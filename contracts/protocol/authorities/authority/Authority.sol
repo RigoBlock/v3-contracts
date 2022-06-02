@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,17 +17,17 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
-import { Owned } from "../../../utils/Owned/Owned.sol";
-import { AuthorityFace } from "./AuthorityFace.sol";
+import { Owned } from "../../../utils/owned/Owned.sol";
+import { IAuthority } from "../../interfaces/IAuthority.sol";
 
 /// @title Authority - Allows to set up the base rules of the protocol.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract Authority is
     Owned,
-    AuthorityFace
+    IAuthority
 {
     BuildingBlocks public blocks;
     Type public types;
@@ -66,21 +67,6 @@ contract Authority is
         address casper;
         mapping (address => bool) initialized;
     }
-
-    /*
-     * EVENTS
-     */
-    event AuthoritySet(address indexed authority);
-    event WhitelisterSet(address indexed whitelister);
-    event WhitelistedUser(address indexed target, bool approved);
-    event WhitelistedRegistry(address indexed registry, bool approved);
-    event WhitelistedFactory(address indexed factory, bool approved);
-    event WhitelistedVault(address indexed vault, bool approved);
-    event WhitelistedDrago(address indexed drago, bool isWhitelisted);
-    event NewDragoEventful(address indexed dragoEventful);
-    event NewVaultEventful(address indexed vaultEventful);
-    event NewNavVerifier(address indexed navVerifier);
-    event NewExchangesAuthority(address indexed exchangesAuthority);
 
     /*
      * MODIFIERS

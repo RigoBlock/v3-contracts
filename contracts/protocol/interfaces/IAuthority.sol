@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,12 +17,12 @@
 
 */
 
-pragma solidity >=0.4.22 <0.8.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Authority Interface - Allows interaction with the Authority contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface AuthorityFace {
+interface IAuthority {
 
     /*
      * EVENTS

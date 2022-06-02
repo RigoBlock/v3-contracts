@@ -16,7 +16,7 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
 import { VaultFace as Vault } from "../../protocol/Vault/Vault.sol";
 import { DistributionFace } from "./DistributionFace.sol";
