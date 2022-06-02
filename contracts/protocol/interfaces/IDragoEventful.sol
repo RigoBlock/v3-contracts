@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,12 +17,12 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Drago Eventful Interface contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface DragoEventfulFace {
+interface IDragoEventful {
 
     /*
      * EVENTS
@@ -46,18 +47,128 @@ interface DragoEventfulFace {
     /*
      * CORE FUNCTIONS
      */
-    function buyDrago(address _who, address _targetDrago, uint256 _value, uint256 _amount, bytes calldata _name, bytes calldata _symbol) external returns (bool success);
-    function sellDrago(address _who, address _targetDrago, uint256 _amount, uint256 _revenue, bytes calldata _name, bytes calldata _symbol) external returns(bool success);
-    function changeRatio(address _who, address _targetDrago, uint256 _ratio) external returns(bool success);
-    function changeFeeCollector(address _who, address _targetDrago, address _feeCollector) external returns(bool success);
-    function changeDragoDao(address _who, address _targetDrago, address _dragoDao) external returns(bool success);
-    function setDragoPrice(address _who, address _targetDrago, uint256 _sellPrice, uint256 _buyPrice) external returns(bool success);
-    function setTransactionFee(address _who, address _targetDrago, uint256 _transactionFee) external returns(bool success);
-    function depositToExchange(address _who, address _targetDrago, address _exchange, address _token, uint256 _value) external returns(bool success);
-    function withdrawFromExchange(address _who, address _targetDrago, address _exchange, address _token, uint256 _value) external returns(bool success);
-    function customDragoLog(bytes4 _methodHash, bytes calldata _encodedParams) external returns (bool success);
-    function customDragoLog2(bytes4 _methodHash, bytes32 topic2, bytes32 topic3, bytes calldata _encodedParams) external returns (bool success);
-    function customExchangeLog(bytes4 _methodHash, bytes calldata _encodedParams) external returns (bool success);
-    function customExchangeLog2(bytes4 _methodHash, bytes32 topic2, bytes32 topic3,bytes calldata _encodedParams) external returns (bool success);
-    function createDrago(address _who, address _newDrago, string calldata _name, string calldata _symbol, uint256 _dragoId) external returns(bool success);
+    function buyDrago(
+        address _who,
+        address _targetDrago,
+        uint256 _value,
+        uint256 _amount,
+        bytes calldata _name,
+        bytes calldata _symbol
+    )
+        external
+        returns (bool);
+    
+    function sellDrago(
+        address _who,
+        address _targetDrago,
+        uint256 _amount,
+        uint256 _revenue,
+        bytes calldata _name,
+        bytes calldata _symbol
+    )
+        external
+        returns(bool);
+
+    function changeRatio(
+        address _who,
+        address _targetDrago,
+        uint256 _ratio
+    )
+        external
+        returns(bool);
+
+    function changeFeeCollector(
+        address _who,
+        address _targetDrago,
+        address _feeCollector
+    )
+        external
+        returns(bool);
+
+    function changeDragoDao(
+        address _who,
+        address _targetDrago,
+        address _dragoDao
+    )
+        external
+        returns(bool);
+
+    function setDragoPrice(
+        address _who,
+        address _targetDrago,
+        uint256 _sellPrice,
+        uint256 _buyPrice
+    )
+        external
+        returns(bool);
+
+    function setTransactionFee(
+        address _who,
+        address _targetDrago,
+        uint256 _transactionFee
+    )
+        external
+        returns(bool);
+
+    function depositToExchange(
+        address _who,
+        address _targetDrago,
+        address _exchange,
+        address _token,
+        uint256 _value
+    )
+        external
+        returns(bool);
+
+    function withdrawFromExchange(
+        address _who,
+        address _targetDrago,
+        address _exchange,
+        address _token,
+        uint256 _value
+    )
+        external
+        returns(bool);
+
+    function customDragoLog(
+        bytes4 _methodHash,
+        bytes calldata _encodedParams
+    )
+        external
+        returns (bool);
+
+    function customDragoLog2(
+        bytes4 _methodHash,
+        bytes32 topic2,
+        bytes32 topic3,
+        bytes calldata _encodedParams
+    )
+        external
+        returns (bool);
+
+    function customExchangeLog(
+        bytes4 _methodHash,
+        bytes calldata _encodedParams
+    )
+        external
+        returns (bool);
+
+    function customExchangeLog2(
+        bytes4 _methodHash,
+        bytes32 topic2,
+        bytes32 topic3,
+        bytes calldata _encodedParams
+    )
+        external
+        returns (bool);
+
+    function createDrago(
+        address _who,
+        address _newDrago,
+        string calldata _name,
+        string calldata _symbol,
+        uint256 _dragoId
+    )
+        external
+        returns(bool);
 }

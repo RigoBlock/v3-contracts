@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2018 RigoBlock, Rigo Investment Sagl.
+ Copyright 2018 RigoBlock, Rigo Investment Sagl, ZeroEx Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -16,26 +17,21 @@
 
 */
 
-pragma solidity >=0.4.25;
+pragma solidity >=0.8.0 <0.9.0;
 
-/// @title Nav Verifier Interface - Allows to check if new NAV comes from approved authority.
+/// @title SigVerifier Interface - Allows interaction with the signature verifier contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface NavVerifierFace {
+interface ISigVerifier {
 
     /// @dev Verifies that a signature is valid.
-    /// @param sellPrice Price in wei
-    /// @param buyPrice Price in wei
-    /// @param signaturevaliduntilBlock Number of blocks till price expiry
     /// @param hash Message hash that is signed.
-    /// @param signedData Proof of nav validity.
-    /// @notice mock function which returns true
-    function isValidNav(
-        uint256 sellPrice,
-        uint256 buyPrice,
-        uint256 signaturevaliduntilBlock,
+    /// @param signature Proof of signing.
+    /// @return isValid Validity of order signature.
+    function isValidSignature(
         bytes32 hash,
-        bytes calldata signedData)
+        bytes calldata signature
+    )
         external
         view
         returns (bool isValid);

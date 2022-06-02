@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,12 +17,12 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title KycFace - allows interaction with a Kyc provider.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface KycFace
+interface IKyc
 
 {
     function isWhitelistedUser(address hodler) external view returns (bool);

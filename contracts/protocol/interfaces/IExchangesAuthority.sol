@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2018 RigoBlock, Rigo Investment Sagl.
@@ -16,12 +17,12 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Exchange Authority Interface - A helper contract for the exchange adapters.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface ExchangesAuthorityFace {
+interface IExchangesAuthority {
 
     /*
      * EVENTS

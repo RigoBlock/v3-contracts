@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2019 RigoBlock, Rigo Investment Sagl, 2020 Rigo Intl.
@@ -16,7 +17,7 @@
 
 */
 
-pragma solidity >=0.5.0 <0.8.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Drago Registry Interface - Allows external interaction with Drago Registry.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

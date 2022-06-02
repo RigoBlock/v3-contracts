@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2018 RigoBlock, Rigo Investment Sagl.
@@ -16,15 +17,15 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
-import { Owned } from "../../../utils/Owned/Owned.sol";
-import { ExchangesAuthorityFace } from "./ExchangesAuthorityFace.sol";
+import { Owned } from "../../../utils/owned/Owned.sol";
+import { IExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
 
 /// @title Exchanges Authority - A helper contract for the exchange adapters.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract ExchangesAuthority is Owned, ExchangesAuthorityFace {
+contract ExchangesAuthority is Owned, IExchangesAuthority {
 
     BuildingBlocks public blocks;
     Type public types;
@@ -66,20 +67,6 @@ contract ExchangesAuthority is Owned, ExchangesAuthorityFace {
         mapping (address => mapping (address => bool)) allowedTokens;
         mapping (address => mapping (address => bool)) allowedWrappers;
     }
-
-    /*
-     * EVENTS
-     */
-    event AuthoritySet(address indexed authority);
-    event WhitelisterSet(address indexed whitelister);
-    event WhitelistedAsset(address indexed asset, bool approved);
-    event WhitelistedExchange(address indexed exchange, bool approved);
-    event WhitelistedWrapper(address indexed wrapper, bool approved);
-    event WhitelistedProxy(address indexed proxy, bool approved);
-    event WhitelistedMethod(bytes4 indexed method, address indexed adapter, bool approved);
-    event NewSigVerifier(address indexed sigVerifier);
-    event NewExchangeEventful(address indexed exchangeEventful);
-    event NewCasper(address indexed casper);
 
     /*
      * MODIFIERS

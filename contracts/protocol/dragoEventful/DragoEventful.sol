@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,146 +17,20 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
-import { AuthorityFace as Authority } from "../authorities/Authority/AuthorityFace.sol";
-import { ExchangesAuthorityFace as DexAuth } from "../authorities/ExchangesAuthority/ExchangesAuthorityFace.sol";
-import { DragoEventfulFace } from "./DragoEventfulFace.sol";
+import { IAuthority as Authority } from "../interfaces/IAuthority.sol";
+import { IExchangesAuthority as DexAuth } from "../interfaces/IExchangesAuthority.sol";
+import { IDragoEventful } from "../interfaces/IDragoEventful.sol";
 
 /// @title Drago Eventful contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract DragoEventful is DragoEventfulFace {
+contract DragoEventful is IDragoEventful {
 
     string public constant VERSION = 'DH0.4.2';
 
     address public AUTHORITY;
-
-    event BuyDrago(
-        address indexed drago,
-        address indexed from,
-        address indexed to,
-        uint256 amount,
-        uint256 revenue,
-        bytes name,
-        bytes symbol
-    );
-
-    event SellDrago(
-        address indexed drago,
-        address indexed from,
-        address indexed to,
-        uint256 amount,
-        uint256 revenue,
-        bytes name,
-        bytes symbol
-    );
-
-    event NewRatio(
-        address indexed drago,
-        address indexed from,
-        uint256 newRatio
-    );
-
-    event NewNAV(
-        address indexed drago,
-        address indexed from,
-        address indexed to,
-        uint256 sellPrice,
-        uint256 buyPrice
-    );
-
-    event NewFee(
-        address indexed drago,
-        address indexed group,
-        address indexed who,
-        uint256 transactionFee
-    );
-
-    event NewCollector(
-        address indexed drago,
-        address indexed group,
-        address indexed who,
-        address feeCollector
-    );
-
-    event DragoDao(
-        address indexed drago,
-        address indexed from,
-        address indexed to,
-        address dragoDao
-    );
-
-    event DepositExchange(
-        address indexed drago,
-        address indexed exchange,
-        address indexed token,
-        uint256 value,
-        uint256 amount
-    );
-
-    event WithdrawExchange(
-        address indexed drago,
-        address indexed exchange,
-        address indexed token,
-        uint256 value,
-        uint256 amount
-    );
-
-    event OrderExchange(
-        address indexed drago,
-        address indexed exchange,
-        address indexed cfd,
-        uint256 value,
-        uint256 revenue
-    );
-
-    event TradeExchange(
-        address indexed drago,
-        address indexed exchange,
-        address tokenGet,
-        address tokenGive,
-        uint256 amountGet,
-        uint256 amountGive,
-        address get
-    );
-
-    event CancelOrder(
-        address indexed drago,
-        address indexed exchange,
-        address indexed cfd,
-        uint256 value,
-        uint256 id
-    );
-
-    event DealFinalized(
-        address indexed drago,
-        address indexed exchange,
-        address indexed cfd,
-        uint256 value,
-        uint256 id
-    );
-
-    event CustomDragoLog(
-        bytes4 indexed method,
-        bytes encodedParams
-    );
-
-    event CustomDragoLog2(
-        bytes4 indexed methodHash,
-        bytes32 indexed topic2,
-        bytes32 indexed topic3,
-        bytes encodedParams
-    );
-
-    event DragoCreated(
-        address indexed drago,
-        address indexed group,
-        address indexed owner,
-        uint256 dragoId,
-        string name,
-        string symbol
-    );
 
     modifier approvedFactoryOnly(address _factory) {
         Authority auth = Authority(AUTHORITY);
@@ -191,7 +66,7 @@ contract DragoEventful is DragoEventfulFace {
         _;
     }
 
-    constructor(address _authority) public {
+    constructor(address _authority) {
         AUTHORITY = _authority;
     }
 
@@ -210,12 +85,21 @@ contract DragoEventful is DragoEventfulFace {
         uint256 _value,
         uint256 _amount,
         bytes calldata _name,
-        bytes calldata _symbol)
+        bytes calldata _symbol
+    )
         external
         approvedDragoOnly(msg.sender)
-        returns (bool success)
+        returns (bool)
     {
-        buyDragoInternal(_targetDrago, _who, msg.sender, _value, _amount, _name, _symbol);
+        buyDragoInternal(
+            _targetDrago,
+            _who,
+            msg.sender,
+            _value,
+            _amount,
+            _name,
+            _symbol
+        );
         return true;
     }
 
@@ -224,20 +108,29 @@ contract DragoEventful is DragoEventfulFace {
     /// @param _targetDrago Address of the target drago
     /// @param _amount Number of shares purchased
     /// @param _revenue Value of the transaction in Ether
-    /// @return Bool the transaction executed successfully
+    /// @return success Bool the transaction executed successfully
     function sellDrago(
         address _who,
         address _targetDrago,
         uint256 _amount,
         uint256 _revenue,
         bytes calldata _name,
-        bytes calldata _symbol)
+        bytes calldata _symbol
+    )
         external
         approvedDragoOnly(msg.sender)
-        returns(bool success)
+        returns(bool)
     {
         require(_amount > 0);
-        sellDragoInternal(_targetDrago, _who, msg.sender, _amount, _revenue, _name, _symbol);
+        sellDragoInternal(
+            _targetDrago,
+            _who,
+            msg.sender,
+            _amount,
+            _revenue,
+            _name,
+            _symbol
+        );
         return true;
     }
 
@@ -249,10 +142,11 @@ contract DragoEventful is DragoEventfulFace {
     function changeRatio(
         address _who,
         address _targetDrago,
-        uint256 _ratio)
+        uint256 _ratio
+    )
         external
         approvedDragoOnly(msg.sender)
-        returns(bool success)
+        returns(bool)
     {
         require(_ratio > 0);
         emit NewRatio(_targetDrago, _who, _ratio);
@@ -271,7 +165,7 @@ contract DragoEventful is DragoEventfulFace {
         external
         approvedDragoOnly(msg.sender)
         approvedUserOnly(_who)
-        returns(bool success)
+        returns(bool)
     {
         emit NewCollector(_targetDrago, msg.sender, _who, _feeCollector);
         return true;
@@ -289,7 +183,7 @@ contract DragoEventful is DragoEventfulFace {
         external
         approvedDragoOnly(msg.sender)
         approvedUserOnly(_who)
-        returns(bool success)
+        returns(bool)
     {
         emit DragoDao(_targetDrago, msg.sender, _who, _dragoDao);
         return true;
@@ -308,9 +202,11 @@ contract DragoEventful is DragoEventfulFace {
         uint256 _buyPrice)
         external
         approvedDragoOnly(msg.sender)
-        returns(bool success)
+        returns(bool)
     {
-        require(_sellPrice > 10 finney && _buyPrice > 10 finney);
+        // TODO: check why we are making this check in logger contract
+        // if initial price is 1ETH, whenever price goes down 99%, cannot be updated
+        require(_sellPrice > 1e16 && _buyPrice > 1e16); // 1e16 = 10 finney
         emit NewNAV(_targetDrago, msg.sender, _who, _sellPrice, _buyPrice);
         return true;
     }
@@ -327,7 +223,7 @@ contract DragoEventful is DragoEventfulFace {
         external
         approvedDragoOnly(msg.sender)
         approvedUserOnly(_who)
-        returns(bool success)
+        returns(bool)
     {
         emit NewFee(_targetDrago, msg.sender, _who, _transactionFee);
         return true;
@@ -350,7 +246,7 @@ contract DragoEventful is DragoEventfulFace {
         approvedUserOnly(_who)
         approvedDragoOnly(msg.sender)
         approvedExchangeOnly(_exchange)
-        returns(bool success)
+        returns(bool)
     {
         emit DepositExchange(_targetDrago, _exchange, _token, _value, 0);
         return true;
@@ -373,7 +269,7 @@ contract DragoEventful is DragoEventfulFace {
         approvedUserOnly(_who)
         approvedDragoOnly(msg.sender)
         approvedExchangeOnly(_exchange)
-        returns(bool success)
+        returns(bool)
     {
         emit WithdrawExchange(_targetDrago, _exchange, _token, _value, 0);
         return true;
@@ -388,7 +284,7 @@ contract DragoEventful is DragoEventfulFace {
         bytes calldata _encodedParams)
         external
         approvedDragoOnly(msg.sender)
-        returns (bool success)
+        returns (bool)
     {
         emit CustomDragoLog(_methodHash, _encodedParams);
         return true;
@@ -405,7 +301,7 @@ contract DragoEventful is DragoEventfulFace {
         bytes calldata _encodedParams)
         external
         approvedDragoOnly(msg.sender)
-        returns (bool success)
+        returns (bool)
     {
         emit CustomDragoLog2(_methodHash, topic2, topic3, _encodedParams);
         return true;
@@ -420,7 +316,7 @@ contract DragoEventful is DragoEventfulFace {
         bytes calldata _encodedParams)
         external
         approvedExchangeOnly(msg.sender)
-        returns (bool success)
+        returns (bool)
     {
         emit CustomDragoLog(_methodHash, _encodedParams);
         return true;
@@ -437,7 +333,7 @@ contract DragoEventful is DragoEventfulFace {
         bytes calldata _encodedParams)
         external
         approvedExchangeOnly(msg.sender)
-        returns (bool success)
+        returns (bool)
     {
         emit CustomDragoLog2(_methodHash, topic2, topic3, _encodedParams);
         return true;
@@ -458,7 +354,7 @@ contract DragoEventful is DragoEventfulFace {
         uint256 _dragoId)
         external
         approvedFactoryOnly(msg.sender)
-        returns(bool success)
+        returns(bool)
     {
         createDragoInternal(_newDrago, msg.sender, _who, _dragoId, _name, _symbol);
         return true;
