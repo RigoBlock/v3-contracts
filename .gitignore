@@ -1,2 +1,5 @@
 node_modules/
 dist
+
+#generated contract artifacts
+contracts/**/**/**.json

@@ -19,21 +19,38 @@
 
 pragma solidity 0.8.14;
 
-import './interfaces/pool/IRigoblockV3PoolFallback.sol';
-import './interfaces/pool/IRigoblockV3PoolImmutables.sol';
-import './interfaces/pool/IRigoblockV3PoolState.sol';
-import './interfaces/pool/IRigoblockV3PoolActions.sol';
-import './interfaces/pool/IRigoblockV3PoolOwnerActions.sol';
-
 /// @title Rigoblock V3 Pool Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IRigoblockV3Pool is
-    IRigoblockV3PoolFallback,
-    IRigoblockV3PoolImmutables,
-    IRigoblockV3PoolState,
-    IRigoblockV3PoolActions,
-    IRigoblockV3PoolOwnerActions
-{
+interface IRigoblockV3PoolActions {
 
+    /*
+     * CORE FUNCTIONS
+     */
+    function pay()
+        external
+        payable;
+
+    function buyDrago()
+        external
+        payable
+        returns (bool success);
+
+    function buyDragoOnBehalf(address _hodler)
+        external
+        payable
+        returns (bool success);
+
+    function sellDrago(uint256 _amount)
+        external
+        returns (bool success);
+
+    function changeRatio(uint256 _ratio)
+        external;
+
+    function changeDragoDao(address _dragoDao)
+        external;
+
+    function enforceKyc(bool _enforced, address _kycProvider)
+        external;
 }
