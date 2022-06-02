@@ -1,0 +1,276 @@
+{
+	"compiler": {
+		"version": "0.5.17+commit.d19bba13"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "_owner",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "_spender",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
+					}
+				],
+				"name": "Approval",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "_from",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "_to",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
+					}
+				],
+				"name": "Transfer",
+				"type": "event"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_owner",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "_spender",
+						"type": "address"
+					}
+				],
+				"name": "allowance",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_spender",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
+					}
+				],
+				"name": "approve",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_owner",
+						"type": "address"
+					}
+				],
+				"name": "balanceOf",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "totalSupply",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
+					}
+				],
+				"name": "transfer",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_from",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "_to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_value",
+						"type": "uint256"
+					}
+				],
+				"name": "transferFrom",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"methods": {
+				"allowance(address,address)": {
+					"params": {
+						"_owner": "The address of the account owning tokens",
+						"_spender": "The address of the account able to transfer the tokens"
+					},
+					"return": "Amount of remaining tokens allowed to spent"
+				},
+				"approve(address,uint256)": {
+					"details": "`msg.sender` approves `_spender` to spend `_value` tokens",
+					"params": {
+						"_spender": "The address of the account able to transfer the tokens",
+						"_value": "The amount of wei to be approved for transfer"
+					},
+					"return": "Always true if the call has enough gas to complete execution"
+				},
+				"balanceOf(address)": {
+					"params": {
+						"_owner": "The address from which the balance will be retrieved"
+					},
+					"return": "Balance of owner"
+				},
+				"totalSupply()": {
+					"details": "Query total supply of token",
+					"return": "Total supply of token"
+				},
+				"transfer(address,uint256)": {
+					"details": "send `value` token to `to` from `msg.sender`",
+					"params": {
+						"_to": "The address of the recipient",
+						"_value": "The amount of token to be transferred"
+					},
+					"return": "True if transfer was successful"
+				},
+				"transferFrom(address,address,uint256)": {
+					"details": "send `value` token to `to` from `from` on the condition it is approved by `from`",
+					"params": {
+						"_from": "The address of the sender",
+						"_to": "The address of the recipient",
+						"_value": "The amount of token to be transferred"
+					},
+					"return": "True if transfer was successful"
+				}
+			}
+		},
+		"userdoc": {
+			"methods": {}
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/0xUtils/IERC20Token.sol": "IERC20Token"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/0xUtils/IERC20Token.sol": {
+			"keccak256": "0x4eab85561a24071b7fa2229035daa1e9beb9d18b5f78f56b0cf8f0b094c5f8e3",
+			"urls": [
+				"bzz-raw://5be7f8843d72ad86d7926d32396bcc01b82b29d977b6e695c81d273e331ba91f",
+				"dweb:/ipfs/QmWjhz3QYkJpgpiLyuX4mShSV44314FuVYCHViSvoSCqhY"
+			]
+		}
+	},
+	"version": 1
+}

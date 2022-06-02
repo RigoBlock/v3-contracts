@@ -1,0 +1,44 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/0xUtils/LibSafeMathRichErrors.sol": "LibSafeMathRichErrors"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/0xUtils/LibSafeMathRichErrors.sol": {
+			"keccak256": "0xc963d193a9472325a179a20b1b1fe3cad0e249f5e97c58269c6c2a4a18c70e07",
+			"urls": [
+				"bzz-raw://31043f6258ac57c7832160f08359aa2173fa0bcad691929a06dd446917f24012",
+				"dweb:/ipfs/QmXzeTVTXkZAUjuX4c8vbGpu76CcJbjaqW37v6SZ9jiktF"
+			]
+		}
+	},
+	"version": 1
+}

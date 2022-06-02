@@ -1,0 +1,417 @@
+{
+	"deploy": {
+		"VM:-": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"main:1": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"ropsten:3": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"rinkeby:4": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"kovan:42": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"görli:5": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"Custom": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		}
+	},
+	"data": {
+		"bytecode": {
+			"generatedSources": [],
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"deployedBytecode": {
+			"generatedSources": [],
+			"immutableReferences": {},
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"gasEstimates": null,
+		"methodIdentifiers": {}
+	},
+	"abi": [
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "string",
+					"name": "reason",
+					"type": "string"
+				}
+			],
+			"name": "CatchStringEvent",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "numPoolsToFinalize",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "rewardsAvailable",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "totalFeesCollected",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "totalWeightedStake",
+					"type": "uint256"
+				}
+			],
+			"name": "EpochEnded",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "rewardsPaid",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "rewardsRemaining",
+					"type": "uint256"
+				}
+			],
+			"name": "EpochFinalized",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "grgAmount",
+					"type": "uint256"
+				}
+			],
+			"name": "GrgMintEvent",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint8",
+					"name": "fromStatus",
+					"type": "uint8"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "fromPool",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint8",
+					"name": "toStatus",
+					"type": "uint8"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "toPool",
+					"type": "bytes32"
+				}
+			],
+			"name": "MoveStake",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "oldOperatorShare",
+					"type": "uint32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "newOperatorShare",
+					"type": "uint32"
+				}
+			],
+			"name": "OperatorShareDecreased",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "epochDurationInSeconds",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "rewardDelegatedStakeWeight",
+					"type": "uint32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "minimumPoolStake",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "cobbDouglasAlphaNumerator",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "cobbDouglasAlphaDenominator",
+					"type": "uint256"
+				}
+			],
+			"name": "ParamsSet",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "address",
+					"name": "exchangeAddress",
+					"type": "address"
+				}
+			],
+			"name": "PopAdded",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "address",
+					"name": "exchangeAddress",
+					"type": "address"
+				}
+			],
+			"name": "PopRemoved",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "rbPoolAddress",
+					"type": "address"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "RbPoolStakingPoolSet",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "bytes",
+					"name": "reason",
+					"type": "bytes"
+				}
+			],
+			"name": "ReturnDataEvent",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "operatorReward",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "membersReward",
+					"type": "uint256"
+				}
+			],
+			"name": "RewardsPaid",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				}
+			],
+			"name": "Stake",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "address",
+					"name": "operator",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "operatorShare",
+					"type": "uint32"
+				}
+			],
+			"name": "StakingPoolCreated",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "StakingPoolEarnedRewardsInEpoch",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				}
+			],
+			"name": "Unstake",
+			"type": "event"
+		}
+	]
+}

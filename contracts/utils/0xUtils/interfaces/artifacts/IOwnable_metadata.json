@@ -1,0 +1,93 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "previousOwner",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "OwnershipTransferred",
+				"type": "event"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "transferOwnership",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"events": {
+				"OwnershipTransferred(address,address)": {
+					"details": "Emitted by Ownable when ownership is transferred.",
+					"params": {
+						"newOwner": "The new owner of the contract.",
+						"previousOwner": "The previous owner of the contract."
+					}
+				}
+			},
+			"kind": "dev",
+			"methods": {
+				"transferOwnership(address)": {
+					"details": "Transfers ownership of the contract to a new address.",
+					"params": {
+						"newOwner": "The address that will become the owner."
+					}
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/0xUtils/interfaces/IOwnable.sol": "IOwnable"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/0xUtils/interfaces/IOwnable.sol": {
+			"keccak256": "0x68e4024f6f30d730b1de10bbbdf5c7753245fc9dc5a80dd0a1215df308b889e2",
+			"urls": [
+				"bzz-raw://0548cbffa6f0c77c505440e3bed8bf0518668876d1d733ef7bec25e9beba9d43",
+				"dweb:/ipfs/Qmf62pKVYV5ygsu1QzRwixMgQsxnKBbCf1rgVZcJ2CySE6"
+			]
+		}
+	},
+	"version": 1
+}

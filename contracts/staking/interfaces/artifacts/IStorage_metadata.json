@@ -1,0 +1,202 @@
+{
+	"compiler": {
+		"version": "0.7.5+commit.eb77ed08"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [],
+				"name": "cobbDouglasAlphaDenominator",
+				"outputs": [
+					{
+						"internalType": "uint32",
+						"name": "",
+						"type": "uint32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "cobbDouglasAlphaNumerator",
+				"outputs": [
+					{
+						"internalType": "uint32",
+						"name": "",
+						"type": "uint32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "currentEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "currentEpochStartTimeInSeconds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "epochDurationInSeconds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "minimumPoolStake",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "protocolFeesThisEpochByPool",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "rewardDelegatedStakeWeight",
+				"outputs": [
+					{
+						"internalType": "uint32",
+						"name": "",
+						"type": "uint32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "stakingContract",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "popAddress",
+						"type": "address"
+					}
+				],
+				"name": "validPops",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/staking/interfaces/IStorage.sol": "IStorage"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/staking/interfaces/IGrgVault.sol": {
+			"keccak256": "0x79fdf7e545bbc18f46aba53f5999ea257b15363a7f1e52145c3c05e40d5a2adf",
+			"license": "Apache 2.0",
+			"urls": [
+				"bzz-raw://c3f37cdfddd31f1a31446f32450d9d3819fb5c9c7496c5c0929fb6f5f17b420d",
+				"dweb:/ipfs/QmVi3F75Ghd114HSi5X2VDo2Tzh6ZnUVMdQybULvpQeCWW"
+			]
+		},
+		"localhost/staking/interfaces/IStorage.sol": {
+			"keccak256": "0xb3c0c869f7804b58dd1fd4c5ac9c3fa0b2a2b8010c6e7488c8b0e23f7d4dccd1",
+			"urls": [
+				"bzz-raw://024eb009c812758164539f7591cca32fc4cca64d93343780580da20be2f85f17",
+				"dweb:/ipfs/QmQLFNU7zPEgFbMK8saQmWXw6WDZPnCXwKTc4vYRT6vpMD"
+			]
+		},
+		"localhost/staking/interfaces/IStructs.sol": {
+			"keccak256": "0x10c400a91961455ca5ea5fed8e60b320b1fdf7903dcdc5fe8a7cb8714cd67b3d",
+			"urls": [
+				"bzz-raw://b9aa6fbb76c818a8f75a8ebb44850a7093885fa2132f0539d28008555766ddbd",
+				"dweb:/ipfs/QmSZcmRbdn7mHGEG3fm2oAnBK5occLFqg9TyZWiufqobWy"
+			]
+		}
+	},
+	"version": 1
+}

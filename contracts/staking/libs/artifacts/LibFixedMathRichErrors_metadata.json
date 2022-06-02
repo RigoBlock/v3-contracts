@@ -1,0 +1,52 @@
+{
+	"compiler": {
+		"version": "0.7.5+commit.eb77ed08"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/staking/libs/LibFixedMathRichErrors.sol": "LibFixedMathRichErrors"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/staking/libs/LibFixedMathRichErrors.sol": {
+			"keccak256": "0xdeaf3bb6ae4a6fc537d6c35144d3299ba1797f8ee68c4a18073fa7d452133f03",
+			"urls": [
+				"bzz-raw://044e6d2dabf234477dece4ad66b43bde1be4120736ef06d922dd50a1be563744",
+				"dweb:/ipfs/QmZtomTS6dkAJSQGuJFxFZYQ4XsYb7LBEK3bhyAEEWwpbz"
+			]
+		},
+		"localhost/utils/0xUtils/LibRichErrors.sol": {
+			"keccak256": "0xc65d20d5519e4b34218877a01ee9e92fea348db5d208f4a077a4771cc491bd0f",
+			"license": "Apache 2.0",
+			"urls": [
+				"bzz-raw://f04bc0cb601f6484fdd70001e0576b97ac25c84b7f9610edd3e27b3faed81e54",
+				"dweb:/ipfs/QmcQ5hGrgSxWAgcmMuTjHTAoscApLGPPP6HwmGRrwkD68B"
+			]
+		}
+	},
+	"version": 1
+}

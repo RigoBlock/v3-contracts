@@ -1,0 +1,472 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_dragoRegistry",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "_dragoAddress",
+						"type": "address"
+					}
+				],
+				"name": "queryDataFromAddress",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "string",
+								"name": "name",
+								"type": "string"
+							},
+							{
+								"internalType": "string",
+								"name": "symbol",
+								"type": "string"
+							},
+							{
+								"internalType": "uint256",
+								"name": "sellPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "buyPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "owner",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "feeCollector",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "dragoDao",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ratio",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "transactionFee",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "totalSupply",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ethBalance",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint32",
+								"name": "minPeriod",
+								"type": "uint32"
+							},
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "drago",
+								"type": "address"
+							}
+						],
+						"internalType": "struct HGetDragoData.DragoData",
+						"name": "dragoData",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_dragoRegistry",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_dragoId",
+						"type": "uint256"
+					}
+				],
+				"name": "queryDataFromId",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "string",
+								"name": "name",
+								"type": "string"
+							},
+							{
+								"internalType": "string",
+								"name": "symbol",
+								"type": "string"
+							},
+							{
+								"internalType": "uint256",
+								"name": "sellPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "buyPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "owner",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "feeCollector",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "dragoDao",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ratio",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "transactionFee",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "totalSupply",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ethBalance",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint32",
+								"name": "minPeriod",
+								"type": "uint32"
+							},
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "drago",
+								"type": "address"
+							}
+						],
+						"internalType": "struct HGetDragoData.DragoData",
+						"name": "dragoData",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_dragoRegistry",
+						"type": "address"
+					},
+					{
+						"internalType": "address[]",
+						"name": "_dragoAddresses",
+						"type": "address[]"
+					}
+				],
+				"name": "queryMultiDataFromAddress",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "string",
+								"name": "name",
+								"type": "string"
+							},
+							{
+								"internalType": "string",
+								"name": "symbol",
+								"type": "string"
+							},
+							{
+								"internalType": "uint256",
+								"name": "sellPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "buyPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "owner",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "feeCollector",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "dragoDao",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ratio",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "transactionFee",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "totalSupply",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ethBalance",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint32",
+								"name": "minPeriod",
+								"type": "uint32"
+							},
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "drago",
+								"type": "address"
+							}
+						],
+						"internalType": "struct HGetDragoData.DragoData[]",
+						"name": "",
+						"type": "tuple[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_dragoRegistry",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "_dragoIds",
+						"type": "uint256[]"
+					}
+				],
+				"name": "queryMultiDataFromId",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "string",
+								"name": "name",
+								"type": "string"
+							},
+							{
+								"internalType": "string",
+								"name": "symbol",
+								"type": "string"
+							},
+							{
+								"internalType": "uint256",
+								"name": "sellPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "buyPrice",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "owner",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "feeCollector",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "dragoDao",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ratio",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "transactionFee",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "totalSupply",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "ethBalance",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint32",
+								"name": "minPeriod",
+								"type": "uint32"
+							},
+							{
+								"internalType": "uint256",
+								"name": "id",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "drago",
+								"type": "address"
+							}
+						],
+						"internalType": "struct HGetDragoData.DragoData[]",
+						"name": "",
+						"type": "tuple[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"author": "Gabriele Rigo - <gab@rigoblock.com>",
+			"kind": "dev",
+			"methods": {
+				"queryDataFromAddress(address,address)": {
+					"details": "Returns structs of infos on a drago from its address.",
+					"params": {
+						"_dragoAddress": "Array of addresses of the target drago.",
+						"_dragoRegistry": "Address of the pools registry."
+					},
+					"returns": {
+						"dragoData": "Arrays of structs of data."
+					}
+				},
+				"queryDataFromId(address,uint256)": {
+					"details": "Returns structs of infos on a drago from its ID.",
+					"params": {
+						"_dragoId": "Number of the target drago ID.",
+						"_dragoRegistry": "Address of the pools registry."
+					},
+					"returns": {
+						"dragoData": "Structs of data."
+					}
+				},
+				"queryMultiDataFromAddress(address,address[])": {
+					"details": "Returns structs of infos on a drago from its address.",
+					"params": {
+						"_dragoAddresses": "Array of addresses of the target dragos.",
+						"_dragoRegistry": "Address of the pools registry."
+					},
+					"returns": {
+						"_0": "Arrays of structs of data and related address of a drago."
+					}
+				},
+				"queryMultiDataFromId(address,uint256[])": {
+					"details": "Returns structs of infos on a drago from its ID.",
+					"params": {
+						"_dragoIds": "Array of IDs of the target dragos.",
+						"_dragoRegistry": "Address of the drago registry."
+					},
+					"returns": {
+						"_0": "Arrays of structs of data and related address of a drago."
+					}
+				}
+			},
+			"title": "Drago Data Helper - Allows to query multiple data of a drago at once.",
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/examples/helpers/HGetDragoData.sol": "HGetDragoData"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/examples/helpers/HGetDragoData.sol": {
+			"keccak256": "0x791d8b7112b17541a85f4353931304fe0cdaf3ce2571fec8fcaca0dfe5a038a5",
+			"urls": [
+				"bzz-raw://872064277752f7c15683b568eb82dfb39a7f6b4ba81b11166af4886efdd85182",
+				"dweb:/ipfs/QmYgYXMv9PiBAuSuNHdC3GPHYXTLSayD7c6KG3sAgfLGsT"
+			]
+		}
+	},
+	"version": 1
+}

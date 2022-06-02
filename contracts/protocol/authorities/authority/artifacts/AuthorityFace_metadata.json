@@ -1,0 +1,564 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "authority",
+						"type": "address"
+					}
+				],
+				"name": "AuthoritySet",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "dragoEventful",
+						"type": "address"
+					}
+				],
+				"name": "NewDragoEventful",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "exchangesAuthority",
+						"type": "address"
+					}
+				],
+				"name": "NewExchangesAuthority",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "navVerifier",
+						"type": "address"
+					}
+				],
+				"name": "NewNavVerifier",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "vaultEventful",
+						"type": "address"
+					}
+				],
+				"name": "NewVaultEventful",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "drago",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bool",
+						"name": "isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "WhitelistedDrago",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "factory",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bool",
+						"name": "approved",
+						"type": "bool"
+					}
+				],
+				"name": "WhitelistedFactory",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "registry",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bool",
+						"name": "approved",
+						"type": "bool"
+					}
+				],
+				"name": "WhitelistedRegistry",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bool",
+						"name": "approved",
+						"type": "bool"
+					}
+				],
+				"name": "WhitelistedUser",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "vault",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bool",
+						"name": "approved",
+						"type": "bool"
+					}
+				],
+				"name": "WhitelistedVault",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "whitelister",
+						"type": "address"
+					}
+				],
+				"name": "WhitelisterSet",
+				"type": "event"
+			},
+			{
+				"inputs": [],
+				"name": "getDragoEventful",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getExchangesAuthority",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getNavVerifier",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getVaultEventful",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_authority",
+						"type": "address"
+					}
+				],
+				"name": "isAuthority",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_drago",
+						"type": "address"
+					}
+				],
+				"name": "isWhitelistedDrago",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_factory",
+						"type": "address"
+					}
+				],
+				"name": "isWhitelistedFactory",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_registry",
+						"type": "address"
+					}
+				],
+				"name": "isWhitelistedRegistry",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_target",
+						"type": "address"
+					}
+				],
+				"name": "isWhitelistedUser",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_vault",
+						"type": "address"
+					}
+				],
+				"name": "isWhitelistedVault",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_authority",
+						"type": "address"
+					},
+					{
+						"internalType": "bool",
+						"name": "_isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "setAuthority",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_dragoEventful",
+						"type": "address"
+					}
+				],
+				"name": "setDragoEventful",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_exchangesAuthority",
+						"type": "address"
+					}
+				],
+				"name": "setExchangesAuthority",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_navVerifier",
+						"type": "address"
+					}
+				],
+				"name": "setNavVerifier",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_vaultEventful",
+						"type": "address"
+					}
+				],
+				"name": "setVaultEventful",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_whitelister",
+						"type": "address"
+					},
+					{
+						"internalType": "bool",
+						"name": "_isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "setWhitelister",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_drago",
+						"type": "address"
+					},
+					{
+						"internalType": "bool",
+						"name": "_isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "whitelistDrago",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_factory",
+						"type": "address"
+					},
+					{
+						"internalType": "bool",
+						"name": "_isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "whitelistFactory",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_registry",
+						"type": "address"
+					},
+					{
+						"internalType": "bool",
+						"name": "_isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "whitelistRegistry",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_target",
+						"type": "address"
+					},
+					{
+						"internalType": "bool",
+						"name": "_isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "whitelistUser",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_vault",
+						"type": "address"
+					},
+					{
+						"internalType": "bool",
+						"name": "_isWhitelisted",
+						"type": "bool"
+					}
+				],
+				"name": "whitelistVault",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"author": "Gabriele Rigo - <gab@rigoblock.com>",
+			"kind": "dev",
+			"methods": {},
+			"title": "Authority Interface - Allows interaction with the Authority contract.",
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/protocol/authorities/Authority/AuthorityFace.sol": "AuthorityFace"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/protocol/authorities/Authority/AuthorityFace.sol": {
+			"keccak256": "0x62d6f51a3f55ddfadf99362b9ec1ea243e3dafed4fba15abc6340fb6ad2b717b",
+			"urls": [
+				"bzz-raw://0ad9187e554fcc34fa88aa7ffadd210ceba3d5276dc202e9cab7884168ea3582",
+				"dweb:/ipfs/QmPDTbhqQ5HeNzqYiq3eeJxhLvv5B7QnSEitsTRmfJaHCw"
+			]
+		}
+	},
+	"version": 1
+}

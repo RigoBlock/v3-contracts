@@ -1,0 +1,592 @@
+{
+	"deploy": {
+		"VM:-": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"main:1": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"ropsten:3": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"rinkeby:4": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"kovan:42": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"görli:5": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"Custom": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		}
+	},
+	"data": {
+		"bytecode": {
+			"generatedSources": [],
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"deployedBytecode": {
+			"generatedSources": [],
+			"immutableReferences": {},
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"gasEstimates": null,
+		"methodIdentifiers": {
+			"getDragoEventful()": "26c7a0de",
+			"getExchangesAuthority()": "84987e83",
+			"getNavVerifier()": "b74508d1",
+			"getVaultEventful()": "088f47ee",
+			"isAuthority(address)": "2330f247",
+			"isWhitelistedDrago(address)": "44938900",
+			"isWhitelistedFactory(address)": "dcb7a3e0",
+			"isWhitelistedRegistry(address)": "9e2de32d",
+			"isWhitelistedUser(address)": "d88c271e",
+			"isWhitelistedVault(address)": "a2ce2773",
+			"setAuthority(address,bool)": "b5f0d35c",
+			"setDragoEventful(address)": "770f434f",
+			"setExchangesAuthority(address)": "8abba186",
+			"setNavVerifier(address)": "89ad16fc",
+			"setVaultEventful(address)": "1610ac4d",
+			"setWhitelister(address,bool)": "c91b0149",
+			"whitelistDrago(address,bool)": "ad562f40",
+			"whitelistFactory(address,bool)": "7b9d4d26",
+			"whitelistRegistry(address,bool)": "6e571167",
+			"whitelistUser(address,bool)": "a0ca3ee1",
+			"whitelistVault(address,bool)": "e6e66c68"
+		}
+	},
+	"abi": [
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "authority",
+					"type": "address"
+				}
+			],
+			"name": "AuthoritySet",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "dragoEventful",
+					"type": "address"
+				}
+			],
+			"name": "NewDragoEventful",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "exchangesAuthority",
+					"type": "address"
+				}
+			],
+			"name": "NewExchangesAuthority",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "navVerifier",
+					"type": "address"
+				}
+			],
+			"name": "NewNavVerifier",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "vaultEventful",
+					"type": "address"
+				}
+			],
+			"name": "NewVaultEventful",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "drago",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "bool",
+					"name": "isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "WhitelistedDrago",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "factory",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "bool",
+					"name": "approved",
+					"type": "bool"
+				}
+			],
+			"name": "WhitelistedFactory",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "registry",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "bool",
+					"name": "approved",
+					"type": "bool"
+				}
+			],
+			"name": "WhitelistedRegistry",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "target",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "bool",
+					"name": "approved",
+					"type": "bool"
+				}
+			],
+			"name": "WhitelistedUser",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "vault",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "bool",
+					"name": "approved",
+					"type": "bool"
+				}
+			],
+			"name": "WhitelistedVault",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "whitelister",
+					"type": "address"
+				}
+			],
+			"name": "WhitelisterSet",
+			"type": "event"
+		},
+		{
+			"inputs": [],
+			"name": "getDragoEventful",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getExchangesAuthority",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getNavVerifier",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getVaultEventful",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_authority",
+					"type": "address"
+				}
+			],
+			"name": "isAuthority",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_drago",
+					"type": "address"
+				}
+			],
+			"name": "isWhitelistedDrago",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_factory",
+					"type": "address"
+				}
+			],
+			"name": "isWhitelistedFactory",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_registry",
+					"type": "address"
+				}
+			],
+			"name": "isWhitelistedRegistry",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_target",
+					"type": "address"
+				}
+			],
+			"name": "isWhitelistedUser",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_vault",
+					"type": "address"
+				}
+			],
+			"name": "isWhitelistedVault",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_authority",
+					"type": "address"
+				},
+				{
+					"internalType": "bool",
+					"name": "_isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "setAuthority",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_dragoEventful",
+					"type": "address"
+				}
+			],
+			"name": "setDragoEventful",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_exchangesAuthority",
+					"type": "address"
+				}
+			],
+			"name": "setExchangesAuthority",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_navVerifier",
+					"type": "address"
+				}
+			],
+			"name": "setNavVerifier",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_vaultEventful",
+					"type": "address"
+				}
+			],
+			"name": "setVaultEventful",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_whitelister",
+					"type": "address"
+				},
+				{
+					"internalType": "bool",
+					"name": "_isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "setWhitelister",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_drago",
+					"type": "address"
+				},
+				{
+					"internalType": "bool",
+					"name": "_isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "whitelistDrago",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_factory",
+					"type": "address"
+				},
+				{
+					"internalType": "bool",
+					"name": "_isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "whitelistFactory",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_registry",
+					"type": "address"
+				},
+				{
+					"internalType": "bool",
+					"name": "_isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "whitelistRegistry",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_target",
+					"type": "address"
+				},
+				{
+					"internalType": "bool",
+					"name": "_isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "whitelistUser",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_vault",
+					"type": "address"
+				},
+				{
+					"internalType": "bool",
+					"name": "_isWhitelisted",
+					"type": "bool"
+				}
+			],
+			"name": "whitelistVault",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		}
+	]
+}

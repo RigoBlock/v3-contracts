@@ -1,0 +1,122 @@
+{
+	"compiler": {
+		"version": "0.7.5+commit.eb77ed08"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "newStakingContractAddress",
+						"type": "address"
+					}
+				],
+				"name": "StakingContractAttachedToProxy",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [],
+				"name": "StakingContractDetachedFromProxy",
+				"type": "event"
+			},
+			{
+				"inputs": [],
+				"name": "assertValidStorageParams",
+				"outputs": [],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_stakingContract",
+						"type": "address"
+					}
+				],
+				"name": "attachStakingContract",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "detachStakingContract",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"events": {
+				"StakingContractAttachedToProxy(address)": {
+					"details": "Emitted by StakingProxy when a staking contract is attached.",
+					"params": {
+						"newStakingContractAddress": "Address of newly attached staking contract."
+					}
+				},
+				"StakingContractDetachedFromProxy()": {
+					"details": "Emitted by StakingProxy when a staking contract is detached."
+				}
+			},
+			"kind": "dev",
+			"methods": {
+				"assertValidStorageParams()": {
+					"details": "Asserts that an epoch is between 5 and 30 days long."
+				},
+				"attachStakingContract(address)": {
+					"details": "Attach a staking contract; future calls will be delegated to the staking contract. Note that this is callable only by an authorized address.",
+					"params": {
+						"_stakingContract": "Address of staking contract."
+					}
+				},
+				"detachStakingContract()": {
+					"details": "Detach the current staking contract. Note that this is callable only by an authorized address."
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/staking/interfaces/IStakingProxy.sol": "IStakingProxy"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/staking/interfaces/IStakingProxy.sol": {
+			"keccak256": "0x35ab8f7eabd29c6a2ac8d7f25df1c47aad40a5451b2bc84d2d9ab655b26a770f",
+			"urls": [
+				"bzz-raw://9ddade90559f6938902c48a9f9cd8ce12d3cd87111cc2e76ca4b7a2376b6bdc7",
+				"dweb:/ipfs/QmQ5s1RXN9unpQo3Fv3uEKZsNrjSiyhj3JBZXeo673AyQK"
+			]
+		},
+		"localhost/staking/interfaces/IStructs.sol": {
+			"keccak256": "0x10c400a91961455ca5ea5fed8e60b320b1fdf7903dcdc5fe8a7cb8714cd67b3d",
+			"urls": [
+				"bzz-raw://b9aa6fbb76c818a8f75a8ebb44850a7093885fa2132f0539d28008555766ddbd",
+				"dweb:/ipfs/QmSZcmRbdn7mHGEG3fm2oAnBK5occLFqg9TyZWiufqobWy"
+			]
+		}
+	},
+	"version": 1
+}

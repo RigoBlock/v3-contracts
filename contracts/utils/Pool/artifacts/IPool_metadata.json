@@ -1,0 +1,220 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_who",
+						"type": "address"
+					}
+				],
+				"name": "balanceOf",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "calcSharePrice",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getAdminData",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "feeCollector",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "dragoDao",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "ratio",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "transactionFee",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint32",
+						"name": "minPeriod",
+						"type": "uint32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getData",
+				"outputs": [
+					{
+						"internalType": "string",
+						"name": "name",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "symbol",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "sellPrice",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "buyPrice",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getEventful",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "totalSupply",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "totaSupply",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"author": "Gabriele Rigo - <gab@rigoblock.com>",
+			"kind": "dev",
+			"methods": {
+				"balanceOf(address)": {
+					"details": "Calculates how many shares a user holds.",
+					"params": {
+						"_who": "Address of the target account."
+					},
+					"returns": {
+						"_0": "Number of shares."
+					}
+				},
+				"calcSharePrice()": {
+					"details": "Returns the price of a pool.",
+					"returns": {
+						"_0": "Value of the share price in wei."
+					}
+				},
+				"getAdminData()": {
+					"details": "Finds the administrative data of the pool.",
+					"returns": {
+						"_0": "Address of the account where a user collects fees.",
+						"dragoDao": "Number of the fee split ratio.",
+						"feeCollector": "Address of the drago dao/factory.",
+						"minPeriod": "Number of the minimum holding period for shares.",
+						"ratio": "Value of the transaction fee in basis points.",
+						"transactionFee": "Value of the subscription fee."
+					}
+				},
+				"getData()": {
+					"details": "Finds details of a drago pool.",
+					"returns": {
+						"buyPrice": "Value of the share price in wei.",
+						"name": "String name of a drago.",
+						"sellPrice": "Value of the share price in wei.",
+						"symbol": "String symbol of a drago."
+					}
+				},
+				"getEventful()": {
+					"details": "Gets the address of the logger contract.",
+					"returns": {
+						"_0": "Address of the logger contract."
+					}
+				},
+				"totalSupply()": {
+					"details": "Returns the total amount of issued tokens for this drago.",
+					"returns": {
+						"totaSupply": "Number of shares."
+					}
+				}
+			},
+			"title": "Pool Interface - Interface of pool standard functions.",
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"notice": "only public view functions are used",
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/Pool/IPool.sol": "IPool"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/Pool/IPool.sol": {
+			"keccak256": "0x0abb970914c1cafcfd32878b17a5bcfadea92cecf8379f5f66c3c1f6058e1f65",
+			"urls": [
+				"bzz-raw://840d2720cafaf1e15c355062ae3b4fef0e265c9d9287fb34f4a79a02316669ba",
+				"dweb:/ipfs/QmPuWDRPQKJGheivoxCQWzh8vpKJFA2d873uRizK1QmoWP"
+			]
+		}
+	},
+	"version": 1
+}

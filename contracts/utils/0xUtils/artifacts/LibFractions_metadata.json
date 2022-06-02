@@ -1,0 +1,65 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/0xUtils/LibFractions.sol": "LibFractions"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/0xUtils/LibFractions.sol": {
+			"keccak256": "0x8f746d866528cadd5c454aab2b0ecf64a8e9a0756b83abc2ce75156542017592",
+			"urls": [
+				"bzz-raw://37e14580af559d5ca906603bcb02443a08922207d88259b13eef0ad864d03a45",
+				"dweb:/ipfs/Qmdq87dBXLdYNZ96S5XtEecvYFcr6uaZGBbRaqHEZkTvGC"
+			]
+		},
+		"localhost/utils/0xUtils/LibRichErrors.sol": {
+			"keccak256": "0xc70446f21236f9c76bc769e36ea5027a1b96db6ebc1d730ef7f6fcebf266fb23",
+			"urls": [
+				"bzz-raw://57c5926a88098e902099c5e8b6eea51110e120b6442d2003f8fdbca1d2ec44df",
+				"dweb:/ipfs/QmQhTpubqBKUpC63rZvmwfECq6szYgZTSDrvnuH7TxVgv1"
+			]
+		},
+		"localhost/utils/0xUtils/LibSafeMath.sol": {
+			"keccak256": "0xd0e19089e0a1669023466c29551fbaa6586885dfefb8793ac7beba59ef9e6554",
+			"urls": [
+				"bzz-raw://b62ec6b8c52285747567d1bcf8261138aac9e5f9deeb0d2a466f2515e3b66433",
+				"dweb:/ipfs/QmRV8mE4EqcA79si2Rf8bCsLB5fmcmx8QMyYdKAWooP1j3"
+			]
+		},
+		"localhost/utils/0xUtils/LibSafeMathRichErrors.sol": {
+			"keccak256": "0xc963d193a9472325a179a20b1b1fe3cad0e249f5e97c58269c6c2a4a18c70e07",
+			"urls": [
+				"bzz-raw://31043f6258ac57c7832160f08359aa2173fa0bcad691929a06dd446917f24012",
+				"dweb:/ipfs/QmXzeTVTXkZAUjuX4c8vbGpu76CcJbjaqW37v6SZ9jiktF"
+			]
+		}
+	},
+	"version": 1
+}

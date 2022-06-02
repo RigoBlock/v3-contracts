@@ -1,0 +1,466 @@
+{
+	"deploy": {
+		"VM:-": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"main:1": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"ropsten:3": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"rinkeby:4": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"kovan:42": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"görli:5": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"Custom": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		}
+	},
+	"data": {
+		"bytecode": {
+			"generatedSources": [],
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"deployedBytecode": {
+			"generatedSources": [],
+			"immutableReferences": {},
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"gasEstimates": null,
+		"methodIdentifiers": {
+			"addGroup(address)": "f9515f1b",
+			"dragoCount()": "cd6f4e0d",
+			"drain()": "9890220b",
+			"fromAddress(address)": "b72e717d",
+			"fromId(uint256)": "c277f1ac",
+			"fromName(string)": "b43e91f8",
+			"getFee()": "ced72f87",
+			"getGroups()": "c72b5176",
+			"getNameFromAddress(address)": "aac746ee",
+			"getSymbolFromAddress(address)": "d0ee32c4",
+			"meta(uint256,bytes32)": "7958533a",
+			"register(address,string,string,uint256,address)": "3fa7d3e3",
+			"setFee(uint256)": "69fe0e2d",
+			"setMeta(uint256,bytes32,bytes32)": "dd93890b",
+			"setUpgraded(uint256)": "428afcd1",
+			"unregister(uint256)": "a02b161e",
+			"updateOwner(uint256)": "31daabb7",
+			"updateOwners(uint256[])": "4510ee2d",
+			"upgrade(address)": "0900f010"
+		}
+	},
+	"abi": [
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_group",
+					"type": "address"
+				}
+			],
+			"name": "addGroup",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "dragoCount",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "drain",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_drago",
+					"type": "address"
+				}
+			],
+			"name": "fromAddress",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "id",
+					"type": "uint256"
+				},
+				{
+					"internalType": "string",
+					"name": "name",
+					"type": "string"
+				},
+				{
+					"internalType": "string",
+					"name": "symbol",
+					"type": "string"
+				},
+				{
+					"internalType": "uint256",
+					"name": "dragoId",
+					"type": "uint256"
+				},
+				{
+					"internalType": "address",
+					"name": "owner",
+					"type": "address"
+				},
+				{
+					"internalType": "address",
+					"name": "group",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_id",
+					"type": "uint256"
+				}
+			],
+			"name": "fromId",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "drago",
+					"type": "address"
+				},
+				{
+					"internalType": "string",
+					"name": "name",
+					"type": "string"
+				},
+				{
+					"internalType": "string",
+					"name": "symbol",
+					"type": "string"
+				},
+				{
+					"internalType": "uint256",
+					"name": "dragoId",
+					"type": "uint256"
+				},
+				{
+					"internalType": "address",
+					"name": "owner",
+					"type": "address"
+				},
+				{
+					"internalType": "address",
+					"name": "group",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "string",
+					"name": "_name",
+					"type": "string"
+				}
+			],
+			"name": "fromName",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "id",
+					"type": "uint256"
+				},
+				{
+					"internalType": "address",
+					"name": "drago",
+					"type": "address"
+				},
+				{
+					"internalType": "string",
+					"name": "symbol",
+					"type": "string"
+				},
+				{
+					"internalType": "uint256",
+					"name": "dragoId",
+					"type": "uint256"
+				},
+				{
+					"internalType": "address",
+					"name": "owner",
+					"type": "address"
+				},
+				{
+					"internalType": "address",
+					"name": "group",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getFee",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getGroups",
+			"outputs": [
+				{
+					"internalType": "address[]",
+					"name": "",
+					"type": "address[]"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_pool",
+					"type": "address"
+				}
+			],
+			"name": "getNameFromAddress",
+			"outputs": [
+				{
+					"internalType": "string",
+					"name": "",
+					"type": "string"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_pool",
+					"type": "address"
+				}
+			],
+			"name": "getSymbolFromAddress",
+			"outputs": [
+				{
+					"internalType": "string",
+					"name": "",
+					"type": "string"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_id",
+					"type": "uint256"
+				},
+				{
+					"internalType": "bytes32",
+					"name": "_key",
+					"type": "bytes32"
+				}
+			],
+			"name": "meta",
+			"outputs": [
+				{
+					"internalType": "bytes32",
+					"name": "",
+					"type": "bytes32"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_drago",
+					"type": "address"
+				},
+				{
+					"internalType": "string",
+					"name": "_name",
+					"type": "string"
+				},
+				{
+					"internalType": "string",
+					"name": "_symbol",
+					"type": "string"
+				},
+				{
+					"internalType": "uint256",
+					"name": "_dragoId",
+					"type": "uint256"
+				},
+				{
+					"internalType": "address",
+					"name": "_owner",
+					"type": "address"
+				}
+			],
+			"name": "register",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "payable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_fee",
+					"type": "uint256"
+				}
+			],
+			"name": "setFee",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_id",
+					"type": "uint256"
+				},
+				{
+					"internalType": "bytes32",
+					"name": "_key",
+					"type": "bytes32"
+				},
+				{
+					"internalType": "bytes32",
+					"name": "_value",
+					"type": "bytes32"
+				}
+			],
+			"name": "setMeta",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_version",
+					"type": "uint256"
+				}
+			],
+			"name": "setUpgraded",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_id",
+					"type": "uint256"
+				}
+			],
+			"name": "unregister",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_id",
+					"type": "uint256"
+				}
+			],
+			"name": "updateOwner",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256[]",
+					"name": "_id",
+					"type": "uint256[]"
+				}
+			],
+			"name": "updateOwners",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "_newAddress",
+					"type": "address"
+				}
+			],
+			"name": "upgrade",
+			"outputs": [],
+			"stateMutability": "payable",
+			"type": "function"
+		}
+	]
+}

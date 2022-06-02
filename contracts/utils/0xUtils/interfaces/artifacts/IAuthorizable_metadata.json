@@ -1,0 +1,166 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "caller",
+						"type": "address"
+					}
+				],
+				"name": "AuthorizedAddressAdded",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "caller",
+						"type": "address"
+					}
+				],
+				"name": "AuthorizedAddressRemoved",
+				"type": "event"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					}
+				],
+				"name": "addAuthorizedAddress",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getAuthorizedAddresses",
+				"outputs": [
+					{
+						"internalType": "address[]",
+						"name": "",
+						"type": "address[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					}
+				],
+				"name": "removeAuthorizedAddress",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "index",
+						"type": "uint256"
+					}
+				],
+				"name": "removeAuthorizedAddressAtIndex",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"addAuthorizedAddress(address)": {
+					"details": "Authorizes an address.",
+					"params": {
+						"target": "Address to authorize."
+					}
+				},
+				"getAuthorizedAddresses()": {
+					"details": "Gets all authorized addresses.",
+					"returns": {
+						"_0": "Array of authorized addresses."
+					}
+				},
+				"removeAuthorizedAddress(address)": {
+					"details": "Removes authorizion of an address.",
+					"params": {
+						"target": "Address to remove authorization from."
+					}
+				},
+				"removeAuthorizedAddressAtIndex(address,uint256)": {
+					"details": "Removes authorizion of an address.",
+					"params": {
+						"index": "Index of target in authorities array.",
+						"target": "Address to remove authorization from."
+					}
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/0xUtils/interfaces/IAuthorizable.sol": "IAuthorizable"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/0xUtils/interfaces/IAuthorizable.sol": {
+			"keccak256": "0xd89fb9d873e84217bbe23cfb14984bd6615968f9821b9a06912c76c0614393d6",
+			"urls": [
+				"bzz-raw://e8b6764751e9a8b148831a7de16f96bb020707ddaa77bb15afc7aca959cba4ea",
+				"dweb:/ipfs/QmdQxgwaCCQXk3DvSZsAFt7igZz2eusRUjVMdfYYEn56nM"
+			]
+		}
+	},
+	"version": 1
+}

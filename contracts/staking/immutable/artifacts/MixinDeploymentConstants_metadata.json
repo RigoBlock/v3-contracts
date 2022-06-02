@@ -1,0 +1,956 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "addr",
+						"type": "address"
+					}
+				],
+				"name": "addPopAddress",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "address",
+						"name": "member",
+						"type": "address"
+					}
+				],
+				"name": "computeRewardBalanceOfDelegator",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "reward",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "computeRewardBalanceOfOperator",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "reward",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "rigoblockPoolAddress",
+						"type": "address"
+					}
+				],
+				"name": "createStakingPool",
+				"outputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "poolAccount",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "popReward",
+						"type": "uint256"
+					}
+				],
+				"name": "creditPopReward",
+				"outputs": [],
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint32",
+						"name": "newOperatorShare",
+						"type": "uint32"
+					}
+				],
+				"name": "decreaseStakingPoolOperatorShare",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "endEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "finalizePool",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getCurrentEpochEarliestEndTimeInSeconds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getDragoRegistry",
+				"outputs": [
+					{
+						"internalType": "contract IDragoRegistry",
+						"name": "dragoRegistry",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "enum IStructs.StakeStatus",
+						"name": "stakeStatus",
+						"type": "uint8"
+					}
+				],
+				"name": "getGlobalStakeByStatus",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getGrgContract",
+				"outputs": [
+					{
+						"internalType": "contract RigoTokenFace",
+						"name": "grgContract",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getGrgVault",
+				"outputs": [
+					{
+						"internalType": "contract IGrgVault",
+						"name": "grgVault",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					},
+					{
+						"internalType": "enum IStructs.StakeStatus",
+						"name": "stakeStatus",
+						"type": "uint8"
+					}
+				],
+				"name": "getOwnerStakeByStatus",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getParams",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "_epochDurationInSeconds",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint32",
+						"name": "_rewardDelegatedStakeWeight",
+						"type": "uint32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_minimumPoolStake",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint32",
+						"name": "_cobbDouglasAlphaNumerator",
+						"type": "uint32"
+					},
+					{
+						"internalType": "uint32",
+						"name": "_cobbDouglasAlphaDenominator",
+						"type": "uint32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getStakeDelegatedToPoolByOwner",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getStakingPool",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "address",
+								"name": "operator",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "stakingPal",
+								"type": "address"
+							},
+							{
+								"internalType": "uint32",
+								"name": "operatorShare",
+								"type": "uint32"
+							},
+							{
+								"internalType": "uint32",
+								"name": "stakingPalShare",
+								"type": "uint32"
+							}
+						],
+						"internalType": "struct IStructs.Pool",
+						"name": "",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getStakingPoolStatsThisEpoch",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "feesCollected",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "weightedStake",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "membersStake",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct IStructs.PoolStats",
+						"name": "",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					}
+				],
+				"name": "getTotalStake",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getTotalStakeDelegatedToPool",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "init",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "stakingPoolId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "address",
+						"name": "rigoblockPoolAccount",
+						"type": "address"
+					}
+				],
+				"name": "joinStakingPoolAsRbPoolAccount",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"components": [
+							{
+								"internalType": "enum IStructs.StakeStatus",
+								"name": "status",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "poolId",
+								"type": "bytes32"
+							}
+						],
+						"internalType": "struct IStructs.StakeInfo",
+						"name": "from",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{
+								"internalType": "enum IStructs.StakeStatus",
+								"name": "status",
+								"type": "uint8"
+							},
+							{
+								"internalType": "bytes32",
+								"name": "poolId",
+								"type": "bytes32"
+							}
+						],
+						"internalType": "struct IStructs.StakeInfo",
+						"name": "to",
+						"type": "tuple"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "moveStake",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "addr",
+						"type": "address"
+					}
+				],
+				"name": "removePopAddress",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "_epochDurationInSeconds",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint32",
+						"name": "_rewardDelegatedStakeWeight",
+						"type": "uint32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_minimumPoolStake",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint32",
+						"name": "_cobbDouglasAlphaNumerator",
+						"type": "uint32"
+					},
+					{
+						"internalType": "uint32",
+						"name": "_cobbDouglasAlphaDenominator",
+						"type": "uint32"
+					}
+				],
+				"name": "setParams",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "address",
+						"name": "newStakingPalAddress",
+						"type": "address"
+					}
+				],
+				"name": "setStakingPalAddress",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "stake",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "unstake",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "withdrawDelegatorRewards",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"addPopAddress(address)": {
+					"details": "Adds a new proof_of_performance address.",
+					"params": {
+						"addr": "Address of proof_of_performance contract to add."
+					}
+				},
+				"computeRewardBalanceOfDelegator(bytes32,address)": {
+					"details": "Computes the reward balance in ETH of a specific member of a pool.",
+					"params": {
+						"member": "The member of the pool.",
+						"poolId": "Unique id of pool."
+					},
+					"returns": {
+						"reward": "Balance in ETH."
+					}
+				},
+				"computeRewardBalanceOfOperator(bytes32)": {
+					"details": "Computes the reward balance in ETH of the operator of a pool.",
+					"params": {
+						"poolId": "Unique id of pool."
+					},
+					"returns": {
+						"reward": "Balance in ETH."
+					}
+				},
+				"createStakingPool(address)": {
+					"details": "Create a new staking pool. The sender will be the staking pal of this pool. Note that a staking pal must be payable.",
+					"params": {
+						"rigoblockPoolAddress": "Adds rigoblock pool to the created staking pool for convenience if non-null."
+					},
+					"returns": {
+						"poolId": "The unique pool id generated for this pool."
+					}
+				},
+				"creditPopReward(address,uint256)": {
+					"details": "Credits the value of a pool's pop reward.      Only a known RigoBlock pop can call this method. See      (MixinPopManager).",
+					"params": {
+						"poolAccount": "The address of the rigoblock pool account.",
+						"popReward": "The pop reward."
+					}
+				},
+				"decreaseStakingPoolOperatorShare(bytes32,uint32)": {
+					"details": "Decreases the operator share for the given pool (i.e. increases pool rewards for members).",
+					"params": {
+						"newOperatorShare": "The newly decreased percentage of any rewards owned by the operator.",
+						"poolId": "Unique Id of pool."
+					}
+				},
+				"endEpoch()": {
+					"details": "Begins a new epoch, preparing the prior one for finalization.      Throws if not enough time has passed between epochs or if the      previous epoch was not fully finalized.",
+					"returns": {
+						"_0": "numPoolsToFinalize The number of unfinalized pools."
+					}
+				},
+				"finalizePool(bytes32)": {
+					"details": "Instantly finalizes a single pool that earned rewards in the previous      epoch, crediting it rewards for members and withdrawing operator's      rewards as WETH. This can be called by internal functions that need      to finalize a pool immediately. Does nothing if the pool is already      finalized or did not earn rewards in the previous epoch.",
+					"params": {
+						"poolId": "The pool ID to finalize."
+					}
+				},
+				"getCurrentEpochEarliestEndTimeInSeconds()": {
+					"details": "Returns the earliest end time in seconds of this epoch.      The next epoch can begin once this time is reached.      Epoch period = [startTimeInSeconds..endTimeInSeconds)",
+					"returns": {
+						"_0": "Time in seconds."
+					}
+				},
+				"getDragoRegistry()": {
+					"details": "An overridable way to access the deployed dragoRegistry.      Must be view to allow overrides to access state.",
+					"returns": {
+						"dragoRegistry": "The dragoRegistry contract."
+					}
+				},
+				"getGlobalStakeByStatus(uint8)": {
+					"details": "Gets global stake for a given status.",
+					"params": {
+						"stakeStatus": "UNDELEGATED or DELEGATED"
+					},
+					"returns": {
+						"balance": "Global stake for given status."
+					}
+				},
+				"getGrgContract()": {
+					"details": "An overridable way to access the deployed GRG contract.      Must be view to allow overrides to access state.",
+					"returns": {
+						"grgContract": "The GRG contract instance."
+					}
+				},
+				"getGrgVault()": {
+					"details": "An overridable way to access the deployed grgVault.      Must be view to allow overrides to access state.",
+					"returns": {
+						"grgVault": "The grgVault contract."
+					}
+				},
+				"getOwnerStakeByStatus(address,uint8)": {
+					"details": "Gets an owner's stake balances by status.",
+					"params": {
+						"stakeStatus": "UNDELEGATED or DELEGATED",
+						"staker": "Owner of stake."
+					},
+					"returns": {
+						"balance": "Owner's stake balances for given status."
+					}
+				},
+				"getParams()": {
+					"details": "Retrieves all configurable parameter values.",
+					"returns": {
+						"_cobbDouglasAlphaDenominator": "Denominator for cobb douglas alpha factor.",
+						"_cobbDouglasAlphaNumerator": "Numerator for cobb douglas alpha factor.",
+						"_epochDurationInSeconds": "Minimum seconds between epochs.",
+						"_minimumPoolStake": "Minimum amount of stake required in a pool to collect rewards.",
+						"_rewardDelegatedStakeWeight": "How much delegated stake is weighted vs operator stake, in ppm."
+					}
+				},
+				"getStakeDelegatedToPoolByOwner(address,bytes32)": {
+					"params": {
+						"poolId": "Unique Id of pool.",
+						"staker": "of stake."
+					},
+					"returns": {
+						"balance": "Stake delegated to pool by staker."
+					}
+				},
+				"getStakingPool(bytes32)": {
+					"details": "Returns a staking pool",
+					"params": {
+						"poolId": "Unique id of pool."
+					}
+				},
+				"getStakingPoolStatsThisEpoch(bytes32)": {
+					"details": "Get stats on a staking pool in this epoch.",
+					"params": {
+						"poolId": "Pool Id to query."
+					},
+					"returns": {
+						"_0": "PoolStats struct for pool id."
+					}
+				},
+				"getTotalStake(address)": {
+					"details": "Returns the total stake for a given staker.",
+					"params": {
+						"staker": "of stake."
+					},
+					"returns": {
+						"_0": "Total GRG staked by `staker`."
+					}
+				},
+				"getTotalStakeDelegatedToPool(bytes32)": {
+					"details": "Returns the total stake delegated to a specific staking pool,      across all members.",
+					"params": {
+						"poolId": "Unique Id of pool."
+					},
+					"returns": {
+						"balance": "Total stake delegated to pool."
+					}
+				},
+				"init()": {
+					"details": "Initialize storage owned by this contract.      This function should not be called directly.      The StakingProxy contract will call it in `attachStakingContract()`."
+				},
+				"joinStakingPoolAsRbPoolAccount(bytes32,address)": {
+					"details": "Allows caller to join a staking pool as a rigoblock pool id subaccount.",
+					"params": {
+						"rigoblockPoolAccount": "Address of subaccount to be added to staking pool.",
+						"stakingPoolId": "Unique id of staking pool."
+					}
+				},
+				"moveStake((uint8,bytes32),(uint8,bytes32),uint256)": {
+					"details": "Moves stake between statuses: 'undelegated' or 'delegated'.      Delegated stake can also be moved between pools.      This change comes into effect next epoch.",
+					"params": {
+						"amount": "of stake to move.",
+						"from": "status to move stake out of.",
+						"to": "status to move stake into."
+					}
+				},
+				"removePopAddress(address)": {
+					"details": "Removes an existing proof_of_performance address.",
+					"params": {
+						"addr": "Address of proof_of_performance contract to remove."
+					}
+				},
+				"setParams(uint256,uint32,uint256,uint32,uint32)": {
+					"details": "Set all configurable parameters at once.",
+					"params": {
+						"_cobbDouglasAlphaDenominator": "Denominator for cobb douglas alpha factor.",
+						"_cobbDouglasAlphaNumerator": "Numerator for cobb douglas alpha factor.",
+						"_epochDurationInSeconds": "Minimum seconds between epochs.",
+						"_minimumPoolStake": "Minimum amount of stake required in a pool to collect rewards.",
+						"_rewardDelegatedStakeWeight": "How much delegated stake is weighted vs operator stake, in ppm."
+					}
+				},
+				"setStakingPalAddress(bytes32,address)": {
+					"details": "Allows the operator to update the staking pal address.",
+					"params": {
+						"newStakingPalAddress": "Address of the new staking pal.",
+						"poolId": "Unique id of pool."
+					}
+				},
+				"stake(uint256)": {
+					"details": "Stake GRG tokens. Tokens are deposited into the GRG Vault.      Unstake to retrieve the GRG. Stake is in the 'Active' status.",
+					"params": {
+						"amount": "of GRG to stake."
+					}
+				},
+				"unstake(uint256)": {
+					"details": "Unstake. Tokens are withdrawn from the GRG Vault and returned to      the staker. Stake must be in the 'undelegated' status in both the      current and next epoch in order to be unstaked.",
+					"params": {
+						"amount": "of GRG to unstake."
+					}
+				},
+				"withdrawDelegatorRewards(bytes32)": {
+					"details": "Withdraws the caller's WETH rewards that have accumulated      until the last epoch.",
+					"params": {
+						"poolId": "Unique id of pool."
+					}
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/staking/immutable/MixinDeploymentConstants.sol": "MixinDeploymentConstants"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/protocol/DragoRegistry/IDragoRegistry.sol": {
+			"keccak256": "0x8f7cd2738495503e9b181687f89bbce100cdf71d743f5405adb891d939d6e9ed",
+			"urls": [
+				"bzz-raw://8c286b20b97a896b3e247923792f9b1f065f2600c47e81802958db936f34beb3",
+				"dweb:/ipfs/QmRUNsPP4xG171EPVYdZzWqB2JRvcPoij7r4TWr8CgLw4f"
+			]
+		},
+		"localhost/rigoToken/RigoToken/RigoTokenFace.sol": {
+			"keccak256": "0x36c3c5a0a73bde4ef143fde2fcbdfc060cba6a7b01cc1304de9ddd030ac9dd6b",
+			"urls": [
+				"bzz-raw://93768cb08c3c517d57c56da2258d52dd2eaf836a5c70ca239a2106f867aae8da",
+				"dweb:/ipfs/QmQKi1od8hzeBhFQHnDfPhwwhHZGBbGFLrMtDs7FWyeGdq"
+			]
+		},
+		"localhost/staking/immutable/MixinDeploymentConstants.sol": {
+			"keccak256": "0x56389233738bd3ae794b2f098282e8146aa73fbee39c19cc96a30c09c135f76f",
+			"urls": [
+				"bzz-raw://d542f64e97a53fa457e47c0c2a2735ca4fc049c01ed68c970f890f75dd251884",
+				"dweb:/ipfs/QmPSGVv9SsJKbAxeLjkeSzWLzLyU844QG8UhUeVSApEBeq"
+			]
+		},
+		"localhost/staking/interfaces/IGrgVault.sol": {
+			"keccak256": "0xed5ec7fce9f9acd1505143f58294013739e966d6763394445b469b57c8400d2e",
+			"urls": [
+				"bzz-raw://bc5de5fd786789cf52da56e4001b22a1d7d39e8e0f9e54c2423c20090798ad16",
+				"dweb:/ipfs/QmVz4Wv9576PhPKNq3a7fFSaDpienBYczwZc9fgHeusy8m"
+			]
+		},
+		"localhost/staking/interfaces/IStaking.sol": {
+			"keccak256": "0x67202751e4c2266b1c62fcfc9dc2b3e974dbe4533df4bbcacab2794542be8463",
+			"urls": [
+				"bzz-raw://e426b2c7ba3ab8501ba8ececc3974a8da9a1c22a61ed52027b55c3feec9369d6",
+				"dweb:/ipfs/QmYCwmKFgFYxLMuPHPVDLS6tTUvuARAs6DsecZotyLjg1T"
+			]
+		},
+		"localhost/staking/interfaces/IStructs.sol": {
+			"keccak256": "0x10c400a91961455ca5ea5fed8e60b320b1fdf7903dcdc5fe8a7cb8714cd67b3d",
+			"urls": [
+				"bzz-raw://b9aa6fbb76c818a8f75a8ebb44850a7093885fa2132f0539d28008555766ddbd",
+				"dweb:/ipfs/QmSZcmRbdn7mHGEG3fm2oAnBK5occLFqg9TyZWiufqobWy"
+			]
+		},
+		"localhost/utils/0xUtils/IERC20Token.sol": {
+			"keccak256": "0xa6c94ce23e0e1de6488050761a7be629c32d152241e892d36fef3101f549b60d",
+			"urls": [
+				"bzz-raw://b6cc2ed4d6201b50bcca2778ad7defd9d37f65df1efb402d52c75968191342d2",
+				"dweb:/ipfs/QmQYas7SDamGNmy3knLXLM3wTmkpq5cQbXXD8yYfQYBHUC"
+			]
+		},
+		"localhost/utils/0xUtils/IEtherToken.sol": {
+			"keccak256": "0x1ef41b219a84c3d245f947f694bd1e8008feed0fb56316c6eee8e8c5fec54bd4",
+			"urls": [
+				"bzz-raw://df4f12ec60d7339ed8f11e5f8a6bfe7c8f3e26b4d2cc0e80b5fbfb365090336c",
+				"dweb:/ipfs/QmVDZPCL6n16RF9rGnFQDEy65x22AY44RY4fBLvDbsKfBT"
+			]
+		}
+	},
+	"version": 1
+}

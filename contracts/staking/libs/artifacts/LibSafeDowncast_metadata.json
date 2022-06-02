@@ -1,0 +1,60 @@
+{
+	"compiler": {
+		"version": "0.7.5+commit.eb77ed08"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/staking/libs/LibSafeDowncast.sol": "LibSafeDowncast"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/staking/libs/LibSafeDowncast.sol": {
+			"keccak256": "0x87aa6190a86920b187d3d7ed6071210c871ddb4009247089fdbfd7bcf673b8a6",
+			"urls": [
+				"bzz-raw://2846956118a875e5fe3152fbd0bfb6214e0f4ea5e738fbda6054ceb822ed627e",
+				"dweb:/ipfs/QmccH9WJJJCv8NTnUvGArgTduTUwyrryon7YV9RUxCTAzG"
+			]
+		},
+		"localhost/utils/0xUtils/LibRichErrors.sol": {
+			"keccak256": "0xc65d20d5519e4b34218877a01ee9e92fea348db5d208f4a077a4771cc491bd0f",
+			"license": "Apache 2.0",
+			"urls": [
+				"bzz-raw://f04bc0cb601f6484fdd70001e0576b97ac25c84b7f9610edd3e27b3faed81e54",
+				"dweb:/ipfs/QmcQ5hGrgSxWAgcmMuTjHTAoscApLGPPP6HwmGRrwkD68B"
+			]
+		},
+		"localhost/utils/0xUtils/LibSafeMathRichErrors.sol": {
+			"keccak256": "0x9e95687c06942b74104cac11d3eef619315baa66252d4b30983b1826fc0bfe00",
+			"license": "Apache 2.0",
+			"urls": [
+				"bzz-raw://f438260dc3c99e12a90bae8896c2f3b2050f23b4bf61c73bc5de7ecf3acb3dfb",
+				"dweb:/ipfs/QmWNzUMEwWG7mrEuiZJMq41zUPZLCoStq9KpzNGDCT4QoC"
+			]
+		}
+	},
+	"version": 1
+}

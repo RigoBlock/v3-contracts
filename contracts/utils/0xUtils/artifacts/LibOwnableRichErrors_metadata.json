@@ -1,0 +1,44 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/0xUtils/LibOwnableRichErrors.sol": "LibOwnableRichErrors"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/0xUtils/LibOwnableRichErrors.sol": {
+			"keccak256": "0x016064761c548df3f567781c30ecb57bcc1cd3c3e8387dc7f7a9d14115134696",
+			"urls": [
+				"bzz-raw://cb7e9e5228c3b815c06a7a1b524502e6e99fed098b46c6acfa4a9300f422ce85",
+				"dweb:/ipfs/QmWgvq9Dn3W4aHLz54qgf16n8htK5sqmGB8fgkrEEWgBKY"
+			]
+		}
+	},
+	"version": 1
+}

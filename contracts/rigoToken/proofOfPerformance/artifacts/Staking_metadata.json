@@ -1,0 +1,127 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "poolAccount",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "popReward",
+						"type": "uint256"
+					}
+				],
+				"name": "creditPopReward",
+				"outputs": [],
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "epochDurationInSeconds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"creditPopReward(address,uint256)": {
+					"details": "Credits the value of a pool's pop reward.      Only a known RigoBlock pop can call this method. See      (MixinPopManager).",
+					"params": {
+						"poolAccount": "The address of the rigoblock pool account.",
+						"popReward": "The pop reward."
+					}
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/rigoToken/ProofOfPerformance/ProofOfPerformance.sol": "Staking"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/protocol/DragoRegistry/IDragoRegistry.sol": {
+			"keccak256": "0x8f7cd2738495503e9b181687f89bbce100cdf71d743f5405adb891d939d6e9ed",
+			"urls": [
+				"bzz-raw://8c286b20b97a896b3e247923792f9b1f065f2600c47e81802958db936f34beb3",
+				"dweb:/ipfs/QmRUNsPP4xG171EPVYdZzWqB2JRvcPoij7r4TWr8CgLw4f"
+			]
+		},
+		"localhost/rigoToken/Inflation/InflationFace.sol": {
+			"keccak256": "0xab53b33126958620b9e5635d6bf31282407818c09985785b8c215617ef43af89",
+			"urls": [
+				"bzz-raw://ad6b88be81918c8cc5a784388e18f53e1df6ed274def2e5461856e533b5a7681",
+				"dweb:/ipfs/QmdCRbk5PRv1WPK23MAmVBCriNhDSFUCR3ci4tontvrQBt"
+			]
+		},
+		"localhost/rigoToken/ProofOfPerformance/ProofOfPerformance.sol": {
+			"keccak256": "0xab6fa9bfce6ef639fb4d9fd30013b9c17b7ce35ff316006f84be1f6ef7d34ad6",
+			"license": "Apache 2.0",
+			"urls": [
+				"bzz-raw://54321e1571a678aadddd05dfef3c1c4d8614d9d9c584f80231ac2192c66df0bf",
+				"dweb:/ipfs/QmWb5xyCQE9Ah4svVSn6VPk7tH99zXU37DjfLmRDXXB4uw"
+			]
+		},
+		"localhost/rigoToken/ProofOfPerformance/ProofOfPerformanceFace.sol": {
+			"keccak256": "0x9365e22cbd973ba3cf2f9cc99c94b21dbf86fce7072d320c9120bae4e28c1ae4",
+			"urls": [
+				"bzz-raw://6e73fe21db75946aeb8d3ebf38c548edd0a672f05ab3d16bd68d5893e13d0f12",
+				"dweb:/ipfs/QmRuP4wp92tKBiAxLqEeqFV2PEWQJRvJhcNY7L425Nm3zn"
+			]
+		},
+		"localhost/rigoToken/RigoToken/RigoTokenFace.sol": {
+			"keccak256": "0x36c3c5a0a73bde4ef143fde2fcbdfc060cba6a7b01cc1304de9ddd030ac9dd6b",
+			"urls": [
+				"bzz-raw://93768cb08c3c517d57c56da2258d52dd2eaf836a5c70ca239a2106f867aae8da",
+				"dweb:/ipfs/QmQKi1od8hzeBhFQHnDfPhwwhHZGBbGFLrMtDs7FWyeGdq"
+			]
+		},
+		"localhost/utils/Pool/IPool.sol": {
+			"keccak256": "0xe7234162e7f84e8c531aa124193d4a1efa20ddc8783f1f8e2e70b083ba6a6d44",
+			"urls": [
+				"bzz-raw://74eb2493ca76feda695bbce607a5314c498265efbf5ac36c1358ef7741c7b1aa",
+				"dweb:/ipfs/QmcBwYNRqhwTExpLkCG25v8cbcNgkxSWJ81rztgE5dXm6a"
+			]
+		},
+		"localhost/utils/SafeMath/SafeMath.sol": {
+			"keccak256": "0x2fc47a847ae97fc6f8c0d1b1a215a96ee9cc38b79a235c0128379c593e2f7ae4",
+			"urls": [
+				"bzz-raw://e03a7e614d6c4e87a3d1b7da1d98f4c4ad0c1231a11e5414f8668bfb096cb818",
+				"dweb:/ipfs/QmWXkzAd3i3x1LfSz7i2EUarC7d8MNmF7S8Z73pV9sFMY3"
+			]
+		}
+	},
+	"version": 1
+}

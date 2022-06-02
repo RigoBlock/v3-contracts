@@ -1,0 +1,60 @@
+{
+	"compiler": {
+		"version": "0.7.5+commit.eb77ed08"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"details": "Signed, fixed-point, 127-bit precision math library.",
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/staking/libs/LibFixedMath.sol": "LibFixedMath"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/staking/libs/LibFixedMath.sol": {
+			"keccak256": "0xdaf63fb873afa62b8e5cc7935cd3541ae2f5a2562631b19445ee967789e520af",
+			"urls": [
+				"bzz-raw://7ccefcd5f56356640eb8de114b232b05e51774772bc7e7f9c3191eae79a73eb3",
+				"dweb:/ipfs/Qme7dfWroSeyDFPkGdG2UqD57sUTViT4k7QGxTjf4cNBg6"
+			]
+		},
+		"localhost/staking/libs/LibFixedMathRichErrors.sol": {
+			"keccak256": "0xdeaf3bb6ae4a6fc537d6c35144d3299ba1797f8ee68c4a18073fa7d452133f03",
+			"urls": [
+				"bzz-raw://044e6d2dabf234477dece4ad66b43bde1be4120736ef06d922dd50a1be563744",
+				"dweb:/ipfs/QmZtomTS6dkAJSQGuJFxFZYQ4XsYb7LBEK3bhyAEEWwpbz"
+			]
+		},
+		"localhost/utils/0xUtils/LibRichErrors.sol": {
+			"keccak256": "0xc65d20d5519e4b34218877a01ee9e92fea348db5d208f4a077a4771cc491bd0f",
+			"license": "Apache 2.0",
+			"urls": [
+				"bzz-raw://f04bc0cb601f6484fdd70001e0576b97ac25c84b7f9610edd3e27b3faed81e54",
+				"dweb:/ipfs/QmcQ5hGrgSxWAgcmMuTjHTAoscApLGPPP6HwmGRrwkD68B"
+			]
+		}
+	},
+	"version": 1
+}

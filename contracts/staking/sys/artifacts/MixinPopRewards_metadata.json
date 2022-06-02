@@ -1,0 +1,1827 @@
+{
+	"compiler": {
+		"version": "0.5.17+commit.d19bba13"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "caller",
+						"type": "address"
+					}
+				],
+				"name": "AuthorizedAddressAdded",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "caller",
+						"type": "address"
+					}
+				],
+				"name": "AuthorizedAddressRemoved",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "numPoolsToFinalize",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "rewardsAvailable",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "totalFeesCollected",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "totalWeightedStake",
+						"type": "uint256"
+					}
+				],
+				"name": "EpochEnded",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "rewardsPaid",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "rewardsRemaining",
+						"type": "uint256"
+					}
+				],
+				"name": "EpochFinalized",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint8",
+						"name": "fromStatus",
+						"type": "uint8"
+					},
+					{
+						"indexed": true,
+						"internalType": "bytes32",
+						"name": "fromPool",
+						"type": "bytes32"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint8",
+						"name": "toStatus",
+						"type": "uint8"
+					},
+					{
+						"indexed": true,
+						"internalType": "bytes32",
+						"name": "toPool",
+						"type": "bytes32"
+					}
+				],
+				"name": "MoveStake",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint32",
+						"name": "oldOperatorShare",
+						"type": "uint32"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint32",
+						"name": "newOperatorShare",
+						"type": "uint32"
+					}
+				],
+				"name": "OperatorShareDecreased",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "previousOwner",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "OwnershipTransferred",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "epochDurationInSeconds",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint32",
+						"name": "rewardDelegatedStakeWeight",
+						"type": "uint32"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "minimumPoolStake",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "cobbDouglasAlphaNumerator",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "cobbDouglasAlphaDenominator",
+						"type": "uint256"
+					}
+				],
+				"name": "ParamsSet",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "exchangeAddress",
+						"type": "address"
+					}
+				],
+				"name": "PopAdded",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "exchangeAddress",
+						"type": "address"
+					}
+				],
+				"name": "PopRemoved",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "rbPoolAddress",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "RbPoolStakingPoolSet",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "operatorReward",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "membersReward",
+						"type": "uint256"
+					}
+				],
+				"name": "RewardsPaid",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "Stake",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "operator",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint32",
+						"name": "operatorShare",
+						"type": "uint32"
+					}
+				],
+				"name": "StakingPoolCreated",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "epoch",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "StakingPoolEarnedRewardsInEpoch",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "Unstake",
+				"type": "event"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					}
+				],
+				"name": "addAuthorizedAddress",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "addr",
+						"type": "address"
+					}
+				],
+				"name": "addPopAddress",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "aggregatedStatsByEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "rewardsAvailable",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "numPoolsToFinalize",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "totalFeesCollected",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "totalWeightedStake",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "totalRewardsFinalized",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "authorities",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "authorized",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "cobbDouglasAlphaDenominator",
+				"outputs": [
+					{
+						"internalType": "uint32",
+						"name": "",
+						"type": "uint32"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "cobbDouglasAlphaNumerator",
+				"outputs": [
+					{
+						"internalType": "uint32",
+						"name": "",
+						"type": "uint32"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "address",
+						"name": "member",
+						"type": "address"
+					}
+				],
+				"name": "computeRewardBalanceOfDelegator",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "reward",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "computeRewardBalanceOfOperator",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "reward",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "rigoblockPoolAddress",
+						"type": "address"
+					}
+				],
+				"name": "createStakingPool",
+				"outputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "currentEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "currentEpochStartTimeInSeconds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint32",
+						"name": "newOperatorShare",
+						"type": "uint32"
+					}
+				],
+				"name": "decreaseStakingPoolOperatorShare",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [],
+				"name": "endEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "epochDurationInSeconds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "finalizePool",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "getAuthorizedAddresses",
+				"outputs": [
+					{
+						"internalType": "address[]",
+						"name": "",
+						"type": "address[]"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "getCurrentEpochEarliestEndTimeInSeconds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "getDragoRegistry",
+				"outputs": [
+					{
+						"internalType": "contract IDragoRegistry",
+						"name": "dragoRegistry",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "enum IStructs.StakeStatus",
+						"name": "stakeStatus",
+						"type": "uint8"
+					}
+				],
+				"name": "getGlobalStakeByStatus",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "getGrgContract",
+				"outputs": [
+					{
+						"internalType": "contract RigoTokenFace",
+						"name": "grgContract",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "getGrgVault",
+				"outputs": [
+					{
+						"internalType": "contract IGrgVault",
+						"name": "grgVault",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					},
+					{
+						"internalType": "enum IStructs.StakeStatus",
+						"name": "stakeStatus",
+						"type": "uint8"
+					}
+				],
+				"name": "getOwnerStakeByStatus",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getStakeDelegatedToPoolByOwner",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getStakingPool",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "address",
+								"name": "operator",
+								"type": "address"
+							},
+							{
+								"internalType": "uint32",
+								"name": "operatorShare",
+								"type": "uint32"
+							},
+							{
+								"internalType": "address",
+								"name": "stakingPal",
+								"type": "address"
+							}
+						],
+						"internalType": "struct IStructs.Pool",
+						"name": "",
+						"type": "tuple"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getStakingPoolStatsThisEpoch",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "feesCollected",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "weightedStake",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "membersStake",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct IStructs.PoolStats",
+						"name": "",
+						"type": "tuple"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "staker",
+						"type": "address"
+					}
+				],
+				"name": "getTotalStake",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "getTotalStakeDelegatedToPool",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint64",
+								"name": "currentEpoch",
+								"type": "uint64"
+							},
+							{
+								"internalType": "uint96",
+								"name": "currentEpochBalance",
+								"type": "uint96"
+							},
+							{
+								"internalType": "uint96",
+								"name": "nextEpochBalance",
+								"type": "uint96"
+							}
+						],
+						"internalType": "struct IStructs.StoredBalance",
+						"name": "balance",
+						"type": "tuple"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "getWethContract",
+				"outputs": [
+					{
+						"internalType": "contract IEtherToken",
+						"name": "wethContract",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "address",
+						"name": "rigoblockPoolAccount",
+						"type": "address"
+					}
+				],
+				"name": "joinStakingPoolAsRbPoolAccount",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "lastPoolId",
+				"outputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "minimumPoolStake",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "owner",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "makerAddress",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "payerAddress",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "protocolFee",
+						"type": "uint256"
+					}
+				],
+				"name": "payProtocolFee",
+				"outputs": [],
+				"payable": true,
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "poolIdByRbPoolAccount",
+				"outputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "poolStatsByEpoch",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "feesCollected",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "weightedStake",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "membersStake",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					}
+				],
+				"name": "removeAuthorizedAddress",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "target",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "index",
+						"type": "uint256"
+					}
+				],
+				"name": "removeAuthorizedAddressAtIndex",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "addr",
+						"type": "address"
+					}
+				],
+				"name": "removeExchangeAddress",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "rewardDelegatedStakeWeight",
+				"outputs": [
+					{
+						"internalType": "uint32",
+						"name": "",
+						"type": "uint32"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"name": "rewardsByPoolId",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "stakingContract",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "transferOwnership",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "validPops",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": true,
+				"inputs": [],
+				"name": "wethReservedForPoolRewards",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"payable": false,
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "poolId",
+						"type": "bytes32"
+					}
+				],
+				"name": "withdrawDelegatorRewards",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"methods": {
+				"addAuthorizedAddress(address)": {
+					"details": "Authorizes an address.",
+					"params": {
+						"target": "Address to authorize."
+					}
+				},
+				"addPopAddress(address)": {
+					"details": "Adds a new pop address",
+					"params": {
+						"addr": "Address of pop contract to add"
+					}
+				},
+				"computeRewardBalanceOfDelegator(bytes32,address)": {
+					"details": "Computes the reward balance in ETH of a specific member of a pool.",
+					"params": {
+						"member": "The member of the pool.",
+						"poolId": "Unique id of pool."
+					},
+					"return": "totalReward Balance in ETH."
+				},
+				"computeRewardBalanceOfOperator(bytes32)": {
+					"details": "Computes the reward balance in ETH of the operator of a pool.",
+					"params": {
+						"poolId": "Unique id of pool."
+					},
+					"return": "totalReward Balance in ETH."
+				},
+				"createStakingPool(address)": {
+					"details": "Create a new staking pool. The sender will be the operator of this pool. Note that an operator must be payable.",
+					"params": {
+						"rigoblockPoolAddress": "Adds rigoblock pool to the created staking pool for convenience if non-null."
+					},
+					"return": "poolId The unique pool id generated for this pool."
+				},
+				"decreaseStakingPoolOperatorShare(bytes32,uint32)": {
+					"details": "Decreases the operator share for the given pool (i.e. increases pool rewards for members).",
+					"params": {
+						"newOperatorShare": "The newly decreased percentage of any rewards owned by the operator.",
+						"poolId": "Unique Id of pool."
+					}
+				},
+				"endEpoch()": {
+					"details": "Begins a new epoch, preparing the prior one for finalization.      Throws if not enough time has passed between epochs or if the      previous epoch was not fully finalized.",
+					"return": "numPoolsToFinalize The number of unfinalized pools."
+				},
+				"finalizePool(bytes32)": {
+					"details": "Instantly finalizes a single pool that earned rewards in the previous      epoch, crediting it rewards for members and withdrawing operator's      rewards as WETH. This can be called by internal functions that need      to finalize a pool immediately. Does nothing if the pool is already      finalized or did not earn rewards in the previous epoch.",
+					"params": {
+						"poolId": "The pool ID to finalize."
+					}
+				},
+				"getAuthorizedAddresses()": {
+					"details": "Gets all authorized addresses.",
+					"return": "Array of authorized addresses."
+				},
+				"getCurrentEpochEarliestEndTimeInSeconds()": {
+					"details": "Returns the earliest end time in seconds of this epoch.      The next epoch can begin once this time is reached.      Epoch period = [startTimeInSeconds..endTimeInSeconds)",
+					"return": "Time in seconds."
+				},
+				"getDragoRegistry()": {
+					"details": "An overridable way to access the deployed dragoRegistry.      Must be view to allow overrides to access state.",
+					"return": "dragoRegistry The dragoRegistry contract."
+				},
+				"getGlobalStakeByStatus(uint8)": {
+					"details": "Gets global stake for a given status.",
+					"params": {
+						"stakeStatus": "UNDELEGATED or DELEGATED"
+					},
+					"return": "Global stake for given status."
+				},
+				"getGrgContract()": {
+					"details": "An overridable way to access the deployed GRG contract.      Must be view to allow overrides to access state.",
+					"return": "grgContract The GRG contract instance."
+				},
+				"getGrgVault()": {
+					"details": "An overridable way to access the deployed grgVault.      Must be view to allow overrides to access state.",
+					"return": "grgVault The grgVault contract."
+				},
+				"getOwnerStakeByStatus(address,uint8)": {
+					"details": "Gets an owner's stake balances by status.",
+					"params": {
+						"stakeStatus": "UNDELEGATED or DELEGATED",
+						"staker": "Owner of stake."
+					},
+					"return": "Owner's stake balances for given status."
+				},
+				"getStakeDelegatedToPoolByOwner(address,bytes32)": {
+					"details": "Returns the stake delegated to a specific staking pool, by a given staker.",
+					"params": {
+						"poolId": "Unique Id of pool.",
+						"staker": "of stake."
+					},
+					"return": "Stake delegated to pool by staker."
+				},
+				"getStakingPool(bytes32)": {
+					"details": "Returns a staking pool",
+					"params": {
+						"poolId": "Unique id of pool."
+					}
+				},
+				"getStakingPoolStatsThisEpoch(bytes32)": {
+					"details": "Get stats on a staking pool in this epoch.",
+					"params": {
+						"poolId": "Pool Id to query."
+					},
+					"return": "PoolStats struct for pool id."
+				},
+				"getTotalStake(address)": {
+					"details": "Returns the total stake for a given staker.",
+					"params": {
+						"staker": "of stake."
+					},
+					"return": "Total GRG staked by `staker`."
+				},
+				"getTotalStakeDelegatedToPool(bytes32)": {
+					"details": "Returns the total stake delegated to a specific staking pool,      across all members.",
+					"params": {
+						"poolId": "Unique Id of pool."
+					},
+					"return": "Total stake delegated to pool."
+				},
+				"getWethContract()": {
+					"details": "An overridable way to access the deployed WETH contract.      Must be view to allow overrides to access state.",
+					"return": "wethContract The WETH contract instance."
+				},
+				"joinStakingPoolAsRbPoolAccount(bytes32,address)": {
+					"details": "Allows caller to join a staking pool as a rigoblock pool account.",
+					"params": {
+						"poolId": "Unique id of pool.",
+						"rigoblockPoolAccount": "Address of subaccount to be added to staking pool."
+					}
+				},
+				"payProtocolFee(address,address,uint256)": {
+					"details": "Pays a protocol fee in ETH or WETH.      Only a known 0x exchange can call this method. See      (MixinExchangeManager).",
+					"params": {
+						"makerAddress": "The address of the order's maker.",
+						"payerAddress": "The address of the protocol fee payer.",
+						"protocolFee": "The protocol fee amount. This is either passed as ETH or transferred as WETH."
+					}
+				},
+				"removeAuthorizedAddress(address)": {
+					"details": "Removes authorizion of an address.",
+					"params": {
+						"target": "Address to remove authorization from."
+					}
+				},
+				"removeAuthorizedAddressAtIndex(address,uint256)": {
+					"details": "Removes authorizion of an address.",
+					"params": {
+						"index": "Index of target in authorities array.",
+						"target": "Address to remove authorization from."
+					}
+				},
+				"removeExchangeAddress(address)": {
+					"details": "Removes an existing exchange address",
+					"params": {
+						"addr": "Address of exchange contract to remove"
+					}
+				},
+				"transferOwnership(address)": {
+					"details": "Change the owner of this contract.",
+					"params": {
+						"newOwner": "New owner address."
+					}
+				},
+				"withdrawDelegatorRewards(bytes32)": {
+					"details": "Withdraws the caller's WETH rewards that have accumulated      until the last epoch.",
+					"params": {
+						"poolId": "Unique id of pool."
+					}
+				}
+			}
+		},
+		"userdoc": {
+			"methods": {}
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/staking/rewards/MixinPopRewards.sol": "MixinPopRewards"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/protocol/DragoRegistry/IDragoRegistry.sol": {
+			"keccak256": "0x8f7cd2738495503e9b181687f89bbce100cdf71d743f5405adb891d939d6e9ed",
+			"urls": [
+				"bzz-raw://8c286b20b97a896b3e247923792f9b1f065f2600c47e81802958db936f34beb3",
+				"dweb:/ipfs/QmRUNsPP4xG171EPVYdZzWqB2JRvcPoij7r4TWr8CgLw4f"
+			]
+		},
+		"localhost/rigoToken/Inflation/InflationFace.sol": {
+			"keccak256": "0xd997d091850cd1eced21aeba61785a3b2b9545c2818b2c954a87283fe1a517a2",
+			"urls": [
+				"bzz-raw://1ca6481fb68ef0d12fbd0bac754ad6cea1ade7ccbadb1c3d134382df266695ac",
+				"dweb:/ipfs/Qmbcr1qkkWCXm2nagAHvYGfxeZaWQmBjK7FEg3sGqXLMUp"
+			]
+		},
+		"localhost/rigoToken/ProofOfPerformance/ProofOfPerformanceFace.sol": {
+			"keccak256": "0xef17d9694ae180b90de8dbbbd10f415887c6c8b1de4ce51922cf42f1bc5ea022",
+			"urls": [
+				"bzz-raw://b28280ebe9da2e1ca68119830c755307488c33aefa4a92dfda82c03f3d260084",
+				"dweb:/ipfs/Qmb5htREwh1H7CEpHSHeTXSF3TSeiUbtXpZZksf7qYm7RF"
+			]
+		},
+		"localhost/rigoToken/RigoToken/RigoTokenFace.sol": {
+			"keccak256": "0x36c3c5a0a73bde4ef143fde2fcbdfc060cba6a7b01cc1304de9ddd030ac9dd6b",
+			"urls": [
+				"bzz-raw://93768cb08c3c517d57c56da2258d52dd2eaf836a5c70ca239a2106f867aae8da",
+				"dweb:/ipfs/QmQKi1od8hzeBhFQHnDfPhwwhHZGBbGFLrMtDs7FWyeGdq"
+			]
+		},
+		"localhost/staking/immutable/MixinConstants.sol": {
+			"keccak256": "0x2ca7dd236be6aef87579b117d176185e3f4232d5e7bff731a686136d1687f205",
+			"urls": [
+				"bzz-raw://affd5b3fda5a39c0c9d11676c904882724e922c76753dd7869bbd7537d33c089",
+				"dweb:/ipfs/QmXf1VW7NqUwdYU3XqTFdz36ttiTAZ5YLp9qyAPQmDUe1m"
+			]
+		},
+		"localhost/staking/immutable/MixinDeploymentConstants.sol": {
+			"keccak256": "0x1ad9501f883193286750f498176dc42bc61a9342275d6fd4344ab95ef4335287",
+			"urls": [
+				"bzz-raw://9974fcf0bb607f0fcd8b8e434350d82934586bca01d68d75a2ffd19a96f67cf8",
+				"dweb:/ipfs/QmdqbRiDvKtXmBy9ri4SVENmB7FNENQMAiHxujGZYw7B3C"
+			]
+		},
+		"localhost/staking/immutable/MixinStorage.sol": {
+			"keccak256": "0xc961454d81f8138830d07d4a2dc8cc130aacf1b96070da2fa5783f7061719372",
+			"urls": [
+				"bzz-raw://a6fccca160ec577a1d43ed0b43551a402d5415a5201de284191e8f62cffacf43",
+				"dweb:/ipfs/QmPQwAReGy3KXrgLuePu4BHc9EJ2U19xYJd5Rmu5SvXk5Z"
+			]
+		},
+		"localhost/staking/interfaces/IGrgVault.sol": {
+			"keccak256": "0x3b6c339568dd8b7e8f330702c2edac7c58dbbe420952e56e4badd420394d78fd",
+			"urls": [
+				"bzz-raw://cc5eaed08f91f75b8f8b450f5f69ba6d07f3b8455844692fde62de001a47babb",
+				"dweb:/ipfs/QmV1jufafpt2jrjLzEkqTycGyeyp1x7Hu11ZdsNcmK9Dyi"
+			]
+		},
+		"localhost/staking/interfaces/IStakingEvents.sol": {
+			"keccak256": "0x34b11789f72ee8694b37e29c9085c1e8e6a7078ca8585e3dd9e79eed3851b881",
+			"urls": [
+				"bzz-raw://c958bd0bcd6603d9bd243df5a56990f89e915c4d74517f74ddf09002e5358a98",
+				"dweb:/ipfs/QmQwy21gPnV6apLQ9Xc7wMJQeB54e2wHzFtDWDNB81CwbA"
+			]
+		},
+		"localhost/staking/interfaces/IStructs.sol": {
+			"keccak256": "0x12e0285972546900ef5199ba78d60cf242d4f3f263fa80ca44ef94d7e62b2d39",
+			"urls": [
+				"bzz-raw://eefa3c3882cafba629090dddd3bc729d104dddf8eb96baea0a0185b688d67e3b",
+				"dweb:/ipfs/QmfAb5NGYx9uuuMNbMZnord9Po6SQQWUxYhx6kyteCDwQw"
+			]
+		},
+		"localhost/staking/libs/LibCobbDouglas.sol": {
+			"keccak256": "0x01e4a1b7e48364a72b83aa4cd15c7e94c7077e82edfeea3d50c999d5d2bc7f6a",
+			"urls": [
+				"bzz-raw://31166d0c6a2d20b0fe5fabea46b1c35c942875c520ca6ed981ad33c31f4576db",
+				"dweb:/ipfs/QmPhaGgAWQPA6rrFGCtqAjCeuB47TUsdu15iPRUQF7QEaR"
+			]
+		},
+		"localhost/staking/libs/LibFixedMath.sol": {
+			"keccak256": "0xa12d72f1a4bef82e1da70db9255a28d285c2084d1d1b64cac42f626e3f0ac954",
+			"urls": [
+				"bzz-raw://f51c539b12616fa4a419082176244cb57bb6ed662b78fa4db957fb26b5f2e354",
+				"dweb:/ipfs/QmbuU7L5AbJcFc6z4TA8SbLHBtsifKrLuBM3WSLeWkSRMq"
+			]
+		},
+		"localhost/staking/libs/LibFixedMathRichErrors.sol": {
+			"keccak256": "0x1d0f33a0141e8986fb85c72390cb93e9fc9c960587653bfd81f45c90facf4bc4",
+			"urls": [
+				"bzz-raw://0629e44a6eb0e8e8fea4fd6f91a6449c16701425532e0397c8d22cf6ba719f39",
+				"dweb:/ipfs/QmXrFWeH3f4MXQWFtSzPts4HczjtLd8kr36YVvDPqpTuwf"
+			]
+		},
+		"localhost/staking/libs/LibSafeDowncast.sol": {
+			"keccak256": "0x6524dae8f89e36d263300e2000a55982c09cc88cdfc51ea8b905e97a6045f211",
+			"urls": [
+				"bzz-raw://4652ee709dd8238a2579f4206187b2debac7effa13d896929dc5b50f30ab869e",
+				"dweb:/ipfs/QmQuVqi3DeMDiXc5EcxUrCtqSyBkwCqacFo9BUrMSiQV7C"
+			]
+		},
+		"localhost/staking/libs/LibStakingRichErrors.sol": {
+			"keccak256": "0xa5c4e488db4b0b694d2d6a61786e7d0317b87eeaac5c1e8ec581c3a9517e94e2",
+			"urls": [
+				"bzz-raw://0f6b890b8691666e65946327654ea2095e92f42b5ee557c3d60f8d5e8948d15c",
+				"dweb:/ipfs/QmSJEPtNYzow9kcRHJw5moedtY922n5EtsTJmaV5dUbn9r"
+			]
+		},
+		"localhost/staking/rewards/MixinPopManager.sol": {
+			"keccak256": "0x47581108999256025302d8d7263246eb83060ba4d5ebddd41f3f2ef8d097a45f",
+			"urls": [
+				"bzz-raw://300deed75c10e95569dee2a5a2168b9f32deca3eed4fd059cc174b7c0878676a",
+				"dweb:/ipfs/QmWk3FkX22a15mSUQL2oYFYxwu1r6FrFNFK4M1eqRQK1F2"
+			]
+		},
+		"localhost/staking/rewards/MixinPopRewards.sol": {
+			"keccak256": "0xdd03540b65059a659f44d806bc6ddd93fb41dc2db46864c788f28cb5a630a05e",
+			"urls": [
+				"bzz-raw://3b1995d388a8fc5e16521341ac8a885f7c690d088a730d631c0d96bbc23feff1",
+				"dweb:/ipfs/Qmeiv7mSBfuP6h8cafhJEQ8PaQ89h8274acgJs2XGMhr8g"
+			]
+		},
+		"localhost/staking/stake/MixinStakeBalances.sol": {
+			"keccak256": "0x0f78b6a7d72165de233348189c95469ed5f3e992829e9a1f23dbbc36f6bd7a98",
+			"urls": [
+				"bzz-raw://446ba038d150f532ebfb9be27233dedbec62c000fd8f728d84290dc7ff220861",
+				"dweb:/ipfs/QmVttnyPX6vP6t2fyFx5fiGT9i4CBY6eGi7SswjFhAvzXm"
+			]
+		},
+		"localhost/staking/stake/MixinStakeStorage.sol": {
+			"keccak256": "0x82e65b1aa789d828820bba843808b95e4d7120897406214b2148f629ab7f7dbd",
+			"urls": [
+				"bzz-raw://b4122e195497b614f8c7d23c069988b873e0e8feae3d5f6ee787ecdda6e3ef89",
+				"dweb:/ipfs/QmZyPw1n5rzey4Tm1kkL2yCgTwLofHpD9iDipR3dMD4Nfr"
+			]
+		},
+		"localhost/staking/staking_pools/MixinCumulativeRewards.sol": {
+			"keccak256": "0x7dd83f9443343833bc977e8a99ef3d8b954e65262529b68033ca7c511f416cae",
+			"urls": [
+				"bzz-raw://667d93946d4dfee9a6642838609cc476653a1a29c2eb339b2d115c845203ad57",
+				"dweb:/ipfs/QmT14CsRXFCBFFP6J1r5vonwD9YvCTkgPwi9NZa62RaVoR"
+			]
+		},
+		"localhost/staking/staking_pools/MixinStakingPool.sol": {
+			"keccak256": "0x8ddfbf5b3df48558b812d932ff44f3c5d0cb4068808e6ce64de9bbd334693d5e",
+			"urls": [
+				"bzz-raw://dcaff2f57db7f103f0c8df1b24cef7ad35f864035d3b49de10056e84c5002ed8",
+				"dweb:/ipfs/QmTeRyoazS4rKpTaiL4o5v9xoEKj8NipMwNHMWm1oq5YvL"
+			]
+		},
+		"localhost/staking/staking_pools/MixinStakingPoolRewards.sol": {
+			"keccak256": "0x943c2f8ceaf87296246ed6b6ba5366cf0cd5905a2d22689fb498df20c0d2d24a",
+			"urls": [
+				"bzz-raw://2d3535e262139b8c5594b58b3665659d9912f078a7d38c3c6f9cdd7a0fe59c62",
+				"dweb:/ipfs/QmePrvagqoHgjwz96CQVMGXXSEKqMVG925bt5VRGxLkNUB"
+			]
+		},
+		"localhost/staking/sys/MixinAbstract.sol": {
+			"keccak256": "0xbb88f2980e6977510f5948a54d5a9292be2b0cbfcf465c9d5b1b4625497f593b",
+			"urls": [
+				"bzz-raw://ea353970c19021cc260b04409f81c2690377b85b7bdd2e22470c243d260c3dbb",
+				"dweb:/ipfs/QmbQu7DJ8X78wsxLtnXNdrHG8eeJo3K7YwimmTX1KsE1VW"
+			]
+		},
+		"localhost/staking/sys/MixinFinalizer.sol": {
+			"keccak256": "0x28a0ace0fb274e2a68cba157dd6ec516965c103336834a332006f11a4d025eca",
+			"urls": [
+				"bzz-raw://06b4798cfbaca386c12fdc693844127ca1c7c42a5923b788c7cf2c70697302c9",
+				"dweb:/ipfs/QmPNkZw7i4wP8EhDrqoYFPZBA3FvErfHjzf8MvBbwvsU8b"
+			]
+		},
+		"localhost/staking/sys/MixinScheduler.sol": {
+			"keccak256": "0x0cc2756bdd4d1f5b1699012e639df1812d261a671c80db669664a0a45f06807d",
+			"urls": [
+				"bzz-raw://8aef38d65e85dc0dbba6ae01fe054137ab56eb9334b6a2eea67c144d8cf06af1",
+				"dweb:/ipfs/QmdyuX2nsKNk8UNwb5eNGNAigtz4oXqkauU1D91ewfLV4B"
+			]
+		},
+		"localhost/utils/0xUtils/Authorizable.sol": {
+			"keccak256": "0xca0e2034860168cf1abb698c4745650c8397cf850cc4c1e73f82279769037b81",
+			"urls": [
+				"bzz-raw://046ddd48ecae552a6f9e1ee8368938bc2d1ac21e52a48752efd23e2c733a27cd",
+				"dweb:/ipfs/QmXqh4LZLqvvPbaYHHzXeujuPv4ggmdh5cbVAVH3kjrhjA"
+			]
+		},
+		"localhost/utils/0xUtils/IERC20Token.sol": {
+			"keccak256": "0x4eab85561a24071b7fa2229035daa1e9beb9d18b5f78f56b0cf8f0b094c5f8e3",
+			"urls": [
+				"bzz-raw://5be7f8843d72ad86d7926d32396bcc01b82b29d977b6e695c81d273e331ba91f",
+				"dweb:/ipfs/QmWjhz3QYkJpgpiLyuX4mShSV44314FuVYCHViSvoSCqhY"
+			]
+		},
+		"localhost/utils/0xUtils/IEtherToken.sol": {
+			"keccak256": "0xfd4a5af3c7700a3df24a297262a863969e3672f0c6c033c8c3088933b97059bf",
+			"urls": [
+				"bzz-raw://3c7f5f6a066f7614c8c2ffd9695f8cf4f9427c5c935662092e9cf76203cb1b84",
+				"dweb:/ipfs/QmQn4BbuXFtoAxkbQQfrB7bKBxbDSswGLHnCCvX6EKfWZr"
+			]
+		},
+		"localhost/utils/0xUtils/LibAuthorizableRichErrors.sol": {
+			"keccak256": "0xbf557501c90a4e53f6ee05bfc0ce09fb05395dfef56c3a653b2cd1a7327a4ebc",
+			"urls": [
+				"bzz-raw://bc3ae358626ce5cce9b5976f9633ad756a4d27156cb6af2db6fab69ab5da7965",
+				"dweb:/ipfs/QmbAEiFR1wBLmfcKBRPHP432KtHNRnGA868oPMFidVjJMJ"
+			]
+		},
+		"localhost/utils/0xUtils/LibFractions.sol": {
+			"keccak256": "0x1dc5e79fbf32a2005677d4e4c0d24f5cd23436acf167daf201392594b87567db",
+			"urls": [
+				"bzz-raw://841beb587d0bde771457904a7afa2d8689d8076878304f5d45c12e2abd2d2c48",
+				"dweb:/ipfs/QmNjFvGDCrMiCdtQbKvHw3gPftTFVvXUPTCPDEFxWKmMVS"
+			]
+		},
+		"localhost/utils/0xUtils/LibMath.sol": {
+			"keccak256": "0x6bd90e5c83d34d21a466a41d6f57a0547b49505d4be5dd61447a7d1dc21f9f25",
+			"urls": [
+				"bzz-raw://e1cb22812e006da65f243d561c7e0fcc4b8ee99852f45bec0d23547c1a3d4370",
+				"dweb:/ipfs/QmTYS7ZxhZaJe6heYP2jyoykCPPJ9ufUv7xdPa2nM5JcQ2"
+			]
+		},
+		"localhost/utils/0xUtils/LibMathRichErrors.sol": {
+			"keccak256": "0xd2d047534facd6051467dd7a22d7ee9fd4e54e63bb5a5fae2511eac7332fad3d",
+			"urls": [
+				"bzz-raw://5e0aeedd55c996fd72004a14f5c528ed60b46631ca9599bbb7925c8342ca3be4",
+				"dweb:/ipfs/QmNi1ozt4sYmn4pCobjU7FQ4KGUvK77pCyWUtbD18uQgVm"
+			]
+		},
+		"localhost/utils/0xUtils/LibOwnableRichErrors.sol": {
+			"keccak256": "0xfe1658c79678842a12d9b5841157eb871aaa810ed8a0223c715f49ad4c71d690",
+			"urls": [
+				"bzz-raw://1003baa4b726f5ea2256d1ac58e4d953756a657e786e7817a050786ac7819120",
+				"dweb:/ipfs/QmWbiBGMegH2kkKJeCCkXfMJZYbvnoXrEJA2uuG1XCZ6iZ"
+			]
+		},
+		"localhost/utils/0xUtils/LibRichErrors.sol": {
+			"keccak256": "0xe3ce6ded2fea3cc80998ca4d364bda530e273af0ba1c78d22a6cdadb6f64186e",
+			"urls": [
+				"bzz-raw://8239629dbcee9797a8f8157f03c2b78827b446787b4d53b3033a3e1ab538ad0b",
+				"dweb:/ipfs/QmbttkX94CxMkS6t1K4He5bNwGKCRUhKqTt9pNsAL5ynst"
+			]
+		},
+		"localhost/utils/0xUtils/LibSafeMath.sol": {
+			"keccak256": "0xd0da9ac1905381832f6612774cb7eced3b4b60459d6bafa59f5424955b44c935",
+			"urls": [
+				"bzz-raw://ede4bbe2dac43c6cc4e3b7a22285e00d55b31fb8cc00b375c6ac4714298b7e6d",
+				"dweb:/ipfs/QmWbN5qbJSNYrMMZMugaH5itTVSexe9yPsCPuArQVCLUgi"
+			]
+		},
+		"localhost/utils/0xUtils/LibSafeMathRichErrors.sol": {
+			"keccak256": "0x4458a1c77afaa64c5b2984a1de042d017e043ba412fc12e33e215563a63f6f7e",
+			"urls": [
+				"bzz-raw://f7fb12481f64bc7088ed77d74ca5b628bdcc7462e750102131f509ad77140afc",
+				"dweb:/ipfs/QmYxMBtzugoYPdCaHDJyw5mAYv2yr8GPuJdvNMGuqC9k3R"
+			]
+		},
+		"localhost/utils/0xUtils/Ownable.sol": {
+			"keccak256": "0x1e93522fe38a8408cdcb029fec6c9d021abab97b3d191cd95a46a64c3853ec06",
+			"urls": [
+				"bzz-raw://2fdc8b10a5e077ee5a87579718003fbfa49b34826b466d621ef11362390e7608",
+				"dweb:/ipfs/QmdrZ8HkgiPQmrSB17Cz5VD6L217qoNcUBPaFkrt1QHnZA"
+			]
+		},
+		"localhost/utils/0xUtils/interfaces/IAuthorizable.sol": {
+			"keccak256": "0x961072f728ffdd8797ba433cf9d78715e88324e7e0eca3a33700b132ae67a1ca",
+			"urls": [
+				"bzz-raw://e72459eed8fb358b2abb571ef3ed581e97ea1aa4209d137522b8b60ecf516c4a",
+				"dweb:/ipfs/QmWaoR21aj4CmtGHeM2oUU8zJVPpd7Y7jSGrL4xVMhxvp1"
+			]
+		},
+		"localhost/utils/0xUtils/interfaces/IOwnable.sol": {
+			"keccak256": "0x8a9c1243689632ecdf3e85d51c904ab61192bfe40e0115f37dc549c52e445ba2",
+			"urls": [
+				"bzz-raw://3d08b33cdabda90da9e6d0228649d9dabace9b19ebc22b5b718eff7f123bfef4",
+				"dweb:/ipfs/QmS1o2HnyhsY5b35s1sADd2sZwq4QDE3rXk1UUC7JjPvCS"
+			]
+		}
+	},
+	"version": 1
+}

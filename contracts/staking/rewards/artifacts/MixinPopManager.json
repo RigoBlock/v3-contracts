@@ -1,0 +1,1502 @@
+{
+	"deploy": {
+		"VM:-": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"main:1": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"ropsten:3": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"rinkeby:4": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"kovan:42": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"görli:5": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		},
+		"Custom": {
+			"linkReferences": {},
+			"autoDeployLib": true
+		}
+	},
+	"data": {
+		"bytecode": {
+			"generatedSources": [],
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"deployedBytecode": {
+			"generatedSources": [],
+			"immutableReferences": {},
+			"linkReferences": {},
+			"object": "",
+			"opcodes": "",
+			"sourceMap": ""
+		},
+		"gasEstimates": null,
+		"methodIdentifiers": {
+			"addAuthorizedAddress(address)": "42f1181e",
+			"addPopAddress(address)": "1f81eb80",
+			"aggregatedStatsByEpoch(uint256)": "38229d93",
+			"authorities(uint256)": "494503d4",
+			"authorized(address)": "b9181611",
+			"cobbDouglasAlphaDenominator()": "e8eeb3f8",
+			"cobbDouglasAlphaNumerator()": "81666796",
+			"computeRewardBalanceOfDelegator(bytes32,address)": "e907f003",
+			"computeRewardBalanceOfOperator(bytes32)": "bb7ef7e0",
+			"createStakingPool(address)": "be111af4",
+			"creditPopReward(address,uint256)": "ecc128f2",
+			"currentEpoch()": "76671808",
+			"currentEpochStartTimeInSeconds()": "587da023",
+			"decreaseStakingPoolOperatorShare(bytes32,uint32)": "5d91121d",
+			"endEpoch()": "0b9663db",
+			"epochDurationInSeconds()": "63403801",
+			"finalizePool(bytes32)": "ff691b11",
+			"getAuthorizedAddresses()": "d39de6e9",
+			"getCurrentEpochEarliestEndTimeInSeconds()": "b2baa33e",
+			"getDragoRegistry()": "b652b41f",
+			"getGlobalStakeByStatus(uint8)": "e804d0a4",
+			"getGrgContract()": "ef4ba680",
+			"getGrgVault()": "e0822db7",
+			"getOwnerStakeByStatus(address,uint8)": "44a6958b",
+			"getParams()": "5e615a6b",
+			"getStakeDelegatedToPoolByOwner(address,bytes32)": "f252b7a1",
+			"getStakingPool(bytes32)": "4bcc3f67",
+			"getStakingPoolStatsThisEpoch(bytes32)": "46b97959",
+			"getTotalStake(address)": "1e7ff8f6",
+			"getTotalStakeDelegatedToPool(bytes32)": "3e4ad732",
+			"grgReservedForPoolRewards()": "d14dc231",
+			"init()": "e1c7392a",
+			"joinStakingPoolAsRbPoolAccount(bytes32,address)": "1a67a0a0",
+			"minimumPoolStake()": "a26171e2",
+			"moveStake((uint8,bytes32),(uint8,bytes32),uint256)": "58f6c7e3",
+			"owner()": "8da5cb5b",
+			"poolIdByRbPoolAccount(address)": "7fa140c7",
+			"poolStatsByEpoch(bytes32,uint256)": "2a94c279",
+			"removeAuthorizedAddress(address)": "70712939",
+			"removeAuthorizedAddressAtIndex(address,uint256)": "9ad26744",
+			"removePopAddress(address)": "36d7dd8e",
+			"rewardDelegatedStakeWeight()": "e0ee036e",
+			"rewardsByPoolId(bytes32)": "c18c9141",
+			"setParams(uint256,uint32,uint256,uint32,uint32)": "9c3ccc82",
+			"setStakingPalAddress(bytes32,address)": "3a832382",
+			"stake(uint256)": "a694fc3a",
+			"stakingContract()": "ee99205c",
+			"transferOwnership(address)": "f2fde38b",
+			"unstake(uint256)": "2e17de78",
+			"validPops(address)": "540c2d53",
+			"withdrawDelegatorRewards(bytes32)": "b510879f"
+		}
+	},
+	"abi": [
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "target",
+					"type": "address"
+				},
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "caller",
+					"type": "address"
+				}
+			],
+			"name": "AuthorizedAddressAdded",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "target",
+					"type": "address"
+				},
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "caller",
+					"type": "address"
+				}
+			],
+			"name": "AuthorizedAddressRemoved",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "numPoolsToFinalize",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "rewardsAvailable",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "totalFeesCollected",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "totalWeightedStake",
+					"type": "uint256"
+				}
+			],
+			"name": "EpochEnded",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "rewardsPaid",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "rewardsRemaining",
+					"type": "uint256"
+				}
+			],
+			"name": "EpochFinalized",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint8",
+					"name": "fromStatus",
+					"type": "uint8"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "fromPool",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint8",
+					"name": "toStatus",
+					"type": "uint8"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "toPool",
+					"type": "bytes32"
+				}
+			],
+			"name": "MoveStake",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "oldOperatorShare",
+					"type": "uint32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "newOperatorShare",
+					"type": "uint32"
+				}
+			],
+			"name": "OperatorShareDecreased",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "previousOwner",
+					"type": "address"
+				},
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "newOwner",
+					"type": "address"
+				}
+			],
+			"name": "OwnershipTransferred",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "epochDurationInSeconds",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "rewardDelegatedStakeWeight",
+					"type": "uint32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "minimumPoolStake",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "cobbDouglasAlphaNumerator",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "cobbDouglasAlphaDenominator",
+					"type": "uint256"
+				}
+			],
+			"name": "ParamsSet",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "address",
+					"name": "exchangeAddress",
+					"type": "address"
+				}
+			],
+			"name": "PopAdded",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "address",
+					"name": "exchangeAddress",
+					"type": "address"
+				}
+			],
+			"name": "PopRemoved",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "rbPoolAddress",
+					"type": "address"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "RbPoolStakingPoolSet",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "operatorReward",
+					"type": "uint256"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "membersReward",
+					"type": "uint256"
+				}
+			],
+			"name": "RewardsPaid",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				}
+			],
+			"name": "Stake",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": false,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"indexed": false,
+					"internalType": "address",
+					"name": "operator",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint32",
+					"name": "operatorShare",
+					"type": "uint32"
+				}
+			],
+			"name": "StakingPoolCreated",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "uint256",
+					"name": "epoch",
+					"type": "uint256"
+				},
+				{
+					"indexed": true,
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "StakingPoolEarnedRewardsInEpoch",
+			"type": "event"
+		},
+		{
+			"anonymous": false,
+			"inputs": [
+				{
+					"indexed": true,
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"indexed": false,
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				}
+			],
+			"name": "Unstake",
+			"type": "event"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "target",
+					"type": "address"
+				}
+			],
+			"name": "addAuthorizedAddress",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "addr",
+					"type": "address"
+				}
+			],
+			"name": "addPopAddress",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"name": "aggregatedStatsByEpoch",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "rewardsAvailable",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "numPoolsToFinalize",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "totalFeesCollected",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "totalWeightedStake",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "totalRewardsFinalized",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"name": "authorities",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"name": "authorized",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "cobbDouglasAlphaDenominator",
+			"outputs": [
+				{
+					"internalType": "uint32",
+					"name": "",
+					"type": "uint32"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "cobbDouglasAlphaNumerator",
+			"outputs": [
+				{
+					"internalType": "uint32",
+					"name": "",
+					"type": "uint32"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"internalType": "address",
+					"name": "member",
+					"type": "address"
+				}
+			],
+			"name": "computeRewardBalanceOfDelegator",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "reward",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "computeRewardBalanceOfOperator",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "reward",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "rigoblockPoolAddress",
+					"type": "address"
+				}
+			],
+			"name": "createStakingPool",
+			"outputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "poolAccount",
+					"type": "address"
+				},
+				{
+					"internalType": "uint256",
+					"name": "popReward",
+					"type": "uint256"
+				}
+			],
+			"name": "creditPopReward",
+			"outputs": [],
+			"stateMutability": "payable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "currentEpoch",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "currentEpochStartTimeInSeconds",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"internalType": "uint32",
+					"name": "newOperatorShare",
+					"type": "uint32"
+				}
+			],
+			"name": "decreaseStakingPoolOperatorShare",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "endEpoch",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "epochDurationInSeconds",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "finalizePool",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getAuthorizedAddresses",
+			"outputs": [
+				{
+					"internalType": "address[]",
+					"name": "",
+					"type": "address[]"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getCurrentEpochEarliestEndTimeInSeconds",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getDragoRegistry",
+			"outputs": [
+				{
+					"internalType": "contract IDragoRegistry",
+					"name": "dragoRegistry",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "enum IStructs.StakeStatus",
+					"name": "stakeStatus",
+					"type": "uint8"
+				}
+			],
+			"name": "getGlobalStakeByStatus",
+			"outputs": [
+				{
+					"components": [
+						{
+							"internalType": "uint64",
+							"name": "currentEpoch",
+							"type": "uint64"
+						},
+						{
+							"internalType": "uint96",
+							"name": "currentEpochBalance",
+							"type": "uint96"
+						},
+						{
+							"internalType": "uint96",
+							"name": "nextEpochBalance",
+							"type": "uint96"
+						}
+					],
+					"internalType": "struct IStructs.StoredBalance",
+					"name": "balance",
+					"type": "tuple"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getGrgContract",
+			"outputs": [
+				{
+					"internalType": "contract RigoTokenFace",
+					"name": "grgContract",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getGrgVault",
+			"outputs": [
+				{
+					"internalType": "contract IGrgVault",
+					"name": "grgVault",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"internalType": "enum IStructs.StakeStatus",
+					"name": "stakeStatus",
+					"type": "uint8"
+				}
+			],
+			"name": "getOwnerStakeByStatus",
+			"outputs": [
+				{
+					"components": [
+						{
+							"internalType": "uint64",
+							"name": "currentEpoch",
+							"type": "uint64"
+						},
+						{
+							"internalType": "uint96",
+							"name": "currentEpochBalance",
+							"type": "uint96"
+						},
+						{
+							"internalType": "uint96",
+							"name": "nextEpochBalance",
+							"type": "uint96"
+						}
+					],
+					"internalType": "struct IStructs.StoredBalance",
+					"name": "balance",
+					"type": "tuple"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "getParams",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "_epochDurationInSeconds",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint32",
+					"name": "_rewardDelegatedStakeWeight",
+					"type": "uint32"
+				},
+				{
+					"internalType": "uint256",
+					"name": "_minimumPoolStake",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint32",
+					"name": "_cobbDouglasAlphaNumerator",
+					"type": "uint32"
+				},
+				{
+					"internalType": "uint32",
+					"name": "_cobbDouglasAlphaDenominator",
+					"type": "uint32"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				},
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "getStakeDelegatedToPoolByOwner",
+			"outputs": [
+				{
+					"components": [
+						{
+							"internalType": "uint64",
+							"name": "currentEpoch",
+							"type": "uint64"
+						},
+						{
+							"internalType": "uint96",
+							"name": "currentEpochBalance",
+							"type": "uint96"
+						},
+						{
+							"internalType": "uint96",
+							"name": "nextEpochBalance",
+							"type": "uint96"
+						}
+					],
+					"internalType": "struct IStructs.StoredBalance",
+					"name": "balance",
+					"type": "tuple"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "getStakingPool",
+			"outputs": [
+				{
+					"components": [
+						{
+							"internalType": "address",
+							"name": "operator",
+							"type": "address"
+						},
+						{
+							"internalType": "address",
+							"name": "stakingPal",
+							"type": "address"
+						},
+						{
+							"internalType": "uint32",
+							"name": "operatorShare",
+							"type": "uint32"
+						},
+						{
+							"internalType": "uint32",
+							"name": "stakingPalShare",
+							"type": "uint32"
+						}
+					],
+					"internalType": "struct IStructs.Pool",
+					"name": "",
+					"type": "tuple"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "getStakingPoolStatsThisEpoch",
+			"outputs": [
+				{
+					"components": [
+						{
+							"internalType": "uint256",
+							"name": "feesCollected",
+							"type": "uint256"
+						},
+						{
+							"internalType": "uint256",
+							"name": "weightedStake",
+							"type": "uint256"
+						},
+						{
+							"internalType": "uint256",
+							"name": "membersStake",
+							"type": "uint256"
+						}
+					],
+					"internalType": "struct IStructs.PoolStats",
+					"name": "",
+					"type": "tuple"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "staker",
+					"type": "address"
+				}
+			],
+			"name": "getTotalStake",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "getTotalStakeDelegatedToPool",
+			"outputs": [
+				{
+					"components": [
+						{
+							"internalType": "uint64",
+							"name": "currentEpoch",
+							"type": "uint64"
+						},
+						{
+							"internalType": "uint96",
+							"name": "currentEpochBalance",
+							"type": "uint96"
+						},
+						{
+							"internalType": "uint96",
+							"name": "nextEpochBalance",
+							"type": "uint96"
+						}
+					],
+					"internalType": "struct IStructs.StoredBalance",
+					"name": "balance",
+					"type": "tuple"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "grgReservedForPoolRewards",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "init",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "stakingPoolId",
+					"type": "bytes32"
+				},
+				{
+					"internalType": "address",
+					"name": "rigoblockPoolAccount",
+					"type": "address"
+				}
+			],
+			"name": "joinStakingPoolAsRbPoolAccount",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "minimumPoolStake",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"components": [
+						{
+							"internalType": "enum IStructs.StakeStatus",
+							"name": "status",
+							"type": "uint8"
+						},
+						{
+							"internalType": "bytes32",
+							"name": "poolId",
+							"type": "bytes32"
+						}
+					],
+					"internalType": "struct IStructs.StakeInfo",
+					"name": "from",
+					"type": "tuple"
+				},
+				{
+					"components": [
+						{
+							"internalType": "enum IStructs.StakeStatus",
+							"name": "status",
+							"type": "uint8"
+						},
+						{
+							"internalType": "bytes32",
+							"name": "poolId",
+							"type": "bytes32"
+						}
+					],
+					"internalType": "struct IStructs.StakeInfo",
+					"name": "to",
+					"type": "tuple"
+				},
+				{
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				}
+			],
+			"name": "moveStake",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "owner",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"name": "poolIdByRbPoolAccount",
+			"outputs": [
+				{
+					"internalType": "bytes32",
+					"name": "",
+					"type": "bytes32"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "",
+					"type": "bytes32"
+				},
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"name": "poolStatsByEpoch",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "feesCollected",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "weightedStake",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "membersStake",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "target",
+					"type": "address"
+				}
+			],
+			"name": "removeAuthorizedAddress",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "target",
+					"type": "address"
+				},
+				{
+					"internalType": "uint256",
+					"name": "index",
+					"type": "uint256"
+				}
+			],
+			"name": "removeAuthorizedAddressAtIndex",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "addr",
+					"type": "address"
+				}
+			],
+			"name": "removePopAddress",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "rewardDelegatedStakeWeight",
+			"outputs": [
+				{
+					"internalType": "uint32",
+					"name": "",
+					"type": "uint32"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "",
+					"type": "bytes32"
+				}
+			],
+			"name": "rewardsByPoolId",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "_epochDurationInSeconds",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint32",
+					"name": "_rewardDelegatedStakeWeight",
+					"type": "uint32"
+				},
+				{
+					"internalType": "uint256",
+					"name": "_minimumPoolStake",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint32",
+					"name": "_cobbDouglasAlphaNumerator",
+					"type": "uint32"
+				},
+				{
+					"internalType": "uint32",
+					"name": "_cobbDouglasAlphaDenominator",
+					"type": "uint32"
+				}
+			],
+			"name": "setParams",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				},
+				{
+					"internalType": "address",
+					"name": "newStakingPalAddress",
+					"type": "address"
+				}
+			],
+			"name": "setStakingPalAddress",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				}
+			],
+			"name": "stake",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [],
+			"name": "stakingContract",
+			"outputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "newOwner",
+					"type": "address"
+				}
+			],
+			"name": "transferOwnership",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "uint256",
+					"name": "amount",
+					"type": "uint256"
+				}
+			],
+			"name": "unstake",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "address",
+					"name": "",
+					"type": "address"
+				}
+			],
+			"name": "validPops",
+			"outputs": [
+				{
+					"internalType": "bool",
+					"name": "",
+					"type": "bool"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{
+					"internalType": "bytes32",
+					"name": "poolId",
+					"type": "bytes32"
+				}
+			],
+			"name": "withdrawDelegatorRewards",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		}
+	]
+}

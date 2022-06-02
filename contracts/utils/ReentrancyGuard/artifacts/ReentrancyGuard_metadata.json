@@ -1,0 +1,44 @@
+{
+	"compiler": {
+		"version": "0.7.4+commit.3f05b770"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/utils/ReentrancyGuard/ReentrancyGuard.sol": "ReentrancyGuard"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": true,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/utils/ReentrancyGuard/ReentrancyGuard.sol": {
+			"keccak256": "0x5f91e4de21fb9d5c36c682dcdef0d0197d375995b1c75c91cbc4441fa4f5ca9b",
+			"urls": [
+				"bzz-raw://d192115cc4d39b1081558333a266607241b0bf76dbd1917a7d5011803b053f8a",
+				"dweb:/ipfs/QmZHdi669z7pmTdsHtHPZURU1MWadXtFNgAPudT7vnByEo"
+			]
+		}
+	},
+	"version": 1
+}
