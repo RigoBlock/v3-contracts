@@ -1,6 +1,6 @@
 {
 	"compiler": {
-		"version": "0.7.4+commit.3f05b770"
+		"version": "0.8.14+commit.80d49f37"
 	},
 	"language": "Solidity",
 	"output": {
@@ -18,9 +18,9 @@
 	},
 	"settings": {
 		"compilationTarget": {
-			"localhost/utils/ReentrancyGuard/ReentrancyGuard.sol": "ReentrancyGuard"
+			"utils/ReentrancyGuard/ReentrancyGuard.sol": "ReentrancyGuard"
 		},
-		"evmVersion": "istanbul",
+		"evmVersion": "london",
 		"libraries": {},
 		"metadata": {
 			"bytecodeHash": "ipfs"
@@ -32,11 +32,12 @@
 		"remappings": []
 	},
 	"sources": {
-		"localhost/utils/ReentrancyGuard/ReentrancyGuard.sol": {
-			"keccak256": "0x5f91e4de21fb9d5c36c682dcdef0d0197d375995b1c75c91cbc4441fa4f5ca9b",
+		"utils/ReentrancyGuard/ReentrancyGuard.sol": {
+			"keccak256": "0xa134ac4cfa5dbefe9d7133a62d714712ed99401e876b8ba1b0d96dd6e9ae5a68",
+			"license": "Apache 2.0",
 			"urls": [
-				"bzz-raw://d192115cc4d39b1081558333a266607241b0bf76dbd1917a7d5011803b053f8a",
-				"dweb:/ipfs/QmZHdi669z7pmTdsHtHPZURU1MWadXtFNgAPudT7vnByEo"
+				"bzz-raw://57e504614c6070e4f812e6c152a60994fe21e34876f59a1cbfcee901ba77a655",
+				"dweb:/ipfs/QmUq5RiNyasbq7ijPBSXcDNEz9UPmZDaMDqhzn65kGc8o7"
 			]
 		}
 	},

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2018 RigoBlock, Rigo Investment Sagl.
@@ -16,7 +17,7 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
 /// @title Find Method Library - library to find the method of a call.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -24,7 +25,7 @@ library LibFindMethod {
 
     /// @dev Returns the method of an ABIencoded call
     /// @param assembledData Bytes of the call data
-    /// @return Bytes4 of the function signature
+    /// @return method Bytes4 of the function signature
     function findMethod(bytes memory assembledData)
         internal
         pure

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2018 RigoBlock, Rigo Investment Sagl.
@@ -16,7 +17,7 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
 /// @title Nav Verifier - Allows to check if new NAV comes from approved authority.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -40,7 +41,7 @@ contract NavVerifier {
         /* solhint-disable */
     )
         external
-        view
+        pure
         returns (bool isValid)
     {
         return isValid = true;

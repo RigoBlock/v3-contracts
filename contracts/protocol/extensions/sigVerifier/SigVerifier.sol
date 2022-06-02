@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2018 RigoBlock, Rigo Investment Sagl.
@@ -16,12 +17,12 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
 import { LibBytes } from "../../../utils/LibBytes/LibBytes.sol";
 import { ERC20Face as RigoToken } from "../../../tokens/ERC20/ERC20.sol";
-import { Drago } from "../../Drago/Drago.sol";
-import { ExchangesAuthorityFace as ExchangesAuthority } from "../../authorities/ExchangesAuthority/ExchangesAuthorityFace.sol";
+import { RigoblockV3Pool } from "../../../protocol/RigoblockV3Pool.sol";
+import { IExchangesAuthority as ExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
 
 /// @title SigVerifier - Allows verify whether a transaction has been signed correctly.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

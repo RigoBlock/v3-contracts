@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2022 Rigo Intl.
@@ -17,24 +18,24 @@
 */
 
 pragma solidity 0.8.14;
-pragma experimental ABIEncoderV2;
 
-import { AuthorityFace as Authority } from "../authorities/Authority/AuthorityFace.sol";
-import { ExchangesAuthorityFace as ExchangesAuthority } from "../authorities/ExchangesAuthority/ExchangesAuthorityFace.sol";
-import { SigVerifierFace as SigVerifier } from "../extensions/SigVerifier/SigVerifierFace.sol";
-import { NavVerifierFace as NavVerifier } from "../extensions/NavVerifier/NavVerifierFace.sol";
-import { KycFace as Kyc } from "../Kyc/KycFace.sol";
-import { DragoEventfulFace as DragoEventful } from "../DragoEventful/DragoEventfulFace.sol";
-import { ERC20Face as Token } from "../../tokens/ERC20/ERC20Face.sol";
+import { IAuthority as Authority } from "./interfaces/IAuthority.sol";
+import { IExchangesAuthority as ExchangesAuthority } from "./interfaces/IExchangesAuthority.sol";
+import { ISigVerifier as SigVerifier } from "./interfaces/ISigVerifier.sol";
+import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
+import { IKyc as Kyc } from "./interfaces/IKyc.sol";
+import { IDragoEventful as DragoEventful } from "./interfaces/IDragoEventful.sol";
+import { IERC20 as Token } from "./interfaces/IERC20.sol";
 import { ReentrancyGuard } from "../../utils/ReentrancyGuard//ReentrancyGuard.sol";
-import { OwnedUninitialized as Owned } from "../../utils/Owned/OwnedUninitialized.sol";
-import { SafeMathLight as SafeMath } from "../../utils/SafeMath/SafeMathLight.sol";
+import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
 import { LibFindMethod } from "../../utils/LibFindMethod/LibFindMethod.sol";
+
+import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 
 /// @title Drago - A set of rules for a drago.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract Drago is Owned, SafeMath, ReentrancyGuard {
+contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     using LibFindMethod for *;
 
@@ -55,10 +56,6 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         uint256 balance;
         Receipt receipt;
         mapping(address => address[]) approvedAccount;
-    }
-
-    struct Transaction {
-        bytes assembledData;
     }
 
     struct DragoData {
@@ -145,7 +142,6 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         uint256 _dragoId,
         address _owner,
         address _authority)
-        public
     {
         data.name = _dragoName;
         data.symbol = _dragoSymbol;
@@ -155,7 +151,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         owner = _owner;
         admin.authority = _authority;
         admin.dragoDao = msg.sender;
-        admin.minOrder = 1 finney;
+        admin.minOrder = 1e15; // 1e15 = 1 finney
         admin.feeCollector = _owner;
         admin.ratio = 80;
     }
@@ -165,7 +161,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
      */
     /// @dev Allows Ether to be received.
     /// @notice Used for settlements and withdrawals.
-    function()
+    function pay()
         external
         payable
     {
@@ -178,7 +174,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         external
         payable
         minimumStake(msg.value)
-        returns (bool success)
+        returns (bool)
     {
         require(buyDragoInternal(msg.sender));
         return true;
@@ -191,7 +187,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         external
         payable
         minimumStake(msg.value)
-        returns (bool success)
+        returns (bool)
     {
         require(buyDragoInternal(_hodler));
         return true;
@@ -206,7 +202,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         hasEnough(_amount)
         positiveAmount(_amount)
         minimumPeriodPast
-        returns (bool success)
+        returns (bool)
     {
         uint256 feeDrago;
         uint256 feeDragoDao;
@@ -215,8 +211,8 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         (feeDrago, feeDragoDao, netAmount, netRevenue) = getSaleAmounts(_amount);
         addSaleLog(_amount, netRevenue);
         allocateSaleTokens(msg.sender, _amount, feeDrago, feeDragoDao);
-        data.totalSupply = safeSub(data.totalSupply, netAmount);
-        msg.sender.transfer(netRevenue);
+        data.totalSupply = data.totalSupply - netAmount; //safeSub(data.totalSupply, netAmount);
+        payable(msg.sender).transfer(netRevenue);
         return true;
     }
 
@@ -376,7 +372,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         assembly {
 
             let succeeded := delegatecall(
-                sub(gas, 5000),
+                sub(gas(), 5000),
                 adapter,
                 add(transactionData, 0x20),
                 mload(transactionData),
@@ -404,7 +400,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
     function batchOperateOnExchange(
         address _exchange,
         Transaction[] memory transactions)
-        public
+        external
         onlyOwner
         nonReentrant
         whenApprovedExchangeOrWrapper(_exchange)
@@ -440,10 +436,10 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
     }
 
     /// @dev Finds details of a drago pool.
-    /// @return String name of a drago.
-    /// @return String symbol of a drago.
-    /// @return Value of the share price in wei.
-    /// @return Value of the share price in wei.
+    /// @return name String name of a drago.
+    /// @return symbol String symbol of a drago.
+    /// @return sellPrice Value of the share price in wei.
+    /// @return buyPrice Value of the share price in wei.
     function getData()
         external
         view
@@ -471,11 +467,12 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
     }
 
     /// @dev Finds the administrative data of the pool.
-    /// @return Address of the account where a user collects fees.
-    /// @return Address of the drago dao/factory.
-    /// @return Number of the fee split ratio.
-    /// @return Value of the transaction fee in basis points.
-    /// @return Number of the minimum holding period for shares.
+    /// @return Address of the owner.
+    /// @return feeCollector Address of the account where a user collects fees.
+    /// @return dragoDao Address of the drago dao/factory.
+    /// @return ratio Number of the fee split ratio.
+    /// @return transactionFee Value of the transaction fee in basis points.
+    /// @return minPeriod Number of the minimum holding period for shares.
     function getAdminData()
         external
         view
@@ -501,17 +498,17 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
     function getKycProvider()
         external
         view
-        returns (address)
+        returns (address kycProviderAddress)
     {
         if(admin.kycEnforced) {
-            return admin.kycProvider;
+            return kycProviderAddress = admin.kycProvider;
         }
     }
 
     /// @dev Verifies that a signature is valid.
     /// @param hash Message hash that is signed.
     /// @param signature Proof of signing.
-    /// @return Validity of order signature.
+    /// @return isValid Validity of order signature.
     function isValidSignature(
         bytes32 hash,
         bytes calldata signature
@@ -553,7 +550,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
     /// @return Bool the function executed correctly.
     function buyDragoInternal(address _hodler)
         internal
-        returns (bool success)
+        returns (bool)
     {
         if (admin.kycProvider != address(0)) {
             require(Kyc(admin.kycProvider).isWhitelistedUser(_hodler));
@@ -565,7 +562,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         (grossAmount, feeDrago, feeDragoDao, amount) = getPurchaseAmounts();
         addPurchaseLog(amount);
         allocatePurchaseTokens(_hodler, amount, feeDrago, feeDragoDao);
-        data.totalSupply = safeAdd(data.totalSupply, grossAmount);
+        data.totalSupply = data.totalSupply + grossAmount; //safeAdd(data.totalSupply, grossAmount);
         return true;
     }
 
@@ -581,10 +578,10 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         uint256 _feeDragoDao)
         internal
     {
-        accounts[_hodler].balance = safeAdd(accounts[_hodler].balance, _amount);
-        accounts[admin.feeCollector].balance = safeAdd(accounts[admin.feeCollector].balance, _feeDrago);
-        accounts[admin.dragoDao].balance = safeAdd(accounts[admin.dragoDao].balance, _feeDragoDao);
-        accounts[_hodler].receipt.activation = uint32(now) + data.minPeriod;
+        accounts[_hodler].balance = accounts[_hodler].balance + _amount;
+        accounts[admin.feeCollector].balance = accounts[admin.feeCollector].balance + _feeDrago;
+        accounts[admin.dragoDao].balance = accounts[admin.dragoDao].balance + _feeDragoDao;
+        unchecked { accounts[_hodler].receipt.activation = uint32(block.timestamp) + data.minPeriod; }
     }
 
     /// @dev Destroys tokens of seller, splits fee in tokens to wizard and dao.
@@ -599,9 +596,9 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
         uint256 _feeDragoDao)
         internal
     {
-        accounts[_hodler].balance = safeSub(accounts[_hodler].balance, _amount);
-        accounts[admin.feeCollector].balance = safeAdd(accounts[admin.feeCollector].balance, _feeDrago);
-        accounts[admin.dragoDao].balance = safeAdd(accounts[admin.dragoDao].balance, _feeDragoDao);
+        accounts[_hodler].balance = accounts[_hodler].balance - _amount;
+        accounts[admin.feeCollector].balance = accounts[admin.feeCollector].balance + _feeDrago;
+        accounts[admin.dragoDao].balance = accounts[admin.dragoDao].balance + _feeDragoDao;
     }
 
     /// @dev Sends a buy log to the eventful contract.
@@ -645,10 +642,10 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
     }
 
     /// @dev Calculates the correct purchase amounts.
-    /// @return Number of new shares.
-    /// @return Value of fee in shares.
-    /// @return Value of fee in shares to dao.
-    /// @return Value of net purchased shares.
+    /// @return grossAmount Number of new shares.
+    /// @return feeDrago Value of fee in shares.
+    /// @return feeDragoDao Value of fee in shares to dao.
+    /// @return amount Value of net purchased shares.
     function getPurchaseAmounts()
         internal
         view
@@ -659,21 +656,21 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
             uint256 amount
         )
     {
-        grossAmount = safeDiv(msg.value * BASE, data.buyPrice);
-        uint256 fee = safeMul(grossAmount, data.transactionFee) / 10000; //fee is in basis points
+        grossAmount = msg.value * BASE / data.buyPrice;
+        uint256 fee = grossAmount * data.transactionFee / 10000; //fee is in basis points
         return (
             grossAmount,
-            feeDrago = safeMul(fee , admin.ratio) / 100,
-            feeDragoDao = safeSub(fee, feeDrago),
-            amount = safeSub(grossAmount, fee)
+            feeDrago = fee * admin.ratio / 100,
+            feeDragoDao = fee - feeDrago,
+            amount = grossAmount - fee
         );
     }
 
     /// @dev Calculates the correct sale amounts.
-    /// @return Value of fee in shares.
-    /// @return Value of fee in shares to dao.
-    /// @return Value of net sold shares.
-    /// @return Value of sale amount for hodler.
+    /// @return feeDrago Value of fee in shares.
+    /// @return feeDragoDao Value of fee in shares to dao.
+    /// @return netAmount Value of net sold shares.
+    /// @return netRevenue Value of sale amount for hodler.
     function getSaleAmounts(uint256 _amount)
         internal
         view
@@ -684,12 +681,12 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
             uint256 netRevenue
         )
     {
-        uint256 fee = safeMul(_amount, data.transactionFee) / 10000; //fee is in basis points
+        uint256 fee = _amount * data.transactionFee / 10000; //fee is in basis points
         return (
-            feeDrago = safeMul(fee, admin.ratio) / 100,
-            feeDragoDao = safeSub(fee, feeDragoDao),
-            netAmount = safeSub(_amount, fee),
-            netRevenue = (safeMul(netAmount, data.sellPrice) / BASE)
+            feeDrago = fee * admin.ratio / 100,
+            feeDragoDao = fee - feeDragoDao,
+            netAmount = _amount - fee,
+            netRevenue = netAmount * data.sellPrice / BASE
         );
     }
 
@@ -734,7 +731,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
     /// @param signaturevaliduntilBlock Number of blocks till price expiry.
     /// @param hash Message hash that is signed.
     /// @param signedData Proof of nav validity.
-    /// @return Bool validity of signed price update.
+    /// @return isValid Bool validity of signed price update.
     function isValidNav(
         uint256 sellPrice,
         uint256 buyPrice,
@@ -781,7 +778,7 @@ contract Drago is Owned, SafeMath, ReentrancyGuard {
 
     /// @dev Returns the method of a call.
     /// @param assembledData Bytes of the encoded transaction.
-    /// @return Bytes4 function signature.
+    /// @return method Bytes4 function signature.
     function findMethod(bytes memory assembledData)
         internal
         pure

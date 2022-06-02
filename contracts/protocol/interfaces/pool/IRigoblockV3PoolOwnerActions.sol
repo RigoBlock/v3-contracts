@@ -37,7 +37,7 @@ interface IRigoblockV3PoolOwnerActions {
         external;
 
     struct Transaction {
-        bytes Transaction;
+        bytes assembledData;
     }
 
     function operateOnExchange(address _exchange, Transaction memory transaction)
