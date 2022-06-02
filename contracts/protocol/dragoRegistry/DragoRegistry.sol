@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,17 +17,17 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
-import { Owned } from "../../utils/Owned/Owned.sol";
-import { DragoRegistryFace } from "./DragoRegistryFace.sol";
-import { AuthorityFace as Authority } from "../authorities/Authority/AuthorityFace.sol";
+import { Owned } from "../../utils/owned/Owned.sol";
+import { IDragoRegistry } from "../interfaces/IDragoRegistry.sol";
+import { IAuthority as Authority } from "../interfaces/IAuthority.sol";
 import { LibSanitize } from "../../utils/LibSanitize/LibSanitize.sol";
 
 /// @title Drago Registry - Allows registration of pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract DragoRegistry is DragoRegistryFace, Owned {
+contract DragoRegistry is IDragoRegistry, Owned {
 
     using LibSanitize for bool;
 
@@ -107,7 +108,7 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         _;
     }
 
-    constructor(address _authority) public {
+    constructor(address _authority) {
         AUTHORITY = _authority;
     }
 
@@ -211,7 +212,7 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         DragoRegistry registry = DragoRegistry(_newAddress);
         ++VERSION;
         registry.setUpgraded(VERSION);
-        address payable registryAddress = address(uint160(address(registry)));
+        address payable registryAddress = payable(address(uint160(address(registry))));
         registryAddress.transfer(address(this).balance);
     }
 
@@ -229,7 +230,7 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         external
         onlyOwner
     {
-        msg.sender.transfer(address(this).balance);
+        payable(msg.sender).transfer(address(this).balance);
     }
 
     /*
@@ -246,7 +247,12 @@ contract DragoRegistry is DragoRegistryFace, Owned {
 
     /// @dev Provides a pool's struct data
     /// @param _id Registration number of the pool
-    /// @return Pool struct data
+    /// @return drago Pool struct data
+    /// @return name Pool struct data
+    /// @return symbol Pool struct data
+    /// @return dragoId Pool struct data
+    /// @return owner Pool struct data
+    /// @return group Pool struct data
     function fromId(uint256 _id)
         public view //prev external
         returns (
@@ -258,20 +264,24 @@ contract DragoRegistry is DragoRegistryFace, Owned {
             address group
         )
     {
-        Drago memory pool = dragos[_id];
         return (
-            drago = pool.drago,
-            name = pool.name,
-            symbol = pool.symbol,
-            dragoId = pool.dragoId,
+            drago = dragos[_id].drago,
+            name = dragos[_id].name,
+            symbol = dragos[_id].symbol,
+            dragoId = dragos[_id].dragoId,
             owner = getPoolOwner(drago),
-            group = pool.group
+            group = dragos[_id].group
         );
     }
 
     /// @dev Provides a pool's struct data
     /// @param _drago Address of the pool
-    /// @return Pool struct data
+    /// @return id Pool struct data
+    /// @return name Pool struct data
+    /// @return symbol Pool struct data
+    /// @return dragoId Pool struct data
+    /// @return owner Pool struct data
+    /// @return group Pool struct data
     function fromAddress(address _drago)
         external view
         returns (
@@ -284,20 +294,24 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         )
     {
         id = mapFromAddress[_drago] - 1;
-        Drago memory pool = dragos[id];
         return (
             id,
-            name = pool.name,
-            symbol = pool.symbol,
-            dragoId = pool.dragoId,
+            name = dragos[id].name,
+            symbol = dragos[id].symbol,
+            dragoId = dragos[id].dragoId,
             owner = getPoolOwner(_drago),
-            group = pool.group
+            group = dragos[id].group
         );
     }
 
     /// @dev Provides a pool's struct data
     /// @param _name Name of the pool
-    /// @return Pool struct data
+    /// @return id Pool struct data
+    /// @return drago Pool struct data
+    /// @return symbol Pool struct data
+    /// @return dragoId Pool struct data
+    /// @return owner Pool struct data
+    /// @return group Pool struct data
     function fromName(string calldata _name)
         external view
         returns (
@@ -310,14 +324,13 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         )
     {
         id = mapFromName[_name] - 1;
-        Drago memory pool = dragos[id];
         return (
             id,
-            drago = pool.drago,
-            symbol = pool.symbol,
-            dragoId = pool.dragoId,
+            drago = dragos[id].drago,
+            symbol = dragos[id].symbol,
+            dragoId = dragos[id].dragoId,
             owner = getPoolOwner(drago),
-            group = pool.group
+            group = dragos[id].group
         );
     }
 
@@ -329,8 +342,7 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         returns (string memory)
     {
         uint256 id = mapFromAddress[_pool] - 1;
-        Drago memory pool = dragos[id];
-        return pool.name;
+        return dragos[id].name;
     }
 
     /// @dev Provides a pool's symbol from its address
@@ -341,8 +353,7 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         returns (string memory)
     {
         uint256 id = mapFromAddress[_pool] - 1;
-        Drago memory pool = dragos[id];
-        return pool.symbol;
+        return dragos[id].symbol;
     }
 
     /// @dev Provides a pool's metadata
@@ -394,7 +405,13 @@ contract DragoRegistry is DragoRegistryFace, Owned {
         internal
         returns (bool)
     {
-        dragos.push(Drago(_drago, _name, _symbol, _dragoId, _owner, _group));
+        Drago storage pool = dragos.push();
+        pool.drago = _drago;
+        pool.name = _name;
+        pool.symbol = _symbol;
+        pool.dragoId = _dragoId;
+        pool.owner = _owner;
+        pool.group = _group;
         mapFromAddress[_drago] = dragos.length;
         mapFromName[_name] = dragos.length;
         emit Registered(_name, _symbol, dragos.length - 1, _drago, _owner, _group);

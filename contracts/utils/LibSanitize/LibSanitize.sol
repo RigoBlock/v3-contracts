@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,7 +17,7 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Lib Sanitize - Sanitize strings in smart contracts.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -30,19 +31,19 @@ library LibSanitize {
         bytes memory bStr = bytes(str);
         uint arrayLength = bStr.length;
         require(
-            bStr[0] != byte(uint8(32))
+            bStr[0] != bytes1(uint8(32))
         );    
         require(
-            bStr[arrayLength - 1] != byte(uint8(32))
+            bStr[arrayLength - 1] != bytes1(uint8(32))
         );    
         for (uint i =0; i < arrayLength; i++) {
             if (
                 (
-                    bStr[i] < byte(uint8(48)) ||
-                    bStr[i] > byte(uint8(122)) ||
-                    bStr[i] > byte(uint8(57)) && bStr[i] < byte(uint8(65)) ||
-                    bStr[i] > byte(uint8(90)) && bStr[i] < byte(uint8(97))
-                ) && bStr[i] != byte(uint8(32))
+                    bStr[i] < bytes1(uint8(48)) ||
+                    bStr[i] > bytes1(uint8(122)) ||
+                    bStr[i] > bytes1(uint8(57)) && bStr[i] < bytes1(uint8(65)) ||
+                    bStr[i] > bytes1(uint8(90)) && bStr[i] < bytes1(uint8(97))
+                ) && bStr[i] != bytes1(uint8(32))
             ) return false;
         } return true;
     }
@@ -55,7 +56,7 @@ library LibSanitize {
         bytes memory bStr = bytes(str);
         uint arrayLength = bStr.length;
 		    for (uint i = 0; i < arrayLength; i++) {
-			     if ((bStr[i] >= byte(uint8(65))) && (bStr[i] <= byte(uint8(90)))) return false;
+			     if ((bStr[i] >= bytes1(uint8(65))) && (bStr[i] <= bytes1(uint8(90)))) return false;
 		    } return true;
     }
 
@@ -67,7 +68,7 @@ library LibSanitize {
         bytes memory bStr = bytes(str);
         uint arrayLength = bStr.length;
         for (uint i = 0; i < arrayLength; i++) {
-            if ((bStr[i] >= byte(uint8(97))) && (bStr[i] <= byte(uint8(122)))) return false;
+            if ((bStr[i] >= bytes1(uint8(97))) && (bStr[i] <= bytes1(uint8(122)))) return false;
         } return true;
     }
 }
