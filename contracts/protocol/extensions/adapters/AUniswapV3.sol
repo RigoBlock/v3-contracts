@@ -18,8 +18,7 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.7.6;
-pragma abicoder v2; // in 0.8 solc this is default behaviour
+pragma solidity 0.8.14;
 
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/interfaces/IPeripheryPaymentsWithFee.sol";
