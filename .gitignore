@@ -1,0 +1,7 @@
+node_modules/
+dist
+
+#generated contract artifacts
+*artifacts/
+contracts/**/**/*.json
+contracts/**/**/**/*.json
