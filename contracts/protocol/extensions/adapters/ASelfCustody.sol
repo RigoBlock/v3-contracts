@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2019 RigoBlock, Gabriele Rigo.
@@ -17,24 +18,7 @@
 */
 
 // solhint-disable-next-line
-pragma solidity =0.7.6;
-
-contract SafeMath {
-
-    function safeMul(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a * b;
-        assert(a == 0 || c / a == b);
-        return c;
-    }
-
-    function safeDiv(uint256 a, uint256 b) internal pure returns (uint256) {
-        assert(b > 0);
-        uint256 c = a / b;
-        assert(a == b * c + a % b);
-        return c;
-    }
-}
-
+pragma solidity =0.8.14;
 
 interface Token {
 
@@ -58,7 +42,7 @@ abstract contract Drago {
 /// @title Self Custody adapter - A helper contract for self custody.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract ASelfCustody is SafeMath {
+contract ASelfCustody /*is SafeMath*/ {
     
     // Mainnet GRG Address
     address constant private GRG_ADDRESS = address(0x4FbB350052Bca5417566f188eB2EBCE5b19BC964);
@@ -149,7 +133,7 @@ contract ASelfCustody is SafeMath {
     {
         uint256 etherBase = 18;
         uint256 rationalBase = 36;
-        uint256 rationalizedAmountBase36 = safeMul(amount, 10 ** (rationalBase - etherBase));
+        uint256 rationalizedAmountBase36 = amount * (10 ** (rationalBase - etherBase ));
         uint256 poolRationalizedGrgBalanceBase36 = Token(grgTokenAddress).balanceOf(address(this)) * (10 ** (rationalBase - etherBase));
 
         if (tokenAddress != address(0)) {
@@ -160,7 +144,7 @@ contract ASelfCustody is SafeMath {
         } else if (rationalizedAmountBase36 < findPi2()) {
             if (poolRationalizedGrgBalanceBase36 < findPi4()) {
                 satisfied = false;
-                shortfall = safeDiv(findPi4() - poolRationalizedGrgBalanceBase36, (10 ** (rationalBase - etherBase)));
+                shortfall = (findPi4() - poolRationalizedGrgBalanceBase36) / (10 ** (rationalBase - etherBase));
             } else {
                 satisfied = true;
                 shortfall = uint256(0);
@@ -169,7 +153,7 @@ contract ASelfCustody is SafeMath {
         } else if (rationalizedAmountBase36 < findPi3()) {
             if (poolRationalizedGrgBalanceBase36 < findPi5()) {
                 satisfied = false;
-                shortfall = safeDiv(findPi5() - poolRationalizedGrgBalanceBase36, (10 ** (rationalBase - etherBase)));
+                shortfall = (findPi5() - poolRationalizedGrgBalanceBase36) / (10 ** (rationalBase - etherBase));
             } else {
                 satisfied = true;
                 shortfall = uint256(0);
@@ -178,7 +162,7 @@ contract ASelfCustody is SafeMath {
         } else if (rationalizedAmountBase36 >= findPi3()) {
             if (poolRationalizedGrgBalanceBase36 < findPi6()) {
                 satisfied = false;
-                shortfall = safeDiv(findPi6() - poolRationalizedGrgBalanceBase36, (10 ** (rationalBase - etherBase)));
+                shortfall = (findPi6() - poolRationalizedGrgBalanceBase36) / (10 ** (rationalBase - etherBase));
             } else {
                 satisfied = true;
                 shortfall = uint256(0);
