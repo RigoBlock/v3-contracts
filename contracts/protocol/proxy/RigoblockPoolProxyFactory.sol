@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
  Copyright 2022 Rigo Intl.
@@ -18,21 +19,22 @@
 
 pragma solidity 0.8.14;
 
-import { IDragoRegistry as DragoRegistry } from "../../interfaces/IDragoRegistry.sol";
-import { IAuthority as Authority } from "../../interfaces/IAuthority.sol";
-import { IDragoEventful as DragoEventful } from "../../interfaces/IDragoEventful.sol";
-import { DragoFactoryLibrary, Drago } from "../DragoFactoryLibrary/DragoFactoryLibrary.sol";
-import { OwnedUninitialized as Owned } from "../../../utils/Owned/OwnedUninitialized.sol";
-import { IRigoblockPoolProxyFactory } from "./RigoblockPoolProxyFactory.sol";
+import { IDragoRegistry as DragoRegistry } from "../interfaces/IDragoRegistry.sol";
+import { IAuthority as Authority } from "../interfaces/IAuthority.sol";
+import { IDragoEventful as DragoEventful } from "../interfaces/IDragoEventful.sol";
+import { IRigoblockV3Pool as RigoblockV3Pool } from "../IRigoblockV3Pool.sol";
+import { RigoblockPoolProxyFactoryLibrary } from "./RigoblockPoolProxyFactoryLibrary.sol";
+import { OwnedUninitialized as Owned } from "../../../utils/owned/OwnedUninitialized.sol";
+import { IRigoblockPoolProxyFactory } from "../interfaces/IRigoblockPoolProxyFactory.sol";
 
 /// @title Rigoblock Pool Proxy Factory contract - allows creation of new Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
-    DragoFactoryLibrary.NewDrago private libraryData;
+    RigoblockPoolProxyFactoryLibrary.NewPool private libraryData;
 
-    string public constant VERSION = "DF 0.5.2";
+    string public constant VERSION = "DF 3.0.1";
 
     Data private data;
 
@@ -44,14 +46,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         mapping(address => address[]) dragos;
     }
 
-    event DragoCreated(
-        string name,
-        string symbol,
-        address indexed drago,
-        address indexed owner,
-        uint256 dragoId
-    );
-
     modifier whitelistedFactory(address _authority) {
         Authority auth = Authority(_authority);
         if (auth.isWhitelistedFactory(address(this))) _;
@@ -59,11 +53,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
     modifier whenFeePaid {
         require(msg.value >= data.fee);
-        _;
-    }
-
-    modifier onlyOwner {
-        require(msg.sender == owner);
         _;
     }
 
@@ -76,7 +65,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         address _registry,
         address payable _dragoDao,
         address _authority)
-        public
     {
         data.dragoRegistry = _registry;
         data.dragoDao = _dragoDao;
@@ -90,7 +78,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev allows creation of a new drago
     /// @param _name String of the name
     /// @param _symbol String of the symbol
-    /// @return Bool the transaction executed correctly
+    /// @return success Bool the transaction executed correctly
     function createDrago(string calldata _name, string calldata _symbol)
         external
         payable
@@ -100,17 +88,22 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         DragoRegistry registry = DragoRegistry(data.dragoRegistry);
         uint256 regFee = registry.getFee();
         uint256 dragoId = registry.dragoCount();
-        require(createDragoInternal(_name, _symbol, msg.sender, dragoId));
-        assert(registry.register.value(regFee)(
-            libraryData.newAddress,
-            _name,
-            _symbol,
-            dragoId,
-            msg.sender)
-        );
+        createDragoInternal(_name, _symbol, msg.sender, dragoId);
+        if(
+            registry.register{ value : regFee} (
+                libraryData.newAddress,
+                _name,
+                _symbol,
+                dragoId,
+                msg.sender
+            ) != true
+        ) {
+            revert("REGISTRY_POOL_FACTORY_ERROR");
+        }
         return true;
     }
 
+    // TODO: this method should be moved to the implementation/beacon
     /// @dev Allows factory owner to update the address of the dao/factory
     /// @dev Enables manual update of dao for single dragos
     /// @param _targetDrago Address of the target drago
@@ -119,7 +112,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         external
         onlyOwner
     {
-        Drago drago = Drago(_targetDrago);
+        RigoblockV3Pool drago = RigoblockV3Pool(_targetDrago);
         drago.changeDragoDao(_dragoDao);
     }
 
@@ -181,9 +174,9 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     }
 
     /// @dev Returns administrative data for this factory
-    /// @return Address of the drago dao
-    /// @return String of the version
-    /// @return Number of the next drago from the registry
+    /// @return dragoDao Address of the drago dao
+    /// @return version String of the version
+    /// @return nextDragoId Number of the next drago from the registry
     function getStorage()
         external
         view
@@ -229,42 +222,47 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @param _name String of the name
     /// @param _symbol String of the symbol
     /// @param _owner Address of the owner
-    /// @param _dragoId Number of the new drago Id
-    /// @return Bool the transaction executed correctly
+    /// @param _poolId Number of the new drago Id
     function createDragoInternal(
         string memory _name,
         string memory _symbol,
         address _owner,
-        uint256 _dragoId)
+        uint256 _poolId)
         internal
-        returns (bool success)
     {
         Authority auth = Authority(data.authority);
-        require(RigoblockPoolProxyFactoryLibrary.createPool(
-            libraryData,
-            _name,
-            _symbol,
-            _owner,
-            _poolId,
-            data.authority)
-        );
+        if(
+            RigoblockPoolProxyFactoryLibrary.createPool(
+                libraryData,
+                _name,
+                _symbol,
+                _owner,
+                _poolId,
+                data.authority
+            ) != true
+        ) {
+            revert("PROXY_FACTORY_LIBRARY_DEPLOY_ERROR");
+        }
         data.dragos[_owner].push(libraryData.newAddress);
         DragoEventful events = DragoEventful(auth.getDragoEventful());
-        require(events.createDrago(
-            _owner,
-            libraryData.newAddress,
-            _name,
-            _symbol,
-            _dragoId)
-        );
+        if(
+            events.createDrago(
+                _owner,
+                libraryData.newAddress,
+                _name,
+                _symbol,
+                _poolId
+            ) != true
+        ) {
+            revert("EVENTFUL_FACTORY_DEPLOY_ERROR");
+        }
         auth.whitelistDrago(libraryData.newAddress, true);
         auth.whitelistUser(_owner, true);
-        emit DragoCreated(_name, _symbol, libraryData.newAddress, _owner, _dragoId);
-        return true;
+        emit DragoCreated(_name, _symbol, libraryData.newAddress, _owner, _poolId);
     }
 
     /// @dev Returns the next Id for a drago
-    /// @return Number of the next Id from the registry
+    /// @return nextDragoId Number of the next Id from the registry
     function getNextId()
         internal view
         returns (uint256 nextDragoId)
