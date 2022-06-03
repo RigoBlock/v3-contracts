@@ -39,10 +39,6 @@ contract RigoblockPoolProxy {
     // Reduced deployment cost by using internal variable.
     bytes32 internal constant _BEACON_SLOT = 0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
 
-    struct AddressSlot {
-        address value;
-    }
-
     /// @dev Sets address of beacon contract.
     /// @param _beacon Beacon address.
     /// @param _data Initialization parameters.
