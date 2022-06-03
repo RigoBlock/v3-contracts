@@ -42,7 +42,7 @@ abstract contract Drago {
 /// @title Self Custody adapter - A helper contract for self custody.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract ASelfCustody /*is SafeMath*/ {
+contract ASelfCustody {
     
     // Mainnet GRG Address
     address constant private GRG_ADDRESS = address(0x4FbB350052Bca5417566f188eB2EBCE5b19BC964);
@@ -133,7 +133,7 @@ contract ASelfCustody /*is SafeMath*/ {
     {
         uint256 etherBase = 18;
         uint256 rationalBase = 36;
-        uint256 rationalizedAmountBase36 = amount * (10 ** (rationalBase - etherBase ));
+        uint256 rationalizedAmountBase36 = amount * (10 ** (rationalBase - etherBase));
         uint256 poolRationalizedGrgBalanceBase36 = Token(grgTokenAddress).balanceOf(address(this)) * (10 ** (rationalBase - etherBase));
 
         if (tokenAddress != address(0)) {
