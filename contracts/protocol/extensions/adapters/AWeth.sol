@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
  Copyright 2018 RigoBlock, Rigo Investment Sagl.
@@ -16,14 +17,25 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
-import { Drago } from "../../Drago/Drago.sol";
-import { AuthorityFace as Authority } from "../../authorities/Authority/AuthorityFace.sol";
-import { ExchangesAuthorityFace as ExchangesAuthority } from "../../authorities/ExchangesAuthority/ExchangesAuthorityFace.sol";
-import { WETH9 } from "../../../tokens/WETH9/WETH9.sol";
+import { IAuthority as Authority } from "../../interfaces/IAuthority.sol";
+import { IExchangesAuthority as ExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
 
-/// @title Weth adapter - A helper to wrap eth to the 0x wrapper token.
+abstract contract WETH9 {
+    function deposit() external payable virtual;
+    function withdraw(uint256 wad) external virtual;
+}
+
+abstract contract Drago {
+
+    address public owner;
+
+    function getEventful() external view virtual returns (address);
+    function getExchangesAuth() external view virtual returns (address);
+}
+
+/// @title WETH adapter - A helper to wrap ETH to the wrapper token.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract AWeth {
@@ -60,7 +72,7 @@ contract AWeth {
             )
             .canWrapTokenOnWrapper(address(0), wrapper)
         );
-        WETH9(wrapper).deposit.value(amount)();
+        WETH9(wrapper).deposit{value: amount}();
     }
 
     /// @dev allows a manager to withdraw ETH from WETH9

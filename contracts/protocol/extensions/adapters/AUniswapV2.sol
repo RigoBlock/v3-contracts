@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2020 Rigo Intl.
@@ -17,7 +18,7 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.7.6;
+pragma solidity 0.8.14;
 
 import "../../../utils/exchanges/uniswap/IUniswapV2Router02/IUniswapV2Router02.sol";
 import "../../../utils/exchanges/uniswap/IUniswapV2Factory/IUniswapV2Factory.sol";

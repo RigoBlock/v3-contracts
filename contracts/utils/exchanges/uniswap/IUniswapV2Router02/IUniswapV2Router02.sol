@@ -1,4 +1,5 @@
-pragma solidity >=0.5.12 <0.8.0;
+// SPDX-License-Identifier: Apache 2.0
+pragma solidity >=0.5.12 <0.9.0;
 
 interface IUniswapV2Router02 {
     function removeLiquidityETHSupportingFeeOnTransferTokens(
