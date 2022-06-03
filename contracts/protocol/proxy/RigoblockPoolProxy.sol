@@ -29,7 +29,6 @@ interface IRigoblockPool {
         address _owner,
         address _authority
     ) external;
-    function _setBeacon(address newBeacon) external;
     function _getBeacon() external view returns (address);
 }
 
@@ -39,6 +38,10 @@ contract RigoblockPoolProxy {
     // beacon slot is used to store beacon address, a contract that returns the address of the implementation contract.
     // Reduced deployment cost by using internal variable.
     bytes32 internal constant _BEACON_SLOT = 0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
+
+    struct AddressSlot {
+        address value;
+    }
 
     /// @dev Sets address of beacon contract.
     /// @param _beacon Beacon address.
@@ -60,7 +63,8 @@ contract RigoblockPoolProxy {
     fallback() external payable {
         // solhint-disable-next-line no-inline-assembly
         assembly {
-            let _beacon := and(sload(0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50), 0xffffffffffffffffffffffffffffffffffffffff)
+            let _beaconSlot := sload(0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50)
+            let _beacon := mload(_beaconSlot)
             // 0x2bad8ba0 == keccak("_getBeacon()"). The value is right padded to 32-bytes with 0s
             if eq(calldataload(0), 0x2bad8ba000000000000000000000000000000000000000000000000000000000) {
                 mstore(0, _beacon)
@@ -87,4 +91,10 @@ contract RigoblockPoolProxy {
             return(0, returndatasize())
         }
     }
+
+    // TODO: following function is commented as we are trying to save space, but must check that applications
+    // recognize EIP1967 proxy standard
+    /*function _getBeacon() internal view returns (address) {
+        return StorageSlot.getAddressSlot(_BEACON_SLOT).value;
+    }*/
 }
