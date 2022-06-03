@@ -70,7 +70,14 @@ contract RigoblockPoolProxy {
             let x := mload(0x40)
             // 0x5c60da1b == keccak("implementation()")
             mstore(x, 0x5c60da1b)
-            let _implementation := call(5000, _beacon, 0, x, 0x04, x, 0x20)
+            let _implementation := call(
+                5000,   // 5k gas
+                _beacon, // destination address
+                0,      // 0 value
+                x,      // inputs are stored at location x
+                0x04,   // inputs are 4 bytes long (signature)
+                x,      // store output over input (saves space)
+                0x20)   // outputs are 32 bytes long
             calldatacopy(0, 0, calldatasize())
             let success := delegatecall(gas(), _implementation, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
