@@ -34,6 +34,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
     RigoblockPoolProxyFactoryLibrary.NewPool private libraryData;
 
+    address private _poolImplementation;
     string public constant VERSION = "DF 3.0.1";
 
     Data private data;
@@ -103,7 +104,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         return true;
     }
 
-    // TODO: this method should be moved to the implementation/beacon
+    // TODO: this method should be moved to the implementation/beacon, or drago should query dao from factory, not in storage
     /// @dev Allows factory owner to update the address of the dao/factory
     /// @dev Enables manual update of dao for single dragos
     /// @param _targetDrago Address of the target drago
@@ -151,6 +152,13 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         onlyOwner
     {
         data.fee = _fee;
+    }
+
+    function setImplementation(address _newImplementation)
+        external
+        onlyDragoDao
+    {
+        _poolImplementation = _newImplementation;
     }
 
     /// @dev Allows owner to collect fees
@@ -213,6 +221,14 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         returns (address[] memory)
     {
         return data.dragos[_owner];
+    }
+
+    function implementation()
+        external
+        view
+        returns (address)
+    {
+        return _poolImplementation;
     }
 
     /*
