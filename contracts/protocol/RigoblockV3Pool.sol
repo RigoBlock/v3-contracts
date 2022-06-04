@@ -39,6 +39,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     using LibFindMethod for *;
 
+    address private immutable _implementation = address(this);
+
     string constant VERSION = 'HF 0.5.2';
     uint256 constant BASE = 1000000; // tokens are divisible by 1 million
 
@@ -79,6 +81,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 ratio; // ratio is 80%
     }
 
+    modifier onlyDelegateCall() {
+        if (address(this) != _implementation) {
+            _;
+        } else {
+            revert("DELEGATECALL_REQUIREMENT_ERROR");
+        }
+    }
+
     modifier onlyDragoDao() {
         require(msg.sender == admin.dragoDao);
         _;
@@ -87,6 +97,11 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     modifier onlyOwnerOrAuthority() {
         Authority auth = Authority(admin.authority);
         require(auth.isAuthority(msg.sender) || msg.sender == owner);
+        _;
+    }
+
+    modifier onlyUninitialized() {
+        require(owner != address(0), "POOL_ALREADY_INITIALIZED_ERROR");
         _;
     }
 
@@ -136,6 +151,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
+    // TODO: all methods should be onlyDelegatecall modifier limited
+    // also inherited methods (owner) should be delegatecall in this context
+
     function _initializePool(
         string memory _dragoName,
         string memory _dragoSymbol,
@@ -143,8 +161,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         address _owner,
         address _authority
     )
-        // onlyUninitialized modifier
-        private
+        onlyUninitialized // could check in fallback instead
+        external
     {
         data.name = _dragoName;
         data.symbol = _dragoSymbol;
