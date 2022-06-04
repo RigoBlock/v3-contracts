@@ -152,6 +152,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     // TODO: all methods should be onlyDelegatecall modifier limited
+    // also inherited methods (owner) should be delegatecall in this context
 
     function _initializePool(
         string memory _dragoName,
