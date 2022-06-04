@@ -41,7 +41,7 @@ library RigoblockPoolProxyFactoryLibrary {
     /// @param _poolId Number of Id of the pool from the registry
     /// @param _authority Address of the respective authority
     /// @return success Bool the function executed
-    function createPool(
+    function createPool0(
         NewPool storage self,
         string memory _name,
         string memory _symbol,
@@ -64,6 +64,39 @@ library RigoblockPoolProxyFactoryLibrary {
             )
         );
         self.newAddress = address(proxy);
-        return true;
+        return success = true;
+    }
+
+    function createPool(
+        NewPool storage self,
+        string memory _name,
+        string memory _symbol,
+        address _owner,
+        uint256 _poolId,
+        address _authority
+    )
+        internal
+        returns (bool success)
+    {
+        bytes memory encodedInitialization = abi.encodeWithSelector(
+            0xc9ee5905, // RigoblockPool._initializePool.selector
+            self.name = _name,
+            self.symbol = _symbol,
+            self.poolId = _poolId,
+            self.owner = _owner,
+            _authority
+        );
+        bytes32 salt = keccak256(abi.encodePacked(_name, _symbol, _owner, msg.sender));
+        bytes memory deploymentData = abi.encodePacked(
+            type(RigoblockPoolProxy).creationCode, // bytecode
+            uint256(uint160(address(this))), // beacon
+            encodedInitialization // encoded initialization call
+        );
+        RigoblockPoolProxy proxy;
+        assembly {
+            proxy := create2(0x0, add(0x20, deploymentData), mload(deploymentData), salt)
+        }
+        self.newAddress = address(proxy);
+        return success = true;
     }
 }
