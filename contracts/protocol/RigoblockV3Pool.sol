@@ -136,12 +136,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
-    constructor(
+    function _initializePool(
         string memory _dragoName,
         string memory _dragoSymbol,
         uint256 _dragoId,
         address _owner,
-        address _authority)
+        address _authority
+    )
+        // onlyUninitialized modifier
+        private
     {
         data.name = _dragoName;
         data.symbol = _dragoSymbol;
