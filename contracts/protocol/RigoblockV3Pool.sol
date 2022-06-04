@@ -144,7 +144,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         address _authority
     )
         // onlyUninitialized modifier
-        internal
+        private
     {
         data.name = _dragoName;
         data.symbol = _dragoSymbol;
