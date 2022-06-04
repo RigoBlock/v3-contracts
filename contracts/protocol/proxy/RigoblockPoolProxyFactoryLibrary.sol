@@ -54,7 +54,7 @@ library RigoblockPoolProxyFactoryLibrary {
         RigoblockPoolProxy proxy = new RigoblockPoolProxy(
             address(this),
             abi.encodeWithSelector(
-                0x3734c12c, // RigoblockPool.initiatePool.selector
+                0xc9ee5905, // RigoblockPool._initializePool.selector
                 // TODO: check gas saving in forwarding data as struct
                 self.name = _name,
                 self.symbol = _symbol,
