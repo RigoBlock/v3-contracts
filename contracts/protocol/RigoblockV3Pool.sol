@@ -101,7 +101,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     modifier onlyUninitialized() {
-        require(owner != address(0), "POOL_ALREADY_INITIALIZED_ERROR");
+        require(owner == address(0), "POOL_ALREADY_INITIALIZED_ERROR");
         _;
     }
 
