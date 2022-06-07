@@ -49,7 +49,7 @@ library RigoblockPoolProxyFactoryLibrary {
         uint256 _poolId,
         address _authority)
         internal
-        returns (bool success)
+        returns (RigoblockPoolProxy)
     {
         RigoblockPoolProxy proxy = new RigoblockPoolProxy(
             address(this),
@@ -64,11 +64,11 @@ library RigoblockPoolProxyFactoryLibrary {
             )
         );
         self.newAddress = address(proxy);
-        return success = true;
+        return(proxy);
     }
 
     function createPool(
-        NewPool storage self,
+        NewPool memory self,
         string memory _name,
         string memory _symbol,
         address _owner,
@@ -76,8 +76,7 @@ library RigoblockPoolProxyFactoryLibrary {
         address _authority
     )
         internal
-        returns (bool success)
-        //returns (RigoblockPoolProxy proxy)
+        returns (RigoblockPoolProxy proxy)
     {
         bytes memory encodedInitialization = abi.encodeWithSelector(
             0xc9ee5905, // RigoblockPool._initializePool.selector
@@ -95,11 +94,9 @@ library RigoblockPoolProxyFactoryLibrary {
                 encodedInitialization // encoded initialization call
             )
         );
-        RigoblockPoolProxy proxy;
         assembly {
             proxy := create2(0x0, add(deploymentData, 0x20), mload(deploymentData), salt)
         }
         self.newAddress = address(proxy);
-        return success = true;
     }
 }
