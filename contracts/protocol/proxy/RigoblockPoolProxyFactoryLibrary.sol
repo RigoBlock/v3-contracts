@@ -77,6 +77,7 @@ library RigoblockPoolProxyFactoryLibrary {
     )
         internal
         returns (bool success)
+        //returns (RigoblockPoolProxy proxy)
     {
         bytes memory encodedInitialization = abi.encodeWithSelector(
             0xc9ee5905, // RigoblockPool._initializePool.selector
@@ -89,12 +90,14 @@ library RigoblockPoolProxyFactoryLibrary {
         bytes32 salt = keccak256(abi.encodePacked(_name, _symbol, _owner, msg.sender));
         bytes memory deploymentData = abi.encodePacked(
             type(RigoblockPoolProxy).creationCode, // bytecode
-            uint256(uint160(address(this))), // beacon
-            encodedInitialization // encoded initialization call
+            abi.encode(
+                uint256(uint160(address(this))), // beacon
+                encodedInitialization // encoded initialization call
+            )
         );
         RigoblockPoolProxy proxy;
         assembly {
-            proxy := create2(0x0, add(0x20, deploymentData), mload(deploymentData), salt)
+            proxy := create2(0x0, add(deploymentData, 0x20), mload(deploymentData), salt)
         }
         self.newAddress = address(proxy);
         return success = true;
