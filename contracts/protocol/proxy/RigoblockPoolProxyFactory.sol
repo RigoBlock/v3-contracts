@@ -20,8 +20,6 @@
 pragma solidity 0.8.14;
 
 import { IDragoRegistry as DragoRegistry } from "../interfaces/IDragoRegistry.sol";
-import { IAuthority as Authority } from "../interfaces/IAuthority.sol";
-import { IDragoEventful as DragoEventful } from "../interfaces/IDragoEventful.sol";
 import { IRigoblockV3Pool as RigoblockV3Pool } from "../IRigoblockV3Pool.sol";
 import { RigoblockPoolProxyFactoryLibrary } from "./RigoblockPoolProxyFactoryLibrary.sol";
 import { OwnedUninitialized as Owned } from "../../../utils/owned/OwnedUninitialized.sol";
@@ -41,15 +39,10 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
     struct Data {
         uint256 fee;
-        address dragoRegistry;
         address payable dragoDao;
         address authority;
         mapping(address => address[]) dragos;
-    }
-
-    modifier whitelistedFactory(address _authority) {
-        Authority auth = Authority(_authority);
-        if (auth.isWhitelistedFactory(address(this))) _;
+        DragoRegistry registry;
     }
 
     modifier whenFeePaid {
@@ -63,11 +56,11 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     }
 
     constructor(
-        address _registry,
+        address payable _registry,
         address payable _dragoDao,
         address _authority)
     {
-        data.dragoRegistry = _registry;
+        data.registry = DragoRegistry(_registry);
         data.dragoDao = _dragoDao;
         data.authority = _authority;
         owner = msg.sender;
@@ -79,29 +72,28 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev allows creation of a new drago
     /// @param _name String of the name
     /// @param _symbol String of the symbol
-    /// @return success Bool the transaction executed correctly
+    /// @return Address of the new pool
     function createDrago(string calldata _name, string calldata _symbol)
         external
         payable
+        override
         whenFeePaid
-        returns (bool success)
+        returns (address)
     {
-        DragoRegistry registry = DragoRegistry(data.dragoRegistry);
-        uint256 regFee = registry.getFee();
-        uint256 dragoId = registry.dragoCount();
+        uint256 regFee = data.registry.getFee();
+        uint256 dragoId = data.registry.dragoCount();
         createDragoInternal(_name, _symbol, msg.sender, dragoId);
-        if(
-            registry.register{ value : regFee} (
+        require(
+            data.registry.register{ value : regFee} (
                 libraryData.newAddress,
                 _name,
                 _symbol,
                 dragoId,
                 msg.sender
-            ) != true
-        ) {
-            revert("REGISTRY_POOL_FACTORY_ERROR");
-        }
-        return true;
+            ) == true,
+            "REGISTRY_POOL_FACTORY_ERROR"
+        );
+        return libraryData.newAddress;
     }
 
     // TODO: this method should be moved to the implementation/beacon, or drago should query dao from factory, not in storage
@@ -111,10 +103,10 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @param _dragoDao Address of the new drago dao
     function setTargetDragoDao(address payable _targetDrago, address _dragoDao)
         external
+        override
         onlyOwner
     {
-        RigoblockV3Pool drago = RigoblockV3Pool(_targetDrago);
-        drago.changeDragoDao(_dragoDao);
+        RigoblockV3Pool(_targetDrago).changeDragoDao(_dragoDao);
     }
 
     /// @dev Allows drago dao/factory to update its address
@@ -122,6 +114,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @param _newDragoDao Address of the drago dao
     function changeDragoDao(address payable _newDragoDao)
         external
+        override
         onlyDragoDao
     {
         data.dragoDao = _newDragoDao;
@@ -131,15 +124,17 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @param _newRegistry Address of the new registry
     function setRegistry(address _newRegistry)
         external
+        override
         onlyOwner
     {
-        data.dragoRegistry = _newRegistry;
+        data.registry = DragoRegistry(_newRegistry);
     }
 
     /// @dev Allows owner to set the address which can collect creation fees
     /// @param _dragoDao Address of the new drago dao/factory
     function setBeneficiary(address payable _dragoDao)
         external
+        override
         onlyOwner
     {
         data.dragoDao = _dragoDao;
@@ -149,6 +144,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @param _fee Value of the fee in wei
     function setFee(uint256 _fee)
         external
+        override
         onlyOwner
     {
         data.fee = _fee;
@@ -156,6 +152,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
     function setImplementation(address _newImplementation)
         external
+        override
         onlyDragoDao
     {
         _poolImplementation = _newImplementation;
@@ -164,6 +161,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev Allows owner to collect fees
     function drain()
         external
+        override
         onlyOwner
     {
         data.dragoDao.transfer(address(this).balance);
@@ -175,10 +173,12 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev Returns the address of the pool registry
     /// @return Address of the registry
     function getRegistry()
-        external view
+        external
+        view
+        override
         returns (address)
     {
-        return (data.dragoRegistry);
+        return (address(data.registry));
     }
 
     /// @dev Returns administrative data for this factory
@@ -188,6 +188,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     function getStorage()
         external
         view
+        override
         returns (
             address dragoDao,
             string memory version,
@@ -201,23 +202,13 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         );
     }
 
-    /// @dev Returns the address of the logger contract
-    /// @dev Queries from authority contract
-    /// @return Address of the eventful contract
-    function getEventful()
-        external view
-        returns (address)
-    {
-        Authority auth = Authority(data.authority);
-        return auth.getDragoEventful();
-    }
-
     /// @dev Returns an array of dragos the owner has created
     /// @param _owner Address of the queried owner
     /// @return Array of drago addresses
     function getDragosByAddress(address _owner)
         external
         view
+        override
         returns (address[] memory)
     {
         return data.dragos[_owner];
@@ -226,6 +217,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     function implementation()
         external
         view
+        override
         returns (address)
     {
         return _poolImplementation;
@@ -246,44 +238,30 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         uint256 _poolId)
         internal
     {
-        Authority auth = Authority(data.authority);
-        if(
-            RigoblockPoolProxyFactoryLibrary.createPool(
-                libraryData,
-                _name,
-                _symbol,
-                _owner,
-                _poolId,
-                data.authority
-            ) != true
-        ) {
-            revert("PROXY_FACTORY_LIBRARY_DEPLOY_ERROR");
-        }
+        require(
+            address(
+                RigoblockPoolProxyFactoryLibrary.createPool(
+                    libraryData,
+                    _name,
+                    _symbol,
+                    _owner,
+                    _poolId,
+                    data.authority
+                )
+            )  != address(0),
+            "PROXY_FACTORY_LIBRARY_DEPLOY_ERROR"
+        );
         data.dragos[_owner].push(libraryData.newAddress);
-        DragoEventful events = DragoEventful(auth.getDragoEventful());
-        if(
-            events.createDrago(
-                _owner,
-                libraryData.newAddress,
-                _name,
-                _symbol,
-                _poolId
-            ) != true
-        ) {
-            revert("EVENTFUL_FACTORY_DEPLOY_ERROR");
-        }
-        auth.whitelistDrago(libraryData.newAddress, true);
-        auth.whitelistUser(_owner, true);
         emit DragoCreated(_name, _symbol, libraryData.newAddress, _owner, _poolId);
     }
 
     /// @dev Returns the next Id for a drago
     /// @return nextDragoId Number of the next Id from the registry
     function getNextId()
-        internal view
+        internal
+        view
         returns (uint256 nextDragoId)
     {
-        DragoRegistry registry = DragoRegistry(data.dragoRegistry);
-        nextDragoId = registry.dragoCount();
+        nextDragoId = data.registry.dragoCount();
     }
 }
