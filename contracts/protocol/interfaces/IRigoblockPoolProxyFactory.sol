@@ -26,16 +26,17 @@ interface IRigoblockPoolProxyFactory {
 
     event DragoCreated(string name, string symbol, address indexed drago, address indexed owner, uint256 dragoId);
 
-    function createDrago(string calldata _name, string calldata _symbol) external payable returns (bool success);
+    function createDrago(string calldata _name, string calldata _symbol) external payable returns (address);
     function setTargetDragoDao(address payable _targetDrago, address _dragoDao) external;
     function changeDragoDao(address payable _newDragoDao) external;
     function setRegistry(address _newRegistry) external;
     function setBeneficiary(address payable _dragoDao) external;
     function setFee(uint256 _fee) external;
+    function setImplementation(address _newImplementation) external;
     function drain() external;
 
     function getRegistry() external view returns (address);
     function getStorage() external view returns (address dragoDao, string memory version, uint256 nextDragoId);
-    function getEventful() external view returns (address);
     function getDragosByAddress(address _owner) external view returns (address[] memory);
+    function implementation() external view returns (address);
 }
