@@ -42,7 +42,7 @@ library RigoblockPoolProxyFactoryLibrary {
     /// @param _authority Address of the respective authority
     /// @return success Bool the function executed
     function createPool0(
-        NewPool storage self,
+        NewPool memory self,
         string memory _name,
         string memory _symbol,
         address _owner,
