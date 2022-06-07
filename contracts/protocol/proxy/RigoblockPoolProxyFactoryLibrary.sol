@@ -40,7 +40,7 @@ library RigoblockPoolProxyFactoryLibrary {
     /// @param _symbol String of the symbol
     /// @param _poolId Number of Id of the pool from the registry
     /// @param _authority Address of the respective authority
-    /// @return success Bool the function executed
+    /// @return proxy Instance of a Rigoblock pool
     function createPool0(
         NewPool memory self,
         string memory _name,
@@ -49,9 +49,9 @@ library RigoblockPoolProxyFactoryLibrary {
         uint256 _poolId,
         address _authority)
         internal
-        returns (RigoblockPoolProxy)
+        returns (RigoblockPoolProxy proxy)
     {
-        RigoblockPoolProxy proxy = new RigoblockPoolProxy(
+        proxy = new RigoblockPoolProxy(
             address(this),
             abi.encodeWithSelector(
                 0xc9ee5905, // RigoblockPool._initializePool.selector
@@ -64,7 +64,6 @@ library RigoblockPoolProxyFactoryLibrary {
             )
         );
         self.newAddress = address(proxy);
-        return(proxy);
     }
 
     function createPool(
