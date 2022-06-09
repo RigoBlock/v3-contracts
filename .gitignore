@@ -1,5 +1,17 @@
+build/
 node_modules/
-dist
+.DS_Store
+.zos.session
+.openzeppelin/.session
+deployments/
+env/
+dist/
+.env
+bin/
+solc
+coverage/
+coverage.json
+yarn-error.log
 
 #generated contract artifacts
 *artifacts/
