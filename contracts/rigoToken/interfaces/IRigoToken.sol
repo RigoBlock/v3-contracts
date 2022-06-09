@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,12 +17,12 @@
 
 */
 
-pragma solidity >=0.5.0;
+pragma solidity >=0.5.0 <0.8.0;
 
 /// @title Rigo Token Interface - Allows interaction with the Rigo token.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface RigoTokenFace {
+interface IRigoToken {
 
     function minter() external view returns (address);
 

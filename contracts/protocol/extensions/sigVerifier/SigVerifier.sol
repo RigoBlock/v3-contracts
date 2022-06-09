@@ -20,7 +20,7 @@
 pragma solidity 0.8.14;
 
 import { LibBytes } from "../../../utils/LibBytes/LibBytes.sol";
-import { ERC20Face as RigoToken } from "../../../tokens/ERC20/ERC20.sol";
+import { IERC20 as RigoToken } from "../../../tokens/ERC20/IERC20.sol";
 import { RigoblockV3Pool } from "../../../protocol/RigoblockV3Pool.sol";
 import { IExchangesAuthority as ExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
 
@@ -35,7 +35,6 @@ contract SigVerifier {
 
     constructor(
         address _GRGTokenAddress)
-        public
     {
         GRGTokenAddress = _GRGTokenAddress;
     }
@@ -43,7 +42,7 @@ contract SigVerifier {
     /// @dev Verifies that a signature is valid.
     /// @param hash Message hash that is signed.
     /// @param signature Proof of signing.
-    /// @return Validity of order signature.
+    /// @return isValid Validity of order signature.
     /// @notice mock function whici returns false
     function isValidSignature(
         /* solhint-disable */
@@ -60,18 +59,18 @@ contract SigVerifier {
 
         if (recoveredEIP712 != address(0)) {
             require(
-                isValid = recoveredEIP712 == Drago(address(msg.sender)).owner(),
+                isValid = recoveredEIP712 == RigoblockV3Pool(address(msg.sender)).owner(),
                 "EIP712_SIGNER_INVALID"
             );
 
             // if operator holds at least 100 GRG, valid, otherwise require whitelisted signer
-            if (RigoToken(GRGTokenAddress).balanceOf(Drago(address(msg.sender)).owner()) >= 100 * 10 ** 18) {
+            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(address(msg.sender)).owner()) >= 100 * 10 ** 18) {
                 isValid = true;
 
             } else {
                 require(
                     ExchangesAuthority(
-                        Drago(address(msg.sender)).getExchangesAuth()
+                        RigoblockV3Pool(address(msg.sender)).getExchangesAuth()
                     )
                     .getExchangeAdapter(address(tx.origin)) != address(0),
                     "VALID_EIP712_BUT_ORIGIN_NOT_WHITELISTED"
@@ -80,18 +79,18 @@ contract SigVerifier {
 
         } else if (recoveredETHSIGN != address(0)) {
             require(
-                isValid = recoveredETHSIGN == Drago(address(msg.sender)).owner(),
+                isValid = recoveredETHSIGN == RigoblockV3Pool(address(msg.sender)).owner(),
                 "EIP712_SIGNER_INVALID"
             );
 
             // if operator holds at least 100 GRG, valid, otherwise require whitelisted signer
-            if (RigoToken(GRGTokenAddress).balanceOf(Drago(address(msg.sender)).owner()) >= 100 * 10 ** 18) {
+            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(address(msg.sender)).owner()) >= 100 * 10 ** 18) {
                 isValid = true;
 
             } else {
                 require(
                     ExchangesAuthority(
-                        Drago(address(msg.sender)).getExchangesAuth()
+                        RigoblockV3Pool(address(msg.sender)).getExchangesAuth()
                     )
                     .getExchangeAdapter(address(tx.origin)) != address(0),
                     "VALID_ETHSIGN_BUT_ORIGIN_NOT_WHITELISTED"

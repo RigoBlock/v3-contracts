@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.14;
 
-import { IPool } from "../../utils/Pool/IPool.sol";
+import { IPool } from "../../utils/pool/IPool.sol";
 import { IDragoRegistry } from "../../protocol/interfaces/IDragoRegistry.sol";
 
 /// @title Network - Returns data of active pools and network value.

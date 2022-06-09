@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
@@ -25,7 +26,6 @@ import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
 import "../immutable/MixinDeploymentConstants.sol";
 import "./MixinStakeStorage.sol";
-import "../../rigoToken/Inflation/InflationFace.sol";
 
 
 abstract contract MixinStakeBalances is
