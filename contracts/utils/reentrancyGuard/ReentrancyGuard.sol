@@ -19,7 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-contract ReentrancyGuard {
+abstract contract ReentrancyGuard {
 
     // Locked state of mutex
     bool private locked = false;

@@ -26,9 +26,9 @@ import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IDragoEventful as DragoEventful } from "./interfaces/IDragoEventful.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
-import { ReentrancyGuard } from "../../utils/ReentrancyGuard//ReentrancyGuard.sol";
+import { ReentrancyGuard } from "../../utils/reentrancyGuard/ReentrancyGuard.sol";
 import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
-import { LibFindMethod } from "../../utils/LibFindMethod/LibFindMethod.sol";
+import { LibFindMethod } from "../../utils/libFindMethod/LibFindMethod.sol";
 
 import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 

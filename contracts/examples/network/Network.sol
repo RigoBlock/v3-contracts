@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2018-2019 RigoBlock, Rigo Investment Sagl, 2020 Rigo Intl.
+ Copyright 2018-2022 RigoBlock, Rigo Investment Sagl, Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -16,10 +17,10 @@
 
 */
 
-pragma solidity 0.6.6;
+pragma solidity 0.8.14;
 
 import { IPool } from "../../utils/Pool/IPool.sol";
-import { IDragoRegistry } from "../../protocol/DragoRegistry/IDragoRegistry.sol";
+import { IDragoRegistry } from "../../protocol/interfaces/IDragoRegistry.sol";
 
 /// @title Network - Returns data of active pools and network value.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -29,7 +30,6 @@ contract Network {
 
     constructor(
         address dragoRegistryAddress)
-        public
     {
         DRAGOREGISTRYADDRESS = dragoRegistryAddress;
     }
@@ -130,7 +130,7 @@ contract Network {
         (address poolAddress, , , , , ) = IDragoRegistry(DRAGOREGISTRYADDRESS).fromId(poolId);
         if (poolAddress != address(0)) {
             return true;
-        }
+        } else return false;
     }
 
     /// @dev Returns the address and the group of a pool from its id
