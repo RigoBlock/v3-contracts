@@ -12,7 +12,7 @@ jobs:
           settings: '"viaIR":true,"optimizer":{"enabled":true,"runs":200}}'
     env:
       SOLIDITY_VERSION: ${{ matrix.solidity }}
-      SOLIDITY_SETTINGS: ${{ matric.settings }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
