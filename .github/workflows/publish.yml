@@ -27,35 +27,6 @@ jobs:
       - run: yarn build
       #- run: yarn test
 
-  publish-gpr:
-    needs: build
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        solidity: [""]
-        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
-    env:
-      SOLIDITY_VERSION: ${{ matrix.solidity }}
-      SOLIDITY_SETTINGS: ${{ matrix.settings }}
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16.7.0
-          registry-url: https://npm.pkg.github.com/
-          always-auth: true
-      - uses: actions/cache@v3
-        with:
-          path: "**/node_modules"
-          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
-      - run: yarn --frozen-lockfile
-      - run: yarn publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.PUBLISH_GITHUB_TOKEN}}
-
   publish-npm:
     needs: build
     runs-on: ubuntu-latest

@@ -1,6 +1,6 @@
 {
   "name": "@rgbk/v3-contracts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Ethereum asset management",
   "homepage": "https://github.com/rigoblock/v3-contracts/",
   "license": "Apache-2.0",
@@ -39,9 +39,6 @@
     "Wallet",
     "Rigoblock"
   ],
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "author": "gab@rigoblock.com",
   "bugs": {
     "url": "https://github.com/rigoblock/v3-contracts/issues"
