@@ -8,7 +8,8 @@ jobs:
       matrix:
         solidity: ["0.5.0", "0.6.6", "0.7.4", "0.8.14"]
         include:
-        - settings: '"optimizer":{"enabled":true,"runs":200}}'
+        - solidity: ["0.8.14"]
+          settings: '"optimizer":{"enabled":true,"runs":200}}'
     env:
       SOLIDITY_VERSION: ${{ matrix.solidity }}
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
