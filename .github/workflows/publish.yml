@@ -7,6 +7,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        solidity: [""]
+        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
+    env:
+      SOLIDITY_VERSION: ${{ matrix.solidity }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
@@ -23,6 +30,13 @@ jobs:
   publish-gpr:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        solidity: [""]
+        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
+    env:
+      SOLIDITY_VERSION: ${{ matrix.solidity }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
     permissions:
       contents: read
       packages: write
@@ -32,6 +46,10 @@ jobs:
         with:
           node-version: 16
           registry-url: https://npm.pkg.github.com/
+      - uses: actions/cache@v3
+        with:
+          path: "**/node_modules"
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
       - run: yarn --frozen-lockfile
       - run: yarn publish
         env:
@@ -40,12 +58,23 @@ jobs:
   publish-npm:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        solidity: [""]
+        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
+    env:
+      SOLIDITY_VERSION: ${{ matrix.solidity }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
           node-version: 16
           registry-url: https://registry.npmjs.org/
+      - uses: actions/cache@v3
+        with:
+          path: "**/node_modules"
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
       - run: yarn --frozen-lockfile
       - run: yarn publish
         env:
