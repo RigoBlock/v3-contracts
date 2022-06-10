@@ -1,1 +1,2 @@
 contracts: ['contracts']
+@rgbk/v3-contracts: ['packages/v3-contracts']
