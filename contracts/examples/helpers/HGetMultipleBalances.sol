@@ -18,7 +18,7 @@
 
 pragma solidity 0.5.0;
 
-import { ERC20Face as Token } from "../../tokens/ERC20/ERC20.sol";
+import { IERC20 as Token } from "../../tokens/ERC20/IERC20.sol";
 
 /// @title Multiple Balances Helper - Allows to receive a list of pools for a specific group.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

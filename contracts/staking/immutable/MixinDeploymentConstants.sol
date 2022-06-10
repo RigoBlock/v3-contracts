@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
@@ -23,8 +24,8 @@ pragma experimental ABIEncoderV2;
 import "../../utils/0xUtils/IEtherToken.sol";
 import "../interfaces/IGrgVault.sol";
 import "../interfaces/IStaking.sol";
-import "../../protocol/DragoRegistry/IDragoRegistry.sol";
-import "../../rigoToken/RigoToken/RigoTokenFace.sol";
+import "../../protocol/interfaces/IDragoRegistry.sol";
+import "../../rigoToken/interfaces/IRigoToken.sol";
 
 
 // solhint-disable separate-by-one-line-in-contract
@@ -84,9 +85,9 @@ abstract contract MixinDeploymentConstants is IStaking {
         view
         virtual
         override
-        returns (RigoTokenFace grgContract)
+        returns (IRigoToken grgContract)
     {
-        grgContract = RigoTokenFace(GRG_ADDRESS);
+        grgContract = IRigoToken(GRG_ADDRESS);
         return grgContract;
     }
 }

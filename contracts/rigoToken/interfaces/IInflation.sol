@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2019 RigoBlock, Rigo Investment Sagl, 2020 Rigo Intl.
@@ -21,7 +22,7 @@ pragma solidity >=0.4.22 <0.8.0;
 /// @title Inflation Interface - Allows interaction with the Inflation contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface InflationFace {
+interface IInflation {
 
     /*
      * PUBLIC VARIABLES

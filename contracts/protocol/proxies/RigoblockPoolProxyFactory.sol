@@ -22,7 +22,7 @@ pragma solidity 0.8.14;
 import { IDragoRegistry as DragoRegistry } from "../interfaces/IDragoRegistry.sol";
 import { IRigoblockV3Pool as RigoblockV3Pool } from "../IRigoblockV3Pool.sol";
 import { RigoblockPoolProxyFactoryLibrary } from "./RigoblockPoolProxyFactoryLibrary.sol";
-import { OwnedUninitialized as Owned } from "../../../utils/owned/OwnedUninitialized.sol";
+import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
 import { IRigoblockPoolProxyFactory } from "../interfaces/IRigoblockPoolProxyFactory.sol";
 
 /// @title Rigoblock Pool Proxy Factory contract - allows creation of new Rigoblock pools.

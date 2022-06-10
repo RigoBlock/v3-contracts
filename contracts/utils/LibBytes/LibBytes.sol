@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
-  Copyright 2018 ZeroEx Intl.
+  Copyright 2018 ZeroEx Intl, 2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -227,7 +228,7 @@ library LibBytes {
 
     /// @dev Pops the last byte off of a byte array by modifying its length.
     /// @param b Byte array that will be modified.
-    /// @return The byte that was popped off.
+    /// @return result The byte that was popped off.
     function popLastByte(bytes memory b)
         internal
         pure
@@ -251,7 +252,7 @@ library LibBytes {
 
     /// @dev Pops the last 20 bytes off of a byte array by modifying its length.
     /// @param b Byte array that will be modified.
-    /// @return The 20 byte address that was popped off.
+    /// @return result The 20 byte address that was popped off.
     function popLast20Bytes(bytes memory b)
         internal
         pure
@@ -276,7 +277,7 @@ library LibBytes {
     /// @dev Tests equality of two byte arrays.
     /// @param lhs First byte array to compare.
     /// @param rhs Second byte array to compare.
-    /// @return True if arrays are the same. False otherwise.
+    /// @return equal True if arrays are the same. False otherwise.
     function equals(
         bytes memory lhs,
         bytes memory rhs
@@ -294,7 +295,7 @@ library LibBytes {
     /// @dev Reads an address from a position in a byte array.
     /// @param b Byte array containing an address.
     /// @param index Index in byte array of address.
-    /// @return address from byte array.
+    /// @return result address from byte array.
     function readAddress(
         bytes memory b,
         uint256 index
@@ -372,7 +373,7 @@ library LibBytes {
     /// @dev Reads a bytes32 value from a position in a byte array.
     /// @param b Byte array containing a bytes32 value.
     /// @param index Index in byte array of bytes32 value.
-    /// @return bytes32 value from byte array.
+    /// @return result bytes32 value from byte array.
     function readBytes32(
         bytes memory b,
         uint256 index
@@ -425,7 +426,7 @@ library LibBytes {
     /// @dev Reads a uint256 value from a position in a byte array.
     /// @param b Byte array containing a uint256 value.
     /// @param index Index in byte array of uint256 value.
-    /// @return uint256 value from byte array.
+    /// @return result uint256 value from byte array.
     function readUint256(
         bytes memory b,
         uint256 index
@@ -456,7 +457,7 @@ library LibBytes {
     /// @dev Reads an unpadded bytes4 value from a position in a byte array.
     /// @param b Byte array containing a bytes4 value.
     /// @param index Index in byte array of bytes4 value.
-    /// @return bytes4 value from byte array.
+    /// @return result bytes4 value from byte array.
     function readBytes4(
         bytes memory b,
         uint256 index

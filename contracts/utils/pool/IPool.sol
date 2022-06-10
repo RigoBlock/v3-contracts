@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2020 Rigo Intl.
+ Copyright 2020-2022 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -16,7 +17,7 @@
 
 */
 
-pragma solidity >=0.6.0 <0.8.0;
+pragma solidity >=0.6.0 <0.9.0;
 
 /// @title Pool Interface - Interface of pool standard functions.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

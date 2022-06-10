@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2017-2019 RigoBlock, Rigo Investment Sagl, 2020 Rigo Intl.
+ Copyright 2017-2022 RigoBlock, Rigo Investment Sagl, Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -21,7 +22,7 @@ pragma solidity >=0.4.22 <0.8.0;
 /// @title Proof of Performance Interface - Allows interaction with the PoP contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface ProofOfPerformanceFace {
+interface IProofOfPerformance {
 
     /*
      * PUBLIC VARIABLES

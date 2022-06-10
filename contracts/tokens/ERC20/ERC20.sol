@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.5.0 <0.6.0;
 
-import { ERC20Face } from "./ERC20Face.sol";
+import { IERC20 } from "./IERC20.sol";
 
-contract ERC20 is ERC20Face {
+contract ERC20 is IERC20 {
 
     function transfer(address _to, uint256 _value)
         external
