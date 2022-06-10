@@ -46,6 +46,7 @@ jobs:
         with:
           node-version: 16
           registry-url: https://npm.pkg.github.com/
+          always-auth: true
       - uses: actions/cache@v3
         with:
           path: "**/node_modules"
@@ -71,6 +72,7 @@ jobs:
         with:
           node-version: 16
           registry-url: https://registry.npmjs.org/
+          always-auth: true
       - uses: actions/cache@v3
         with:
           path: "**/node_modules"
