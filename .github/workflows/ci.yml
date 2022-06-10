@@ -1,0 +1,33 @@
+name: v3-contracts
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        solidity: [""]
+        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
+        #include:
+        #- solidity: "0.8.14"
+        #  settings: '{"optimizer":{"enabled":true,"runs":200}}'
+        #- solidity: "0.7.4"
+        #  settings: '{"optimizer":{"enabled":true,"runs":200}}'
+        #- solidity: "0.6.6"
+        #  settings: '{"optimizer":{"enabled":true,"runs":200}}'
+        #- solidity: "0.5.0"
+        #  settings: '{"optimizer":{"enabled":true,"runs":200}}'
+    env:
+      SOLIDITY_VERSION: ${{ matrix.solidity }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 16.7.0
+      - uses: actions/cache@v2
+        with:
+          path: "**/node_modules"
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+      - run: yarn --frozen-lockfile
+      - run: yarn build
