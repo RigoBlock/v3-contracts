@@ -39,6 +39,9 @@
     "Wallet",
     "Rigoblock"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "author": "gab@rigoblock.com",
   "bugs": {
     "url": "https://github.com/rigoblock/v3-contracts/issues"
