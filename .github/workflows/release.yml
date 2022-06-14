@@ -7,9 +7,9 @@ on:
 #              description: 'required CI status'
 #              default: 'success'
 #              required: true
-          default_bump:
-            description: patch-minor-major
-            default: patch
+#          default_bump:
+#            description: patch-minor-major
+#            default: patch
           prerelease:
             description: prerelease name
             required: false
@@ -38,7 +38,7 @@ jobs:
         with:
           github_token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
           release_branches: development
-          default_bump: github.event.input.default_bump
+          #default_bump: false #github.event.input.default_bump
 
   create_release:
     name: Create Release
