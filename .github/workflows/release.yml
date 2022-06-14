@@ -60,6 +60,9 @@ jobs:
 #
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
 
       - name: Create Github Release
         uses: actions/create-release@v1.1.0
