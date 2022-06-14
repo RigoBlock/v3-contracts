@@ -21,11 +21,11 @@
 // solhint-disable-next-line
 pragma solidity 0.7.4;
 
-import { AuthorityFace } from "../../protocol/authorities/Authority/AuthorityFace.sol";
-import { IPool } from "../../utils/Pool/IPool.sol";
+import { IAuthority } from "../../protocol/interfaces/IAuthority.sol";
+import { IPool } from "../../utils/pool/IPool.sol";
 import { SafeMath } from "../../utils/SafeMath/SafeMath.sol";
-import { ProofOfPerformanceFace } from "./ProofOfPerformanceFace.sol";
-import { IDragoRegistry } from "../../protocol/DragoRegistry/IDragoRegistry.sol";
+import { IProofOfPerformance } from "../interfaces/IProofOfPerformance.sol";
+import { IDragoRegistry } from "../../protocol/interfaces/IDragoRegistry.sol";
 import { IStaking } from "../../staking/interfaces/IStaking.sol";
 
 
@@ -34,7 +34,7 @@ import { IStaking } from "../../staking/interfaces/IStaking.sol";
 // solhint-disable-next-line
 contract ProofOfPerformance is
     SafeMath,
-    ProofOfPerformanceFace
+    IProofOfPerformance
 {
     address public override dragoRegistryAddress;
     address public override rigoblockDaoAddress;
@@ -561,7 +561,7 @@ contract ProofOfPerformance is
         internal
         view
     {
-        if (!AuthorityFace(authorityAddress).isWhitelistedFactory(_factory)) {
+        if (!IAuthority(authorityAddress).isWhitelistedFactory(_factory)) {
             revert("NOT_APPROVED_AUTHORITY_ERROR");
         }
     }

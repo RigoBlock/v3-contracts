@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
@@ -26,6 +27,7 @@ import "../libs/LibCobbDouglas.sol";
 import "../libs/LibStakingRichErrors.sol";
 import "../interfaces/IStructs.sol";
 import "../staking_pools/MixinStakingPoolRewards.sol";
+import "../../rigoToken/interfaces/IInflation.sol";
 
 
 abstract contract MixinFinalizer is
@@ -60,7 +62,7 @@ abstract contract MixinFinalizer is
         //  mint happens before time has passed check, therefore tokens will be allocated even before expiry if method is called
         //  but will not be minted again until epoch time has passed. This could happen when epoch length is changed only.
         if (currentEpoch_ > uint256(1)) {
-            try InflationFace(getGrgContract().minter()).mintInflation() returns (uint256 mintedInflation) {
+            try IInflation(getGrgContract().minter()).mintInflation() returns (uint256 mintedInflation) {
                 emit GrgMintEvent(mintedInflation);
             } catch Error(string memory revertReason) {
                 emit CatchStringEvent(revertReason);

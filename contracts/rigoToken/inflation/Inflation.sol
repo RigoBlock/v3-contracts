@@ -23,8 +23,8 @@ pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
 import { SafeMath } from "../../utils/SafeMath/SafeMath.sol";
-import { InflationFace } from "./InflationFace.sol";
-import { RigoTokenFace } from "../RigoToken/RigoTokenFace.sol";
+import { IInflation } from "../interfaces/IInflation.sol";
+import { IRigoToken } from "../interfaces/IRigoToken.sol";
 import { IStaking } from "../../staking/interfaces/IStaking.sol";
 
 
@@ -33,7 +33,7 @@ import { IStaking } from "../../staking/interfaces/IStaking.sol";
 // solhint-disable-next-line
 contract Inflation is
     SafeMath,
-    InflationFace
+    IInflation
 {
     address public immutable override RIGO_TOKEN_ADDRESS;
     address public immutable override STAKING_PROXY_ADDRESS;
@@ -93,7 +93,7 @@ contract Inflation is
         slot = safeAdd(slot, 1);
 
         // mint rewards
-        RigoTokenFace(RIGO_TOKEN_ADDRESS).mintToken(
+        IRigoToken(RIGO_TOKEN_ADDRESS).mintToken(
             STAKING_PROXY_ADDRESS,
             epochInflation
         );
@@ -144,7 +144,7 @@ contract Inflation is
             safeDiv(
                 safeDiv(
                     safeMul(
-                        RigoTokenFace(RIGO_TOKEN_ADDRESS).totalSupply(),
+                        IRigoToken(RIGO_TOKEN_ADDRESS).totalSupply(),
                         safeMul(
                             ANNUAL_INFLATION_RATE,
                             epochLength

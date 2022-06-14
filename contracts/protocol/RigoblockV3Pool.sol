@@ -26,9 +26,9 @@ import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IDragoEventful as DragoEventful } from "./interfaces/IDragoEventful.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
-import { ReentrancyGuard } from "../../utils/ReentrancyGuard//ReentrancyGuard.sol";
-import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
-import { LibFindMethod } from "../../utils/LibFindMethod/LibFindMethod.sol";
+import { LibFindMethod } from "../utils/libFindMethod/LibFindMethod.sol";
+import { OwnedUninitialized as Owned } from "../utils/owned/OwnedUninitialized.sol";
+import { ReentrancyGuard } from "../utils/reentrancyGuard/ReentrancyGuard.sol";
 
 import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 
@@ -38,6 +38,8 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     using LibFindMethod for *;
+
+    address private immutable _implementation = address(this);
 
     string constant VERSION = 'HF 0.5.2';
     uint256 constant BASE = 1000000; // tokens are divisible by 1 million
@@ -79,6 +81,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 ratio; // ratio is 80%
     }
 
+    modifier onlyDelegateCall() {
+        if (address(this) != _implementation) {
+            _;
+        } else {
+            revert("DELEGATECALL_REQUIREMENT_ERROR");
+        }
+    }
+
     modifier onlyDragoDao() {
         require(msg.sender == admin.dragoDao);
         _;
@@ -87,6 +97,11 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     modifier onlyOwnerOrAuthority() {
         Authority auth = Authority(admin.authority);
         require(auth.isAuthority(msg.sender) || msg.sender == owner);
+        _;
+    }
+
+    modifier onlyUninitialized() {
+        require(owner == address(0), "POOL_ALREADY_INITIALIZED_ERROR");
         _;
     }
 
@@ -136,12 +151,18 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
-    constructor(
+    // TODO: all methods should be onlyDelegatecall modifier limited
+    // also inherited methods (owner) should be delegatecall in this context
+
+    function _initializePool(
         string memory _dragoName,
         string memory _dragoSymbol,
         uint256 _dragoId,
         address _owner,
-        address _authority)
+        address _authority
+    )
+        onlyUninitialized // could check in fallback instead
+        external
     {
         data.name = _dragoName;
         data.symbol = _dragoSymbol;

@@ -1,4 +1,5 @@
-pragma solidity >=0.7.6 <0.8.0;
+// SPDX-License-Identifier: Apache 2.0
+pragma solidity >=0.7.6 <0.9.0;
 
 interface IUniswapV2Factory {
     event PairCreated(address indexed token0, address indexed token1, address pair, uint);

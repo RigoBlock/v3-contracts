@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
@@ -20,8 +21,8 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
-import "../../rigoToken/RigoToken/RigoTokenFace.sol";
-import "../../protocol/DragoRegistry/IDragoRegistry.sol";
+import "../../rigoToken/interfaces/IRigoToken.sol";
+import "../../protocol/interfaces/IDragoRegistry.sol";
 import "./IStructs.sol";
 import "./IGrgVault.sol";
 
@@ -257,7 +258,7 @@ interface IStaking {
     function getGrgContract()
         external
         view
-        returns (RigoTokenFace grgContract);
+        returns (IRigoToken grgContract);
 
     /// @dev An overridable way to access the deployed dragoRegistry.
     ///      Must be view to allow overrides to access state.
