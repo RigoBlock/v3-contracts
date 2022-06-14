@@ -26,11 +26,10 @@ jobs:
               with:
                 ref: ${{ github.ref }}
                 fetch-depth: 0
-            - name: 'merge release to main'
+            - name: 'merge into main branch'
               env:
                   GITHUB_TOKEN: ${{ github.token }}
                   PUBLISH_PRERELEASE: ${{ github.event.inputs.prerelease }}
-            - name: 'merge into main branch'
               if: github.event.inputs.prerelease == '' # unless it's a prerelease
               run: |
                   git checkout main && \
