@@ -26,6 +26,8 @@ jobs:
         uses: actions/checkout@v2
         with:
           token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
+
+      - name: Configure Git
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "Github Actions"
