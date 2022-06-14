@@ -27,11 +27,6 @@ jobs:
         with:
           token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
 
-      - name: Configure Git
-        run: |
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "Github Actions"
-
       - name: Bump version and push tag
         id: github_tag_action
         uses: mathieudutour/github-tag-action@331898d5052eedac9b15fec867b5ba66ebf9b692
@@ -73,6 +68,11 @@ jobs:
           release_name: Release ${{ needs.bump_version.outputs.new_tag }}
           body: |
             ${{ needs.bump_version.outputs.changelog }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "Github Actions"
 
       - name: Merge Into Main Branch'
         env:
