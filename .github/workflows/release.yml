@@ -56,7 +56,9 @@ jobs:
         with:
           github_token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
           release_branches: development
-          #default_bump: false #github.event.input.default_bump
+          # Comment following line if want to create new tag at each commit.
+          # A new release will be created only with exact commit message.
+          default_bump: false #github.event.input.default_bump
 
   create_release:
     name: Create Release
