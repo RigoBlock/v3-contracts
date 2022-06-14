@@ -1,6 +1,6 @@
 {
   "name": "@rgbk/v3-contracts",
-  "version": "0.1.2",
+  "version": "0.1.1",
   "description": "Ethereum asset management",
   "homepage": "https://github.com/rigoblock/v3-contracts/",
   "license": "Apache-2.0",
