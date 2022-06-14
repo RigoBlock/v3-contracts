@@ -12,6 +12,24 @@ on:
               required: false
 
 jobs:
+    bump_version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.github_tag_action.outputs.new_tag }}
+      changelog: ${{ steps.github_tag_action.outputs.changelog }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Bump version and push tag
+        id: github_tag_action
+        uses: mathieudutour/github-tag-action@331898d5052eedac9b15fec867b5ba66ebf9b692
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release_branches: .*
+          default_bump: false
+
     release:
         runs-on: ubuntu-latest
         steps:
