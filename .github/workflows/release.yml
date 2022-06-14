@@ -15,6 +15,28 @@ on:
             required: false
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        solidity: [""]
+        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
+    env:
+      SOLIDITY_VERSION: ${{ matrix.solidity }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.7.0
+      - uses: actions/cache@v3
+        with:
+          path: "**/node_modules"
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+      - run: yarn --frozen-lockfile
+      - run: yarn build
+      #- run: yarn test
+
   bump_version:
     name: Bump Version
     runs-on: ubuntu-latest
@@ -83,3 +105,29 @@ jobs:
           git checkout main && \
           git merge ${{ github.ref }} && \
           git push
+
+  publish-npm:
+    needs: create_release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        solidity: [""]
+        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
+    env:
+      SOLIDITY_VERSION: ${{ matrix.solidity }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.7.0
+          registry-url: https://registry.npmjs.org/
+          always-auth: true
+      - uses: actions/cache@v3
+        with:
+          path: "**/node_modules"
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+      - run: yarn --frozen-lockfile
+      - run: yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
