@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  workflow_dispatch:
+      inputs:
+          ci_status:
+              description: 'required CI status'
+              default: 'success'
+              required: true
+          prerelease:
+              description: 'prerelease name'
+              required: false
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            - name: 'check successful status'
+              run: |
+                  REF_STATUS=$(curl -s \
+                  'https://api.github.com/repos/${{ github.repository }}/commits/${{ github.ref }}/status' \
+                  | jq .state)
+                  [[ "${REF_STATUS}" == '"${{ github.event.inputs.ci_status }}"' ]] || \
+                  (echo "::error ::${{ github.ref }} does not have a successful CI status" && false)
+            - uses: actions/checkout@v2
+              with:
+                ref: ${{ github.ref }}
+                fetch-depth: 0
+            - name: 'merge release to main'
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+                  PUBLISH_PRERELEASE: ${{ github.event.inputs.prerelease }}
+            - name: 'merge into main branch'
+              if: github.event.inputs.prerelease == '' # unless it's a prerelease
+              run: |
+                  git checkout main && \
+                  git merge ${{ github.ref }} && \
+                  git push
