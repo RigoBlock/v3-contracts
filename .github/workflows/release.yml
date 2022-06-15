@@ -110,7 +110,6 @@ jobs:
           git push
 
   publish-npm:
-    needs: create_release
     runs-on: ubuntu-latest
     strategy:
       matrix:
