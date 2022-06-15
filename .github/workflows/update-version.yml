@@ -30,7 +30,9 @@ jobs:
         with:
           skip-tag: 'true'
           bump-policy: 'all'
-          default: null
+          minor-wording:  'feat,feature'
+          patch-wording:  'fix,patch'
+          #default: prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
