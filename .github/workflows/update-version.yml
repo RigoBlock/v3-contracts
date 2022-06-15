@@ -6,8 +6,6 @@ on:
       - 'development'
     types:
       - opened
-      - edited
-      - synchronize
 
   # manual trigger
   workflow_dispatch:
