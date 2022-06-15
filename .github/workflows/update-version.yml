@@ -30,6 +30,7 @@ jobs:
         with:
           skip-tag: 'true'
           bump-policy: 'all'
+          default: null
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
