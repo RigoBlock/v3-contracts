@@ -9,6 +9,9 @@ on:
       - edited
       - synchronize
 
+  # manual trigger
+  workflow_dispatch:
+
 jobs:
   bump_version:
     name: Bump NPM Version on development
