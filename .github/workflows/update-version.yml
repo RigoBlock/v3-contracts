@@ -1,0 +1,37 @@
+name: Bump npm version
+
+on:
+  pull_request:
+    branches:
+      - 'development'
+    types:
+      - opened
+
+  # manual trigger
+  workflow_dispatch:
+
+jobs:
+  bump_version:
+    name: Bump NPM Version on development
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: 'actions/checkout@v2'
+        with:
+          ref: ${{ github.ref }}
+
+      - name: cat package.json
+        run: cat ./package.json
+
+      - name: Automated Version Bump
+        id: version-bump
+        uses: 'phips28/gh-action-bump-version@master'
+        # we skip tag, as a new tag is created when the release workflow is executed
+        with:
+          skip-tag: 'true'
+          bump-policy: 'all'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: cat package.json
+        run: cat ./package.json
