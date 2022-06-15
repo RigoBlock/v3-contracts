@@ -6,9 +6,11 @@ on:
       - 'development'
     types:
       - opened
+      - edited
+      - synchronize
 
   # manual trigger
-  workflow_dispatch:
+  #workflow_dispatch:
 
 jobs:
   bump_version:
@@ -30,9 +32,9 @@ jobs:
         with:
           skip-tag: 'true'
           bump-policy: 'all'
-          minor-wording:  'feat,feature'
-          patch-wording:  'fix,patch'
-          #default: prerelease
+          minor-wording: 'feat,feature'
+          patch-wording: 'fix,patch'
+          default: "" #prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
