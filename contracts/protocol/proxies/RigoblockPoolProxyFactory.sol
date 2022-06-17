@@ -55,15 +55,17 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         _;
     }
 
+    // dev owner is input as we are using factory deterministic deployment.
     constructor(
         address payable _registry,
         address payable _dragoDao,
-        address _authority)
+        address _authority,
+        address _owner)
     {
         data.registry = DragoRegistry(_registry);
         data.dragoDao = _dragoDao;
         data.authority = _authority;
-        owner = msg.sender;
+        owner = _owner;
     }
 
     /*
