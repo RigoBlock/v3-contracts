@@ -8,14 +8,18 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
+  // TODO: define grg address, initialize staking
   await deploy("GrgVault", {
     from: deployer,
-    args: [],
+    args: [
+      deployer, // mock grg transfer proxy address
+      deployer  // mock grg token address
+    ],
     log: true,
     deterministicDeployment: true,
   });
 
-  await deploy("Staking", {
+  const staking = await deploy("Staking", {
     from: deployer,
     args: [],
     log: true,
@@ -24,7 +28,7 @@ const deploy: DeployFunction = async function (
 
   await deploy("StakingProxy", {
     from: deployer,
-    args: [],
+    args: [staking.address],
     log: true,
     deterministicDeployment: true,
   });

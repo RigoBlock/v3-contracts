@@ -8,27 +8,13 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  await deploy("DragoRegistry", {
+/*  await deploy("ExchangesAuthority", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   });
-
-  await deploy("Authority", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  await deploy("ExchangesAuthority", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
-
+*/
   await deploy("NavVerifier", {
     from: deployer,
     args: [],
@@ -38,11 +24,11 @@ const deploy: DeployFunction = async function (
 
   await deploy("SigVerifier", {
     from: deployer,
-    args: [],
+    args: [deployer], // mock address
     log: true,
     deterministicDeployment: true,
   });
 };
 
-deploy.tags = ['pool-deps', 'l2-suite', 'main-suite']
+deploy.tags = ['factory', 'pool-deps', 'l2-suite', 'main-suite']
 export default deploy;

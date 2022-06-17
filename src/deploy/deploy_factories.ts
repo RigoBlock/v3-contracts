@@ -8,13 +8,32 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  await deploy("RigoblockPoolProxyFactory", {
+  const authority = await deploy("Authority", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   });
+
+  const registry = await deploy("DragoRegistry", {
+    from: deployer,
+    args: [authority.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await deploy("RigoblockPoolProxyFactory", {
+    from: deployer,
+    args: [
+      registry.address,
+      deployer,
+      authority.address,
+      deployer
+    ],
+    log: true,
+    deterministicDeployment: true,
+  });
 };
 
-deploy.tags = ['factory', 'l2-suite', 'main-suite']
+deploy.tags = ['factory', 'pool-deps', 'l2-suite', 'main-suite']
 export default deploy;
