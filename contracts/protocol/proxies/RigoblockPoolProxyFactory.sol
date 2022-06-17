@@ -55,7 +55,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         _;
     }
 
-    // dev owner is input as we are using factory deterministic deployment.
+    /// @dev owner is input as we are using factory deterministic deployment.
     constructor(
         address payable _registry,
         address payable _dragoDao,
