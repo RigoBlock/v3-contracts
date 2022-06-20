@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2018-2019 RigoBlock, Rigo Investment Sagl, 2020 Rigo Intl.
@@ -56,7 +57,7 @@ interface DragoRegistryFace {
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract HGetPools {
-    
+
     struct PoolBaseData {
         address poolAddress;
         string name;
@@ -94,7 +95,7 @@ contract HGetPools {
                 poolBaseData[i].symbol,
                 poolBaseData[i].poolId,
                 poolBaseData[i].owner,
-                
+
             ) = dragoRegistryInstance.fromId(i);
         }
         return (poolBaseData);
