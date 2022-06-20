@@ -19,13 +19,13 @@
 
 pragma solidity 0.8.14;
 
-import { OwnedUninitialized as Owned } from "../../../utils/owned/OwnedUninitialized.sol";
-import { IExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
+import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
+import { IExchangesAuthority } from "../interfaces/IExchangesAuthority.sol";
 
-/// @title Exchanges Authority - A helper contract for the exchange adapters.
+/// @title AuthorityExchanges - A helper contract for the exchange adapters.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract ExchangesAuthority is Owned, IExchangesAuthority {
+contract AuthorityExchanges is Owned, IExchangesAuthority {
 
     BuildingBlocks public blocks;
     Type public types;

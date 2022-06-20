@@ -19,13 +19,13 @@
 
 pragma solidity 0.8.14;
 
-import { OwnedUninitialized as Owned } from "../../../utils/owned/OwnedUninitialized.sol";
-import { IAuthority } from "../../interfaces/IAuthority.sol";
+import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
+import { IAuthority } from "../interfaces/IAuthority.sol";
 
-/// @title Authority - Allows to set up the base rules of the protocol.
+/// @title AuthorityCore - Allows to set up the base rules of the protocol.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract Authority is
+contract AuthorityCore is
     Owned,
     IAuthority
 {
