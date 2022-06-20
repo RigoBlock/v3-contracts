@@ -10,7 +10,7 @@ const deploy: DeployFunction = async function (
 
   const authority = await deploy("Authority", {
     from: deployer,
-    args: [],
+    args: [deployer],
     log: true,
     deterministicDeployment: true,
   });

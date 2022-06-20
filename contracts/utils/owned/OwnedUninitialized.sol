@@ -8,7 +8,7 @@ contract OwnedUninitialized {
     event NewOwner(address indexed old, address indexed current);
 
     modifier onlyOwner {
-        require(msg.sender == owner);
+        require(msg.sender == owner, "OWNED_CALLER_IS_NOT_OWNER_ERROR");
         _;
     }
 

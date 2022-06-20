@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.14;
 
-import { Owned } from "../../../utils/owned/Owned.sol";
+import { OwnedUninitialized as Owned } from "../../../utils/owned/OwnedUninitialized.sol";
 import { IAuthority } from "../../interfaces/IAuthority.sol";
 
 /// @title Authority - Allows to set up the base rules of the protocol.
@@ -79,6 +79,10 @@ contract Authority is
     modifier onlyWhitelister {
         require(isWhitelister(msg.sender));
         _;
+    }
+
+    constructor(address _owner) {
+      owner = _owner;
     }
 
     /*

@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.14;
 
-import { Owned } from "../../../utils/owned/Owned.sol";
+import { OwnedUninitialized as Owned } from "../../../utils/owned/OwnedUninitialized.sol";
 import { IExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
 
 /// @title Exchanges Authority - A helper contract for the exchange adapters.
@@ -79,6 +79,10 @@ contract ExchangesAuthority is Owned, IExchangesAuthority {
     modifier onlyWhitelister {
         require(isWhitelister(msg.sender));
         _;
+    }
+
+    constructor(address _owner) {
+      owner = _owner;
     }
 
     /*
