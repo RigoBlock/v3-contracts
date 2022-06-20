@@ -79,19 +79,33 @@ interface IRigoblockV3PoolEvents {
         uint256 buyPrice
     );
 
-    // TODO: complete docs
+    /// @dev Logs update of mint fee.
+    /// @notice Emitted when pool operator sets new fee.
+    /// @param drago Address of the pool.
+    /// @param who Address that is sending the transaction.
+    /// @param transactionFee Number of the new fee in wei.
     event NewFee(
         address indexed drago,
         address indexed who,
         uint256 transactionFee
     );
 
+    /// @dev Logs a change in the fees receiver.
+    /// @notice Emitted when pool operator updates collector address.
+    /// @param drago Address of the pool.
+    /// @param who Address that is sending the transaction.
+    /// @param feeCollector Address of the new fee collector.
     event NewCollector(
         address indexed drago,
         address indexed who,
         address feeCollector
     );
 
+    /// @dev Logs update of drago DAO.
+    /// @notice Emitted when pool factory updates Dao address.
+    /// @param drago Address of the pool.
+    /// @param from Address that is sending the transaction.
+    /// @param dragoDao Address of the Dao.
     event DragoDaoSet(
         address indexed drago,
         address indexed from,
