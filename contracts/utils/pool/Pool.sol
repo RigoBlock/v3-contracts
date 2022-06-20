@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,22 +17,22 @@
 
 */
 
-pragma solidity >=0.4.22 <0.6.0;
+pragma solidity >=0.5.0 <0.9.0;
 
 /// @title Pool Interface Contract - Interface of pool standard functions.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice used in order to access public variable
-contract Pool {
+abstract contract Pool {
 
     address public owner;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function balanceOf(address _who) external view returns (uint256);
-    function totalSupply() external view returns (uint256 totaSupply);
-    function getEventful() external view returns (address);
-    function getData() external view returns (string memory name, string memory symbol, uint256 sellPrice, uint256 buyPrice);
-    function calcSharePrice() external view returns (uint256);
-    function getAdminData() external view returns (address, address feeCollector, address dragodAO, uint256 ratio, uint256 transactionFee, uint32 minPeriod);
+    function balanceOf(address _who) external virtual view returns (uint256);
+    function totalSupply() external virtual view returns (uint256 totaSupply);
+    function getEventful() external virtual view returns (address);
+    function getData() external virtual view returns (string memory name, string memory symbol, uint256 sellPrice, uint256 buyPrice);
+    function calcSharePrice() external virtual view returns (uint256);
+    function getAdminData() external virtual view returns (address, address feeCollector, address dragodAO, uint256 ratio, uint256 transactionFee, uint32 minPeriod);
 }

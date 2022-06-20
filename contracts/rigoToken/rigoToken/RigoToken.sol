@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2017-2018 RigoBlock, Rigo Investment Sagl.
@@ -16,21 +17,19 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
-import { SafeMath } from "../../utils/SafeMath/SafeMath.sol";
 import { UnlimitedAllowanceToken } from "../../tokens/UnlimitedAllowanceToken/UnlimitedAllowanceToken.sol";
 
 /// @title Rigo Token - Rules of the Rigo token.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice UnlimitedAllowanceToken is ERC20
-contract RigoToken is UnlimitedAllowanceToken, SafeMath {
+contract RigoToken is UnlimitedAllowanceToken {
 
     string constant public name = "Rigo Token";
     string constant public symbol = "GRG";
     uint8 constant public decimals = 18;
 
-    uint256 public totalSupply = 10**25; // 10 million tokens, 18 decimal places
     address public minter;
     address public rigoblock;
 
@@ -52,10 +51,14 @@ contract RigoToken is UnlimitedAllowanceToken, SafeMath {
         _;
     }
 
-    constructor(address _setMinter, address _setRigoblock) public {
+    constructor(
+        address _setMinter,
+        address _setRigoblock)
+    {
         minter = _setMinter;
         rigoblock = _setRigoblock;
         balances[msg.sender] = totalSupply;
+        totalSupply = 10**25; // 10 million tokens, 18 decimal places
     }
 
     /*
@@ -70,8 +73,8 @@ contract RigoToken is UnlimitedAllowanceToken, SafeMath {
         external
         onlyMinter
     {
-        balances[_recipient] = safeAdd(balances[_recipient], _amount);
-        totalSupply = safeAdd(totalSupply, _amount);
+        balances[_recipient] = balances[_recipient] + _amount;
+        totalSupply = totalSupply - _amount;
         emit TokenMinted(_recipient, _amount);
     }
 

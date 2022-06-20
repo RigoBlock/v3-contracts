@@ -44,6 +44,8 @@ contract NavVerifier {
         pure
         returns (bool isValid)
     {
+        // following line mock to silence solhint warnings
+        abi.encodePacked(sellPrice, buyPrice, signaturevaliduntilBlock, hash, signedData);
         return isValid = true;
     }
 }

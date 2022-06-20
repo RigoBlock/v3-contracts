@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
 import { IERC20 as Token } from "../../tokens/ERC20/IERC20.sol";
 
@@ -63,7 +63,7 @@ contract HGetMultipleBalances {
     /// @dev Returns the token balance of an hodler.
     /// @param _token Address of the target token.
     /// @param _who Address of the target owner.
-    /// @return Number of token balance.
+    /// @return amount Number of token balance.
     function getBalance(
         address _token,
         address _who
@@ -78,7 +78,8 @@ contract HGetMultipleBalances {
     /// @dev Returns positive token balance of an hodler.
     /// @param _tokenNumbers Addresses of the target token.
     /// @param _who Address of the target owner.
-    /// @return Number of token balances and address of the token.
+    /// @return balances Array of token balances in base unit.
+    /// @return tokenAddresses Array of token addresses.
     function getMultiBalancesWithNumber(
         uint[] calldata _tokenNumbers,
         address _who
@@ -105,7 +106,8 @@ contract HGetMultipleBalances {
 
     /// @dev Returns positive token balance of an hodler.
     /// @param _who Address of the target owner.
-    /// @return Array of numbers of token balances and address of the tokens.
+    /// @return balances Array of token balances in base unit.
+    /// @return tokenAddresses Array of token addresses.
     function getMultiBalances(
         address _who
         )
@@ -132,7 +134,7 @@ contract HGetMultipleBalances {
     /// @dev Returns token balances of an hodler.
     /// @param _tokenAddresses Array of token addresses.
     /// @param _who Address of the target holder.
-    /// @return Array of numbers of token balances of the tokens.
+    /// @return balances Array of token balances in base unit.
     function getMultiBalancesFromAddresses(
         address[] calldata _tokenAddresses,
         address _who)
@@ -153,7 +155,8 @@ contract HGetMultipleBalances {
     /// @dev Returns token balances of an hodler.
     /// @param _tokenAddresses Array of token addresses.
     /// @param _who Address of the target holder.
-    /// @return Array of numbers of token balances and addresses of the tokens.
+    /// @return balances Array of token balances in base unit.
+    /// @return tokenAddresses Array of token addresses.
     function getMultiBalancesAndAddressesFromAddresses(
         address[] calldata _tokenAddresses,
         address _who)
@@ -179,7 +182,8 @@ contract HGetMultipleBalances {
     /// @dev Returns only positive token balances of an hodler.
     /// @param _tokenAddresses Array of token addresses.
     /// @param _who Address of the target holder.
-    /// @return Array of numbers of token balances and addresses of the tokens.
+    /// @return balances Array of token balances in base unit.
+    /// @return tokenAddresses Array of token addresses.
     function getPositiveBalancesAndAddressesFromAddresses(
         address[] calldata _tokenAddresses,
         address _who)

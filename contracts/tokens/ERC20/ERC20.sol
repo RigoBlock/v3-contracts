@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity >=0.5.0 <0.6.0;
+pragma solidity 0.8.14;
 
 import { IERC20 } from "./IERC20.sol";
 
-contract ERC20 is IERC20 {
+abstract contract ERC20 is IERC20 {
 
     function transfer(address _to, uint256 _value)
         external
@@ -18,6 +18,7 @@ contract ERC20 is IERC20 {
 
     function transferFrom(address _from, address _to, uint256 _value)
         external
+        virtual
         returns (bool success)
     {
         require(balances[_from] >= _value && allowed[_from][msg.sender] >= _value && balances[_to] + _value > balances[_to]);

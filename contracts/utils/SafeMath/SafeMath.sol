@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.4.22 <0.8.0;
 
-contract SafeMath {
+abstract contract SafeMath {
 
     function safeMul(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a * b;

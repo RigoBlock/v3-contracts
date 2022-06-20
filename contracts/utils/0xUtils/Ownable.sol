@@ -19,7 +19,7 @@ import "./LibOwnableRichErrors.sol";
 import "./LibRichErrors.sol";
 
 
-contract Ownable is
+abstract contract Ownable is
     IOwnable
 {
     /// @dev The owner of this contract.
