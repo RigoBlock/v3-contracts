@@ -24,7 +24,6 @@ import { IExchangesAuthority as ExchangesAuthority } from "./interfaces/IExchang
 import { ISigVerifier as SigVerifier } from "./interfaces/ISigVerifier.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
-import { IDragoEventful as DragoEventful } from "./interfaces/IDragoEventful.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
 import { LibFindMethod } from "../utils/libFindMethod/LibFindMethod.sol";
 import { OwnedUninitialized as Owned } from "../utils/owned/OwnedUninitialized.sol";
@@ -230,10 +229,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 netAmount;
         uint256 netRevenue;
         (feeDrago, feeDragoDao, netAmount, netRevenue) = getSaleAmounts(_amount);
-        addSaleLog(_amount, netRevenue);
         allocateSaleTokens(msg.sender, _amount, feeDrago, feeDragoDao);
         data.totalSupply = data.totalSupply - netAmount; //safeSub(data.totalSupply, netAmount);
         payable(msg.sender).transfer(netRevenue);
+        emit Burn(msg.sender, address(this), _amount, netRevenue, bytes(data.name), bytes(data.symbol));
         return true;
     }
 
@@ -264,21 +263,22 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
                 _signedData
             )
         );
-        DragoEventful events = DragoEventful(getDragoEventful());
-        require(events.setDragoPrice(msg.sender, address(this), _newSellPrice, _newBuyPrice));
+        // TODO: set mid price + spread (spread only initially).  will save gas
+        // when updating the prices as will only update one variable in storage.
         data.sellPrice = _newSellPrice;
         data.buyPrice = _newBuyPrice;
+        emit NewNav(msg.sender, address(this), _newSellPrice, _newBuyPrice);
     }
 
     /// @dev Allows drago dao/factory to change fee split ratio.
     /// @param _ratio Number of ratio for wizard, from 0 to 100.
+    // TODO: this method should be delegated to DAO and universal for all pools.
     function changeRatio(uint256 _ratio)
         external
         onlyDragoDao
     {
-        DragoEventful events = DragoEventful(getDragoEventful());
-        require(events.changeRatio(msg.sender, address(this), _ratio));
         admin.ratio = _ratio;
+        emit NewRatio(msg.sender, address(this), _ratio);
     }
 
     /// @dev Allows drago owner to set the transaction fee.
@@ -288,9 +288,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         onlyOwner
     {
         require(_transactionFee <= 100); //fee cannot be higher than 1%
-        DragoEventful events = DragoEventful(getDragoEventful());
-        require(events.setTransactionFee(msg.sender, address(this), _transactionFee));
         data.transactionFee = _transactionFee;
+        emit NewFee(msg.sender, address(this), _transactionFee);
     }
 
     /// @dev Allows owner to decide where to receive the fee.
@@ -299,9 +298,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         onlyOwner
     {
-        DragoEventful events = DragoEventful(getDragoEventful());
-        events.changeFeeCollector(msg.sender, address(this), _feeCollector);
         admin.feeCollector = _feeCollector;
+        emit NewCollector(msg.sender, address(this), _feeCollector);
     }
 
     /// @dev Allows drago dao/factory to upgrade its address.
@@ -310,9 +308,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         onlyDragoDao
     {
-        DragoEventful events = DragoEventful(getDragoEventful());
-        require(events.changeDragoDao(msg.sender, address(this), _dragoDao));
         admin.dragoDao = _dragoDao;
+        emit DragoDaoSet(msg.sender, address(this), _dragoDao);
     }
 
     /// @dev Allows drago dao/factory to change the minimum holding period.
@@ -445,17 +442,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return accounts[_who].balance;
     }
 
-    /// @dev Gets the address of the logger contract.
-    /// @return Address of the logger contrac.
-    function getEventful()
-        external
-        view
-        returns (address)
-    {
-        Authority auth = Authority(admin.authority);
-        return auth.getDragoEventful();
-    }
-
     /// @dev Finds details of a drago pool.
     /// @return name String name of a drago.
     /// @return symbol String symbol of a drago.
@@ -581,9 +567,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 feeDragoDao;
         uint256 amount;
         (grossAmount, feeDrago, feeDragoDao, amount) = getPurchaseAmounts();
-        addPurchaseLog(amount);
         allocatePurchaseTokens(_hodler, amount, feeDrago, feeDragoDao);
         data.totalSupply = data.totalSupply + grossAmount; //safeAdd(data.totalSupply, grossAmount);
+        // TODO: when sanitizing the pool name, we must double check the name cannot be longer than bytes32
+        emit Mint(msg.sender, address(this), _hodler, msg.value, amount, bytes(data.name), bytes(data.symbol));
         return true;
     }
 
@@ -620,31 +607,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         accounts[_hodler].balance = accounts[_hodler].balance - _amount;
         accounts[admin.feeCollector].balance = accounts[admin.feeCollector].balance + _feeDrago;
         accounts[admin.dragoDao].balance = accounts[admin.dragoDao].balance + _feeDragoDao;
-    }
-
-    /// @dev Sends a buy log to the eventful contract.
-    /// @param _amount Number of purchased shares.
-    function addPurchaseLog(uint256 _amount)
-        internal
-    {
-        bytes memory name = bytes(data.name);
-        bytes memory symbol = bytes(data.symbol);
-        Authority auth = Authority(admin.authority);
-        DragoEventful events = DragoEventful(auth.getDragoEventful());
-        require(events.buyDrago(msg.sender, address(this), msg.value, _amount, name, symbol));
-    }
-
-    /// @dev Sends a sell log to the eventful contract.
-    /// @param _amount Number of sold shares.
-    /// @param _netRevenue Value of sale for hodler.
-    function addSaleLog(uint256 _amount, uint256 _netRevenue)
-        internal
-    {
-        bytes memory name = bytes(data.name);
-        bytes memory symbol = bytes(data.symbol);
-        Authority auth = Authority(admin.authority);
-        DragoEventful events = DragoEventful(auth.getDragoEventful());
-        require(events.sellDrago(msg.sender, address(this), _amount, _netRevenue, name, symbol));
     }
 
     /// @dev Allows owner to set an infinite allowance to an approved exchange.
@@ -709,17 +671,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             netAmount = _amount - fee,
             netRevenue = netAmount * data.sellPrice / BASE
         );
-    }
-
-    /// @dev Gets the address of the logger contract.
-    /// @return Address of the logger contrac.
-    function getDragoEventful()
-        internal
-        view
-        returns (address)
-    {
-        Authority auth = Authority(admin.authority);
-        return auth.getDragoEventful();
     }
 
     /// @dev Returns the address of the signature verifier.
