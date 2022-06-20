@@ -8,7 +8,7 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  const authority = await deploy("Authority", {
+  const authority = await deploy("AuthorityCore", {
     from: deployer,
     args: [deployer],
     log: true,

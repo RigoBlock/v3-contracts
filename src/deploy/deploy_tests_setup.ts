@@ -9,7 +9,7 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  const authority = await deploy("Authority", {
+  const authority = await deploy("AuthorityCore", {
     from: deployer,
     args: [deployer], // owner
     log: true,
@@ -17,27 +17,25 @@ const deploy: DeployFunction = async function (
   });
 
   const authorityInstance = await hre.ethers.getContractAt(
-    "Authority",
+    "AuthorityCore",
     authority.address
   );
-/*
-  // TODO: follwing returns cannot find artifact "ExchangesAuthority"
-  // probably due to naming or position of file
-  const exchangesAuthority = await deploy("ExchangesAuthority", {
+
+  const authorityExchanges = await deploy("AuthorityExchanges", {
     from: deployer,
-    args: [deployer], // owner
+    args: [deployer], // address _owner
     log: true,
     deterministicDeployment: true
   });
 
-  const exchangesAuthorityInstance = hre.ethers.getContractAt(
-    "ExchangesAuthority",
-    exchangesAuthority.address
+  const authorityExchangesInstance = await hre.ethers.getContractAt(
+    "AuthorityExchanges",
+    authorityExchanges.address
   );
 
-  //await authorityInstance.setExchangesAuthority(exchangesAuthority.address);
-  //await exchangesAuthority.setWhitelister(deployer)
-*/
+  await authorityInstance.setExchangesAuthority(authorityExchanges.address);
+  await authorityExchangesInstance.setWhitelister(deployer, true);
+
   const registry = await deploy("DragoRegistry", {
     from: deployer,
     args: [authority.address],
@@ -82,7 +80,7 @@ const deploy: DeployFunction = async function (
   });
 
   await authorityInstance.setNavVerifier(navVerifier.address)
-/*
+
   const sigVerifier = await deploy("SigVerifier", {
     from: deployer,
     args: [rigoToken.address],
@@ -90,8 +88,8 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await exchangesAuthority.setSignatureVerifier(sigVerifier.address)
-*/
+  await authorityExchangesInstance.setSignatureVerifier(sigVerifier.address)
+
   // TODO: deploy Tokentransferproxy
 
   await deploy("GrgVault", {
