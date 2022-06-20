@@ -7,11 +7,6 @@ interface IRigoblockV3PoolState {
         view
         returns (uint256);
 
-    function getEventful()
-        external
-        view
-        returns (address);
-
     function getData()
         external
         view
