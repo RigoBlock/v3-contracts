@@ -48,7 +48,7 @@ interface IDragoRegistry {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function dragoCount() external view returns (uint256);
+    function nextPoolId() external view returns (uint256);
     function fromId(uint256 _id) external view returns (address drago, string memory name, string memory symbol, uint256 dragoId, address owner, address group);
     function fromAddress(address _drago) external view returns (uint256 id, string memory name, string memory symbol, uint256 dragoId, address owner, address group);
     function fromName(string calldata _name) external view returns (uint256 id, address drago, string memory symbol, uint256 dragoId, address owner, address group);
