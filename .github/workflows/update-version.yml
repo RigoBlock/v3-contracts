@@ -34,7 +34,7 @@ jobs:
           bump-policy: 'all'
           minor-wording: 'feat,feature'
           patch-wording: 'fix,patch'
-          default: "" #prerelease
+          default: prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

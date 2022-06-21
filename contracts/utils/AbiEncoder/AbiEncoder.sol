@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache 2.0
 /*
 
  Copyright 2019 RigoBlock.
@@ -16,11 +17,11 @@
 
 */
 
-pragma solidity 0.5.0;
+pragma solidity 0.7.4;
 
 /// @title ABI Encoder - return an array of encoded parameters.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract AbiEncoder {
+abstract contract AbiEncoder {
 
     struct HandlerMockOrder {
         uint256 orderAmount;

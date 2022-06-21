@@ -26,7 +26,7 @@ import "./Ownable.sol";
 
 
 // solhint-disable no-empty-blocks
-contract Authorizable is
+abstract contract Authorizable is
     Ownable,
     IAuthorizable
 {

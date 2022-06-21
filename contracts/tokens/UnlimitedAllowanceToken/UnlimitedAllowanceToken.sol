@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity 0.5.0;
+pragma solidity 0.8.14;
 
 import { ERC20 } from "../ERC20/ERC20.sol";
 
-contract UnlimitedAllowanceToken is ERC20 {
+abstract contract UnlimitedAllowanceToken is ERC20 {
 
     uint256 constant MAX_UINT = 2**256 - 1;
 
@@ -14,6 +14,7 @@ contract UnlimitedAllowanceToken is ERC20 {
     /// @return Success of transfer.
     function transferFrom(address _from, address _to, uint256 _value)
         external
+        override
         returns (bool)
     {
         uint256 allowance = allowed[_from][msg.sender];
