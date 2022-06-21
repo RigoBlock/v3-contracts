@@ -243,11 +243,11 @@ contract DragoRegistry is IDragoRegistry, Owned {
      */
     /// @dev Provides the total number of registered pools
     /// @return Number of pools
-    function nextPoolId()
+    function dragoCount()
         external view
         returns (uint256)
     {
-        unchecked{ return dragos.length + 1; }
+        return dragos.length;
     }
 
     /// @dev Provides a pool's struct data
