@@ -552,11 +552,46 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /*
      * NON-IMPLEMENTED INTERFACE FUNCTIONS
      */
-    function transfer(address _to, uint256 _value) external override virtual returns (bool success) {}
-    function transferFrom(address _from, address _to, uint256 _value) external override virtual returns (bool success) {}
-    function approve(address _spender, uint256 _value) external override virtual returns (bool success) {}
+    function transfer(
+        address _to,
+        uint256 _value
+    )
+        external
+        override
+        virtual
+        returns (bool success)
+    {}
 
-    function allowance(address _owner, address _spender) external view override virtual returns (uint256) {}
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _value
+    )
+        external
+        override
+        virtual
+        returns (bool success)
+    {}
+
+    function approve(
+        address _spender,
+        uint256 _value
+    )
+        external
+        override
+        virtual
+        returns (bool success)
+    {}
+
+    function allowance(
+        address _owner,
+        address _spender)
+        external
+        view
+        override
+        virtual
+        returns (uint256)
+    {}
 
     /*
      * INTERNAL FUNCTIONS
