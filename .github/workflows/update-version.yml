@@ -31,7 +31,7 @@ jobs:
         # we skip tag, as a new tag is created when the release workflow is executed
         with:
           skip-tag: 'true'
-          #bump-policy: 'all'
+          bump-policy: 'all'
           minor-wording: 'feat,feature'
           patch-wording: 'fix,patch'
           default: prerelease
