@@ -437,6 +437,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     function balanceOf(address _who)
         external
         view
+        override
         returns (uint256)
     {
         return accounts[_who].balance;
@@ -547,6 +548,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         return data.totalSupply;
     }
+
+    /*
+     * NON-IMPLEMENTED INTERFACE FUNCTIONS
+     */
+    function transfer(address _to, uint256 _value) external override virtual returns (bool success) {}
+    function transferFrom(address _from, address _to, uint256 _value) external override virtual returns (bool success) {}
+    function approve(address _spender, uint256 _value) external override virtual returns (bool success) {}
+
+    function allowance(address _owner, address _spender) external view override virtual returns (uint256) {}
 
     /*
      * INTERNAL FUNCTIONS

@@ -19,6 +19,7 @@
 
 pragma solidity 0.8.14;
 
+import './interfaces/IERC20.sol';
 import './interfaces/pool/IRigoblockV3PoolFallback.sol';
 import './interfaces/pool/IRigoblockV3PoolImmutables.sol';
 import './interfaces/pool/IRigoblockV3PoolState.sol';
@@ -30,6 +31,7 @@ import './interfaces/pool/IRigoblockV3PoolEvents.sol';
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockV3Pool is
+    IERC20,
     IRigoblockV3PoolFallback,
     IRigoblockV3PoolImmutables,
     IRigoblockV3PoolState,
