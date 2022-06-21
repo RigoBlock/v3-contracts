@@ -83,18 +83,16 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         returns (address)
     {
         uint256 regFee = data.registry.getFee();
-        uint256 dragoId = data.registry.dragoCount();
-        createDragoInternal(_name, _symbol, msg.sender, dragoId);
-        require(
-            data.registry.register{ value : regFee} (
-                libraryData.newAddress,
-                _name,
-                _symbol,
-                dragoId,
-                msg.sender
-            ) == true,
-            "REGISTRY_POOL_FACTORY_ERROR"
-        );
+        try data.registry.register{ value : regFee } (
+            libraryData.newAddress,
+            _name,
+            _symbol,
+            msg.sender
+        ) returns (uint256 poolId) {
+            createDragoInternal(_name, _symbol, msg.sender, poolId);
+        } catch Error(string memory) {
+            revert("REGISTRY_POOL_FACTORY_CREATION_ERROR");
+        }
         return libraryData.newAddress;
     }
 
