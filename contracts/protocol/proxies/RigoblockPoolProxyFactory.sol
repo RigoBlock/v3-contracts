@@ -260,6 +260,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         view
         returns (uint256 nextDragoId)
     {
-        unchecked{ nextDragoId = data.registry.nextPoolId(); }
+        unchecked{ nextDragoId = data.registry.dragoCount() + 1; }
     }
 }
