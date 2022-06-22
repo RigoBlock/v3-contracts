@@ -5,9 +5,6 @@ on:
     branches: [development]
     types: [opened, edited, synchronize]
 
-  # manual trigger
-  workflow_dispatch:
-
 jobs:
   bump_version:
     name: Bump NPM Version on development
@@ -32,7 +29,7 @@ jobs:
           #bump-policy: 'all'
           #minor-wording: 'feat,feature,feat:'
           patch-wording: 'fix,patch,fix:'
-          default: null #prerelease
+          default: '' #prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
