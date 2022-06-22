@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
-        uses: 'actions/checkout@v3'
+        uses: 'actions/checkout@v2'
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: cat package.json
@@ -31,8 +31,8 @@ jobs:
           target-branch: 'development'
           #bump-policy: 'all'
           #minor-wording: 'feat,feature,feat:'
-          #patch-wording: 'fix,patch,fix:'
-          default: prerelease
+          patch-wording: 'fix,patch,fix:'
+          default: null #prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
