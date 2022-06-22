@@ -29,7 +29,7 @@ interface IDragoRegistry {
      */
     event Registered(bytes32 name, bytes32 indexed symbol, uint256 id, address drago, address indexed owner, address indexed group);
     event Unregistered(bytes32 name, bytes32 indexed symbol, uint256 id);
-    event MetaChanged(uint256 id, bytes32 indexed key, bytes32 value);
+    event MetaChanged(uint256 indexed id, bytes32 indexed key, bytes32 value);
 
     /*
      * CORE FUNCTIONS
