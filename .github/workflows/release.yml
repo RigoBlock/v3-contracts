@@ -42,8 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     outputs:
-      new_tag: ${{ steps.github_tag_action.outputs.new_tag }}
-      changelog: ${{ steps.github_tag_action.outputs.changelog }}
+      new_tag: ${{ steps.conventional_changelog_action.outputs.tag }}
+      changelog: ${{ steps.conventional_changelog_action.outputs.changelog }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -51,14 +51,10 @@ jobs:
           token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
 
       - name: Bump version and push tag
-        id: github_tag_action
-        uses: mathieudutour/github-tag-action@331898d5052eedac9b15fec867b5ba66ebf9b692
+        id: conventional_changelog_action
+        uses: TriPSs/conventional-changelog-action@v3
         with:
-          github_token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
-          release_branches: development
-          # Comment following line if want to create new tag at each commit.
-          # A new release will be created only with exact commit message.
-          default_bump: false #github.event.input.default_bump
+          github-token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
 
   create_release:
     name: Create Release
@@ -85,7 +81,7 @@ jobs:
           fetch-depth: 0
 
       - name: Create Github Release
-        uses: actions/create-release@v1.1.0
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
