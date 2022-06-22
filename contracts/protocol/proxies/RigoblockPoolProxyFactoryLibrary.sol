@@ -30,7 +30,6 @@ library RigoblockPoolProxyFactoryLibrary {
     struct NewPool {
         string name;
         string symbol;
-        uint256 poolId;
         address owner;
         address newAddress;
     }
@@ -38,7 +37,6 @@ library RigoblockPoolProxyFactoryLibrary {
     /// @dev Allows an approved factory to create new pools
     /// @param _name String of the name
     /// @param _symbol String of the symbol
-    /// @param _poolId Number of Id of the pool from the registry
     /// @param _authority Address of the respective authority
     /// @return proxy Instance of a Rigoblock pool
     function createPool0(
@@ -46,7 +44,6 @@ library RigoblockPoolProxyFactoryLibrary {
         string memory _name,
         string memory _symbol,
         address _owner,
-        uint256 _poolId,
         address _authority)
         internal
         returns (RigoblockPoolProxy proxy)
@@ -58,7 +55,6 @@ library RigoblockPoolProxyFactoryLibrary {
                 // TODO: check gas saving in forwarding data as struct
                 self.name = _name,
                 self.symbol = _symbol,
-                self.poolId = _poolId,
                 self.owner = _owner,
                 _authority
             )
@@ -71,7 +67,6 @@ library RigoblockPoolProxyFactoryLibrary {
         string memory _name,
         string memory _symbol,
         address _owner,
-        uint256 _poolId,
         address _authority
     )
         internal
@@ -81,7 +76,6 @@ library RigoblockPoolProxyFactoryLibrary {
             0xc9ee5905, // RigoblockPool._initializePool.selector
             self.name = _name,
             self.symbol = _symbol,
-            self.poolId = _poolId,
             self.owner = _owner,
             _authority
         );

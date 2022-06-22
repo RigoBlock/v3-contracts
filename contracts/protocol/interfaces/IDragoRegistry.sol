@@ -25,9 +25,16 @@ pragma solidity >=0.7.0 <0.9.0;
 interface IDragoRegistry {
 
     /*
+     * EVENTS
+     */
+    event Registered(bytes32 name, bytes32 indexed symbol, uint256 id, address drago, address indexed owner, address indexed group);
+    event Unregistered(bytes32 name, bytes32 indexed symbol, uint256 id);
+    event MetaChanged(uint256 indexed id, bytes32 indexed key, bytes32 value);
+
+    /*
      * CORE FUNCTIONS
      */
-    function register(address _drago, string calldata _name, string calldata _symbol, uint256 _dragoId, address _owner) external payable returns (bool);
+    function register(address _drago, string calldata _name, string calldata _symbol, address _owner) external payable returns (uint256 poolId);
     function unregister(uint256 _id) external;
     function setMeta(uint256 _id, bytes32 _key, bytes32 _value) external;
     function addGroup(address _group) external;

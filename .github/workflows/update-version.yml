@@ -2,15 +2,11 @@ name: Bump npm version
 
 on:
   pull_request:
-    branches:
-      - 'development'
-    types:
-      - opened
-      - edited
-      - synchronize
+    branches: [development]
+    types: [opened, edited, synchronize]
 
   # manual trigger
-  #workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   bump_version:
@@ -18,9 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
-        uses: 'actions/checkout@v2'
+        uses: 'actions/checkout@v3'
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: cat package.json
         run: cat ./package.json
@@ -31,9 +28,10 @@ jobs:
         # we skip tag, as a new tag is created when the release workflow is executed
         with:
           skip-tag: 'true'
-          bump-policy: 'all'
-          minor-wording: 'feat,feature'
-          patch-wording: 'fix,patch'
+          target-branch: 'development'
+          #bump-policy: 'all'
+          #minor-wording: 'feat,feature,feat:'
+          #patch-wording: 'fix,patch,fix:'
           default: prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

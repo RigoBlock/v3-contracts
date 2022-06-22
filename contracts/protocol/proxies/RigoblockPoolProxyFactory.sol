@@ -82,20 +82,19 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         whenFeePaid
         returns (address)
     {
-        uint256 regFee = data.registry.getFee();
-        uint256 dragoId = data.registry.dragoCount();
-        createDragoInternal(_name, _symbol, msg.sender, dragoId);
-        require(
-            data.registry.register{ value : regFee} (
-                libraryData.newAddress,
-                _name,
-                _symbol,
-                dragoId,
-                msg.sender
-            ) == true,
-            "REGISTRY_POOL_FACTORY_ERROR"
-        );
-        return libraryData.newAddress;
+        createDragoInternal(_name, _symbol, msg.sender);
+        try data.registry.register{ value : data.registry.getFee() } (
+            libraryData.newAddress,
+            _name,
+            _symbol,
+            msg.sender
+        ) returns (uint256 poolId)
+        {
+            emit DragoCreated(_name, _symbol, libraryData.newAddress, owner, poolId);
+            return libraryData.newAddress;
+        } catch Error(string memory) {
+            revert("REGISTRY_POOL_FACTORY_CREATION_ERROR");
+        }
     }
 
     // TODO: this method should be moved to the implementation/beacon, or drago should query dao from factory, not in storage
@@ -200,7 +199,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         return (
             dragoDao = data.dragoDao,
             version = VERSION,
-            nextDragoId = getNextId()
+            nextDragoId = nextPoolId()
         );
     }
 
@@ -232,12 +231,11 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @param _name String of the name
     /// @param _symbol String of the symbol
     /// @param _owner Address of the owner
-    /// @param _poolId Number of the new drago Id
     function createDragoInternal(
         string memory _name,
         string memory _symbol,
-        address _owner,
-        uint256 _poolId)
+        address _owner
+    )
         internal
     {
         require(
@@ -247,23 +245,21 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
                     _name,
                     _symbol,
                     _owner,
-                    _poolId,
                     data.authority
                 )
             )  != address(0),
             "PROXY_FACTORY_LIBRARY_DEPLOY_ERROR"
         );
         data.dragos[_owner].push(libraryData.newAddress);
-        emit DragoCreated(_name, _symbol, libraryData.newAddress, _owner, _poolId);
     }
 
     /// @dev Returns the next Id for a drago
     /// @return nextDragoId Number of the next Id from the registry
-    function getNextId()
+    function nextPoolId()
         internal
         view
         returns (uint256 nextDragoId)
     {
-        nextDragoId = data.registry.dragoCount();
+        unchecked{ nextDragoId = data.registry.dragoCount() + 1; }
     }
 }
