@@ -152,7 +152,7 @@ contract ProofOfPerformance is
     {
         // assert that group parameters are correct
         _assertValidGroupParams(ratio, inflationFactor);
-        
+
         // update storage
         groupByAddress[groupAddress].rewardRatio = ratio;
         groupByAddress[groupAddress].epochReward = inflationFactor;
@@ -357,7 +357,6 @@ contract ProofOfPerformance is
         )
     {
         (uint256 newPrice, uint256 tokenSupply, uint256 poolValue) = _getPoolPriceAndValueInternal(poolId);
-        (address poolAddress, ) = _addressFromIdInternal(poolId);
         (uint256 epochReward, uint256 epochTime, uint256 rewardRatio) = getRewardParameters(poolId);
 
         uint256 assetsComponent = safeMul(
@@ -374,7 +373,11 @@ contract ProofOfPerformance is
         ) * 365; // 365 = 365 days / 1 days
 
         // reward is inversely proportional to Eth in pool
-        uint256 ethBalanceAdjustment = _ethBalanceAdjustmentInternal(poolAddress, poolValue);
+        (address poolAddress, ) = _addressFromIdInternal(poolId);
+        uint256 ethBalanceAdjustment = _ethBalanceAdjustmentInternal(
+            poolAddress,
+            poolValue
+        );
         uint256 assetsReward = (
             safeMul(
                 assetsComponent,
@@ -419,7 +422,7 @@ contract ProofOfPerformance is
         returns (uint256)
     {
         uint256 poolEthBalance = address(IPool(poolAddress)).balance;
-        
+
         _assertPoolEthBalanceAndValueValid(poolEthBalance, poolValue);
 
         // logistic function progression g(x)=e^x/(1+e^x).
@@ -580,13 +583,13 @@ contract ProofOfPerformance is
         if (ratio > 10000) {
             revert("TOO_BIG_RATIO_ERROR");
         }
-        
+
         // inflationFactor is between 1e12 and 1e21
         if (inflationFactor < 1e12 || inflationFactor > 1e21) {
             revert("INVALID_INFLATION_FACTOR_ERROR");
         }
     }
-    
+
     /// @dev Asserts than pool ETH balance and total value are ordinary and not dust.
     /// @param poolEthBalance Value of the ETH balance.
     /// @param poolValue Total Value of the pool.
@@ -601,7 +604,7 @@ contract ProofOfPerformance is
         if (poolEthBalance > poolValue) {
             revert("ETH_ABOVE_AUM_ERROR");
         }
-        
+
         // prevent dust from small pools
         if (poolEthBalance < 1e15 || poolValue < 1e16) {
             revert("POOL_OR_BALANCE_DUST_ERROR");
