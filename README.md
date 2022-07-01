@@ -32,3 +32,6 @@ PR must follow "Conventional Commits spec". PR title is checked upon opening. Ex
  Other PR titles are also valid:
 
 - ```build:```,```chore:```,```ci:```,```docs:```,```style:```,```refactor:```,```perf:```,```test:```
+
+### License
+All smart contracts are released under Apache-2.0
