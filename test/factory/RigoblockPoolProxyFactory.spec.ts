@@ -7,36 +7,30 @@ import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../
 import { getAddress } from "ethers/lib/utils";
 
 describe("ProxyFactory", async () => {
-    const setupTests = deployments.createFixture(
-      async ({ deployments }) => {
+    const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
-        const RigoblockPoolProxyFactory = await deployments.get('RigoblockPoolProxyFactory')
-        return { RigoblockPoolProxyFactory }
+        const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
+        const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
+        return {
+          factory: Factory.attach(RigoblockPoolProxyFactory.address),
+          addresslog: RigoblockPoolProxyFactory.address
+        }
     });
 
     describe("createDrago", async () => {
         it('should revert with space before pool name', async () => {
-            const factoryAddress = await setupTests()
-            const factoryInstance = await hre.ethers.getContractAt(
-                "RigoblockPoolProxyFactory",
-                // TODO: fix following as factory address will change if factory code changes
-                '0xbe630fE37079781C4c28D8ea43f2D34525a53C36' //rigoblockPoolProxyFactory.address
-            )
-            //console.log(factoryInstance.address)
+            const { factory, addresslog } = await setupTests()
+            // TODO: factory address should not change with deterministic deployment
+            console.log(addresslog)
             await expect(
-                factoryInstance.createDrago(' testpool', 'TEST')
+                factory.createDrago(' testpool2', 'TEST2')
             ).to.be.revertedWith("Transaction reverted without a reason")
         })
 
-        it('should revert with symbol before pool name', async () => {
-            const factoryAddress = await setupTests()
-            const factoryInstance = await hre.ethers.getContractAt(
-                "RigoblockPoolProxyFactory",
-                // TODO: fix following as factory address will change if factory code changes
-                '0xbe630fE37079781C4c28D8ea43f2D34525a53C36' //rigoblockPoolProxyFactory.address
-            )
+        it('should revert with space before pool symbol', async () => {
+            const { factory } = await setupTests()
             await expect(
-                factoryInstance.createDrago('testpool', ' TEST')
+                factory.createDrago('testpool3', ' TEST3')
             ).to.be.revertedWith("Transaction reverted without a reason")
         })
     })
