@@ -39,7 +39,7 @@ describe("ProxyFactory", async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('test+pool', 'TEST')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
         })
 
         it('should revert with space before pool symbol', async () => {
@@ -78,11 +78,11 @@ describe("ProxyFactory", async () => {
 
         // TODO: following should revert in registry
         it('should revert with duplicate name', async () => {
-            const { factory } = await setupTests()
+            const { factory, registry } = await setupTests()
             await factory.createDrago('duplicateName', 'TEST')
             await expect(
                 factory.createDrago('duplicateName', 'TEST2')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
         })
 
         // TODO: fix following test
@@ -92,28 +92,28 @@ describe("ProxyFactory", async () => {
             //console.log(await factory.implementation(), await factory.getRegistry())
             await expect(
               factory.createDrago('someOtherName', 'TEST2')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
         })
 
         it('should revert with symbol longer than 5 characters', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool2', 'TOOLONG')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
         })
 
-        it('should revert with symbol SHORTER than 3 characters', async () => {
+        it('should revert with symbol shorter than 3 characters', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool2', 'TS')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
         })
 
         it('should revert with lowercase symbol', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool2', 'test')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
         })
     })
 })
