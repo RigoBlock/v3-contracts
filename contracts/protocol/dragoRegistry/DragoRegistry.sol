@@ -59,17 +59,26 @@ contract DragoRegistry is IDragoRegistry, Owned {
      * MODIFIERS
      */
     modifier whenFeePaid {
-        require(msg.value >= fee);
+        require(
+            msg.value >= fee,
+            "REGISTRY_FEE_NOT_PAID_ERROR"
+        );
         _;
     }
 
     modifier whenAddressFree(address _drago) {
-        require(mapFromAddress[_drago] == 0);
+        require(
+            mapFromAddress[_drago] == 0,
+            "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR"
+        );
         _;
     }
 
     modifier onlyDragoOwner(uint256 _id) {
-        require(dragos[_id].owner == msg.sender);
+        require(
+            dragos[_id].owner == msg.sender,
+            "REGISTRY_CALLER_IS_NOT_POOL_OWNER_ERROR"
+        );
         _;
     }
 
@@ -83,15 +92,30 @@ contract DragoRegistry is IDragoRegistry, Owned {
 
     modifier whenNameSanitized(string memory _input) {
         // we always want to keep name lenght below 32, for logging bytes32.
-        require(bytes(_input).length >= 4 && bytes(_input).length <= 32);
-        require(LibSanitize.isValidCheck(_input));
+        require(
+            bytes(_input).length >= 4 && bytes(_input).length <= 32,
+            "REGISTRY_NAME_LENGTH_ERROR"
+        );
+        require(
+            LibSanitize.isValidCheck(_input),
+            "REGISTRY_NAME_INVALID_CHECK_ERROR"
+        );
         _;
     }
 
     modifier whenSymbolSanitized(string memory _input) {
-        require(bytes(_input).length >= 3 && bytes(_input).length <= 5);
-        require(LibSanitize.isValidCheck(_input));
-        require(LibSanitize.isUppercase(_input));
+        require(
+            bytes(_input).length >= 3 && bytes(_input).length <= 5,
+            "REGISTRY_SYMBOL_LENGTH_ERROR"
+        );
+        require(
+            LibSanitize.isValidCheck(_input),
+            "REGISTRY_SYMBOL_INVALID_CHECK_ERROR"
+        );
+        require(
+            LibSanitize.isUppercase(_input),
+            "REGISTRY_SYMBOL_LENGTH_ERROR"
+        );
         _;
     }
 
@@ -104,8 +128,10 @@ contract DragoRegistry is IDragoRegistry, Owned {
     }
 
     modifier onlyAuthority {
-        Authority auth = Authority(AUTHORITY);
-        require(auth.isAuthority(msg.sender) == true);
+        require(
+            Authority(AUTHORITY).isAuthority(msg.sender) == true,
+            "REGISTRY_CALLER_IS_N OT_AUTHORITY_ERROR"
+        );
         _;
     }
 
@@ -485,7 +511,10 @@ contract DragoRegistry is IDragoRegistry, Owned {
         Drago storage pool = dragos[_id];
         address targetPool;
         ( targetPool, , , , , ) = fromId(_id);
-        require(getPoolOwner(targetPool) != pool.owner);
+        require(
+            getPoolOwner(targetPool) != pool.owner,
+            "REGISTRY_POOL_OWNER_UPDATE_ERROR"
+        );
         pool.owner = getPoolOwner(targetPool);
         return true;
     }
