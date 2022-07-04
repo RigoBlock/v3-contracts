@@ -60,12 +60,14 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         address payable _registry,
         address payable _dragoDao,
         address _authority,
-        address _owner)
+        address _owner,
+        address _implementation)
     {
         data.registry = DragoRegistry(_registry);
         data.dragoDao = _dragoDao;
         data.authority = _authority;
         owner = _owner;
+        _poolImplementation = _implementation;
     }
 
     /*

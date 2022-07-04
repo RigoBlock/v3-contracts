@@ -25,13 +25,21 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const poolImplementation = await deploy("RigoblockV3Pool", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
       registry.address,
       deployer,
       authority.address,
-      deployer
+      deployer,
+      poolImplementation.address
     ],
     log: true,
     deterministicDeployment: true,

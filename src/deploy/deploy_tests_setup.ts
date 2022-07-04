@@ -46,13 +46,24 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  // TODO: we should probably remove V3 tag from naming, as with future releases
+  //  proxy should call to different interface, which might change address in
+  //  deterministic deployment.
+  const poolImplementation = await deploy("RigoblockV3Pool", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
       registry.address,
       deployer, // address _dragoDao
       authority.address,
-      deployer  // address _owner
+      deployer,  // address _owner
+      poolImplementation.address
     ],
     log: true,
     deterministicDeployment: true,
