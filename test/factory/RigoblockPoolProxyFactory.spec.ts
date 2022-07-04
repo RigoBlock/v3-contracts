@@ -33,5 +33,11 @@ describe("ProxyFactory", async () => {
                 factory.createDrago('testpool3', ' TEST3')
             ).to.be.revertedWith("Transaction reverted without a reason")
         })
+
+        it('should create address when creating pool', async () => {
+            const { factory } = await setupTests()
+            const poolAddress = await factory.createDrago('testpool', 'TEST')
+            expect(poolAddress).to.be.not.eq(AddressZero)
+        })
     })
 })
