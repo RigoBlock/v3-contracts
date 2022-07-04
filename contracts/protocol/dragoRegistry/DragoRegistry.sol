@@ -90,39 +90,19 @@ contract DragoRegistry is IDragoRegistry, Owned {
         _;
     }
 
-    modifier whenNameSanitized(string memory _input) {
+    modifier whenNameLengthCorrect(string memory _input) {
         // we always want to keep name lenght below 32, for logging bytes32.
         require(
             bytes(_input).length >= 4 && bytes(_input).length <= 32,
             "REGISTRY_NAME_LENGTH_ERROR"
         );
-        require(
-            LibSanitize.isValidCheck(_input),
-            "REGISTRY_NAME_INVALID_CHECK_ERROR"
-        );
         _;
     }
 
-    modifier whenSymbolSanitized(string memory _input) {
+    modifier whenSymbolLengthCorrect(string memory _input) {
         require(
             bytes(_input).length >= 3 && bytes(_input).length <= 5,
             "REGISTRY_SYMBOL_LENGTH_ERROR"
-        );
-        require(
-            LibSanitize.isValidCheck(_input),
-            "REGISTRY_SYMBOL_INVALID_CHECK_ERROR"
-        );
-        require(
-            LibSanitize.isUppercase(_input),
-            "REGISTRY_SYMBOL_LENGTH_ERROR"
-        );
-        _;
-    }
-
-    modifier whenHasName(string memory _name) {
-        require(
-            mapFromName[bytes32(bytes(_name))] != 0,
-            "REGISTRY_POOL_DOES_NOT_HAVE_NAME_ERROR"
         );
         _;
     }
@@ -130,7 +110,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     modifier onlyAuthority {
         require(
             Authority(AUTHORITY).isAuthority(msg.sender) == true,
-            "REGISTRY_CALLER_IS_N OT_AUTHORITY_ERROR"
+            "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
         );
         _;
     }
@@ -164,11 +144,15 @@ contract DragoRegistry is IDragoRegistry, Owned {
         onlyAuthority
         whenFeePaid
         whenAddressFree(_drago)
-        whenNameSanitized(_name)
-        whenSymbolSanitized(_symbol)
+        whenNameLengthCorrect(_name)
+        whenSymbolLengthCorrect(_symbol)
         whenNameFree(_name)
         returns (uint256 poolId)
     {
+        // TODO: check if we can assert following preconditions and return rich errors.
+        LibSanitize.isValidCheck(_name);
+        LibSanitize.isValidCheck(_symbol);
+        LibSanitize.isUppercase(_symbol);
         return registerAs(_drago, _name, _symbol, _owner, msg.sender);
     }
 
@@ -497,13 +481,13 @@ contract DragoRegistry is IDragoRegistry, Owned {
         mapFromAddress[_drago] = dragos.length;
         mapFromName[bytes32(bytes(_name))] = dragos.length;
         emit Registered(pool.name, pool.symbol, dragos.length, _drago, _owner, _group);
-        unchecked{ return pool.dragoId; }
+        return pool.dragoId;
     }
 
     /// @dev Allows anyone to update the owner in the registry
     /// @notice pool owner can change, but gets written in registry only when needed
     /// @param _id uint256 of the target pool
-    /// @return Bollean the transaction was successful
+    /// @return Boolean the transaction was successful
     function updateOwnerInternal(uint256 _id)
         internal
         returns (bool)
