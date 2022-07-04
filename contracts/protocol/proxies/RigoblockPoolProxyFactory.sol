@@ -94,8 +94,8 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         {
             emit DragoCreated(_name, _symbol, libraryData.newAddress, owner, poolId);
             return libraryData.newAddress;
-        } catch Error(string memory) {
-            revert("REGISTRY_POOL_FACTORY_CREATION_ERROR");
+        } catch Error(string memory reason) {
+            revert(reason);
         }
     }
 
