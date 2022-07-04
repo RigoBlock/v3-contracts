@@ -134,6 +134,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
         address _owner)
         external
         payable
+        override
         onlyAuthority
         whenFeePaid
         whenAddressFree(_drago)
@@ -149,6 +150,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _id Number of the pool
     function unregister(uint256 _id)
         external
+        override
         onlyOwner
     {
         delete mapFromAddress[dragos[_id].drago];
@@ -163,6 +165,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _value Bytes32 of the value
     function setMeta(uint256 _id, bytes32 _key, bytes32 _value)
         external
+        override
         onlyDragoOwner(_id)
     {
         dragos[_id].meta[_key] = _value;
@@ -173,6 +176,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _group Address of the new group
     function addGroup(address _group)
         external
+        override
         onlyOwner
     {
         groups.push(_group);
@@ -182,6 +186,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _fee Value of the fee in wei
     function setFee(uint256 _fee)
         external
+        override
         onlyOwner
     {
         fee = _fee;
@@ -192,6 +197,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _id uint256 of the target pool
     function updateOwner(uint256 _id)
         external
+        override
     {
         updateOwnerInternal(_id);
     }
@@ -200,6 +206,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _id uint256 of the target pool
     function updateOwners(uint256[] calldata _id)
         external
+        override
     {
         for (uint256 i = 0; i < _id.length; ++i) {
             if (!updateOwnerInternal(_id[i])) continue;
@@ -212,6 +219,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     function upgrade(address _newAddress)
         external
         payable
+        override
         onlyOwner
     {
         DragoRegistry registry = DragoRegistry(_newAddress);
@@ -225,6 +233,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _version Number of the new version
     function setUpgraded(uint256 _version)
         external
+        override
         onlyOwner
     {
         VERSION = _version;
@@ -233,6 +242,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @dev Allows owner to collect fees by draining the balance
     function drain()
         external
+        override
         onlyOwner
     {
         payable(msg.sender).transfer(address(this).balance);
@@ -244,7 +254,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @dev Provides the total number of registered pools
     /// @return Number of pools
     function dragoCount()
-        external view
+        external
+        view
+        override
         returns (uint256)
     {
         return dragos.length;
@@ -261,6 +273,7 @@ contract DragoRegistry is IDragoRegistry, Owned {
     function fromId(uint256 _id)
         public
         view //prev external
+        override
         returns (
             address drago,
             string memory name,
@@ -295,7 +308,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @return owner Pool struct data
     /// @return group Pool struct data
     function fromAddress(address _drago)
-        external view
+        external
+        view
+        override
         returns (
             uint256 id,
             string memory name,
@@ -331,7 +346,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @return owner Pool struct data
     /// @return group Pool struct data
     function fromName(string calldata _name)
-        external view
+        external
+        view
+        override
         returns (
             uint256 id,
             address drago,
@@ -360,7 +377,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _pool Address of the pool
     /// @return Name of the pool
     function getNameFromAddress(address _pool)
-        external view
+        external
+        view
+        override
         returns (string memory)
     {
         uint256 id = mapFromAddress[_pool];
@@ -375,7 +394,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _pool Address of the pool
     /// @return Symbol of the pool
     function getSymbolFromAddress(address _pool)
-        external view
+        external
+        view
+        override
         returns (string memory)
     {
         uint256 id = mapFromAddress[_pool];
@@ -391,7 +412,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @param _key Bytes32 key
     /// @return Pool metadata
     function meta(uint256 _id, bytes32 _key)
-        external view
+        external
+        view
+        override
         returns (bytes32)
     {
         return dragos[_id].meta[_key];
@@ -400,7 +423,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @dev Provides the addresses of the groups/factories
     /// @return Array of addresses of the groups
     function getGroups()
-        external view
+        external
+        view
+        override
         returns (address[] memory)
     {
         return groups;
@@ -409,7 +434,9 @@ contract DragoRegistry is IDragoRegistry, Owned {
     /// @dev Provides the fee required to register a pool
     /// @return Number of the fee in wei
     function getFee()
-        external view
+        external
+        view
+        override
         returns (uint256)
     {
         return fee;
