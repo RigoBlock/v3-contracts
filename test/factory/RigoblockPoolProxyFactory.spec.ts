@@ -24,7 +24,7 @@ describe("ProxyFactory", async () => {
             const { factory, registry } = await setupTests()
             await expect(
                 factory.createDrago(' testpool', 'TEST')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_BEGINNING_ERROR")
             expect(await registry.dragoCount()).to.eq(0)
         })
 
@@ -32,21 +32,21 @@ describe("ProxyFactory", async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool ', 'TEST')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_END_ERROR")
         })
 
         it('should revert with special character in pool name', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('test+pool', 'TEST')
-            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
+            ).to.be.revertedWith("LIBSANITIZE_SPECIAL_CHARACTER_ERROR")
         })
 
         it('should revert with space before pool symbol', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool2', ' TEST')
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_BEGINNING_ERROR")
         })
 
         it('should create address when creating pool', async () => {
@@ -76,44 +76,45 @@ describe("ProxyFactory", async () => {
             ).to.be.revertedWith("PROXY_FACTORY_LIBRARY_DEPLOY_ERROR")
         })
 
-        // TODO: following should revert in registry
+        // TODO: should have different address with different symbol and revert in registry.
         it('should revert with duplicate name', async () => {
             const { factory, registry } = await setupTests()
             await factory.createDrago('duplicateName', 'TEST')
+            const [ user1 ] = waffle.provider.getWallets()
+            console.log(user1.address, await factory.getDragosByAddress(user1.address))
             await expect(
                 factory.createDrago('duplicateName', 'TEST2')
-            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
+            ).to.be.revertedWith("REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR")
         })
 
-        // TODO: fix following test
+        // TODO: check why second pool has same address with different names
         it('should create pool with duplicate symbol', async () => {
             const { factory } = await setupTests()
             await factory.createDrago('someName', 'TEST')
-            //console.log(await factory.implementation(), await factory.getRegistry())
             await expect(
-              factory.createDrago('someOtherName', 'TEST2')
-            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
+              factory.createDrago('someOtherName', 'TEST')
+            ).to.be.revertedWith("REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR")
         })
 
         it('should revert with symbol longer than 5 characters', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool2', 'TOOLONG')
-            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
+            ).to.be.revertedWith("REGISTRY_SYMBOL_LENGTH_ERROR")
         })
 
         it('should revert with symbol shorter than 3 characters', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool2', 'TS')
-            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
+            ).to.be.revertedWith("REGISTRY_SYMBOL_LENGTH_ERROR")
         })
 
         it('should revert with lowercase symbol', async () => {
             const { factory } = await setupTests()
             await expect(
                 factory.createDrago('testpool2', 'test')
-            ).to.be.revertedWith("REGISTRY_POOL_FACTORY_CREATION_ERROR")
+            ).to.be.revertedWith("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR")
         })
     })
 })
