@@ -54,7 +54,7 @@ interface IDragoRegistry {
     function fromName(string calldata _name) external view returns (uint256 id, address drago, string memory symbol, uint256 dragoId, address owner, address group);
     function getNameFromAddress(address _pool) external view returns (string memory);
     function getSymbolFromAddress(address _pool) external view returns (string memory);
-    function meta(uint256 _id, bytes32 _key) external view returns (bytes32);
+    function getMeta(uint256 _id, bytes32 _key) external view returns (bytes32);
     function getGroups() external view returns (address[] memory);
     function getFee() external view returns (uint256);
 }

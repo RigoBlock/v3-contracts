@@ -23,10 +23,9 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 library LibSanitize {
 
-    function isValidCheck(string memory str)
+    function assertIsValidCheck(string memory str)
         internal
         pure
-        returns (bool)
     {
         bytes memory bStr = bytes(str);
         uint arrayLength = bStr.length;
@@ -47,27 +46,25 @@ library LibSanitize {
                     bStr[i] > bytes1(uint8(90)) && bStr[i] < bytes1(uint8(97))
                 ) && bStr[i] != bytes1(uint8(32))
             ) revert("LIBSANITIZE_SPECIAL_CHARACTER_ERROR");
-        } return true;
+        }
     }
 
-    function isLowercase(string memory str)
+    function assertIsLowercase(string memory str)
         internal
         pure
-        returns (bool)
     {
         bytes memory bStr = bytes(str);
         uint arrayLength = bStr.length;
 		    for (uint i = 0; i < arrayLength; i++) {
-			     if (
-              (bStr[i] >= bytes1(uint8(65))) && (bStr[i] <= bytes1(uint8(90)))
-          ) revert("LIBSANITIZE_LOWERCASE_CHARACTER_ERROR");
-		    } return true;
+			    if (
+                    (bStr[i] >= bytes1(uint8(65))) && (bStr[i] <= bytes1(uint8(90)))
+                ) revert("LIBSANITIZE_LOWERCASE_CHARACTER_ERROR");
+		    }
     }
 
-    function isUppercase(string memory str)
+    function assertIsUppercase(string memory str)
         internal
         pure
-        returns (bool)
     {
         bytes memory bStr = bytes(str);
         uint arrayLength = bStr.length;
@@ -75,6 +72,6 @@ library LibSanitize {
             if (
                 (bStr[i] >= bytes1(uint8(97))) && (bStr[i] <= bytes1(uint8(122)))
             ) revert("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR");
-        } return true;
+        }
     }
 }
