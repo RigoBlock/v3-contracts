@@ -43,7 +43,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     string constant VERSION = 'HF 0.5.2';
     uint256 constant BASE = 1000000; // tokens are divisible by 1 million
 
-    mapping (address => Account) accounts;
+    mapping (address => Account) private accounts;
 
     DragoData data;
     Admin admin;
