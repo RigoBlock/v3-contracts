@@ -73,27 +73,26 @@ describe("ProxyFactory", async () => {
             await factory.createDrago('duplicateName', 'TEST')
             await expect(
                 factory.createDrago('duplicateName', 'TEST')
-            ).to.be.revertedWith("PROXY_FACTORY_LIBRARY_DEPLOY_ERROR")
+            ).to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
         })
 
-        // TODO: should have different address with different symbol and revert in registry.
         it('should revert with duplicate name', async () => {
             const { factory, registry } = await setupTests()
-            await factory.createDrago('duplicateName', 'TEST')
-            const [ user1 ] = waffle.provider.getWallets()
-            console.log(user1.address, await factory.getDragosByAddress(user1.address))
+            await expect(
+                factory.createDrago('duplicateName', 'TEST')
+            ).to.emit(factory, "DragoCreated")
             await expect(
                 factory.createDrago('duplicateName', 'TEST2')
-            ).to.be.revertedWith("REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR")
+            ).to.be.revertedWith("REGISTRY_NAME_ALREADY_REGISTERED_ERROR")
         })
 
-        // TODO: check why second pool has same address with different names
         it('should create pool with duplicate symbol', async () => {
-            const { factory } = await setupTests()
+            const { factory, registry } = await setupTests()
             await factory.createDrago('someName', 'TEST')
             await expect(
               factory.createDrago('someOtherName', 'TEST')
-            ).to.be.revertedWith("REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR")
+            ).to.emit(factory, "DragoCreated")
+            expect(await registry.dragoCount()).to.eq(2)
         })
 
         it('should revert with symbol longer than 5 characters', async () => {
