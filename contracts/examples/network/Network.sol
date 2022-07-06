@@ -20,18 +20,18 @@
 pragma solidity 0.8.14;
 
 import { IPool } from "../../utils/pool/IPool.sol";
-import { IDragoRegistry } from "../../protocol/interfaces/IDragoRegistry.sol";
+import { IPoolRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
 
 /// @title Network - Returns data of active pools and network value.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract Network {
 
-    address public DRAGOREGISTRYADDRESS;
+    address public POOLREGISTRYADDRESS;
 
     constructor(
-        address dragoRegistryAddress)
+        address poolRegistryAddress)
     {
-        DRAGOREGISTRYADDRESS = dragoRegistryAddress;
+        POOLREGISTRYADDRESS = poolRegistryAddress;
     }
 
     /*
@@ -49,7 +49,7 @@ contract Network {
             uint256[] memory
         )
     {
-        uint256 length = IDragoRegistry(DRAGOREGISTRYADDRESS).dragoCount();
+        uint256 length = IPoolRegistry(POOLREGISTRYADDRESS).poolsCount();
         address[] memory poolAddresses = new address[](length);
         uint256[] memory poolPrices = new uint256[](length);
         uint256[] memory totalTokens = new uint256[](length);
@@ -80,7 +80,7 @@ contract Network {
             uint256 numberOfPools
         )
     {
-        numberOfPools = IDragoRegistry(DRAGOREGISTRYADDRESS).dragoCount();
+        numberOfPools = IPoolRegistry(POOLREGISTRYADDRESS).poolsCount();
         for (uint256 i = 0; i < numberOfPools; ++i) {
             bool active = isActive(i);
             if (!active) {
@@ -105,7 +105,7 @@ contract Network {
         if(mockInput > uint256(1)) {
             return (uint256(0), uint256(0));
         }
-        numberOfPools = IDragoRegistry(DRAGOREGISTRYADDRESS).dragoCount();
+        numberOfPools = IPoolRegistry(POOLREGISTRYADDRESS).poolsCount();
         for (uint256 i = 0; i < numberOfPools; ++i) {
             bool active = isActive(i);
             if (!active) {
@@ -127,7 +127,7 @@ contract Network {
         internal view
         returns (bool)
     {
-        (address poolAddress, , , , , ) = IDragoRegistry(DRAGOREGISTRYADDRESS).fromId(poolId);
+        (address poolAddress, , , ) = IPoolRegistry(POOLREGISTRYADDRESS).fromId(poolId);
         if (poolAddress != address(0)) {
             return true;
         } else return false;
@@ -144,7 +144,7 @@ contract Network {
             address groupAddress
         )
     {
-        (poolAddress, , , , , groupAddress) = IDragoRegistry(DRAGOREGISTRYADDRESS).fromId(poolId);
+        (poolAddress, , , groupAddress) = IPoolRegistry(POOLREGISTRYADDRESS).fromId(poolId);
     }
 
     /// @dev Returns the price a pool from its id
