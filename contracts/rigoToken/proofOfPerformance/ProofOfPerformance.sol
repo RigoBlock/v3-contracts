@@ -21,7 +21,7 @@
 // solhint-disable-next-line
 pragma solidity 0.7.4;
 
-import { IAuthority } from "../../protocol/interfaces/IAuthority.sol";
+import { IAuthorityCore } from "../../protocol/interfaces/IAuthorityCore.sol";
 import { IPool } from "../../utils/pool/IPool.sol";
 import { SafeMath } from "../../utils/SafeMath/SafeMath.sol";
 import { IProofOfPerformance } from "../interfaces/IProofOfPerformance.sol";
@@ -564,7 +564,7 @@ contract ProofOfPerformance is
         internal
         view
     {
-        if (!IAuthority(authorityAddress).isWhitelistedFactory(_factory)) {
+        if (!IAuthorityCore(authorityAddress).isWhitelistedFactory(_factory)) {
             revert("NOT_APPROVED_AUTHORITY_ERROR");
         }
     }
