@@ -26,6 +26,8 @@ import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 // solhint-disable-next-line
 library RigoblockPoolProxyFactoryLibrary {
 
+    /// @notice We write to storage in struct in order to query in factory. We could
+    ///     check gas savings in not storing in this struct and passing return value,
     struct NewPool {
         string name;
         string symbol;
@@ -39,7 +41,7 @@ library RigoblockPoolProxyFactoryLibrary {
     /// @param _authority Address of the respective authority
     /// @return proxy Instance of a Rigoblock pool
     function createPool0(
-        NewPool memory self,
+        NewPool storage self,
         string memory _name,
         string memory _symbol,
         address _owner,
@@ -66,7 +68,7 @@ library RigoblockPoolProxyFactoryLibrary {
     }
 
     function createPool(
-        NewPool memory self,
+        NewPool storage self,
         string memory _name,
         string memory _symbol,
         address _owner,
