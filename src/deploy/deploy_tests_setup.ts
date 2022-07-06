@@ -36,7 +36,7 @@ const deploy: DeployFunction = async function (
   await authorityInstance.setExchangesAuthority(authorityExchanges.address);
   await authorityExchangesInstance.setWhitelister(deployer, true);
 
-  const registry = await deploy("DragoRegistry", {
+  const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
       authority.address,
