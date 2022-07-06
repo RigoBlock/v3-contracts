@@ -24,19 +24,68 @@ pragma solidity 0.8.14;
 // solhint-disable-next-line
 interface IRigoblockPoolProxyFactory {
 
-    event DragoCreated(bytes32 name, bytes32 indexed symbol, address indexed drago, address indexed owner, uint256 dragoId);
+    event PoolCreated(
+        bytes32 name,
+        bytes32 indexed symbol,
+        address indexed poolAddress,
+        address indexed owner,
+        uint256 poolId
+    );
 
-    function createDrago(string calldata _name, string calldata _symbol) external payable returns (address newPoolAddress);
-    function setTargetDragoDao(address payable _targetDrago, address _dragoDao) external;
-    function changeDragoDao(address payable _newDragoDao) external;
-    function setRegistry(address _newRegistry) external;
-    function setBeneficiary(address payable _dragoDao) external;
-    function setFee(uint256 _fee) external;
-    function setImplementation(address _newImplementation) external;
-    function drain() external;
+    function createPool(
+        string calldata _name,
+        string calldata _symbol
+    )
+        external
+        payable
+        returns (address newPoolAddress);
 
-    function getRegistry() external view returns (address);
-    function getStorage() external view returns (address dragoDao, string memory version, uint256 nextDragoId);
-    function getDragosByAddress(address _owner) external view returns (address[] memory);
-    function implementation() external view returns (address);
+    // TODO: eliminate this method and pay fees to rigoblock dao. Pool queries from its factory
+    function setTargetRigoblockDao(
+        address payable _targetPool,
+        address _rigoblockDao
+    )
+        external;
+    
+    function changeRigoblockDao( address payable _newRigoblockDao)
+        external;
+
+    function setRegistry(address _newRegistry)
+        external;
+
+    function setBeneficiary(address payable _rigoblockDao)
+        external;
+
+    function setFee(uint256 _fee)
+        external;
+
+    function setImplementation(address _newImplementation)
+        external;
+
+    function drain()
+        external;
+
+    function getRegistry()
+        external
+        view
+        returns (address);
+
+    function getStorage()
+        external
+        view
+        returns (
+            address rigoblockDao,
+            string memory version,
+            uint256 nextPoolId
+        );
+
+    function getPoolsByAddress(address _owner)
+        external
+        view
+        returns (address[] memory);
+
+    function implementation()
+        external
+        view
+        returns (address);
 }
