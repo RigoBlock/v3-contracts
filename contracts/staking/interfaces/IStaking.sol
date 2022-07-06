@@ -21,8 +21,9 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
+// TODO: check if can rename interface without breaking staking proxy interface
+import  { IPoolRegistry as IDragoRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
 import "../../rigoToken/interfaces/IRigoToken.sol";
-import "../../protocol/interfaces/IDragoRegistry.sol";
 import "./IStructs.sol";
 import "./IGrgVault.sol";
 

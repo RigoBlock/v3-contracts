@@ -24,7 +24,7 @@ pragma experimental ABIEncoderV2;
 import "../../utils/0xUtils/IEtherToken.sol";
 import "../interfaces/IGrgVault.sol";
 import "../interfaces/IStaking.sol";
-import "../../protocol/interfaces/IDragoRegistry.sol";
+import  { IPoolRegistry as IDragoRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
 import "../../rigoToken/interfaces/IRigoToken.sol";
 
 
