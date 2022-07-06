@@ -25,7 +25,7 @@ import { IAuthority } from "../../protocol/interfaces/IAuthority.sol";
 import { IPool } from "../../utils/pool/IPool.sol";
 import { SafeMath } from "../../utils/SafeMath/SafeMath.sol";
 import { IProofOfPerformance } from "../interfaces/IProofOfPerformance.sol";
-import { IDragoRegistry } from "../../protocol/interfaces/IDragoRegistry.sol";
+import { IPoolRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
 import { IStaking } from "../../staking/interfaces/IStaking.sol";
 
 
@@ -36,7 +36,7 @@ contract ProofOfPerformance is
     SafeMath,
     IProofOfPerformance
 {
-    address public override dragoRegistryAddress;
+    address public override poolRegistryAddress;
     address public override rigoblockDaoAddress;
     address public override authorityAddress;
 
@@ -64,12 +64,12 @@ contract ProofOfPerformance is
     constructor(
         address _stakingProxyAddress,
         address _rigoblockDao,
-        address _dragoRegistry,
+        address _poolRegistry,
         address _authorityAddress
     ) {
         STAKING_PROXY_ADDRESS = _stakingProxyAddress;
         rigoblockDaoAddress = _rigoblockDao;
-        dragoRegistryAddress = _dragoRegistry;
+        poolRegistryAddress = _poolRegistry;
         authorityAddress = _authorityAddress;
     }
 
@@ -81,7 +81,7 @@ contract ProofOfPerformance is
         external
         override
     {
-        (address poolAddress, , , , , ) = IDragoRegistry(dragoRegistryAddress).fromId(poolId);
+        (address poolAddress, , , ) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
 
         if (poolAddress == address(0)) {
             return;
@@ -106,13 +106,13 @@ contract ProofOfPerformance is
     }
 
     /// @dev Allows RigoBlock Dao to update the pools registry.
-    /// @param newDragoRegistryAddress Address of new registry.
-    function setRegistry(address newDragoRegistryAddress)
+    /// @param newPoolRegistryAddress Address of new registry.
+    function setRegistry(address newPoolRegistryAddress)
         external
         override
         onlyRigoblockDao
     {
-        dragoRegistryAddress = newDragoRegistryAddress;
+        poolRegistryAddress = newPoolRegistryAddress;
     }
 
     /// @dev Allows RigoBlock Dao to update its address.
@@ -472,7 +472,7 @@ contract ProofOfPerformance is
         internal view
         returns (bool)
     {
-        (address poolAddress, , , , , ) = IDragoRegistry(dragoRegistryAddress).fromId(poolId);
+        (address poolAddress, , , ) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
         if (poolAddress != address(0)) {
             return true;
         } else return false;
@@ -480,18 +480,18 @@ contract ProofOfPerformance is
 
     /// @dev Returns the address and the group of a pool from its id.
     /// @param poolId Id of the pool.
-    /// @return pool Address of the target pool.
+    /// @return poolAddress Address of the target pool.
     /// @return group Address of the pool's group.
     function _addressFromIdInternal(uint256 poolId)
         internal
         view
         returns (
-            address pool,
+            address poolAddress,
             address group
         )
     {
-        (pool, , , , , group) = IDragoRegistry(dragoRegistryAddress).fromId(poolId);
-        return (pool, group);
+        (poolAddress, , , group) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
+        return (poolAddress, group);
     }
 
     /// @dev Returns price, supply, aum of a pool from its id.
