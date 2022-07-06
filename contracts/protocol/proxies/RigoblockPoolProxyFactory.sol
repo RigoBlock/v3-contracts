@@ -93,7 +93,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     {
         // TODO: check gas savings in sending name and symbol as bytes32 to registry
         try data.registry.register{ value : data.registry.getFee() } (
-            createPoolInternal(_name, _symbol, msg.sender),
+            createPoolInternal(_name, _symbol),
             _name,
             _symbol,
             msg.sender
@@ -243,11 +243,9 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev Creates a pool and routes to eventful
     /// @param _name String of the name
     /// @param _symbol String of the symbol
-    /// @param _owner Address of the owner
     function createPoolInternal(
         string memory _name,
-        string memory _symbol,
-        address _owner
+        string memory _symbol
     )
         internal
         returns (address)
@@ -256,7 +254,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
             libraryData,
             _name,
             _symbol,
-            _owner,
             data.authority
         ));
     }
