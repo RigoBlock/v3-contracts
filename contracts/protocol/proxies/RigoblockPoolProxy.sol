@@ -29,7 +29,8 @@ interface IRigoblockPool {
         address _owner,
         address _authority
     ) external;
-    function _getBeacon() external view returns (address);
+    // TODO: not yet implemented in pool implementation
+    //function _getBeacon() external view returns (address);
 }
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
@@ -54,30 +55,28 @@ contract RigoblockPoolProxy {
             revert("POOL_INITIALIZATION_FAILED_ERROR");
         }
     }
+/*
+    function _getBeacon() public view returns (address) {
+        return StorageSlot.getAddressSlot(_BEACON_SLOT).value;
+    }
+
+    function _getImplementation() external view returns (address) {
+        return IBeacon(_getBeacon()).implementation();
+    }*/
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
+        // TODO: check if useful returning beacon, we could just return implementation and save gas
+        // we can implement beacon return in pool if useful
+        address _beacon = StorageSlot.getAddressSlot(_BEACON_SLOT).value;
+        address _implementation = IBeacon(_beacon).implementation();
         // solhint-disable-next-line no-inline-assembly
         assembly {
-            let _beaconSlot := sload(0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50)
-            let _beacon := mload(_beaconSlot)
             // 0x2bad8ba0 == keccak("_getBeacon()"). The value is right padded to 32-bytes with 0s
             if eq(calldataload(0), 0x2bad8ba000000000000000000000000000000000000000000000000000000000) {
                 mstore(0, _beacon)
                 return(0, 0x20)
             }
-            // we must find the implementation address
-            let x := mload(0x40)
-            // 0x5c60da1b == keccak("implementation()")
-            mstore(x, 0x5c60da1b)
-            let _implementation := call(
-                5000,   // 5k gas
-                _beacon, // destination address
-                0,      // 0 value
-                x,      // inputs are stored at location x
-                0x04,   // inputs are 4 bytes long (signature)
-                x,      // store output over input (saves space)
-                0x20)   // outputs are 32 bytes long
             calldatacopy(0, 0, calldatasize())
             let success := delegatecall(gas(), _implementation, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
