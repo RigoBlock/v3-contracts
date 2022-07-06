@@ -19,7 +19,7 @@ describe("ProxyFactory", async () => {
         }
     });
 
-    describe("createDrago", async () => {
+    describe("createPool", async () => {
         it('should revert with space before pool name', async () => {
             const { factory, registry } = await setupTests()
             await expect(
@@ -59,6 +59,16 @@ describe("ProxyFactory", async () => {
             // dummy test
             const poolData = await registry.fromAddress(poolAddress)
             expect(poolData.symbol).to.be.eq(symbol)
+        })
+
+        it('should return pool owner', async () => {
+          const { factory, registry } = await setupTests()
+          const template = await factory.callStatic.createPool('testpool','TEST')
+          await factory.createPool('testpool', 'TEST')
+          const { poolAddress } = await registry.fromName('testpool')
+          const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+          const [ user1 ] = waffle.provider.getWallets()
+          expect(await pool.owner()).to.be.eq(user1.address)
         })
 
         it('should create pool with space not first or last character', async () => {
