@@ -71,21 +71,20 @@ library RigoblockPoolProxyFactoryLibrary {
         NewPool storage self,
         string memory _name,
         string memory _symbol,
-        address _owner,
         address _authority
     )
         internal
         returns (RigoblockPoolProxy proxy)
     {
         bytes memory encodedInitialization = abi.encodeWithSelector(
-            0xc9ee5905, // RigoblockPool._initializePool.selector
-            self.name = _name,
-            self.symbol = _symbol,
-            self.owner = _owner,
+            0x95d317f0, // RigoblockPool._initializePool.selector
+            _name,
+            _symbol,
+            msg.sender,
             _authority
         );
         // TODO: check if we get gas savings by using encodedInitialization as base for salt
-        bytes32 salt = keccak256(abi.encodePacked(_name, _symbol, _owner, msg.sender));
+        bytes32 salt = keccak256(abi.encodePacked(_name, _symbol, msg.sender));
         bytes memory deploymentData = abi.encodePacked(
             type(RigoblockPoolProxy).creationCode, // bytecode
             abi.encode(
