@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >=0.7.0 <0.9.0;
 
-abstract contract OwnedUninitialized {
+import { IOwnedUninitialized } from "./IOwnedUninitialized.sol";
 
-    address public owner;
+abstract contract OwnedUninitialized is IOwnedUninitialized {
 
-    event NewOwner(address indexed old, address indexed current);
+    address public override owner;
 
     modifier onlyOwner {
-        require(msg.sender == owner, "OWNED_CALLER_IS_NOT_OWNER_ERROR");
+        require(
+            msg.sender == owner,
+            "OWNED_CALLER_IS_NOT_OWNER_ERROR"
+        );
         _;
     }
 
-    function setOwner(address _new) public onlyOwner {
+    function setOwner(address _new)
+        public
+        override
+        onlyOwner
+    {
         require(_new != address(0));
         owner = _new;
         emit  NewOwner(owner, _new);
