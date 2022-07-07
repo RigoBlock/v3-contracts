@@ -36,7 +36,7 @@ interface IPoolRegistry {
     );
 
     event MetaChanged(
-        bytes32 indexed id,
+        address indexed poolAddress,
         bytes32 indexed key,
         bytes32 value
     );
@@ -54,7 +54,7 @@ interface IPoolRegistry {
         payable;
 
     function setMeta(
-        uint256 _id,
+        address _poolAddress,
         bytes32 _key,
         bytes32 _value
     )
@@ -65,22 +65,13 @@ interface IPoolRegistry {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function fromId(uint256 _id)
-        external
-        view
-        returns (
-            address poolAddress,
-            string memory name,
-            address group
-        );
-
     function fromAddress(address _poolAddress)
         external
         view
         returns (
-            uint256 id,
+            address group,
             string memory name,
-            address group
+            bytes32 poolId
         );
 
     function getNameFromAddress(address _pool)
@@ -89,12 +80,12 @@ interface IPoolRegistry {
         returns (string memory);
 
     function getMeta(
-        uint256 _id,
+        address _poolAddress,
         bytes32 _key
     )
         external
         view
-        returns (bytes32);
+        returns (bytes32 poolMeta);
 
     function getGroups()
         external
