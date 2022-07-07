@@ -27,11 +27,6 @@ interface IProofOfPerformance {
     /*
      * PUBLIC VARIABLES
      */
-    function poolRegistryAddress()
-        external
-        view
-        returns (address);
-
     function rigoblockDaoAddress()
         external
         view
@@ -51,8 +46,8 @@ interface IProofOfPerformance {
         external;
 
     /// @dev Allows RigoBlock Dao to update the pools registry.
-    /// @param newDragoRegistryAddress Address of new registry.
-    function setRegistry(address newDragoRegistryAddress)
+    /// @param _newPoolRegistryAddress Address of new registry.
+    function setRegistry(address _newPoolRegistryAddress)
         external;
 
     /// @dev Allows RigoBlock Dao to update its address.

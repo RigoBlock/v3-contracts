@@ -36,8 +36,8 @@ contract ProofOfPerformance is
     SafeMath,
     IProofOfPerformance
 {
-    address public override poolRegistryAddress;
     address public override rigoblockDaoAddress;
+    // TODO: we should remove authority after pop locked balances reform.
     address public override authorityAddress;
 
     address private immutable STAKING_PROXY_ADDRESS;
@@ -83,8 +83,7 @@ contract ProofOfPerformance is
         external
         override
     {
-        //(address poolAddress, , ) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
-        ( , , bytes32 poolId) = IPoolRegistry(poolRegistryAddress).fromAddress(_poolAddress);
+        ( , , bytes32 poolId) = registry.fromAddress(_poolAddress);
 
         if (bytes32(poolId) == bytes32(0)) {
             return;
@@ -109,13 +108,13 @@ contract ProofOfPerformance is
     }
 
     /// @dev Allows RigoBlock Dao to update the pools registry.
-    /// @param newPoolRegistryAddress Address of new registry.
-    function setRegistry(address newPoolRegistryAddress)
+    /// @param _newPoolRegistryAddress Address of new registry.
+    function setRegistry(address _newPoolRegistryAddress)
         external
         override
         onlyRigoblockDao
     {
-        poolRegistryAddress = newPoolRegistryAddress;
+        registry = IPoolRegistry(_newPoolRegistryAddress);
     }
 
     /// @dev Allows RigoBlock Dao to update its address.
