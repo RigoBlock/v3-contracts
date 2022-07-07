@@ -139,13 +139,19 @@ abstract contract MixinStakingPool is
 
     /// @dev Allows caller to join a staking pool as a rigoblock pool account.
     /// @param _rigoblockPoolAccount Address of subaccount to be added to staking pool.
-    /// @notice Funcion is public but will only overwrite same data if called with same pool address.
     function joinStakingPoolAsRbPoolAccount(
         address _rigoblockPoolAccount)
         public
         override
     {
         ( , , bytes32 poolId) = getDragoRegistry().fromAddress(_rigoblockPoolAccount);
+
+        // only allow rigoblock pool to create staking pool once
+        // TODO: test
+        require(
+            poolIdByRbPoolAccount[_rigoblockPoolAccount] == bytes32(0),
+            "STAKING_POOL_ALREADY_REGISTERED_ERROR"
+        ); 
 
         // only rigoblock pools registered in drago registry can have accounts added to their staking pool
         require(
