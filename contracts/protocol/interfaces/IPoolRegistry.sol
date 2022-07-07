@@ -28,22 +28,15 @@ interface IPoolRegistry {
      * EVENTS
      */
     event Registered(
-        bytes32 name,
+        address indexed group,
         bytes32 indexed symbol,
-        uint256 id,
-        address poolAddress,
-        address indexed owner,
-        address indexed group
-    );
-
-    event Unregistered(
         bytes32 name,
-        bytes32 indexed symbol,
-        uint256 id
+        bytes32 id,
+        address poolAddress
     );
 
     event MetaChanged(
-        uint256 indexed id,
+        bytes32 indexed id,
         bytes32 indexed key,
         bytes32 value
     );
@@ -53,18 +46,12 @@ interface IPoolRegistry {
      */
     function register(
         address _poolAddress,
-        string calldata _name,
+        string calldata  _name,
         string calldata _symbol,
-        address _owner
+        bytes32 id
     )
         external
-        payable
-        returns (uint256 poolId);
-
-    function unregister(
-        uint256 _id
-    )
-        external;
+        payable;
 
     function setMeta(
         uint256 _id,
@@ -75,25 +62,15 @@ interface IPoolRegistry {
 
     function addGroup(address _group) external;
 
-    function setFee(uint256 _fee) external;
-
-    function drain() external;
-
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function poolsCount()
-        external
-        view
-        returns (uint256);
-
     function fromId(uint256 _id)
         external
         view
         returns (
             address poolAddress,
             string memory name,
-            string memory symbol,
             address group
         );
 
@@ -103,26 +80,10 @@ interface IPoolRegistry {
         returns (
             uint256 id,
             string memory name,
-            string memory symbol,
-            address group
-        );
-
-    function fromName(string calldata _name)
-        external
-        view
-        returns (
-            uint256 id,
-            address poolAddress,
-            string memory symbol,
             address group
         );
 
     function getNameFromAddress(address _pool)
-        external
-        view
-        returns (string memory);
-
-    function getSymbolFromAddress(address _pool)
         external
         view
         returns (string memory);
@@ -139,9 +100,4 @@ interface IPoolRegistry {
         external
         view
         returns (address[] memory);
-
-    function getFee()
-        external
-        view
-        returns (uint256);
 }
