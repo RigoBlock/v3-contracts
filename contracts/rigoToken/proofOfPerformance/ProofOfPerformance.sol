@@ -85,9 +85,10 @@ contract ProofOfPerformance is
     {
         ( , , bytes32 poolId) = registry.fromAddress(_poolAddress);
 
-        if (bytes32(poolId) == bytes32(0)) {
-            return;
-        }
+        require(
+            poolId != bytes32(0),
+            "POOL_NOT_FOUND_IN_REGISTRY_ERROR"
+        );
 
         uint256 poolPrice = IPool(_poolAddress).calcSharePrice();
 
