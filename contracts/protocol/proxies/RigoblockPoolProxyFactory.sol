@@ -21,37 +21,25 @@ pragma solidity 0.8.14;
 
 import { IPoolRegistry as PoolRegistry } from "../interfaces/IPoolRegistry.sol";
 import { IRigoblockV3Pool as RigoblockV3Pool } from "../IRigoblockV3Pool.sol";
-import { RigoblockPoolProxyFactoryLibrary } from "./RigoblockPoolProxyFactoryLibrary.sol";
 import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
 import { IRigoblockPoolProxyFactory } from "../interfaces/IRigoblockPoolProxyFactory.sol";
+import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 
 /// @title Rigoblock Pool Proxy Factory contract - allows creation of new Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
-    RigoblockPoolProxyFactoryLibrary.NewPool private libraryData;
-
     string public constant VERSION = "DF 3.0.0";
     address private _poolImplementation;
 
     Data private data;
-
-    mapping(address => address[]) private poolAddressesByOwner;
 
     struct Data {
         uint256 fee;
         address payable rigoblockDao;
         address authority;
         PoolRegistry registry;
-    }
-
-    modifier whenFeePaid {
-        require(
-            msg.value >= data.fee,
-            "FACTORY_FEE_NOT_PAID_ERROR"
-        );
-        _;
     }
 
     modifier onlyRigoblockDao {
@@ -73,7 +61,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         data.registry = PoolRegistry(_registry);
         data.rigoblockDao = _rigoblockDao;
         data.authority = _authority;
-        owner = _owner; // TODO: check owner is correct
+        owner = _owner;
         _poolImplementation = _implementation;
     }
 
@@ -88,20 +76,17 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         external
         payable
         override
-        whenFeePaid
         returns (address newPoolAddress)
     {
-        // TODO: check gas savings in sending name and symbol as bytes32 to registry
-        try data.registry.register{ value : data.registry.getFee() } (
-            createPoolInternal(_name, _symbol),
+        (bytes32 poolId, RigoblockPoolProxy proxy) = _createPoolInternal(_name, _symbol);
+        newPoolAddress = address(proxy);
+        try data.registry.register(
+            newPoolAddress,
             _name,
             _symbol,
-            msg.sender
-        ) returns (uint256 poolId) {
-            // TODO: owner can change, array would not be correct. we can avoid storing here
-            poolAddressesByOwner[msg.sender].push(libraryData.newAddress);
-            newPoolAddress = libraryData.newAddress;
-            emit PoolCreated(bytes32(bytes(_name)), bytes32(bytes(_symbol)), libraryData.newAddress, msg.sender, poolId);
+            poolId
+        ) {
+            emit PoolCreated(msg.sender, bytes32(bytes(_symbol)), bytes32(bytes(_name)), poolId, newPoolAddress);
         } catch Error(string memory reason) {
             revert(reason);
         } catch (bytes memory returnData) {
@@ -198,34 +183,19 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev Returns administrative data for this factory
     /// @return rigoblockDao Address of the Rigoblock DAO
     /// @return version String of the version
-    /// @return nextPoolId Number of the next pool from the registry
     function getStorage()
         external
         view
         override
         returns (
             address rigoblockDao,
-            string memory version,
-            uint256 nextPoolId
+            string memory version
         )
     {
         return (
             rigoblockDao = data.rigoblockDao,
-            version = VERSION,
-            getNextPoolId()
+            version = VERSION
         );
-    }
-
-    /// @dev Returns an array of pools the owner has created
-    /// @param _owner Address of the queried owner
-    /// @return Array of pool addresses
-    function getPoolsByAddress(address _owner)
-        external
-        view
-        override
-        returns (address[] memory)
-    {
-        return poolAddressesByOwner[_owner];
     }
 
     function implementation()
@@ -243,28 +213,37 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev Creates a pool and routes to eventful
     /// @param _name String of the name
     /// @param _symbol String of the symbol
-    function createPoolInternal(
+    function _createPoolInternal(
         string memory _name,
         string memory _symbol
     )
         internal
-        returns (address)
+        returns (
+            bytes32 salt,
+            RigoblockPoolProxy proxy
+        )
     {
-        return address(RigoblockPoolProxyFactoryLibrary.createPool(
-            libraryData,
+        bytes memory encodedInitialization = abi.encodeWithSelector(
+            0x95d317f0, // RigoblockPool._initializePool.selector
             _name,
             _symbol,
+            msg.sender,
             data.authority
-        ));
-    }
-
-    /// @dev Returns the next Id for a pool
-    /// @return nextPoolId Number of the next Id from the registry
-    function getNextPoolId()
-        internal
-        view
-        returns (uint256 nextPoolId)
-    {
-        unchecked{ nextPoolId = data.registry.poolsCount() + 1; }
+        );
+        salt = keccak256(encodedInitialization);
+        bytes memory deploymentData = abi.encodePacked(
+            type(RigoblockPoolProxy).creationCode, // bytecode
+            abi.encode(
+                uint256(uint160(address(this))), // beacon
+                encodedInitialization // encoded initialization call
+            )
+        );
+        assembly {
+            proxy := create2(0x0, add(0x20, deploymentData), mload(deploymentData), salt)
+        }
+        require(
+            address(proxy) != address(0),
+            "FACTORY_LIBRARY_CREATE2_FAILED_ERROR"
+        );
     }
 }

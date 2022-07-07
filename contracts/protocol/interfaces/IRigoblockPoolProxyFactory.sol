@@ -25,11 +25,11 @@ pragma solidity 0.8.14;
 interface IRigoblockPoolProxyFactory {
 
     event PoolCreated(
-        bytes32 name,
-        bytes32 indexed symbol,
-        address indexed poolAddress,
         address indexed owner,
-        uint256 poolId
+        bytes32 indexed symbol,
+        bytes32 name,
+        bytes32 poolId,
+        address poolAddress
     );
 
     function createPool(
@@ -75,14 +75,8 @@ interface IRigoblockPoolProxyFactory {
         view
         returns (
             address rigoblockDao,
-            string memory version,
-            uint256 nextPoolId
+            string memory version
         );
-
-    function getPoolsByAddress(address _owner)
-        external
-        view
-        returns (address[] memory);
 
     function implementation()
         external
