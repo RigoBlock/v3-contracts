@@ -78,12 +78,11 @@ interface IStaking {
     function init()
         external;
 
-    /// @dev Allows caller to join a staking pool as a rigoblock pool id subaccount.
-    /// @param stakingPoolId Unique id of staking pool.
-    /// @param rigoblockPoolAccount Address of subaccount to be added to staking pool.
+    /// @dev Allows caller to join a staking pool as a rigoblock pool account.
+    /// @param _rigoblockPoolAccount Address of subaccount to be added to staking pool.
+    /// @notice Funcion is public but will only overwrite same data if called with same pool address.
     function joinStakingPoolAsRbPoolAccount(
-        bytes32 stakingPoolId,
-        address rigoblockPoolAccount)
+        address _rigoblockPoolAccount)
         external;
 
     /// @dev Moves stake between statuses: 'undelegated' or 'delegated'.

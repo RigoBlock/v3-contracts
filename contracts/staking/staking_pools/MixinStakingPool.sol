@@ -54,9 +54,9 @@ abstract contract MixinStakingPool is
         override
         returns (bytes32 poolId)
     {
-        (uint256 rbPoolId, , ) = getDragoRegistry().fromAddress(rigoblockPoolAddress);
+        ( , , bytes32 rbPoolId) = getDragoRegistry().fromAddress(rigoblockPoolAddress);
         require(
-            rbPoolId != uint256(0),
+            rbPoolId != bytes32(0),
             "NON_REGISTERED_RB_POOL_ERROR"
         );
         // TODO: test if following return value is correct or reverts from pool proxy
@@ -90,7 +90,7 @@ abstract contract MixinStakingPool is
         // Staking pool has been created
         emit StakingPoolCreated(poolId, operator, operatorShare);
 
-        joinStakingPoolAsRbPoolAccount(poolId, rigoblockPoolAddress);
+        joinStakingPoolAsRbPoolAccount(rigoblockPoolAddress);
 
         return poolId;
     }
@@ -138,30 +138,25 @@ abstract contract MixinStakingPool is
     }
 
     /// @dev Allows caller to join a staking pool as a rigoblock pool account.
-    /// @param poolId Unique id of pool.
-    /// @param rigoblockPoolAccount Address of subaccount to be added to staking pool.
+    /// @param _rigoblockPoolAccount Address of subaccount to be added to staking pool.
+    /// @notice Funcion is public but will only overwrite same data if called with same pool address.
     function joinStakingPoolAsRbPoolAccount(
-        bytes32 poolId,
-        address rigoblockPoolAccount)
+        address _rigoblockPoolAccount)
         public
         override
     {
-        (address poolAddress, , ) = getDragoRegistry().fromId(uint256(poolId));
+        ( , , bytes32 poolId) = getDragoRegistry().fromAddress(_rigoblockPoolAccount);
 
         // only rigoblock pools registered in drago registry can have accounts added to their staking pool
-        if (poolAddress == address(0)) {
-            revert("NON_REGISTERED_POOL_ID_ERROR");
-        }
-
-        // only allow pool itself to be registered account
-        if (poolAddress != rigoblockPoolAccount) {
-            revert("POOL_TO_JOIN_NOT_SELF_ERROR");
-        }
+        require(
+            poolId != bytes32(0),
+            "NON_REGISTERED_POOL_ID_ERROR"
+        );
 
         // write to storage
-        poolIdByRbPoolAccount[poolAddress] = poolId;
+        poolIdByRbPoolAccount[_rigoblockPoolAccount] = poolId;
         emit RbPoolStakingPoolSet(
-            rigoblockPoolAccount,
+            _rigoblockPoolAccount,
             poolId
         );
     }
