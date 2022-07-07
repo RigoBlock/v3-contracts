@@ -21,6 +21,7 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
+import "../../utils/owned/IOwnedUninitialized.sol";
 import "../../utils/0xUtils/LibRichErrors.sol";
 import "../../utils/0xUtils/LibSafeMath.sol";
 import "../libs/LibStakingRichErrors.sol";
@@ -47,18 +48,20 @@ abstract contract MixinStakingPool is
     /// Note that a staking pal must be payable.
     /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
     /// @return poolId The unique pool id generated for this pool.
+    // TODO: check what the pool id should be since we are calling it from registry. We must make sure that an upgrade in registry produces same id.
     function createStakingPool(address rigoblockPoolAddress)
         external
         override
         returns (bytes32 poolId)
     {
-        (uint256 rbPoolId, , , , address rbPoolOwner, ) = getDragoRegistry().fromAddress(rigoblockPoolAddress);
+        (uint256 rbPoolId, , ) = getDragoRegistry().fromAddress(rigoblockPoolAddress);
         require(
             rbPoolId != uint256(0),
             "NON_REGISTERED_RB_POOL_ERROR"
         );
+        // TODO: test if following return value is correct or reverts from pool proxy
         // note that an operator must be payable
-        address operator = rbPoolOwner;
+        address operator = IOwnedUninitialized(rigoblockPoolAddress).owner();
 
         // add stakingPal, which receives part of operator reward
         address stakingPal = msg.sender;
@@ -143,10 +146,10 @@ abstract contract MixinStakingPool is
         public
         override
     {
-        (address poolAddress, , , uint256 rbPoolId, , ) = getDragoRegistry().fromId(uint256(poolId));
+        (address poolAddress, , ) = getDragoRegistry().fromId(uint256(poolId));
 
         // only rigoblock pools registered in drago registry can have accounts added to their staking pool
-        if (rbPoolId == uint256(0)) {
+        if (poolAddress == address(0)) {
             revert("NON_REGISTERED_POOL_ID_ERROR");
         }
 

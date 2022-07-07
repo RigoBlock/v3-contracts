@@ -27,7 +27,7 @@ interface IProofOfPerformance {
     /*
      * PUBLIC VARIABLES
      */
-    function dragoRegistryAddress()
+    function poolRegistryAddress()
         external
         view
         returns (address);

@@ -15,7 +15,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const registry = await deploy("DragoRegistry", {
+  const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
       authority.address,

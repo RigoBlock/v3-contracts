@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.14;
 
-import { IAuthority as Authority } from "../../interfaces/IAuthority.sol";
+import { IAuthorityCore as Authority } from "../../interfaces/IAuthorityCore.sol";
 import { IExchangesAuthority as ExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
 
 abstract contract WETH9 {

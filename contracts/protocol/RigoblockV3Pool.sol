@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.14;
 
-import { IAuthority as Authority } from "./interfaces/IAuthority.sol";
+import { IAuthorityCore as Authority } from "./interfaces/IAuthorityCore.sol";
 import { IExchangesAuthority as ExchangesAuthority } from "./interfaces/IExchangesAuthority.sol";
 import { ISigVerifier as SigVerifier } from "./interfaces/ISigVerifier.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
@@ -35,6 +35,7 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
+    // TODO: moved owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts
 
     using LibFindMethod for *;
 
@@ -59,10 +60,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         mapping(address => address[]) approvedAccount;
     }
 
+    // TODO: we removed pool id here, check if useful storing at pool creation
     struct DragoData {
         string name;
         string symbol;
-        uint256 dragoId;
         uint256 totalSupply;
         uint256 sellPrice;
         uint256 buyPrice;
@@ -88,6 +89,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
+    // TODO: eliminate methods with use this modifier as we want to have least intervention policy
+    //  ratio should be either stored in factory or pop should query pool locked balances
+    //  min period should be owner controlled with range (i.e. 1 block to 11MM blocks, 3 weeks)
     modifier onlyDragoDao() {
         require(msg.sender == admin.dragoDao);
         _;
@@ -156,7 +160,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     function _initializePool(
         string memory _dragoName,
         string memory _dragoSymbol,
-        uint256 _dragoId,
         address _owner,
         address _authority
     )
@@ -165,7 +168,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         data.name = _dragoName;
         data.symbol = _dragoSymbol;
-        data.dragoId = _dragoId;
         data.sellPrice = 1 ether;
         data.buyPrice = 1 ether;
         owner = _owner;
