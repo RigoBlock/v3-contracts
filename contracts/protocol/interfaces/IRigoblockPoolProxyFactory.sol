@@ -24,9 +24,9 @@ pragma solidity 0.8.14;
 // solhint-disable-next-line
 interface IRigoblockPoolProxyFactory {
 
-    event DragoCreated(string name, string symbol, address indexed drago, address indexed owner, uint256 dragoId);
+    event DragoCreated(bytes32 name, bytes32 indexed symbol, address indexed drago, address indexed owner, uint256 dragoId);
 
-    function createDrago(string calldata _name, string calldata _symbol) external payable returns (address);
+    function createDrago(string calldata _name, string calldata _symbol) external payable returns (address newPoolAddress);
     function setTargetDragoDao(address payable _targetDrago, address _dragoDao) external;
     function changeDragoDao(address payable _newDragoDao) external;
     function setRegistry(address _newRegistry) external;

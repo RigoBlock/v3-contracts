@@ -19,7 +19,6 @@
 
 pragma solidity 0.8.14;
 
-import { IAuthority as Authority } from "../interfaces/IAuthority.sol";
 import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 
 /// @title RigoBlock Pool Factory library - Reduces size of pool factory.
@@ -59,6 +58,10 @@ library RigoblockPoolProxyFactoryLibrary {
                 _authority
             )
         );
+        require(
+            address(proxy) != address(0),
+            "FACTORY_LIBRARY_DEPLOY_FAILED_ERROR"
+        );
         self.newAddress = address(proxy);
     }
 
@@ -79,6 +82,7 @@ library RigoblockPoolProxyFactoryLibrary {
             self.owner = _owner,
             _authority
         );
+        // TODO: check if we get gas savings by using encodedInitialization as base for salt
         bytes32 salt = keccak256(abi.encodePacked(_name, _symbol, _owner, msg.sender));
         bytes memory deploymentData = abi.encodePacked(
             type(RigoblockPoolProxy).creationCode, // bytecode
@@ -88,8 +92,12 @@ library RigoblockPoolProxyFactoryLibrary {
             )
         );
         assembly {
-            proxy := create2(0x0, add(deploymentData, 0x20), mload(deploymentData), salt)
+            proxy := create2(0x0, add(0x20, deploymentData), mload(deploymentData), salt)
         }
+        require(
+            address(proxy) != address(0),
+            "FACTORY_LIBRARY_CREATE2_FAILED_ERROR"
+        );
         self.newAddress = address(proxy);
     }
 }

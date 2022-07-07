@@ -37,21 +37,28 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
     Data private data;
 
+    mapping(address => address[]) private poolAddressesByOwner;
+
     struct Data {
         uint256 fee;
         address payable dragoDao;
         address authority;
-        mapping(address => address[]) dragos;
         DragoRegistry registry;
     }
 
     modifier whenFeePaid {
-        require(msg.value >= data.fee);
+        require(
+            msg.value >= data.fee,
+            "FACTORY_FEE_NOT_PAID_ERROR"
+        );
         _;
     }
 
     modifier onlyDragoDao {
-        require(msg.sender == data.dragoDao);
+        require(
+            msg.sender == data.dragoDao,
+            "FACTORY_SENDER_NOT_DAO_ERROR"
+        );
         _;
     }
 
@@ -60,12 +67,14 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         address payable _registry,
         address payable _dragoDao,
         address _authority,
-        address _owner)
+        address _owner,
+        address _implementation)
     {
         data.registry = DragoRegistry(_registry);
         data.dragoDao = _dragoDao;
         data.authority = _authority;
         owner = _owner;
+        _poolImplementation = _implementation;
     }
 
     /*
@@ -74,26 +83,28 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev allows creation of a new drago
     /// @param _name String of the name
     /// @param _symbol String of the symbol
-    /// @return Address of the new pool
+    /// @return newPoolAddress Address of the new pool
     function createDrago(string calldata _name, string calldata _symbol)
         external
         payable
         override
         whenFeePaid
-        returns (address)
+        returns (address newPoolAddress)
     {
-        createDragoInternal(_name, _symbol, msg.sender);
+        // TODO: check gas savings in sending name and symbol as bytes32 to registry
         try data.registry.register{ value : data.registry.getFee() } (
-            libraryData.newAddress,
+            createDragoInternal(_name, _symbol, msg.sender),
             _name,
             _symbol,
             msg.sender
-        ) returns (uint256 poolId)
-        {
-            emit DragoCreated(_name, _symbol, libraryData.newAddress, owner, poolId);
-            return libraryData.newAddress;
-        } catch Error(string memory) {
-            revert("REGISTRY_POOL_FACTORY_CREATION_ERROR");
+        ) returns (uint256 poolId) {
+            poolAddressesByOwner[owner].push(libraryData.newAddress);
+            newPoolAddress = libraryData.newAddress;
+            emit DragoCreated(bytes32(bytes(_name)), bytes32(bytes(_symbol)), libraryData.newAddress, owner, poolId);
+        } catch Error(string memory reason) {
+            revert(reason);
+        } catch (bytes memory returnData) {
+            revert(string(returnData));
         }
     }
 
@@ -212,7 +223,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         override
         returns (address[] memory)
     {
-        return data.dragos[_owner];
+        return poolAddressesByOwner[_owner];
     }
 
     function implementation()
@@ -237,20 +248,15 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         address _owner
     )
         internal
+        returns (address)
     {
-        require(
-            address(
-                RigoblockPoolProxyFactoryLibrary.createPool(
-                    libraryData,
-                    _name,
-                    _symbol,
-                    _owner,
-                    data.authority
-                )
-            )  != address(0),
-            "PROXY_FACTORY_LIBRARY_DEPLOY_ERROR"
-        );
-        data.dragos[_owner].push(libraryData.newAddress);
+        return address(RigoblockPoolProxyFactoryLibrary.createPool(
+            libraryData,
+            _name,
+            _symbol,
+            _owner,
+            data.authority
+        ));
     }
 
     /// @dev Returns the next Id for a drago
