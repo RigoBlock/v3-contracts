@@ -48,12 +48,13 @@ abstract contract MixinStakingPool is
     /// Note that a staking pal must be payable.
     /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
     /// @return poolId The unique pool id generated for this pool.
+    // TODO: check what the pool id should be since we are calling it from registry. We must make sure that an upgrade in registry produces same id.
     function createStakingPool(address rigoblockPoolAddress)
         external
         override
         returns (bytes32 poolId)
     {
-        (uint256 rbPoolId, , , ) = getDragoRegistry().fromAddress(rigoblockPoolAddress);
+        (uint256 rbPoolId, , ) = getDragoRegistry().fromAddress(rigoblockPoolAddress);
         require(
             rbPoolId != uint256(0),
             "NON_REGISTERED_RB_POOL_ERROR"
@@ -145,7 +146,7 @@ abstract contract MixinStakingPool is
         public
         override
     {
-        (address poolAddress, , , ) = getDragoRegistry().fromId(uint256(poolId));
+        (address poolAddress, , ) = getDragoRegistry().fromId(uint256(poolId));
 
         // only rigoblock pools registered in drago registry can have accounts added to their staking pool
         if (poolAddress == address(0)) {

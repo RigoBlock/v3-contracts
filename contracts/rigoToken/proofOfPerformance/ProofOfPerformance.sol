@@ -81,7 +81,7 @@ contract ProofOfPerformance is
         external
         override
     {
-        (address poolAddress, , , ) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
+        (address poolAddress, , ) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
 
         if (poolAddress == address(0)) {
             return;
@@ -472,7 +472,7 @@ contract ProofOfPerformance is
         internal view
         returns (bool)
     {
-        (address poolAddress, , , ) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
+        (address poolAddress, , ) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
         if (poolAddress != address(0)) {
             return true;
         } else return false;
@@ -490,7 +490,7 @@ contract ProofOfPerformance is
             address group
         )
     {
-        (poolAddress, , , group) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
+        (poolAddress, , group) = IPoolRegistry(poolRegistryAddress).fromId(poolId);
         return (poolAddress, group);
     }
 
