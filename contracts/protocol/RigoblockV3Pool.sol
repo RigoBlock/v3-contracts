@@ -89,6 +89,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
+    // TODO: eliminate methods with use this modifier as we want to have least intervention policy
+    //  ratio should be either stored in factory or pop should query pool locked balances
+    //  min period should be owner controlled with range (i.e. 1 block to 11MM blocks, 3 weeks)
     modifier onlyDragoDao() {
         require(msg.sender == admin.dragoDao);
         _;

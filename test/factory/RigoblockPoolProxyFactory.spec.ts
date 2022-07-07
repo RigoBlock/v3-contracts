@@ -25,7 +25,6 @@ describe("ProxyFactory", async () => {
             await expect(
                 factory.createPool(' testpool', 'TEST')
             ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_BEGINNING_ERROR")
-            expect(await registry.poolsCount()).to.eq(0)
         })
 
         it('should revert with space after pool name', async () => {
@@ -54,8 +53,7 @@ describe("ProxyFactory", async () => {
             await expect(
                 factory.createPool('testpool','TEST')
             ).to.emit(registry, "Registered")
-            expect(await registry.poolsCount()).to.eq(1)
-            const { poolAddress, symbol } = await registry.fromName('testpool')
+            const { poolAddress, symbol } = await registry.fromId(1)
             // dummy test
             const poolData = await registry.fromAddress(poolAddress)
             expect(poolData.symbol).to.be.eq(symbol)
@@ -65,7 +63,7 @@ describe("ProxyFactory", async () => {
           const { factory, registry } = await setupTests()
           const template = await factory.callStatic.createPool('testpool','TEST')
           await factory.createPool('testpool', 'TEST')
-          const { poolAddress } = await registry.fromName('testpool')
+          const { poolAddress } = await registry.fromId(1)
           const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
           const [ user1 ] = waffle.provider.getWallets()
           expect(await pool.owner()).to.be.eq(user1.address)
@@ -76,14 +74,11 @@ describe("ProxyFactory", async () => {
             const txReceipt = await factory.createPool('t est pool', 'TEST')
             const [ user1 ] = waffle.provider.getWallets()
             const result = await txReceipt.wait()
-            const poolsArray = await factory.getPoolsByAddress(user1.address)
             expect(result.events[1].args.owner).to.be.eq(user1.address)
-            expect(poolsArray[0]).to.be.eq(result.events[1].args.poolAddress)
         })
 
         it('should create pool with uppercase character in name', async () => {
             const { factory } = await setupTests()
-            // TODO: rename event and method in factory and interface
             await expect(
                 factory.createPool('testPool', 'TEST')
             ).to.emit(factory, "PoolCreated")
@@ -113,7 +108,6 @@ describe("ProxyFactory", async () => {
             await expect(
               factory.createPool('someOtherName', 'TEST')
             ).to.emit(factory, "PoolCreated")
-            expect(await registry.poolsCount()).to.eq(2)
         })
 
         it('should revert with symbol longer than 5 characters', async () => {

@@ -37,7 +37,7 @@ library LibSanitize {
             bStr[arrayLength - 1] != bytes1(uint8(32)),
             "LIBSANITIZE_SPACE_AT_END_ERROR"
         );
-        for (uint i =0; i < arrayLength; i++) {
+        for (uint i = 0; i < arrayLength; i++) {
             if (
                 (
                     bStr[i] < bytes1(uint8(48)) ||

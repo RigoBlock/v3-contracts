@@ -41,7 +41,7 @@ contract Network {
     /// @return poolAddresses Array of addressed of the active pools
     /// @return poolPrices Array of the prices of the active pools
     /// @return totalTokens Array of the number of tokens of each pool
-    function getPoolsPrices()
+    function getPoolsPrices(bytes32[] memory _ids)
         external view
         returns (
             address[] memory,
@@ -49,19 +49,19 @@ contract Network {
             uint256[] memory
         )
     {
-        uint256 length = IPoolRegistry(POOLREGISTRYADDRESS).poolsCount();
+        uint256 length = _ids.length;
         address[] memory poolAddresses = new address[](length);
         uint256[] memory poolPrices = new uint256[](length);
         uint256[] memory totalTokens = new uint256[](length);
         for (uint256 i = 0; i < length; ++i) {
-            bool active = isActive(i);
+            bool active = isActive(uint256(_ids[i]));
             if (!active) {
                 continue;
             }
-            (poolAddresses[i], ) = addressFromId(i);
-            IPool poolInstance = IPool(poolAddresses[i]);
-            poolPrices[i] = poolInstance.calcSharePrice();
-            totalTokens[i] = poolInstance.totalSupply();
+            (poolAddresses[uint256(_ids[i])], ) = addressFromId(uint256(_ids[i]));
+            IPool poolInstance = IPool(poolAddresses[uint256(_ids[i])]);
+            poolPrices[uint256(_ids[i])] = poolInstance.calcSharePrice();
+            totalTokens[uint256(_ids[i])] = poolInstance.totalSupply();
         }
         return (
             poolAddresses,
@@ -73,45 +73,21 @@ contract Network {
     /// @dev Returns the value of the assets in the rigoblock network
     /// @return networkValue alue of the rigoblock network in wei
     /// @return numberOfPools Number of active funds
-    function calcNetworkValue()
-        external view
+    function calcNetworkValue(bytes32[] memory _ids)
+        external
+        view
         returns (
             uint256 networkValue,
             uint256 numberOfPools
         )
     {
-        numberOfPools = IPoolRegistry(POOLREGISTRYADDRESS).poolsCount();
+        numberOfPools = _ids.length;
         for (uint256 i = 0; i < numberOfPools; ++i) {
-            bool active = isActive(i);
+            bool active = isActive(uint256(_ids[i]));
             if (!active) {
                 continue;
             }
-            (uint256 poolValue, ) = calcPoolValue(i);
-            networkValue += poolValue;
-        }
-    }
-    
-    /// @dev Returns the value of the assets in the rigoblock network given a mock input
-    /// @param mockInput Random number, must be 1 for querying data
-    /// @return networkValue Value of the rigoblock network in wei
-    /// @return numberOfPools Number of active funds
-    function calcNetworkValueDuneAnalytics(uint256 mockInput)
-        external view
-        returns (
-            uint256 networkValue,
-            uint256 numberOfPools
-        )
-    {
-        if(mockInput > uint256(1)) {
-            return (uint256(0), uint256(0));
-        }
-        numberOfPools = IPoolRegistry(POOLREGISTRYADDRESS).poolsCount();
-        for (uint256 i = 0; i < numberOfPools; ++i) {
-            bool active = isActive(i);
-            if (!active) {
-                continue;
-            }
-            (uint256 poolValue, ) = calcPoolValue(i);
+            (uint256 poolValue, ) = calcPoolValue(uint256(_ids[i]));
             networkValue += poolValue;
         }
     }
@@ -127,7 +103,7 @@ contract Network {
         internal view
         returns (bool)
     {
-        (address poolAddress, , , ) = IPoolRegistry(POOLREGISTRYADDRESS).fromId(poolId);
+        (address poolAddress, , ) = IPoolRegistry(POOLREGISTRYADDRESS).fromId(poolId);
         if (poolAddress != address(0)) {
             return true;
         } else return false;
@@ -144,7 +120,7 @@ contract Network {
             address groupAddress
         )
     {
-        (poolAddress, , , groupAddress) = IPoolRegistry(POOLREGISTRYADDRESS).fromId(poolId);
+        (poolAddress, , groupAddress) = IPoolRegistry(POOLREGISTRYADDRESS).fromId(poolId);
     }
 
     /// @dev Returns the price a pool from its id
