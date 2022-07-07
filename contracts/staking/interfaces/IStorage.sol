@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.8.0;
+pragma solidity >=0.5.9 <0.9.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/IGrgVault.sol";
@@ -31,6 +31,11 @@ interface IStorage {
         external
         view
         returns (address);
+
+    function poolIdByRbPoolAccount(address)
+        external
+        view
+        returns (bytes32);
 
     function currentEpoch()
         external
