@@ -54,7 +54,7 @@ abstract contract MixinStakingPool is
         override
         returns (bytes32 poolId)
     {
-        ( , , bytes32 rbPoolId) = getDragoRegistry().fromAddress(rigoblockPoolAddress);
+        ( , , bytes32 rbPoolId) = getPoolRegistry().fromAddress(rigoblockPoolAddress);
         require(
             rbPoolId != bytes32(0),
             "NON_REGISTERED_RB_POOL_ERROR"
@@ -144,7 +144,7 @@ abstract contract MixinStakingPool is
         public
         override
     {
-        ( , , bytes32 poolId) = getDragoRegistry().fromAddress(_rigoblockPoolAccount);
+        ( , , bytes32 poolId) = getPoolRegistry().fromAddress(_rigoblockPoolAccount);
 
         // only allow rigoblock pool to create staking pool once
         // TODO: test

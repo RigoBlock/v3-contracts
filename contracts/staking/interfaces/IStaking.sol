@@ -21,11 +21,10 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
-// TODO: check if can rename interface without breaking staking proxy interface
-import  { IPoolRegistry as IDragoRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
-import "../../rigoToken/interfaces/IRigoToken.sol";
+import  { IPoolRegistry as PoolRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
+import { IRigoToken as RigoToken } from "../../rigoToken/interfaces/IRigoToken.sol";
 import "./IStructs.sol";
-import "./IGrgVault.sol";
+import { IGrgVault as GrgVault } from "./IGrgVault.sol";
 
 
 interface IStaking {
@@ -80,7 +79,6 @@ interface IStaking {
 
     /// @dev Allows caller to join a staking pool as a rigoblock pool account.
     /// @param _rigoblockPoolAccount Address of subaccount to be added to staking pool.
-    /// @notice Funcion is public but will only overwrite same data if called with same pool address.
     function joinStakingPoolAsRbPoolAccount(
         address _rigoblockPoolAccount)
         external;
@@ -258,15 +256,15 @@ interface IStaking {
     function getGrgContract()
         external
         view
-        returns (IRigoToken grgContract);
+        returns (RigoToken);
 
-    /// @dev An overridable way to access the deployed dragoRegistry.
+    /// @dev An overridable way to access the deployed rigoblock pool registry.
     ///      Must be view to allow overrides to access state.
-    /// @return dragoRegistry The dragoRegistry contract.
-    function getDragoRegistry()
+    /// @return poolRegistry The pool registry contract.
+    function getPoolRegistry()
         external
         view
-        returns (IDragoRegistry dragoRegistry);
+        returns (PoolRegistry);
 
     /// @dev An overridable way to access the deployed grgVault.
     ///      Must be view to allow overrides to access state.
@@ -274,5 +272,5 @@ interface IStaking {
     function getGrgVault()
         external
         view
-        returns (IGrgVault grgVault);
+        returns (GrgVault);
 }

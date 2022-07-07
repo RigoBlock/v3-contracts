@@ -22,26 +22,29 @@ pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
 import "../../utils/0xUtils/IEtherToken.sol";
-import "../interfaces/IGrgVault.sol";
+import { IGrgVault as GrgVault } from "../interfaces/IGrgVault.sol";
 import "../interfaces/IStaking.sol";
-import  { IPoolRegistry as IDragoRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
-import "../../rigoToken/interfaces/IRigoToken.sol";
+import  { IPoolRegistry as PoolRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
+import { IRigoToken as RigoToken } from "../../rigoToken/interfaces/IRigoToken.sol";
 
 
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
 
+    // TODO: since we return these values, we could send input at initialization instead of having hardcoded addresses.
+    // TODO: we could store instance instead of address for gas savings at tx.
     // Mainnet GrgVault address
     address constant private GRG_VAULT_ADDRESS = address(0xfbd2588b170Ff776eBb1aBbB58C0fbE3ffFe1931);
 
     // Ropsten GrgVault address
     // address constant private GRG_VAULT_ADDRESS = address(0x7fc6a07e4b7b859c80F949A2A7812e00C64b4264);
     
-    // Mainnet DragoRegistry address
-    address constant private DRAGO_REGISTRY_ADDRESS = address(0xdE6445484a8dcD9bf35fC95eb4E3990Cc358822e);
+    // Mainnet PoolRegistry address
+    // TODO: update registry with new deployed contract
+    address constant private POOL_REGISTRY_ADDRESS = address(0xdE6445484a8dcD9bf35fC95eb4E3990Cc358822e);
     
-    // Ropsten DragoRegistry address
-    // address constant private DRAGO_REGISTRY_ADDRESS = address(0x4e868D1dDF940316964eA7673E21bE6CBED8b30B);
+    // Ropsten PoolRegistry address
+    // address constant private POOL_REGISTRY_ADDRESS = address(0x4e868D1dDF940316964eA7673E21bE6CBED8b30B);
     
     // Mainnet GRG Address
     address constant private GRG_ADDRESS = address(0x4FbB350052Bca5417566f188eB2EBCE5b19BC964);
@@ -57,24 +60,22 @@ abstract contract MixinDeploymentConstants is IStaking {
         view
         virtual
         override
-        returns (IGrgVault grgVault)
+        returns (GrgVault)
     {
-        grgVault = IGrgVault(GRG_VAULT_ADDRESS);
-        return grgVault;
+        return GrgVault(GRG_VAULT_ADDRESS);
     }
     
-    /// @dev An overridable way to access the deployed dragoRegistry.
+    /// @dev An overridable way to access the deployed rigoblock pool registry.
     ///      Must be view to allow overrides to access state.
-    /// @return dragoRegistry The dragoRegistry contract.
-    function getDragoRegistry()
+    /// @return poolRegistry The pool registry contract.
+    function getPoolRegistry()
         public
         view
         virtual
         override
-        returns (IDragoRegistry dragoRegistry)
+        returns (PoolRegistry)
     {
-        dragoRegistry = IDragoRegistry(DRAGO_REGISTRY_ADDRESS);
-        return dragoRegistry;
+        return PoolRegistry(POOL_REGISTRY_ADDRESS);
     }
     
     /// @dev An overridable way to access the deployed GRG contract.
@@ -85,9 +86,8 @@ abstract contract MixinDeploymentConstants is IStaking {
         view
         virtual
         override
-        returns (IRigoToken grgContract)
+        returns (RigoToken)
     {
-        grgContract = IRigoToken(GRG_ADDRESS);
-        return grgContract;
+        return RigoToken(GRG_ADDRESS);
     }
 }
