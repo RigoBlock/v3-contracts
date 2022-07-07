@@ -66,17 +66,11 @@ contract RigoblockPoolProxy {
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
-        // TODO: check if useful returning beacon, we could just return implementation and save gas
-        // we can implement beacon return in pool if useful
-        address _beacon = StorageSlot.getAddressSlot(_BEACON_SLOT).value;
-        address _implementation = IBeacon(_beacon).implementation();
+        address _implementation = IBeacon(
+            StorageSlot.getAddressSlot(_BEACON_SLOT).value
+        ).implementation();
         // solhint-disable-next-line no-inline-assembly
         assembly {
-            // 0x2bad8ba0 == keccak("_getBeacon()"). The value is right padded to 32-bytes with 0s
-            if eq(calldataload(0), 0x2bad8ba000000000000000000000000000000000000000000000000000000000) {
-                mstore(0, _beacon)
-                return(0, 0x20)
-            }
             calldatacopy(0, 0, calldatasize())
             let success := delegatecall(gas(), _implementation, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
