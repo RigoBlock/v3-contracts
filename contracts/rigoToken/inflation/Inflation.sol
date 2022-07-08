@@ -19,10 +19,9 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.7.4;
+pragma solidity 0.8.9;
 pragma experimental ABIEncoderV2;
 
-import { SafeMath } from "../../utils/SafeMath/SafeMath.sol";
 import { IInflation } from "../interfaces/IInflation.sol";
 import { IRigoToken } from "../interfaces/IRigoToken.sol";
 import { IStaking } from "../../staking/interfaces/IStaking.sol";
@@ -32,7 +31,6 @@ import { IStaking } from "../../staking/interfaces/IStaking.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract Inflation is
-    SafeMath,
     IInflation
 {
     address public immutable override RIGO_TOKEN_ADDRESS;
@@ -90,7 +88,7 @@ contract Inflation is
 
         // solhint-disable-next-line not-rely-on-time
         epochEndTime = block.timestamp + epochLength;
-        slot = safeAdd(slot, 1);
+        slot = slot + 1;
 
         // mint rewards
         IRigoToken(RIGO_TOKEN_ADDRESS).mintToken(
@@ -140,22 +138,13 @@ contract Inflation is
         override
         returns (uint256)
     {
-        uint256 epochInflation = 
-            safeDiv(
-                safeDiv(
-                    safeMul(
-                        IRigoToken(RIGO_TOKEN_ADDRESS).totalSupply(),
-                        safeMul(
-                            ANNUAL_INFLATION_RATE,
-                            epochLength
-                        )
-                    ),
-                    PPM_DENOMINATOR
-                ),
-                365 days
-            );
-
-        return epochInflation;
+        // 2% of GRG total supply
+        // total supply * annual percentage inflation * time period (1 epoch)
+        return (
+            (
+                IRigoToken(RIGO_TOKEN_ADDRESS).totalSupply() * epochLength
+            ) * ANNUAL_INFLATION_RATE
+        ) / PPM_DENOMINATOR / 365 days;
     }
 
     /*
