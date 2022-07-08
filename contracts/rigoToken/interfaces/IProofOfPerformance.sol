@@ -35,14 +35,6 @@ interface IProofOfPerformance {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Returns the highwatermark of a pool.
-    /// @param poolId Id of the pool.
-    /// @return Value of the all-time-high pool nav.
-    function getHwm(bytes32 poolId)
-        external
-        view
-        returns (uint256);
-
     /// @dev Returns the proof of performance reward for a pool.
     /// @param _poolAddress Address of the pool.
     /// @return Value of the pop reward in Rigo tokens.
