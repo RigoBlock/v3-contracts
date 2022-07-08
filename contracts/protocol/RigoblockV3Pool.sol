@@ -176,6 +176,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         admin.minOrder = 1e15; // 1e15 = 1 finney
         admin.feeCollector = _owner;
         admin.ratio = 80;
+        // TODO: should emit event
     }
 
     /*
