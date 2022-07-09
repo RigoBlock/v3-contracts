@@ -47,7 +47,10 @@ contract ProofOfPerformance is
         external
         override
     {
-        uint256 poolLockedBalances = proofOfPerformance(_poolAddress);
+        uint256 poolLockedBalances = STAKING.getOwnerStakeByStatus(
+            _poolAddress,
+            IStructs.StakeStatus.DELEGATED
+        ).currentEpochBalance;
 
         // if address has locked balances, staking pool exists.
         require(
@@ -55,6 +58,7 @@ contract ProofOfPerformance is
             "POP_STAKING_POOL_BALANCES_NULL_ERROR"
         );
 
+        // TODO: crediting reward in staking requires minimum stake, we might skip previous check
         STAKING.creditPopReward(
             _poolAddress,
             poolLockedBalances
@@ -69,7 +73,7 @@ contract ProofOfPerformance is
     /// @param _poolAddress Address of the pool.
     /// @return Value of the pop reward in Rigo tokens.
     function proofOfPerformance(address _poolAddress)
-        public
+        external
         view
         override
         returns (uint256)
