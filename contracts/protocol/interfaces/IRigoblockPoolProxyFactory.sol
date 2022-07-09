@@ -49,16 +49,7 @@ interface IRigoblockPoolProxyFactory {
     function setRegistry(address _newRegistry)
         external;
 
-    function setBeneficiary(address payable _rigoblockDao)
-        external;
-
-    function setFee(uint256 _fee)
-        external;
-
     function setImplementation(address _newImplementation)
-        external;
-
-    function drain()
         external;
 
     function getRegistry()

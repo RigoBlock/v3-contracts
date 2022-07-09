@@ -128,42 +128,12 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         registry = PoolRegistry(_newRegistry);
     }
 
-    /// @dev Allows owner to set the address which can collect creation fees
-    /// @param _rigoblockDao Address of the new Rigoblock DAO/factory
-    function setBeneficiary(address payable _rigoblockDao)
-        external
-        override
-        onlyOwner
-    {
-        data.rigoblockDao = _rigoblockDao;
-    }
-
-    /// @dev Allows owner to set the pool creation fee
-    /// @param _fee Value of the fee in wei
-    function setFee(uint256 _fee)
-        external
-        override
-        onlyOwner
-    {
-        data.fee = _fee;
-    }
-
     function setImplementation(address _newImplementation)
         external
         override
         onlyRigoblockDao
     {
         _poolImplementation = _newImplementation;
-    }
-
-    /// @dev Allows owner to collect fees
-    // TODO: move beneficiary to rigoblock dao, remove following method.
-    function drain()
-        external
-        override
-        onlyOwner
-    {
-        data.rigoblockDao.transfer(address(this).balance);
     }
 
     /*
