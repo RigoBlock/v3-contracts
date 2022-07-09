@@ -54,7 +54,9 @@ abstract contract MixinStakingPool is
         override
         returns (bytes32 poolId)
     {
-        ( , , bytes32 rbPoolId) = getPoolRegistry().fromAddress(rigoblockPoolAddress);
+        bytes32 rbPoolId = getPoolRegistry().getPoolIdFromAddress(
+            rigoblockPoolAddress
+        );
         require(
             rbPoolId != bytes32(0),
             "NON_REGISTERED_RB_POOL_ERROR"
@@ -90,7 +92,7 @@ abstract contract MixinStakingPool is
         // Staking pool has been created
         emit StakingPoolCreated(poolId, operator, operatorShare);
 
-        joinStakingPoolAsRbPoolAccount(rigoblockPoolAddress);
+        _joinStakingPoolAsRbPoolAccount(poolId, rigoblockPoolAddress);
 
         return poolId;
     }
@@ -134,36 +136,6 @@ abstract contract MixinStakingPool is
             poolId,
             currentOperatorShare,
             newOperatorShare
-        );
-    }
-
-    /// @dev Allows caller to join a staking pool as a rigoblock pool account.
-    /// @param _rigoblockPoolAccount Address of subaccount to be added to staking pool.
-    function joinStakingPoolAsRbPoolAccount(
-        address _rigoblockPoolAccount)
-        public
-        override
-    {
-        ( , , bytes32 poolId) = getPoolRegistry().fromAddress(_rigoblockPoolAccount);
-
-        // only allow rigoblock pool to create staking pool once
-        // TODO: test
-        require(
-            poolIdByRbPoolAccount[_rigoblockPoolAccount] == bytes32(0),
-            "STAKING_POOL_ALREADY_REGISTERED_ERROR"
-        ); 
-
-        // only rigoblock pools registered in drago registry can have accounts added to their staking pool
-        require(
-            poolId != bytes32(0),
-            "NON_REGISTERED_POOL_ID_ERROR"
-        );
-
-        // write to storage
-        poolIdByRbPoolAccount[_rigoblockPoolAccount] = poolId;
-        emit RbPoolStakingPoolSet(
-            _rigoblockPoolAccount,
-            poolId
         );
     }
 
@@ -257,5 +229,20 @@ abstract contract MixinStakingPool is
                 )
             );
         }
+    }
+
+    /// @dev Allows caller to join a staking pool as a rigoblock pool account.
+    /// @param _poold Id of the pool.
+    /// @param _rigoblockPoolAccount Address of pool to be added to staking pool.
+    function _joinStakingPoolAsRbPoolAccount(
+        bytes32 _poold,
+        address _rigoblockPoolAccount)
+        internal
+    {
+        poolIdByRbPoolAccount[_rigoblockPoolAccount] = _poold;
+        emit RbPoolStakingPoolSet(
+            _rigoblockPoolAccount,
+            _poold
+        );
     }
 }

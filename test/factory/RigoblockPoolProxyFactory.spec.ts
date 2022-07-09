@@ -54,7 +54,7 @@ describe("ProxyFactory", async () => {
             await expect(
                 factory.createPool('testpool','TEST')
             ).to.emit(registry, "Registered")
-            const { poolId } = await registry.fromAddress(template)
+            const { poolId } = await registry.getPoolIdFromAddress(template)
             expect(poolId).to.be.not.eq(null)
         })
 
@@ -69,10 +69,11 @@ describe("ProxyFactory", async () => {
 
         it('should create pool with space not first or last character', async () => {
             const { factory } = await setupTests()
+            const template = await factory.callStatic.createPool('t est pool','TEST')
             const txReceipt = await factory.createPool('t est pool', 'TEST')
-            const [ user1 ] = waffle.provider.getWallets()
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
             const result = await txReceipt.wait()
-            expect(result.events[1].args.owner).to.be.eq(user1.address)
+            expect(result.events[1].args.poolAddress).to.be.eq(template)
         })
 
         it('should create pool with uppercase character in name', async () => {

@@ -86,7 +86,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
             _symbol,
             poolId
         ) {
-            emit PoolCreated(msg.sender, bytes32(bytes(_symbol)), bytes32(bytes(_name)), poolId, newPoolAddress);
+            emit PoolCreated(newPoolAddress);
         } catch Error(string memory reason) {
             revert(reason);
         } catch (bytes memory returnData) {
@@ -157,7 +157,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     }
 
     /// @dev Allows owner to collect fees
-    // TODO: move beneficiary to rigoblock dao, remove followin method.
+    // TODO: move beneficiary to rigoblock dao, remove following method.
     function drain()
         external
         override

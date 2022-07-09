@@ -145,12 +145,7 @@ const deploy: DeployFunction = async function (
 
   await deploy("ProofOfPerformance", {
     from: deployer,
-    args: [
-      stakingProxy.address,
-      deployer, // address _rigoblockDao
-      registry.address,
-      authority.address
-    ],
+    args: [stakingProxy.address],
     log: true,
     deterministicDeployment: true,
   });

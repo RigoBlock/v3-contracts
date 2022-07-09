@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.8.0;
+pragma solidity >=0.5.9 <0.9.0;
 pragma experimental ABIEncoderV2;
 
 import  { IPoolRegistry as PoolRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
@@ -33,7 +33,7 @@ interface IStaking {
     /// @param addr Address of proof_of_performance contract to add.
     function addPopAddress(address addr)
         external;
-        
+
     /// @dev Create a new staking pool. The sender will be the staking pal of this pool.
     /// Note that a staking pal must be payable.
     /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
@@ -41,7 +41,7 @@ interface IStaking {
     function createStakingPool(address rigoblockPoolAddress)
         external
         returns (bytes32 poolId);
-    
+
     /// @dev Allows the operator to update the staking pal address.
     /// @param poolId Unique id of pool.
     /// @param newStakingPalAddress Address of the new staking pal.
@@ -77,12 +77,6 @@ interface IStaking {
     function init()
         external;
 
-    /// @dev Allows caller to join a staking pool as a rigoblock pool account.
-    /// @param _rigoblockPoolAccount Address of subaccount to be added to staking pool.
-    function joinStakingPoolAsRbPoolAccount(
-        address _rigoblockPoolAccount)
-        external;
-
     /// @dev Moves stake between statuses: 'undelegated' or 'delegated'.
     ///      Delegated stake can also be moved between pools.
     ///      This change comes into effect next epoch.
@@ -95,7 +89,7 @@ interface IStaking {
         uint256 amount
     )
         external;
-        
+
     /// @dev Credits the value of a pool's pop reward.
     ///      Only a known RigoBlock pop can call this method. See
     ///      (MixinPopManager).

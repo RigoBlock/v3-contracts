@@ -25,10 +25,6 @@ pragma solidity 0.8.14;
 interface IRigoblockPoolProxyFactory {
 
     event PoolCreated(
-        address indexed owner,
-        bytes32 indexed symbol,
-        bytes32 name,
-        bytes32 poolId,
         address poolAddress
     );
 
@@ -46,7 +42,7 @@ interface IRigoblockPoolProxyFactory {
         address _rigoblockDao
     )
         external;
-    
+
     function changeRigoblockDao( address payable _newRigoblockDao)
         external;
 
