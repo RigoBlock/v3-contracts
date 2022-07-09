@@ -31,8 +31,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     address public implementation;
 
-    address private immutable AUTHORITY_ADDRESS;
-
+    address private authorityAddress;
     address private registryAddress;
     address private rigoblockDaoAddress;
 
@@ -50,7 +49,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         address _registry,
         address _rigoblockDao
     ) {
-        AUTHORITY_ADDRESS = _authority;
+        authorityAddress = _authority;
         implementation = _implementation;
         registryAddress = _registry;
         rigoblockDaoAddress = _rigoblockDao;
@@ -84,15 +83,27 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         }
     }
 
-    /// @dev Allows Rigoblock DAO/factory to update its address
-    /// @dev Creates internal record
-    /// @param _newRigoblockDao Address of the Rigoblock DAO
-    function changeRigoblockDao(address _newRigoblockDao)
+    function setAuthority(address _newAuthority)
+        external
+        override
+    {
+        require(
+            _newAuthority != address(0),
+            "FACTORY_NEW_REGISTRY_ADDRESS_NULL_ERROR"
+        );
+        authorityAddress = _newAuthority;
+    }
+
+    function setImplementation(address _newImplementation)
         external
         override
         onlyRigoblockDao
     {
-        rigoblockDaoAddress = _newRigoblockDao;
+        require(
+            _isContract(_newImplementation),
+            "NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR"
+        );
+        implementation = _newImplementation;
     }
 
     /// @dev Allows owner to update the registry
@@ -102,20 +113,41 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         override
         onlyRigoblockDao
     {
+        require(
+            _newRegistry != address(0),
+            "FACTORY_NEW_REGISTRY_ADDRESS_NULL_ERROR"
+        );
         registryAddress = _newRegistry;
     }
 
-    function setImplementation(address _newImplementation)
+    /// @dev Allows Rigoblock DAO/factory to update its address
+    /// @dev Creates internal record
+    /// @param _newRigoblockDao Address of the Rigoblock DAO
+    function setRigoblockDao(address _newRigoblockDao)
         external
         override
         onlyRigoblockDao
     {
-        implementation = _newImplementation;
+        require(
+            _newRigoblockDao != address(0),
+            "FACTORY_NEW_DAO_ADDRESS_NULL_ERROR"
+        );
+        rigoblockDaoAddress = _newRigoblockDao;
     }
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
+     /// @dev Returns the address of the pool registry.
+     /// @return Address of the authority.
+     function getAuthority()
+         external
+         view
+         override
+         returns (address)
+     {
+         return authorityAddress;
+     }
 
     /// @dev Returns the address of the pool registry
     /// @return Address of the registry
@@ -160,7 +192,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
             _name,
             _symbol,
             msg.sender,
-            AUTHORITY_ADDRESS
+            authorityAddress
         );
         salt = keccak256(encodedInitialization);
         bytes memory deploymentData = abi.encodePacked(
@@ -177,5 +209,18 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
             address(proxy) != address(0),
             "FACTORY_LIBRARY_CREATE2_FAILED_ERROR"
         );
+    }
+
+    function _isContract(address _target)
+        private
+        view
+        returns (bool)
+    {
+        // TODO: test uin256 vs uint32
+        uint32 size;
+        assembly {
+            size := extcodesize(_target)
+        }
+        return size > 0;
     }
 }

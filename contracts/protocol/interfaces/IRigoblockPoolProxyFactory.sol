@@ -35,14 +35,24 @@ interface IRigoblockPoolProxyFactory {
         external
         returns (address newPoolAddress);
 
-    function changeRigoblockDao(address _newRigoblockDao)
+    function setAuthority(address _newAuthority)
         external;
 
     function setRegistry(address _newRegistry)
         external;
 
+    function setRigoblockDao(address _newRigoblockDao)
+        external;
+
     function setImplementation(address _newImplementation)
         external;
+
+    /// @dev Returns the address of the pool registry.
+    /// @return Address of the authority.
+    function getAuthority()
+        external
+        view
+        returns (address);
 
     function getRegistry()
         external
