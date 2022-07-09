@@ -213,7 +213,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     /// @dev Creates a pool and routes to eventful
     /// @param _name String of the name
     /// @param _symbol String of the symbol
-    // TODO: test using calldata instead of memory
     function _createPoolInternal(
         string calldata _name,
         string calldata _symbol
