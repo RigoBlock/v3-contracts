@@ -188,11 +188,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         )
     {
         bytes memory encodedInitialization = abi.encodeWithSelector(
-            0x95d317f0, // RigoblockPool._initializePool.selector
+            0x5645974e, // RigoblockPool._initializePool.selector
             _name,
             _symbol,
-            msg.sender,
-            authorityAddress
+            msg.sender
         );
         salt = keccak256(encodedInitialization);
         bytes memory deploymentData = abi.encodePacked(
