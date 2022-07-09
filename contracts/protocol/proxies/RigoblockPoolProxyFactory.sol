@@ -34,12 +34,12 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     address private _poolImplementation;
 
     Data private data;
+    PoolRegistry private registry;
 
     struct Data {
         uint256 fee;
         address payable rigoblockDao;
         address authority;
-        PoolRegistry registry;
     }
 
     modifier onlyRigoblockDao {
@@ -58,7 +58,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         address _owner,
         address _implementation)
     {
-        data.registry = PoolRegistry(_registry);
+        registry = PoolRegistry(_registry);
         data.rigoblockDao = _rigoblockDao;
         data.authority = _authority;
         owner = _owner;
@@ -80,7 +80,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     {
         (bytes32 poolId, RigoblockPoolProxy proxy) = _createPoolInternal(_name, _symbol);
         newPoolAddress = address(proxy);
-        try data.registry.register(
+        try registry.register(
             newPoolAddress,
             _name,
             _symbol,
@@ -125,7 +125,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         override
         onlyOwner
     {
-        data.registry = PoolRegistry(_newRegistry);
+        registry = PoolRegistry(_newRegistry);
     }
 
     /// @dev Allows owner to set the address which can collect creation fees
@@ -177,7 +177,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         override
         returns (address)
     {
-        return (address(data.registry));
+        return (address(registry));
     }
 
     /// @dev Returns administrative data for this factory
