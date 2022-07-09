@@ -21,7 +21,6 @@ pragma solidity 0.8.14;
 
 import { IPoolRegistry as PoolRegistry } from "../interfaces/IPoolRegistry.sol";
 import { IRigoblockV3Pool as RigoblockV3Pool } from "../IRigoblockV3Pool.sol";
-import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
 import { IRigoblockPoolProxyFactory } from "../interfaces/IRigoblockPoolProxyFactory.sol";
 import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 
@@ -31,14 +30,11 @@ import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     address public implementation;
+
+    address private immutable AUTHORITY_ADDRESS;
+
+    address private registryAddress;
     address private rigoblockDaoAddress;
-
-    Data private data;
-    PoolRegistry private registry;
-
-    struct Data {
-        address authority;
-    }
 
     modifier onlyRigoblockDao {
         require(
@@ -48,18 +44,16 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         _;
     }
 
-    /// @dev owner is input as we are using factory deterministic deployment.
     constructor(
-        address payable _registry,
-        address payable _rigoblockDao,
         address _authority,
-        address _owner,
-        address _implementation)
-    {
-        registry = PoolRegistry(_registry);
-        rigoblockDaoAddress = _rigoblockDao;
-        data.authority = _authority;
+        address _implementation,
+        address _registry,
+        address _rigoblockDao
+    ) {
+        AUTHORITY_ADDRESS = _authority;
         implementation = _implementation;
+        registryAddress = _registry;
+        rigoblockDaoAddress = _rigoblockDao;
     }
 
     /*
@@ -77,7 +71,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     {
         (bytes32 poolId, RigoblockPoolProxy proxy) = _createPoolInternal(_name, _symbol);
         newPoolAddress = address(proxy);
-        try registry.register(
+        try PoolRegistry(registryAddress).register(
             newPoolAddress,
             _name,
             _symbol,
@@ -94,7 +88,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /// @dev Allows Rigoblock DAO/factory to update its address
     /// @dev Creates internal record
     /// @param _newRigoblockDao Address of the Rigoblock DAO
-    function changeRigoblockDao(address payable _newRigoblockDao)
+    function changeRigoblockDao(address _newRigoblockDao)
         external
         override
         onlyRigoblockDao
@@ -109,7 +103,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         override
         onlyRigoblockDao
     {
-        registry = PoolRegistry(_newRegistry);
+        registryAddress = _newRegistry;
     }
 
     function setImplementation(address _newImplementation)
@@ -123,6 +117,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
+
     /// @dev Returns the address of the pool registry
     /// @return Address of the registry
     function getRegistry()
@@ -131,7 +126,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         override
         returns (address)
     {
-        return (address(registry));
+        return registryAddress;
     }
 
     /// @dev Returns administrative data for this factory
@@ -166,7 +161,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
             _name,
             _symbol,
             msg.sender,
-            data.authority
+            AUTHORITY_ADDRESS
         );
         salt = keccak256(encodedInitialization);
         bytes memory deploymentData = abi.encodePacked(

@@ -58,11 +58,10 @@ const deploy: DeployFunction = async function (
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
-      registry.address,
-      deployer, // address _dragoDao
       authority.address,
-      deployer,  // address _owner
-      poolImplementation.address
+      poolImplementation.address,
+      registry.address,
+      deployer  // rigoblock Dao
     ],
     log: true,
     deterministicDeployment: true,

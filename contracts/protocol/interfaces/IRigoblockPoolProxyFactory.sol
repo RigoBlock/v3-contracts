@@ -36,7 +36,7 @@ interface IRigoblockPoolProxyFactory {
         payable
         returns (address newPoolAddress);
 
-    function changeRigoblockDao( address payable _newRigoblockDao)
+    function changeRigoblockDao(address _newRigoblockDao)
         external;
 
     function setRegistry(address _newRegistry)
