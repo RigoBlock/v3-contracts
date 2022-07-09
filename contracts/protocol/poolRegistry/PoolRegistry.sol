@@ -30,7 +30,7 @@ import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
 // solhint-disable-next-line
 contract PoolRegistry is IPoolRegistry {
 
-    Authority private immutable authority;
+    address private immutable AUTHORITY_ADDRESS;
 
     mapping (address => bytes32) private mapIdByAddress;
     mapping (bytes32 => bytes32) private mapIdByName;
@@ -62,14 +62,14 @@ contract PoolRegistry is IPoolRegistry {
 
     modifier onlyAuthority {
         require(
-            authority.isAuthority(msg.sender) == true,
+            Authority(AUTHORITY_ADDRESS).isAuthority(msg.sender) == true,
             "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
         );
         _;
     }
 
     constructor(address _authority) {
-        authority = Authority(_authority);
+        AUTHORITY_ADDRESS = _authority;
     }
 
     /*
