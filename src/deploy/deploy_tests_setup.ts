@@ -58,7 +58,6 @@ const deploy: DeployFunction = async function (
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
-      authority.address,
       poolImplementation.address,
       registry.address,
       deployer  // rigoblock Dao

@@ -35,9 +35,6 @@ interface IRigoblockPoolProxyFactory {
         external
         returns (address newPoolAddress);
 
-    function setAuthority(address _newAuthority)
-        external;
-
     function setRegistry(address _newRegistry)
         external;
 
@@ -46,13 +43,6 @@ interface IRigoblockPoolProxyFactory {
 
     function setImplementation(address _newImplementation)
         external;
-
-    /// @dev Returns the address of the pool registry.
-    /// @return Address of the authority.
-    function getAuthority()
-        external
-        view
-        returns (address);
 
     function getRegistry()
         external

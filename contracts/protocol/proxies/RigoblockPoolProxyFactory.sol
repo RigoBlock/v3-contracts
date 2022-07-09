@@ -31,7 +31,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     address public implementation;
 
-    address private authorityAddress;
     address private registryAddress;
     address private rigoblockDaoAddress;
 
@@ -44,12 +43,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     }
 
     constructor(
-        address _authority,
         address _implementation,
         address _registry,
         address _rigoblockDao
     ) {
-        authorityAddress = _authority;
         implementation = _implementation;
         registryAddress = _registry;
         rigoblockDaoAddress = _rigoblockDao;
@@ -81,17 +78,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         } catch (bytes memory returnData) {
             revert(string(returnData));
         }
-    }
-
-    function setAuthority(address _newAuthority)
-        external
-        override
-    {
-        require(
-            _newAuthority != address(0),
-            "FACTORY_NEW_REGISTRY_ADDRESS_NULL_ERROR"
-        );
-        authorityAddress = _newAuthority;
     }
 
     function setImplementation(address _newImplementation)
@@ -138,17 +124,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-     /// @dev Returns the address of the pool registry.
-     /// @return Address of the authority.
-     function getAuthority()
-         external
-         view
-         override
-         returns (address)
-     {
-         return authorityAddress;
-     }
-
     /// @dev Returns the address of the pool registry
     /// @return Address of the registry
     function getRegistry()
