@@ -49,8 +49,7 @@ interface IPoolRegistry {
         string calldata _symbol,
         bytes32 poolId
     )
-        external
-        payable;
+        external;
 
     function setMeta(
         address _poolAddress,

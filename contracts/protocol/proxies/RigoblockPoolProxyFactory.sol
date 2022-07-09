@@ -65,7 +65,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /// @return newPoolAddress Address of the new pool
     function createPool(string calldata _name, string calldata _symbol)
         external
-        payable
         override
         returns (address newPoolAddress)
     {

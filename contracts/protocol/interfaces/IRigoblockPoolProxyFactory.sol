@@ -33,7 +33,6 @@ interface IRigoblockPoolProxyFactory {
         string calldata _symbol
     )
         external
-        payable
         returns (address newPoolAddress);
 
     function changeRigoblockDao(address _newRigoblockDao)

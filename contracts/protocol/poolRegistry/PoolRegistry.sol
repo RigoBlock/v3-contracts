@@ -86,7 +86,6 @@ contract PoolRegistry is IPoolRegistry {
         bytes32 poolId
     )
         external
-        payable
         override
         onlyAuthority
         whenAddressFree(_poolAddress)
