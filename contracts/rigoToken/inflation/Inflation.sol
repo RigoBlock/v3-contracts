@@ -141,10 +141,9 @@ contract Inflation is
         // 2% of GRG total supply
         // total supply * annual percentage inflation * time period (1 epoch)
         return (
-            (
-                IRigoToken(RIGO_TOKEN_ADDRESS).totalSupply() * epochLength
-            ) * ANNUAL_INFLATION_RATE
-        ) / PPM_DENOMINATOR / 365 days;
+            ANNUAL_INFLATION_RATE * epochLength * getGRGTotalSupply()
+            / PPM_DENOMINATOR / 365 days
+        );
     }
 
     /*
@@ -158,5 +157,13 @@ contract Inflation is
         if (msg.sender != STAKING_PROXY_ADDRESS) {
             revert("CALLER_NOT_STAKING_PROXY_ERROR");
         }
+    }
+
+    function getGRGTotalSupply()
+        internal
+        view
+        returns (uint256)
+    {
+        return IRigoToken(RIGO_TOKEN_ADDRESS).totalSupply();
     }
 }
