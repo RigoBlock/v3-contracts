@@ -39,8 +39,7 @@ const deploy: DeployFunction = async function (
   const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
-      authority.address,
-      deployer
+      authority.address
     ],
     log: true,
     deterministicDeployment: true,

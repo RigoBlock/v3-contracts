@@ -28,9 +28,7 @@ import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
 /// @title Pool Registry - Allows registration of pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract PoolRegistry is IPoolRegistry, Owned {
-
-    using LibSanitize for string;
+contract PoolRegistry is IPoolRegistry {
 
     Authority private immutable authority;
 
@@ -70,13 +68,8 @@ contract PoolRegistry is IPoolRegistry, Owned {
         _;
     }
 
-    constructor(
-        address _authority,
-        address _owner
-    )
-    {
+    constructor(address _authority) {
         authority = Authority(_authority);
-        owner = _owner;
     }
 
     /*
