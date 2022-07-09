@@ -57,13 +57,10 @@ interface IRigoblockPoolProxyFactory {
         view
         returns (address);
 
-    function getStorage()
+    function getRigoblockDaoAddress()
         external
         view
-        returns (
-            address rigoblockDao,
-            string memory version
-        );
+        returns (address);
 
     function implementation()
         external

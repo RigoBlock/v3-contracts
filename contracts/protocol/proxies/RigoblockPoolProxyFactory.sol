@@ -30,21 +30,19 @@ import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 // solhint-disable-next-line
 contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
 
-    string public constant VERSION = "DF 3.0.0";
-    address private _poolImplementation;
+    address public implementation;
+    address private rigoblockDaoAddress;
 
     Data private data;
     PoolRegistry private registry;
 
     struct Data {
-        uint256 fee;
-        address payable rigoblockDao;
         address authority;
     }
 
     modifier onlyRigoblockDao {
         require(
-            msg.sender == data.rigoblockDao,
+            msg.sender == rigoblockDaoAddress,
             "FACTORY_SENDER_NOT_DAO_ERROR"
         );
         _;
@@ -59,10 +57,10 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         address _implementation)
     {
         registry = PoolRegistry(_registry);
-        data.rigoblockDao = _rigoblockDao;
+        rigoblockDaoAddress = _rigoblockDao;
         data.authority = _authority;
         owner = _owner;
-        _poolImplementation = _implementation;
+        implementation = _implementation;
     }
 
     /*
@@ -115,7 +113,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         override
         onlyRigoblockDao
     {
-        data.rigoblockDao = _newRigoblockDao;
+        rigoblockDaoAddress = _newRigoblockDao;
     }
 
     /// @dev Allows owner to update the registry
@@ -133,7 +131,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         override
         onlyRigoblockDao
     {
-        _poolImplementation = _newImplementation;
+        implementation = _newImplementation;
     }
 
     /*
@@ -151,30 +149,14 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     }
 
     /// @dev Returns administrative data for this factory
-    /// @return rigoblockDao Address of the Rigoblock DAO
-    /// @return version String of the version
-    function getStorage()
-        external
-        view
-        override
-        returns (
-            address rigoblockDao,
-            string memory version
-        )
-    {
-        return (
-            rigoblockDao = data.rigoblockDao,
-            version = VERSION
-        );
-    }
-
-    function implementation()
+    /// @return Address of the Rigoblock DAO
+    function getRigoblockDaoAddress()
         external
         view
         override
         returns (address)
     {
-        return _poolImplementation;
+        return rigoblockDaoAddress;
     }
 
     /*
