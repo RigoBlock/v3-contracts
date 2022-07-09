@@ -35,7 +35,9 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
-    // TODO: moved owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts
+    // TODO: moved owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
+    // TODO: move name symbol and total supply to public variables
+    //  or implement functions name() symbol() (totalSupply already implemented).
 
     using LibFindMethod for *;
 
