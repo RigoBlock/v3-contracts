@@ -32,8 +32,6 @@ contract PoolRegistry is IPoolRegistry, Owned {
 
     using LibSanitize for string;
 
-    // TODO: if id changes, staking system will not be able to query. We should use creation salt as poolid
-    //   which is same regardless of registration ordering. Before deploying, must make sure we can query pool rewards.
     // TODO: check if public AUTHORITY is useful information or can be made private
     address public immutable AUTHORITY;
     // TODO: we can probably eliminate following as unused
@@ -41,15 +39,14 @@ contract PoolRegistry is IPoolRegistry, Owned {
 
     address[] private groups;
 
-    mapping (address => bytes32) private mapFromAddress;
     mapping (bytes32 => bytes32) private mapFromName;
-    mapping (bytes32 => Pool) private poolById;
-    mapping (bytes32 => PoolMeta) private poolMetaById;
+    mapping (address => Pool) private poolByAddress;
+    mapping (address => PoolMeta) private poolMetaByAddress;
 
     struct Pool {
-        address poolAddress;
         address group;
         bytes32 name;
+        bytes32 poolId;
     }
 
     struct PoolMeta {
@@ -59,18 +56,20 @@ contract PoolRegistry is IPoolRegistry, Owned {
     /*
      * MODIFIERS
      */
+    // TODO: since we check for free name and address is uniquely created from name, this check might be skipped.
+    //  Name is stored twice (in pool and here). We could store here as not publicly visible in pool and save 20k gas.
+    //  Will have to query pool name and symbol from here, must check this is useful.
     modifier whenAddressFree(address _poolAddress) {
         require(
-            mapFromAddress[_poolAddress] == 0,
+            poolByAddress[_poolAddress].poolId == bytes32(0),
             "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR"
         );
         _;
     }
 
-    modifier onlyPoolOwner(uint256 _id) {
-        (address poolAddress, , ) = fromId(_id);
+    modifier onlyPoolOwner(address _poolAddress) {
         require(
-            Owned(poolAddress).owner() == msg.sender,
+            Owned(_poolAddress).owner() == msg.sender,
             "REGISTRY_CALLER_IS_NOT_POOL_OWNER_ERROR"
         );
         _;
@@ -140,17 +139,17 @@ contract PoolRegistry is IPoolRegistry, Owned {
         emit Registered(msg.sender, bytes32(bytes(_symbol)), name, id, _poolAddress);
     }
 
-    /// @dev Allows pool owner to set metadata for a pool
-    /// @param _id Number corresponding to pool id
-    /// @param _key Bytes32 of the key
-    /// @param _value Bytes32 of the value
-    function setMeta(uint256 _id, bytes32 _key, bytes32 _value)
+    /// @dev Allows pool owner to set metadata for a pool.
+    /// @param _poolAddress Address of the pool.
+    /// @param _key Bytes32 of the key.
+    /// @param _value Bytes32 of the value.
+    function setMeta(address _poolAddress, bytes32 _key, bytes32 _value)
         external
         override
-        onlyPoolOwner(_id)
+        onlyPoolOwner(_poolAddress)
     {
-        poolMetaById[bytes32(_id)].meta[_key] = _value;
-        emit MetaChanged(bytes32(_id), _key, _value);
+        poolMetaByAddress[_poolAddress].meta[_key] = _value;
+        emit MetaChanged(_poolAddress, _key, _value);
     }
 
     /// @dev Allows owner to add a group of pools (a factory)
@@ -167,48 +166,23 @@ contract PoolRegistry is IPoolRegistry, Owned {
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @dev Provides a pool's struct data
-    /// @param _id Registration number of the pool
-    /// @return poolAddress Pool struct data
-    /// @return name Pool struct data
-    /// @return group Pool struct data
-    function fromId(uint256 _id)
-        public
-        view
-        override
-        returns (
-            address poolAddress,
-            string memory name,
-            address group
-        )
-    {
-        return (
-            poolAddress = poolById[bytes32(_id)].poolAddress,
-            name = string(abi.encodePacked(poolById[bytes32(_id)].name)),
-            group = poolById[bytes32(_id)].group
-        );
-    }
-
-    /// @dev Provides a pool's struct data
     /// @param _poolAddress Address of the pool
-    /// @return id Pool struct data
-    /// @return name Pool struct data
     /// @return group Pool struct data
+    /// @return name Pool struct data
+    /// @return poolId Pool struct data
     function fromAddress(address _poolAddress)
         external
         view
         override
         returns (
-            uint256 id,
+            address group,
             string memory name,
-            address group
+            bytes32 poolId
         )
     {
-        id = uint256(mapFromAddress[_poolAddress]);
-        return (
-            id,
-            name = string(abi.encodePacked(poolById[bytes32(id)].name)),
-            group = poolById[bytes32(id)].group
-        );
+        group = poolByAddress[_poolAddress].group;
+        name = string(abi.encodePacked(poolByAddress[_poolAddress].name));
+        poolId = poolByAddress[_poolAddress].poolId;
     }
 
     /// @dev Provides a pool's name from its address
@@ -220,25 +194,24 @@ contract PoolRegistry is IPoolRegistry, Owned {
         override
         returns (string memory)
     {
-        uint256 id = uint256(mapFromAddress[_poolAddress]);
-        return string(abi.encodePacked(poolById[bytes32(id)].name));
+        return string(abi.encodePacked(poolByAddress[_poolAddress].name));
     }
 
-    /// @dev Provides a pool's metadata
-    /// @param _id Id number of the pool
-    /// @param _key Bytes32 key
-    /// @return Pool metadata
-    function getMeta(uint256 _id, bytes32 _key)
+    /// @dev Provides a pool's metadata.
+    /// @param _poolAddress Address of the pool.
+    /// @param _key Bytes32 key.
+    /// @return poolMeta Meta by key.
+    function getMeta(address _poolAddress, bytes32 _key)
         external
         view
         override
-        returns (bytes32)
+        returns (bytes32 poolMeta)
     {
-        return poolMetaById[bytes32(_id)].meta[_key];
+        return poolMetaByAddress[_poolAddress].meta[_key];
     }
 
-    /// @dev Provides the addresses of the groups/factories
-    /// @return Array of addresses of the groups
+    /// @dev Provides the addresses of the groups/factories.
+    /// @return Array of addresses of the groups.
     function getGroups()
         external
         view
@@ -261,23 +234,24 @@ contract PoolRegistry is IPoolRegistry, Owned {
         );
     }
 
-    /// @dev Allows authority to register a pool for a certain group
-    /// @param _poolAddress Address of the pool
-    /// @param _name Name of the pool
-    /// @param _group Address of the group/factory
+    /// @dev Allows authority to register a pool for a certain group.
+    /// @param _poolAddress Address of the pool.
+    /// @param _name Name of the pool.
+    /// @param _poolId Id the pool.
+    /// @param _group Address of the group/factory.
     function registerAs(
         address _poolAddress,
         bytes32 _name,
         bytes32 _poolId,
-        address _group)
+        address _group
+    )
         internal
     {
-        poolById[_poolId] = Pool({
-            poolAddress: _poolAddress,
+        poolByAddress[_poolAddress] = Pool({
+            poolId: _poolId,
             group: _group,
             name: _name
         });
-        mapFromAddress[_poolAddress] = _poolId;
         mapFromName[_name] = _poolId;
     }
 }

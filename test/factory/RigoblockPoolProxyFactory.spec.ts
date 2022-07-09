@@ -50,20 +50,18 @@ describe("ProxyFactory", async () => {
 
         it('should create address when creating pool', async () => {
             const { factory, registry } = await setupTests()
+            const template = await factory.callStatic.createPool('testpool','TEST')
             await expect(
                 factory.createPool('testpool','TEST')
             ).to.emit(registry, "Registered")
-            const { poolAddress, symbol } = await registry.fromId(1)
-            // dummy test
-            const poolData = await registry.fromAddress(poolAddress)
-            expect(poolData.symbol).to.be.eq(symbol)
+            const { poolId } = await registry.fromAddress(template)
+            expect(poolId).to.be.not.eq(null)
         })
 
         it('should return pool owner', async () => {
           const { factory, registry } = await setupTests()
           const template = await factory.callStatic.createPool('testpool','TEST')
           await factory.createPool('testpool', 'TEST')
-          const { poolAddress } = await registry.fromId(1)
           const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
           const [ user1 ] = waffle.provider.getWallets()
           expect(await pool.owner()).to.be.eq(user1.address)
