@@ -28,7 +28,7 @@ import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 /// @title Rigoblock Pool Proxy Factory contract - allows creation of new Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
+contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     address public implementation;
     address private rigoblockDaoAddress;
@@ -59,7 +59,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         registry = PoolRegistry(_registry);
         rigoblockDaoAddress = _rigoblockDao;
         data.authority = _authority;
-        owner = _owner;
         implementation = _implementation;
     }
 
@@ -92,19 +91,6 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
         }
     }
 
-    // TODO: this method should be moved to the implementation/beacon, or pool should query dao from factory, not in storage
-    /// @dev Allows factory owner to update the address of the dao/factory
-    /// @dev Enables manual update of dao for single pools
-    /// @param _targetPool Address of the target pool
-    /// @param _rigoblockDao Address of the new rigoblock dao
-    function setTargetRigoblockDao(address payable _targetPool, address _rigoblockDao)
-        external
-        override
-        onlyOwner
-    {
-        RigoblockV3Pool(_targetPool).changeDragoDao(_rigoblockDao);
-    }
-
     /// @dev Allows Rigoblock DAO/factory to update its address
     /// @dev Creates internal record
     /// @param _newRigoblockDao Address of the Rigoblock DAO
@@ -121,7 +107,7 @@ contract RigoblockPoolProxyFactory is Owned, IRigoblockPoolProxyFactory {
     function setRegistry(address _newRegistry)
         external
         override
-        onlyOwner
+        onlyRigoblockDao
     {
         registry = PoolRegistry(_newRegistry);
     }

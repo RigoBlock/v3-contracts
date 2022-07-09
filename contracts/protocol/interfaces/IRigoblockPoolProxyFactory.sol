@@ -36,13 +36,6 @@ interface IRigoblockPoolProxyFactory {
         payable
         returns (address newPoolAddress);
 
-    // TODO: eliminate this method and pay fees to rigoblock dao. Pool queries from its factory
-    function setTargetRigoblockDao(
-        address payable _targetPool,
-        address _rigoblockDao
-    )
-        external;
-
     function changeRigoblockDao( address payable _newRigoblockDao)
         external;
 
