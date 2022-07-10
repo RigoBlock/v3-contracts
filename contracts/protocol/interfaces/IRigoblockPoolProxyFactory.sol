@@ -38,18 +38,10 @@ interface IRigoblockPoolProxyFactory {
     function setRegistry(address _newRegistry)
         external;
 
-    function setRigoblockDao(address _newRigoblockDao)
-        external;
-
     function setImplementation(address _newImplementation)
         external;
 
     function getRegistry()
-        external
-        view
-        returns (address);
-
-    function getRigoblockDaoAddress()
         external
         view
         returns (address);

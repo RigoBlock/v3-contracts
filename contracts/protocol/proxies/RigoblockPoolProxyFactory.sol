@@ -32,11 +32,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     address public implementation;
 
     address private registryAddress;
-    address private rigoblockDaoAddress;
 
     modifier onlyRigoblockDao {
         require(
-            msg.sender == rigoblockDaoAddress,
+            PoolRegistry(registryAddress).rigoblockDaoAddress() == msg.sender,
             "FACTORY_SENDER_NOT_DAO_ERROR"
         );
         _;
@@ -44,12 +43,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     constructor(
         address _implementation,
-        address _registry,
-        address _rigoblockDao
+        address _registry
     ) {
         implementation = _implementation;
         registryAddress = _registry;
-        rigoblockDaoAddress = _rigoblockDao;
     }
 
     /*
@@ -106,21 +103,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         registryAddress = _newRegistry;
     }
 
-    /// @dev Allows Rigoblock DAO/factory to update its address
-    /// @dev Creates internal record
-    /// @param _newRigoblockDao Address of the Rigoblock DAO
-    function setRigoblockDao(address _newRigoblockDao)
-        external
-        override
-        onlyRigoblockDao
-    {
-        require(
-            _newRigoblockDao != address(0),
-            "FACTORY_NEW_DAO_ADDRESS_NULL_ERROR"
-        );
-        rigoblockDaoAddress = _newRigoblockDao;
-    }
-
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
@@ -133,17 +115,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         returns (address)
     {
         return registryAddress;
-    }
-
-    /// @dev Returns administrative data for this factory
-    /// @return Address of the Rigoblock DAO
-    function getRigoblockDaoAddress()
-        external
-        view
-        override
-        returns (address)
-    {
-        return rigoblockDaoAddress;
     }
 
     /*

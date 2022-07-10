@@ -41,6 +41,14 @@ interface IPoolRegistry {
     );
 
     /*
+     * STORAGE
+    */
+    function rigoblockDaoAddress()
+        external
+        view
+        returns (address);
+
+    /*
      * CORE FUNCTIONS
      */
     function register(
@@ -57,6 +65,11 @@ interface IPoolRegistry {
         bytes32 _value
     )
         external;
+
+    /// @dev Allows Rigoblock DAO/factory to update its address
+    /// @dev Creates internal record
+    /// @param _newRigoblockDao Address of the Rigoblock DAO
+    function setRigoblockDao(address _newRigoblockDao) external;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS

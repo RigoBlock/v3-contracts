@@ -30,6 +30,8 @@ import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
 // solhint-disable-next-line
 contract PoolRegistry is IPoolRegistry {
 
+    address public rigoblockDaoAddress;
+
     address private immutable AUTHORITY_ADDRESS;
 
     mapping (address => bytes32) private mapIdByAddress;
@@ -44,10 +46,10 @@ contract PoolRegistry is IPoolRegistry {
     /*
      * MODIFIERS
      */
-    modifier whenAddressFree(address _poolAddress) {
+    modifier onlyAuthority {
         require(
-            mapIdByAddress[_poolAddress] == bytes32(0),
-            "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR"
+            Authority(AUTHORITY_ADDRESS).isAuthority(msg.sender) == true,
+            "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
         );
         _;
     }
@@ -60,16 +62,28 @@ contract PoolRegistry is IPoolRegistry {
         _;
     }
 
-    modifier onlyAuthority {
+    modifier onlyRigoblockDao {
         require(
-            Authority(AUTHORITY_ADDRESS).isAuthority(msg.sender) == true,
-            "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
+            msg.sender == rigoblockDaoAddress,
+            "FACTORY_SENDER_NOT_DAO_ERROR"
         );
         _;
     }
 
-    constructor(address _authority) {
+    modifier whenAddressFree(address _poolAddress) {
+        require(
+            mapIdByAddress[_poolAddress] == bytes32(0),
+            "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR"
+        );
+        _;
+    }
+
+    constructor(
+        address _authority,
+        address _rigoblockDao
+    ) {
         AUTHORITY_ADDRESS = _authority;
+        rigoblockDaoAddress = _rigoblockDao;
     }
 
     /*
@@ -117,6 +131,21 @@ contract PoolRegistry is IPoolRegistry {
     {
         poolMetaByAddress[_poolAddress].meta[_key] = _value;
         emit MetaChanged(_poolAddress, _key, _value);
+    }
+
+    /// @dev Allows Rigoblock DAO/factory to update its address
+    /// @dev Creates internal record
+    /// @param _newRigoblockDao Address of the Rigoblock DAO
+    function setRigoblockDao(address _newRigoblockDao)
+        external
+        override
+        onlyRigoblockDao
+    {
+        require(
+            _newRigoblockDao != address(0),
+            "FACTORY_NEW_DAO_ADDRESS_NULL_ERROR"
+        );
+        rigoblockDaoAddress = _newRigoblockDao;
     }
 
     /*

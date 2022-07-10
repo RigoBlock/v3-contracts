@@ -18,7 +18,8 @@ const deploy: DeployFunction = async function (
   const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
-      authority.address
+      authority.address,
+      deployer  // Rigoblock Dao
     ],
     log: true,
     deterministicDeployment: true,
@@ -35,8 +36,7 @@ const deploy: DeployFunction = async function (
     from: deployer,
     args: [
       poolImplementation.address,
-      registry.address,
-      deployer  // Rigoblock Dao
+      registry.address
     ],
     log: true,
     deterministicDeployment: true,
