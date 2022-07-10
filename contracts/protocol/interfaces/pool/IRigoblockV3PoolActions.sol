@@ -31,17 +31,17 @@ interface IRigoblockV3PoolActions {
         external
         payable;
 
-    function buyDrago()
+    function mint()
         external
         payable
-        returns (bool success);
+        returns (uint256 outputTokens);
 
-    function buyDragoOnBehalf(address _hodler)
+    function mintOnBehalf(address _hodler)
         external
         payable
-        returns (bool success);
+        returns (uint256 outputTokens);
 
-    function sellDrago(uint256 _amount)
+    function burn(uint256 _amount)
         external
-        returns (bool success);
+        returns (uint256);  // netRevenue
 }

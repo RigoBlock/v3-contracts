@@ -3,9 +3,9 @@ pragma solidity >=0.8.0;
 
 interface IRigoblockV3PoolState {
 
-    /// @dev Finds details of a drago pool.
-    /// @return poolName String name of a drago.
-    /// @return poolSymbol String symbol of a drago.
+    /// @dev Finds details of this pool.
+    /// @return poolName String name of this pool.
+    /// @return poolSymbol String symbol of this pool.
     /// @return Value of the share price in wei.
     /// @return Value of the share price in wei.
     function getData()
