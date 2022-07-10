@@ -52,7 +52,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     address internal immutable _implementation = address(this);
 
-    address internal rigoblockDao = address(0); // mock address for Rigoblock Dao.
+    address internal rigoblockDao = msg.sender; // mock address for Rigoblock Dao.
     // TODO: check if we can group multiple uint for smaller implementation bytecode
     uint256 internal ratio = 80;
 
@@ -180,7 +180,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         data.name = _poolName;
         data.symbol = _poolSymbol;
         owner = _owner;
-        // TODO: should emit event
+        // TODO: should emit event. Check as we are already emitting event in registry
+        //    where we can filter more efficiently by event and contract
     }
 
     /*

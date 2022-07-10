@@ -32,24 +32,21 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     address public implementation;
 
     address private registryAddress;
-    address private rigoblockDaoAddress;
 
     modifier onlyRigoblockDao {
         require(
-            msg.sender == rigoblockDaoAddress,
-            "FACTORY_SENDER_NOT_DAO_ERROR"
+            PoolRegistry(registryAddress).rigoblockDaoAddress() == msg.sender,
+            "FACTORY_CALLER_NOT_DAO_ERROR"
         );
         _;
     }
 
     constructor(
         address _implementation,
-        address _registry,
-        address _rigoblockDao
+        address _registry
     ) {
         implementation = _implementation;
         registryAddress = _registry;
-        rigoblockDaoAddress = _rigoblockDao;
     }
 
     /*
@@ -87,7 +84,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     {
         require(
             _isContract(_newImplementation),
-            "NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR"
+            "FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR"
         );
         implementation = _newImplementation;
     }
@@ -100,25 +97,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         onlyRigoblockDao
     {
         require(
-            _newRegistry != address(0),
-            "FACTORY_NEW_REGISTRY_ADDRESS_NULL_ERROR"
+            _isContract(_newRegistry),
+            "FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR"
         );
         registryAddress = _newRegistry;
-    }
-
-    /// @dev Allows Rigoblock DAO/factory to update its address
-    /// @dev Creates internal record
-    /// @param _newRigoblockDao Address of the Rigoblock DAO
-    function setRigoblockDao(address _newRigoblockDao)
-        external
-        override
-        onlyRigoblockDao
-    {
-        require(
-            _newRigoblockDao != address(0),
-            "FACTORY_NEW_DAO_ADDRESS_NULL_ERROR"
-        );
-        rigoblockDaoAddress = _newRigoblockDao;
     }
 
     /*
@@ -133,17 +115,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         returns (address)
     {
         return registryAddress;
-    }
-
-    /// @dev Returns administrative data for this factory
-    /// @return Address of the Rigoblock DAO
-    function getRigoblockDaoAddress()
-        external
-        view
-        override
-        returns (address)
-    {
-        return rigoblockDaoAddress;
     }
 
     /*

@@ -30,7 +30,9 @@ import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
 // solhint-disable-next-line
 contract PoolRegistry is IPoolRegistry {
 
-    address private immutable AUTHORITY_ADDRESS;
+    address public rigoblockDaoAddress;
+
+    address private authority;
 
     mapping (address => bytes32) private mapIdByAddress;
     mapping (bytes32 => bytes32) private mapIdByName;
@@ -44,10 +46,10 @@ contract PoolRegistry is IPoolRegistry {
     /*
      * MODIFIERS
      */
-    modifier whenAddressFree(address _poolAddress) {
+    modifier onlyAuthority {
         require(
-            mapIdByAddress[_poolAddress] == bytes32(0),
-            "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR"
+            Authority(authority).isAuthority(msg.sender) == true,
+            "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
         );
         _;
     }
@@ -60,16 +62,28 @@ contract PoolRegistry is IPoolRegistry {
         _;
     }
 
-    modifier onlyAuthority {
+    modifier onlyRigoblockDao {
         require(
-            Authority(AUTHORITY_ADDRESS).isAuthority(msg.sender) == true,
-            "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
+            msg.sender == rigoblockDaoAddress,
+            "FACTORY_CALLER_NOT_DAO_ERROR"
         );
         _;
     }
 
-    constructor(address _authority) {
-        AUTHORITY_ADDRESS = _authority;
+    modifier whenAddressFree(address _poolAddress) {
+        require(
+            mapIdByAddress[_poolAddress] == bytes32(0),
+            "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR"
+        );
+        _;
+    }
+
+    constructor(
+        address _authority,
+        address _rigoblockDao
+    ) {
+        authority = _authority;
+        rigoblockDaoAddress = _rigoblockDao;
     }
 
     /*
@@ -117,6 +131,35 @@ contract PoolRegistry is IPoolRegistry {
     {
         poolMetaByAddress[_poolAddress].meta[_key] = _value;
         emit MetaChanged(_poolAddress, _key, _value);
+    }
+
+    /// @dev Allows Rigoblock governance to update authority.
+    /// @param _authority Address of the authority contract.
+    function setAuthority (address _authority)
+        external
+        override
+        onlyRigoblockDao
+    {
+        require(
+            _isContract(_authority),
+            "FACTORY_NEW_AUTHORITY_NOT_CONTRACT_ERROR"
+        );
+        authority = _authority;
+    }
+
+    /// @dev Allows Rigoblock DAO/factory to update its address
+    /// @dev Creates internal record
+    /// @param _newRigoblockDao Address of the Rigoblock DAO
+    function setRigoblockDao(address _newRigoblockDao)
+        external
+        override
+        onlyRigoblockDao
+    {
+        require(
+            _isContract(_newRigoblockDao),
+            "FACTORY_NEW_DAO_NOT_CONTRACT_ERROR"
+        );
+        rigoblockDaoAddress = _newRigoblockDao;
     }
 
     /*
@@ -183,5 +226,18 @@ contract PoolRegistry is IPoolRegistry {
         LibSanitize.assertIsValidCheck(_name);
         LibSanitize.assertIsValidCheck(_symbol);
         LibSanitize.assertIsUppercase(_symbol);
+    }
+
+    function _isContract(address _target)
+        private
+        view
+        returns (bool)
+    {
+        // TODO: test uin256 vs uint32
+        uint32 size;
+        assembly {
+            size := extcodesize(_target)
+        }
+        return size > 0;
     }
 }
