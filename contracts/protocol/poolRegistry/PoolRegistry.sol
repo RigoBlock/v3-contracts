@@ -32,7 +32,7 @@ contract PoolRegistry is IPoolRegistry {
 
     address public rigoblockDaoAddress;
 
-    address private immutable AUTHORITY_ADDRESS;
+    address private authority;
 
     mapping (address => bytes32) private mapIdByAddress;
     mapping (bytes32 => bytes32) private mapIdByName;
@@ -48,7 +48,7 @@ contract PoolRegistry is IPoolRegistry {
      */
     modifier onlyAuthority {
         require(
-            Authority(AUTHORITY_ADDRESS).isAuthority(msg.sender) == true,
+            Authority(authority).isAuthority(msg.sender) == true,
             "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
         );
         _;
@@ -65,7 +65,7 @@ contract PoolRegistry is IPoolRegistry {
     modifier onlyRigoblockDao {
         require(
             msg.sender == rigoblockDaoAddress,
-            "FACTORY_SENDER_NOT_DAO_ERROR"
+            "FACTORY_CALLER_NOT_DAO_ERROR"
         );
         _;
     }
@@ -82,7 +82,7 @@ contract PoolRegistry is IPoolRegistry {
         address _authority,
         address _rigoblockDao
     ) {
-        AUTHORITY_ADDRESS = _authority;
+        authority = _authority;
         rigoblockDaoAddress = _rigoblockDao;
     }
 
@@ -133,6 +133,20 @@ contract PoolRegistry is IPoolRegistry {
         emit MetaChanged(_poolAddress, _key, _value);
     }
 
+    /// @dev Allows Rigoblock governance to update authority.
+    /// @param _authority Address of the authority contract.
+    function setAuthority (address _authority)
+        external
+        override
+        onlyRigoblockDao
+    {
+        require(
+            _isContract(_authority),
+            "FACTORY_NEW_AUTHORITY_NOT_CONTRACT_ERROR"
+        );
+        authority = _authority;
+    }
+
     /// @dev Allows Rigoblock DAO/factory to update its address
     /// @dev Creates internal record
     /// @param _newRigoblockDao Address of the Rigoblock DAO
@@ -142,8 +156,8 @@ contract PoolRegistry is IPoolRegistry {
         onlyRigoblockDao
     {
         require(
-            _newRigoblockDao != address(0),
-            "FACTORY_NEW_DAO_ADDRESS_NULL_ERROR"
+            _isContract(_newRigoblockDao),
+            "FACTORY_NEW_DAO_NOT_CONTRACT_ERROR"
         );
         rigoblockDaoAddress = _newRigoblockDao;
     }
@@ -212,5 +226,18 @@ contract PoolRegistry is IPoolRegistry {
         LibSanitize.assertIsValidCheck(_name);
         LibSanitize.assertIsValidCheck(_symbol);
         LibSanitize.assertIsUppercase(_symbol);
+    }
+
+    function _isContract(address _target)
+        private
+        view
+        returns (bool)
+    {
+        // TODO: test uin256 vs uint32
+        uint32 size;
+        assembly {
+            size := extcodesize(_target)
+        }
+        return size > 0;
     }
 }

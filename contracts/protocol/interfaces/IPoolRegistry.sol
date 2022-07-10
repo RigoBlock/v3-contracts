@@ -58,6 +58,11 @@ interface IPoolRegistry {
         bytes32 poolId
     )
         external;
+    
+    /// @dev Allows Rigoblock governance to update authority.
+    /// @param _authority Address of the authority contract.
+    function setAuthority (address _authority)
+        external;
 
     function setMeta(
         address _poolAddress,

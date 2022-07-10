@@ -36,7 +36,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     modifier onlyRigoblockDao {
         require(
             PoolRegistry(registryAddress).rigoblockDaoAddress() == msg.sender,
-            "FACTORY_SENDER_NOT_DAO_ERROR"
+            "FACTORY_CALLER_NOT_DAO_ERROR"
         );
         _;
     }
@@ -84,7 +84,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     {
         require(
             _isContract(_newImplementation),
-            "NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR"
+            "FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR"
         );
         implementation = _newImplementation;
     }
@@ -97,8 +97,8 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         onlyRigoblockDao
     {
         require(
-            _newRegistry != address(0),
-            "FACTORY_NEW_REGISTRY_ADDRESS_NULL_ERROR"
+            _isContract(_newRegistry),
+            "FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR"
         );
         registryAddress = _newRegistry;
     }
