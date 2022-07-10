@@ -6,8 +6,8 @@ interface IRigoblockV3PoolState {
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
-    /// @return Value of the share price in wei.
-    /// @return Value of the share price in wei.
+    /// @return Value of the token price in wei.
+    /// @return Value of the token price in wei.
     function getData()
         external
         view
@@ -18,7 +18,7 @@ interface IRigoblockV3PoolState {
             uint256     // buyPrice
         );
 
-    function calcSharePrice()
+    function calcTokenPrice()
         external
         view
         returns (uint256);

@@ -2,6 +2,7 @@ import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
+import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { getAddress } from "ethers/lib/utils";
@@ -19,7 +20,7 @@ describe("ProxyGasCost", async () => {
         }
     });
 
-    describe("calculateCost", async () => {
+    describe("poolOwner", async () => {
         it('should return pool name from new pool', async () => {
             const { factory } = await setupTests()
             const template = await factory.callStatic.createPool('testpool','TEST')
@@ -38,7 +39,9 @@ describe("ProxyGasCost", async () => {
             const [ user1 ] = waffle.provider.getWallets()
             expect(await pool.owner()).to.be.eq(user1.address)
         })
+    })
 
+    describe("setTransactionFee", async () => {
         it('should set the transaction fee', async () => {
             const { factory, registry } = await setupTests()
             const template = await factory.callStatic.createPool('testpool','TEST')
@@ -69,6 +72,31 @@ describe("ProxyGasCost", async () => {
             await expect(
               pool.setTransactionFee(101) // 100 / 10000 = 1%
             ).to.be.revertedWith("POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR")
+        })
+    })
+
+    describe("mint", async () => {
+        it('should create new tokens', async () => {
+            const { factory, registry } = await setupTests()
+            const template = await factory.callStatic.createPool('testpool','TEST')
+            await factory.createPool('testpool', 'TEST')
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            expect(await pool.totalSupply()).to.be.eq(0)
+            const etherAmount = parseEther("1")
+            const [ user1 ] = waffle.provider.getWallets()
+            const name = await pool.name()
+            const symbol = await pool.symbol()
+            const amount = 1000000 // mock amount
+            await expect(
+                pool.mint({ value: etherAmount })
+            ).to.emit(pool, "Mint").withArgs(
+                user1.address,
+                template,
+                user1.address,
+                etherAmount,
+                amount
+            )
+            expect(await pool.totalSupply()).to.be.not.eq(0)
         })
     })
 })

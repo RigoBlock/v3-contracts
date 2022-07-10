@@ -55,12 +55,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
     address internal rigoblockDao = msg.sender; // mock address for Rigoblock Dao.
     // TODO: check if we can group multiple uint for smaller implementation bytecode
-    uint256 internal ratio = 80;
+    uint256 internal ratio = 80;    // ratio is 80%
 
     // minimum order size to avoid dust clogging things up
     uint256 internal minimumOrder = 1e15; // 1e15 = 1 finney
-    uint256 internal sellPrice = 1 ether;
-    uint256 internal buyPrice = 1 ether;
+
+    uint256 private buyPrice; // 1e18 = 1 ether
+    uint256 internal sellPrice = 1e18; // 1e18 = 1 ether
 
     mapping (address => Account) internal accounts;
 
@@ -91,9 +92,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         address feeCollector;
         address kycProvider;
         bool kycEnforced;
-        uint256 ratio; // ratio is 80%
     }
 
+    // TODO: fix as msg.sender == address(this) only self or msg.sender == implementation
     modifier onlyDelegateCall() {
         if (address(this) != _implementation) {
             _;
@@ -103,7 +104,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     modifier onlyUninitialized() {
-        require(owner == address(0), "POOL_ALREADY_INITIALIZED_ERROR");
+        require(
+            owner == address(0),
+            "POOL_ALREADY_INITIALIZED_ERROR");
         _;
     }
 
@@ -112,44 +115,69 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             .isWhitelistedExchange(_target);
         bool approvedWrapper = ExchangesAuthority(getExchangesAuthority())
             .isWhitelistedWrapper(_target);
-        require(approvedWrapper || approvedExchange);
+        require(
+            approvedWrapper || approvedExchange,
+            "99"
+        );
         _;
     }
 
     modifier whenApprovedProxy(address _proxy) {
         bool approved = ExchangesAuthority(getExchangesAuthority())
             .isWhitelistedProxy(_proxy);
-        require(approved);
+        require(
+            approved,
+            "100"
+        );
         _;
     }
 
     modifier minimumStake(uint256 amount) {
-        require (amount >= minimumOrder);
+        require (
+            amount >= minimumOrder,
+            "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
+        );
         _;
     }
 
     modifier hasEnough(uint256 _amount) {
-        require(accounts[msg.sender].balance >= _amount);
+        require(
+            accounts[msg.sender].balance >= _amount,
+            "101"
+        );
         _;
     }
 
     modifier positiveAmount(uint256 _amount) {
-        require(accounts[msg.sender].balance + _amount > accounts[msg.sender].balance);
+        require(
+            accounts[msg.sender].balance + _amount > accounts[msg.sender].balance,
+            "102"
+        );
         _;
     }
 
     modifier minimumPeriodPast() {
-        require(block.timestamp >= accounts[msg.sender].receipt.activation);
+        require(
+            block.timestamp >= accounts[msg.sender].receipt.activation,
+            "103"
+        );
         _;
     }
 
     modifier buyPriceHigherOrEqual(uint256 _sellPrice, uint256 _buyPrice) {
-        require(_sellPrice <= _buyPrice);
+        require(
+            _sellPrice <= _buyPrice,
+            "104"
+        );
         _;
     }
 
+    // TODO: fix and move to nav verifier
     modifier notPriceError(uint256 _sellPrice, uint256 _buyPrice) {
-        if (_sellPrice <= sellPrice / 10 || _buyPrice >= buyPrice * 10) return;
+        require(
+            _sellPrice > sellPrice / 10 && _buyPrice < buyPrice * 10,
+            "105"
+        );
         _;
     }
 
@@ -180,30 +208,33 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         payable
     {
-        require(msg.value != 0);
+        require(
+            msg.value != 0,
+            "POOL_MINT_VALUE_SENT_NULL_ERROR"
+        );
     }
 
     /// @dev Allows a user to mint pool tokens.
-    /// @return outputTokens Amount of new tokens.
+    /// @return Value of minted tokens.
     function mint()
         external
         payable
         minimumStake(msg.value)
-        returns (uint256 outputTokens)
+        returns (uint256)
     {
-        return outputTokens = _mint(msg.sender);
+        return _mint(msg.sender);
     }
 
     /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _hodler Address of the target user.
-    /// @return outputTokens Amount of new tokens.
+    /// @return Value of minted tokens.
     function mintOnBehalf(address _hodler)
         external
         payable
         minimumStake(msg.value)
-        returns (uint256 outputTokens)
+        returns (uint256)
     {
-        return outputTokens = _mint(_hodler);
+        return _mint(_hodler);
     }
 
     /// @dev Allows a pool holder to burn pool tokens.
@@ -256,7 +287,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
                 _signaturevaliduntilBlock,
                 _hash,
                 _signedData
-            )
+            ),
+            "POOL_NAV_NOT_VALID_ERROR"
         );
         // TODO: set mid price + spread (spread only initially).  will save gas
         // when updating the prices as will only update one variable in storage.
@@ -340,13 +372,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         onlyOwner
         whenApprovedProxy(_tokenTransferProxy)
     {
-        require(_setAllowances(_tokenTransferProxy, _token, _amount));
+        require(
+            _setAllowances(_tokenTransferProxy, _token, _amount),
+            "POOL_ALLOWANCE_SETTING_ERROR"
+        );
     }
 
     /// @dev Allows owner to set allowances to multiple approved tokens with one call.
     /// @param _tokenTransferProxy Address of the proxy to be approved.
     /// @param _tokens Address of the token to receive allowance for.
     /// @param _amounts Array of number of tokens to be approved.
+    // TODO: remove batch allowance setting
     function setMultipleAllowances(
         address _tokenTransferProxy,
         address[] calldata _tokens,
@@ -378,7 +414,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             methodAllowedOnExchange(
                 findMethod(transactionData),
                 adapter
-            )
+            ),
+            "POOL_METHOD_NOT_ALLOWED_ERROR"
         );
 
         bytes memory response;
@@ -443,8 +480,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
-    /// @return Value of the share price in wei.
-    /// @return Value of the share price in wei.
+    /// @return Value of the token price in wei.
+    /// @return Value of the token price in wei.
     function getData()
         external
         view
@@ -455,17 +492,18 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256     // buyPrice
         )
     {
+        // TODO: sell price not initialized correctly
         return(
             poolName = data.name,
             poolSymbol = data.symbol,
             sellPrice,
-            buyPrice
+            _getPrice()
         );
     }
 
     /// @dev Returns the price of a pool.
-    /// @return Value of the share price in wei.
-    function calcSharePrice()
+    /// @return Value of the token price in wei.
+    function calcTokenPrice()
         external
         view
         returns (uint256)
@@ -616,14 +654,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Executes the pool purchase.
     /// @param _hodler Address of the target user.
-    /// @return Bool the function executed correctly.
+    /// @return Value of minted tokens.
     function _mint(address _hodler)
         internal
         returns (uint256)
     {
         // require whitelisted user if kyc is enforced
         if (admin.kycProvider != address(0)) {
-            require(Kyc(admin.kycProvider).isWhitelistedUser(_hodler));
+            require(
+                Kyc(admin.kycProvider).isWhitelistedUser(_hodler),
+                "POOL_CALLER_NOT_WHITELISTED_ERROR"
+            );
         }
 
         (
@@ -640,8 +681,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             "POOL_MINT_RETURNED_AMOUNT_NULL_ERROR"
         );
 
-        data.totalSupply = data.totalSupply + grossAmount;
-        emit Mint(msg.sender, address(this), _hodler, msg.value, amount, bytes(data.name), bytes(data.symbol));
+        data.totalSupply += grossAmount;
+        // TODO: save space, we are returning pool address in event
+        emit Mint(msg.sender, address(this), _hodler, msg.value, amount);
         return amount;
     }
 
@@ -706,53 +748,60 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Calculates the correct purchase amounts.
     /// @return grossAmount Number of new tokens.
-    /// @return _feePool Value of fee in tokens.
-    /// @return _feeRigoblockDao Value of fee in tokens to dao.
+    /// @return feePool Value of fee in tokens.
+    /// @return feeRigoblockDao Value of fee in tokens to dao.
     /// @return amount Value of net minted tokens.
     function _getMintAmounts()
-        private
+        internal
         view
         returns (
             uint256 grossAmount,
-            uint256 _feePool,
-            uint256 _feeRigoblockDao,
+            uint256 feePool,
+            uint256 feeRigoblockDao,
             uint256 amount
         )
     {
-        grossAmount = msg.value * BASE / buyPrice;
+        grossAmount = msg.value * BASE / _getPrice();
         uint256 fee; // fee is in basis points
 
         if (data.transactionFee != uint256(0)) {
             fee = grossAmount * data.transactionFee / 10000;
-            _feePool = fee * ratio / 100;
-            _feeRigoblockDao = fee - _feePool;
+            // TODO: check if ratio returned correctly
+            feePool = fee * ratio / 100;
+            feeRigoblockDao = fee - feePool;
             amount = grossAmount - fee;
         } else {
-            _feePool = uint256(0);
-            _feeRigoblockDao = uint256(0);
+            feePool = uint256(0);
+            feeRigoblockDao = uint256(0);
             amount = grossAmount;
         }
     }
 
+    function _getPrice() internal view returns (uint256) {
+        if (buyPrice == uint256(0)) {
+            return 1e18;
+        } else return buyPrice;
+    }
+
     /// @dev Calculates the correct sale amounts.
-    /// @return _feePool Value of fee in tokens.
-    /// @return _feeRigoblockDao Value of fee in tokens to dao.
+    /// @return feePool Value of fee in tokens.
+    /// @return feeRigoblockDao Value of fee in tokens to dao.
     /// @return netAmount Value of net burnt tokens.
     /// @return netRevenue Value of revenue for hodler.
     function _getBurnAmounts(uint256 _amount)
-        private
+        internal
         view
         returns (
-            uint256 _feePool,
-            uint256 _feeRigoblockDao,
+            uint256 feePool,
+            uint256 feeRigoblockDao,
             uint256 netAmount,
             uint256 netRevenue
         )
     {
         uint256 fee = _amount * data.transactionFee / 10000; //fee is in basis points
         return (
-            _feePool = fee * ratio / 100,
-            _feeRigoblockDao = fee - _feeRigoblockDao,
+            feePool = fee * ratio / 100,
+            feeRigoblockDao = fee - feeRigoblockDao,
             netAmount = _amount - fee,
             netRevenue = netAmount * sellPrice / BASE
         );

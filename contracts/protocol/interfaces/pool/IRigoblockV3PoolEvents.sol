@@ -26,16 +26,12 @@ interface IRigoblockV3PoolEvents {
     /// @param to Address that receives the tokens.
     /// @param amount Number of units created.
     /// @param revenue Value in base unit.
-    /// @param name String name of the pool.
-    /// @param symbol String symbol of the pool.
     event Mint(
         address indexed poolAddress,
         address indexed from,
         address indexed to,
         uint256 amount,
-        uint256 revenue,
-        bytes name,
-        bytes symbol
+        uint256 revenue
     );
 
     /// @dev Logs sale of pool tokens.
