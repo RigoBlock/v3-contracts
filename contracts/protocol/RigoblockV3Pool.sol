@@ -52,6 +52,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     address internal immutable _implementation = address(this);
 
+    // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
     address internal rigoblockDao = msg.sender; // mock address for Rigoblock Dao.
     // TODO: check if we can group multiple uint for smaller implementation bytecode
     uint256 internal ratio = 80;
