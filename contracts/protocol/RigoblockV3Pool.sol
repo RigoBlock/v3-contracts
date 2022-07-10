@@ -35,9 +35,7 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
-    // TODO: moved owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
-    // TODO: move name symbol and total supply to public variables
-    //  or implement functions name() symbol() (totalSupply already implemented).
+    // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
 
     // TODO: deprecate following and use msg.sig
     //using LibFindMethod for *;
@@ -45,23 +43,19 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     string public constant VERSION = 'HF 3.0.1';
     // TODO: make standard ERC20 1e18
     // TODO: could rename decimals as in ERC20
-    uint256 public constant BASE = 1e6; // tokens are divisible by 1 million
+    uint256 public immutable BASE = 1e6; // tokens are divisible by 1 million
 
     /// @notice address must be updated if authority changes and implementation redeployed.
-    address internal immutable AUTHORITY = address(0xcbd0e85fFd354bfB84FDAA04E8BB3E82183Cc92F);
+    address private immutable AUTHORITY = address(0xcbd0e85fFd354bfB84FDAA04E8BB3E82183Cc92F);
 
-    address internal immutable _implementation = address(this);
+    address private immutable _implementation = address(this);
 
     // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
-    address internal rigoblockDao = msg.sender; // mock address for Rigoblock Dao.
-    // TODO: check if we can group multiple uint for smaller implementation bytecode
-    uint256 internal ratio = 80;    // ratio is 80%
+    /// @notice address must be updated if governance changes and implementation redeployed.
+    address private immutable RIGOBLOCK_DAO = msg.sender; // mock address for Rigoblock Dao, must change to governance.
 
     // minimum order size to avoid dust clogging things up
-    uint256 internal minimumOrder = 1e15; // 1e15 = 1 finney
-
-    uint256 private buyPrice; // 1e18 = 1 ether
-    uint256 internal sellPrice = 1e18; // 1e18 = 1 ether
+    uint256 private immutable MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
 
     mapping (address => Account) internal accounts;
 
@@ -83,12 +77,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     struct PoolData {
         string name;
         string symbol;
+        // TODO: merge sell and buy price, set spread
+        uint256 buyPrice;   // initially 1e18 = 1 ether
+        uint256 sellPrice;  // initially 1e18 = 1 ether
         uint256 totalSupply;
         uint256 transactionFee; // in basis points 1 = 0.01%
         uint32 minPeriod;
     }
 
     struct Admin {
+        uint256 ratio;  // initial ratio is 80%
         address feeCollector;
         address kycProvider;
         bool kycEnforced;
@@ -134,7 +132,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     modifier minimumStake(uint256 amount) {
         require (
-            amount >= minimumOrder,
+            amount >= MINIMUM_ORDER,
             "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
         );
         _;
@@ -175,7 +173,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: fix and move to nav verifier
     modifier notPriceError(uint256 _sellPrice, uint256 _buyPrice) {
         require(
-            _sellPrice > sellPrice / 10 && _buyPrice < buyPrice * 10,
+            _sellPrice > data.sellPrice / 10 && _buyPrice < data.buyPrice * 10,
             "105"
         );
         _;
@@ -290,10 +288,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             ),
             "POOL_NAV_NOT_VALID_ERROR"
         );
-        // TODO: set mid price + spread (spread only initially).  will save gas
-        // when updating the prices as will only update one variable in storage.
-        sellPrice = _newSellPrice;
-        buyPrice = _newBuyPrice;
+        data.sellPrice = _newSellPrice;
+        data.buyPrice = _newBuyPrice;
         emit NewNav(msg.sender, address(this), _newSellPrice, _newBuyPrice);
     }
 
@@ -308,7 +304,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             _ratio != uint256(0),
             "POOL_RATIO_NULL_ERROR"
         );
-        ratio = _ratio;
+        admin.ratio = _ratio;
         emit NewRatio(msg.sender, address(this), _ratio);
     }
 
@@ -492,12 +488,11 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256     // buyPrice
         )
     {
-        // TODO: sell price not initialized correctly
         return(
             poolName = data.name,
             poolSymbol = data.symbol,
-            sellPrice,
-            _getPrice()
+            _getSellPrice(),
+            _getBuyPrice()
         );
     }
 
@@ -508,7 +503,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (uint256)
     {
-        return sellPrice;
+        return _getSellPrice();
     }
 
     /// @dev Finds the administrative data of the pool.
@@ -533,8 +528,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return (
             owner,
             admin.feeCollector,
-            rigoblockDao,
-            ratio,
+            RIGOBLOCK_DAO,
+            _getRatio(),
             data.transactionFee,
             data.minPeriod
         );
@@ -704,7 +699,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             // TODO: test
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
-            accounts[rigoblockDao].balance = accounts[rigoblockDao].balance + _feeRigoblockDao;
+            accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
         unchecked { accounts[_hodler].receipt.activation = uint32(block.timestamp) + data.minPeriod; }
     }
@@ -725,7 +720,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         if (_feePool != uint256(0)) {
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
-            accounts[rigoblockDao].balance = accounts[rigoblockDao].balance + _feeRigoblockDao;
+            accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
     }
 
@@ -761,13 +756,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256 amount
         )
     {
-        grossAmount = msg.value * BASE / _getPrice();
+        grossAmount = msg.value * BASE / _getBuyPrice();
         uint256 fee; // fee is in basis points
 
         if (data.transactionFee != uint256(0)) {
             fee = grossAmount * data.transactionFee / 10000;
             // TODO: check if ratio returned correctly
-            feePool = fee * ratio / 100;
+            feePool = fee * _getRatio() / 100;
             feeRigoblockDao = fee - feePool;
             amount = grossAmount - fee;
         } else {
@@ -777,10 +772,22 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
-    function _getPrice() internal view returns (uint256) {
-        if (buyPrice == uint256(0)) {
+    function _getBuyPrice() internal view returns (uint256) {
+        if (data.buyPrice == uint256(0)) {
             return 1e18;
-        } else return buyPrice;
+        } else return data.buyPrice;
+    }
+
+    function _getSellPrice() internal view returns (uint256) {
+        if (data.sellPrice == uint256(0)) {
+            return 1e18;
+        } else return data.sellPrice;
+    }
+
+    function _getRatio() private view returns (uint256) {
+        if (admin.ratio == uint256(0)) {
+            return 80;
+        } else return admin.ratio;
     }
 
     /// @dev Calculates the correct sale amounts.
@@ -800,10 +807,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         uint256 fee = _amount * data.transactionFee / 10000; //fee is in basis points
         return (
-            feePool = fee * ratio / 100,
+            feePool = fee * _getRatio() / 100,
             feeRigoblockDao = fee - feeRigoblockDao,
             netAmount = _amount - fee,
-            netRevenue = netAmount * sellPrice / BASE
+            netRevenue = netAmount * _getSellPrice() / BASE
         );
     }
 

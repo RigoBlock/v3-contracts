@@ -86,7 +86,7 @@ describe("ProxyGasCost", async () => {
             const [ user1 ] = waffle.provider.getWallets()
             const name = await pool.name()
             const symbol = await pool.symbol()
-            const amount = 1000000 // mock amount
+            const amount = await pool.callStatic.mint({ value: etherAmount })
             await expect(
                 pool.mint({ value: etherAmount })
             ).to.emit(pool, "Mint").withArgs(
@@ -97,6 +97,28 @@ describe("ProxyGasCost", async () => {
                 amount
             )
             expect(await pool.totalSupply()).to.be.not.eq(0)
+            expect(await pool.balanceOf(user1.address)).to.be.eq(amount)
+        })
+
+        it('should revert with order below minimum', async () => {
+            const { factory, registry } = await setupTests()
+            const template = await factory.callStatic.createPool('testpool','TEST')
+            await factory.createPool('testpool', 'TEST')
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const etherAmount = parseEther("0.0001")
+            await expect(pool.mint({ value: etherAmount })
+            ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
+        })
+    })
+
+    describe("_initializePool", async () => {
+        it('should revert when already initialized', async () => {
+            const { factory, registry } = await setupTests()
+            const template = await factory.callStatic.createPool('testpool','TEST')
+            await factory.createPool('testpool', 'TEST')
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            await expect(pool._initializePool('testpool','TEST', template)
+            ).to.be.revertedWith("POOL_ALREADY_INITIALIZED_ERROR")
         })
     })
 })
