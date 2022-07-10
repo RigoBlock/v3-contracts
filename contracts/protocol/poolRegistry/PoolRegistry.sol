@@ -28,11 +28,9 @@ import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
 /// @title Pool Registry - Allows registration of pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract PoolRegistry is IPoolRegistry, Owned {
+contract PoolRegistry is IPoolRegistry {
 
-    using LibSanitize for string;
-
-    Authority private immutable authority;
+    address private immutable AUTHORITY_ADDRESS;
 
     mapping (address => bytes32) private mapIdByAddress;
     mapping (bytes32 => bytes32) private mapIdByName;
@@ -64,19 +62,14 @@ contract PoolRegistry is IPoolRegistry, Owned {
 
     modifier onlyAuthority {
         require(
-            authority.isAuthority(msg.sender) == true,
+            Authority(AUTHORITY_ADDRESS).isAuthority(msg.sender) == true,
             "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
         );
         _;
     }
 
-    constructor(
-        address _authority,
-        address _owner
-    )
-    {
-        authority = Authority(_authority);
-        owner = _owner;
+    constructor(address _authority) {
+        AUTHORITY_ADDRESS = _authority;
     }
 
     /*
@@ -93,7 +86,6 @@ contract PoolRegistry is IPoolRegistry, Owned {
         bytes32 poolId
     )
         external
-        payable
         override
         onlyAuthority
         whenAddressFree(_poolAddress)

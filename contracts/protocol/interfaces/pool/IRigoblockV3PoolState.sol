@@ -9,8 +9,8 @@ interface IRigoblockV3PoolState {
         returns (
             string memory name,
             string memory symbol,
-            uint256 sellPrice,
-            uint256 buyPrice
+            uint256,  // sellPrice
+            uint256   // buyPrice
         );
 
     function calcSharePrice()
@@ -25,7 +25,7 @@ interface IRigoblockV3PoolState {
             address,
             address feeCollector,
             address dragoDao,
-            uint256 ratio,
+            uint256, // ratio
             uint256 transactionFee,
             uint32 minPeriod
         );
@@ -42,7 +42,7 @@ interface IRigoblockV3PoolState {
         external
         view
         returns (bool isValid);
-    
+
     /// @dev Finds the exchanges authority.
     /// @return Address of the exchanges authority.
     function getExchangesAuth()

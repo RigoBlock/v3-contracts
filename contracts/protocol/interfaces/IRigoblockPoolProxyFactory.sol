@@ -33,32 +33,15 @@ interface IRigoblockPoolProxyFactory {
         string calldata _symbol
     )
         external
-        payable
         returns (address newPoolAddress);
-
-    // TODO: eliminate this method and pay fees to rigoblock dao. Pool queries from its factory
-    function setTargetRigoblockDao(
-        address payable _targetPool,
-        address _rigoblockDao
-    )
-        external;
-
-    function changeRigoblockDao( address payable _newRigoblockDao)
-        external;
 
     function setRegistry(address _newRegistry)
         external;
 
-    function setBeneficiary(address payable _rigoblockDao)
-        external;
-
-    function setFee(uint256 _fee)
+    function setRigoblockDao(address _newRigoblockDao)
         external;
 
     function setImplementation(address _newImplementation)
-        external;
-
-    function drain()
         external;
 
     function getRegistry()
@@ -66,13 +49,10 @@ interface IRigoblockPoolProxyFactory {
         view
         returns (address);
 
-    function getStorage()
+    function getRigoblockDaoAddress()
         external
         view
-        returns (
-            address rigoblockDao,
-            string memory version
-        );
+        returns (address);
 
     function implementation()
         external
