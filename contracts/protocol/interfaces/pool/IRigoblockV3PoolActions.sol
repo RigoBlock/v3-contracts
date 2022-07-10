@@ -44,13 +44,4 @@ interface IRigoblockV3PoolActions {
     function sellDrago(uint256 _amount)
         external
         returns (bool success);
-
-    function changeRatio(uint256 _ratio)
-        external;
-
-    function changeDragoDao(address _dragoDao)
-        external;
-
-    function enforceKyc(bool _enforced, address _kycProvider)
-        external;
 }

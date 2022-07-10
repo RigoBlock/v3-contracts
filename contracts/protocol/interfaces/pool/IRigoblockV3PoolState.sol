@@ -3,14 +3,19 @@ pragma solidity >=0.8.0;
 
 interface IRigoblockV3PoolState {
 
+    /// @dev Finds details of a drago pool.
+    /// @return poolName String name of a drago.
+    /// @return poolSymbol String symbol of a drago.
+    /// @return Value of the share price in wei.
+    /// @return Value of the share price in wei.
     function getData()
         external
         view
         returns (
-            string memory name,
-            string memory symbol,
-            uint256,  // sellPrice
-            uint256   // buyPrice
+            string memory poolName,
+            string memory poolSymbol,
+            uint256,    // sellPrice
+            uint256     // buyPrice
         );
 
     function calcSharePrice()
@@ -54,4 +59,14 @@ interface IRigoblockV3PoolState {
         external
         view
         returns (uint256);
+    
+    function name()
+        external
+        view
+        returns (string memory);
+
+    function symbol()
+        external
+        view
+        returns (string memory);
 }

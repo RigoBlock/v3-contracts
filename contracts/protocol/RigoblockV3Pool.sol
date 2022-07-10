@@ -40,9 +40,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     //  or implement functions name() symbol() (totalSupply already implemented).
 
     // TODO: deprecate following and use msg.sig
-    using LibFindMethod for *;
+    //using LibFindMethod for *;
 
-    string public constant VERSION = 'HF 3.0.0';
+    string public constant VERSION = 'HF 3.0.1';
     // TODO: make standard ERC20 1e18
     // TODO: could rename decimals as in ERC20
     uint256 public constant BASE = 1e6; // tokens are divisible by 1 million
@@ -106,12 +106,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     //  min period should be owner controlled with range (i.e. 1 block to 11MM blocks, 3 weeks)
     modifier onlyDragoDao() {
         require(msg.sender == rigoblockDao);
-        _;
-    }
-
-    modifier onlyOwnerOrAuthority() {
-        Authority auth = Authority(AUTHORITY);
-        require(auth.isAuthority(msg.sender) || msg.sender == owner);
         _;
     }
 
@@ -258,7 +252,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         bytes calldata _signedData)
         external
         nonReentrant
-        onlyOwnerOrAuthority
+        onlyOwner
         buyPriceHigherOrEqual(_newSellPrice, _newBuyPrice)
         notPriceError(_newSellPrice, _newBuyPrice)
     {
@@ -278,13 +272,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         emit NewNav(msg.sender, address(this), _newSellPrice, _newBuyPrice);
     }
 
-    /// @dev Allows drago dao/factory to change fee split ratio.
-    /// @param _ratio Number of ratio for wizard, from 0 to 100.
+    /// @dev Allows pool owner to change fee split ratio between fee collector and Dao.
+    /// @param _ratio Number of ratio for fee collector, from 0 to 100.
     // TODO: this method should be delegated to DAO and universal for all pools.
     function changeRatio(uint256 _ratio)
         external
-        onlyDragoDao
+        onlyOwner
     {
+        require(
+            _ratio != uint256(0),
+            "POOL_RATIO_NULL_ERROR"
+        );
         ratio = _ratio;
         emit NewRatio(msg.sender, address(this), _ratio);
     }
@@ -295,7 +293,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         onlyOwner
     {
-        require(_transactionFee <= 100); //fee cannot be higher than 1%
+        require(
+            _transactionFee <= 100,
+            "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"
+            ); //fee cannot be higher than 1%
         data.transactionFee = _transactionFee;
         emit NewFee(msg.sender, address(this), _transactionFee);
     }
@@ -310,22 +311,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         emit NewCollector(msg.sender, address(this), _feeCollector);
     }
 
-    /// @dev Allows drago dao/factory to upgrade its address.
-    /// @param _dragoDao Address of the new drago dao.
-    function changeDragoDao(address _dragoDao)
-        external
-        onlyDragoDao
-    {
-        rigoblockDao = _dragoDao;
-        emit DragoDaoSet(msg.sender, address(this), _dragoDao);
-    }
-
     /// @dev Allows drago dao/factory to change the minimum holding period.
     /// @param _minPeriod Time in seconds.
     function changeMinPeriod(uint32 _minPeriod)
         external
-        onlyDragoDao
+        onlyOwner
     {
+        require(
+            _minPeriod <= 15 days,
+            "POOL_LOCKUP_LONGER_THAN_15_DAYS_ERROR"
+        );
         data.minPeriod = _minPeriod;
     }
 
@@ -343,6 +338,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _tokenTransferProxy Address of the proxy to be approved.
     /// @param _token Address of the token to receive allowance for.
     /// @param _amount Number of tokens approved for spending.
+    // TODO: move method to faucet or change to revoke allowance only
     function setAllowance(
         address _tokenTransferProxy,
         address _token,
@@ -452,25 +448,23 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     /// @dev Finds details of a drago pool.
-    /// @return name String name of a drago.
-    /// @return symbol String symbol of a drago.
-    /// @return sellPrice Value of the share price in wei.
-    /// @return buyPrice Value of the share price in wei.
+    /// @return poolName String name of a drago.
+    /// @return poolSymbol String symbol of a drago.
+    /// @return Value of the share price in wei.
+    /// @return Value of the share price in wei.
     function getData()
         external
         view
         returns (
-            string memory name,
-            string memory symbol,
-            uint256,  // sellPrice
-            uint256   // buyPrice
+            string memory poolName,
+            string memory poolSymbol,
+            uint256,    // sellPrice
+            uint256     // buyPrice
         )
     {
-        name = data.name;
-        symbol = data.symbol;
-        return (
-            name,
-            symbol,
+        return(
+            poolName = data.name,
+            poolSymbol = data.symbol,
             sellPrice,
             buyPrice
         );
@@ -559,6 +553,24 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (uint256)
     {
         return data.totalSupply;
+    }
+
+    function name()
+        external
+        view
+        override
+        returns (string memory)
+    {
+        return data.name;
+    }
+
+    function symbol()
+        external
+        view
+        override
+        returns (string memory)
+    {
+        return data.symbol;
     }
 
     /*

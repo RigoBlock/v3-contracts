@@ -21,6 +21,12 @@ interface IRigoblockV3PoolOwnerActions {
 
     function changeFeeCollector(address _feeCollector)
         external;
+
+    function changeRatio(uint256 _ratio)
+        external;
+
+    function enforceKyc(bool _enforced, address _kycProvider)
+        external;
     
     function setAllowance(
         address _tokenTransferProxy,

@@ -83,7 +83,7 @@ describe("ProxyFactory", async () => {
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
             const result = await txReceipt.wait()
             const poolData = await pool.getData()
-            expect(poolData.name).to.be.eq('testpool')
+            expect(poolData.poolName).to.be.eq('testpool')
         })
 
         it('should create pool with uppercase character in name', async () => {
