@@ -64,7 +64,8 @@ describe("ProxyFactory", async () => {
             const txReceipt = await factory.createPool('t est pool', 'TEST')
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
             const result = await txReceipt.wait()
-            expect(result.events[1].args.poolAddress).to.be.eq(template)
+            // 3 logs are emitted at pool creation, could expect exact event.withArgs
+            expect(result.events[2].args.poolAddress).to.be.eq(template)
         })
 
         it('should create pool with uppercase character in name', async () => {

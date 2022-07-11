@@ -20,13 +20,12 @@ describe("ProxyGasCost", async () => {
         }
     });
 
-    describe("poolOwner", async () => {
+    describe("poolStorage", async () => {
         it('should return pool name from new pool', async () => {
             const { factory } = await setupTests()
             const template = await factory.callStatic.createPool('testpool','TEST')
             const txReceipt = await factory.createPool('testpool', 'TEST')
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
-            const result = await txReceipt.wait()
             const poolData = await pool.getData()
             expect(poolData.poolName).to.be.eq('testpool')
         })
