@@ -189,12 +189,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     )
         onlyUninitialized // could check in fallback instead
         external
+        override
     {
         data.name = _poolName;
         data.symbol = _poolSymbol;
         owner = _owner;
-        // TODO: should emit event. Check as we are already emitting event in registry
-        //    where we can filter more efficiently by event and contract
+
+        emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
     }
 
     /*
