@@ -15,8 +15,11 @@ contract RigoblockPoolProxy {
     /// @param _beacon Beacon address.
     /// @param _data Initialization parameters.
     constructor(address _beacon, bytes memory _data) payable {
+        // store beacon address in beacon slot value
         assert(_BEACON_SLOT == bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1));
         StorageSlot.getAddressSlot(_BEACON_SLOT).value = _beacon;
+
+        // initialize pool
         // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, owner)
         (bool success, ) = Beacon(_beacon).implementation().delegatecall(_data);
 
