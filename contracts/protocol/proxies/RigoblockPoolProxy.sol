@@ -29,7 +29,6 @@ contract RigoblockPoolProxy {
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
-        // TODO: check gas savings with static call (more efficient for immutables)
         address _implementation = Beacon(
             StorageSlot.getAddressSlot(_BEACON_SLOT).value
         ).implementation();
