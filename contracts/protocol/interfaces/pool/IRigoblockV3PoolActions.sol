@@ -27,6 +27,13 @@ interface IRigoblockV3PoolActions {
     /*
      * CORE FUNCTIONS
      */
+    function _initializePool(
+        string calldata _poolName,
+        string calldata _poolSymbol,
+        address _owner
+    )
+        external;
+
     function pay()
         external
         payable;
