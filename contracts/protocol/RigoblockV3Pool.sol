@@ -49,11 +49,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @notice Must be immutable to be compile-time constant.
     address private immutable _implementation;
 
+    // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
+    address private immutable RIGOBLOCK_DAO;
+
     // minimum order size to avoid dust clogging things up
     uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
 
-    // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
-    address private immutable RIGOBLOCK_DAO;
+    // initial unitary value
+    uint256 private constant INITIAL_SELL_PRICE = 1e18;
+    uint256 private constant INITIAL_BUY_PRICE = 1e18;
+    uint256 private constant INITIAL_RATIO = 80;  // 80 is 80%
 
     mapping (address => Account) internal accounts;
 
@@ -779,19 +784,19 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     function _getBuyPrice() internal view returns (uint256) {
         if (data.buyPrice == uint256(0)) {
-            return 1e18;
+            return INITIAL_BUY_PRICE;
         } else return data.buyPrice;
     }
 
     function _getSellPrice() internal view returns (uint256) {
         if (data.sellPrice == uint256(0)) {
-            return 1e18;
+            return INITIAL_SELL_PRICE;
         } else return data.sellPrice;
     }
 
     function _getRatio() private view returns (uint256) {
         if (admin.ratio == uint256(0)) {
-            return 80;
+            return INITIAL_RATIO;
         } else return admin.ratio;
     }
 
