@@ -30,7 +30,7 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
     BuildingBlocks public blocks;
     Type public types;
 
-    mapping (address => Account) public accounts;
+    mapping(address => Account) public accounts;
 
     struct List {
         address target;
@@ -53,19 +53,19 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
     struct Account {
         address account;
         bool authorized;
-        mapping (bool => Group) groups; //mapping account to bool authorized to bool group
+        mapping(bool => Group) groups; //mapping account to bool authorized to bool group
     }
 
     struct BuildingBlocks {
         address exchangeEventful;
         address sigVerifier;
         address casper;
-        mapping (address => bool) initialized;
-        mapping (address => address) adapter;
+        mapping(address => bool) initialized;
+        mapping(address => address) adapter;
         // Mapping of exchange => method => approved
-        mapping (address => mapping (bytes4 => bool)) allowedMethods;
-        mapping (address => mapping (address => bool)) allowedTokens;
-        mapping (address => mapping (address => bool)) allowedWrappers;
+        mapping(address => mapping(bytes4 => bool)) allowedMethods;
+        mapping(address => mapping(address => bool)) allowedTokens;
+        mapping(address => mapping(address => bool)) allowedWrappers;
     }
 
     /*

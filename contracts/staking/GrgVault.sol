@@ -44,7 +44,7 @@ contract GrgVault is
     bool public isInCatastrophicFailure;
 
     // Mapping from staker to GRG balance
-    mapping (address => uint256) internal _balances;
+    mapping(address => uint256) internal _balances;
 
     // Grg Asset Proxy
     IAssetProxy public grgAssetProxy;
