@@ -26,7 +26,7 @@ import { IERC20 as Token } from "../../tokens/ERC20/IERC20.sol";
 // solhint-disable-next-line
 contract HGetMultipleBalances {
 
-    mapping (uint256 => address) private inLine;
+    mapping(uint256 => address) private inLine;
     uint256 public numTokens = 0;
 
     /*

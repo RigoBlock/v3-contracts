@@ -39,29 +39,29 @@ abstract contract MixinStorage is
     // mapping from StakeStatus to global stored balance
     // NOTE: only Status.DELEGATED is used to access this mapping, but this format
     // is used for extensibility
-    mapping (uint8 => IStructs.StoredBalance) internal _globalStakeByStatus;
+    mapping(uint8 => IStructs.StoredBalance) internal _globalStakeByStatus;
 
     // mapping from StakeStatus to address of staker to stored balance
-    mapping (uint8 => mapping (address => IStructs.StoredBalance)) internal _ownerStakeByStatus;
+    mapping(uint8 => mapping(address => IStructs.StoredBalance)) internal _ownerStakeByStatus;
 
     // Mapping from Owner to Pool Id to Amount Delegated
-    mapping (address => mapping (bytes32 => IStructs.StoredBalance)) internal _delegatedStakeToPoolByOwner;
+    mapping(address => mapping(bytes32 => IStructs.StoredBalance)) internal _delegatedStakeToPoolByOwner;
 
     // Mapping from Pool Id to Amount Delegated
-    mapping (bytes32 => IStructs.StoredBalance) internal _delegatedStakeByPoolId;
+    mapping(bytes32 => IStructs.StoredBalance) internal _delegatedStakeByPoolId;
 
     /// @dev Mapping from RigoBlock pool subaccount to pool Id of rigoblock pool
     /// @dev 0 RigoBlock pool subaccount address.
     /// @return 0 The pool ID.
-    mapping (address => bytes32) public poolIdByRbPoolAccount;
+    mapping(address => bytes32) public poolIdByRbPoolAccount;
 
     // mapping from Pool Id to Pool
-    mapping (bytes32 => IStructs.Pool) internal _poolById;
+    mapping(bytes32 => IStructs.Pool) internal _poolById;
 
     /// @dev mapping from pool ID to reward balance of members
     /// @dev 0 Pool ID.
     /// @return 0 The total reward balance of members in this pool.
-    mapping (bytes32 => uint256) public rewardsByPoolId;
+    mapping(bytes32 => uint256) public rewardsByPoolId;
 
     // The current epoch.
     uint256 public currentEpoch;
@@ -70,15 +70,15 @@ abstract contract MixinStorage is
     uint256 public currentEpochStartTimeInSeconds;
 
     // mapping from Pool Id to Epoch to Reward Ratio
-    mapping (bytes32 => mapping (uint256 => IStructs.Fraction)) internal _cumulativeRewardsByPool;
+    mapping(bytes32 => mapping(uint256 => IStructs.Fraction)) internal _cumulativeRewardsByPool;
 
     // mapping from Pool Id to Epoch
-    mapping (bytes32 => uint256) internal _cumulativeRewardsByPoolLastStored;
+    mapping(bytes32 => uint256) internal _cumulativeRewardsByPoolLastStored;
 
     /// @dev Registered RigoBlock Proof_of_Performance contracts, capable of paying protocol fees.
     /// @dev 0 The address to check.
     /// @return 0 Whether the address is a registered proof_of_performance.
-    mapping (address => bool) public validPops;
+    mapping(address => bool) public validPops;
 
     /* Tweakable parameters */
 
@@ -104,13 +104,13 @@ abstract contract MixinStorage is
     /// @dev 0 Pool ID.
     /// @dev 1 Epoch number.
     /// @return 0 Pool fee stats.
-    mapping (bytes32 => mapping (uint256 => IStructs.PoolStats)) public poolStatsByEpoch;
+    mapping(bytes32 => mapping(uint256 => IStructs.PoolStats)) public poolStatsByEpoch;
 
     /// @dev Aggregated stats across all pools that generated fees with sufficient stake to earn rewards.
     ///      See `_minimumPoolStake` in MixinParams.
     /// @dev 0 Epoch number.
     /// @return 0 Reward computation stats.
-    mapping (uint256 => IStructs.AggregatedStats) public aggregatedStatsByEpoch;
+    mapping(uint256 => IStructs.AggregatedStats) public aggregatedStatsByEpoch;
 
     /// @dev The GRG balance of this contract that is reserved for pool reward payouts.
     uint256 public grgReservedForPoolRewards;

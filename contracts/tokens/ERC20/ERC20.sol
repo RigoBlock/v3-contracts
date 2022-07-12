@@ -55,6 +55,6 @@ abstract contract ERC20 is IERC20 {
     }
 
     uint256 public totalSupply;
-    mapping (address => uint256) balances;
-    mapping (address => mapping (address => uint256)) allowed;
+    mapping(address => uint256) balances;
+    mapping(address => mapping(address => uint256)) allowed;
 }
