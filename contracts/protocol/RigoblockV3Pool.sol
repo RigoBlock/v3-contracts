@@ -38,24 +38,22 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
 
     // TODO: deprecate following and use msg.sig
-    //using LibFindMethod for *;
+    using LibFindMethod for bytes4;
 
-    string public constant VERSION = 'HF 3.0.1';
-    // TODO: make standard ERC20 1e18
-    // TODO: could rename decimals as in ERC20
-    uint256 public immutable BASE = 1e6; // tokens are divisible by 1 million
+    string public constant override VERSION = 'HF 3.0.1';
+    address public immutable override AUTHORITY;
 
-    /// @notice address must be updated if authority changes and implementation redeployed.
-    address private immutable AUTHORITY = address(0xcbd0e85fFd354bfB84FDAA04E8BB3E82183Cc92F);
+    /// @notice Standard ERC20
+    uint256 public constant override decimals = 1e18;
 
-    address private immutable _implementation = address(this);
-
-    // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
-    /// @notice address must be updated if governance changes and implementation redeployed.
-    address private immutable RIGOBLOCK_DAO = msg.sender; // mock address for Rigoblock Dao, must change to governance.
+    /// @notice Must be immutable to be compile-time constant.
+    address private immutable _implementation;
 
     // minimum order size to avoid dust clogging things up
-    uint256 private immutable MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
+    uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
+
+    // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
+    address private immutable RIGOBLOCK_DAO;
 
     mapping (address => Account) internal accounts;
 
@@ -177,6 +175,12 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             "105"
         );
         _;
+    }
+
+    constructor(address _authority, address _rigoblockDao) {
+        _implementation = address(this);
+        AUTHORITY = _authority;
+        RIGOBLOCK_DAO = _rigoblockDao;
     }
 
     // TODO: all methods should be onlyDelegatecall modifier limited
@@ -757,7 +761,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256 amount
         )
     {
-        grossAmount = msg.value * BASE / _getBuyPrice();
+        grossAmount = msg.value * decimals / _getBuyPrice();
         uint256 fee; // fee is in basis points
 
         if (data.transactionFee != uint256(0)) {
@@ -811,7 +815,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             feePool = fee * _getRatio() / 100,
             feeRigoblockDao = fee - feeRigoblockDao,
             netAmount = _amount - fee,
-            netRevenue = netAmount * _getSellPrice() / BASE
+            netRevenue = netAmount * _getSellPrice() / decimals
         );
     }
 
