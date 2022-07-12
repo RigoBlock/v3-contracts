@@ -242,8 +242,7 @@ contract PoolRegistry is IPoolRegistry {
         view
         returns (bool)
     {
-        // TODO: test uin256 vs uint32
-        uint32 size;
+        uint256 size;
         assembly {
             size := extcodesize(_target)
         }

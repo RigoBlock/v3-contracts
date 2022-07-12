@@ -108,9 +108,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         // pool proxy is always initialized in the constructor, therefore
         // empty extcodesize means the pool has not been initialized
         address self = address(this);
-        uint256 cs;
-        assembly { cs := extcodesize(self) }
-        require(cs == 0, "POOL_ALREADY_INITIALIZED_ERROR");
+        uint256 size;
+        assembly {
+            size := extcodesize(self)
+        }
+        require(
+            cs == 0,
+            "POOL_ALREADY_INITIALIZED_ERROR"
+        );
         _;
     }
 
