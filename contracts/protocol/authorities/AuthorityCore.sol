@@ -32,7 +32,7 @@ contract AuthorityCore is
     BuildingBlocks public blocks;
     Type public types;
 
-    mapping (address => Account) public accounts;
+    mapping(address => Account) public accounts;
 
     struct List {
         address target;
@@ -56,7 +56,7 @@ contract AuthorityCore is
     struct Account {
         address account;
         bool authorized;
-        mapping (bool => Group) groups; //mapping account to bool authorized to bool group
+        mapping(bool => Group) groups; //mapping account to bool authorized to bool group
     }
 
     struct BuildingBlocks {
@@ -65,7 +65,7 @@ contract AuthorityCore is
         address navVerifier;
         address exchangesAuthority;
         address casper;
-        mapping (address => bool) initialized;
+        mapping(address => bool) initialized;
     }
 
     /*

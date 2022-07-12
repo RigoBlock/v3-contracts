@@ -34,13 +34,13 @@ contract PoolRegistry is IPoolRegistry {
 
     address private authority;
 
-    mapping (address => bytes32) private mapIdByAddress;
-    mapping (bytes32 => bytes32) private mapIdByName;
+    mapping(address => bytes32) private mapIdByAddress;
+    mapping(bytes32 => bytes32) private mapIdByName;
 
-    mapping (address => PoolMeta) private poolMetaByAddress;
+    mapping(address => PoolMeta) private poolMetaByAddress;
 
     struct PoolMeta {
-        mapping (bytes32 => bytes32) meta;
+        mapping(bytes32 => bytes32) meta;
     }
 
     /*

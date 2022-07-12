@@ -60,7 +60,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
     address private immutable RIGOBLOCK_DAO;
 
-    mapping (address => Account) internal accounts;
+    mapping(address => Account) internal accounts;
 
     PoolData data;
     Admin admin;

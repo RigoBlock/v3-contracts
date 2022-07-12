@@ -39,7 +39,7 @@ abstract contract Authorizable is
     /// @dev Whether an address is authorized to call privileged functions.
     /// @dev 0 Address to query.
     /// @return 0 Whether the address is authorized.
-    mapping (address => bool) public authorized;
+    mapping(address => bool) public authorized;
     /// @dev Whether an adderss is authorized to call privileged functions.
     /// @dev 0 Index of authorized address.
     /// @return 0 Authorized address.
