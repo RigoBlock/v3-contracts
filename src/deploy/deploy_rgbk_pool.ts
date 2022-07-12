@@ -8,9 +8,19 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
+  const authority = await deploy("AuthorityCore", {
+    from: deployer,
+    args: [deployer],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   await deploy("RigoblockV3Pool", {
     from: deployer,
-    args: [],
+    args: [
+        authority.address,
+        deployer  // TODO: substitute with governance if input kept
+    ],
     log: true,
     deterministicDeployment: true,
   });
