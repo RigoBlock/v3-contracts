@@ -58,32 +58,14 @@ describe("ProxyFactory", async () => {
             expect(poolId).to.be.not.eq(null)
         })
 
-        it('should return pool owner', async () => {
-          const { factory, registry } = await setupTests()
-          const template = await factory.callStatic.createPool('testpool','TEST')
-          await factory.createPool('testpool', 'TEST')
-          const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
-          const [ user1 ] = waffle.provider.getWallets()
-          expect(await pool.owner()).to.be.eq(user1.address)
-        })
-
         it('should create pool with space not first or last character', async () => {
             const { factory } = await setupTests()
             const template = await factory.callStatic.createPool('t est pool','TEST')
             const txReceipt = await factory.createPool('t est pool', 'TEST')
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
             const result = await txReceipt.wait()
-            expect(result.events[1].args.poolAddress).to.be.eq(template)
-        })
-
-        it('should return pool name from new pool', async () => {
-            const { factory } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
-            const txReceipt = await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
-            const result = await txReceipt.wait()
-            const poolData = await pool.getData()
-            expect(poolData.name).to.be.eq('testpool')
+            // 3 logs are emitted at pool creation, could expect exact event.withArgs
+            expect(result.events[2].args.poolAddress).to.be.eq(template)
         })
 
         it('should create pool with uppercase character in name', async () => {

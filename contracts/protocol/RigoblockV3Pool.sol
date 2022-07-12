@@ -31,39 +31,38 @@ import { ReentrancyGuard } from "../utils/reentrancyGuard/ReentrancyGuard.sol";
 
 import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 
-/// @title Drago - A set of rules for a drago.
+/// @title RigoblockV3Pool - A set of rules for Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
-    // TODO: moved owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
-    // TODO: move name symbol and total supply to public variables
-    //  or implement functions name() symbol() (totalSupply already implemented).
+    // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
 
     // TODO: deprecate following and use msg.sig
-    using LibFindMethod for *;
+    using LibFindMethod for bytes4;
 
-    string public constant VERSION = 'HF 3.0.0';
-    // TODO: make standard ERC20 1e18
-    // TODO: could rename decimals as in ERC20
-    uint256 public constant BASE = 1e6; // tokens are divisible by 1 million
+    string public constant override VERSION = "HF 3.0.1";
 
-    /// @notice address must be updated if authority changes and implementation redeployed.
-    address internal immutable AUTHORITY = address(0xcbd0e85fFd354bfB84FDAA04E8BB3E82183Cc92F);
+    /// @notice Standard ERC20
+    uint256 public constant override decimals = 1e18;
 
-    address internal immutable _implementation = address(this);
-
-    address internal rigoblockDao = msg.sender; // mock address for Rigoblock Dao.
-    // TODO: check if we can group multiple uint for smaller implementation bytecode
-    uint256 internal ratio = 80;
+    address public immutable override AUTHORITY;
 
     // minimum order size to avoid dust clogging things up
-    uint256 internal minimumOrder = 1e15; // 1e15 = 1 finney
-    uint256 internal sellPrice = 1 ether;
-    uint256 internal buyPrice = 1 ether;
+    uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
+
+    uint256 private constant INITIAL_SELL_PRICE = 1e18;
+    uint256 private constant INITIAL_BUY_PRICE = 1e18;
+    uint256 private constant INITIAL_RATIO = 80;  // 80 is 80%
+
+    /// @notice Must be immutable to be compile-time constant.
+    address private immutable _implementation;
+
+    // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
+    address private immutable RIGOBLOCK_DAO;
 
     mapping (address => Account) internal accounts;
 
-    DragoData data;
+    PoolData data;
     Admin admin;
 
     struct Receipt {
@@ -78,21 +77,25 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     // TODO: we removed pool id here, check if useful storing at pool creation
-    struct DragoData {
+    struct PoolData {
         string name;
         string symbol;
+        // TODO: merge sell and buy price, set spread
+        uint256 buyPrice;   // initially 1e18 = 1 ether
+        uint256 sellPrice;  // initially 1e18 = 1 ether
         uint256 totalSupply;
         uint256 transactionFee; // in basis points 1 = 0.01%
         uint32 minPeriod;
     }
 
     struct Admin {
+        uint256 ratio;  // initial ratio is 80%
         address feeCollector;
         address kycProvider;
         bool kycEnforced;
-        uint256 ratio; // ratio is 80%
     }
 
+    // TODO: fix as msg.sender == address(this) only self or msg.sender == implementation
     modifier onlyDelegateCall() {
         if (address(this) != _implementation) {
             _;
@@ -101,22 +104,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
-    // TODO: eliminate methods with use this modifier as we want to have least intervention policy
-    //  ratio should be either stored in factory or pop should query pool locked balances
-    //  min period should be owner controlled with range (i.e. 1 block to 11MM blocks, 3 weeks)
-    modifier onlyDragoDao() {
-        require(msg.sender == rigoblockDao);
-        _;
-    }
-
-    modifier onlyOwnerOrAuthority() {
-        Authority auth = Authority(AUTHORITY);
-        require(auth.isAuthority(msg.sender) || msg.sender == owner);
-        _;
-    }
-
     modifier onlyUninitialized() {
-        require(owner == address(0), "POOL_ALREADY_INITIALIZED_ERROR");
+        require(
+            owner == address(0),
+            "POOL_ALREADY_INITIALIZED_ERROR");
         _;
     }
 
@@ -125,45 +116,76 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             .isWhitelistedExchange(_target);
         bool approvedWrapper = ExchangesAuthority(getExchangesAuthority())
             .isWhitelistedWrapper(_target);
-        require(approvedWrapper || approvedExchange);
+        require(
+            approvedWrapper || approvedExchange,
+            "99"
+        );
         _;
     }
 
     modifier whenApprovedProxy(address _proxy) {
         bool approved = ExchangesAuthority(getExchangesAuthority())
             .isWhitelistedProxy(_proxy);
-        require(approved);
+        require(
+            approved,
+            "100"
+        );
         _;
     }
 
     modifier minimumStake(uint256 amount) {
-        require (amount >= minimumOrder);
+        require (
+            amount >= MINIMUM_ORDER,
+            "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
+        );
         _;
     }
 
     modifier hasEnough(uint256 _amount) {
-        require(accounts[msg.sender].balance >= _amount);
+        require(
+            accounts[msg.sender].balance >= _amount,
+            "101"
+        );
         _;
     }
 
     modifier positiveAmount(uint256 _amount) {
-        require(accounts[msg.sender].balance + _amount > accounts[msg.sender].balance);
+        require(
+            accounts[msg.sender].balance + _amount > accounts[msg.sender].balance,
+            "102"
+        );
         _;
     }
 
     modifier minimumPeriodPast() {
-        require(block.timestamp >= accounts[msg.sender].receipt.activation);
+        require(
+            block.timestamp >= accounts[msg.sender].receipt.activation,
+            "103"
+        );
         _;
     }
 
     modifier buyPriceHigherOrEqual(uint256 _sellPrice, uint256 _buyPrice) {
-        require(_sellPrice <= _buyPrice);
+        require(
+            _sellPrice <= _buyPrice,
+            "104"
+        );
         _;
     }
 
+    // TODO: fix and move to nav verifier
     modifier notPriceError(uint256 _sellPrice, uint256 _buyPrice) {
-        if (_sellPrice <= sellPrice / 10 || _buyPrice >= buyPrice * 10) return;
+        require(
+            _sellPrice > data.sellPrice / 10 && _buyPrice < data.buyPrice * 10,
+            "105"
+        );
         _;
+    }
+
+    constructor(address _authority, address _rigoblockDao) {
+        _implementation = address(this);
+        AUTHORITY = _authority;
+        RIGOBLOCK_DAO = _rigoblockDao;
     }
 
     // TODO: all methods should be onlyDelegatecall modifier limited
@@ -176,12 +198,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     )
         onlyUninitialized // could check in fallback instead
         external
+        override
     {
         data.name = _poolName;
         data.symbol = _poolSymbol;
         owner = _owner;
-        // TODO: should emit event. Check as we are already emitting event in registry
-        //    where we can filter more efficiently by event and contract
+
+        emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
     }
 
     /*
@@ -193,58 +216,61 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         payable
     {
-        require(msg.value != 0);
+        require(
+            msg.value != 0,
+            "POOL_MINT_VALUE_SENT_NULL_ERROR"
+        );
     }
 
-    /// @dev Allows a user to buy into a drago.
-    /// @return Bool the function executed correctly.
-    function buyDrago()
+    /// @dev Allows a user to mint pool tokens.
+    /// @return Value of minted tokens.
+    function mint()
         external
         payable
         minimumStake(msg.value)
-        returns (bool)
+        returns (uint256)
     {
-        require(buyDragoInternal(msg.sender));
-        return true;
+        return _mint(msg.sender);
     }
 
-    /// @dev Allows a user to buy into a drago on behalf of an address.
+    /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _hodler Address of the target user.
-    /// @return Bool the function executed correctly.
-    function buyDragoOnBehalf(address _hodler)
+    /// @return Value of minted tokens.
+    function mintOnBehalf(address _hodler)
         external
         payable
         minimumStake(msg.value)
-        returns (bool)
+        returns (uint256)
     {
-        require(buyDragoInternal(_hodler));
-        return true;
+        return _mint(_hodler);
     }
 
-    /// @dev Allows a user to sell from a drago.
-    /// @param _amount Number of shares to sell.
+    /// @dev Allows a pool holder to burn pool tokens.
+    /// @param _amount Number of tokens to burn.
     /// @return Bool the function executed correctly.
-    function sellDrago(uint256 _amount)
+    function burn(uint256 _amount)
         external
         nonReentrant
         hasEnough(_amount)
         positiveAmount(_amount)
         minimumPeriodPast
-        returns (bool)
+        returns (uint256)
     {
-        uint256 feeDrago;
-        uint256 feeDragoDao;
-        uint256 netAmount;
-        uint256 netRevenue;
-        (feeDrago, feeDragoDao, netAmount, netRevenue) = getSaleAmounts(_amount);
-        allocateSaleTokens(msg.sender, _amount, feeDrago, feeDragoDao);
-        data.totalSupply = data.totalSupply - netAmount; //safeSub(data.totalSupply, netAmount);
+        (
+            uint256 feePool,
+            uint256 feeRigoblockDao,
+            uint256 netAmount,
+            uint256 netRevenue
+        ) = _getBurnAmounts(_amount);
+
+        _allocateBurnTokens(msg.sender, _amount, feePool, feeRigoblockDao);
+        data.totalSupply -= netAmount;
         payable(msg.sender).transfer(netRevenue);
         emit Burn(msg.sender, address(this), _amount, netRevenue, bytes(data.name), bytes(data.symbol));
-        return true;
+        return netRevenue;
     }
 
-    /// @dev Allows drago owner or authority to set the price for a drago.
+    /// @dev Allows pool owner to set the pool price.
     /// @param _newSellPrice Price in wei.
     /// @param _newBuyPrice Price in wei.
     /// @param _signaturevaliduntilBlock Number of blocks till expiry of new data.
@@ -258,7 +284,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         bytes calldata _signedData)
         external
         nonReentrant
-        onlyOwnerOrAuthority
+        onlyOwner
         buyPriceHigherOrEqual(_newSellPrice, _newBuyPrice)
         notPriceError(_newSellPrice, _newBuyPrice)
     {
@@ -269,33 +295,39 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
                 _signaturevaliduntilBlock,
                 _hash,
                 _signedData
-            )
+            ),
+            "POOL_NAV_NOT_VALID_ERROR"
         );
-        // TODO: set mid price + spread (spread only initially).  will save gas
-        // when updating the prices as will only update one variable in storage.
-        sellPrice = _newSellPrice;
-        buyPrice = _newBuyPrice;
+        data.sellPrice = _newSellPrice;
+        data.buyPrice = _newBuyPrice;
         emit NewNav(msg.sender, address(this), _newSellPrice, _newBuyPrice);
     }
 
-    /// @dev Allows drago dao/factory to change fee split ratio.
-    /// @param _ratio Number of ratio for wizard, from 0 to 100.
+    /// @dev Allows pool owner to change fee split ratio between fee collector and Dao.
+    /// @param _ratio Number of ratio for fee collector, from 0 to 100.
     // TODO: this method should be delegated to DAO and universal for all pools.
     function changeRatio(uint256 _ratio)
         external
-        onlyDragoDao
+        onlyOwner
     {
-        ratio = _ratio;
+        require(
+            _ratio != uint256(0),
+            "POOL_RATIO_NULL_ERROR"
+        );
+        admin.ratio = _ratio;
         emit NewRatio(msg.sender, address(this), _ratio);
     }
 
-    /// @dev Allows drago owner to set the transaction fee.
+    /// @dev Allows pool owner to set the transaction fee.
     /// @param _transactionFee Value of the transaction fee in basis points.
     function setTransactionFee(uint256 _transactionFee)
         external
         onlyOwner
     {
-        require(_transactionFee <= 100); //fee cannot be higher than 1%
+        require(
+            _transactionFee <= 100,
+            "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"
+            ); //fee cannot be higher than 1%
         data.transactionFee = _transactionFee;
         emit NewFee(msg.sender, address(this), _transactionFee);
     }
@@ -310,22 +342,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         emit NewCollector(msg.sender, address(this), _feeCollector);
     }
 
-    /// @dev Allows drago dao/factory to upgrade its address.
-    /// @param _dragoDao Address of the new drago dao.
-    function changeDragoDao(address _dragoDao)
-        external
-        onlyDragoDao
-    {
-        rigoblockDao = _dragoDao;
-        emit DragoDaoSet(msg.sender, address(this), _dragoDao);
-    }
-
-    /// @dev Allows drago dao/factory to change the minimum holding period.
+    /// @dev Allows pool owner to change the minimum holding period.
     /// @param _minPeriod Time in seconds.
     function changeMinPeriod(uint32 _minPeriod)
         external
-        onlyDragoDao
+        onlyOwner
     {
+        require(
+            _minPeriod <= 15 days,
+            "POOL_LOCKUP_LONGER_THAN_15_DAYS_ERROR"
+        );
         data.minPeriod = _minPeriod;
     }
 
@@ -343,6 +369,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _tokenTransferProxy Address of the proxy to be approved.
     /// @param _token Address of the token to receive allowance for.
     /// @param _amount Number of tokens approved for spending.
+    // TODO: move method to faucet or change to revoke allowance only
     function setAllowance(
         address _tokenTransferProxy,
         address _token,
@@ -351,13 +378,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         onlyOwner
         whenApprovedProxy(_tokenTransferProxy)
     {
-        require(setAllowancesInternal(_tokenTransferProxy, _token, _amount));
+        require(
+            _setAllowances(_tokenTransferProxy, _token, _amount),
+            "POOL_ALLOWANCE_SETTING_ERROR"
+        );
     }
 
     /// @dev Allows owner to set allowances to multiple approved tokens with one call.
     /// @param _tokenTransferProxy Address of the proxy to be approved.
     /// @param _tokens Address of the token to receive allowance for.
     /// @param _amounts Array of number of tokens to be approved.
+    // TODO: remove batch allowance setting
     function setMultipleAllowances(
         address _tokenTransferProxy,
         address[] calldata _tokens,
@@ -367,7 +398,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         whenApprovedProxy(_tokenTransferProxy)
     {
         for (uint256 i = 0; i < _tokens.length; i++) {
-            if (!setAllowancesInternal(_tokenTransferProxy, _tokens[i], _amounts[i])) continue;
+            if (!_setAllowances(_tokenTransferProxy, _tokens[i], _amounts[i])) continue;
         }
     }
 
@@ -389,7 +420,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             methodAllowedOnExchange(
                 findMethod(transactionData),
                 adapter
-            )
+            ),
+            "POOL_METHOD_NOT_ALLOWED_ERROR"
         );
 
         bytes memory response;
@@ -439,9 +471,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Calculates how many shares a user holds.
+    /// @dev Returns how many pool tokens a user holds.
     /// @param _who Address of the target account.
-    /// @return Number of shares.
+    /// @return Number of pool.
     function balanceOf(address _who)
         external
         view
@@ -451,48 +483,46 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return accounts[_who].balance;
     }
 
-    /// @dev Finds details of a drago pool.
-    /// @return name String name of a drago.
-    /// @return symbol String symbol of a drago.
-    /// @return sellPrice Value of the share price in wei.
-    /// @return buyPrice Value of the share price in wei.
+    /// @dev Finds details of this pool.
+    /// @return poolName String name of this pool.
+    /// @return poolSymbol String symbol of this pool.
+    /// @return Value of the token price in wei.
+    /// @return Value of the token price in wei.
     function getData()
         external
         view
         returns (
-            string memory name,
-            string memory symbol,
-            uint256,  // sellPrice
-            uint256   // buyPrice
+            string memory poolName,
+            string memory poolSymbol,
+            uint256,    // sellPrice
+            uint256     // buyPrice
         )
     {
-        name = data.name;
-        symbol = data.symbol;
-        return (
-            name,
-            symbol,
-            sellPrice,
-            buyPrice
+        return(
+            poolName = data.name,
+            poolSymbol = data.symbol,
+            _getSellPrice(),
+            _getBuyPrice()
         );
     }
 
     /// @dev Returns the price of a pool.
-    /// @return Value of the share price in wei.
-    function calcSharePrice()
+    /// @return Value of the token price in wei.
+    function calcTokenPrice()
         external
         view
         returns (uint256)
     {
-        return sellPrice;
+        return _getSellPrice();
     }
 
     /// @dev Finds the administrative data of the pool.
     /// @return Address of the owner.
     /// @return feeCollector Address of the account where a user collects fees.
-    /// @return dragoDao Address of the drago dao/factory.
-    /// @return ratio Number of the fee split ratio.
+    /// @return Address of the Rigoblock DAO.
+    /// @return Number of the fee split ratio.
     /// @return transactionFee Value of the transaction fee in basis points.
-    /// @return minPeriod Number of the minimum holding period for shares.
+    /// @return minPeriod Number of the minimum holding period for tokens.
     function getAdminData()
         external
         view
@@ -508,8 +538,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return (
             owner,
             admin.feeCollector,
-            rigoblockDao,
-            ratio,
+            RIGOBLOCK_DAO,
+            _getRatio(),
             data.transactionFee,
             data.minPeriod
         );
@@ -552,13 +582,31 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return getExchangesAuthority();
     }
 
-    /// @dev Returns the total amount of issued tokens for this drago.
-    /// @return Number of shares.
+    /// @dev Returns the total amount of issued tokens for this pool.
+    /// @return Number of tokens.
     function totalSupply()
         external view
         returns (uint256)
     {
         return data.totalSupply;
+    }
+
+    function name()
+        external
+        view
+        override
+        returns (string memory)
+    {
+        return data.name;
+    }
+
+    function symbol()
+        external
+        view
+        override
+        returns (string memory)
+    {
+        return data.symbol;
     }
 
     /*
@@ -611,43 +659,57 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Executes the pool purchase.
     /// @param _hodler Address of the target user.
-    /// @return Bool the function executed correctly.
-    function buyDragoInternal(address _hodler)
+    /// @return Value of minted tokens.
+    function _mint(address _hodler)
         internal
-        returns (bool)
+        returns (uint256)
     {
+        // require whitelisted user if kyc is enforced
         if (admin.kycProvider != address(0)) {
-            require(Kyc(admin.kycProvider).isWhitelistedUser(_hodler));
+            require(
+                Kyc(admin.kycProvider).isWhitelistedUser(_hodler),
+                "POOL_CALLER_NOT_WHITELISTED_ERROR"
+            );
         }
-        uint256 grossAmount;
-        uint256 feeDrago;
-        uint256 feeDragoDao;
-        uint256 amount;
-        (grossAmount, feeDrago, feeDragoDao, amount) = getPurchaseAmounts();
-        allocatePurchaseTokens(_hodler, amount, feeDrago, feeDragoDao);
-        data.totalSupply = data.totalSupply + grossAmount;
-        emit Mint(msg.sender, address(this), _hodler, msg.value, amount, bytes(data.name), bytes(data.symbol));
-        return true;
+
+        (
+            uint256 grossAmount,
+            uint256 feePool,
+            uint256 feeRigoblockDao,
+            uint256 amount
+        ) = _getMintAmounts();
+
+        _allocateMintTokens(_hodler, amount, feePool, feeRigoblockDao);
+
+        require(
+            amount > uint256(0),
+            "POOL_MINT_RETURNED_AMOUNT_NULL_ERROR"
+        );
+
+        data.totalSupply += grossAmount;
+        // TODO: save space, we are returning pool address in event
+        emit Mint(msg.sender, address(this), _hodler, msg.value, amount);
+        return amount;
     }
 
     /// @dev Allocates tokens to buyer, splits fee in tokens to wizard and dao.
     /// @param _hodler Address of the buyer.
     /// @param _amount Value of issued tokens.
-    /// @param _feeDrago Number of shares as fee.
-    /// @param _feeDragoDao Number of shares as fee to dao.
-    function allocatePurchaseTokens(
+    /// @param _feePool Number of tokens as fee.
+    /// @param _feeRigoblockDao Number of tokens as fee to dao.
+    function _allocateMintTokens(
         address _hodler,
         uint256 _amount,
-        uint256 _feeDrago,
-        uint256 _feeDragoDao)
+        uint256 _feePool,
+        uint256 _feeRigoblockDao)
         internal
     {
         accounts[_hodler].balance = accounts[_hodler].balance + _amount;
-        if (_feeDrago != uint256(0)) {
+        if (_feePool != uint256(0)) {
             // TODO: test
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
-            accounts[feeCollector].balance = accounts[feeCollector].balance + _feeDrago;
-            accounts[rigoblockDao].balance = accounts[rigoblockDao].balance + _feeDragoDao;
+            accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
+            accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
         unchecked { accounts[_hodler].receipt.activation = uint32(block.timestamp) + data.minPeriod; }
     }
@@ -655,89 +717,110 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Destroys tokens of seller, splits fee in tokens to wizard and dao.
     /// @param _hodler Address of the seller.
     /// @param _amount Value of burnt tokens.
-    /// @param _feeDrago Number of shares as fee.
-    /// @param _feeDragoDao Number of shares as fee to dao.
-    function allocateSaleTokens(
+    /// @param _feePool Number of tokens as fee.
+    /// @param _feeRigoblockDao Number of tokens as fee to dao.
+    function _allocateBurnTokens(
         address _hodler,
         uint256 _amount,
-        uint256 _feeDrago,
-        uint256 _feeDragoDao)
+        uint256 _feePool,
+        uint256 _feeRigoblockDao)
         internal
     {
         accounts[_hodler].balance = accounts[_hodler].balance - _amount;
-        if (_feeDrago != uint256(0)) {
+        if (_feePool != uint256(0)) {
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
-            accounts[feeCollector].balance = accounts[feeCollector].balance + _feeDrago;
-            accounts[rigoblockDao].balance = accounts[rigoblockDao].balance + _feeDragoDao;
+            accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
+            accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
     }
 
     /// @dev Allows owner to set an infinite allowance to an approved exchange.
     /// @param _tokenTransferProxy Address of the proxy to be approved.
     /// @param _token Address of the token to receive allowance for.
-    function setAllowancesInternal(
+    // TODO: remove method
+    function _setAllowances(
         address _tokenTransferProxy,
         address _token,
         uint256 _amount)
         internal
         returns (bool)
     {
+        // TODO: fix as this fails with some old tokens
         require(Token(_token)
             .approve(_tokenTransferProxy, _amount));
         return true;
     }
 
     /// @dev Calculates the correct purchase amounts.
-    /// @return grossAmount Number of new shares.
-    /// @return feeDrago Value of fee in shares.
-    /// @return feeDragoDao Value of fee in shares to dao.
-    /// @return amount Value of net purchased shares.
-    function getPurchaseAmounts()
+    /// @return grossAmount Number of new tokens.
+    /// @return feePool Value of fee in tokens.
+    /// @return feeRigoblockDao Value of fee in tokens to dao.
+    /// @return amount Value of net minted tokens.
+    function _getMintAmounts()
         internal
         view
         returns (
             uint256 grossAmount,
-            uint256 feeDrago,
-            uint256 feeDragoDao,
+            uint256 feePool,
+            uint256 feeRigoblockDao,
             uint256 amount
         )
     {
-        grossAmount = msg.value * BASE / buyPrice;
+        grossAmount = msg.value * decimals / _getBuyPrice();
         uint256 fee; // fee is in basis points
 
         if (data.transactionFee != uint256(0)) {
             fee = grossAmount * data.transactionFee / 10000;
-            feeDrago = fee * ratio / 100;
-            feeDragoDao = fee - feeDrago;
+            // TODO: check if ratio returned correctly
+            feePool = fee * _getRatio() / 100;
+            feeRigoblockDao = fee - feePool;
             amount = grossAmount - fee;
         } else {
-            feeDrago = uint256(0);
-            feeDragoDao = uint256(0);
+            feePool = uint256(0);
+            feeRigoblockDao = uint256(0);
             amount = grossAmount;
         }
     }
 
+    function _getBuyPrice() internal view returns (uint256) {
+        if (data.buyPrice == uint256(0)) {
+            return INITIAL_BUY_PRICE;
+        } else return data.buyPrice;
+    }
+
+    function _getSellPrice() internal view returns (uint256) {
+        if (data.sellPrice == uint256(0)) {
+            return INITIAL_SELL_PRICE;
+        } else return data.sellPrice;
+    }
+
+    function _getRatio() private view returns (uint256) {
+        if (admin.ratio == uint256(0)) {
+            return INITIAL_RATIO;
+        } else return admin.ratio;
+    }
+
     /// @dev Calculates the correct sale amounts.
-    /// @return feeDrago Value of fee in shares.
-    /// @return feeDragoDao Value of fee in shares to dao.
-    /// @return netAmount Value of net sold shares.
-    /// @return netRevenue Value of sale amount for hodler.
-    function getSaleAmounts(uint256 _amount)
+    /// @return feePool Value of fee in tokens.
+    /// @return feeRigoblockDao Value of fee in tokens to dao.
+    /// @return netAmount Value of net burnt tokens.
+    /// @return netRevenue Value of revenue for hodler.
+    function _getBurnAmounts(uint256 _amount)
         internal
         view
         returns (
-            uint256 feeDrago,
-            uint256 feeDragoDao,
+            uint256 feePool,
+            uint256 feeRigoblockDao,
             uint256 netAmount,
             uint256 netRevenue
         )
     {
         uint256 fee = _amount * data.transactionFee / 10000; //fee is in basis points
         return (
-            feeDrago = fee * ratio / 100,
-            feeDragoDao = fee - feeDragoDao,
+            feePool = fee * _getRatio() / 100,
+            feeRigoblockDao = fee - feeRigoblockDao,
             netAmount = _amount - fee,
-            netRevenue = netAmount * sellPrice / BASE
+            netRevenue = netAmount * _getSellPrice() / decimals
         );
     }
 

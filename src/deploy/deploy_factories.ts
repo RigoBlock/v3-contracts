@@ -27,7 +27,10 @@ const deploy: DeployFunction = async function (
 
   const poolImplementation = await deploy("RigoblockV3Pool", {
     from: deployer,
-    args: [],
+    args: [
+        authority.address,
+        deployer  // TODO: substitute with governance if input kept
+    ],
     log: true,
     deterministicDeployment: true,
   });

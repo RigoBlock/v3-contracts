@@ -27,30 +27,28 @@ interface IRigoblockV3PoolActions {
     /*
      * CORE FUNCTIONS
      */
+    function _initializePool(
+        string calldata _poolName,
+        string calldata _poolSymbol,
+        address _owner
+    )
+        external;
+
     function pay()
         external
         payable;
 
-    function buyDrago()
+    function mint()
         external
         payable
-        returns (bool success);
+        returns (uint256);
 
-    function buyDragoOnBehalf(address _hodler)
+    function mintOnBehalf(address _hodler)
         external
         payable
-        returns (bool success);
+        returns (uint256);
 
-    function sellDrago(uint256 _amount)
+    function burn(uint256 _amount)
         external
-        returns (bool success);
-
-    function changeRatio(uint256 _ratio)
-        external;
-
-    function changeDragoDao(address _dragoDao)
-        external;
-
-    function enforceKyc(bool _enforced, address _kycProvider)
-        external;
+        returns (uint256);  // netRevenue
 }

@@ -1,37 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-library StorageSlot {
-    struct AddressSlot {
-        address value;
-    }
-
-    function getAddressSlot(bytes32 slot) internal pure returns (AddressSlot storage r) {
-        assembly {
-            r.slot := slot
-        }
-    }
-}
-
-// Factory can be beacon, owned by the governance
-interface IBeacon {
-    function implementation() external view returns (address);
-}
-
-/// @title IRigoblockPoolProxy - Helper interface of the proxy to access admin slot
-/// @author Gabriele Rigo - <gab@rigoblock.com>
-interface IRigoblockPool {
-
-    function _initializePool(
-        string memory _dragoName,
-        string memory _dragoSymbol,
-        uint256 _dragoId,
-        address _owner,
-        address _authority
-    ) external;
-    // TODO: not yet implemented in pool implementation
-    //function _getBeacon() external view returns (address);
-}
+import "../../utils/storageSlot/StorageSlot.sol";
+import { IRigoblockPoolProxyFactory as Beacon } from "../interfaces/IRigoblockPoolProxyFactory.sol";
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -44,29 +15,21 @@ contract RigoblockPoolProxy {
     /// @param _beacon Beacon address.
     /// @param _data Initialization parameters.
     constructor(address _beacon, bytes memory _data) payable {
+        // store beacon address in beacon slot value
         assert(_BEACON_SLOT == bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1));
         StorageSlot.getAddressSlot(_BEACON_SLOT).value = _beacon;
-        // we pass _data as abi.encodeWithSelector(IRigoblockPool._initializePool.selector, "name", "symbol", id, owner, authority)
-        (bool success, ) = address(IRigoblockPool(
-            IBeacon(_beacon).implementation()
-        )).delegatecall(_data);
 
-        if (success == false) {
-            revert("POOL_INITIALIZATION_FAILED_ERROR");
-        }
-    }
-/*
-    function _getBeacon() public view returns (address) {
-        return StorageSlot.getAddressSlot(_BEACON_SLOT).value;
-    }
+        // initialize pool
+        // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, owner)
+        (bool success, ) = Beacon(_beacon).implementation().delegatecall(_data);
 
-    function _getImplementation() external view returns (address) {
-        return IBeacon(_getBeacon()).implementation();
-    }*/
+        // should never be false as initialization parameters are checked with error returned.
+        assert(success == true);
+    }
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
-        address _implementation = IBeacon(
+        address _implementation = Beacon(
             StorageSlot.getAddressSlot(_BEACON_SLOT).value
         ).implementation();
         // solhint-disable-next-line no-inline-assembly
@@ -80,10 +43,4 @@ contract RigoblockPoolProxy {
             return(0, returndatasize())
         }
     }
-
-    // TODO: following function is commented as we are trying to save space, but must check that applications
-    // recognize EIP1967 proxy standard
-    /*function _getBeacon() internal view returns (address) {
-        return StorageSlot.getAddressSlot(_BEACON_SLOT).value;
-    }*/
 }

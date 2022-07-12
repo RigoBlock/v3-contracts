@@ -87,6 +87,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
             "FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR"
         );
         implementation = _newImplementation;
+        emit Upgraded(_newImplementation);
     }
 
     /// @dev Allows owner to update the registry

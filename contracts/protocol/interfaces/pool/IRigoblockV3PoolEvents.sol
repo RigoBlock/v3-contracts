@@ -2,19 +2,15 @@
 pragma solidity >=0.8.0;
 
 interface IRigoblockV3PoolEvents {
-    /// @dev Logs creation of a new pool.
-    /// @notice Emitted when new pool created.
-    /// @param poolAddress Address of the new pool.
+    /// @dev Logs initialization of a new pool.
+    /// @notice Emitted after new pool created.
     /// @param group Address of the factory.
     /// @param owner Address of the owner.
-    /// @param poolId Id of the pool.
     /// @param name String name of the pool.
     /// @param symbol String symbol of the pool.
-    event DragoCreated(
-        address poolAddress,
-        address indexed group,
+    event PoolInitialized(
+        address group,
         address indexed owner,
-        uint256 poolId,
         string name,
         string symbol
     );
@@ -26,16 +22,12 @@ interface IRigoblockV3PoolEvents {
     /// @param to Address that receives the tokens.
     /// @param amount Number of units created.
     /// @param revenue Value in base unit.
-    /// @param name String name of the pool.
-    /// @param symbol String symbol of the pool.
     event Mint(
         address indexed poolAddress,
         address indexed from,
         address indexed to,
         uint256 amount,
-        uint256 revenue,
-        bytes name,
-        bytes symbol
+        uint256 revenue
     );
 
     /// @dev Logs sale of pool tokens.

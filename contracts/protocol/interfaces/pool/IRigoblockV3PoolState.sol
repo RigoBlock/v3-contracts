@@ -3,17 +3,38 @@ pragma solidity >=0.8.0;
 
 interface IRigoblockV3PoolState {
 
+    /*
+     * IMMUTABLE STORAGE
+    */
+    function AUTHORITY() external view returns (address);
+
+    function decimals() external view returns(uint256);
+
+    function name() external view returns (string memory);
+
+    function symbol() external view returns (string memory);
+
+    function VERSION() external view returns (string calldata);
+
+    /*
+     * VIEW METHODS
+    */
+    /// @dev Finds details of this pool.
+    /// @return poolName String name of this pool.
+    /// @return poolSymbol String symbol of this pool.
+    /// @return Value of the token price in wei.
+    /// @return Value of the token price in wei.
     function getData()
         external
         view
         returns (
-            string memory name,
-            string memory symbol,
-            uint256,  // sellPrice
-            uint256   // buyPrice
+            string memory poolName,
+            string memory poolSymbol,
+            uint256,    // sellPrice
+            uint256     // buyPrice
         );
 
-    function calcSharePrice()
+    function calcTokenPrice()
         external
         view
         returns (uint256);
@@ -50,8 +71,5 @@ interface IRigoblockV3PoolState {
         view
         returns (address);
 
-    function totalSupply()
-        external
-        view
-        returns (uint256);
+    function totalSupply() external view returns (uint256);
 }

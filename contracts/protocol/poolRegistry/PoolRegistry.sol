@@ -20,7 +20,7 @@
 pragma solidity 0.8.14;
 
 import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
-import { LibSanitize } from "../../utils/LibSanitize/LibSanitize.sol";
+import { LibSanitize } from "../../utils/libSanitize/LibSanitize.sol";
 import { IAuthorityCore as Authority } from "../interfaces/IAuthorityCore.sol";
 
 import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
@@ -78,6 +78,14 @@ contract PoolRegistry is IPoolRegistry {
         _;
     }
 
+    modifier whenPoolRegistered(address _poolAddress) {
+        require(
+            mapIdByAddress[_poolAddress] != bytes32(0),
+            "REGISTRY_ADDRESS_NOT_REGISTERED_ERROR"
+        );
+        _;
+    }
+
     constructor(
         address _authority,
         address _rigoblockDao
@@ -128,6 +136,7 @@ contract PoolRegistry is IPoolRegistry {
         external
         override
         onlyPoolOwner(_poolAddress)
+        whenPoolRegistered(_poolAddress)
     {
         poolMetaByAddress[_poolAddress].meta[_key] = _value;
         emit MetaChanged(_poolAddress, _key, _value);
