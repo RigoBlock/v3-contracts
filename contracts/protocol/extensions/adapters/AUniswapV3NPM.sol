@@ -45,14 +45,17 @@ interface IWETH9 {
 }
 
 contract AUniswapV3NPM {
-    
+
     using Path for bytes;
-    
+
     // immutable variables, initialized here it to facilitate etherscan verification
     // addresses are same on all networks
+    // TODO: initialize in constructor
     address payable immutable private UNISWAP_V3_NPM_ADDRESS = payable(address(0xC36442b4a4522E871399CD717aBDD847Ab11FE88));
+
+    // TODO: define as constant, add sig hash and comment explanation
     bytes4 immutable private APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
-    
+
     /// @notice Wraps ETH when value input is non-null
     /// @param value The ETH amount to be wrapped
     function wrapETH(uint256 value) external payable {
@@ -62,7 +65,7 @@ contract AUniswapV3NPM {
             ).deposit{value: value}();
         }
     }
-    
+
     /// @notice Creates a new position wrapped in a NFT
     /// @dev Call this when the pool does exist and is initialized. Note that if the pool is created but not initialized
     /// a method does not exist, i.e. the pool is assumed to be initialized.
@@ -82,13 +85,9 @@ contract AUniswapV3NPM {
         )
     {
         // we first set the allowance to the uniswap position manager
-        if (Token(params.token0).allowance(address(this), UNISWAP_V3_NPM_ADDRESS) < params.amount0Desired) {
-            safeApproveInternal(params.token0, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
-        }
-        if (Token(params.token1).allowance(address(this), UNISWAP_V3_NPM_ADDRESS) < params.amount1Desired) {
-            safeApproveInternal(params.token1, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
-        }
-        
+        _safeApprove(params.token0, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
+        _safeApprove(params.token1, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
+
         // finally, we mint the liquidity token
         (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).mint(
             INonfungiblePositionManager.MintParams({
@@ -105,9 +104,13 @@ contract AUniswapV3NPM {
                 deadline: params.deadline
             })
         );
+
+        // we make sure we do not clear storage
+        _safeApprove(params.token0, UNISWAP_V3_NPM_ADDRESS, uint256(1));
+        _safeApprove(params.token1, UNISWAP_V3_NPM_ADDRESS, uint256(1));
     }
-    
-    
+
+
     /// @notice Increases the amount of liquidity in a position, with tokens paid by the `msg.sender`
     /// @param params tokenId The ID of the token for which liquidity is being increased,
     /// amount0Desired The desired amount of token0 to be spent,
@@ -128,15 +131,11 @@ contract AUniswapV3NPM {
         )
     {
         ( , , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).positions(params.tokenId);
-        
+
         // we first set the allowance to the uniswap position manager
-        if (Token(token0).allowance(address(this), UNISWAP_V3_NPM_ADDRESS) < params.amount0Desired) {
-            safeApproveInternal(token0, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
-        }
-        if (Token(token1).allowance(address(this), UNISWAP_V3_NPM_ADDRESS) < params.amount1Desired) {
-            safeApproveInternal(token1, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
-        }
-        
+        _safeApprove(token0, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
+        _safeApprove(token1, UNISWAP_V3_NPM_ADDRESS, type(uint).max);
+
         // finally, we add to the liquidity token
         (liquidity, amount0, amount1) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).increaseLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
@@ -148,8 +147,12 @@ contract AUniswapV3NPM {
                 deadline: params.deadline
             })
         );
+
+        // we make sure we do not clear storage
+        _safeApprove(token0, UNISWAP_V3_NPM_ADDRESS, uint256(1));
+        _safeApprove(token1, UNISWAP_V3_NPM_ADDRESS, uint256(1));
     }
-    
+
     /// @notice Decreases the amount of liquidity in a position and accounts it to the position
     /// @param params tokenId The ID of the token for which liquidity is being decreased,
     /// amount The amount by which liquidity will be decreased,
@@ -185,7 +188,7 @@ contract AUniswapV3NPM {
             burnInternal(params.tokenId);
         }
     }
-    
+
     /// @notice Collects up to a maximum amount of fees owed to a specific position to the recipient
     /// @param params tokenId The ID of the NFT for which tokens are being collected,
     /// recipient The account that should receive the tokens,
@@ -200,7 +203,7 @@ contract AUniswapV3NPM {
     {
         (amount0, amount1) = collectInternal(params);
     }
-    
+
     /// @notice Collects up to a maximum amount of fees owed to a specific position to the recipient
     /// @param params tokenId The ID of the NFT for which tokens are being collected,
     /// recipient The account that should receive the tokens,
@@ -221,18 +224,18 @@ contract AUniswapV3NPM {
             })
         );
     }
-    
+
     /// @notice Burns a token ID, which deletes it from the NFT contract. The token must have 0 liquidity and all tokens
     /// must be collected first.
     /// @param tokenId The ID of the token that is being burned
     function burn(uint256 tokenId) external payable {
         burnInternal(tokenId);
     }
-    
+
     function burnInternal(uint256 tokenId) internal {
         INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).burn(tokenId);
     }
-    
+
     /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
     /// @param amountMinimum The minimum amount of WETH9 to unwrap
@@ -276,7 +279,7 @@ contract AUniswapV3NPM {
             recipient != address(this) ? address(this) : address(this) // this drago is always the recipient
         );
     }
-    
+
     /// @notice Creates a new pool if it does not exist, then initializes if not initialized
     /// @dev This method can be bundled with others via IMulticall for the first action (e.g. mint) performed against a pool
     /// @param token0 The contract address of token0 of the pool
@@ -301,8 +304,8 @@ contract AUniswapV3NPM {
             sqrtPriceX96
         );
     }
-    
-    function safeApproveInternal(
+
+    function _safeApprove(
         address token,
         address spender,
         uint256 value
@@ -313,7 +316,7 @@ contract AUniswapV3NPM {
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(APPROVE_SELECTOR, spender, value));
         require(
             success && (data.length == 0 || abi.decode(data, (bool))),
-            "RIGOBLOCK_APPROVE_FAILED"
+            "AUNISWAPV3NPM_TOKEN_APPROVE_FAILED_ERROR"
         );
     }
 }
