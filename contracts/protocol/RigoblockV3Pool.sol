@@ -40,7 +40,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: deprecate following and use msg.sig
     using LibFindMethod for bytes4;
 
-    string public constant override VERSION = 'HF 3.0.1';
+    string public constant override VERSION = "HF 3.0.1";
 
     /// @notice Standard ERC20
     uint256 public constant override decimals = 1e18;
