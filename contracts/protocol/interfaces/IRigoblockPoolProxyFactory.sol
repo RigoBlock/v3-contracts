@@ -28,6 +28,8 @@ interface IRigoblockPoolProxyFactory {
         address poolAddress
     );
 
+    event Upgraded(address indexed implementation);
+
     function createPool(
         string calldata _name,
         string calldata _symbol
