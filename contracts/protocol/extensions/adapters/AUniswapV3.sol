@@ -412,7 +412,7 @@ contract AUniswapV3 {
         internal
     {
         // solhint-disable-next-line avoid-low-level-calls
-        // TODO: check additional gas cost in calling contract instead of address with selector or use assembly
+        // TODO: we may want to use assembly here
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(APPROVE_SELECTOR, spender, value));
         require(
             success && (data.length == 0 || abi.decode(data, (bool))),
