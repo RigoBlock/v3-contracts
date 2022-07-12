@@ -113,7 +113,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             size := extcodesize(self)
         }
         require(
-            cs == 0,
+            size == 0,
             "POOL_ALREADY_INITIALIZED_ERROR"
         );
         _;
