@@ -41,24 +41,24 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     using LibFindMethod for bytes4;
 
     string public constant override VERSION = 'HF 3.0.1';
-    address public immutable override AUTHORITY;
 
     /// @notice Standard ERC20
     uint256 public constant override decimals = 1e18;
+
+    address public immutable override AUTHORITY;
+
+    // minimum order size to avoid dust clogging things up
+    uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
+
+    uint256 private constant INITIAL_SELL_PRICE = 1e18;
+    uint256 private constant INITIAL_BUY_PRICE = 1e18;
+    uint256 private constant INITIAL_RATIO = 80;  // 80 is 80%
 
     /// @notice Must be immutable to be compile-time constant.
     address private immutable _implementation;
 
     // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
     address private immutable RIGOBLOCK_DAO;
-
-    // minimum order size to avoid dust clogging things up
-    uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
-
-    // initial unitary value
-    uint256 private constant INITIAL_SELL_PRICE = 1e18;
-    uint256 private constant INITIAL_BUY_PRICE = 1e18;
-    uint256 private constant INITIAL_RATIO = 80;  // 80 is 80%
 
     mapping (address => Account) internal accounts;
 
