@@ -105,9 +105,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     modifier onlyUninitialized() {
+        // pool proxy is always initialized in the constructor, therefore
+        // empty extcodesize means the pool has not been initialized
+        address self = address(this);
+        uint256 size;
+        assembly {
+            size := extcodesize(self)
+        }
         require(
-            owner == address(0),
-            "POOL_ALREADY_INITIALIZED_ERROR");
+            size == 0,
+            "POOL_ALREADY_INITIALIZED_ERROR"
+        );
         _;
     }
 
@@ -119,16 +127,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         require(
             approvedWrapper || approvedExchange,
             "99"
-        );
-        _;
-    }
-
-    modifier whenApprovedProxy(address _proxy) {
-        bool approved = ExchangesAuthority(getExchangesAuthority())
-            .isWhitelistedProxy(_proxy);
-        require(
-            approved,
-            "100"
         );
         _;
     }
@@ -224,6 +222,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Allows a user to mint pool tokens.
     /// @return Value of minted tokens.
+    // TODO merge with following, as holder can just mint for himself
     function mint()
         external
         payable
@@ -363,43 +362,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         admin.kycEnforced = _enforced;
         admin.kycProvider = _kycProvider;
-    }
-
-    /// @dev Allows owner to set an allowance to an approved token transfer proxy.
-    /// @param _tokenTransferProxy Address of the proxy to be approved.
-    /// @param _token Address of the token to receive allowance for.
-    /// @param _amount Number of tokens approved for spending.
-    // TODO: move method to faucet or change to revoke allowance only
-    function setAllowance(
-        address _tokenTransferProxy,
-        address _token,
-        uint256 _amount)
-        external
-        onlyOwner
-        whenApprovedProxy(_tokenTransferProxy)
-    {
-        require(
-            _setAllowances(_tokenTransferProxy, _token, _amount),
-            "POOL_ALLOWANCE_SETTING_ERROR"
-        );
-    }
-
-    /// @dev Allows owner to set allowances to multiple approved tokens with one call.
-    /// @param _tokenTransferProxy Address of the proxy to be approved.
-    /// @param _tokens Address of the token to receive allowance for.
-    /// @param _amounts Array of number of tokens to be approved.
-    // TODO: remove batch allowance setting
-    function setMultipleAllowances(
-        address _tokenTransferProxy,
-        address[] calldata _tokens,
-        uint256[] calldata _amounts)
-        external
-        onlyOwner
-        whenApprovedProxy(_tokenTransferProxy)
-    {
-        for (uint256 i = 0; i < _tokens.length; i++) {
-            if (!_setAllowances(_tokenTransferProxy, _tokens[i], _amounts[i])) continue;
-        }
     }
 
     /// @dev Allows owner to operate on exchange through extension.
@@ -732,23 +694,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
             accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
-    }
-
-    /// @dev Allows owner to set an infinite allowance to an approved exchange.
-    /// @param _tokenTransferProxy Address of the proxy to be approved.
-    /// @param _token Address of the token to receive allowance for.
-    // TODO: remove method
-    function _setAllowances(
-        address _tokenTransferProxy,
-        address _token,
-        uint256 _amount)
-        internal
-        returns (bool)
-    {
-        // TODO: fix as this fails with some old tokens
-        require(Token(_token)
-            .approve(_tokenTransferProxy, _amount));
-        return true;
     }
 
     /// @dev Calculates the correct purchase amounts.

@@ -15,7 +15,7 @@ interface IRigoblockV3PoolOwnerActions {
     function changeMinPeriod(uint32 _minPeriod)
         external;
 
-    
+
     function setTransactionFee(uint256 _transactionFee)
         external;
 
@@ -26,20 +26,6 @@ interface IRigoblockV3PoolOwnerActions {
         external;
 
     function enforceKyc(bool _enforced, address _kycProvider)
-        external;
-    
-    function setAllowance(
-        address _tokenTransferProxy,
-        address _token,
-        uint256 _amount
-    )
-        external;
-
-    function setMultipleAllowances(
-        address _tokenTransferProxy,
-        address[] calldata _tokens,
-        uint256[] calldata _amounts
-    )
         external;
 
     struct Transaction {
