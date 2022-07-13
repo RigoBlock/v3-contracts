@@ -202,6 +202,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
         // we want to make sure only owner writes to storage, as state changes
         // require at least 20k gas. Anyone can perform a read call.
+        // TODO: check gas consumption assumption is true, we are using 5k.
 
         // perform a delegatecall to extension
         // TODO: test and check owner.slot
@@ -215,7 +216,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
                 if eq(caller(), owner.slot) {
                     return(0, returndatasize())
                 }
-                revert(0, returndatasize())
+                revert(0, "POOL_WRITE_OP_NOT_OWNER_ERROR")
             }
             if eq(success, 0) {
                 revert(0, returndatasize())
