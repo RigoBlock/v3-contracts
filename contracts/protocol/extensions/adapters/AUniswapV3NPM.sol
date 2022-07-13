@@ -100,7 +100,7 @@ contract AUniswapV3NPM {
                 amount1Desired: params.amount1Desired,
                 amount0Min: params.amount0Min,
                 amount1Min: params.amount1Min,
-                recipient: address(this), // this drago is always the recipient
+                recipient: address(this), // this pool is always the recipient
                 deadline: params.deadline
             })
         );
@@ -178,7 +178,7 @@ contract AUniswapV3NPM {
         collectInternal(
             INonfungiblePositionManager.CollectParams({
                 tokenId: params.tokenId,
-                recipient: address(this), // this drago is always the recipient
+                recipient: address(this), // this pool is always the recipient
                 amount0Max: type(uint128).max,
                 amount1Max: type(uint128).max
             })
@@ -218,7 +218,7 @@ contract AUniswapV3NPM {
         (amount0, amount1) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: params.tokenId,
-                recipient: address(this),  // this drago is always the recipient
+                recipient: address(this),  // this pool is always the recipient
                 amount0Max: params.amount0Max,
                 amount1Max: params.amount1Max
             })
@@ -246,7 +246,7 @@ contract AUniswapV3NPM {
     {
         IPeripheryPayments(UNISWAP_V3_NPM_ADDRESS).unwrapWETH9(
             amountMinimum,
-            recipient != address(this) ? address(this) : address(this) // this drago is always the recipient
+            recipient != address(this) ? address(this) : address(this) // this pool is always the recipient
         );
     }
 
@@ -276,7 +276,7 @@ contract AUniswapV3NPM {
         IPeripheryPayments(UNISWAP_V3_NPM_ADDRESS).sweepToken(
             token,
             amountMinimum,
-            recipient != address(this) ? address(this) : address(this) // this drago is always the recipient
+            recipient != address(this) ? address(this) : address(this) // this pool is always the recipient
         );
     }
 

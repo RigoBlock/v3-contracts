@@ -64,12 +64,12 @@ interface IRigoblockV3PoolState {
         view
         returns (bool isValid);
 
-    /// @dev Finds the exchanges authority.
-    /// @return Address of the exchanges authority.
-    function getExchangesAuth()
+    function totalSupply() external view returns (uint256);
+
+    // TODO: not sure correct defining in pool state interface
+    // not sure we need this
+    function getExtensionsAuthority()
         external
         view
         returns (address);
-
-    function totalSupply() external view returns (uint256);
 }

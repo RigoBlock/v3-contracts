@@ -311,7 +311,7 @@ contract AuthorityCore is
 
     /// @dev Provides the address of the exchangee authority
     /// @return Address of the adapter
-    function getExchangesAuthority()
+    function getExtensionsAuthority()
         external view
         returns (address)
     {
