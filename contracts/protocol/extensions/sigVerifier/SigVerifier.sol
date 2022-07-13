@@ -72,6 +72,9 @@ contract SigVerifier {
                     ExchangesAuthority(
                         RigoblockV3Pool(payable(address(msg.sender))).getExtensionsAuthority()
                     )
+                    // TODO: tx.origin returns EOA. Generates confusion and should be removed
+                    // not the correct way to query whitelisted signer. Since we check adaoter,
+                    // we very well may just make this contract an adapter
                     .getExchangeAdapter(address(tx.origin)) != address(0),
                     "VALID_EIP712_BUT_ORIGIN_NOT_WHITELISTED"
                 );
@@ -88,7 +91,6 @@ contract SigVerifier {
                 isValid = true;
 
             } else {
-                // TODO: move sigverifier to custom adapter and deprecate use of tx.origin
                 require(
                     ExchangesAuthority(
                         RigoblockV3Pool(payable(address(msg.sender))).getExtensionsAuthority()

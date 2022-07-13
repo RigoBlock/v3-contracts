@@ -200,24 +200,26 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         // we check that the method is approved by governance
         require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
 
-        // we allow anyone to read from adapter, only owner to write
-        if (msg.sender != owner) {
-            assembly {
-                calldatacopy(0, 0, calldatasize())
-                let success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
-                returndatacopy(0, 0, returndatasize())
-                return(0, returndatasize())
+        // TODO: test
+        // we want to make sure only owner writes to storage, as state changes
+        // require at least 20k gas. Anyone can perform a read call.
+        // alternatively, we delegatecall from implemented pool method
+        if (gasleft() > 10000) {
+            require(
+                msg.sender == owner,
+                "POOL_STATE_CHANGE_NOT_OWNER_ERROR"
+            );
+        }
+
+        // perform a delegatecall to extension
+        assembly {
+            calldatacopy(0, 0, calldatasize())
+            let success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            if eq(success, 0) {
+                revert(0, returndatasize())
             }
-        } else {
-            assembly {
-                calldatacopy(0, 0, calldatasize())
-                let success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
-                returndatacopy(0, 0, returndatasize())
-                if eq(success, 0) {
-                    revert(0, returndatasize())
-                }
-                return(0, returndatasize())
-            }
+            return(0, returndatasize())
         }
     }
 
