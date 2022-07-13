@@ -20,12 +20,12 @@
 pragma solidity 0.8.14;
 
 import { IAuthorityCore as Authority } from "./interfaces/IAuthorityCore.sol";
-import { IExchangesAuthority as ExchangesAuthority } from "./interfaces/IExchangesAuthority.sol";
+// TODO: modify import after contracts renaming
+import { IExchangesAuthority as ExtensionsAuthority } from "./interfaces/IExchangesAuthority.sol";
 import { ISigVerifier as SigVerifier } from "./interfaces/ISigVerifier.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
-import { LibFindMethod } from "../utils/libFindMethod/LibFindMethod.sol";
 import { OwnedUninitialized as Owned } from "../utils/owned/OwnedUninitialized.sol";
 import { ReentrancyGuard } from "../utils/reentrancyGuard/ReentrancyGuard.sol";
 
@@ -36,9 +36,6 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
-
-    // TODO: deprecate following and use msg.sig
-    using LibFindMethod for bytes4;
 
     string public constant override VERSION = "HF 3.0.1";
 
@@ -62,7 +59,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     mapping(address => Account) internal accounts;
 
-    PoolData data;
+    PoolData poolData;
     Admin admin;
 
     struct Receipt {
@@ -119,18 +116,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
-    modifier whenApprovedExchangeOrWrapper(address _target) {
-        bool approvedExchange = ExchangesAuthority(getExchangesAuthority())
-            .isWhitelistedExchange(_target);
-        bool approvedWrapper = ExchangesAuthority(getExchangesAuthority())
-            .isWhitelistedWrapper(_target);
-        require(
-            approvedWrapper || approvedExchange,
-            "99"
-        );
-        _;
-    }
-
     modifier minimumStake(uint256 amount) {
         require (
             amount >= MINIMUM_ORDER,
@@ -174,7 +159,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: fix and move to nav verifier
     modifier notPriceError(uint256 _sellPrice, uint256 _buyPrice) {
         require(
-            _sellPrice > data.sellPrice / 10 && _buyPrice < data.buyPrice * 10,
+            _sellPrice > poolData.sellPrice / 10 && _buyPrice < poolData.buyPrice * 10,
             "105"
         );
         _;
@@ -194,12 +179,12 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         string memory _poolSymbol,
         address _owner
     )
-        onlyUninitialized // could check in fallback instead
+        onlyUninitialized
         external
         override
     {
-        data.name = _poolName;
-        data.symbol = _poolSymbol;
+        poolData.name = _poolName;
+        poolData.symbol = _poolSymbol;
         owner = _owner;
 
         emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
@@ -208,6 +193,38 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /*
      * CORE FUNCTIONS
      */
+
+    // fallback is restricted to owner
+    fallback() external payable {
+        address adapter = _getApplicationAdapter(msg.sig);
+        // we check that the method is approved by governance
+        require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
+
+        // we allow anyone to read from adapter, only owner to write
+        if (msg.sender != owner) {
+            assembly {
+                calldatacopy(0, 0, calldatasize())
+                let success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                return(0, returndatasize())
+            }
+        } else {
+            assembly {
+                calldatacopy(0, 0, calldatasize())
+                let success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                if eq(success, 0) {
+                    revert(0, returndatasize())
+                }
+                return(0, returndatasize())
+            }
+        }
+    }
+
+    receive() external payable {
+        assert(msg.value > 0);
+    }
+
     /// @dev Allows Ether to be received.
     /// @notice Used for settlements and withdrawals.
     function pay()
@@ -216,7 +233,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         require(
             msg.value != 0,
-            "POOL_MINT_VALUE_SENT_NULL_ERROR"
+            "POOL_VALUE_SENT_NULL_ERROR"
         );
     }
 
@@ -263,16 +280,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         ) = _getBurnAmounts(_amount);
 
         _allocateBurnTokens(msg.sender, _amount, feePool, feeRigoblockDao);
-        data.totalSupply -= netAmount;
+        poolData.totalSupply -= netAmount;
         payable(msg.sender).transfer(netRevenue);
-        emit Burn(msg.sender, address(this), _amount, netRevenue, bytes(data.name), bytes(data.symbol));
+        emit Burn(msg.sender, address(this), _amount, netRevenue, bytes(poolData.name), bytes(poolData.symbol));
         return netRevenue;
     }
 
     /// @dev Allows pool owner to set the pool price.
     /// @param _newSellPrice Price in wei.
     /// @param _newBuyPrice Price in wei.
-    /// @param _signaturevaliduntilBlock Number of blocks till expiry of new data.
+    /// @param _signaturevaliduntilBlock Number of blocks till expiry of new poolData.
     /// @param _hash Bytes32 of the transaction hash.
     /// @param _signedData Bytes of extradata and signature.
     function setPrices(
@@ -288,7 +305,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         notPriceError(_newSellPrice, _newBuyPrice)
     {
         require(
-            isValidNav(
+            _isValidNav(
                 _newSellPrice,
                 _newBuyPrice,
                 _signaturevaliduntilBlock,
@@ -297,8 +314,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             ),
             "POOL_NAV_NOT_VALID_ERROR"
         );
-        data.sellPrice = _newSellPrice;
-        data.buyPrice = _newBuyPrice;
+        poolData.sellPrice = _newSellPrice;
+        poolData.buyPrice = _newBuyPrice;
         emit NewNav(msg.sender, address(this), _newSellPrice, _newBuyPrice);
     }
 
@@ -327,7 +344,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             _transactionFee <= 100,
             "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"
             ); //fee cannot be higher than 1%
-        data.transactionFee = _transactionFee;
+        poolData.transactionFee = _transactionFee;
         emit NewFee(msg.sender, address(this), _transactionFee);
     }
 
@@ -351,7 +368,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             _minPeriod <= 15 days,
             "POOL_LOCKUP_LONGER_THAN_15_DAYS_ERROR"
         );
-        data.minPeriod = _minPeriod;
+        poolData.minPeriod = _minPeriod;
     }
 
     function enforceKyc(
@@ -362,72 +379,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         admin.kycEnforced = _enforced;
         admin.kycProvider = _kycProvider;
-    }
-
-    /// @dev Allows owner to operate on exchange through extension.
-    /// @param _exchange Address of the target exchange.
-    /// @param transaction ABIencoded transaction.
-    function operateOnExchange(
-        address _exchange,
-        Transaction memory transaction)
-        public
-        onlyOwner
-        nonReentrant
-        whenApprovedExchangeOrWrapper(_exchange)
-        returns (bool success)
-    {
-        address adapter = getExchangeAdapter(_exchange);
-        bytes memory transactionData = transaction.assembledData;
-        require(
-            methodAllowedOnExchange(
-                findMethod(transactionData),
-                adapter
-            ),
-            "POOL_METHOD_NOT_ALLOWED_ERROR"
-        );
-
-        bytes memory response;
-        bool failed = true;
-
-        assembly {
-
-            let succeeded := delegatecall(
-                sub(gas(), 5000),
-                adapter,
-                add(transactionData, 0x20),
-                mload(transactionData),
-                0,
-                32) // 0x0
-
-            // load delegatecall output
-            response := mload(0)
-            failed := iszero(succeeded)
-
-            switch failed
-            case 1 {
-                // throw if delegatecall failed
-                revert(0, 0)
-            }
-        }
-
-        return (success = true);
-    }
-
-    /// @dev Allows owner or approved exchange to send a transaction to exchange
-    /// @dev With data of signed/unsigned transaction
-    /// @param _exchange Address of the exchange
-    /// @param transactions Array of ABI encoded transactions
-    function batchOperateOnExchange(
-        address _exchange,
-        Transaction[] memory transactions)
-        external
-        onlyOwner
-        nonReentrant
-        whenApprovedExchangeOrWrapper(_exchange)
-    {
-        for (uint256 i = 0; i < transactions.length; i++) {
-            if (!operateOnExchange(_exchange, transactions[i])) continue;
-        }
     }
 
     /*
@@ -461,8 +412,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         )
     {
         return(
-            poolName = data.name,
-            poolSymbol = data.symbol,
+            poolName = poolData.name,
+            poolSymbol = poolData.symbol,
             _getSellPrice(),
             _getBuyPrice()
         );
@@ -502,8 +453,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             admin.feeCollector,
             RIGOBLOCK_DAO,
             _getRatio(),
-            data.transactionFee,
-            data.minPeriod
+            poolData.transactionFee,
+            poolData.minPeriod
         );
     }
 
@@ -529,19 +480,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (bool isValid)
     {
-        isValid = SigVerifier(getSigVerifier())
-            .isValidSignature(hash, signature);
-        return isValid;
-    }
-
-    /// @dev Finds the exchanges authority.
-    /// @return Address of the exchanges authority.
-    function getExchangesAuth()
-        external
-        view
-        returns (address)
-    {
-        return getExchangesAuthority();
+        isValid = SigVerifier(
+            _getSigVerifier()
+        ).isValidSignature(hash, signature);
     }
 
     /// @dev Returns the total amount of issued tokens for this pool.
@@ -550,7 +491,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external view
         returns (uint256)
     {
-        return data.totalSupply;
+        return poolData.totalSupply;
     }
 
     function name()
@@ -559,7 +500,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         override
         returns (string memory)
     {
-        return data.name;
+        return poolData.name;
     }
 
     function symbol()
@@ -568,7 +509,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         override
         returns (string memory)
     {
-        return data.symbol;
+        return poolData.symbol;
     }
 
     /*
@@ -579,8 +520,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 _value
     )
         external
-        override
         virtual
+        override
         returns (bool success)
     {}
 
@@ -590,8 +531,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 _value
     )
         external
-        override
         virtual
+        override
         returns (bool success)
     {}
 
@@ -600,8 +541,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 _value
     )
         external
-        override
         virtual
+        override
         returns (bool success)
     {}
 
@@ -610,8 +551,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         address _spender)
         external
         view
-        override
         virtual
+        override
         returns (uint256)
     {}
 
@@ -648,7 +589,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             "POOL_MINT_RETURNED_AMOUNT_NULL_ERROR"
         );
 
-        data.totalSupply += grossAmount;
+        poolData.totalSupply += grossAmount;
         // TODO: save space, we are returning pool address in event
         emit Mint(msg.sender, address(this), _hodler, msg.value, amount);
         return amount;
@@ -673,7 +614,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
             accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
-        unchecked { accounts[_hodler].receipt.activation = uint32(block.timestamp) + data.minPeriod; }
+        unchecked { accounts[_hodler].receipt.activation = uint32(block.timestamp) + poolData.minPeriod; }
     }
 
     /// @dev Destroys tokens of seller, splits fee in tokens to wizard and dao.
@@ -714,8 +655,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         grossAmount = msg.value * decimals / _getBuyPrice();
         uint256 fee; // fee is in basis points
 
-        if (data.transactionFee != uint256(0)) {
-            fee = grossAmount * data.transactionFee / 10000;
+        if (poolData.transactionFee != uint256(0)) {
+            fee = grossAmount * poolData.transactionFee / 10000;
             // TODO: check if ratio returned correctly
             feePool = fee * _getRatio() / 100;
             feeRigoblockDao = fee - feePool;
@@ -728,15 +669,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     function _getBuyPrice() internal view returns (uint256) {
-        if (data.buyPrice == uint256(0)) {
+        if (poolData.buyPrice == uint256(0)) {
             return INITIAL_BUY_PRICE;
-        } else return data.buyPrice;
+        } else return poolData.buyPrice;
     }
 
     function _getSellPrice() internal view returns (uint256) {
-        if (data.sellPrice == uint256(0)) {
+        if (poolData.sellPrice == uint256(0)) {
             return INITIAL_SELL_PRICE;
-        } else return data.sellPrice;
+        } else return poolData.sellPrice;
     }
 
     function _getRatio() private view returns (uint256) {
@@ -760,7 +701,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256 netRevenue
         )
     {
-        uint256 fee = _amount * data.transactionFee / 10000; //fee is in basis points
+        uint256 fee = _amount * poolData.transactionFee / 10000; //fee is in basis points
         return (
             feePool = fee * _getRatio() / 100,
             feeRigoblockDao = fee - feeRigoblockDao,
@@ -771,26 +712,22 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Returns the address of the signature verifier.
     /// @return Address of the verifier contract.
-    function getSigVerifier()
+    function _getSigVerifier()
         internal
         view
         returns (address)
     {
-        return ExchangesAuthority(
-            Authority(AUTHORITY)
-            .getExchangesAuthority())
-            .getSigVerifier();
+        return ExtensionsAuthority(_getExtensionsAuthority()).getSigVerifier();
     }
 
     /// @dev Returns the address of the price verifier.
     /// @return Address of the verifier contract.
-    function getNavVerifier()
+    function _getNavVerifier()
         internal
         view
         returns (address)
     {
-        return Authority(AUTHORITY)
-            .getNavVerifier();
+        return Authority(AUTHORITY).getNavVerifier();
     }
 
     /// @dev Verifies that a signature is valid.
@@ -800,7 +737,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _hash Message hash that is signed.
     /// @param _signedData Proof of nav validity.
     /// @return isValid Bool validity of signed price update.
-    function isValidNav(
+    function _isValidNav(
         uint256 _sellPrice,
         uint256 _buyPrice,
         uint256 _signaturevaliduntilBlock,
@@ -808,66 +745,45 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         bytes memory _signedData)
         internal
         view
-        returns (bool isValid)
+        returns (bool)
     {
-        isValid = NavVerifier(getNavVerifier()).isValidNav(
+        return NavVerifier(_getNavVerifier()).isValidNav(
             _sellPrice,
             _buyPrice,
             _signaturevaliduntilBlock,
             _hash,
             _signedData
         );
-        return isValid;
     }
 
-    /// @dev Finds the exchanges authority.
-    /// @return Address of the exchanges authority.
-    function getExchangesAuthority()
+    /// @dev Returns the address of the application adapter.
+    /// @param _selector Hash of the method signature.
+    /// @return Address of the application adapter.
+    function _getApplicationAdapter(bytes4 _selector)
         internal
         view
         returns (address)
     {
-        return Authority(AUTHORITY).getExchangesAuthority();
+        return ExtensionsAuthority(
+            _getExtensionsAuthority()
+        ).getApplicationAdapter(_selector);
     }
 
-    /// @dev Returns the address of the exchange adapter.
-    /// @param _exchange Address of the target exchange.
-    /// @return Address of the exchange adapter.
-    function getExchangeAdapter(address _exchange)
-        internal
+    /// @dev Finds the extensions authority.
+    /// @return Address of the extensions authority.
+    function _getExtensionsAuthority()
+        private
         view
         returns (address)
     {
-        return ExchangesAuthority(
-            Authority(AUTHORITY)
-            .getExchangesAuthority())
-            .getExchangeAdapter(_exchange);
+        return Authority(AUTHORITY).getExtensionsAuthority();
     }
 
-    /// @dev Returns the method of a call.
-    /// @param assembledData Bytes of the encoded transaction.
-    /// @return method Bytes4 function signature.
-    function findMethod(bytes memory assembledData)
-        internal
-        pure
-        returns (bytes4 method)
-    {
-        return method = LibFindMethod.findMethod(assembledData);
-    }
-
-    /// @dev Finds if a method is allowed on an exchange.
-    /// @param _adapter Address of the target exchange.
-    /// @return Bool the method is allowed.
-    function methodAllowedOnExchange(
-        bytes4 _method,
-        address _adapter)
-        internal
+    function getExtensionsAuthority()
+        external
         view
-        returns (bool)
+        returns (address)
     {
-        return ExchangesAuthority(
-            Authority(AUTHORITY)
-            .getExchangesAuthority())
-            .isMethodAllowed(_method, _adapter);
+        return _getExtensionsAuthority();
     }
 }
