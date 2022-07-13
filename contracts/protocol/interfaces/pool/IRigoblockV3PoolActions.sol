@@ -34,10 +34,6 @@ interface IRigoblockV3PoolActions {
     )
         external;
 
-    function pay()
-        external
-        payable;
-
     function mint()
         external
         payable

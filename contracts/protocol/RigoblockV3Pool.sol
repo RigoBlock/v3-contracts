@@ -217,18 +217,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         assert(msg.value > 0);
     }
 
-    /// @dev Allows Ether to be received.
-    /// @notice Used for settlements and withdrawals.
-    function pay()
-        external
-        payable
-    {
-        require(
-            msg.value != 0,
-            "POOL_VALUE_SENT_NULL_ERROR"
-        );
-    }
-
     /// @dev Allows a user to mint pool tokens.
     /// @return Value of minted tokens.
     // TODO merge with following, as holder can just mint for himself
