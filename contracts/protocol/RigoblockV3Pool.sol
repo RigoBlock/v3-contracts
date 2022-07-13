@@ -206,6 +206,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
         // perform a delegatecall to extension
         // TODO: test and check owner.slot
+        // @notice Would probably just be much more simple to implement return methods
+        // and only forward owner messages
         assembly {
             calldatacopy(0, 0, calldatasize())
             let initialGas := gas()
