@@ -66,5 +66,5 @@ interface IAuthorityCore {
     function getDragoEventful() external view returns (address);
     function getVaultEventful() external view returns (address);
     function getNavVerifier() external view returns (address);
-    function getExchangesAuthority() external view returns (address);
+    function getExtensionsAuthority() external view returns (address);
 }

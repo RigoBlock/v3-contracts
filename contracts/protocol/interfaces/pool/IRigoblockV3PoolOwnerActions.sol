@@ -27,14 +27,4 @@ interface IRigoblockV3PoolOwnerActions {
 
     function enforceKyc(bool _enforced, address _kycProvider)
         external;
-
-    struct Transaction {
-        bytes assembledData;
-    }
-
-    function operateOnExchange(address _exchange, Transaction memory transaction)
-        external
-        returns (bool success);
-
-    function batchOperateOnExchange(address _exchange, Transaction[] memory transactions) external;
 }

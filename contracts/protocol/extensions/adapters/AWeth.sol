@@ -32,7 +32,7 @@ abstract contract Drago {
     address public owner;
 
     function getEventful() external view virtual returns (address);
-    function getExchangesAuth() external view virtual returns (address);
+    function getExtensionsAuthority() external view virtual returns (address);
 }
 
 /// @title WETH adapter - A helper to wrap ETH to the wrapper token.
@@ -59,7 +59,7 @@ contract AWeth {
                 Drago(
                     address(uint160(address(this)))
                 )
-                .getExchangesAuth()
+                .getExtensionsAuthority()
             )
             .isWhitelistedWrapper(wrapper)
         );
@@ -68,7 +68,7 @@ contract AWeth {
                 Drago(
                     address(uint160(address(this)))
                 )
-                .getExchangesAuth()
+                .getExtensionsAuthority()
             )
             .canWrapTokenOnWrapper(address(0), wrapper)
         );
@@ -94,7 +94,7 @@ contract AWeth {
                 Drago(
                     address(uint160(address(this)))
                 )
-                .getExchangesAuth()
+                .getExtensionsAuthority()
             )
             .isWhitelistedWrapper(wrapper)
         );
@@ -103,7 +103,7 @@ contract AWeth {
                 Drago(
                     address(uint160(address(this)))
                 )
-                .getExchangesAuth()
+                .getExtensionsAuthority()
             )
             .canWrapTokenOnWrapper(address(0), wrapper)
         );

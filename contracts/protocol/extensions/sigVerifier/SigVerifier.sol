@@ -59,19 +59,22 @@ contract SigVerifier {
 
         if (recoveredEIP712 != address(0)) {
             require(
-                isValid = recoveredEIP712 == RigoblockV3Pool(address(msg.sender)).owner(),
+                isValid = recoveredEIP712 == RigoblockV3Pool(payable(address(msg.sender))).owner(),
                 "EIP712_SIGNER_INVALID"
             );
 
             // if operator holds at least 100 GRG, valid, otherwise require whitelisted signer
-            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(address(msg.sender)).owner()) >= 100 * 10 ** 18) {
+            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(payable(address(msg.sender))).owner()) >= 100 * 10 ** 18) {
                 isValid = true;
 
             } else {
                 require(
                     ExchangesAuthority(
-                        RigoblockV3Pool(address(msg.sender)).getExchangesAuth()
+                        RigoblockV3Pool(payable(address(msg.sender))).getExtensionsAuthority()
                     )
+                    // TODO: tx.origin returns EOA. Generates confusion and should be removed
+                    // not the correct way to query whitelisted signer. Since we check adaoter,
+                    // we very well may just make this contract an adapter
                     .getExchangeAdapter(address(tx.origin)) != address(0),
                     "VALID_EIP712_BUT_ORIGIN_NOT_WHITELISTED"
                 );
@@ -79,20 +82,19 @@ contract SigVerifier {
 
         } else if (recoveredETHSIGN != address(0)) {
             require(
-                isValid = recoveredETHSIGN == RigoblockV3Pool(address(msg.sender)).owner(),
+                isValid = recoveredETHSIGN == RigoblockV3Pool(payable(address(msg.sender))).owner(),
                 "EIP712_SIGNER_INVALID"
             );
 
             // if operator holds at least 100 GRG, valid, otherwise require whitelisted signer
-            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(address(msg.sender)).owner()) >= 100 * 10 ** 18) {
+            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(payable(address(msg.sender))).owner()) >= 100 * 10 ** 18) {
                 isValid = true;
 
             } else {
                 require(
                     ExchangesAuthority(
-                        RigoblockV3Pool(address(msg.sender)).getExchangesAuth()
-                    )
-                    .getExchangeAdapter(address(tx.origin)) != address(0),
+                        RigoblockV3Pool(payable(address(msg.sender))).getExtensionsAuthority()
+                    ).getExchangeAdapter(address(tx.origin)) != address(0),
                     "VALID_ETHSIGN_BUT_ORIGIN_NOT_WHITELISTED"
                 );
             }

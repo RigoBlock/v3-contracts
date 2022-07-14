@@ -166,6 +166,11 @@ interface IExchangesAuthority {
         external view
         returns (bool);
 
+    function getApplicationAdapter(bytes4 _selector)
+        external
+        view
+        returns (address);
+
     /// @dev Provides the address of the exchange adapter
     /// @param _exchange Address of the exchange
     /// @return Address of the adapter

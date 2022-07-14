@@ -50,22 +50,29 @@ describe("ProxyFactory", async () => {
 
         it('should create address when creating pool', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress, poolId } = await factory.callStatic.createPool('testpool','TEST')
+            const bytes32name = hre.ethers.utils.formatBytes32String('TEST')
             await expect(
                 factory.createPool('testpool','TEST')
-            ).to.emit(registry, "Registered")
-            const { poolId } = await registry.getPoolIdFromAddress(template)
-            expect(poolId).to.be.not.eq(null)
+            ).to.emit(registry, "Registered").withArgs(
+                factory.address,
+                newPoolAddress,
+                bytes32name,
+                poolId
+            )
+            expect(
+                await registry.getPoolIdFromAddress(newPoolAddress)
+            ).to.be.eq(poolId)
         })
 
         it('should create pool with space not first or last character', async () => {
             const { factory } = await setupTests()
-            const template = await factory.callStatic.createPool('t est pool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('t est pool','TEST')
             const txReceipt = await factory.createPool('t est pool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const result = await txReceipt.wait()
             // 3 logs are emitted at pool creation, could expect exact event.withArgs
-            expect(result.events[2].args.poolAddress).to.be.eq(template)
+            expect(result.events[2].args.poolAddress).to.be.eq(newPoolAddress)
         })
 
         it('should create pool with uppercase character in name', async () => {

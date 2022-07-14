@@ -302,6 +302,19 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
         return accounts[_tokenTransferProxy].groups[true].proxy;
     }
 
+    // selectorToAdapter[msg.sig]
+    mapping(bytes4 => address) selectorToAdapter;
+
+    // TODO: implement write function for selectorToAdapter[msg.sig]
+    function getApplicationAdapter(bytes4 _selector)
+        external
+        view
+        override
+        returns (address)
+    {
+        return selectorToAdapter[_selector];
+    }
+
     /// @dev Provides the address of the exchange adapter
     /// @param _exchange Address of the exchange
     /// @return Address of the adapter
