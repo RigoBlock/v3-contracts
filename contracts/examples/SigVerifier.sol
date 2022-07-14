@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2018 RigoBlock, Rigo Investment Sagl.
+ Copyright 2018-2022 RigoBlock, Rigo Investment Sagl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -19,25 +19,20 @@
 
 pragma solidity 0.8.14;
 
-import { LibBytes } from "../../../utils/LibBytes/LibBytes.sol";
-import { IERC20 as RigoToken } from "../../../tokens/ERC20/IERC20.sol";
-import { RigoblockV3Pool } from "../../../protocol/RigoblockV3Pool.sol";
-import { IExchangesAuthority as ExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
+import { LibBytes } from "../utils/LibBytes/LibBytes.sol";
 
 /// @title SigVerifier - Allows verify whether a transaction has been signed correctly.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
+/// @notice This contract is made abstract as we are not using it. Was used for
+///   0x protocol signatures validation, which now accepts signatures from EOAs
+///   registered directly to the 0x protocol. Will be most likely removed.
 // solhint-disable-next-line
-contract SigVerifier {
+abstract contract SigVerifier {
 
     using LibBytes for bytes;
 
-    address public GRGTokenAddress;
-
-    constructor(
-        address _GRGTokenAddress)
-    {
-        GRGTokenAddress = _GRGTokenAddress;
-    }
+    // abstract function to call self variable
+    function owner() public view virtual returns (address);
 
     /// @dev Verifies that a signature is valid.
     /// @param hash Message hash that is signed.
@@ -59,48 +54,15 @@ contract SigVerifier {
 
         if (recoveredEIP712 != address(0)) {
             require(
-                isValid = recoveredEIP712 == RigoblockV3Pool(payable(address(msg.sender))).owner(),
+                isValid = recoveredEIP712 == owner(),
                 "EIP712_SIGNER_INVALID"
             );
-
-            // if operator holds at least 100 GRG, valid, otherwise require whitelisted signer
-            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(payable(address(msg.sender))).owner()) >= 100 * 10 ** 18) {
-                isValid = true;
-
-            } else {
-                require(
-                    ExchangesAuthority(
-                        RigoblockV3Pool(payable(address(msg.sender))).getExtensionsAuthority()
-                    )
-                    // TODO: tx.origin returns EOA. Generates confusion and should be removed
-                    // not the correct way to query whitelisted signer. Since we check adaoter,
-                    // we very well may just make this contract an adapter
-                    .getExchangeAdapter(address(tx.origin)) != address(0),
-                    "VALID_EIP712_BUT_ORIGIN_NOT_WHITELISTED"
-                );
-            }
-
         } else if (recoveredETHSIGN != address(0)) {
             require(
-                isValid = recoveredETHSIGN == RigoblockV3Pool(payable(address(msg.sender))).owner(),
+                isValid = recoveredETHSIGN == owner(),
                 "EIP712_SIGNER_INVALID"
             );
-
-            // if operator holds at least 100 GRG, valid, otherwise require whitelisted signer
-            if (RigoToken(GRGTokenAddress).balanceOf(RigoblockV3Pool(payable(address(msg.sender))).owner()) >= 100 * 10 ** 18) {
-                isValid = true;
-
-            } else {
-                require(
-                    ExchangesAuthority(
-                        RigoblockV3Pool(payable(address(msg.sender))).getExtensionsAuthority()
-                    ).getExchangeAdapter(address(tx.origin)) != address(0),
-                    "VALID_ETHSIGN_BUT_ORIGIN_NOT_WHITELISTED"
-                );
-            }
-        }
-
-        revert("SIGNATURE_INVALID2");
+        } else revert("SIGNATURE_INVALID2");
     }
 
     function returnRecoveredEIP712(

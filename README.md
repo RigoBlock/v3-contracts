@@ -22,6 +22,9 @@ yarn build
 yarn test
 ```
 
+### storage upgrades
+New storage variables in the implementation must be added to a dedicated storage to prevent storage collision.
+
 ### Commit format:
 PR must follow "Conventional Commits spec". PR title is checked upon opening. Examples for valid PR titles:
 

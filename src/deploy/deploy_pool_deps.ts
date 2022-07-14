@@ -21,13 +21,6 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
-
-  await deploy("SigVerifier", {
-    from: deployer,
-    args: [deployer], // mock address
-    log: true,
-    deterministicDeployment: true,
-  });
 };
 
 deploy.tags = ['factory', 'pool-deps', 'l2-suite', 'main-suite']
