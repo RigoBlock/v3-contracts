@@ -7,7 +7,7 @@ import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { getAddress } from "ethers/lib/utils";
 
-describe("ProxyGasCost", async () => {
+describe("Proxy", async () => {
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
@@ -23,18 +23,18 @@ describe("ProxyGasCost", async () => {
     describe("poolStorage", async () => {
         it('should return pool name from new pool', async () => {
             const { factory } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             const txReceipt = await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const poolData = await pool.getData()
             expect(poolData.poolName).to.be.eq('testpool')
         })
 
         it('should return pool owner', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const [ user1 ] = waffle.provider.getWallets()
             expect(await pool.owner()).to.be.eq(user1.address)
         })
@@ -43,9 +43,9 @@ describe("ProxyGasCost", async () => {
     describe("setTransactionFee", async () => {
         it('should set the transaction fee', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             await pool.setTransactionFee(2)
             const poolData = await pool.getAdminData()
             expect(poolData.transactionFee).to.be.eq(2)
@@ -53,9 +53,9 @@ describe("ProxyGasCost", async () => {
 
         it('should not set fee if caller not owner', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const [ user1, user2 ] = waffle.provider.getWallets()
             await pool.setOwner(user2.address)
             await expect(pool.setTransactionFee(2)
@@ -64,9 +64,9 @@ describe("ProxyGasCost", async () => {
 
         it('should not set fee higher than 1 percent', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const [ user1, user2 ] = waffle.provider.getWallets()
             await expect(
               pool.setTransactionFee(101) // 100 / 10000 = 1%
@@ -77,9 +77,9 @@ describe("ProxyGasCost", async () => {
     describe("mint", async () => {
         it('should create new tokens', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             expect(await pool.totalSupply()).to.be.eq(0)
             const etherAmount = parseEther("1")
             const [ user1 ] = waffle.provider.getWallets()
@@ -90,7 +90,7 @@ describe("ProxyGasCost", async () => {
                 pool.mint({ value: etherAmount })
             ).to.emit(pool, "Mint").withArgs(
                 user1.address,
-                template,
+                newPoolAddress,
                 user1.address,
                 etherAmount,
                 amount
@@ -101,9 +101,9 @@ describe("ProxyGasCost", async () => {
 
         it('should revert with order below minimum', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const etherAmount = parseEther("0.0001")
             await expect(pool.mint({ value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
@@ -113,10 +113,10 @@ describe("ProxyGasCost", async () => {
     describe("_initializePool", async () => {
         it('should revert when already initialized', async () => {
             const { factory, registry } = await setupTests()
-            const template = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", template)
-            await expect(pool._initializePool('testpool','TEST', template)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            await expect(pool._initializePool('testpool','TEST', newPoolAddress)
             ).to.be.revertedWith("POOL_ALREADY_INITIALIZED_ERROR")
         })
     })

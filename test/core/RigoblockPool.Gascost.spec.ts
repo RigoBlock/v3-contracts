@@ -20,7 +20,7 @@ describe("ProxyGasCost", async () => {
     });
 
     describe("calculateCost", async () => {
-        it('should create pool with space not first or last character', async () => {
+        it('should create pool whose size is smaller than 500k gas', async () => {
             const { factory, registry } = await setupTests()
             const txReceipt = await factory.createPool('t est pool', 'TEST')
             const [ user1 ] = waffle.provider.getWallets()
@@ -28,7 +28,7 @@ describe("ProxyGasCost", async () => {
             const gasCost = result.cumulativeGasUsed.toNumber()
             console.log(gasCost)
             // TODO: actual size will be affected by tests coverage
-            expect(gasCost).to.be.lt(700000)
+            expect(gasCost).to.be.lt(500000)
         })
     })
 })
