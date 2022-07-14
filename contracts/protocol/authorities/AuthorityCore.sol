@@ -60,8 +60,6 @@ contract AuthorityCore is
     }
 
     struct BuildingBlocks {
-        address dragoEventful;
-        address vaultEventful;
         address navVerifier;
         address extensionsAuthority;
         address casper;
@@ -179,26 +177,6 @@ contract AuthorityCore is
         emit WhitelistedFactory(_factory, _isWhitelisted);
     }
 
-    /// @dev Allows the owner to set the drago eventful
-    /// @param _dragoEventful Address of the logs contract
-    function setDragoEventful(address _dragoEventful)
-        external
-        onlyOwner
-    {
-        blocks.dragoEventful = _dragoEventful;
-        emit NewDragoEventful(blocks.dragoEventful);
-    }
-
-    /// @dev Allows the owner to set the vault eventful
-    /// @param _vaultEventful Address of the vault logs contract
-    function setVaultEventful(address _vaultEventful)
-        external
-        onlyOwner
-    {
-        blocks.vaultEventful = _vaultEventful;
-        emit NewVaultEventful(blocks.vaultEventful);
-    }
-
     /// @dev Allows the owner to set the nav verifier
     /// @param _navVerifier Address of the verifier
     function setNavVerifier(address _navVerifier)
@@ -280,24 +258,6 @@ contract AuthorityCore is
         returns (bool)
     {
         return accounts[_factory].groups[true].registry;
-    }
-
-    /// @dev Provides the address of the drago logs contract
-    /// @return Address of the drago logs contract
-    function getDragoEventful()
-        external view
-        returns (address)
-    {
-        return blocks.dragoEventful;
-    }
-
-    /// @dev Provides the address of the vault logs contract
-    /// @return Address of the vault logs contract
-    function getVaultEventful()
-        external view
-        returns (address)
-    {
-        return blocks.vaultEventful;
     }
 
     /// @dev Provides the address of the nav verifier

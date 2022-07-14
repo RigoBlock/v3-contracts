@@ -50,8 +50,6 @@ interface IAuthorityCore {
     function whitelistVault(address _vault, bool _isWhitelisted) external;
     function whitelistRegistry(address _registry, bool _isWhitelisted) external;
     function whitelistFactory(address _factory, bool _isWhitelisted) external;
-    function setDragoEventful(address _dragoEventful) external;
-    function setVaultEventful(address _vaultEventful) external;
     function setNavVerifier(address _navVerifier) external;
 
     /*
@@ -63,8 +61,6 @@ interface IAuthorityCore {
     function isWhitelistedDrago(address _drago) external view returns (bool);
     function isWhitelistedVault(address _vault) external view returns (bool);
     function isWhitelistedFactory(address _factory) external view returns (bool);
-    function getDragoEventful() external view returns (address);
-    function getVaultEventful() external view returns (address);
     function getNavVerifier() external view returns (address);
     function getAuthorityExtensions() external view returns (address);
 }
