@@ -95,15 +95,6 @@ const deploy: DeployFunction = async function (
 
   await authorityInstance.setNavVerifier(navVerifier.address)
 
-  const sigVerifier = await deploy("SigVerifier", {
-    from: deployer,
-    args: [rigoToken.address],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  await authorityExchangesInstance.setSignatureVerifier(sigVerifier.address)
-
   // TODO: deploy Tokentransferproxy
 
   await deploy("GrgVault", {
