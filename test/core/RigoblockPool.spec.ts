@@ -120,4 +120,76 @@ describe("Proxy", async () => {
             ).to.be.revertedWith("POOL_ALREADY_INITIALIZED_ERROR")
         })
     })
+
+    describe("setPrices", async () => {
+        it('should revert when caller is not owner', async () => {
+            const { factory, registry } = await setupTests()
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
+            await factory.createPool('testpool', 'TEST')
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const [ user1, user2 ] = waffle.provider.getWallets()
+            await pool.setOwner(user2.address)
+            const newPrice = parseEther("1.1")
+            const signaturevaliduntilBlock = 1 // relevant only when checked
+            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
+            await expect(
+                pool.setPrices(
+                    newPrice,
+                    newPrice,
+                    signaturevaliduntilBlock,
+                    bytes32hash,
+                    bytes32hash
+                )
+            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+        })
+
+        it('should revert when price error', async () => {
+            const { factory, registry } = await setupTests()
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
+            await factory.createPool('testpool', 'TEST')
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const newPrice = parseEther("11")
+            const signaturevaliduntilBlock = 1 // relevant only when checked
+            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
+            await expect(
+                pool.setPrices(
+                    newPrice,
+                    newPrice,
+                    signaturevaliduntilBlock,
+                    bytes32hash,
+                    bytes32hash
+                )
+            ).to.be.revertedWith("105")
+        })
+
+        it('should set price when caller is owner', async () => {
+            const { factory, registry } = await setupTests()
+            const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
+            await factory.createPool('testpool', 'TEST')
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const newPrice = parseEther("1.1")
+            const signaturevaliduntilBlock = 1 // relevant only when checked
+            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
+            const bytesSignedData = hre.ethers.utils.formatBytes32String('notused')
+            /*await expect(
+                pool.setPrices(
+                    newPrice,
+                    newPrice,
+                    signaturevaliduntilBlock,
+                    bytes32hash,
+                    bytes32hash
+                )
+            ).to.emit(pool, "NewNav")*/
+            // TODO: we must deploy extensions adapter, adapter and map selector to adapter
+            await expect(
+                pool.setPrices(
+                    newPrice,
+                    newPrice,
+                    signaturevaliduntilBlock,
+                    bytes32hash,
+                    bytes32hash
+                )
+            ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+        })
+    })
 })

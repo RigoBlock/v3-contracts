@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2018 RigoBlock, Rigo Investment Sagl.
+ Copyright 2018-2022 RigoBlock, Rigo Investment Sagl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
