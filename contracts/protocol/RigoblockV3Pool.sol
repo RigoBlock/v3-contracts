@@ -36,6 +36,7 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
+    // TODO: add immutable base token and mint/burn in base token
 
     string public constant override VERSION = "HF 3.0.1";
 
@@ -73,7 +74,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         mapping(address => address[]) approvedAccount;
     }
 
-    // TODO: we removed pool id here, check if useful storing at pool creation
     struct PoolData {
         string name;
         string symbol;
@@ -92,13 +92,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         bool kycEnforced;
     }
 
-    // TODO: fix as msg.sender == address(this) only self or msg.sender == implementation
+    // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
-        if (address(this) != _implementation) {
-            _;
-        } else {
-            revert("DELEGATECALL_REQUIREMENT_ERROR");
-        }
+        _checkDelegateCall();
+        _;
     }
 
     modifier onlyUninitialized() {
@@ -116,6 +113,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
+    // TODO: do not inline when reading immutables as they are copied anywhere
+    //  the modifier is used, rather call to private/internal method.
     modifier minimumStake(uint256 amount) {
         require (
             amount >= MINIMUM_ORDER,
@@ -165,36 +164,23 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
+    // owner is initialized to 0 to lock owner actions in this implementation.
+    // kycEnforced set to true as will prevent mint/burn actions, effectively
+    // making this implementation unusable by itself.
     constructor(address _authority, address _rigoblockDao) {
-        _implementation = address(this);
         AUTHORITY = _authority;
         RIGOBLOCK_DAO = _rigoblockDao;
-    }
-
-    // TODO: all methods should be onlyDelegatecall modifier limited
-    // also inherited methods (owner) should be delegatecall in this context
-
-    function _initializePool(
-        string memory _poolName,
-        string memory _poolSymbol,
-        address _owner
-    )
-        onlyUninitialized
-        external
-        override
-    {
-        poolData.name = _poolName;
-        poolData.symbol = _poolSymbol;
-        owner = _owner;
-
-        emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
+        _implementation = address(this);
+        // must lock implementation after initializing _implementation
+        owner = address(0);
+        admin.kycEnforced == true;
     }
 
     /*
      * CORE FUNCTIONS
      */
-
-    // fallback is restricted to owner
+    // permission of methods that change state are checked in the target adapter
+    //  effectively locking direct calls to this implementation contract.
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
@@ -213,8 +199,27 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
-    receive() external payable {
+    // prevent accidental transfer to implementation
+    receive() external payable onlyDelegateCall {
         assert(msg.value > 0);
+    }
+
+    // pool can only be initialized at creation, meaning this method cannot be
+    //  called directly to implementation.
+    function _initializePool(
+        string memory _poolName,
+        string memory _poolSymbol,
+        address _owner
+    )
+        onlyUninitialized
+        external
+        override
+    {
+        poolData.name = _poolName;
+        poolData.symbol = _poolSymbol;
+        owner = _owner;
+
+        emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
     }
 
     /// @dev Allows a user to mint pool tokens.
@@ -438,6 +443,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         );
     }
 
+    function getExtensionsAuthority()
+        external
+        view
+        returns (address)
+    {
+        return _getExtensionsAuthority();
+    }
+
     function getKycProvider()
         external
         view
@@ -548,7 +561,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (uint256)
     {
         // require whitelisted user if kyc is enforced
-        if (admin.kycProvider != address(0)) {
+        if (admin.kycEnforced == true) {
             require(
                 Kyc(admin.kycProvider).isWhitelistedUser(_hodler),
                 "POOL_CALLER_NOT_WHITELISTED_ERROR"
@@ -749,6 +762,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         ).getApplicationAdapter(_selector);
     }
 
+    function _checkDelegateCall() private view {
+        require(
+            address(this) != _implementation,
+            "POOL_IMPLEMENTATION_DIRECT_CALL_NOT_ALLOWED_ERROR"
+        );
+    }
+
     /// @dev Finds the extensions authority.
     /// @return Address of the extensions authority.
     function _getExtensionsAuthority()
@@ -757,13 +777,5 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (address)
     {
         return Authority(AUTHORITY).getExtensionsAuthority();
-    }
-
-    function getExtensionsAuthority()
-        external
-        view
-        returns (address)
-    {
-        return _getExtensionsAuthority();
     }
 }
