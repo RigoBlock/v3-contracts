@@ -35,7 +35,7 @@ interface IRigoblockPoolProxyFactory {
         string calldata _symbol
     )
         external
-        returns (address newPoolAddress);
+        returns (address newPoolAddress, bytes32 poolId);
 
     function setRegistry(address _newRegistry)
         external;

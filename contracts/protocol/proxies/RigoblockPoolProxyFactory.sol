@@ -52,17 +52,19 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * PUBLIC FUNCTIONS
      */
-    /// @dev allows creation of a new pool
-    /// @param _name String of the name
-    /// @param _symbol String of the symbol
-    /// @return newPoolAddress Address of the new pool
+    /// @dev Creates a new Rigoblock pool.
+    /// @param _name String of the name.
+    /// @param _symbol String of the symbol.
+    /// @return newPoolAddress Address of the new pool.
+    /// @return poolId Id of the new pool.
     function createPool(string calldata _name, string calldata _symbol)
         external
         override
-        returns (address newPoolAddress)
+        returns (address newPoolAddress, bytes32 poolId)
     {
-        (bytes32 poolId, RigoblockPoolProxy proxy) = _createPoolInternal(_name, _symbol);
+        (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPoolInternal(_name, _symbol);
         newPoolAddress = address(proxy);
+        poolId = newPoolId;
         try PoolRegistry(registryAddress).register(
             newPoolAddress,
             _name,
