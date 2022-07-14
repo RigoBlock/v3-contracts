@@ -56,17 +56,9 @@ interface IRigoblockV3PoolState {
         view
         returns (address);
 
-    function isValidSignature(
-        bytes32 hash,
-        bytes calldata signature
-    )
-        external
-        view
-        returns (bool isValid);
-
     function totalSupply() external view returns (uint256);
 
-    // TODO: check if should be made public (or internal) in implementation 
+    // TODO: check if should be made public (or internal) in implementation
     function getExtensionsAuthority()
         external
         view
