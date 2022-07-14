@@ -20,7 +20,7 @@
 pragma solidity 0.8.14;
 
 import { IAuthorityCore as Authority } from "../../interfaces/IAuthorityCore.sol";
-import { IExchangesAuthority as ExchangesAuthority } from "../../interfaces/IExchangesAuthority.sol";
+import { IAuthorityExtensions as ExtensionsAuthority } from "../../interfaces/IAuthorityExtensions.sol";
 
 abstract contract WETH9 {
     function deposit() external payable virtual;
@@ -40,9 +40,10 @@ abstract contract Drago {
 // solhint-disable-next-line
 contract AWeth {
 
-    /// @dev allows a manager to deposit eth to an approved exchange/wrap eth
-    /// @param wrapper Address of the target exchange
+    /// @dev allows a manager to deposit eth to an approved eth wrapper.
+    /// @param wrapper Address of the target wrapper.
     /// @param amount Value of the Eth in wei
+    // TODO: must initialize immutable WETH9 address
     function wrapEth(
         address payable wrapper,
         uint256 amount)
@@ -55,7 +56,7 @@ contract AWeth {
             .owner() == msg.sender
         );
         require(
-            ExchangesAuthority(
+            ExtensionsAuthority(
                 Drago(
                     address(uint160(address(this)))
                 )
@@ -64,7 +65,7 @@ contract AWeth {
             .isWhitelistedWrapper(wrapper)
         );
         require(
-            ExchangesAuthority(
+            ExtensionsAuthority(
                 Drago(
                     address(uint160(address(this)))
                 )
@@ -90,7 +91,7 @@ contract AWeth {
             .owner() == msg.sender
         );
         require(
-            ExchangesAuthority(
+            ExtensionsAuthority(
                 Drago(
                     address(uint160(address(this)))
                 )
@@ -99,7 +100,7 @@ contract AWeth {
             .isWhitelistedWrapper(wrapper)
         );
         require(
-            ExchangesAuthority(
+            ExtensionsAuthority(
                 Drago(
                     address(uint160(address(this)))
                 )

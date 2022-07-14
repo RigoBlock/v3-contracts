@@ -55,10 +55,4 @@ interface IRigoblockV3PoolState {
         returns (address);
 
     function totalSupply() external view returns (uint256);
-
-    // TODO: check if should be made public (or internal) in implementation
-    function getExtensionsAuthority()
-        external
-        view
-        returns (address);
 }

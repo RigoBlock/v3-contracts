@@ -21,7 +21,7 @@ pragma solidity 0.8.14;
 
 import { IAuthorityCore as Authority } from "./interfaces/IAuthorityCore.sol";
 // TODO: modify import after contracts renaming
-import { IExchangesAuthority as ExtensionsAuthority } from "./interfaces/IExchangesAuthority.sol";
+import { IAuthorityExtensions as AuthorityExchanges } from "./interfaces/IAuthorityExtensions.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
@@ -443,14 +443,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         );
     }
 
-    function getExtensionsAuthority()
-        external
-        view
-        returns (address)
-    {
-        return _getExtensionsAuthority();
-    }
-
     function getKycProvider()
         external
         view
@@ -728,8 +720,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (address)
     {
-        return ExtensionsAuthority(
-            _getExtensionsAuthority()
+        return AuthorityExchanges(
+            _getAuthorityExtensions()
         ).getApplicationAdapter(_selector);
     }
 
@@ -743,14 +735,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Finds the extensions authority.
     /// @return Address of the extensions authority.
     // TODO: check under what circumstances we call this method, as can
-    //  initialize externsions authority address as well as authority, and skip
+    //  initialize extensions authority address as well as authority, and skip
     //  1 read operation in this call. Governance must upgrade implementation
     //   when it upgrades extensions authority.
-    function _getExtensionsAuthority()
+    function _getAuthorityExtensions()
         private
         view
         returns (address)
     {
-        return Authority(AUTHORITY).getExtensionsAuthority();
+        return Authority(AUTHORITY).getAuthorityExtensions();
     }
 }

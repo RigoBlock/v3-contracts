@@ -63,7 +63,7 @@ contract AuthorityCore is
         address dragoEventful;
         address vaultEventful;
         address navVerifier;
-        address exchangesAuthority;
+        address extensionsAuthority;
         address casper;
         mapping(address => bool) initialized;
     }
@@ -209,14 +209,14 @@ contract AuthorityCore is
         emit NewNavVerifier(blocks.navVerifier);
     }
 
-    /// @dev Allows the owner to set the exchanges authority
-    /// @param _exchangesAuthority Address of the exchanges authority
-    function setExchangesAuthority(address _exchangesAuthority)
+    /// @dev Allows the owner to set the extensions authority.
+    /// @param _extensionsAuthority Address of the extensions authority.
+    function setExtensionsAuthority(address _extensionsAuthority)
         external
         onlyOwner
     {
-        blocks.exchangesAuthority = _exchangesAuthority;
-        emit NewExchangesAuthority(blocks.exchangesAuthority);
+        blocks.extensionsAuthority = _extensionsAuthority;
+        emit NewExtensionsAuthority(blocks.extensionsAuthority);
     }
 
     /*
@@ -309,13 +309,13 @@ contract AuthorityCore is
         return blocks.navVerifier;
     }
 
-    /// @dev Provides the address of the exchangee authority
+    /// @dev Provides the address of the exchanges authority
     /// @return Address of the adapter
-    function getExtensionsAuthority()
+    function getAuthorityExtensions()
         external view
         returns (address)
     {
-        return blocks.exchangesAuthority;
+        return blocks.extensionsAuthority;
     }
 
     /*

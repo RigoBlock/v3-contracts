@@ -21,20 +21,21 @@ const deploy: DeployFunction = async function (
     authority.address
   );
 
-  const authorityExchanges = await deploy("AuthorityExchanges", {
+  const authorityExtensions = await deploy("AuthorityExtensions", {
     from: deployer,
     args: [deployer], // address _owner
     log: true,
     deterministicDeployment: true
   });
 
-  const authorityExchangesInstance = await hre.ethers.getContractAt(
-    "AuthorityExchanges",
-    authorityExchanges.address
+  const authorityExtensionsInstance = await hre.ethers.getContractAt(
+    "AuthorityExtensions",
+    authorityExtensions.address
   );
 
-  await authorityInstance.setExchangesAuthority(authorityExchanges.address);
-  await authorityExchangesInstance.setWhitelister(deployer, true);
+  // TODO: file renaming for hardhat issue creates confusion with method names
+  await authorityInstance.setExtensionsAuthority(authorityExtensions.address);
+  await authorityExtensionsInstance.setWhitelister(deployer, true);
 
   const registry = await deploy("PoolRegistry", {
     from: deployer,
