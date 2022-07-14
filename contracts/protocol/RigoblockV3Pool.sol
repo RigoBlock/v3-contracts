@@ -706,13 +706,12 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 _unitaryValue,
         uint256 _signatureValidUntilBlock,
         bytes32 _hash,
-        bytes memory _signedData)
+        // TODO: check are we are using calldata instead of memory
+        bytes calldata _signedData)
         internal
         view
         returns (bool)
     {
-        // TODO: check if we can define isValidNav internal virtual and
-        //  simplify following statement.
         return NavVerifier(address(this)).isValidNav(
             _unitaryValue,
             _signatureValidUntilBlock,
@@ -720,9 +719,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             _signedData
         );
     }
-
-    // abstract method
-    //function isValidNav() private virtual view returns (bool) {}
 
     /// @dev Returns the address of the application adapter.
     /// @param _selector Hash of the method signature.
