@@ -180,9 +180,9 @@ contract PoolRegistry is IPoolRegistry {
         external
         view
         override
-        returns (bytes32)
+        returns (bytes32 poolAddress)
     {
-        return mapIdByAddress[_poolAddress];
+        poolAddress = mapIdByAddress[_poolAddress];
     }
 
     /// @dev Provides a pool's metadata.
