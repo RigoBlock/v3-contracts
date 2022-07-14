@@ -66,8 +66,7 @@ interface IRigoblockV3PoolState {
 
     function totalSupply() external view returns (uint256);
 
-    // TODO: not sure correct defining in pool state interface
-    // not sure we need this
+    // TODO: check if should be made public (or internal) in implementation 
     function getExtensionsAuthority()
         external
         view
