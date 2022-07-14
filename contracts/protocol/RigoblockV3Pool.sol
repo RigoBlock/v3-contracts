@@ -22,7 +22,6 @@ pragma solidity 0.8.14;
 import { IAuthorityCore as Authority } from "./interfaces/IAuthorityCore.sol";
 // TODO: modify import after contracts renaming
 import { IExchangesAuthority as ExtensionsAuthority } from "./interfaces/IExchangesAuthority.sol";
-import { ISigVerifier as SigVerifier } from "./interfaces/ISigVerifier.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
@@ -158,7 +157,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: fix and move to nav verifier
     modifier notPriceError(uint256 _sellPrice, uint256 _buyPrice) {
         require(
-            _sellPrice > poolData.sellPrice / 10 && _buyPrice < poolData.buyPrice * 10,
+            _sellPrice > _getSellPrice() / 10 && _buyPrice < _getBuyPrice() * 10,
             "105"
         );
         _;
@@ -461,23 +460,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
-    /// @dev Verifies that a signature is valid.
-    /// @param hash Message hash that is signed.
-    /// @param signature Proof of signing.
-    /// @return isValid Validity of order signature.
-    function isValidSignature(
-        bytes32 hash,
-        bytes calldata signature
-    )
-        external
-        view
-        returns (bool isValid)
-    {
-        isValid = SigVerifier(
-            _getSigVerifier()
-        ).isValidSignature(hash, signature);
-    }
-
     /// @dev Returns the total amount of issued tokens for this pool.
     /// @return Number of tokens.
     function totalSupply()
@@ -703,26 +685,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         );
     }
 
-    /// @dev Returns the address of the signature verifier.
-    /// @return Address of the verifier contract.
-    function _getSigVerifier()
-        internal
-        view
-        returns (address)
-    {
-        return ExtensionsAuthority(_getExtensionsAuthority()).getSigVerifier();
-    }
-
-    /// @dev Returns the address of the price verifier.
-    /// @return Address of the verifier contract.
-    function _getNavVerifier()
-        internal
-        view
-        returns (address)
-    {
-        return Authority(AUTHORITY).getNavVerifier();
-    }
-
     /// @dev Verifies that a signature is valid.
     /// @param _sellPrice Price in wei.
     /// @param _buyPrice Price in wei.
@@ -740,7 +702,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (bool)
     {
-        return NavVerifier(_getNavVerifier()).isValidNav(
+        // TODO: check if we can define isValidNav internal virtual and
+        //  simplify following statement.
+        return NavVerifier(address(this)).isValidNav(
             _sellPrice,
             _buyPrice,
             _signaturevaliduntilBlock,
@@ -771,6 +735,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Finds the extensions authority.
     /// @return Address of the extensions authority.
+    // TODO: check under what circumstances we call this method, as can
+    //  initialize externsions authority address as well as authority, and skip
+    //  1 read operation in this call. Governance must upgrade implementation
+    //   when it upgrades extensions authority.
     function _getExtensionsAuthority()
         private
         view
