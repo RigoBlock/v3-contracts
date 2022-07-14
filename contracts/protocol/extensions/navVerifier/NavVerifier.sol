@@ -25,27 +25,24 @@ pragma solidity 0.8.14;
 contract NavVerifier {
 
     /// @dev Verifies that a signature is valid.
-    /// @param sellPrice Price in wei
-    /// @param buyPrice Price in wei
-    /// @param signaturevaliduntilBlock Number of blocks till price expiry
-    /// @param hash Message hash that is signed.
-    /// @param signedData Proof of nav validity.
+    /// @param _unitaryValue Value of 1 token in wei units.
+    /// @param _signatureValidUntilBlock Number of blocks.
+    /// @param _hash Message hash that is signed.
+    /// @param _signedData Proof of nav validity.
+    /// @return isValid Bool validity of signed data.
     /// @notice mock function which returns true
     function isValidNav(
-        /* solhint-disable */
-        uint256 sellPrice,
-        uint256 buyPrice,
-        uint256 signaturevaliduntilBlock,
-        bytes32 hash,
-        bytes calldata signedData
-        /* solhint-disable */
+        uint256 _unitaryValue,
+        uint256 _signatureValidUntilBlock,
+        bytes32 _hash,
+        bytes calldata _signedData
     )
         external
         pure
         returns (bool isValid)
     {
         // following line mock to silence solhint warnings
-        abi.encodePacked(sellPrice, buyPrice, signaturevaliduntilBlock, hash, signedData);
+        abi.encodePacked(_unitaryValue, _signatureValidUntilBlock, _hash, _signedData);
         return isValid = true;
     }
 }
