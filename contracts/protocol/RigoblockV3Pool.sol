@@ -207,14 +207,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // pool can only be initialized at creation, meaning this method cannot be
     //  called directly to implementation.
     function _initializePool(
-        string memory _poolName,
-        string memory _poolSymbol,
+        string calldata _poolName,
+        string calldata _poolSymbol,
         address _owner
     )
         onlyUninitialized
         external
         override
     {
+        // TODO: check gas savings in batching variables | and returning individually
+        // uint256 | uint256
+        // TODO: check if initialize smaller uints at smaller higher cost
         poolData.name = _poolName;
         poolData.symbol = _poolSymbol;
         owner = _owner;
