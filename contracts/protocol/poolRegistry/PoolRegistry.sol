@@ -35,7 +35,6 @@ contract PoolRegistry is IPoolRegistry {
     address private authority;
 
     mapping(address => bytes32) private mapIdByAddress;
-    mapping(bytes32 => bytes32) private mapIdByName;
 
     mapping(address => PoolMeta) private poolMetaByAddress;
 
@@ -113,16 +112,12 @@ contract PoolRegistry is IPoolRegistry {
         whenAddressFree(_poolAddress)
     {
         _assertValidNameAndSymbol(_name, _symbol);
-
-        bytes32 name = bytes32(bytes(_name));
-        _assertNameIsFree(name);
-
         mapIdByAddress[_poolAddress] = poolId;
-        mapIdByName[name] = poolId;
 
         emit Registered(
             msg.sender, // proxy factory
             _poolAddress,
+            bytes32(bytes(_name)),
             bytes32(bytes(_symbol)),
             poolId
         );
@@ -201,16 +196,6 @@ contract PoolRegistry is IPoolRegistry {
     /*
      * INTERNAL FUNCTIONS
      */
-    function _assertNameIsFree(bytes32 _name)
-        internal
-        view
-    {
-        require(
-            mapIdByName[_name] == bytes32(0),
-            "REGISTRY_NAME_ALREADY_REGISTERED_ERROR"
-        );
-    }
-
     function _assertValidNameAndSymbol(
         string memory _name,
         string memory _symbol

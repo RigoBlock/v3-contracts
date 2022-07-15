@@ -30,6 +30,7 @@ interface IPoolRegistry {
     event Registered(
         address indexed group,
         address poolAddress,
+        bytes32 indexed name, // client can prune sibyl pools
         bytes32 indexed symbol,
         bytes32 id
     );
