@@ -40,7 +40,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     string public constant override VERSION = "HF 3.0.2";
 
     /// @notice Standard ERC20
-    uint256 public constant override decimals = 1e18;
+    uint256 public immutable override decimals;
 
     address public immutable override AUTHORITY;
 
@@ -51,14 +51,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     uint256 private constant FEE_BASE = 10000;
     uint256 private constant INITIAL_RATIO = 80;  // 80 is 80%
     uint256 private constant INITIAL_SPREAD = 500; // +-5%, in basis points
-    uint256 private constant INITIAL_UNITARY_VALUE = 1e18;
     uint256 private constant MAX_SPREAD = 1000; // +-10%, in basis points
     uint256 private constant MAX_TRANSACTION_FEE = 100; // maximum 1%
     uint256 private constant RATIO_BASE = 100;
     uint256 private constant SPREAD_BASE = 10000;
 
-    /// @notice Must be immutable to be compile-time constant.
+    // notice Must be immutable to be compile-time constant.
+    // eip1967 standard
     address private immutable _implementation;
+
+    uint256 private immutable INITIAL_UNITARY_VALUE;
 
     // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
     address private immutable RIGOBLOCK_DAO;
@@ -82,7 +84,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     struct PoolData {
         string name;
         string symbol;
-        uint256 unitaryValue;   // initially 1e18 = 1 ether
+        uint256 unitaryValue;   // initially = 1 * 10**18
         // TODO: check if we get benefit as storing spread as uint32
         uint256 spread;  // in basis points 1 = 0.01%
         uint256 totalSupply;
@@ -170,6 +172,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     constructor(address _authority, address _rigoblockDao) {
         AUTHORITY = _authority;
         RIGOBLOCK_DAO = _rigoblockDao;
+        // TODO: initialize decimals as input
+        decimals = 18;
+        INITIAL_UNITARY_VALUE = 1 * 10**decimals; // initial value is 1
         _implementation = address(this);
         // must lock implementation after initializing _implementation
         owner = address(0);
@@ -179,19 +184,29 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /*
      * CORE FUNCTIONS
      */
-    // permission of methods that change state are checked in the target adapter
-    //  effectively locking direct calls to this implementation contract.
+    // restricting delegatecall to owner effectively locks direct calls
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
         require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
 
-        // perform a delegatecall to extension
-        // msg.sender permission must be checked at single extension method level
+        address poolOwner = owner;
+        // pool owner can execute a delegatecall to extension. Any other caller
+        // will perform a staticcall.
         assembly {
             calldatacopy(0, 0, calldatasize())
-            let success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+            let success
+            // TODO: check if have gas savings in declaring if statement and
+            // returning inside the condition block
+            switch eq(caller(), poolOwner)
+            case true {
+                success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+            }
+            default {
+                success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
+            }
             returndatacopy(0, 0, returndatasize())
+
             if eq(success, 0) {
                 revert(0, returndatasize())
             }
@@ -203,6 +218,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     receive() external payable onlyDelegateCall {
         assert(msg.value > 0);
     }
+
+    // TODO: develop uniswapv3swapcallback
+    // TODO: double check how uniswap splits v3-v2 swaps
 
     // pool can only be initialized at creation, meaning this method cannot be
     //  called directly to implementation.
@@ -289,6 +307,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         onlyOwner
         notPriceError(_unitaryValue)
     {
+        // TODO: update only after totalSupply > 0 (initial price is always 1e18)
+        // add in modifier
         require(
             _isValidNav(
                 _unitaryValue,
