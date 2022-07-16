@@ -184,6 +184,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /*
      * CORE FUNCTIONS
      */
+    /// @dev Delegate calls to extension.
     // restricting delegatecall to owner effectively locks direct calls
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
@@ -191,22 +192,21 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
 
         address poolOwner = owner;
-        // pool owner can execute a delegatecall to extension. Any other caller
-        // will perform a staticcall.
         assembly {
             calldatacopy(0, 0, calldatasize())
             let success
-            // TODO: check if have gas savings in declaring if statement and
-            // returning inside the condition block
-            switch eq(caller(), poolOwner)
-            case true {
+            // pool owner can execute a delegatecall to extension, any other caller will perform a staticcall
+            if eq(caller(), poolOwner) {
                 success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                if eq(success, 0) {
+                    revert(0, returndatasize())
+                }
+                return(0, returndatasize())
             }
-            default {
-                success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
-            }
+            success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
-
+            // TODO: view methods will never be restricted as onchain data are public, should never revert. We could skip this check
             if eq(success, 0) {
                 revert(0, returndatasize())
             }
