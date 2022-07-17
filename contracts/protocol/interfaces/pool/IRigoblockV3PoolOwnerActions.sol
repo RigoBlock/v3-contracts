@@ -22,6 +22,6 @@ interface IRigoblockV3PoolOwnerActions {
     function changeFeeCollector(address _feeCollector)
         external;
 
-    function enforceKyc(bool _enforced, address _kycProvider)
+    function setKycProvider(address _kycProvider)
         external;
 }
