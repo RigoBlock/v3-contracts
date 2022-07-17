@@ -219,9 +219,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         assert(msg.value > 0);
     }
 
-    // TODO: develop uniswapv3swapcallback
-    // TODO: double check how uniswap splits v3-v2 swaps
-
     // pool can only be initialized at creation, meaning this method cannot be
     //  called directly to implementation.
     function _initializePool(
