@@ -35,12 +35,7 @@ interface IRigoblockV3PoolActions {
     )
         external;
 
-    function mint()
-        external
-        payable
-        returns (uint256);
-
-    function mintOnBehalf(address _hodler)
+    function mint(address _recipient, uint256 _amountIn)
         external
         payable
         returns (uint256);

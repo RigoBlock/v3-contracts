@@ -128,9 +128,13 @@ describe("Proxy", async () => {
             const [ user1 ] = waffle.provider.getWallets()
             const name = await pool.name()
             const symbol = await pool.symbol()
-            const amount = await pool.callStatic.mint({ value: etherAmount })
+            const amount = await pool.callStatic.mint(
+                  user1.address,
+                  etherAmount,
+                  { value: etherAmount }
+            )
             await expect(
-                pool.mint({ value: etherAmount })
+                pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.emit(pool, "Transfer").withArgs(
                 AddressZero,
                 user1.address,
@@ -150,7 +154,8 @@ describe("Proxy", async () => {
             await factory.createPool('testpool', 'TEST', AddressZero)
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const etherAmount = parseEther("0.0001")
-            await expect(pool.mint({ value: etherAmount })
+            const [ user1 ] = waffle.provider.getWallets()
+            await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
         })
     })

@@ -55,12 +55,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     uint32 private constant INITIAL_LOCKUP = 1;
 
-    uint8 private immutable COINBASE_DECIMALS;
-    uint256 private immutable COINBASE_UNITARY_VALUE;
-
     // notice Must be immutable to be compile-time constant.
     // eip1967 standard
     address private immutable _implementation;
+
+    uint8 private immutable COINBASE_DECIMALS;
+    uint256 private immutable COINBASE_UNITARY_VALUE;
+
+    // TODO: hardcode selector to save gas
+    bytes4 immutable private TRANSFER_FROM_SELECTOR = bytes4(
+        keccak256(bytes("transferFrom(address,address,uint256)"))
+    );
 
     mapping(address => Account) internal userAccount;
 
@@ -108,12 +113,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             size == 0,
             "POOL_ALREADY_INITIALIZED_ERROR"
         );
-        _;
-    }
-
-    // calling internal since immutable is copied in bytecode anywhere it is used.
-    modifier minimumStake(uint256 _amount) {
-        _assertBiggerThanMinimum(_amount);
         _;
     }
 
@@ -227,26 +226,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
     }
 
-    /// @dev Allows a user to mint pool tokens.
-    /// @return recipientAmount Number of tokens minted to recipient.
-    // TODO merge with following, as holder can just mint for himself
-    function mint()
-        external
-        payable
-        override
-        returns (uint256 recipientAmount)
-    {
-        return mintOnBehalf(msg.sender);
-    }
-
     /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _recipient Address receiving the tokens.
+    /// @param _amountIn Amount of base tokens.
     /// @return recipientAmount Number of tokens minted to recipient.
-    function mintOnBehalf(address _recipient)
+    function mint(address _recipient, uint256 _amountIn)
         public
         payable
         override
-        minimumStake(msg.value)
         returns (uint256 recipientAmount)
     {
         // require whitelisted user if kyc is enforced
@@ -259,7 +246,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
         uint256 mintPrice = _getUnitaryValue();
         mintPrice += _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        uint256 mintedAmount = msg.value * decimals() / mintPrice;
+        uint256 mintedAmount;
+        if (admin.baseToken == address(0)) {
+            _assertBiggerThanMinimum(msg.value);
+            mintedAmount = msg.value * decimals() / mintPrice;
+        } else {
+            _assertBiggerThanMinimum(_amountIn);
+            _safeTransferFrom(msg.sender, address(this), _amountIn);
+            mintedAmount = _amountIn * decimals() / mintPrice;
+        }
         poolData.totalSupply += mintedAmount;
         recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
     }
@@ -686,5 +681,28 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     function _isKycEnforced() private view returns (bool) {
         return admin.kycProvider != address(0);
+    }
+
+    function _safeTransferFrom(
+        address _from,
+        address _to,
+        uint256 _amount
+    )
+        private
+    {
+        // solhint-disable-next-line avoid-low-level-calls
+        // TODO: we may want to use assembly here
+        (bool success, bytes memory data) = admin.baseToken.call(
+            abi.encodeWithSelector(
+                TRANSFER_FROM_SELECTOR,
+                _from,
+                _to,
+                _amount
+            )
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "POOL_TRANSFER_FROM_FAILED_ERROR"
+        );
     }
 }
