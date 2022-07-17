@@ -33,11 +33,13 @@ interface IRigoblockPoolProxyFactory {
     /// @dev Creates a new Rigoblock pool.
     /// @param _name String of the name.
     /// @param _symbol String of the symbol.
+    /// @param _baseToken Address of the base token.
     /// @return newPoolAddress Address of the new pool.
     /// @return poolId Id of the new pool.
     function createPool(
         string calldata _name,
-        string calldata _symbol
+        string calldata _symbol,
+        address _baseToken
     )
         external
         returns (address newPoolAddress, bytes32 poolId);

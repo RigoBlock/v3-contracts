@@ -30,4 +30,6 @@ interface IERC20 {
 
     function balanceOf(address _who) external view returns (uint256);
     function allowance(address _owner, address _spender) external view returns (uint256);
+
+    function decimals() external view returns (uint8);
 }

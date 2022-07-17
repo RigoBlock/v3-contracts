@@ -30,6 +30,7 @@ interface IRigoblockV3PoolActions {
     function _initializePool(
         string calldata _poolName,
         string calldata _poolSymbol,
+        address _baseToken,
         address _owner
     )
         external;
