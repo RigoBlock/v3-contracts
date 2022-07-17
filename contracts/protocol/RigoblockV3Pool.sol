@@ -41,7 +41,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @notice Standard ERC20
     // TODO: check if best adding in struct and returning as external view
-    uint256 public immutable override decimals;
+    uint8 public immutable override decimals;
 
     address public immutable override AUTHORITY;
 

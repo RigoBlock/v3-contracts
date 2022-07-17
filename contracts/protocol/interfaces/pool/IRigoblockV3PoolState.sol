@@ -8,7 +8,7 @@ interface IRigoblockV3PoolState {
     */
     function AUTHORITY() external view returns (address);
 
-    function decimals() external view returns(uint256);
+    function decimals() external view returns(uint8);
 
     function name() external view returns (string memory);
 
