@@ -23,13 +23,15 @@ interface IRigoblockV3PoolState {
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
     /// @return unitaryValue Value of the token in wei unit.
+    /// @return spread Value of the spread from unitary value.
     function getData()
         external
         view
         returns (
             string memory poolName,
             string memory poolSymbol,
-            uint256 unitaryValue
+            uint256 unitaryValue,
+            uint256 spread
         );
 
     function getUnitaryValue()

@@ -21,7 +21,7 @@ pragma solidity 0.8.14;
 
 import { IAuthorityCore as Authority } from "./interfaces/IAuthorityCore.sol";
 // TODO: modify import after contracts renaming
-import { IAuthorityExtensions as AuthorityExchanges } from "./interfaces/IAuthorityExtensions.sol";
+import { IAuthorityExtensions as AuthorityExtensions } from "./interfaces/IAuthorityExtensions.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
@@ -40,6 +40,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     string public constant override VERSION = "HF 3.0.2";
 
     /// @notice Standard ERC20
+    // TODO: check if best adding in struct and returning as external view
     uint256 public immutable override decimals;
 
     address public immutable override AUTHORITY;
@@ -84,7 +85,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     struct PoolData {
         string name;
         string symbol;
-        uint256 unitaryValue;   // initially = 1 * 10**18
+        uint256 unitaryValue;   // initially = 1 * 10**decimals
         // TODO: check if we get benefit as storing spread as uint32
         uint256 spread;  // in basis points 1 = 0.01%
         uint256 totalSupply;
@@ -156,11 +157,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     // TODO: fix and move to nav verifier
     modifier notPriceError(uint256 _newUnitaryValue) {
-        // most typical error is adding/removing one 0
-        // TODO: could be more restrictive, vs delegate to nav verifier
+        /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
         require(
-            _newUnitaryValue < _getMintPrice() * 9 &&
-            _newUnitaryValue > _getBurnPrice() / 9,
+            _newUnitaryValue < getUnitaryValue() * 5 &&
+            _newUnitaryValue > getUnitaryValue() / 5,
             "105"
         );
         _;
@@ -300,12 +300,12 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         bytes32 _hash,
         bytes calldata _signedData)
         external
-        nonReentrant  // should remove as call does not move eth
         onlyOwner
         notPriceError(_unitaryValue)
     {
-        // TODO: update only after totalSupply > 0 (initial price is always 1e18)
-        // add in modifier
+        /// @notice Value can be updated only after first mint.
+        // TODO: fix tests to apply following
+        //require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
         require(
             _isValidNav(
                 _unitaryValue,
@@ -410,28 +410,37 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
     /// @return unitaryValue Value of the token in wei unit.
+    /// @return spread Value of the spread from unitary value.
+    // TODO: can inheritdoc only if implemented in subcontract
     function getData()
         external
         view
+        override
         returns (
             string memory poolName,
             string memory poolSymbol,
-            uint256 unitaryValue
+            uint256 unitaryValue,
+            uint256 spread
         )
     {
+        // TODO: check if we should reorg return data for client efficiency
         return(
             poolName = poolData.name,
             poolSymbol = poolData.symbol,
-            _getUnitaryValue()
+            getUnitaryValue(),
+            _getSpread()
+
         );
     }
 
     function getUnitaryValue()
-        external
+        public
         view
         returns (uint256)
     {
-        return _getUnitaryValue();
+        if (poolData.unitaryValue == uint256(0)) {
+            return INITIAL_UNITARY_VALUE;
+        } else return poolData.unitaryValue;
     }
 
     /// @dev Finds the administrative data of the pool.
@@ -640,7 +649,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256 amount
         )
     {
-        grossAmount = msg.value * decimals / _getMintPrice();
+        uint256 mintPrice = getUnitaryValue();
+        mintPrice += getUnitaryValue() * _getSpread() / SPREAD_BASE;
+        grossAmount = msg.value * decimals / mintPrice;
         uint256 fee; // fee is in basis points
 
         if (poolData.transactionFee != uint256(0)) {
@@ -656,26 +667,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
-    function _getMintPrice() internal view returns (uint256 unitaryValue) {
-        unitaryValue = _getUnitaryValue();
-        unitaryValue += _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-    }
-
-    function _getBurnPrice() internal view returns (uint256 unitaryValue) {
-        unitaryValue = _getUnitaryValue();
-        unitaryValue -= _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-    }
-
     function _getSpread() internal view returns (uint256) {
         if (poolData.spread == uint256(0)) {
             return INITIAL_SPREAD;
         } else { return poolData.spread; }
-    }
-
-    function _getUnitaryValue() private view returns (uint256) {
-        if (poolData.unitaryValue == uint256(0)) {
-            return INITIAL_UNITARY_VALUE;
-        } else return poolData.unitaryValue;
     }
 
     function _getRatio() private view returns (uint256) {
@@ -700,11 +695,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         )
     {
         uint256 fee = _amount * poolData.transactionFee / FEE_BASE;
+        uint256 burnPrice = getUnitaryValue();
+        burnPrice -= getUnitaryValue() * _getSpread() / SPREAD_BASE;
         return (
             feePool = fee * _getRatio() / RATIO_BASE,
             feeRigoblockDao = fee - feeRigoblockDao,
             netAmount = _amount - fee,
-            netRevenue = netAmount * _getBurnPrice() / decimals
+            netRevenue = netAmount * burnPrice / decimals
         );
     }
 
@@ -740,7 +737,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (address)
     {
-        return AuthorityExchanges(
+        return AuthorityExtensions(
             _getAuthorityExtensions()
         ).getApplicationAdapter(_selector);
     }
