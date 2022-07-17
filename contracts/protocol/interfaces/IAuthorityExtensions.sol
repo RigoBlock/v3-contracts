@@ -168,8 +168,8 @@ interface IAuthorityExtensions {
         external view
         returns (bool);
 
-    /// @dev Checkes whether a method is allowed on an exchange
-    function isMethodAllowed(bytes4 _method, address _exchange)
+    /// @dev Checkes whether a method is whitelisted.
+    function isMethodAllowed(bytes4 _method)
         external view
         returns (bool);
 }

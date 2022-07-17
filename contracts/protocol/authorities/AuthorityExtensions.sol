@@ -305,15 +305,12 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
 
     /// @dev Checkes whether a method is allowed on an exchange
     /// @param _selector Bytes4 of the function signature
-    /// @param _adapter Address of the exchange
     /// @return Bool the method is allowed
-    function isMethodAllowed(bytes4 _selector, address _adapter)
+    function isMethodAllowed(bytes4 _selector)
         external view
         returns (bool)
     {
-        // TODO: could remove adapter address and return only if ! address(0)
-        if (blocks.adapterBySelector[_selector] == address(0)) { return false; }
-        return (blocks.adapterBySelector[_selector] == _adapter);
+        return (blocks.adapterBySelector[_selector] != address(0));
     }
 
     /*
