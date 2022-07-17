@@ -51,11 +51,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * PUBLIC FUNCTIONS
      */
-    /// @dev Creates a new Rigoblock pool.
-    /// @param _name String of the name.
-    /// @param _symbol String of the symbol.
-    /// @return newPoolAddress Address of the new pool.
-    /// @return poolId Id of the new pool.
+    /// @inheritdoc IRigoblockPoolProxyFactory
     function createPool(string calldata _name, string calldata _symbol)
         external
         override
