@@ -123,15 +123,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     modifier hasEnough(uint256 _amount) {
         require(
             userAccount[msg.sender].balance >= _amount,
-            "101"
-        );
-        _;
-    }
-
-    modifier positiveAmount(uint256 _amount) {
-        require(
-            _amount > 0,
-            "102"
+            "POOL_BURN_NOT_ENOUGH_ERROR"
         );
         _;
     }
@@ -228,7 +220,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     /// @dev Allows a user to mint pool tokens.
-    /// @return recipientAmount Value of minted tokens.
+    /// @return recipientAmount Number of tokens minted to recipient.
     // TODO merge with following, as holder can just mint for himself
     function mint()
         external
@@ -240,7 +232,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _recipient Address receiving the tokens.
-    /// @return recipientAmount Value of minted tokens.
+    /// @return recipientAmount Number of tokens minted to recipient.
     function mintOnBehalf(address _recipient)
         public
         payable
@@ -269,11 +261,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         nonReentrant
         hasEnough(_amountIn)
-        positiveAmount(_amountIn)
         minimumPeriodPast
         returns (uint256 netRevenue)
     {
-
+        require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
         uint256 buntAmount = _allocateBurnTokens(_amountIn);
         uint256 burnPrice = _getUnitaryValue();
         burnPrice -= _getUnitaryValue() * _getSpread() / SPREAD_BASE;
