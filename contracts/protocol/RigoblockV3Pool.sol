@@ -61,20 +61,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     uint256 private immutable INITIAL_UNITARY_VALUE;
 
-    mapping(address => Account) internal accounts;
+    mapping(address => Account) internal userAccount;
 
     PoolData poolData;
     Admin admin;
 
-    struct Receipt {
-        uint256 units;
-        uint32 activation;
-    }
-
     struct Account {
         uint256 balance;
-        Receipt receipt;
-        mapping(address => address[]) approvedAccount;
+        uint32 activation;
     }
 
     struct PoolData {
@@ -127,7 +121,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     modifier hasEnough(uint256 _amount) {
         require(
-            accounts[msg.sender].balance >= _amount,
+            userAccount[msg.sender].balance >= _amount,
             "101"
         );
         _;
@@ -135,7 +129,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     modifier positiveAmount(uint256 _amount) {
         require(
-            accounts[msg.sender].balance + _amount > accounts[msg.sender].balance,
+            _amount > 0,
             "102"
         );
         _;
@@ -143,7 +137,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     modifier minimumPeriodPast() {
         require(
-            block.timestamp >= accounts[msg.sender].receipt.activation,
+            block.timestamp >= userAccount[msg.sender].activation,
             "103"
         );
         _;
@@ -239,22 +233,37 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     function mint()
         external
         payable
-        minimumStake(msg.value)
         returns (uint256)
     {
-        return _mint(msg.sender);
+        return mintOnBehalf(msg.sender);
     }
 
     /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _recipient Address receiving the tokens.
     /// @return Value of minted tokens.
     function mintOnBehalf(address _recipient)
-        external
+        public
         payable
         minimumStake(msg.value)
         returns (uint256)
     {
-        return _mint(_recipient);
+        // require whitelisted user if kyc is enforced
+        if (admin.kycEnforced == true) {
+            require(
+                Kyc(admin.kycProvider).isWhitelistedUser(_recipient),
+                "POOL_CALLER_NOT_WHITELISTED_ERROR"
+            );
+        }
+
+        (
+            uint256 grossAmount,
+            uint256 feePool,
+            uint256 amount
+        ) = _getMintAmounts();
+        require(amount > 0, "POOL_MINT_NULL_AMOUNT_ERROR");
+        poolData.totalSupply += grossAmount;
+        _allocateMintTokens(_recipient, amount, feePool);
+        return amount;
     }
 
     /// @dev Allows a pool holder to burn pool tokens.
@@ -277,7 +286,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _allocateBurnTokens(msg.sender, _amount, feePool);
         poolData.totalSupply -= netAmount;
         payable(msg.sender).transfer(netRevenue);
-        emit Burn(msg.sender, address(this), _amount, netRevenue, bytes(poolData.name), bytes(poolData.symbol));
+        // TODO: log transfer to fee collector
+        emit Transfer(msg.sender, address(0), _amount);
         return netRevenue;
     }
 
@@ -380,7 +390,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         override
         returns (uint256)
     {
-        return accounts[_who].balance;
+        return userAccount[_who].balance;
     }
 
     /// @dev Finds details of this pool.
@@ -527,41 +537,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /*
      * INTERNAL FUNCTIONS
      */
-
-    /// @dev Executes the pool purchase.
-    /// @param _receipient Address of the target user.
-    /// @return Value of minted tokens.
-    function _mint(address _receipient)
-        internal
-        returns (uint256)
-    {
-        // require whitelisted user if kyc is enforced
-        if (admin.kycEnforced == true) {
-            require(
-                Kyc(admin.kycProvider).isWhitelistedUser(_receipient),
-                "POOL_CALLER_NOT_WHITELISTED_ERROR"
-            );
-        }
-
-        (
-            uint256 grossAmount,
-            uint256 feePool,
-            uint256 amount
-        ) = _getMintAmounts();
-
-        _allocateMintTokens(_receipient, amount, feePool);
-
-        require(
-            amount > uint256(0),
-            "POOL_MINT_RETURNED_AMOUNT_NULL_ERROR"
-        );
-
-        poolData.totalSupply += grossAmount;
-        // TODO: save space, we are returning pool address in event
-        emit Mint(msg.sender, address(this), _receipient, msg.value, amount);
-        return amount;
-    }
-
     /// @dev Allocates tokens to recipient.
     /// @param _recipient Address of the recipient.
     /// @param _amount Value of issued tokens.
@@ -573,13 +548,31 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     )
         internal
     {
-        accounts[_recipient].balance = accounts[_recipient].balance + _amount;
         if (_feePool != uint256(0)) {
             // TODO: test
-            address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
-            accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
+            address feeCollector = (
+                admin.feeCollector != address(0) ? admin.feeCollector : owner
+            );
+
+            if (feeCollector == _recipient) {
+                userAccount[feeCollector].balance += _amount + _feePool;
+                emit Transfer(address(0), feeCollector, _amount + _feePool);
+            } else {
+                userAccount[feeCollector].balance += _feePool;
+                userAccount[_recipient].balance += _amount;
+                emit Transfer(address(0), feeCollector, _feePool);
+                emit Transfer(address(0), _recipient, _amount);
+            }
+        } else {
+            /// @dev Each mint on same recipient resets prior activation.
+            unchecked {
+                userAccount[_recipient].activation = (
+                    uint32(block.timestamp) + poolData.minPeriod
+                );
+            }
+            userAccount[_recipient].balance += _amount;
+            emit Transfer(address(0), _recipient, _amount);
         }
-        unchecked { accounts[_recipient].receipt.activation = uint32(block.timestamp) + poolData.minPeriod; }
     }
 
     /// @dev Destroys tokens of holder.
@@ -593,10 +586,25 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     )
         internal
     {
-        accounts[_receipient].balance = accounts[_receipient].balance - _amount;
+        // TODO: check if we still want to keep fee as adds to execution cost if owner sets positive fee
         if (_feePool != uint256(0)) {
-            address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
-            accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
+            address feeCollector = (
+                admin.feeCollector != address(0) ? admin.feeCollector : owner
+            );
+
+            if (feeCollector == _receipient) {
+                userAccount[feeCollector].balance -= _amount + _feePool;
+                emit Transfer(feeCollector, address(0), _amount + _feePool);
+            } else {
+                userAccount[feeCollector].balance += _feePool;
+                userAccount[_receipient].balance -= _amount;
+                // fee tokens are transferred to fee collector.
+                emit Transfer(_receipient, feeCollector, _feePool);
+                emit Transfer(_receipient, address(0), _amount);
+            }
+        } else {
+            userAccount[_receipient].balance -= _amount;
+            emit Transfer(_receipient, address(0), _amount);
         }
     }
 

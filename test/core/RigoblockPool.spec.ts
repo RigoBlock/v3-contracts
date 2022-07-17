@@ -94,11 +94,9 @@ describe("Proxy", async () => {
             const amount = await pool.callStatic.mint({ value: etherAmount })
             await expect(
                 pool.mint({ value: etherAmount })
-            ).to.emit(pool, "Mint").withArgs(
+            ).to.emit(pool, "Transfer").withArgs(
+                AddressZero,
                 user1.address,
-                newPoolAddress,
-                user1.address,
-                etherAmount,
                 amount
             )
             expect(await pool.totalSupply()).to.be.not.eq(0)
