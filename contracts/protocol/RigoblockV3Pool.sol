@@ -50,11 +50,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
     uint256 private constant FEE_BASE = 10000;
-    uint256 private constant INITIAL_RATIO = 80;  // 80 is 80%
     uint256 private constant INITIAL_SPREAD = 500; // +-5%, in basis points
     uint256 private constant MAX_SPREAD = 1000; // +-10%, in basis points
     uint256 private constant MAX_TRANSACTION_FEE = 100; // maximum 1%
-    uint256 private constant RATIO_BASE = 100;
     uint256 private constant SPREAD_BASE = 10000;
 
     // notice Must be immutable to be compile-time constant.
@@ -62,9 +60,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     address private immutable _implementation;
 
     uint256 private immutable INITIAL_UNITARY_VALUE;
-
-    // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
-    address private immutable RIGOBLOCK_DAO;
 
     mapping(address => Account) internal accounts;
 
@@ -94,7 +89,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     struct Admin {
-        uint256 ratio;  // initial ratio is 80%
         address feeCollector;
         address kycProvider;
         bool kycEnforced;
@@ -169,9 +163,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // owner is initialized to 0 to lock owner actions in this implementation.
     // kycEnforced set to true as will prevent mint/burn actions, effectively
     // making this implementation unusable by itself.
-    constructor(address _authority, address _rigoblockDao) {
+    constructor(address _authority) {
         AUTHORITY = _authority;
-        RIGOBLOCK_DAO = _rigoblockDao;
         // TODO: initialize decimals as input
         decimals = 18;
         INITIAL_UNITARY_VALUE = 1 * 10**decimals; // initial value is 1
@@ -277,12 +270,11 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         (
             uint256 feePool,
-            uint256 feeRigoblockDao,
             uint256 netAmount,
             uint256 netRevenue
         ) = _getBurnAmounts(_amount);
 
-        _allocateBurnTokens(msg.sender, _amount, feePool, feeRigoblockDao);
+        _allocateBurnTokens(msg.sender, _amount, feePool);
         poolData.totalSupply -= netAmount;
         payable(msg.sender).transfer(netRevenue);
         emit Burn(msg.sender, address(this), _amount, netRevenue, bytes(poolData.name), bytes(poolData.symbol));
@@ -317,21 +309,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         );
         poolData.unitaryValue = _unitaryValue;
         emit NewNav(msg.sender, address(this), _unitaryValue);
-    }
-
-    /// @dev Allows pool owner to change fee split ratio between fee collector and Dao.
-    /// @param _ratio Number of ratio for fee collector, from 0 to 100.
-    // TODO: this method should be delegated to DAO and universal for all pools.
-    function changeRatio(uint256 _ratio)
-        external
-        onlyOwner
-    {
-        require(
-            _ratio != uint256(0),
-            "POOL_RATIO_NULL_ERROR"
-        );
-        admin.ratio = _ratio;
-        emit NewRatio(msg.sender, address(this), _ratio);
     }
 
     /// @dev Allows pool owner to set the transaction fee.
@@ -446,8 +423,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Finds the administrative data of the pool.
     /// @return Address of the owner.
     /// @return feeCollector Address of the account where a user collects fees.
-    /// @return Address of the Rigoblock DAO.
-    /// @return Number of the fee split ratio.
     /// @return transactionFee Value of the transaction fee in basis points.
     /// @return minPeriod Number of the minimum holding period for tokens.
     function getAdminData()
@@ -456,8 +431,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (
             address,  //owner
             address feeCollector,
-            address,  // rigoblockDao
-            uint256,  // ratio
             uint256 transactionFee,
             uint32 minPeriod
         )
@@ -465,8 +438,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return (
             owner,
             admin.feeCollector,
-            RIGOBLOCK_DAO,
-            _getRatio(),
             poolData.transactionFee,
             poolData.minPeriod
         );
@@ -575,11 +546,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         (
             uint256 grossAmount,
             uint256 feePool,
-            uint256 feeRigoblockDao,
             uint256 amount
         ) = _getMintAmounts();
 
-        _allocateMintTokens(_receipient, amount, feePool, feeRigoblockDao);
+        _allocateMintTokens(_receipient, amount, feePool);
 
         require(
             amount > uint256(0),
@@ -592,16 +562,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return amount;
     }
 
-    /// @dev Allocates tokens to recipient, splits fee in tokens to wizard and dao.
+    /// @dev Allocates tokens to recipient.
     /// @param _recipient Address of the recipient.
     /// @param _amount Value of issued tokens.
     /// @param _feePool Number of tokens as fee.
-    /// @param _feeRigoblockDao Number of tokens as fee to dao.
     function _allocateMintTokens(
         address _recipient,
         uint256 _amount,
-        uint256 _feePool,
-        uint256 _feeRigoblockDao)
+        uint256 _feePool
+    )
         internal
     {
         accounts[_recipient].balance = accounts[_recipient].balance + _amount;
@@ -609,35 +578,31 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             // TODO: test
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
-            accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
         unchecked { accounts[_recipient].receipt.activation = uint32(block.timestamp) + poolData.minPeriod; }
     }
 
-    /// @dev Destroys tokens of holder, splits fee in tokens to wizard and dao.
+    /// @dev Destroys tokens of holder.
     /// @param _receipient Address of the holder.
     /// @param _amount Value of burnt tokens.
     /// @param _feePool Number of tokens as fee.
-    /// @param _feeRigoblockDao Number of tokens as fee to dao.
     function _allocateBurnTokens(
         address _receipient,
         uint256 _amount,
-        uint256 _feePool,
-        uint256 _feeRigoblockDao)
+        uint256 _feePool
+    )
         internal
     {
         accounts[_receipient].balance = accounts[_receipient].balance - _amount;
         if (_feePool != uint256(0)) {
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
-            accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
     }
 
     /// @dev Calculates the correct purchase amounts.
     /// @return grossAmount Number of new tokens.
     /// @return feePool Value of fee in tokens.
-    /// @return feeRigoblockDao Value of fee in tokens to dao.
     /// @return amount Value of net minted tokens.
     function _getMintAmounts()
         internal
@@ -645,24 +610,18 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (
             uint256 grossAmount,
             uint256 feePool,
-            uint256 feeRigoblockDao,
             uint256 amount
         )
     {
         uint256 mintPrice = getUnitaryValue();
         mintPrice += getUnitaryValue() * _getSpread() / SPREAD_BASE;
         grossAmount = msg.value * decimals / mintPrice;
-        uint256 fee; // fee is in basis points
 
         if (poolData.transactionFee != uint256(0)) {
-            fee = grossAmount * poolData.transactionFee / FEE_BASE;
-            // TODO: check if ratio returned correctly
-            feePool = fee * _getRatio() / RATIO_BASE;
-            feeRigoblockDao = fee - feePool;
-            amount = grossAmount - fee;
+            feePool = grossAmount * poolData.transactionFee / FEE_BASE;
+            amount = grossAmount - feePool;
         } else {
             feePool = uint256(0);
-            feeRigoblockDao = uint256(0);
             amount = grossAmount;
         }
     }
@@ -673,15 +632,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         } else { return poolData.spread; }
     }
 
-    function _getRatio() private view returns (uint256) {
-        if (admin.ratio == uint256(0)) {
-            return INITIAL_RATIO;
-        } else return admin.ratio;
-    }
-
     /// @dev Calculates the correct sale amounts.
     /// @return feePool Value of fee in tokens.
-    /// @return feeRigoblockDao Value of fee in tokens to dao.
     /// @return netAmount Value of net burnt tokens.
     /// @return netRevenue Value of revenue for holder.
     function _getBurnAmounts(uint256 _amount)
@@ -689,18 +641,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (
             uint256 feePool,
-            uint256 feeRigoblockDao,
             uint256 netAmount,
             uint256 netRevenue
         )
     {
-        uint256 fee = _amount * poolData.transactionFee / FEE_BASE;
         uint256 burnPrice = getUnitaryValue();
         burnPrice -= getUnitaryValue() * _getSpread() / SPREAD_BASE;
         return (
-            feePool = fee * _getRatio() / RATIO_BASE,
-            feeRigoblockDao = fee - feeRigoblockDao,
-            netAmount = _amount - fee,
+            feePool = _amount * poolData.transactionFee / FEE_BASE,
+            netAmount = _amount - feePool,
             netRevenue = netAmount * burnPrice / decimals
         );
     }

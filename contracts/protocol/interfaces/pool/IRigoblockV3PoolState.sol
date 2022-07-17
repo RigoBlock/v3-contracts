@@ -45,8 +45,6 @@ interface IRigoblockV3PoolState {
         returns (
             address,
             address feeCollector,
-            address dragoDao,
-            uint256, // ratio
             uint256 transactionFee,
             uint32 minPeriod
         );

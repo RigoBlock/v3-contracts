@@ -47,17 +47,6 @@ interface IRigoblockV3PoolEvents {
         bytes symbol
     );
 
-    /// @dev Logs update of ratio.
-    /// @notice Emitted when pool operator sets ratio.
-    /// @param poolAddress Address of the pool.
-    /// @param from Address that is sending the transaction.
-    /// @param newRatio Value of the new ration.
-    event NewRatio(
-        address indexed poolAddress,
-        address indexed from,
-        uint256 newRatio
-    );
-
     /// @dev Logs update of NAV.
     /// @notice Emitted when pool operator updates NAV.
     /// @param poolOperator Address of the pool owner.
@@ -89,17 +78,5 @@ interface IRigoblockV3PoolEvents {
         address indexed poolAddress,
         address indexed who,
         address feeCollector
-    );
-
-    // TODO: fix method
-    /// @dev Logs update of Rigoblock DAO.
-    /// @notice Emitted when pool factory updates Dao address.
-    /// @param poolAddress Address of the pool.
-    /// @param from Address that is sending the transaction.
-    /// @param dragoDao Address of the Dao.
-    event DragoDaoSet(
-        address indexed poolAddress,
-        address indexed from,
-        address dragoDao
     );
 }
