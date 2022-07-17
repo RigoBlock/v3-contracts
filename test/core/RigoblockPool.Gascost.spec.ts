@@ -14,15 +14,19 @@ describe("ProxyGasCost", async () => {
         const ResitryInstance = await deployments.get("PoolRegistry")
         const Registry = await hre.ethers.getContractFactory("PoolRegistry")
         return {
-          factory: Factory.attach(RigoblockPoolProxyFactory.address),
-          registry: Registry.attach(ResitryInstance.address)
+            factory: Factory.attach(RigoblockPoolProxyFactory.address),
+            registry: Registry.attach(ResitryInstance.address)
         }
     });
 
     describe("calculateCost", async () => {
         it('should create pool whose size is smaller than 500k gas', async () => {
             const { factory, registry } = await setupTests()
-            const txReceipt = await factory.createPool('t est pool', 'TEST')
+            const txReceipt = await factory.createPool(
+                't est pool',
+                'TEST',
+                AddressZero
+            )
             const [ user1 ] = waffle.provider.getWallets()
             const result = await txReceipt.wait()
             const gasCost = result.cumulativeGasUsed.toNumber()
