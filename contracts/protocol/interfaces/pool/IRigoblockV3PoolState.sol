@@ -22,19 +22,19 @@ interface IRigoblockV3PoolState {
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
-    /// @return Value of the token price in wei.
-    /// @return Value of the token price in wei.
+    /// @return unitaryValue Value of the token in wei unit.
+    /// @return spread Value of the spread from unitary value.
     function getData()
         external
         view
         returns (
             string memory poolName,
             string memory poolSymbol,
-            uint256,    // sellPrice
-            uint256     // buyPrice
+            uint256 unitaryValue,
+            uint256 spread
         );
 
-    function calcTokenPrice()
+    function getUnitaryValue()
         external
         view
         returns (uint256);
@@ -57,10 +57,4 @@ interface IRigoblockV3PoolState {
         returns (address);
 
     function totalSupply() external view returns (uint256);
-
-    // TODO: check if should be made public (or internal) in implementation
-    function getExtensionsAuthority()
-        external
-        view
-        returns (address);
 }

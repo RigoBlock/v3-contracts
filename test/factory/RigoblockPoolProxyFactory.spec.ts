@@ -51,12 +51,14 @@ describe("ProxyFactory", async () => {
         it('should create address when creating pool', async () => {
             const { factory, registry } = await setupTests()
             const { newPoolAddress, poolId } = await factory.callStatic.createPool('testpool','TEST')
+            const bytes32symbol = hre.ethers.utils.formatBytes32String('testpool')
             const bytes32name = hre.ethers.utils.formatBytes32String('TEST')
             await expect(
                 factory.createPool('testpool','TEST')
             ).to.emit(registry, "Registered").withArgs(
                 factory.address,
                 newPoolAddress,
+                bytes32symbol,
                 bytes32name,
                 poolId
             )
@@ -90,14 +92,14 @@ describe("ProxyFactory", async () => {
             ).to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
         })
 
-        it('should revert with duplicate name', async () => {
+        it('should create pool with duplicate name', async () => {
             const { factory, registry } = await setupTests()
             await expect(
                 factory.createPool('duplicateName', 'TEST')
             ).to.emit(factory, "PoolCreated")
             await expect(
                 factory.createPool('duplicateName', 'TEST2')
-            ).to.be.revertedWith("REGISTRY_NAME_ALREADY_REGISTERED_ERROR")
+            ).to.emit(factory, "PoolCreated")
         })
 
         it('should create pool with duplicate symbol', async () => {

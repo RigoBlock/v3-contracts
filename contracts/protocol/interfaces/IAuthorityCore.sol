@@ -37,22 +37,20 @@ interface IAuthorityCore {
     event NewDragoEventful(address indexed dragoEventful);
     event NewVaultEventful(address indexed vaultEventful);
     event NewNavVerifier(address indexed navVerifier);
-    event NewExchangesAuthority(address indexed exchangesAuthority);
+    event NewExtensionsAuthority(address indexed extensionsAuthority);
 
     /*
      * CORE FUNCTIONS
      */
     function setAuthority(address _authority, bool _isWhitelisted) external;
+    function setExtensionsAuthority(address _extensionsAuthority) external;
     function setWhitelister(address _whitelister, bool _isWhitelisted) external;
     function whitelistUser(address _target, bool _isWhitelisted) external;
     function whitelistDrago(address _drago, bool _isWhitelisted) external;
     function whitelistVault(address _vault, bool _isWhitelisted) external;
     function whitelistRegistry(address _registry, bool _isWhitelisted) external;
     function whitelistFactory(address _factory, bool _isWhitelisted) external;
-    function setDragoEventful(address _dragoEventful) external;
-    function setVaultEventful(address _vaultEventful) external;
     function setNavVerifier(address _navVerifier) external;
-    function setExchangesAuthority(address _exchangesAuthority) external;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
@@ -63,8 +61,6 @@ interface IAuthorityCore {
     function isWhitelistedDrago(address _drago) external view returns (bool);
     function isWhitelistedVault(address _vault) external view returns (bool);
     function isWhitelistedFactory(address _factory) external view returns (bool);
-    function getDragoEventful() external view returns (address);
-    function getVaultEventful() external view returns (address);
     function getNavVerifier() external view returns (address);
-    function getExtensionsAuthority() external view returns (address);
+    function getAuthorityExtensions() external view returns (address);
 }

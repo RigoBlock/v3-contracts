@@ -21,7 +21,7 @@ pragma solidity 0.8.14;
 
 import { IAuthorityCore as Authority } from "./interfaces/IAuthorityCore.sol";
 // TODO: modify import after contracts renaming
-import { IExchangesAuthority as ExtensionsAuthority } from "./interfaces/IExchangesAuthority.sol";
+import { IAuthorityExtensions as AuthorityExtensions } from "./interfaces/IAuthorityExtensions.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
@@ -40,19 +40,28 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     string public constant override VERSION = "HF 3.0.2";
 
     /// @notice Standard ERC20
-    uint256 public constant override decimals = 1e18;
+    // TODO: check if best adding in struct and returning as external view
+    uint256 public immutable override decimals;
 
     address public immutable override AUTHORITY;
 
     // minimum order size to avoid dust clogging things up
     uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
 
-    uint256 private constant INITIAL_SELL_PRICE = 1e18;
-    uint256 private constant INITIAL_BUY_PRICE = 1e18;
+    // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
+    uint256 private constant FEE_BASE = 10000;
     uint256 private constant INITIAL_RATIO = 80;  // 80 is 80%
+    uint256 private constant INITIAL_SPREAD = 500; // +-5%, in basis points
+    uint256 private constant MAX_SPREAD = 1000; // +-10%, in basis points
+    uint256 private constant MAX_TRANSACTION_FEE = 100; // maximum 1%
+    uint256 private constant RATIO_BASE = 100;
+    uint256 private constant SPREAD_BASE = 10000;
 
-    /// @notice Must be immutable to be compile-time constant.
+    // notice Must be immutable to be compile-time constant.
+    // eip1967 standard
     address private immutable _implementation;
+
+    uint256 private immutable INITIAL_UNITARY_VALUE;
 
     // TODO: dao should not individually claim fee, remove dao fee or pay to dao at mint/burn (requires transfer()).
     address private immutable RIGOBLOCK_DAO;
@@ -76,9 +85,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     struct PoolData {
         string name;
         string symbol;
-        // TODO: merge sell and buy price, set spread
-        uint256 buyPrice;   // initially 1e18 = 1 ether
-        uint256 sellPrice;  // initially 1e18 = 1 ether
+        uint256 unitaryValue;   // initially = 1 * 10**decimals
+        // TODO: check if we get benefit as storing spread as uint32
+        uint256 spread;  // in basis points 1 = 0.01%
         uint256 totalSupply;
         uint256 transactionFee; // in basis points 1 = 0.01%
         uint32 minPeriod;
@@ -146,18 +155,12 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
-    modifier buyPriceHigherOrEqual(uint256 _sellPrice, uint256 _buyPrice) {
-        require(
-            _sellPrice <= _buyPrice,
-            "104"
-        );
-        _;
-    }
-
     // TODO: fix and move to nav verifier
-    modifier notPriceError(uint256 _sellPrice, uint256 _buyPrice) {
+    modifier notPriceError(uint256 _newUnitaryValue) {
+        /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
         require(
-            _sellPrice > _getSellPrice() / 10 && _buyPrice < _getBuyPrice() * 10,
+            _newUnitaryValue < getUnitaryValue() * 5 &&
+            _newUnitaryValue > getUnitaryValue() / 5,
             "105"
         );
         _;
@@ -169,6 +172,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     constructor(address _authority, address _rigoblockDao) {
         AUTHORITY = _authority;
         RIGOBLOCK_DAO = _rigoblockDao;
+        // TODO: initialize decimals as input
+        decimals = 18;
+        INITIAL_UNITARY_VALUE = 1 * 10**decimals; // initial value is 1
         _implementation = address(this);
         // must lock implementation after initializing _implementation
         owner = address(0);
@@ -178,19 +184,29 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /*
      * CORE FUNCTIONS
      */
-    // permission of methods that change state are checked in the target adapter
-    //  effectively locking direct calls to this implementation contract.
+    /// @dev Delegate calls to extension.
+    // restricting delegatecall to owner effectively locks direct calls
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
         require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
 
-        // perform a delegatecall to extension
-        // msg.sender permission must be checked at single extension method level
+        address poolOwner = owner;
         assembly {
             calldatacopy(0, 0, calldatasize())
-            let success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+            let success
+            // pool owner can execute a delegatecall to extension, any other caller will perform a staticcall
+            if eq(caller(), poolOwner) {
+                success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                if eq(success, 0) {
+                    revert(0, returndatasize())
+                }
+                return(0, returndatasize())
+            }
+            success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
+            // TODO: view methods will never be restricted as onchain data are public, should never revert. We could skip this check
             if eq(success, 0) {
                 revert(0, returndatasize())
             }
@@ -206,14 +222,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // pool can only be initialized at creation, meaning this method cannot be
     //  called directly to implementation.
     function _initializePool(
-        string memory _poolName,
-        string memory _poolSymbol,
+        string calldata _poolName,
+        string calldata _poolSymbol,
         address _owner
     )
         onlyUninitialized
         external
         override
     {
+        // TODO: check gas savings in batching variables | and returning individually
+        // uint256 | uint256
+        // TODO: check if initialize smaller uints at smaller higher cost
         poolData.name = _poolName;
         poolData.symbol = _poolSymbol;
         owner = _owner;
@@ -234,15 +253,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     /// @dev Allows a user to mint pool tokens on behalf of an address.
-    /// @param _hodler Address of the target user.
+    /// @param _recipient Address receiving the tokens.
     /// @return Value of minted tokens.
-    function mintOnBehalf(address _hodler)
+    function mintOnBehalf(address _recipient)
         external
         payable
         minimumStake(msg.value)
         returns (uint256)
     {
-        return _mint(_hodler);
+        return _mint(_recipient);
     }
 
     /// @dev Allows a pool holder to burn pool tokens.
@@ -271,36 +290,33 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     /// @dev Allows pool owner to set the pool price.
-    /// @param _newSellPrice Price in wei.
-    /// @param _newBuyPrice Price in wei.
-    /// @param _signaturevaliduntilBlock Number of blocks till expiry of new poolData.
+    /// @param _unitaryValue Value of 1 token in wei units.
+    /// @param _signaturevaliduntilBlock Number of blocks until expiry of new poolData.
     /// @param _hash Bytes32 of the transaction hash.
     /// @param _signedData Bytes of extradata and signature.
-    function setPrices(
-        uint256 _newSellPrice,
-        uint256 _newBuyPrice,
+    function setUnitaryValue(
+        uint256 _unitaryValue,
         uint256 _signaturevaliduntilBlock,
         bytes32 _hash,
         bytes calldata _signedData)
         external
-        nonReentrant
         onlyOwner
-        buyPriceHigherOrEqual(_newSellPrice, _newBuyPrice)
-        notPriceError(_newSellPrice, _newBuyPrice)
+        notPriceError(_unitaryValue)
     {
+        /// @notice Value can be updated only after first mint.
+        // TODO: fix tests to apply following
+        //require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
         require(
             _isValidNav(
-                _newSellPrice,
-                _newBuyPrice,
+                _unitaryValue,
                 _signaturevaliduntilBlock,
                 _hash,
                 _signedData
             ),
             "POOL_NAV_NOT_VALID_ERROR"
         );
-        poolData.sellPrice = _newSellPrice;
-        poolData.buyPrice = _newBuyPrice;
-        emit NewNav(msg.sender, address(this), _newSellPrice, _newBuyPrice);
+        poolData.unitaryValue = _unitaryValue;
+        emit NewNav(msg.sender, address(this), _unitaryValue);
     }
 
     /// @dev Allows pool owner to change fee split ratio between fee collector and Dao.
@@ -325,7 +341,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         onlyOwner
     {
         require(
-            _transactionFee <= 100,
+            _transactionFee <= MAX_TRANSACTION_FEE,
             "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"
             ); //fee cannot be higher than 1%
         poolData.transactionFee = _transactionFee;
@@ -353,6 +369,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             "POOL_LOCKUP_LONGER_THAN_15_DAYS_ERROR"
         );
         poolData.minPeriod = _minPeriod;
+    }
+
+    function changeSpread(uint256 _newSpread) external onlyOwner {
+        // TODO: check what happens with value 0
+        require(
+            _newSpread < MAX_SPREAD,
+            "POOL_SPREAD_TOO_HIGH_ERROR"
+        );
+        poolData.spread = _newSpread;
+        // TODO: should emit event
     }
 
     function enforceKyc(
@@ -383,34 +409,38 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
-    /// @return Value of the token price in wei.
-    /// @return Value of the token price in wei.
+    /// @return unitaryValue Value of the token in wei unit.
+    /// @return spread Value of the spread from unitary value.
+    // TODO: can inheritdoc only if implemented in subcontract
     function getData()
         external
         view
+        override
         returns (
             string memory poolName,
             string memory poolSymbol,
-            uint256,    // sellPrice
-            uint256     // buyPrice
+            uint256 unitaryValue,
+            uint256 spread
         )
     {
+        // TODO: check if we should reorg return data for client efficiency
         return(
             poolName = poolData.name,
             poolSymbol = poolData.symbol,
-            _getSellPrice(),
-            _getBuyPrice()
+            getUnitaryValue(),
+            _getSpread()
+
         );
     }
 
-    /// @dev Returns the price of a pool.
-    /// @return Value of the token price in wei.
-    function calcTokenPrice()
-        external
+    function getUnitaryValue()
+        public
         view
         returns (uint256)
     {
-        return _getSellPrice();
+        if (poolData.unitaryValue == uint256(0)) {
+            return INITIAL_UNITARY_VALUE;
+        } else return poolData.unitaryValue;
     }
 
     /// @dev Finds the administrative data of the pool.
@@ -440,14 +470,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             poolData.transactionFee,
             poolData.minPeriod
         );
-    }
-
-    function getExtensionsAuthority()
-        external
-        view
-        returns (address)
-    {
-        return _getExtensionsAuthority();
     }
 
     function getKycProvider()
@@ -536,16 +558,16 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
      */
 
     /// @dev Executes the pool purchase.
-    /// @param _hodler Address of the target user.
+    /// @param _receipient Address of the target user.
     /// @return Value of minted tokens.
-    function _mint(address _hodler)
+    function _mint(address _receipient)
         internal
         returns (uint256)
     {
         // require whitelisted user if kyc is enforced
         if (admin.kycEnforced == true) {
             require(
-                Kyc(admin.kycProvider).isWhitelistedUser(_hodler),
+                Kyc(admin.kycProvider).isWhitelistedUser(_receipient),
                 "POOL_CALLER_NOT_WHITELISTED_ERROR"
             );
         }
@@ -557,7 +579,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256 amount
         ) = _getMintAmounts();
 
-        _allocateMintTokens(_hodler, amount, feePool, feeRigoblockDao);
+        _allocateMintTokens(_receipient, amount, feePool, feeRigoblockDao);
 
         require(
             amount > uint256(0),
@@ -566,45 +588,45 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
         poolData.totalSupply += grossAmount;
         // TODO: save space, we are returning pool address in event
-        emit Mint(msg.sender, address(this), _hodler, msg.value, amount);
+        emit Mint(msg.sender, address(this), _receipient, msg.value, amount);
         return amount;
     }
 
-    /// @dev Allocates tokens to buyer, splits fee in tokens to wizard and dao.
-    /// @param _hodler Address of the buyer.
+    /// @dev Allocates tokens to recipient, splits fee in tokens to wizard and dao.
+    /// @param _recipient Address of the recipient.
     /// @param _amount Value of issued tokens.
     /// @param _feePool Number of tokens as fee.
     /// @param _feeRigoblockDao Number of tokens as fee to dao.
     function _allocateMintTokens(
-        address _hodler,
+        address _recipient,
         uint256 _amount,
         uint256 _feePool,
         uint256 _feeRigoblockDao)
         internal
     {
-        accounts[_hodler].balance = accounts[_hodler].balance + _amount;
+        accounts[_recipient].balance = accounts[_recipient].balance + _amount;
         if (_feePool != uint256(0)) {
             // TODO: test
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
             accounts[RIGOBLOCK_DAO].balance = accounts[RIGOBLOCK_DAO].balance + _feeRigoblockDao;
         }
-        unchecked { accounts[_hodler].receipt.activation = uint32(block.timestamp) + poolData.minPeriod; }
+        unchecked { accounts[_recipient].receipt.activation = uint32(block.timestamp) + poolData.minPeriod; }
     }
 
-    /// @dev Destroys tokens of seller, splits fee in tokens to wizard and dao.
-    /// @param _hodler Address of the seller.
+    /// @dev Destroys tokens of holder, splits fee in tokens to wizard and dao.
+    /// @param _receipient Address of the holder.
     /// @param _amount Value of burnt tokens.
     /// @param _feePool Number of tokens as fee.
     /// @param _feeRigoblockDao Number of tokens as fee to dao.
     function _allocateBurnTokens(
-        address _hodler,
+        address _receipient,
         uint256 _amount,
         uint256 _feePool,
         uint256 _feeRigoblockDao)
         internal
     {
-        accounts[_hodler].balance = accounts[_hodler].balance - _amount;
+        accounts[_receipient].balance = accounts[_receipient].balance - _amount;
         if (_feePool != uint256(0)) {
             address feeCollector = admin.feeCollector != address(0) ? admin.feeCollector : owner;
             accounts[feeCollector].balance = accounts[feeCollector].balance + _feePool;
@@ -627,13 +649,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256 amount
         )
     {
-        grossAmount = msg.value * decimals / _getBuyPrice();
+        uint256 mintPrice = getUnitaryValue();
+        mintPrice += getUnitaryValue() * _getSpread() / SPREAD_BASE;
+        grossAmount = msg.value * decimals / mintPrice;
         uint256 fee; // fee is in basis points
 
         if (poolData.transactionFee != uint256(0)) {
-            fee = grossAmount * poolData.transactionFee / 10000;
+            fee = grossAmount * poolData.transactionFee / FEE_BASE;
             // TODO: check if ratio returned correctly
-            feePool = fee * _getRatio() / 100;
+            feePool = fee * _getRatio() / RATIO_BASE;
             feeRigoblockDao = fee - feePool;
             amount = grossAmount - fee;
         } else {
@@ -643,16 +667,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
     }
 
-    function _getBuyPrice() internal view returns (uint256) {
-        if (poolData.buyPrice == uint256(0)) {
-            return INITIAL_BUY_PRICE;
-        } else return poolData.buyPrice;
-    }
-
-    function _getSellPrice() internal view returns (uint256) {
-        if (poolData.sellPrice == uint256(0)) {
-            return INITIAL_SELL_PRICE;
-        } else return poolData.sellPrice;
+    function _getSpread() internal view returns (uint256) {
+        if (poolData.spread == uint256(0)) {
+            return INITIAL_SPREAD;
+        } else { return poolData.spread; }
     }
 
     function _getRatio() private view returns (uint256) {
@@ -665,7 +683,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @return feePool Value of fee in tokens.
     /// @return feeRigoblockDao Value of fee in tokens to dao.
     /// @return netAmount Value of net burnt tokens.
-    /// @return netRevenue Value of revenue for hodler.
+    /// @return netRevenue Value of revenue for holder.
     function _getBurnAmounts(uint256 _amount)
         internal
         view
@@ -676,38 +694,36 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             uint256 netRevenue
         )
     {
-        uint256 fee = _amount * poolData.transactionFee / 10000; //fee is in basis points
+        uint256 fee = _amount * poolData.transactionFee / FEE_BASE;
+        uint256 burnPrice = getUnitaryValue();
+        burnPrice -= getUnitaryValue() * _getSpread() / SPREAD_BASE;
         return (
-            feePool = fee * _getRatio() / 100,
+            feePool = fee * _getRatio() / RATIO_BASE,
             feeRigoblockDao = fee - feeRigoblockDao,
             netAmount = _amount - fee,
-            netRevenue = netAmount * _getSellPrice() / decimals
+            netRevenue = netAmount * burnPrice / decimals
         );
     }
 
     /// @dev Verifies that a signature is valid.
-    /// @param _sellPrice Price in wei.
-    /// @param _buyPrice Price in wei.
-    /// @param _signaturevaliduntilBlock Number of blocks till price expiry.
+    /// @param _unitaryValue Value of 1 token in wei units.
+    /// @param _signatureValidUntilBlock Number of blocks.
     /// @param _hash Message hash that is signed.
     /// @param _signedData Proof of nav validity.
     /// @return isValid Bool validity of signed price update.
     function _isValidNav(
-        uint256 _sellPrice,
-        uint256 _buyPrice,
-        uint256 _signaturevaliduntilBlock,
+        uint256 _unitaryValue,
+        uint256 _signatureValidUntilBlock,
         bytes32 _hash,
-        bytes memory _signedData)
+        // TODO: check are we are using calldata instead of memory
+        bytes calldata _signedData)
         internal
         view
         returns (bool)
     {
-        // TODO: check if we can define isValidNav internal virtual and
-        //  simplify following statement.
         return NavVerifier(address(this)).isValidNav(
-            _sellPrice,
-            _buyPrice,
-            _signaturevaliduntilBlock,
+            _unitaryValue,
+            _signatureValidUntilBlock,
             _hash,
             _signedData
         );
@@ -721,8 +737,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (address)
     {
-        return ExtensionsAuthority(
-            _getExtensionsAuthority()
+        return AuthorityExtensions(
+            _getAuthorityExtensions()
         ).getApplicationAdapter(_selector);
     }
 
@@ -736,14 +752,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Finds the extensions authority.
     /// @return Address of the extensions authority.
     // TODO: check under what circumstances we call this method, as can
-    //  initialize externsions authority address as well as authority, and skip
+    //  initialize extensions authority address as well as authority, and skip
     //  1 read operation in this call. Governance must upgrade implementation
     //   when it upgrades extensions authority.
-    function _getExtensionsAuthority()
+    function _getAuthorityExtensions()
         private
         view
         returns (address)
     {
-        return Authority(AUTHORITY).getExtensionsAuthority();
+        return Authority(AUTHORITY).getAuthorityExtensions();
     }
 }

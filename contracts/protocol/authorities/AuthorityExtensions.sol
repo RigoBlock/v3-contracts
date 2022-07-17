@@ -20,12 +20,12 @@
 pragma solidity 0.8.14;
 
 import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
-import { IExchangesAuthority } from "../interfaces/IExchangesAuthority.sol";
+import { IAuthorityExtensions } from "../interfaces/IAuthorityExtensions.sol";
 
-/// @title AuthorityExchanges - A helper contract for the exchange adapters.
+/// @title AuthorityExtensions - A helper contract for the exchange adapters.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract AuthorityExchanges is Owned, IExchangesAuthority {
+contract AuthorityExtensions is Owned, IAuthorityExtensions {
 
     BuildingBlocks public blocks;
     Type public types;
@@ -59,11 +59,13 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
     struct BuildingBlocks {
         address exchangeEventful;
         address sigVerifier;
+        // TODO: remove caspter variable
         address casper;
         mapping(address => bool) initialized;
         mapping(address => address) adapter;
         // Mapping of exchange => method => approved
-        mapping(address => mapping(bytes4 => bool)) allowedMethods;
+        mapping(bytes4 => address) adapterBySelector;
+        // TODO: only map address to address, and to address 0 to revoke (will save gas)
         mapping(address => mapping(address => bool)) allowedTokens;
         mapping(address => mapping(address => bool)) allowedWrappers;
     }
@@ -120,20 +122,6 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
         accounts[_asset].groups[_isWhitelisted].asset = _isWhitelisted;
         types.list.push(List(_asset));
         emit WhitelistedAsset(_asset, _isWhitelisted);
-    }
-
-    /// @dev Allows a whitelister to whitelist an exchange
-    /// @param _exchange Address of the target exchange
-    /// @param _isWhitelisted Bool whitelisted
-    function whitelistExchange(address _exchange, bool _isWhitelisted)
-        external
-        onlyWhitelister
-    {
-        accounts[_exchange].account = _exchange;
-        accounts[_exchange].authorized = _isWhitelisted;
-        accounts[_exchange].groups[_isWhitelisted].exchange = _isWhitelisted;
-        types.list.push(List(_exchange));
-        emit WhitelistedExchange(_exchange, _isWhitelisted);
     }
 
     /// @dev Allows a whitelister to whitelist an token wrapper
@@ -193,18 +181,23 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
         emit WhitelistedAsset(_token, _isWhitelisted);
     }
 
-    /// @dev Allows an admin to whitelist a factory
-    /// @param _method Hex of the function ABI
-    /// @param _isWhitelisted Bool whitelisted
+    /// @dev Allows an admin to whitelist a factory.
+    /// @param _selector Bytes4 hex of the method interface.
+    /// @notice setting _adapter to address(0) will effectively revoke method.
+    // TODO controlled by owner or whitelister, check desired permissions
     function whitelistMethod(
-        bytes4 _method,
-        address _adapter,
-        bool _isWhitelisted)
+        bytes4 _selector,
+        address _adapter
+    )
         external
         onlyAdmin
     {
-        blocks.allowedMethods[_adapter][_method] = _isWhitelisted;
-        emit WhitelistedMethod(_method, _adapter, _isWhitelisted);
+        require(
+            blocks.adapterBySelector[_selector] == address(0),
+            "SELECTOR_EXISTS_ERROR"
+        );
+        blocks.adapterBySelector[_selector] = _adapter;
+        emit WhitelistedMethod(_selector, _adapter);
     }
 
     /// @dev Allows the owner to set the signature verifier
@@ -215,38 +208,6 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
     {
         blocks.sigVerifier = _sigVerifier;
         emit NewSigVerifier(blocks.sigVerifier);
-    }
-
-    /// @dev Allows the owner to set the exchange eventful
-    /// @param _exchangeEventful Address of the exchange logs contract
-    function setExchangeEventful(address _exchangeEventful)
-        external
-        onlyOwner
-    {
-        blocks.exchangeEventful = _exchangeEventful;
-        emit NewExchangeEventful(blocks.exchangeEventful);
-    }
-
-    /// @dev Allows the owner to associate an exchange to its adapter
-    /// @param _exchange Address of the exchange
-    /// @param _adapter Address of the adapter
-    function setExchangeAdapter(address _exchange, address _adapter)
-        external
-        onlyOwner
-    {
-        require(_exchange != _adapter);
-        blocks.adapter[_exchange] = _adapter;
-    }
-
-    /// @dev Allows the owner to set the casper contract
-    /// @param _casper Address of the casper contract
-    function setCasper(address _casper)
-        external
-        onlyOwner
-    {
-        blocks.casper = _casper;
-        blocks.initialized[_casper] = true;
-        emit NewCasper(blocks.casper);
     }
 
     /*
@@ -302,27 +263,13 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
         return accounts[_tokenTransferProxy].groups[true].proxy;
     }
 
-    // selectorToAdapter[msg.sig]
-    mapping(bytes4 => address) selectorToAdapter;
-
-    // TODO: implement write function for selectorToAdapter[msg.sig]
     function getApplicationAdapter(bytes4 _selector)
         external
         view
         override
         returns (address)
     {
-        return selectorToAdapter[_selector];
-    }
-
-    /// @dev Provides the address of the exchange adapter
-    /// @param _exchange Address of the exchange
-    /// @return Address of the adapter
-    function getExchangeAdapter(address _exchange)
-        external view
-        returns (address)
-    {
-        return blocks.adapter[_exchange];
+        return blocks.adapterBySelector[_selector];
     }
 
     /// @dev Provides the address of the signature verifier
@@ -357,33 +304,13 @@ contract AuthorityExchanges is Owned, IExchangesAuthority {
     }
 
     /// @dev Checkes whether a method is allowed on an exchange
-    /// @param _method Bytes of the function signature
-    /// @param _adapter Address of the exchange
+    /// @param _selector Bytes4 of the function signature
     /// @return Bool the method is allowed
-    function isMethodAllowed(bytes4 _method, address _adapter)
+    function isMethodAllowed(bytes4 _selector)
         external view
         returns (bool)
     {
-        return blocks.allowedMethods[_adapter][_method];
-    }
-
-    /// @dev Checkes whether casper has been inizialized
-    /// @return Bool the casper contract has been initialized
-    function isCasperInitialized()
-        external view
-        returns (bool)
-    {
-        address casper = blocks.casper;
-        return blocks.initialized[casper];
-    }
-
-    /// @dev Provides the address of the casper contract
-    /// @return Address of the casper contract
-    function getCasper()
-        external view
-        returns (address)
-    {
-        return blocks.casper;
+        return (blocks.adapterBySelector[_selector] != address(0));
     }
 
     /*

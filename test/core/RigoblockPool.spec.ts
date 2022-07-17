@@ -14,9 +14,15 @@ describe("Proxy", async () => {
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const ResitryInstance = await deployments.get("PoolRegistry")
         const Registry = await hre.ethers.getContractFactory("PoolRegistry")
+        const AuthorityExtensionsInstance = await deployments.get("AuthorityExtensions")
+        const AuthorityExtensions = await hre.ethers.getContractFactory("AuthorityExtensions")
+        const NavVerifierInstance = await deployments.get("NavVerifier")
+        const NavVerifier = await hre.ethers.getContractFactory("NavVerifier")
         return {
           factory: Factory.attach(RigoblockPoolProxyFactory.address),
-          registry: Registry.attach(ResitryInstance.address)
+          registry: Registry.attach(ResitryInstance.address),
+          authorityExtensions: AuthorityExtensions.attach(AuthorityExtensionsInstance.address),
+          navVerifier: NavVerifier.attach(NavVerifierInstance.address)
         }
     });
 
@@ -133,8 +139,7 @@ describe("Proxy", async () => {
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
             await expect(
-                pool.setPrices(
-                    newPrice,
+                pool.setUnitaryValue(
                     newPrice,
                     signaturevaliduntilBlock,
                     bytes32hash,
@@ -152,8 +157,7 @@ describe("Proxy", async () => {
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
             await expect(
-                pool.setPrices(
-                    newPrice,
+                pool.setUnitaryValue(
                     newPrice,
                     signaturevaliduntilBlock,
                     bytes32hash,
@@ -163,33 +167,40 @@ describe("Proxy", async () => {
         })
 
         it('should set price when caller is owner', async () => {
-            const { factory, registry } = await setupTests()
+            const { factory, registry, authorityExtensions, navVerifier } = await setupTests()
             const { newPoolAddress } = await factory.callStatic.createPool('testpool','TEST')
             await factory.createPool('testpool', 'TEST')
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
-            const newPrice = parseEther("1.1")
+            const newValue = parseEther("1.1")
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
             const bytesSignedData = hre.ethers.utils.formatBytes32String('notused')
-            /*await expect(
-                pool.setPrices(
-                    newPrice,
-                    newPrice,
-                    signaturevaliduntilBlock,
-                    bytes32hash,
-                    bytes32hash
-                )
-            ).to.emit(pool, "NewNav")*/
-            // TODO: we must deploy extensions adapter, adapter and map selector to adapter
             await expect(
-                pool.setPrices(
-                    newPrice,
-                    newPrice,
+                pool.setUnitaryValue(
+                    newValue,
                     signaturevaliduntilBlock,
                     bytes32hash,
                     bytes32hash
                 )
             ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            const [ user1 ] = waffle.provider.getWallets()
+            //"9e4e93d0": "isValidNav(uint256,uint256,bytes32,bytes)"
+            await authorityExtensions.whitelistMethod(
+                "0x9e4e93d0",
+                navVerifier.address
+            )
+            await expect(
+                pool.setUnitaryValue(
+                    newValue,
+                    signaturevaliduntilBlock,
+                    bytes32hash,
+                    bytes32hash
+                )
+            ).to.emit(pool, "NewNav").withArgs(
+                user1.address,
+                newPoolAddress,
+                newValue
+            )
         })
     })
 })

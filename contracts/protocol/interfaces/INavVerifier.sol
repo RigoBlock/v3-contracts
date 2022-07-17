@@ -25,18 +25,18 @@ pragma solidity >=0.8.0 <0.9.0;
 interface INavVerifier {
 
     /// @dev Verifies that a signature is valid.
-    /// @param sellPrice Price in wei
-    /// @param buyPrice Price in wei
-    /// @param signaturevaliduntilBlock Number of blocks till price expiry
-    /// @param hash Message hash that is signed.
-    /// @param signedData Proof of nav validity.
-    /// @notice mock function which returns true
+    /// @param _unitaryValue Value of 1 token in wei units.
+    /// @param _signatureValidUntilBlock Number of blocks.
+    /// @param _hash Message hash that is signed.
+    /// @param _signedData Proof of nav validity.
+    /// @return isValid Bool validity of signed data.
+    /// @notice mock function which returns true.
     function isValidNav(
-        uint256 sellPrice,
-        uint256 buyPrice,
-        uint256 signaturevaliduntilBlock,
-        bytes32 hash,
-        bytes calldata signedData)
+        uint256 _unitaryValue,
+        uint256 _signatureValidUntilBlock,
+        bytes32 _hash,
+        bytes calldata _signedData
+    )
         external
         view
         returns (bool isValid);

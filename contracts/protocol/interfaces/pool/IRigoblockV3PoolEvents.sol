@@ -60,15 +60,13 @@ interface IRigoblockV3PoolEvents {
 
     /// @dev Logs update of NAV.
     /// @notice Emitted when pool operator updates NAV.
+    /// @param poolOperator Address of the pool owner.
     /// @param poolAddress Address of the pool.
-    /// @param from Address that is sending the transaction.
-    /// @param sellPrice Value of the bid price.
-    /// @param buyPrice Value of the offer price.
+    /// @param unitaryValue Value of 1 token in wei units.
     event NewNav(
+        address indexed poolOperator,
         address indexed poolAddress,
-        address indexed from,
-        uint256 sellPrice,
-        uint256 buyPrice
+        uint256 unitaryValue
     );
 
     /// @dev Logs update of mint fee.

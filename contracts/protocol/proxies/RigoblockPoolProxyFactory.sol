@@ -20,7 +20,6 @@
 pragma solidity 0.8.14;
 
 import { IPoolRegistry as PoolRegistry } from "../interfaces/IPoolRegistry.sol";
-import { IRigoblockV3Pool as RigoblockV3Pool } from "../IRigoblockV3Pool.sol";
 import { IRigoblockPoolProxyFactory } from "../interfaces/IRigoblockPoolProxyFactory.sol";
 import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 
@@ -52,11 +51,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * PUBLIC FUNCTIONS
      */
-    /// @dev Creates a new Rigoblock pool.
-    /// @param _name String of the name.
-    /// @param _symbol String of the symbol.
-    /// @return newPoolAddress Address of the new pool.
-    /// @return poolId Id of the new pool.
+    /// @inheritdoc IRigoblockPoolProxyFactory
     function createPool(string calldata _name, string calldata _symbol)
         external
         override

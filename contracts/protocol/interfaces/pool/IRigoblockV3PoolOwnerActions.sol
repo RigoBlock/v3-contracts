@@ -3,9 +3,8 @@ pragma solidity >=0.8.0;
 
 interface IRigoblockV3PoolOwnerActions {
 
-    function setPrices(
-        uint256 _newSellPrice,
-        uint256 _newBuyPrice,
+    function setUnitaryValue(
+        uint256 _unitaryValue,
         uint256 _signaturevaliduntilBlock,
         bytes32 _hash,
         bytes calldata _signedData
@@ -15,6 +14,7 @@ interface IRigoblockV3PoolOwnerActions {
     function changeMinPeriod(uint32 _minPeriod)
         external;
 
+    function changeSpread(uint256 _newSpread) external;
 
     function setTransactionFee(uint256 _transactionFee)
         external;

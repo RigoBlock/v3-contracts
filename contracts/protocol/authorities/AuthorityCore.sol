@@ -60,10 +60,8 @@ contract AuthorityCore is
     }
 
     struct BuildingBlocks {
-        address dragoEventful;
-        address vaultEventful;
         address navVerifier;
-        address exchangesAuthority;
+        address extensionsAuthority;
         address casper;
         mapping(address => bool) initialized;
     }
@@ -179,26 +177,6 @@ contract AuthorityCore is
         emit WhitelistedFactory(_factory, _isWhitelisted);
     }
 
-    /// @dev Allows the owner to set the drago eventful
-    /// @param _dragoEventful Address of the logs contract
-    function setDragoEventful(address _dragoEventful)
-        external
-        onlyOwner
-    {
-        blocks.dragoEventful = _dragoEventful;
-        emit NewDragoEventful(blocks.dragoEventful);
-    }
-
-    /// @dev Allows the owner to set the vault eventful
-    /// @param _vaultEventful Address of the vault logs contract
-    function setVaultEventful(address _vaultEventful)
-        external
-        onlyOwner
-    {
-        blocks.vaultEventful = _vaultEventful;
-        emit NewVaultEventful(blocks.vaultEventful);
-    }
-
     /// @dev Allows the owner to set the nav verifier
     /// @param _navVerifier Address of the verifier
     function setNavVerifier(address _navVerifier)
@@ -209,14 +187,14 @@ contract AuthorityCore is
         emit NewNavVerifier(blocks.navVerifier);
     }
 
-    /// @dev Allows the owner to set the exchanges authority
-    /// @param _exchangesAuthority Address of the exchanges authority
-    function setExchangesAuthority(address _exchangesAuthority)
+    /// @dev Allows the owner to set the extensions authority.
+    /// @param _extensionsAuthority Address of the extensions authority.
+    function setExtensionsAuthority(address _extensionsAuthority)
         external
         onlyOwner
     {
-        blocks.exchangesAuthority = _exchangesAuthority;
-        emit NewExchangesAuthority(blocks.exchangesAuthority);
+        blocks.extensionsAuthority = _extensionsAuthority;
+        emit NewExtensionsAuthority(blocks.extensionsAuthority);
     }
 
     /*
@@ -282,24 +260,6 @@ contract AuthorityCore is
         return accounts[_factory].groups[true].registry;
     }
 
-    /// @dev Provides the address of the drago logs contract
-    /// @return Address of the drago logs contract
-    function getDragoEventful()
-        external view
-        returns (address)
-    {
-        return blocks.dragoEventful;
-    }
-
-    /// @dev Provides the address of the vault logs contract
-    /// @return Address of the vault logs contract
-    function getVaultEventful()
-        external view
-        returns (address)
-    {
-        return blocks.vaultEventful;
-    }
-
     /// @dev Provides the address of the nav verifier
     /// @return Address of the verifier
     function getNavVerifier()
@@ -309,13 +269,13 @@ contract AuthorityCore is
         return blocks.navVerifier;
     }
 
-    /// @dev Provides the address of the exchangee authority
+    /// @dev Provides the address of the exchanges authority
     /// @return Address of the adapter
-    function getExtensionsAuthority()
+    function getAuthorityExtensions()
         external view
         returns (address)
     {
-        return blocks.exchangesAuthority;
+        return blocks.extensionsAuthority;
     }
 
     /*

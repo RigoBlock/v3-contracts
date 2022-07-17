@@ -19,10 +19,10 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-/// @title Exchange Authority Interface - A helper contract for the exchange adapters.
+/// @title Extensions Authority Interface - A helper contract for the extensions adapters.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IExchangesAuthority {
+interface IAuthorityExtensions {
 
     /*
      * EVENTS
@@ -33,7 +33,7 @@ interface IExchangesAuthority {
     event WhitelistedExchange(address indexed exchange, bool approved);
     event WhitelistedWrapper(address indexed wrapper, bool approved);
     event WhitelistedProxy(address indexed proxy, bool approved);
-    event WhitelistedMethod(bytes4 indexed method, address indexed exchange, bool approved);
+    event WhitelistedMethod(bytes4 indexed method, address indexed adapter);
     event NewSigVerifier(address indexed sigVerifier);
     event NewExchangeEventful(address indexed exchangeEventful);
     event NewCasper(address indexed casper);
@@ -57,12 +57,6 @@ interface IExchangesAuthority {
     /// @param _asset Address of the token
     /// @param _isWhitelisted Bool whitelisted
     function whitelistAsset(address _asset, bool _isWhitelisted)
-        external;
-
-    /// @dev Allows a whitelister to whitelist an exchange
-    /// @param _exchange Address of the target exchange
-    /// @param _isWhitelisted Bool whitelisted
-    function whitelistExchange(address _exchange, bool _isWhitelisted)
         external;
 
     /// @dev Allows a whitelister to whitelist an token wrapper
@@ -100,32 +94,14 @@ interface IExchangesAuthority {
 
     /// @dev Allows an admin to whitelist a factory
     /// @param _method Hex of the function ABI
-    /// @param _isWhitelisted Bool whitelisted
     function whitelistMethod(
         bytes4 _method,
-        address _adapter,
-        bool _isWhitelisted)
+        address _adapter)
         external;
 
     /// @dev Allows the owner to set the signature verifier
     /// @param _sigVerifier Address of the logs contract
     function setSignatureVerifier(address _sigVerifier)
-        external;
-
-    /// @dev Allows the owner to set the exchange eventful
-    /// @param _exchangeEventful Address of the exchange logs contract
-    function setExchangeEventful(address _exchangeEventful)
-        external;
-
-    /// @dev Allows the owner to associate an exchange to its adapter
-    /// @param _exchange Address of the exchange
-    /// @param _adapter Address of the adapter
-    function setExchangeAdapter(address _exchange, address _adapter)
-        external;
-
-    /// @dev Allows the owner to set the casper contract
-    /// @param _casper Address of the casper contract
-    function setCasper(address _casper)
         external;
 
     /*
@@ -171,13 +147,6 @@ interface IExchangesAuthority {
         view
         returns (address);
 
-    /// @dev Provides the address of the exchange adapter
-    /// @param _exchange Address of the exchange
-    /// @return Address of the adapter
-    function getExchangeAdapter(address _exchange)
-        external view
-        returns (address);
-
     /// @dev Provides the address of the signature verifier
     /// @return Address of the verifier
     function getSigVerifier()
@@ -199,20 +168,8 @@ interface IExchangesAuthority {
         external view
         returns (bool);
 
-    /// @dev Checkes whether a method is allowed on an exchange
-    function isMethodAllowed(bytes4 _method, address _exchange)
+    /// @dev Checkes whether a method is whitelisted.
+    function isMethodAllowed(bytes4 _method)
         external view
         returns (bool);
-
-    /// @dev Checkes whether casper has been inizialized
-    /// @return Bool the casper contract has been initialized
-    function isCasperInitialized()
-        external view
-        returns (bool);
-
-    /// @dev Provides the address of the casper contract
-    /// @return Address of the casper contract
-    function getCasper()
-        external view
-        returns (address);
 }
