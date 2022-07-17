@@ -15,49 +15,6 @@ interface IRigoblockV3PoolEvents {
         string symbol
     );
 
-    /// @dev Logs purchase of pool tokens.
-    /// @notice Emitted when user buys into pool.
-    /// @param poolAddress Address of the pool.
-    /// @param from Address that is sending the transaction.
-    /// @param to Address that receives the tokens.
-    /// @param amount Number of units created.
-    /// @param revenue Value in base unit.
-    event Mint(
-        address indexed poolAddress,
-        address indexed from,
-        address indexed to,
-        uint256 amount,
-        uint256 revenue
-    );
-
-    /// @dev Logs sale of pool tokens.
-    /// @notice Emitted when user sells pool tokens.
-    /// @param poolAddress Address of the pool.
-    /// @param from Address that is sending the transaction.
-    /// @param amount Number of units burnt.
-    /// @param revenue Value in base unit.
-    /// @param name String name of the pool.
-    /// @param symbol String symbol of the pool.
-    event Burn(
-        address indexed poolAddress,
-        address indexed from,
-        uint256 amount,
-        uint256 revenue,
-        bytes name,
-        bytes symbol
-    );
-
-    /// @dev Logs update of ratio.
-    /// @notice Emitted when pool operator sets ratio.
-    /// @param poolAddress Address of the pool.
-    /// @param from Address that is sending the transaction.
-    /// @param newRatio Value of the new ration.
-    event NewRatio(
-        address indexed poolAddress,
-        address indexed from,
-        uint256 newRatio
-    );
-
     /// @dev Logs update of NAV.
     /// @notice Emitted when pool operator updates NAV.
     /// @param poolOperator Address of the pool owner.
@@ -89,17 +46,5 @@ interface IRigoblockV3PoolEvents {
         address indexed poolAddress,
         address indexed who,
         address feeCollector
-    );
-
-    // TODO: fix method
-    /// @dev Logs update of Rigoblock DAO.
-    /// @notice Emitted when pool factory updates Dao address.
-    /// @param poolAddress Address of the pool.
-    /// @param from Address that is sending the transaction.
-    /// @param dragoDao Address of the Dao.
-    event DragoDaoSet(
-        address indexed poolAddress,
-        address indexed from,
-        address dragoDao
     );
 }

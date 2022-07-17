@@ -8,7 +8,7 @@ interface IRigoblockV3PoolState {
     */
     function AUTHORITY() external view returns (address);
 
-    function decimals() external view returns(uint256);
+    function decimals() external view returns(uint8);
 
     function name() external view returns (string memory);
 
@@ -34,19 +34,12 @@ interface IRigoblockV3PoolState {
             uint256 spread
         );
 
-    function getUnitaryValue()
-        external
-        view
-        returns (uint256);
-
     function getAdminData()
         external
         view
         returns (
             address,
             address feeCollector,
-            address dragoDao,
-            uint256, // ratio
             uint256 transactionFee,
             uint32 minPeriod
         );
