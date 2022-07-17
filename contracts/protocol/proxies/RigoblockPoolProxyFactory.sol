@@ -20,7 +20,6 @@
 pragma solidity 0.8.14;
 
 import { IPoolRegistry as PoolRegistry } from "../interfaces/IPoolRegistry.sol";
-import { IRigoblockV3Pool as RigoblockV3Pool } from "../IRigoblockV3Pool.sol";
 import { IRigoblockPoolProxyFactory } from "../interfaces/IRigoblockPoolProxyFactory.sol";
 import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 
