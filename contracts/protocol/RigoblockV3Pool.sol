@@ -55,11 +55,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     uint256 private constant MAX_TRANSACTION_FEE = 100; // maximum 1%
     uint256 private constant SPREAD_BASE = 10000;
 
+    uint32 private constant INITIAL_LOCKUP = 1;
+
     // notice Must be immutable to be compile-time constant.
     // eip1967 standard
     address private immutable _implementation;
 
-    uint256 private immutable INITIAL_UNITARY_VALUE;
+    uint256 private immutable INITIAL_VALUE;
 
     mapping(address => Account) internal userAccount;
 
@@ -85,7 +87,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     struct Admin {
         address feeCollector;
         address kycProvider;
-        bool kycEnforced;
     }
 
     // reading immutable through internal method more gas efficient
@@ -147,25 +148,24 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     modifier notPriceError(uint256 _newUnitaryValue) {
         /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
         require(
-            _newUnitaryValue < getUnitaryValue() * 5 &&
-            _newUnitaryValue > getUnitaryValue() / 5,
+            _newUnitaryValue < _getUnitaryValue() * 5 &&
+            _newUnitaryValue > _getUnitaryValue() / 5,
             "105"
         );
         _;
     }
 
-    // owner is initialized to 0 to lock owner actions in this implementation.
-    // kycEnforced set to true as will prevent mint/burn actions, effectively
-    // making this implementation unusable by itself.
+    /// @notice Owner is initialized to 0 to lock owner actions in this implementation.
+    /// @notice Kyc provider set as will effectively lock direct mint/burn actions.
     constructor(address _authority) {
         AUTHORITY = _authority;
         // TODO: initialize decimals as input
         decimals = 18;
-        INITIAL_UNITARY_VALUE = 1 * 10**decimals; // initial value is 1
+        INITIAL_VALUE = 1 * 10**decimals; // initial value is 1
         _implementation = address(this);
         // must lock implementation after initializing _implementation
         owner = address(0);
-        admin.kycEnforced == true;
+        admin.kycProvider == address(1);
     }
 
     /*
@@ -248,15 +248,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (uint256 recipientAmount)
     {
         // require whitelisted user if kyc is enforced
-        if (admin.kycEnforced == true) {
+        if (_isKycEnforced() == true) {
             require(
                 Kyc(admin.kycProvider).isWhitelistedUser(_recipient),
                 "POOL_CALLER_NOT_WHITELISTED_ERROR"
             );
         }
 
-        uint256 mintPrice = getUnitaryValue();
-        mintPrice += getUnitaryValue() * _getSpread() / SPREAD_BASE;
+        uint256 mintPrice = _getUnitaryValue();
+        mintPrice += _getUnitaryValue() * _getSpread() / SPREAD_BASE;
         uint256 mintedAmount = msg.value * decimals / mintPrice;
         poolData.totalSupply += mintedAmount;
         recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
@@ -275,8 +275,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
 
         uint256 buntAmount = _allocateBurnTokens(_amountIn);
-        uint256 burnPrice = getUnitaryValue();
-        burnPrice -= getUnitaryValue() * _getSpread() / SPREAD_BASE;
+        uint256 burnPrice = _getUnitaryValue();
+        burnPrice -= _getUnitaryValue() * _getSpread() / SPREAD_BASE;
         netRevenue = buntAmount * burnPrice / decimals;
 
         // TODO: implement in base token
@@ -343,11 +343,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         onlyOwner
     {
+        /// @notice minimum period is always at least 1 to prevent flash txs.
         require(
-            _minPeriod <= 15 days,
-            "POOL_LOCKUP_LONGER_THAN_15_DAYS_ERROR"
+            _minPeriod > 0 && _minPeriod <= 30 days,
+            "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR"
         );
         poolData.minPeriod = _minPeriod;
+        // TODO: should emit event
     }
 
     function changeSpread(uint256 _newSpread) external onlyOwner {
@@ -360,14 +362,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         // TODO: should emit event
     }
 
-    function enforceKyc(
-        bool _enforced,
-        address _kycProvider)
-        external
-        onlyOwner
-    {
-        admin.kycEnforced = _enforced;
+    /// @notice Kyc provider can be set to null, removing user whitelist requirement.
+    function setKycProvider(address _kycProvider) external onlyOwner {
         admin.kycProvider = _kycProvider;
+        // TODO: should emit event
     }
 
     /*
@@ -406,20 +404,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return(
             poolName = poolData.name,
             poolSymbol = poolData.symbol,
-            getUnitaryValue(),
+            _getUnitaryValue(),
             _getSpread()
 
         );
-    }
-
-    function getUnitaryValue()
-        public
-        view
-        returns (uint256)
-    {
-        if (poolData.unitaryValue == uint256(0)) {
-            return INITIAL_UNITARY_VALUE;
-        } else return poolData.unitaryValue;
     }
 
     /// @dev Finds the administrative data of the pool.
@@ -439,9 +427,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         return (
             owner,
+            // TODO: must return internal method
             admin.feeCollector,
             poolData.transactionFee,
-            poolData.minPeriod
+            _getMinPeriod()
         );
     }
 
@@ -450,9 +439,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (address kycProviderAddress)
     {
-        if(admin.kycEnforced) {
-            return kycProviderAddress = admin.kycProvider;
-        }
+        return kycProviderAddress = admin.kycProvider;
     }
 
     /// @dev Returns the total amount of issued tokens for this pool.
@@ -540,6 +527,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         internal
         returns (uint256 recipientAmount)
     {
+        /// @notice Each mint on same recipient resets prior activation.
+        /// @notice Lock receipient tokens.
+        unchecked {
+            userAccount[_recipient].activation = (
+                uint32(block.timestamp) + _getMinPeriod()
+            );
+        }
+
         if (poolData.transactionFee != uint256(0)) {
             // TODO: test
             address feeCollector = (
@@ -551,6 +546,12 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
                 userAccount[feeCollector].balance += recipientAmount;
                 emit Transfer(address(0), feeCollector, recipientAmount);
             } else {
+                /// @notice Lock fee tokens as well.
+                unchecked {
+                    userAccount[feeCollector].activation = (
+                        uint32(block.timestamp) + _getMinPeriod()
+                    );
+                }
                 uint256 feePool = _mintedAmount * poolData.transactionFee / FEE_BASE;
                 recipientAmount = _mintedAmount - feePool;
                 userAccount[feeCollector].balance += feePool;
@@ -562,14 +563,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             recipientAmount = _mintedAmount;
             userAccount[_recipient].balance += recipientAmount;
             emit Transfer(address(0), _recipient, recipientAmount);
-        }
-
-        /// @notice Each mint on same recipient resets prior activation.
-        /// @notice Receipient tokens are locked, fee recipient tokens unlocked.
-        unchecked {
-            userAccount[_recipient].activation = (
-                uint32(block.timestamp) + poolData.minPeriod
-            );
         }
     }
 
@@ -605,12 +598,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             emit Transfer(msg.sender, address(0), buntAmount);
         }
         poolData.totalSupply -= buntAmount;
-    }
-
-    function _getSpread() internal view returns (uint256) {
-        if (poolData.spread == uint256(0)) {
-            return INITIAL_SPREAD;
-        } else { return poolData.spread; }
     }
 
     /// @dev Verifies that a signature is valid.
@@ -669,5 +656,21 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (address)
     {
         return Authority(AUTHORITY).getAuthorityExtensions();
+    }
+
+    function _getMinPeriod() private view returns (uint32) {
+        return poolData.minPeriod == 0 ? INITIAL_LOCKUP : poolData.minPeriod;
+    }
+
+    function _getSpread() private view returns (uint256) {
+        return poolData.spread == 0 ? INITIAL_SPREAD : poolData.spread;
+    }
+
+    function _getUnitaryValue() private view returns (uint256) {
+        return poolData.unitaryValue == 0 ? INITIAL_VALUE : poolData.unitaryValue;
+    }
+
+    function _isKycEnforced() private view returns (bool) {
+        return admin.kycProvider != address(0);
     }
 }
