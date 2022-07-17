@@ -35,11 +35,8 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
-    // TODO: add immutable base token and mint/burn in base token
 
     string public constant override VERSION = "HF 3.0.2";
-
-    /// @notice Standard ERC20
 
     address public immutable override AUTHORITY;
 
@@ -65,6 +62,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: hardcode selector to save gas
     bytes4 immutable private TRANSFER_FROM_SELECTOR = bytes4(
         keccak256(bytes("transferFrom(address,address,uint256)"))
+    );
+    bytes4 immutable private TRANSFER_SELECTOR = bytes4(
+        keccak256(bytes("transfer(address,uint256)"))
     );
 
     mapping(address => Account) internal userAccount;
@@ -277,7 +277,11 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         netRevenue = buntAmount * burnPrice / decimals();
 
         // TODO: implement in base token
-        payable(msg.sender).transfer(netRevenue);
+        if (admin.baseToken == address(0)) {
+            payable(msg.sender).transfer(netRevenue);
+        } else {
+            _safeTransfer(msg.sender, netRevenue);
+        }
     }
 
     /// @dev Allows pool owner to set the pool price.
@@ -681,6 +685,27 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     function _isKycEnforced() private view returns (bool) {
         return admin.kycProvider != address(0);
+    }
+
+    function _safeTransfer(
+        address _to,
+        uint256 _amount
+    )
+        private
+    {
+        // solhint-disable-next-line avoid-low-level-calls
+        // TODO: we may want to use assembly here
+        (bool success, bytes memory data) = admin.baseToken.call(
+            abi.encodeWithSelector(
+                TRANSFER_SELECTOR,
+                _to,
+                _amount
+            )
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "POOL_TRANSFER_FROM_FAILED_ERROR"
+        );
     }
 
     function _safeTransferFrom(
