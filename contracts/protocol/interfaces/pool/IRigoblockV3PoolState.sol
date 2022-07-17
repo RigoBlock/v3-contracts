@@ -34,11 +34,6 @@ interface IRigoblockV3PoolState {
             uint256 spread
         );
 
-    function getUnitaryValue()
-        external
-        view
-        returns (uint256);
-
     function getAdminData()
         external
         view
