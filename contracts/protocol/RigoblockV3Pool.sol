@@ -228,24 +228,24 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     /// @dev Allows a user to mint pool tokens.
-    /// @return Value of minted tokens.
+    /// @return recipientAmount Value of minted tokens.
     // TODO merge with following, as holder can just mint for himself
     function mint()
         external
         payable
-        returns (uint256)
+        returns (uint256 recipientAmount)
     {
         return mintOnBehalf(msg.sender);
     }
 
     /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _recipient Address receiving the tokens.
-    /// @return Value of minted tokens.
+    /// @return recipientAmount Value of minted tokens.
     function mintOnBehalf(address _recipient)
         public
         payable
         minimumStake(msg.value)
-        returns (uint256)
+        returns (uint256 recipientAmount)
     {
         // require whitelisted user if kyc is enforced
         if (admin.kycEnforced == true) {
@@ -255,40 +255,32 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             );
         }
 
-        (
-            uint256 grossAmount,
-            uint256 feePool,
-            uint256 amount
-        ) = _getMintAmounts();
-        require(amount > 0, "POOL_MINT_NULL_AMOUNT_ERROR");
-        poolData.totalSupply += grossAmount;
-        _allocateMintTokens(_recipient, amount, feePool);
-        return amount;
+        uint256 mintPrice = getUnitaryValue();
+        mintPrice += getUnitaryValue() * _getSpread() / SPREAD_BASE;
+        uint256 mintedAmount = msg.value * decimals / mintPrice;
+        poolData.totalSupply += mintedAmount;
+        recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
     }
 
     /// @dev Allows a pool holder to burn pool tokens.
-    /// @param _amount Number of tokens to burn.
-    /// @return Bool the function executed correctly.
-    function burn(uint256 _amount)
+    /// @param _amountIn Number of tokens to burn.
+    /// @return netRevenue Net amount of burnt pool tokens.
+    function burn(uint256 _amountIn)
         external
         nonReentrant
-        hasEnough(_amount)
-        positiveAmount(_amount)
+        hasEnough(_amountIn)
+        positiveAmount(_amountIn)
         minimumPeriodPast
-        returns (uint256)
+        returns (uint256 netRevenue)
     {
-        (
-            uint256 feePool,
-            uint256 netAmount,
-            uint256 netRevenue
-        ) = _getBurnAmounts(_amount);
 
-        _allocateBurnTokens(msg.sender, _amount, feePool);
-        poolData.totalSupply -= netAmount;
+        uint256 buntAmount = _allocateBurnTokens(_amountIn);
+        uint256 burnPrice = getUnitaryValue();
+        burnPrice -= getUnitaryValue() * _getSpread() / SPREAD_BASE;
+        netRevenue = buntAmount * burnPrice / decimals;
+
+        // TODO: implement in base token
         payable(msg.sender).transfer(netRevenue);
-        // TODO: log transfer to fee collector
-        emit Transfer(msg.sender, address(0), _amount);
-        return netRevenue;
     }
 
     /// @dev Allows pool owner to set the pool price.
@@ -539,127 +531,86 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
      */
     /// @dev Allocates tokens to recipient.
     /// @param _recipient Address of the recipient.
-    /// @param _amount Value of issued tokens.
-    /// @param _feePool Number of tokens as fee.
+    /// @param _mintedAmount Value of issued tokens.
+    /// @return recipientAmount Number of new tokens issued to recipient.
     function _allocateMintTokens(
         address _recipient,
-        uint256 _amount,
-        uint256 _feePool
+        uint256 _mintedAmount
     )
         internal
+        returns (uint256 recipientAmount)
     {
-        if (_feePool != uint256(0)) {
+        if (poolData.transactionFee != uint256(0)) {
             // TODO: test
             address feeCollector = (
                 admin.feeCollector != address(0) ? admin.feeCollector : owner
             );
 
             if (feeCollector == _recipient) {
-                userAccount[feeCollector].balance += _amount + _feePool;
-                emit Transfer(address(0), feeCollector, _amount + _feePool);
+                recipientAmount = _mintedAmount;
+                userAccount[feeCollector].balance += recipientAmount;
+                emit Transfer(address(0), feeCollector, recipientAmount);
             } else {
-                userAccount[feeCollector].balance += _feePool;
-                userAccount[_recipient].balance += _amount;
-                emit Transfer(address(0), feeCollector, _feePool);
-                emit Transfer(address(0), _recipient, _amount);
+                uint256 feePool = _mintedAmount * poolData.transactionFee / FEE_BASE;
+                recipientAmount = _mintedAmount - feePool;
+                userAccount[feeCollector].balance += feePool;
+                userAccount[_recipient].balance += recipientAmount;
+                emit Transfer(address(0), feeCollector, feePool);
+                emit Transfer(address(0), _recipient, recipientAmount);
             }
         } else {
-            /// @dev Each mint on same recipient resets prior activation.
-            unchecked {
-                userAccount[_recipient].activation = (
-                    uint32(block.timestamp) + poolData.minPeriod
-                );
-            }
-            userAccount[_recipient].balance += _amount;
-            emit Transfer(address(0), _recipient, _amount);
+            recipientAmount = _mintedAmount;
+            userAccount[_recipient].balance += recipientAmount;
+            emit Transfer(address(0), _recipient, recipientAmount);
+        }
+
+        /// @notice Each mint on same recipient resets prior activation.
+        /// @notice Receipient tokens are locked, fee recipient tokens unlocked.
+        unchecked {
+            userAccount[_recipient].activation = (
+                uint32(block.timestamp) + poolData.minPeriod
+            );
         }
     }
 
     /// @dev Destroys tokens of holder.
-    /// @param _receipient Address of the holder.
-    /// @param _amount Value of burnt tokens.
-    /// @param _feePool Number of tokens as fee.
+    /// @param _amountIn Value of tokens to be burnt.
+    /// @return buntAmount Number of net burnt tokens.
+    /// @notice Fee is paid in pool tokens.
     function _allocateBurnTokens(
-        address _receipient,
-        uint256 _amount,
-        uint256 _feePool
+        uint256 _amountIn
     )
         internal
+        returns (uint256 buntAmount)
     {
-        // TODO: check if we still want to keep fee as adds to execution cost if owner sets positive fee
-        if (_feePool != uint256(0)) {
+        if (poolData.transactionFee != uint256(0)) {
             address feeCollector = (
                 admin.feeCollector != address(0) ? admin.feeCollector : owner
             );
-
-            if (feeCollector == _receipient) {
-                userAccount[feeCollector].balance -= _amount + _feePool;
-                emit Transfer(feeCollector, address(0), _amount + _feePool);
+            if (msg.sender == feeCollector) {
+                buntAmount = _amountIn;
+                userAccount[msg.sender].balance -= buntAmount;
+                emit Transfer(msg.sender, address(0), buntAmount);
             } else {
-                userAccount[feeCollector].balance += _feePool;
-                userAccount[_receipient].balance -= _amount;
-                // fee tokens are transferred to fee collector.
-                emit Transfer(_receipient, feeCollector, _feePool);
-                emit Transfer(_receipient, address(0), _amount);
+                uint256 feePool = _amountIn * poolData.transactionFee / FEE_BASE;
+                buntAmount = _amountIn - feePool;
+                userAccount[feeCollector].balance += feePool;
+                userAccount[msg.sender].balance -= buntAmount;
+                emit Transfer(msg.sender, feeCollector, feePool);
+                emit Transfer(msg.sender, address(0), buntAmount);
             }
         } else {
-            userAccount[_receipient].balance -= _amount;
-            emit Transfer(_receipient, address(0), _amount);
+            buntAmount = _amountIn;
+            userAccount[msg.sender].balance -= buntAmount;
+            emit Transfer(msg.sender, address(0), buntAmount);
         }
-    }
-
-    /// @dev Calculates the correct purchase amounts.
-    /// @return grossAmount Number of new tokens.
-    /// @return feePool Value of fee in tokens.
-    /// @return amount Value of net minted tokens.
-    function _getMintAmounts()
-        internal
-        view
-        returns (
-            uint256 grossAmount,
-            uint256 feePool,
-            uint256 amount
-        )
-    {
-        uint256 mintPrice = getUnitaryValue();
-        mintPrice += getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        grossAmount = msg.value * decimals / mintPrice;
-
-        if (poolData.transactionFee != uint256(0)) {
-            feePool = grossAmount * poolData.transactionFee / FEE_BASE;
-            amount = grossAmount - feePool;
-        } else {
-            feePool = uint256(0);
-            amount = grossAmount;
-        }
+        poolData.totalSupply -= buntAmount;
     }
 
     function _getSpread() internal view returns (uint256) {
         if (poolData.spread == uint256(0)) {
             return INITIAL_SPREAD;
         } else { return poolData.spread; }
-    }
-
-    /// @dev Calculates the correct sale amounts.
-    /// @return feePool Value of fee in tokens.
-    /// @return netAmount Value of net burnt tokens.
-    /// @return netRevenue Value of revenue for holder.
-    function _getBurnAmounts(uint256 _amount)
-        internal
-        view
-        returns (
-            uint256 feePool,
-            uint256 netAmount,
-            uint256 netRevenue
-        )
-    {
-        uint256 burnPrice = getUnitaryValue();
-        burnPrice -= getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        return (
-            feePool = _amount * poolData.transactionFee / FEE_BASE,
-            netAmount = _amount - feePool,
-            netRevenue = netAmount * burnPrice / decimals
-        );
     }
 
     /// @dev Verifies that a signature is valid.
