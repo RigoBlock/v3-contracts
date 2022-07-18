@@ -54,10 +54,8 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should return unitary value', async () => {
-            // this test should always return 18 with any token but special tokens (i.e. 6 decimals tokens)
             const { pool, grgToken } = await setupTests()
             const poolData = await pool.getData()
-            // following is true for 18 decimals tokens
             const decimals = await pool.decimals()
             const initialUnitaryValue = 1 * 10**decimals
             const poolReturnedValue = poolData.unitaryValue
