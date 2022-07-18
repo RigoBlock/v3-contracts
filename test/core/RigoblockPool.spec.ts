@@ -8,6 +8,8 @@ import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../
 import { getAddress } from "ethers/lib/utils";
 
 describe("Proxy", async () => {
+    const [ user1, user2 ] = waffle.provider.getWallets()
+
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
@@ -38,6 +40,15 @@ describe("Proxy", async () => {
         }
     });
 
+    describe("receive", async () => {
+        it('should receive ether', async () => {
+            const { factory, pool } = await setupTests()
+            const etherAmount = parseEther("5")
+            await user1.sendTransaction({ to: pool.address, value: etherAmount})
+            await expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(etherAmount)
+        })
+    })
+
     describe("poolStorage", async () => {
         it('should return pool name from new pool', async () => {
             const { factory, pool } = await setupTests()
@@ -47,7 +58,6 @@ describe("Proxy", async () => {
 
         it('should return pool owner', async () => {
             const { factory, registry, pool } = await setupTests()
-            const [ user1 ] = waffle.provider.getWallets()
             expect(await pool.owner()).to.be.eq(user1.address)
         })
     })
@@ -62,7 +72,6 @@ describe("Proxy", async () => {
 
         it('should not set fee if caller not owner', async () => {
             const { factory, registry, pool } = await setupTests()
-            const [ user1, user2 ] = waffle.provider.getWallets()
             await pool.setOwner(user2.address)
             await expect(pool.setTransactionFee(2)
             ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
@@ -70,7 +79,6 @@ describe("Proxy", async () => {
 
         it('should not set fee higher than 1 percent', async () => {
             const { factory, registry, pool } = await setupTests()
-            const [ user1, user2 ] = waffle.provider.getWallets()
             await expect(
               pool.setTransactionFee(101) // 100 / 10000 = 1%
             ).to.be.revertedWith("POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR")
@@ -82,7 +90,6 @@ describe("Proxy", async () => {
             const { factory, registry, pool } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
             const etherAmount = parseEther("1")
-            const [ user1 ] = waffle.provider.getWallets()
             const name = await pool.name()
             const symbol = await pool.symbol()
             const amount = await pool.callStatic.mint(
@@ -104,7 +111,6 @@ describe("Proxy", async () => {
         it('should revert with order below minimum', async () => {
             const { factory, registry, pool } = await setupTests()
             const etherAmount = parseEther("0.0001")
-            const [ user1 ] = waffle.provider.getWallets()
             await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
         })
@@ -113,7 +119,6 @@ describe("Proxy", async () => {
     describe("_initializePool", async () => {
         it('should revert when already initialized', async () => {
             const { factory, registry, pool } = await setupTests()
-            const [ user1 ] = waffle.provider.getWallets()
             await expect(
                 pool._initializePool(
                     'testpool',
@@ -128,7 +133,6 @@ describe("Proxy", async () => {
     describe("setPrices", async () => {
         it('should revert when caller is not owner', async () => {
             const { factory, registry, pool } = await setupTests()
-            const [ user1, user2 ] = waffle.provider.getWallets()
             await pool.setOwner(user2.address)
             const newPrice = parseEther("1.1")
             const signaturevaliduntilBlock = 1 // relevant only when checked
@@ -172,7 +176,6 @@ describe("Proxy", async () => {
                     bytes32hash
                 )
             ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
-            const [ user1 ] = waffle.provider.getWallets()
             //"9e4e93d0": "isValidNav(uint256,uint256,bytes32,bytes)"
             await authorityExtensions.whitelistMethod(
                 "0x9e4e93d0",
