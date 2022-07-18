@@ -60,7 +60,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     uint8 private immutable COINBASE_DECIMALS;
     uint256 private immutable COINBASE_UNITARY_VALUE;
 
-    // TODO: hardcode selector to save gas
     bytes4 immutable private TRANSFER_FROM_SELECTOR = bytes4(
         keccak256(bytes("transferFrom(address,address,uint256)"))
     );
