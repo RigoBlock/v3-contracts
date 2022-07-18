@@ -41,6 +41,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     address public immutable override AUTHORITY;
 
     // minimum order size to avoid dust clogging things up
+    // TODO: following will fail with tokens with small precision. Must correctly initialize.
     uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
 
     // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
@@ -244,17 +245,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             );
         }
 
-        uint256 mintPrice = _getUnitaryValue();
-        mintPrice += _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        uint256 mintedAmount;
         if (admin.baseToken == address(0)) {
             _assertBiggerThanMinimum(msg.value);
-            mintedAmount = msg.value * decimals() / mintPrice;
+            require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
         } else {
             _assertBiggerThanMinimum(_amountIn);
             _safeTransferFrom(msg.sender, address(this), _amountIn);
-            mintedAmount = _amountIn * decimals() / mintPrice;
         }
+
+        uint256 markup = _amountIn * _getSpread() / SPREAD_BASE;
+        _amountIn -= markup;
+        uint256 mintedAmount = _amountIn * 10**decimals() / _getUnitaryValue();
         poolData.totalSupply += mintedAmount;
 
         /// @notice allocate pool token transfers and log events.
@@ -279,7 +280,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
         uint256 burnPrice = _getUnitaryValue();
         burnPrice -= _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        netRevenue = buntAmount * burnPrice / decimals();
+        netRevenue = buntAmount * burnPrice / 10**decimals();
 
         // TODO: implement in base token
         if (admin.baseToken == address(0)) {
@@ -396,6 +397,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
+    /// @return baseToken Address of base token (0 for coinbase).
     /// @return unitaryValue Value of the token in wei unit.
     /// @return spread Value of the spread from unitary value.
     // TODO: can inheritdoc only if implemented in subcontract
@@ -406,6 +408,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (
             string memory poolName,
             string memory poolSymbol,
+            address baseToken,
             uint256 unitaryValue,
             uint256 spread
         )
@@ -414,6 +417,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return(
             poolName = poolData.name,
             poolSymbol = poolData.symbol,
+            baseToken = admin.baseToken,
             _getUnitaryValue(),
             _getSpread()
 
