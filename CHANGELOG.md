@@ -1,3 +1,39 @@
+# [0.5.0](https://github.com/rigoblock/v3-contracts/compare/v0.4.0...v0.5.0) (2022-07-18)
+
+
+### Bug Fixes
+
+* correctly initialize rigo token with deterministic deployment ([5ee6b46](https://github.com/rigoblock/v3-contracts/commit/5ee6b463374094ad05c485d4db20c1ab7e12373e))
+* do not save name and symbol string in memory at pool creation ([fb298dc](https://github.com/rigoblock/v3-contracts/commit/fb298dc104097cd38a518467c8b5fbb7078eddc5))
+* improve pool checks and reorg methods ([7eac151](https://github.com/rigoblock/v3-contracts/commit/7eac151cfc3be8e08d5c80ec1bcfc56d653968ef))
+* make 1 pool method private (prev. external) ([a39c95c](https://github.com/rigoblock/v3-contracts/commit/a39c95c1964954e5c8aa77bb6beecf44584759d5))
+* merge positive amount modifier into burn method ([5412535](https://github.com/rigoblock/v3-contracts/commit/5412535b97dc462c1cafe8fca3980410909abbc3))
+* move sigverifier to examples and made abstract, simplified contract ([5d1bcaf](https://github.com/rigoblock/v3-contracts/commit/5d1bcaf9573a32665780ecd84e43bf0760a9e81c))
+* override pool decimals and set base token ([9f85f2d](https://github.com/rigoblock/v3-contracts/commit/9f85f2d7395a97ed74a9b27f0580502385beb952))
+* prevent flashbot attacks by setting pool initial lockup = 1 ([9a7b52b](https://github.com/rigoblock/v3-contracts/commit/9a7b52bebee864c086b9162447f80216aa186477))
+* remove  pool siverifier method as call delegated to adapter ([d765a6d](https://github.com/rigoblock/v3-contracts/commit/d765a6d480c50fb6a802ba4d0c21508c27e1bda8))
+* remove deprecated eventful contract related methods in authority ([f69d726](https://github.com/rigoblock/v3-contracts/commit/f69d7262088e07243ec93d55e8d5e674176d0d7b))
+* remove mint/burn events and user transfer with address 0 ([3046fa1](https://github.com/rigoblock/v3-contracts/commit/3046fa1aba0e70a719e9c1c6e414a951a71781bb))
+* rename pool method ([d7dd789](https://github.com/rigoblock/v3-contracts/commit/d7dd789d1043545ee49cfbc3fd5cb4637584e99e))
+* simplify logic of pool mint/burn methods and variables renaming ([8f80a60](https://github.com/rigoblock/v3-contracts/commit/8f80a605a4d4fef2a9c39021252e5d082942a6e9))
+* update authority extensions selector related methods ([93244c3](https://github.com/rigoblock/v3-contracts/commit/93244c3ae86956d0be81f86eaf5ec9e0d197ca0b))
+* update nav verifier to single price specs ([2b08d32](https://github.com/rigoblock/v3-contracts/commit/2b08d32058852069e8fc27c6d6ee18634623f895))
+* update new nav log msg ([7d99181](https://github.com/rigoblock/v3-contracts/commit/7d991814bd748ec243acb83d1b92d76f9398bc74))
+* update pool interfaces ([a954011](https://github.com/rigoblock/v3-contracts/commit/a954011ab0353faaa722affd08813b6a52b8210d))
+* updated README.md ([02fbe47](https://github.com/rigoblock/v3-contracts/commit/02fbe47cd9757b8c3b7b0f4cb156382f9932c04b))
+
+
+### Features
+
+* add base token return value in get pool data ([4b6dd72](https://github.com/rigoblock/v3-contracts/commit/4b6dd72889f5556e0b86f33d7eed6fe06674bee8))
+* do not require unique name to prevent race conditions ([2213f27](https://github.com/rigoblock/v3-contracts/commit/2213f27fb792cf01aaa5b31c705e79dc38506c04))
+* implement generic fallback in pool implementation ([57f2d99](https://github.com/rigoblock/v3-contracts/commit/57f2d99bcdc11aeec94e41ae1ed3dc9ef60ed86e))
+* merge buy and sell prices in pool, introduce spread ([0ee6f0a](https://github.com/rigoblock/v3-contracts/commit/0ee6f0a1f8cc853f04f4574c08e497c1ea9fe828))
+* minimum order check with small-decimals tokens ([27212ea](https://github.com/rigoblock/v3-contracts/commit/27212ea5dd8d1e0104f57ddd614728874d72c0ef))
+* remove dao fee and remove related variables, methods, deps ([57ff575](https://github.com/rigoblock/v3-contracts/commit/57ff5759bf2140678c8bfdc46f5a5fb7110baa02))
+
+
+
 # [0.4.0](https://github.com/rigoblock/v3-contracts/compare/v0.3.0...v0.4.0) (2022-07-12)
 
 
@@ -65,27 +101,13 @@
 
 ### Bug Fixes
 
-* add SPDX identifier ([002a14e](https://github.com/rigoblock/v3-contracts/commit/002a14e2348ce375873bd0bf773d96cfdbebadb9))
-* add tests setup ([7c26aca](https://github.com/rigoblock/v3-contracts/commit/7c26acaf66efda05666a8e7bbd2aee32e7877d4a))
 * ci bump package version ([a8620d6](https://github.com/rigoblock/v3-contracts/commit/a8620d647d786074298ec33b2f6aae8cd87f7998))
-* deterministic factory deployment ([03c8feb](https://github.com/rigoblock/v3-contracts/commit/03c8feb9d39b7b88ca776c72ff48266c9a8b9dff))
-* deterministic factory deployment ([e722787](https://github.com/rigoblock/v3-contracts/commit/e722787e87f7b7d0e7b9ecae3c8d8d728fffed05))
 * event indexing in registry interface ([996d81e](https://github.com/rigoblock/v3-contracts/commit/996d81e6d666a27ec2f99dea5a9adf4d8bdd4703))
 * registry contract ([522a51d](https://github.com/rigoblock/v3-contracts/commit/522a51df2c9190b568706a00270381d29e6ffae8))
 * removed poolId from factory library ([f311d83](https://github.com/rigoblock/v3-contracts/commit/f311d83ddae3feec5fd2f88aa02ed34fce4a2717))
 * revert to correct pool creation flow ([2c72b91](https://github.com/rigoblock/v3-contracts/commit/2c72b9125ba0c6804f861971c41566abbc491a6f))
-* set overrides ([26573b1](https://github.com/rigoblock/v3-contracts/commit/26573b1eadedffca1ab759c99f70d490108cb1ac))
-* update pragma identifier ([2ce49b0](https://github.com/rigoblock/v3-contracts/commit/2ce49b0716af6fa5956fc681ce02150543c67b71))
 * update version script ([75ac5ed](https://github.com/rigoblock/v3-contracts/commit/75ac5ed2f52f3b49db772c2ef7308c64303066c0))
 * use conventional changelog instead of github tag action ([ad8e887](https://github.com/rigoblock/v3-contracts/commit/ad8e88753ff2da04d24619d5b3e499602fccd4b6))
-
-
-### Features
-
-* add contracts tests ([eb7fe1e](https://github.com/rigoblock/v3-contracts/commit/eb7fe1e412bcc4542fe60fb9ecfa74a0fe2e5441))
-* publish ([1bfe2b5](https://github.com/rigoblock/v3-contracts/commit/1bfe2b50a5fd61b103ffcbf6e072eb5c15ce2e71))
-* remove eventful ([db75691](https://github.com/rigoblock/v3-contracts/commit/db7569194d3c9e67ebee25d45c2cc0f8871bda16))
-* rigoblock pool as erc20 interface ([f710282](https://github.com/rigoblock/v3-contracts/commit/f710282d6935bfa74e46d90096b17a217078e5c7))
 
 
 
