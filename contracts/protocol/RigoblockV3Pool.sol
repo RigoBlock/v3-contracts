@@ -256,6 +256,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             mintedAmount = _amountIn * decimals() / mintPrice;
         }
         poolData.totalSupply += mintedAmount;
+
+        /// @notice allocate pool token transfers and log events.
         recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
     }
 
@@ -271,7 +273,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (uint256 netRevenue)
     {
         require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
+
+        /// @notice allocate pool token transfers and log events.
         uint256 buntAmount = _allocateBurnTokens(_amountIn);
+
         uint256 burnPrice = _getUnitaryValue();
         burnPrice -= _getUnitaryValue() * _getSpread() / SPREAD_BASE;
         netRevenue = buntAmount * burnPrice / decimals();
