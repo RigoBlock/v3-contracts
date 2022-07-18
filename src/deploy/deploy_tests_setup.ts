@@ -73,7 +73,8 @@ const deploy: DeployFunction = async function (
     from: deployer,
     args: [
       deployer, // address _setMinter
-      deployer  // address _setRigoblock
+      deployer, // address _setRigoblock
+      deployer // address _grgHolder
     ],
     log: true,
     deterministicDeployment: true,

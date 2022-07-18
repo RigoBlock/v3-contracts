@@ -42,6 +42,7 @@ describe("Proxy", async () => {
 
     describe("receive", async () => {
         it('should receive ether', async () => {
+            // TODO: remove unused factory import (in pool tests as well)
             const { factory, pool } = await setupTests()
             const etherAmount = parseEther("5")
             await user1.sendTransaction({ to: pool.address, value: etherAmount})
@@ -106,6 +107,10 @@ describe("Proxy", async () => {
             )
             expect(await pool.totalSupply()).to.be.not.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(amount)
+            const poolData = await pool.getData()
+            const spread = poolData.spread / 10000 // spread
+            const netAmount = amount / (1 - spread)
+            expect(netAmount.toString()).to.be.eq(etherAmount.toString())
         })
 
         it('should revert with order below minimum', async () => {
