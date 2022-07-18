@@ -13,9 +13,12 @@ describe("ProxyGasCost", async () => {
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const ResitryInstance = await deployments.get("PoolRegistry")
         const Registry = await hre.ethers.getContractFactory("PoolRegistry")
+        const RigoTokenInstance = await deployments.get("RigoToken")
+        const RigoToken = await hre.ethers.getContractFactory("RigoToken")
         return {
             factory: Factory.attach(RigoblockPoolProxyFactory.address),
-            registry: Registry.attach(ResitryInstance.address)
+            registry: Registry.attach(ResitryInstance.address),
+            grgToken: RigoToken.attach(RigoTokenInstance.address)
         }
     });
 
@@ -27,10 +30,23 @@ describe("ProxyGasCost", async () => {
                 'TEST',
                 AddressZero
             )
-            const [ user1 ] = waffle.provider.getWallets()
             const result = await txReceipt.wait()
             const gasCost = result.cumulativeGasUsed.toNumber()
-            console.log(gasCost)
+            console.log(gasCost,'pool with base coin')
+            // TODO: actual size will be affected by tests coverage
+            expect(gasCost).to.be.lt(500000)
+        })
+
+        it('should cost less than 500k gas with base token', async () => {
+            const { factory, registry, grgToken } = await setupTests()
+            const txReceipt = await factory.createPool(
+                't est pool',
+                'TEST',
+                grgToken.address
+            )
+            const result = await txReceipt.wait()
+            const gasCost = result.cumulativeGasUsed.toNumber()
+            console.log(gasCost,'pool with base token')
             // TODO: actual size will be affected by tests coverage
             expect(gasCost).to.be.lt(500000)
         })
