@@ -52,12 +52,20 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
      * PUBLIC FUNCTIONS
      */
     /// @inheritdoc IRigoblockPoolProxyFactory
-    function createPool(string calldata _name, string calldata _symbol)
+    function createPool(
+        string calldata _name,
+        string calldata _symbol,
+        address _baseToken
+    )
         external
         override
         returns (address newPoolAddress, bytes32 poolId)
     {
-        (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPoolInternal(_name, _symbol);
+        (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPoolInternal(
+            _name,
+            _symbol,
+            _baseToken    
+        );
         newPoolAddress = address(proxy);
         poolId = newPoolId;
         try PoolRegistry(registryAddress).register(
@@ -118,12 +126,14 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * INTERNAL FUNCTIONS
      */
-    /// @dev Creates a pool and routes to eventful
-    /// @param _name String of the name
-    /// @param _symbol String of the symbol
+    /// @dev Creates a pool and routes to eventful.
+    /// @param _name String of the name.
+    /// @param _symbol String of the symbol.
+    /// @param _baseToken Address of the base token.
     function _createPoolInternal(
         string calldata _name,
-        string calldata _symbol
+        string calldata _symbol,
+        address _baseToken
     )
         internal
         returns (
@@ -132,9 +142,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         )
     {
         bytes memory encodedInitialization = abi.encodeWithSelector(
-            0x5645974e, // RigoblockPool._initializePool.selector
+            0x95d317f0, // RigoblockPool._initializePool.selector
             _name,
             _symbol,
+            _baseToken,
             msg.sender
         );
         salt = keccak256(encodedInitialization);

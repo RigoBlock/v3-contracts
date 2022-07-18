@@ -35,33 +35,37 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 // solhint-disable-next-line
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
-    // TODO: add immutable base token and mint/burn in base token
 
-    string public constant override VERSION = "HF 3.0.2";
-
-    /// @notice Standard ERC20
-    // TODO: check if best adding in struct and returning as external view
-    uint8 public immutable override decimals;
+    string public constant override VERSION = "HF 3.1.0";
 
     address public immutable override AUTHORITY;
-
-    // minimum order size to avoid dust clogging things up
-    uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
 
     // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
     uint256 private constant FEE_BASE = 10000;
     uint256 private constant INITIAL_SPREAD = 500; // +-5%, in basis points
     uint256 private constant MAX_SPREAD = 1000; // +-10%, in basis points
     uint256 private constant MAX_TRANSACTION_FEE = 100; // maximum 1%
+
+    // minimum order size 1/1000th of unitary value to avoid dust clogging things up
+    uint256 private constant MINIMUM_ORDER_DIVISOR = 1e3;
+
     uint256 private constant SPREAD_BASE = 10000;
 
-    uint32 private constant INITIAL_LOCKUP = 1;
+    uint32 private constant MAX_LOCKUP = 30 days;
+    uint32 private constant MIN_LOCKUP = 1;
 
-    // notice Must be immutable to be compile-time constant.
-    // eip1967 standard
+    // EIP1967 standard, must be immutable to be compile-time constant.
     address private immutable _implementation;
 
-    uint256 private immutable INITIAL_VALUE;
+    uint8 private immutable COINBASE_DECIMALS;
+    uint256 private immutable COINBASE_UNITARY_VALUE;
+
+    bytes4 immutable private TRANSFER_FROM_SELECTOR = bytes4(
+        keccak256(bytes("transferFrom(address,address,uint256)"))
+    );
+    bytes4 immutable private TRANSFER_SELECTOR = bytes4(
+        keccak256(bytes("transfer(address,uint256)"))
+    );
 
     mapping(address => Account) internal userAccount;
 
@@ -82,11 +86,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         uint256 totalSupply;
         uint256 transactionFee; // in basis points 1 = 0.01%
         uint32 minPeriod;
+        uint8 decimals;
     }
 
     struct Admin {
         address feeCollector;
         address kycProvider;
+        address baseToken; // TODO: check where best to store
     }
 
     // reading immutable through internal method more gas efficient
@@ -110,16 +116,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         _;
     }
 
-    // TODO: do not inline when reading immutables as they are copied anywhere
-    //  the modifier is used, rather call to private/internal method.
-    modifier minimumStake(uint256 amount) {
-        require (
-            amount >= MINIMUM_ORDER,
-            "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
-        );
-        _;
-    }
-
     modifier hasEnough(uint256 _amount) {
         require(
             userAccount[msg.sender].balance >= _amount,
@@ -131,18 +127,18 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     modifier minimumPeriodPast() {
         require(
             block.timestamp >= userAccount[msg.sender].activation,
-            "103"
+            "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR"
         );
         _;
     }
 
-    // TODO: fix and move to nav verifier
+    /// @dev We keep this check to prevent accidental failure in Nav calculations.
     modifier notPriceError(uint256 _newUnitaryValue) {
         /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
         require(
             _newUnitaryValue < _getUnitaryValue() * 5 &&
             _newUnitaryValue > _getUnitaryValue() / 5,
-            "105"
+            "POOL_INPUT_VALUE_ERROR"
         );
         _;
     }
@@ -151,9 +147,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @notice Kyc provider set as will effectively lock direct mint/burn actions.
     constructor(address _authority) {
         AUTHORITY = _authority;
-        // TODO: initialize decimals as input
-        decimals = 18;
-        INITIAL_VALUE = 1 * 10**decimals; // initial value is 1
+        COINBASE_DECIMALS = 18;
+        COINBASE_UNITARY_VALUE = 1 * 10**COINBASE_DECIMALS;
         _implementation = address(this);
         // must lock implementation after initializing _implementation
         owner = address(0);
@@ -203,6 +198,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     function _initializePool(
         string calldata _poolName,
         string calldata _poolSymbol,
+        address _baseToken,
         address _owner
     )
         onlyUninitialized
@@ -215,30 +211,33 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         poolData.name = _poolName;
         poolData.symbol = _poolSymbol;
         owner = _owner;
+        /// @notice We only initialize if different from default values.
+        /// @notice Be very careful with new releases as default values must be returned unless poolData overwritten.
+        // TODO: test different initialization scenarios
+        if (_baseToken != address(0)) {
+            admin.baseToken = _baseToken;
+            uint8 tokenDecimals = Token(_baseToken).decimals();
+            if (tokenDecimals != COINBASE_DECIMALS) {
+                poolData.decimals = tokenDecimals;
+                poolData.unitaryValue = 1 * 10**tokenDecimals; // initial value is 1
+            }
+        } // we do not initialize unless values different from default ones.
 
         emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
     }
 
-    /// @dev Allows a user to mint pool tokens.
-    /// @return recipientAmount Number of tokens minted to recipient.
-    // TODO merge with following, as holder can just mint for himself
-    function mint()
-        external
-        payable
-        returns (uint256 recipientAmount)
-    {
-        return mintOnBehalf(msg.sender);
-    }
-
     /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _recipient Address receiving the tokens.
+    /// @param _amountIn Amount of base tokens.
     /// @return recipientAmount Number of tokens minted to recipient.
-    function mintOnBehalf(address _recipient)
+    function mint(address _recipient, uint256 _amountIn)
         public
         payable
-        minimumStake(msg.value)
+        override
         returns (uint256 recipientAmount)
     {
+        /// @notice for ether transfers we later require value transferred equals amount in.
+        _assertBiggerThanMinimum(_amountIn);
         // require whitelisted user if kyc is enforced
         if (_isKycEnforced() == true) {
             require(
@@ -247,10 +246,18 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             );
         }
 
-        uint256 mintPrice = _getUnitaryValue();
-        mintPrice += _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        uint256 mintedAmount = msg.value * decimals / mintPrice;
+        if (admin.baseToken == address(0)) {
+            require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
+        } else {
+            _safeTransferFrom(msg.sender, address(this), _amountIn);
+        }
+
+        uint256 markup = _amountIn * _getSpread() / SPREAD_BASE;
+        _amountIn -= markup;
+        uint256 mintedAmount = _amountIn * 10**decimals() / _getUnitaryValue();
         poolData.totalSupply += mintedAmount;
+
+        /// @notice allocate pool token transfers and log events.
         recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
     }
 
@@ -259,19 +266,27 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @return netRevenue Net amount of burnt pool tokens.
     function burn(uint256 _amountIn)
         external
+        override
         nonReentrant
         hasEnough(_amountIn)
         minimumPeriodPast
         returns (uint256 netRevenue)
     {
         require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
-        uint256 buntAmount = _allocateBurnTokens(_amountIn);
-        uint256 burnPrice = _getUnitaryValue();
-        burnPrice -= _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        netRevenue = buntAmount * burnPrice / decimals;
 
-        // TODO: implement in base token
-        payable(msg.sender).transfer(netRevenue);
+        /// @notice allocate pool token transfers and log events.
+        uint256 buntAmount = _allocateBurnTokens(_amountIn);
+        poolData.totalSupply -= buntAmount;
+
+        uint256 markup = buntAmount * _getSpread() / SPREAD_BASE;
+        buntAmount -= markup;
+        netRevenue = buntAmount * _getUnitaryValue() / 10**decimals();
+
+        if (admin.baseToken == address(0)) {
+            payable(msg.sender).transfer(netRevenue);
+        } else {
+            _safeTransfer(msg.sender, netRevenue);
+        }
     }
 
     /// @dev Allows pool owner to set the pool price.
@@ -285,6 +300,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         bytes32 _hash,
         bytes calldata _signedData)
         external
+        override
         onlyOwner
         notPriceError(_unitaryValue)
     {
@@ -308,6 +324,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _transactionFee Value of the transaction fee in basis points.
     function setTransactionFee(uint256 _transactionFee)
         external
+        override
         onlyOwner
     {
         require(
@@ -322,6 +339,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _feeCollector Address of the fee receiver.
     function changeFeeCollector(address _feeCollector)
         external
+        override
         onlyOwner
     {
         admin.feeCollector = _feeCollector;
@@ -332,18 +350,19 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _minPeriod Time in seconds.
     function changeMinPeriod(uint32 _minPeriod)
         external
+        override
         onlyOwner
     {
         /// @notice minimum period is always at least 1 to prevent flash txs.
         require(
-            _minPeriod > 0 && _minPeriod <= 30 days,
+            _minPeriod >= MIN_LOCKUP && _minPeriod <= MAX_LOCKUP,
             "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR"
         );
         poolData.minPeriod = _minPeriod;
         // TODO: should emit event
     }
 
-    function changeSpread(uint256 _newSpread) external onlyOwner {
+    function changeSpread(uint256 _newSpread) external override onlyOwner {
         // TODO: check what happens with value 0
         require(
             _newSpread < MAX_SPREAD,
@@ -354,7 +373,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     /// @notice Kyc provider can be set to null, removing user whitelist requirement.
-    function setKycProvider(address _kycProvider) external onlyOwner {
+    function setKycProvider(address _kycProvider) external override onlyOwner {
         admin.kycProvider = _kycProvider;
         // TODO: should emit event
     }
@@ -377,6 +396,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
+    /// @return baseToken Address of base token (0 for coinbase).
     /// @return unitaryValue Value of the token in wei unit.
     /// @return spread Value of the spread from unitary value.
     // TODO: can inheritdoc only if implemented in subcontract
@@ -387,6 +407,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (
             string memory poolName,
             string memory poolSymbol,
+            address baseToken,
             uint256 unitaryValue,
             uint256 spread
         )
@@ -395,6 +416,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return(
             poolName = poolData.name,
             poolSymbol = poolData.symbol,
+            baseToken = admin.baseToken,
             _getUnitaryValue(),
             _getSpread()
 
@@ -409,6 +431,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     function getAdminData()
         external
         view
+        override
         returns (
             address,  //owner
             address feeCollector,
@@ -428,6 +451,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     function getKycProvider()
         external
         view
+        override
         returns (address kycProviderAddress)
     {
         return kycProviderAddress = admin.kycProvider;
@@ -435,29 +459,25 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @dev Returns the total amount of issued tokens for this pool.
     /// @return Number of tokens.
-    function totalSupply()
-        external view
-        returns (uint256)
-    {
+    function totalSupply() external view override returns (uint256) {
         return poolData.totalSupply;
     }
 
-    function name()
-        external
-        view
-        override
-        returns (string memory)
-    {
+    function name() external view override returns (string memory) {
         return poolData.name;
     }
 
-    function symbol()
-        external
-        view
-        override
-        returns (string memory)
-    {
+    function symbol() external view override returns (string memory) {
         return poolData.symbol;
+    }
+
+    /// @dev Decimals are initialized at proxy creation only if base token not null.
+    /// @return Number of decimals.
+    /// @notice We use this method to save gas on base currency pools.
+    function decimals() public view override returns (uint8) {
+        if (admin.baseToken != address(0)) {
+            return Token(admin.baseToken).decimals();
+        } else return COINBASE_DECIMALS;
     }
 
     /*
@@ -588,7 +608,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             userAccount[msg.sender].balance -= buntAmount;
             emit Transfer(msg.sender, address(0), buntAmount);
         }
-        poolData.totalSupply -= buntAmount;
     }
 
     /// @dev Verifies that a signature is valid.
@@ -635,6 +654,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         );
     }
 
+    function _assertBiggerThanMinimum(uint256 _amount) private view {
+        require (
+            _amount >= _getUnitaryValue() / MINIMUM_ORDER_DIVISOR,
+            "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
+        );
+    }
+
     /// @dev Finds the extensions authority.
     /// @return Address of the extensions authority.
     // TODO: check under what circumstances we call this method, as can
@@ -650,7 +676,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     function _getMinPeriod() private view returns (uint32) {
-        return poolData.minPeriod == 0 ? INITIAL_LOCKUP : poolData.minPeriod;
+        return poolData.minPeriod == 0 ? MIN_LOCKUP : poolData.minPeriod;
     }
 
     function _getSpread() private view returns (uint256) {
@@ -658,10 +684,57 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     function _getUnitaryValue() private view returns (uint256) {
-        return poolData.unitaryValue == 0 ? INITIAL_VALUE : poolData.unitaryValue;
+        return (
+            poolData.unitaryValue == 0 ? COINBASE_UNITARY_VALUE
+            : poolData.unitaryValue
+        );
     }
 
     function _isKycEnforced() private view returns (bool) {
         return admin.kycProvider != address(0);
+    }
+
+    function _safeTransfer(
+        address _to,
+        uint256 _amount
+    )
+        private
+    {
+        // solhint-disable-next-line avoid-low-level-calls
+        // TODO: we may want to use assembly here
+        (bool success, bytes memory data) = admin.baseToken.call(
+            abi.encodeWithSelector(
+                TRANSFER_SELECTOR,
+                _to,
+                _amount
+            )
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "POOL_TRANSFER_FROM_FAILED_ERROR"
+        );
+    }
+
+    function _safeTransferFrom(
+        address _from,
+        address _to,
+        uint256 _amount
+    )
+        private
+    {
+        // solhint-disable-next-line avoid-low-level-calls
+        // TODO: we may want to use assembly here
+        (bool success, bytes memory data) = admin.baseToken.call(
+            abi.encodeWithSelector(
+                TRANSFER_FROM_SELECTOR,
+                _from,
+                _to,
+                _amount
+            )
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "POOL_TRANSFER_FROM_FAILED_ERROR"
+        );
     }
 }

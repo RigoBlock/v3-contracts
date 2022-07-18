@@ -14,8 +14,8 @@ describe("ProxyFactory", async () => {
         const ResitryInstance = await deployments.get("PoolRegistry")
         const Registry = await hre.ethers.getContractFactory("PoolRegistry")
         return {
-          factory: Factory.attach(RigoblockPoolProxyFactory.address),
-          registry: Registry.attach(ResitryInstance.address)
+            factory: Factory.attach(RigoblockPoolProxyFactory.address),
+            registry: Registry.attach(ResitryInstance.address)
         }
     });
 
@@ -23,38 +23,42 @@ describe("ProxyFactory", async () => {
         it('should revert with space before pool name', async () => {
             const { factory, registry } = await setupTests()
             await expect(
-                factory.createPool(' testpool', 'TEST')
+                factory.createPool(' testpool', 'TEST', AddressZero)
             ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_BEGINNING_ERROR")
         })
 
         it('should revert with space after pool name', async () => {
             const { factory } = await setupTests()
             await expect(
-                factory.createPool('testpool ', 'TEST')
+                factory.createPool('testpool ', 'TEST', AddressZero)
             ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_END_ERROR")
         })
 
         it('should revert with special character in pool name', async () => {
             const { factory } = await setupTests()
             await expect(
-                factory.createPool('test+pool', 'TEST')
+                factory.createPool('test+pool', 'TEST', AddressZero)
             ).to.be.revertedWith("LIBSANITIZE_SPECIAL_CHARACTER_ERROR")
         })
 
         it('should revert with space before pool symbol', async () => {
             const { factory } = await setupTests()
             await expect(
-                factory.createPool('testpool2', ' TEST')
+                factory.createPool('testpool2', ' TEST', AddressZero)
             ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_BEGINNING_ERROR")
         })
 
         it('should create address when creating pool', async () => {
             const { factory, registry } = await setupTests()
-            const { newPoolAddress, poolId } = await factory.callStatic.createPool('testpool','TEST')
+            const { newPoolAddress, poolId } = await factory.callStatic.createPool(
+                'testpool',
+                'TEST',
+                AddressZero
+            )
             const bytes32symbol = hre.ethers.utils.formatBytes32String('testpool')
             const bytes32name = hre.ethers.utils.formatBytes32String('TEST')
             await expect(
-                factory.createPool('testpool','TEST')
+                factory.createPool('testpool','TEST', AddressZero)
             ).to.emit(registry, "Registered").withArgs(
                 factory.address,
                 newPoolAddress,
@@ -69,9 +73,20 @@ describe("ProxyFactory", async () => {
 
         it('should create pool with space not first or last character', async () => {
             const { factory } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool('t est pool','TEST')
-            const txReceipt = await factory.createPool('t est pool', 'TEST')
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const { newPoolAddress } = await factory.callStatic.createPool(
+                't est pool',
+                'TEST',
+                AddressZero
+            )
+            const txReceipt = await factory.createPool(
+                't est pool',
+                'TEST',
+                AddressZero
+            )
+            const pool = await hre.ethers.getContractAt(
+                "RigoblockV3Pool",
+                newPoolAddress
+            )
             const result = await txReceipt.wait()
             // 3 logs are emitted at pool creation, could expect exact event.withArgs
             expect(result.events[2].args.poolAddress).to.be.eq(newPoolAddress)
@@ -80,54 +95,54 @@ describe("ProxyFactory", async () => {
         it('should create pool with uppercase character in name', async () => {
             const { factory } = await setupTests()
             await expect(
-                factory.createPool('testPool', 'TEST')
+                factory.createPool('testPool', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
         })
 
         it('should revert when contract exists already', async () => {
             const { factory } = await setupTests()
-            await factory.createPool('duplicateName', 'TEST')
+            await factory.createPool('duplicateName', 'TEST', AddressZero)
             await expect(
-                factory.createPool('duplicateName', 'TEST')
+                factory.createPool('duplicateName', 'TEST', AddressZero)
             ).to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
         })
 
         it('should create pool with duplicate name', async () => {
             const { factory, registry } = await setupTests()
             await expect(
-                factory.createPool('duplicateName', 'TEST')
+                factory.createPool('duplicateName', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
             await expect(
-                factory.createPool('duplicateName', 'TEST2')
+                factory.createPool('duplicateName', 'TEST2', AddressZero)
             ).to.emit(factory, "PoolCreated")
         })
 
         it('should create pool with duplicate symbol', async () => {
             const { factory, registry } = await setupTests()
-            await factory.createPool('someName', 'TEST')
+            await factory.createPool('someName', 'TEST', AddressZero)
             await expect(
-              factory.createPool('someOtherName', 'TEST')
+              factory.createPool('someOtherName', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
         })
 
         it('should revert with symbol longer than 5 characters', async () => {
             const { factory } = await setupTests()
             await expect(
-                factory.createPool('testpool2', 'TOOLONG')
+                factory.createPool('testpool2', 'TOOLONG', AddressZero)
             ).to.be.revertedWith("REGISTRY_SYMBOL_LENGTH_ERROR")
         })
 
         it('should revert with symbol shorter than 3 characters', async () => {
             const { factory } = await setupTests()
             await expect(
-                factory.createPool('testpool2', 'TS')
+                factory.createPool('testpool2', 'TS', AddressZero)
             ).to.be.revertedWith("REGISTRY_SYMBOL_LENGTH_ERROR")
         })
 
         it('should revert with lowercase symbol', async () => {
             const { factory } = await setupTests()
             await expect(
-                factory.createPool('testpool2', 'test')
+                factory.createPool('testpool2', 'test', AddressZero)
             ).to.be.revertedWith("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR")
         })
     })

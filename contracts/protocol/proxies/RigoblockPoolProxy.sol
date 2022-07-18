@@ -20,7 +20,7 @@ contract RigoblockPoolProxy {
         StorageSlot.getAddressSlot(_BEACON_SLOT).value = _beacon;
 
         // initialize pool
-        // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, owner)
+        // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, baseToken, owner)
         (bool success, ) = Beacon(_beacon).implementation().delegatecall(_data);
 
         // should never be false as initialization parameters are checked with error returned.

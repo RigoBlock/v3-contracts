@@ -53,12 +53,13 @@ contract RigoToken is UnlimitedAllowanceToken {
 
     constructor(
         address _setMinter,
-        address _setRigoblock)
-    {
+        address _setRigoblock,
+        address _grgHolder
+    ) {
         minter = _setMinter;
         rigoblock = _setRigoblock;
-        balances[msg.sender] = totalSupply;
-        totalSupply = 10**25; // 10 million tokens, 18 decimal places
+        totalSupply = 1e25; // 10 million tokens, 18 decimals
+        balances[_grgHolder] = totalSupply;
     }
 
     /*
