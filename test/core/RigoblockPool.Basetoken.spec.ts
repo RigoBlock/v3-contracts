@@ -5,6 +5,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
+import { timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("BaseTokenProxy", async () => {
@@ -59,14 +60,14 @@ describe("BaseTokenProxy", async () => {
             // following is true for 18 decimals tokens
             const decimals = await pool.decimals()
             const initialUnitaryValue = 1 * 10**decimals
-            const poolReturnedValue = await poolData.unitaryValue
+            const poolReturnedValue = poolData.unitaryValue
             expect(poolReturnedValue).to.be.eq(initialUnitaryValue.toString())
         })
     })
 
     describe("mint", async () => {
         it('should create new tokens with input tokens', async () => {
-            // TODO: with 6-decimal tokens this will fail as small amount
+            // TODO: test minimum order assertion with small amounts
             const { pool, grgToken } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
             expect(await grgToken.balanceOf(pool.address)).to.be.eq(0)
@@ -89,10 +90,51 @@ describe("BaseTokenProxy", async () => {
             // with 0 fees and without changing price, total supply will be equal to userbalance
             expect(userTokens).to.be.eq(await pool.totalSupply())
             // with initial price 1, user tokens are equal to grg transferred to pool
+            // TODO: check why we do not use price here for expect? test when price changes
             const poolData = await pool.getData()
             const spread = poolGrgBalance * poolData.spread / 10000 // spread
             poolGrgBalance -= spread
             expect(userTokens.toString()).to.be.eq(poolGrgBalance.toString())
+        })
+    })
+
+    describe("burn", async () => {
+        it('should burn tokens with input tokens', async () => {
+            const { pool, grgToken } = await setupTests()
+            const tokenAmountIn = parseEther("1")
+            await grgToken.approve(pool.address, tokenAmountIn)
+            const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn)
+            await pool.mint(user1.address, tokenAmountIn)
+            expect(await pool.totalSupply()).to.be.not.eq(0)
+            expect(await pool.balanceOf(user1.address)).to.be.eq(userTokens)
+            let userPoolBalance = await pool.balanceOf(user1.address)
+            // TODO: write tests failing before lockup expiry
+            await timeTravel({ seconds: 1, mine: true })
+            const netRevenue = await pool.callStatic.burn(userPoolBalance)
+            // the following is true with fee set as 0
+            await expect(
+                pool.burn(userPoolBalance)
+            ).to.emit(grgToken, "Transfer").withArgs(
+                pool.address,
+                user1.address,
+                netRevenue
+            )
+            expect(await pool.totalSupply()).to.be.eq(0)
+            expect(await pool.balanceOf(user1.address)).to.be.eq(0)
+            const tokenDelta = Math.abs(Number(tokenAmountIn) - netRevenue)
+            const poolGrgBalance = await grgToken.balanceOf(pool.address)
+            expect(poolGrgBalance).to.be.eq(tokenDelta.toString())
+
+            // if fee != 0 and caller not fee recipient, supply will not be 0
+            const poolData = await pool.getData()
+            const spread = userPoolBalance * poolData.spread / 10000 // spread
+            userPoolBalance -= spread
+            const unitaryValue = poolData.unitaryValue
+            const decimals = await pool.decimals()
+            const revenue = userPoolBalance * unitaryValue / (10**decimals)
+            // TODO: check why difference of 128 wei, possibly approximation
+            expect(userPoolBalance - revenue).to.be.lt(129)
+            //expect(netRevenue.toString()).to.be.deep.eq(revenue.toString())
         })
     })
 

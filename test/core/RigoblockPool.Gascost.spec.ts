@@ -33,7 +33,7 @@ describe("ProxyGasCost", async () => {
             const result = await txReceipt.wait()
             const gasCost = result.cumulativeGasUsed.toNumber()
             console.log(gasCost,'pool with base coin')
-            // TODO: actual size will be affected by tests coverage
+            // actual size will be affected in tests coverage (+100K), will require updating
             expect(gasCost).to.be.lt(500000)
         })
 
@@ -47,7 +47,7 @@ describe("ProxyGasCost", async () => {
             const result = await txReceipt.wait()
             const gasCost = result.cumulativeGasUsed.toNumber()
             console.log(gasCost,'pool with base token')
-            // TODO: actual size will be affected by tests coverage
+            // actual size will be affected in tests coverage (+100K), will require updating
             expect(gasCost).to.be.lt(500000)
         })
     })
