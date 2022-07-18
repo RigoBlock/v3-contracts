@@ -278,11 +278,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         /// @notice allocate pool token transfers and log events.
         uint256 buntAmount = _allocateBurnTokens(_amountIn);
 
-        uint256 burnPrice = _getUnitaryValue();
-        burnPrice -= _getUnitaryValue() * _getSpread() / SPREAD_BASE;
-        netRevenue = buntAmount * burnPrice / 10**decimals();
+        uint256 markup = buntAmount * _getSpread() / SPREAD_BASE;
+        buntAmount -= markup;
+        netRevenue = buntAmount * _getUnitaryValue() / 10**decimals();
 
-        // TODO: implement in base token
         if (admin.baseToken == address(0)) {
             payable(msg.sender).transfer(netRevenue);
         } else {
