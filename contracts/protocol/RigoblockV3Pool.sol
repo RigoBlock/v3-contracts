@@ -36,7 +36,7 @@ import { IRigoblockV3Pool } from "./IRigoblockV3Pool.sol";
 contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
 
-    string public constant override VERSION = "HF 3.0.2";
+    string public constant override VERSION = "HF 3.1.0";
 
     address public immutable override AUTHORITY;
 
@@ -51,7 +51,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     uint256 private constant SPREAD_BASE = 10000;
 
-    uint32 private constant INITIAL_LOCKUP = 1;
+    uint32 private constant MAX_LOCKUP = 30 days;
+    uint32 private constant MIN_LOCKUP = 1;
 
     // EIP1967 standard, must be immutable to be compile-time constant.
     address private immutable _implementation;
@@ -355,7 +356,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         /// @notice minimum period is always at least 1 to prevent flash txs.
         require(
-            _minPeriod > 0 && _minPeriod <= 30 days,
+            _minPeriod > MIN_LOCKUP && _minPeriod <= MAX_LOCKUP,
             "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR"
         );
         poolData.minPeriod = _minPeriod;
@@ -676,7 +677,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     function _getMinPeriod() private view returns (uint32) {
-        return poolData.minPeriod == 0 ? INITIAL_LOCKUP : poolData.minPeriod;
+        return poolData.minPeriod == 0 ? MIN_LOCKUP : poolData.minPeriod;
     }
 
     function _getSpread() private view returns (uint256) {
