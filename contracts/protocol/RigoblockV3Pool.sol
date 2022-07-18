@@ -40,21 +40,20 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     address public immutable override AUTHORITY;
 
-    // minimum order size to avoid dust clogging things up
-    // TODO: following will fail with tokens with small precision. Must correctly initialize.
-    uint256 private constant MINIMUM_ORDER = 1e15; // 1e15 = 1 finney
-
     // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
     uint256 private constant FEE_BASE = 10000;
     uint256 private constant INITIAL_SPREAD = 500; // +-5%, in basis points
     uint256 private constant MAX_SPREAD = 1000; // +-10%, in basis points
     uint256 private constant MAX_TRANSACTION_FEE = 100; // maximum 1%
+
+    // minimum order size 1/1000th of unitary value to avoid dust clogging things up
+    uint256 private constant MINIMUM_ORDER_DIVISOR = 1e3;
+
     uint256 private constant SPREAD_BASE = 10000;
 
     uint32 private constant INITIAL_LOCKUP = 1;
 
-    // notice Must be immutable to be compile-time constant.
-    // eip1967 standard
+    // EIP1967 standard, must be immutable to be compile-time constant.
     address private immutable _implementation;
 
     uint8 private immutable COINBASE_DECIMALS;
@@ -237,6 +236,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         override
         returns (uint256 recipientAmount)
     {
+        /// @notice for ether transfers we later require value transferred equals amount in.
+        _assertBiggerThanMinimum(_amountIn);
         // require whitelisted user if kyc is enforced
         if (_isKycEnforced() == true) {
             require(
@@ -246,10 +247,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         }
 
         if (admin.baseToken == address(0)) {
-            _assertBiggerThanMinimum(msg.value);
             require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
         } else {
-            _assertBiggerThanMinimum(_amountIn);
             _safeTransferFrom(msg.sender, address(this), _amountIn);
         }
 
@@ -277,6 +276,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
         /// @notice allocate pool token transfers and log events.
         uint256 buntAmount = _allocateBurnTokens(_amountIn);
+        poolData.totalSupply -= buntAmount;
 
         uint256 markup = buntAmount * _getSpread() / SPREAD_BASE;
         buntAmount -= markup;
@@ -608,7 +608,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             userAccount[msg.sender].balance -= buntAmount;
             emit Transfer(msg.sender, address(0), buntAmount);
         }
-        poolData.totalSupply -= buntAmount;
     }
 
     /// @dev Verifies that a signature is valid.
@@ -655,9 +654,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         );
     }
 
-    function _assertBiggerThanMinimum(uint256 _amount) private pure {
+    function _assertBiggerThanMinimum(uint256 _amount) private view {
         require (
-            _amount >= MINIMUM_ORDER,
+            _amount >= _getUnitaryValue() / MINIMUM_ORDER_DIVISOR,
             "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
         );
     }
