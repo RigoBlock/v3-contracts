@@ -20,6 +20,7 @@ interface IRigoblockV3PoolState {
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
+    /// @return baseToken Address of base token (0 for coinbase).
     /// @return unitaryValue Value of the token in wei unit.
     /// @return spread Value of the spread from unitary value.
     function getData()
@@ -28,6 +29,7 @@ interface IRigoblockV3PoolState {
         returns (
             string memory poolName,
             string memory poolSymbol,
+            address baseToken,
             uint256 unitaryValue,
             uint256 spread
         );
