@@ -18,8 +18,20 @@ describe("Proxy", async () => {
         const AuthorityExtensions = await hre.ethers.getContractFactory("AuthorityExtensions")
         const NavVerifierInstance = await deployments.get("NavVerifier")
         const NavVerifier = await hre.ethers.getContractFactory("NavVerifier")
+        const factory = Factory.attach(RigoblockPoolProxyFactory.address)
+        const { newPoolAddress } = await factory.callStatic.createPool(
+            'testpool',
+            'TEST',
+            AddressZero
+        )
+        await factory.createPool('testpool','TEST',AddressZero)
+        const pool = await hre.ethers.getContractAt(
+            "RigoblockV3Pool",
+            newPoolAddress
+        )
         return {
-            factory: Factory.attach(RigoblockPoolProxyFactory.address),
+            factory,
+            pool,
             registry: Registry.attach(ResitryInstance.address),
             authorityExtensions: AuthorityExtensions.attach(AuthorityExtensionsInstance.address),
             navVerifier: NavVerifier.attach(NavVerifierInstance.address)
@@ -28,37 +40,13 @@ describe("Proxy", async () => {
 
     describe("poolStorage", async () => {
         it('should return pool name from new pool', async () => {
-            const { factory } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            const txReceipt = await factory.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            const pool = await hre.ethers.getContractAt(
-                "RigoblockV3Pool",
-                newPoolAddress
-            )
+            const { factory, pool } = await setupTests()
             const poolData = await pool.getData()
             expect(poolData.poolName).to.be.eq('testpool')
         })
 
         it('should return pool owner', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt(
-                "RigoblockV3Pool",
-                newPoolAddress
-            )
+            const { factory, registry, pool } = await setupTests()
             const [ user1 ] = waffle.provider.getWallets()
             expect(await pool.owner()).to.be.eq(user1.address)
         })
@@ -66,31 +54,14 @@ describe("Proxy", async () => {
 
     describe("setTransactionFee", async () => {
         it('should set the transaction fee', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const { factory, registry, pool } = await setupTests()
             await pool.setTransactionFee(2)
             const poolData = await pool.getAdminData()
             expect(poolData.transactionFee).to.be.eq(2)
         })
 
         it('should not set fee if caller not owner', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt(
-                "RigoblockV3Pool",
-                newPoolAddress
-            )
+            const { factory, registry, pool } = await setupTests()
             const [ user1, user2 ] = waffle.provider.getWallets()
             await pool.setOwner(user2.address)
             await expect(pool.setTransactionFee(2)
@@ -98,14 +69,7 @@ describe("Proxy", async () => {
         })
 
         it('should not set fee higher than 1 percent', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const { factory, registry, pool } = await setupTests()
             const [ user1, user2 ] = waffle.provider.getWallets()
             await expect(
               pool.setTransactionFee(101) // 100 / 10000 = 1%
@@ -115,14 +79,7 @@ describe("Proxy", async () => {
 
     describe("mint", async () => {
         it('should create new tokens', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const { factory, registry, pool } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
             const etherAmount = parseEther("1")
             const [ user1 ] = waffle.provider.getWallets()
@@ -145,14 +102,7 @@ describe("Proxy", async () => {
         })
 
         it('should revert with order below minimum', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const { factory, registry, pool } = await setupTests()
             const etherAmount = parseEther("0.0001")
             const [ user1 ] = waffle.provider.getWallets()
             await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
@@ -162,17 +112,7 @@ describe("Proxy", async () => {
 
     describe("_initializePool", async () => {
         it('should revert when already initialized', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt(
-                "RigoblockV3Pool",
-                newPoolAddress
-            )
+            const { factory, registry, pool } = await setupTests()
             const [ user1 ] = waffle.provider.getWallets()
             await expect(
                 pool._initializePool(
@@ -187,17 +127,7 @@ describe("Proxy", async () => {
 
     describe("setPrices", async () => {
         it('should revert when caller is not owner', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt(
-                "RigoblockV3Pool",
-                newPoolAddress
-            )
+            const { factory, registry, pool } = await setupTests()
             const [ user1, user2 ] = waffle.provider.getWallets()
             await pool.setOwner(user2.address)
             const newPrice = parseEther("1.1")
@@ -214,17 +144,7 @@ describe("Proxy", async () => {
         })
 
         it('should revert when price error', async () => {
-            const { factory, registry } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt(
-                "RigoblockV3Pool",
-                newPoolAddress
-            )
+            const { factory, registry, pool } = await setupTests()
             const newPrice = parseEther("11")
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
@@ -239,14 +159,7 @@ describe("Proxy", async () => {
         })
 
         it('should set price when caller is owner', async () => {
-            const { factory, registry, authorityExtensions, navVerifier } = await setupTests()
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                AddressZero
-            )
-            await factory.createPool('testpool', 'TEST', AddressZero)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const { factory, pool, registry, authorityExtensions, navVerifier } = await setupTests()
             const newValue = parseEther("1.1")
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
@@ -274,7 +187,7 @@ describe("Proxy", async () => {
                 )
             ).to.emit(pool, "NewNav").withArgs(
                 user1.address,
-                newPoolAddress,
+                pool.address,
                 newValue
             )
         })
