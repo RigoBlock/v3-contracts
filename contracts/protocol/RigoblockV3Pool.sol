@@ -355,7 +355,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         /// @notice minimum period is always at least 1 to prevent flash txs.
         require(
-            _minPeriod > MIN_LOCKUP && _minPeriod <= MAX_LOCKUP,
+            _minPeriod >= MIN_LOCKUP && _minPeriod <= MAX_LOCKUP,
             "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR"
         );
         poolData.minPeriod = _minPeriod;
