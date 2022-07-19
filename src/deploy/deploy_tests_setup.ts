@@ -100,7 +100,8 @@ const deploy: DeployFunction = async function (
     from: deployer,
     args: [
       deployer, // mock grg transfer proxy address
-      rigoToken.address
+      rigoToken.address,
+      deployer  // Authorizable(_owner)
     ],
     log: true,
     deterministicDeployment: true,
@@ -108,14 +109,17 @@ const deploy: DeployFunction = async function (
 
   const staking = await deploy("Staking", {
     from: deployer,
-    args: [],
+    args: [deployer], // Authorizable(_owner)
     log: true,
     deterministicDeployment: true,
   });
 
   const stakingProxy = await deploy("StakingProxy", {
     from: deployer,
-    args: [staking.address],
+    args: [
+        staking.address,
+        deployer  // Authorizable(_owner)
+    ],
     log: true,
     deterministicDeployment: true,
   });

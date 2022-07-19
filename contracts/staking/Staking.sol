@@ -35,6 +35,11 @@ contract Staking is
     MixinStake,
     MixinPopRewards
 {
+    constructor(address _owner)
+        Authorizable(_owner)
+    {}
+
+    // TODO: prevent direct calls to this contract
     /// @dev Initialize storage owned by this contract.
     ///      This function should not be called directly.
     ///      The StakingProxy contract will call it in `attachStakingContract()`.

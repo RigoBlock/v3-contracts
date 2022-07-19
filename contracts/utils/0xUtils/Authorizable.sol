@@ -27,6 +27,7 @@ import "./Ownable.sol";
 
 // solhint-disable no-empty-blocks
 abstract contract Authorizable is
+    // TODO: check if should use OwnedUninitialized and remove duplicate contract
     Ownable,
     IAuthorizable
 {
@@ -46,8 +47,8 @@ abstract contract Authorizable is
     address[] public authorities;
 
     /// @dev Initializes the `owner` address.
-    constructor()
-        Ownable()
+    constructor(address _owner)
+        Ownable(_owner)
     {}
 
     /// @dev Authorizes an address.

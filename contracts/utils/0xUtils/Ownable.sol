@@ -26,9 +26,8 @@ abstract contract Ownable is
     /// @return 0 The owner address.
     address public owner;
 
-    constructor ()
-    {
-        owner = msg.sender;
+    constructor (address _owner) {
+        owner = _owner;
     }
 
     modifier onlyOwner() {
