@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.4 <0.8.0;
+pragma solidity >=0.5.4 <0.9.0;
 
 
 abstract contract IAssetProxy {

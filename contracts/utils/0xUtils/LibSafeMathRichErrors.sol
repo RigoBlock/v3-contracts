@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity >=0.5.4 <0.8.0;
+pragma solidity >=0.5.4 <0.9.0;
 
 
 library LibSafeMathRichErrors {

@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.8.0;
+pragma solidity >=0.5.9 <0.9.0;
 
 
 abstract contract IERC20Token {
