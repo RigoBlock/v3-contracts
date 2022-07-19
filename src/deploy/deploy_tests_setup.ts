@@ -117,7 +117,13 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
+  // TODO: test if following condition necessary
+  //await grgTransferProxyInstance.setAuthorizedAddress(grgVault.address)
+
+  const grgVaultInstance = await hre.ethers.getContractAt(
+    "GrgVault",
+    grgVault.address
+  );
 
   const staking = await deploy("Staking", {
     from: deployer,
@@ -140,6 +146,10 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
+
+  await grgVaultInstance.addAuthorizedAddress(deployer)
+  await grgVaultInstance.setStakingProxy(stakingProxy.address)
+  await grgVaultInstance.removeAuthorizedAddress(deployer)
 
   const inflation = await deploy("Inflation", {
     from: deployer,
