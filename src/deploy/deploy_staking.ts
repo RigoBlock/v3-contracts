@@ -8,6 +8,13 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
+  await deploy("ERC20Proxy", {
+    from: deployer,
+    args: [deployer],  // Authorizable(_owner)
+    log: true,
+    deterministicDeployment: true,
+  });
+
   // TODO: define grg address, initialize staking
   await deploy("GrgVault", {
     from: deployer,

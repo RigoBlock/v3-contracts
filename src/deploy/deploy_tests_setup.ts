@@ -94,18 +94,30 @@ const deploy: DeployFunction = async function (
 
   await authorityInstance.setNavVerifier(navVerifier.address)
 
-  // TODO: deploy Tokentransferproxy
+  const grgTransferProxy = await deploy("ERC20Proxy", {
+    from: deployer,
+    args: [deployer],  // Authorizable(_owner)
+    log: true,
+    deterministicDeployment: true,
+  });
 
-  await deploy("GrgVault", {
+  const grgTransferProxyInstance = await hre.ethers.getContractAt(
+    "ERC20Proxy",
+    grgTransferProxy.address
+  );
+
+  const grgVault = await deploy("GrgVault", {
     from: deployer,
     args: [
-      deployer, // mock grg transfer proxy address
+      grgTransferProxy.address,
       rigoToken.address,
       deployer  // Authorizable(_owner)
     ],
     log: true,
     deterministicDeployment: true,
   });
+
+  await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
 
   const staking = await deploy("Staking", {
     from: deployer,
