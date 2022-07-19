@@ -31,26 +31,15 @@ import { IRigoToken as RigoToken } from "../../rigoToken/interfaces/IRigoToken.s
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
 
-    // TODO: since we return these values, we could send input at initialization instead of having hardcoded addresses.
-    // TODO: we could store instance instead of address for gas savings at tx.
-    // Mainnet GrgVault address
-    address constant private GRG_VAULT_ADDRESS = address(0xfbd2588b170Ff776eBb1aBbB58C0fbE3ffFe1931);
+    constructor(address _grgVault, address _poolRegistry, address _rigoToken) {
+        GRG_VAULT_ADDRESS = _grgVault;
+        POOL_REGISTRY_ADDRESS = _poolRegistry;
+        GRG_ADDRESS = _rigoToken;
+    }
 
-    // Ropsten GrgVault address
-    // address constant private GRG_VAULT_ADDRESS = address(0x7fc6a07e4b7b859c80F949A2A7812e00C64b4264);
-    
-    // Mainnet PoolRegistry address
-    // TODO: update registry with new deployed contract
-    address constant private POOL_REGISTRY_ADDRESS = address(0xdE6445484a8dcD9bf35fC95eb4E3990Cc358822e);
-    
-    // Ropsten PoolRegistry address
-    // address constant private POOL_REGISTRY_ADDRESS = address(0x4e868D1dDF940316964eA7673E21bE6CBED8b30B);
-    
-    // Mainnet GRG Address
-    address constant private GRG_ADDRESS = address(0x4FbB350052Bca5417566f188eB2EBCE5b19BC964);
-
-    // Ropsten GRG Address
-    // address constant private GRG_ADDRESS = address(0x6FA8590920c5966713b1a86916f7b0419411e474);
+    address immutable private GRG_VAULT_ADDRESS;
+    address immutable private POOL_REGISTRY_ADDRESS;
+    address immutable private GRG_ADDRESS;
 
     /// @dev An overridable way to access the deployed grgVault.
     ///      Must be view to allow overrides to access state.

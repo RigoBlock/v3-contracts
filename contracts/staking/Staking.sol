@@ -35,8 +35,18 @@ contract Staking is
     MixinStake,
     MixinPopRewards
 {
-    constructor(address _owner)
+    constructor(
+        address _owner,
+        address _grgVault,
+        address _poolRegistry,
+        address _rigoToken
+    )
         Authorizable(_owner)
+        MixinDeploymentConstants(
+            _grgVault,
+            _poolRegistry,
+            _rigoToken
+        )
     {}
 
     // TODO: prevent direct calls to this contract
