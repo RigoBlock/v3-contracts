@@ -119,7 +119,7 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
         onlyOwner
     {
         require(_adapter != address(0), "NULL_ADAPTER_ADDRESS_ERROR");
-        require(whitelisted[_adapter], "ALREADY_WHITELISTED_ADAPTER_ERROR");
+        require(!whitelisted[_adapter], "ALREADY_WHITELISTED_ADAPTER_ERROR");
         adapters.push(_adapter);
         whitelisted[_adapter] = true;
         emit WhitelistedAdapter(_adapter);
@@ -226,7 +226,7 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
         external
         onlyAdmin
     {
-        require(whitelisted[_adapter]);
+        require(whitelisted[_adapter], "ADAPTER_NOT_WHITELISTED_ERROR");
         require(
             blocks.adapterBySelector[_selector] == address(0),
             "SELECTOR_EXISTS_ERROR"
