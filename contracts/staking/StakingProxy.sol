@@ -162,7 +162,8 @@ contract StakingProxy is
         // Alpha must be 0 < x <= 1
         uint32 _cobbDouglasAlphaDenominator = cobbDouglasAlphaDenominator;
         require(
-            cobbDouglasAlphaNumerator <= _cobbDouglasAlphaDenominator && _cobbDouglasAlphaDenominator != 0,
+            cobbDouglasAlphaNumerator <= _cobbDouglasAlphaDenominator &&
+                _cobbDouglasAlphaDenominator != 0,
             "STAKING_PROXY_INVALID_COBB_DOUGLAS_ALPHA_ERROR"
         );
 
