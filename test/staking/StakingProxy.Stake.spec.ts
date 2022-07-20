@@ -5,6 +5,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
+import { timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("StakingProxy-Stake", async () => {
@@ -140,7 +141,60 @@ describe("StakingProxy-Stake", async () => {
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await expect(
               stakingProxy.moveStake(fromInfo, toInfo, amount)
-            ).to.emit(stakingProxy, "MoveStake")
+            ).to.emit(stakingProxy, "MoveStake").withArgs(
+              user1.address,
+              amount,
+              StakeStatus.Undelegated,
+              poolId,
+              StakeStatus.Delegated,
+              poolId
+            )
+        })
+
+        it('should not allow to unstake delegated stake', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            await stakingProxy.createStakingPool(newPoolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await expect(
+              stakingProxy.unstake(amount)
+            ).to.be.revertedWith("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
+        })
+
+        it('should not allow to unstake before epoch end', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            await stakingProxy.createStakingPool(newPoolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.moveStake(toInfo, fromInfo, amount)
+            await expect(
+              stakingProxy.unstake(amount)
+            ).to.be.revertedWith("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
+        })
+
+        it('should allow to unstake before next epoch start', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            await stakingProxy.createStakingPool(newPoolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await stakingProxy.moveStake(toInfo, fromInfo, amount)
+            await expect(
+              stakingProxy.unstake(amount)
+            ).to.emit(stakingProxy, "Unstake").withArgs(user1.address, amount)
         })
     })
 })
