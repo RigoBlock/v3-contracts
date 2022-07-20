@@ -41,6 +41,7 @@ contract StakingProxy is
     /// @param _stakingContract Staking contract to delegate calls to.
     constructor(address _stakingContract, address _owner)
         Authorizable(_owner)
+        MixinStorage()
     {
         // Deployer address must be authorized in order to call `init`
         _addAuthorizedAddress(msg.sender);
