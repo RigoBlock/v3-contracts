@@ -27,6 +27,8 @@ describe("StakingProxy-Pop", async () => {
         const grgToken = GrgToken.attach(GrgTokenInstance.address)
         const grgTransferProxyAddress = GrgTransferProxyInstance.address
         const stakingProxy = Staking.attach(StakingProxyInstance.address)
+        // TODO: authorityExtensions.whitelistAdapter (adapter)
+        // authorityExtensions.whitelistMethod(selector, adapter)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
@@ -62,9 +64,13 @@ describe("StakingProxy-Pop", async () => {
 
         it('should credit pop rewards for existing pool', async () => {
             const { stakingProxy, pop, newPoolAddress } = await setupTests()
+            // await grgToken.transfer(newPoolAddress, amount)
+            // must define pool as pool address on adapter instance
+            // await pool.stake(amount)
+            // await pool.moveStake(0, 1, poolId)
+            // TODO: pool must stake on itself first, must develop adapter
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
-            // TODO: pool must stake on itself first, must develop adapter
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.be.revertedWith("POP_STAKING_POOL_BALANCES_NULL_ERROR")
