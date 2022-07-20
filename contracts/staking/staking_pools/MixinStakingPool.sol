@@ -107,7 +107,8 @@ abstract contract MixinStakingPool is
     {
         IStructs.Pool storage pool = _poolById[poolId];
         require(
-            newStakingPalAddress != address(0) && pool.stakingPal != newStakingPalAddress,
+            newStakingPalAddress != address(0) &&
+                pool.stakingPal != newStakingPalAddress,
             "STAKING_PAL_NULL_OR_SAME_ERROR"
         );
         pool.stakingPal = newStakingPalAddress;
