@@ -31,6 +31,9 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
     Type public types;
 
     mapping(address => Account) public accounts;
+    mapping(address => bool) whitelisted;
+
+    address[] adapters;
 
     struct List {
         address target;
@@ -110,6 +113,36 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
         setWhitelisterInternal(_whitelister, _isWhitelisted);
     }
 
+    // this method will allow whitelisting of methods
+    function whitelistAdapter(address _adapter)
+        external
+        onlyOwner
+    {
+        require(_adapter != address(0), "NULL_ADAPTER_ADDRESS_ERROR");
+        require(whitelisted[_adapter], "ALREADY_WHITELISTED_ADAPTER_ERROR");
+        adapters.push(_adapter);
+        whitelisted[_adapter] = true;
+        emit WhitelistedAdapter(_adapter);
+    }
+
+    /// @notice This method won't allow blacklisting adapter methods at once.
+    function removeAdapter(address _adapter)
+        external
+        onlyOwner
+    {
+        require(whitelisted[_adapter] == true, "ADAPTER_NOT_WHITELISTED_ERROR");
+
+        for (uint256 i = 0; i < adapters.length; i++) {
+            if (adapters[i] == _adapter) {
+                delete whitelisted[_adapter];
+                adapters[i] = adapters[adapters.length - 1];
+                adapters.pop();
+                emit RemovedAdapter(_adapter, msg.sender);
+                break;
+            }
+        }
+    }
+
     /// @dev Allows a whitelister to whitelist an asset
     /// @param _asset Address of the token
     /// @param _isWhitelisted Bool whitelisted
@@ -185,6 +218,7 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
     /// @param _selector Bytes4 hex of the method interface.
     /// @notice setting _adapter to address(0) will effectively revoke method.
     // TODO controlled by owner or whitelister, check desired permissions
+    // TODO: must removeMethod(selector, adapter)
     function whitelistMethod(
         bytes4 _selector,
         address _adapter
@@ -192,6 +226,7 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
         external
         onlyAdmin
     {
+        require(whitelisted[_adapter]);
         require(
             blocks.adapterBySelector[_selector] == address(0),
             "SELECTOR_EXISTS_ERROR"
