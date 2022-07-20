@@ -109,9 +109,10 @@ abstract contract Authorizable is
         internal
         view
     {
-        if (!authorized[msg.sender]) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.SenderNotAuthorizedError(msg.sender));
-        }
+        require(
+            authorized[msg.sender] == true,
+            "AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR"
+        );
     }
 
     /// @dev Authorizes an address.
