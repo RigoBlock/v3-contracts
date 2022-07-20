@@ -35,11 +35,7 @@ abstract contract MixinPopManager is
 {
     /// @dev Asserts that the call is coming from a valid pop.
     modifier onlyPop() {
-        if (!validPops[msg.sender]) {
-            LibRichErrors.rrevert(LibStakingRichErrors.OnlyCallableByPopError(
-                msg.sender
-            ));
-        }
+        require(validPops[msg.sender], "STAKING_ONLY_CALLABLE_BY_POP_ERROR");
         _;
     }
 
@@ -50,12 +46,7 @@ abstract contract MixinPopManager is
         override
         onlyAuthorized
     {
-        if (validPops[addr]) {
-            LibRichErrors.rrevert(LibStakingRichErrors.PopManagerError(
-                LibStakingRichErrors.PopManagerErrorCodes.PopAlreadyRegistered,
-                addr
-            ));
-        }
+        require(!validPops[addr], "STAKING_POP_ALREADY_REGISTERED_ERROR");
         validPops[addr] = true;
         emit PopAdded(addr);
     }
@@ -67,12 +58,7 @@ abstract contract MixinPopManager is
         override
         onlyAuthorized
     {
-        if (!validPops[addr]) {
-            LibRichErrors.rrevert(LibStakingRichErrors.PopManagerError(
-                LibStakingRichErrors.PopManagerErrorCodes.PopNotRegistered,
-                addr
-            ));
-        }
+        require(validPops[addr], "STAKING_POP_NOT_REGISTERED_ERROR");
         validPops[addr] = false;
         emit PopRemoved(addr);
     }
