@@ -54,21 +54,72 @@ describe("Inflation", async () => {
             await expect(
                 stakingProxy.endEpoch()
             ).to.emit(stakingProxy, "EpochFinalized").withArgs(1, 0, 0)
+            //expect(await inflation.epochEnded()).to.be.eq(false)
             expect(await rigoToken.balanceOf(stakingProxy.address)).to.be.eq(0)
             await timeTravel({ days: 14, mine:true })
             await expect(
                 stakingProxy.endEpoch()
             ).to.emit(stakingProxy, "GrgMintEvent")
+            const mintedAmount = await inflation.getEpochInflation()
             expect(await rigoToken.balanceOf(stakingProxy.address)).to.be.not.eq(0)
         })
 
         // when deploying on alt-chains we must set rigoblock dao to address 0 in Rigo token after setup
-        it('should not allow changin rigoblock address in grg after set to 0', async () => {
+        it('should not allow changing rigoblock address in grg after set to 0', async () => {
             const { inflation, stakingProxy, rigoToken } = await setupTests()
             await expect(rigoToken.changeMintingAddress(user2.address)).to.be.reverted
             // following tests will always fail as we set rigoblock address to 0 in grg token after initial setup
             //await expect(inflation.connect(user2).mintInflation(40000)).to.be.reverted
             //expect(await rigoToken.balanceOf(user2.address)).to.be.eq(40000)
+        })
+    })
+
+    describe("timeUntilNextClaim", async () => {
+        it('should return 0 before second epoch', async () => {
+            const { inflation, stakingProxy } = await setupTests()
+            expect(await inflation.timeUntilNextClaim()).to.be.eq(0)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            expect(await inflation.timeUntilNextClaim()).to.be.eq(0)
+        })
+
+        it('should return positive amount after first claim, 0 after 14 days', async () => {
+            const { inflation, stakingProxy } = await setupTests()
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            // after first epoch end will mint for the first time
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            expect(await inflation.timeUntilNextClaim()).to.be.not.eq(0)
+            await timeTravel({ days: 14, mine:true })
+            expect(await inflation.timeUntilNextClaim()).to.be.eq(0)
+        })
+    })
+
+    describe("getEpochInflation", async () => {
+        it('should return 0 before second epoch', async () => {
+            const { inflation, stakingProxy } = await setupTests()
+            // first epoch required to activate stake
+            expect(await inflation.getEpochInflation()).to.be.eq(0)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            expect(await inflation.getEpochInflation()).to.be.eq(0)
+        })
+
+        it('should return epoch inflation after first claim', async () => {
+            const { inflation, stakingProxy, rigoToken } = await setupTests()
+            // first epoch finalization will not mint as no active stake would be possible
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            expect(await inflation.getEpochInflation()).to.be.not.eq(0)
+            const grgSupply = await rigoToken.totalSupply()
+            const epochInflation = Math.abs(Number(grgSupply) * 2 / 100 * 14 / 365)
+            const returnedInflation = await inflation.getEpochInflation()
+            const delta = Math.abs(Number(returnedInflation) - epochInflation)
+            // TODO: check where this approximation error comes from
+            expect(delta).to.be.lt(1e8)
         })
     })
 })
