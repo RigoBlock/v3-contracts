@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.8.0;
+pragma solidity >=0.5.9 <0.9.0;
 
 import "./interfaces/IAuthorizable.sol";
 import "./LibAuthorizableRichErrors.sol";
@@ -27,6 +27,7 @@ import "./Ownable.sol";
 
 // solhint-disable no-empty-blocks
 abstract contract Authorizable is
+    // TODO: check if should use OwnedUninitialized and remove duplicate contract
     Ownable,
     IAuthorizable
 {
@@ -46,8 +47,8 @@ abstract contract Authorizable is
     address[] public authorities;
 
     /// @dev Initializes the `owner` address.
-    constructor()
-        Ownable()
+    constructor(address _owner)
+        Ownable(_owner)
     {}
 
     /// @dev Authorizes an address.
@@ -108,9 +109,10 @@ abstract contract Authorizable is
         internal
         view
     {
-        if (!authorized[msg.sender]) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.SenderNotAuthorizedError(msg.sender));
-        }
+        require(
+            authorized[msg.sender] == true,
+            "AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR"
+        );
     }
 
     /// @dev Authorizes an address.

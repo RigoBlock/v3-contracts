@@ -8,12 +8,20 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
+  await deploy("ERC20Proxy", {
+    from: deployer,
+    args: [deployer],  // Authorizable(_owner)
+    log: true,
+    deterministicDeployment: true,
+  });
+
   // TODO: define grg address, initialize staking
-  await deploy("GrgVault", {
+  const grgVault = await deploy("GrgVault", {
     from: deployer,
     args: [
-      deployer, // mock grg transfer proxy address
-      deployer  // mock grg token address
+        deployer, // mock grg transfer proxy address
+        deployer, // mock grg token address
+        deployer  // Authorizable(_owner)
     ],
     log: true,
     deterministicDeployment: true,
@@ -21,14 +29,22 @@ const deploy: DeployFunction = async function (
 
   const staking = await deploy("Staking", {
     from: deployer,
-    args: [],
+    args: [
+        deployer,  // Authorizable(_owner)
+        grgVault.address,
+        deployer,  // MixinDeploymentConstants(_poolRegistry)
+        deployer,  // MixinDeploymentConstants(_rigoToken)
+    ],
     log: true,
     deterministicDeployment: true,
   });
 
   await deploy("StakingProxy", {
     from: deployer,
-    args: [staking.address],
+    args: [
+        staking.address,
+        deployer  // Authorizable(_owner)
+    ],
     log: true,
     deterministicDeployment: true,
   });

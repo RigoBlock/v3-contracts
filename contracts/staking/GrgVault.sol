@@ -78,9 +78,10 @@ contract GrgVault is
     /// @param _grgTokenAddress Address of the Grg Token.
     constructor(
         address _grgProxyAddress,
-        address _grgTokenAddress
+        address _grgTokenAddress,
+        address _owner
     )
-        Authorizable()
+        Authorizable(_owner)
     {
         grgAssetProxy = IAssetProxy(_grgProxyAddress);
         _grgToken = IERC20Token(_grgTokenAddress);

@@ -106,11 +106,11 @@ abstract contract MixinStakingPool is
         onlyStakingPoolOperator(poolId)
     {
         IStructs.Pool storage pool = _poolById[poolId];
-
-        if (newStakingPalAddress == address(0) || pool.stakingPal == newStakingPalAddress) {
-            return;
-        }
-
+        require(
+            newStakingPalAddress != address(0) &&
+                pool.stakingPal != newStakingPalAddress,
+            "STAKING_PAL_NULL_OR_SAME_ERROR"
+        );
         pool.stakingPal = newStakingPalAddress;
     }
 
@@ -125,7 +125,6 @@ abstract contract MixinStakingPool is
         // load pool and assert that we can decrease
         uint32 currentOperatorShare = _poolById[poolId].operatorShare;
         _assertNewOperatorShare(
-            poolId,
             currentOperatorShare,
             newOperatorShare
         );
@@ -156,15 +155,10 @@ abstract contract MixinStakingPool is
         internal
         view
     {
-        if (_poolById[poolId].operator == NIL_ADDRESS) {
-            // we use the pool's operator as a proxy for its existence
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.PoolExistenceError(
-                    poolId,
-                    false
-                )
-            );
-        }
+        require(
+            _poolById[poolId].operator != NIL_ADDRESS,
+            "STAKING_POOL_DOES_NOT_EXIST_ERROR"
+        );
     }
 
     /// @dev Reverts iff a staking pool does exist.
@@ -173,23 +167,16 @@ abstract contract MixinStakingPool is
         internal
         view
     {
-        if (_poolById[poolId].operator != NIL_ADDRESS) {
-            // we use the pool's operator as a proxy for its existence
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.PoolExistenceError(
-                    poolId,
-                    false
-                )
-            );
-        }
+        require(
+            _poolById[poolId].operator == NIL_ADDRESS,
+            "STAKING_POOL_ALREADY_EXISTS_ERROR"
+        );
     }
 
     /// @dev Reverts iff the new operator share is invalid.
-    /// @param poolId Unique id of pool.
     /// @param currentOperatorShare Current operator share.
     /// @param newOperatorShare New operator share.
     function _assertNewOperatorShare(
-        bytes32 poolId,
         uint32 currentOperatorShare,
         uint32 newOperatorShare
     )
@@ -199,18 +186,10 @@ abstract contract MixinStakingPool is
         // sanity checks
         if (newOperatorShare > PPM_DENOMINATOR) {
             // operator share must be a valid fraction
-            LibRichErrors.rrevert(LibStakingRichErrors.OperatorShareError(
-                LibStakingRichErrors.OperatorShareErrorCodes.OperatorShareTooLarge,
-                poolId,
-                newOperatorShare
-            ));
+            revert("OPERATOR_SHARE_BIGGER_THAN_MAX_ERROR");
         } else if (newOperatorShare > currentOperatorShare) {
             // new share must be less than or equal to the current share
-            LibRichErrors.rrevert(LibStakingRichErrors.OperatorShareError(
-                LibStakingRichErrors.OperatorShareErrorCodes.CanOnlyDecreaseOperatorShare,
-                poolId,
-                newOperatorShare
-            ));
+            revert("OPERATOR_SHARE_BIGGER_THAN_CURRENT_ERROR");
         }
     }
 
@@ -221,14 +200,10 @@ abstract contract MixinStakingPool is
         view
     {
         address operator = _poolById[poolId].operator;
-        if (msg.sender != operator) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.OnlyCallableByPoolOperatorError(
-                    msg.sender,
-                    poolId
-                )
-            );
-        }
+        require(
+            msg.sender == operator,
+            "CALLER_NOT_OPERATOR_ERROR"
+        );
     }
 
     /// @dev Allows caller to join a staking pool as a rigoblock pool account.

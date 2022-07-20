@@ -39,7 +39,8 @@ contract StakingProxy is
 
     /// @dev Constructor.
     /// @param _stakingContract Staking contract to delegate calls to.
-    constructor(address _stakingContract)
+    constructor(address _stakingContract, address _owner)
+        Authorizable(_owner)
         MixinStorage()
     {
         // Deployer address must be authorized in order to call `init`
@@ -153,37 +154,31 @@ contract StakingProxy is
     {
         // Epoch length must be between 5 and 90 days long
         uint256 _epochDurationInSeconds = epochDurationInSeconds;
-        if (_epochDurationInSeconds < 5 days || _epochDurationInSeconds > 90 days) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InvalidParamValueError(
-                    LibStakingRichErrors.InvalidParamValueErrorCodes.InvalidEpochDuration
-            ));
-        }
+        require(
+            _epochDurationInSeconds >= 5 days && _epochDurationInSeconds <= 90 days,
+            "STAKING_PROXY_INVALID_EPOCH_DURATION_ERROR"
+        );
 
         // Alpha must be 0 < x <= 1
         uint32 _cobbDouglasAlphaDenominator = cobbDouglasAlphaDenominator;
-        if (cobbDouglasAlphaNumerator > _cobbDouglasAlphaDenominator || _cobbDouglasAlphaDenominator == 0) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InvalidParamValueError(
-                    LibStakingRichErrors.InvalidParamValueErrorCodes.InvalidCobbDouglasAlpha
-            ));
-        }
+        require(
+            cobbDouglasAlphaNumerator <= _cobbDouglasAlphaDenominator &&
+                _cobbDouglasAlphaDenominator != 0,
+            "STAKING_PROXY_INVALID_COBB_DOUGLAS_ALPHA_ERROR"
+        );
 
         // Weight of delegated stake must be <= 100%
-        if (rewardDelegatedStakeWeight > PPM_DENOMINATOR) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InvalidParamValueError(
-                    LibStakingRichErrors.InvalidParamValueErrorCodes.InvalidRewardDelegatedStakeWeight
-            ));
-        }
+        require(
+            rewardDelegatedStakeWeight <= PPM_DENOMINATOR,
+            "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR"
+        );
 
         // Minimum stake must be > 1
-        if (minimumPoolStake < 2) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InvalidParamValueError(
-                    LibStakingRichErrors.InvalidParamValueErrorCodes.InvalidMinimumPoolStake
-            ));
-        }
+        // TODO: check if is intended as could require 2 * MIN_TOKEN_VALUE
+        require(
+            minimumPoolStake >= 2,
+            "STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR"
+        );
     }
 
     /// @dev Attach a staking contract; future calls will be delegated to the staking contract.

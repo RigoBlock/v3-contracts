@@ -74,12 +74,10 @@ abstract contract MixinScheduler is
 
         // validate that we can increment the current epoch
         uint256 epochEndTime = getCurrentEpochEarliestEndTimeInSeconds();
-        if (epochEndTime > currentBlockTimestamp) {
-            LibRichErrors.rrevert(LibStakingRichErrors.BlockTimestampTooLowError(
-                epochEndTime,
-                currentBlockTimestamp
-            ));
-        }
+        require(
+            epochEndTime <= currentBlockTimestamp,
+            "STAKING_TIMESTAMP_TOO_LOW_ERROR"
+        );
 
         // incremment epoch
         uint256 nextEpoch = currentEpoch.safeAdd(1);

@@ -75,14 +75,10 @@ abstract contract MixinStake is
             undelegatedBalance.nextEpochBalance
         );
 
-        if (amount > currentWithdrawableStake) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InsufficientBalanceError(
-                    amount,
-                    currentWithdrawableStake
-                )
-            );
-        }
+        require(
+            amount <= currentWithdrawableStake,
+            "MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR"
+        );
 
         // burn undelegated stake
         _decreaseCurrentAndNextBalance(
@@ -117,15 +113,12 @@ abstract contract MixinStake is
         address staker = msg.sender;
 
         // Sanity check: no-op if no stake is being moved.
-        if (amount == 0) {
-            return;
-        }
+        require(amount != 0, "MOVE_STAKE_AMOUNT_NULL_ERROR");
 
         // Sanity check: no-op if moving stake from undelegated to undelegated.
         if (from.status == IStructs.StakeStatus.UNDELEGATED &&
-            to.status == IStructs.StakeStatus.UNDELEGATED) {
-            return;
-        }
+            to.status == IStructs.StakeStatus.UNDELEGATED
+        ) { revert("MOVE_STAKE_UNDELEGATED_STATUS_UNCHANGED_ERROR"); }
 
         // handle delegation
         if (from.status == IStructs.StakeStatus.DELEGATED) {
