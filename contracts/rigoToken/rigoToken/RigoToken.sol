@@ -74,8 +74,8 @@ contract RigoToken is UnlimitedAllowanceToken {
         external
         onlyMinter
     {
-        balances[_recipient] = balances[_recipient] + _amount;
-        totalSupply = totalSupply - _amount;
+        balances[_recipient] += _amount;
+        totalSupply += _amount;
         emit TokenMinted(_recipient, _amount);
     }
 
