@@ -24,11 +24,16 @@ describe("StakingProxy-Pop", async () => {
         const StakingProxyInstance = await deployments.get("StakingProxy")
         const Staking = await hre.ethers.getContractFactory("Staking")
         const GrgTransferProxyInstance = await deployments.get("ERC20Proxy")
-        const grgToken = GrgToken.attach(GrgTokenInstance.address)
         const grgTransferProxyAddress = GrgTransferProxyInstance.address
-        const stakingProxy = Staking.attach(StakingProxyInstance.address)
-        // TODO: authorityExtensions.whitelistAdapter (adapter)
-        // authorityExtensions.whitelistMethod(selector, adapter)
+        const AuthorityExtensionsInstance = await deployments.get("AuthorityExtensions")
+        const AuthorityExtensions = await hre.ethers.getContractFactory("AuthorityExtensions")
+        const AStakingInstance = await deployments.get("AStaking")
+        const authorityExtensions = AuthorityExtensions.attach(AuthorityExtensionsInstance.address)
+        //"a694fc3a": "stake(uint256)"
+        await authorityExtensions.whitelistMethod(
+            "0xa694fc3a",
+            AStakingInstance.address
+        )
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
@@ -36,44 +41,64 @@ describe("StakingProxy-Pop", async () => {
             AddressZero
         )
         await factory.createPool('testpool','TEST',AddressZero)
-        const amount = parseEther("100")
-        await grgToken.approve(grgTransferProxyAddress, amount)
-        await stakingProxy.stake(amount)
+        const stakingProxy = Staking.attach(StakingProxyInstance.address)
         await stakingProxy.createStakingPool(newPoolAddress)
-        const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
-        const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
-        await stakingProxy.moveStake(fromInfo, toInfo, amount)
         return {
-            grgToken,
+            grgToken: GrgToken.attach(GrgTokenInstance.address),
             grgVault: GrgVault.attach(GrgVaultInstance.address),
             pop: Pop.attach(PopInstance.address),
             stakingProxy,
             grgTransferProxyAddress,
             newPoolAddress,
-            poolId
+            poolId,
+            authorityExtensions
         }
     });
 
     describe("creditPopRewardToStakingProxy", async () => {
         it('should revert if locked balances are null', async () => {
-            const { stakingProxy, pop, newPoolAddress } = await setupTests()
+            const { stakingProxy, pop, grgToken, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.be.revertedWith("POP_STAKING_POOL_BALANCES_NULL_ERROR")
         })
 
         it('should credit pop rewards for existing pool', async () => {
-            const { stakingProxy, pop, newPoolAddress } = await setupTests()
-            // await grgToken.transfer(newPoolAddress, amount)
+            const { stakingProxy, pop, grgToken, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
             // must define pool as pool address on adapter instance
-            // await pool.stake(amount)
-            // await pool.moveStake(0, 1, poolId)
-            // TODO: pool must stake on itself first, must develop adapter
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
+        })
+
+        it('should revert if caller not pop', async () => {
+            const { stakingProxy, pop, grgToken, newPoolAddress } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            // must define pool as pool address on adapter instance
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(amount)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
-            ).to.be.revertedWith("POP_STAKING_POOL_BALANCES_NULL_ERROR")
+            ).to.be.revertedWith("STAKING_ONLY_CALLABLE_BY_POP_ERROR")
         })
 
         it('should revert if pool not registered', async () => {
