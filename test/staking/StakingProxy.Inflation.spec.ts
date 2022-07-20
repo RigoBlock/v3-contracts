@@ -2,6 +2,7 @@ import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
+import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { timeTravel } from "../utils/utils";
@@ -42,6 +43,25 @@ describe("Inflation", async () => {
             await expect(
                 inflation.mintInflation()
             ).to.be.revertedWith("CALLER_NOT_STAKING_PROXY_ERROR")
+        })
+
+        it('should revert if epoch time shortened but time not enough', async () => {
+            const { inflation, stakingProxy } = await setupTests()
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            const minimumPoolStake = parseEther("100") // 100 GRG
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.setParams(
+                432001,  //uint256 _epochDurationInSeconds,
+                100,    //uint32 _rewardDelegatedStakeWeight,
+                minimumPoolStake,    //uint256 _minimumPoolStake,
+                2,      //uint32 _cobbDouglasAlphaNumerator,
+                3       //uint32 _cobbDouglasAlphaDenominator
+            )
+            // error in inflation will never be returned as staking will revert first
+            await expect(
+                stakingProxy.endEpoch()
+            ).to.be.revertedWith("STAKING_TIMESTAMP_TOO_LOW_ERROR")
         })
 
         it('should wait for epoch 2 before first mint', async () => {
@@ -115,11 +135,11 @@ describe("Inflation", async () => {
             await stakingProxy.endEpoch()
             expect(await inflation.getEpochInflation()).to.be.not.eq(0)
             const grgSupply = await rigoToken.totalSupply()
-            const epochInflation = Math.abs(Number(grgSupply) * 2 / 100 * 14 / 365)
-            const returnedInflation = await inflation.getEpochInflation()
-            const delta = Math.abs(Number(returnedInflation) - epochInflation)
-            // TODO: check where this approximation error comes from
-            expect(delta).to.be.lt(1e8)
+            const epochInflation = Number(grgSupply) * 2 / 100 * 14 / 365
+            expect(Number(await inflation.getEpochInflation())).to.be.eq(epochInflation)
+            // fixed amount per epoch regardless time of claim
+            await timeTravel({ days: 7, mine:true })
+            expect(Number(await inflation.getEpochInflation())).to.be.eq(epochInflation)
         })
     })
 })

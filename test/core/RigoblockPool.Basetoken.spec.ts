@@ -119,7 +119,7 @@ describe("BaseTokenProxy", async () => {
             )
             expect(await pool.totalSupply()).to.be.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(0)
-            const tokenDelta = Math.abs(Number(tokenAmountIn) - netRevenue)
+            const tokenDelta = Number(tokenAmountIn) - netRevenue
             const poolGrgBalance = await grgToken.balanceOf(pool.address)
             expect(poolGrgBalance).to.be.eq(tokenDelta.toString())
 
