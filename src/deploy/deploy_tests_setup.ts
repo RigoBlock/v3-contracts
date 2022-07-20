@@ -47,9 +47,16 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: we should probably remove V3 tag from naming, as with future releases
-  //  proxy should call to different interface, which might change address in
-  //  deterministic deployment.
+  const navVerifier = await deploy("NavVerifier", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await authorityInstance.setNavVerifier(navVerifier.address)
+
+  // as long as authority address is same on all chains, pool implementation will have same address
   const poolImplementation = await deploy("RigoblockV3Pool", {
     from: deployer,
     args: [authority.address],
@@ -57,6 +64,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  // same as above
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
@@ -69,6 +77,7 @@ const deploy: DeployFunction = async function (
 
   await authorityInstance.whitelistFactory(proxyFactory.address, true)
 
+  // same on altchains but different from one deployed on Ethereum
   const rigoToken = await deploy("RigoToken", {
     from: deployer,
     args: [
@@ -85,15 +94,6 @@ const deploy: DeployFunction = async function (
     rigoToken.address
   );
 
-  const navVerifier = await deploy("NavVerifier", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  await authorityInstance.setNavVerifier(navVerifier.address)
-
   const grgTransferProxy = await deploy("ERC20Proxy", {
     from: deployer,
     args: [deployer],  // Authorizable(_owner)
@@ -106,6 +106,7 @@ const deploy: DeployFunction = async function (
     grgTransferProxy.address
   );
 
+  // same on altchains but different from one deployed on Ethereum
   const grgVault = await deploy("GrgVault", {
     from: deployer,
     args: [
@@ -118,13 +119,14 @@ const deploy: DeployFunction = async function (
   });
 
   // TODO: test if following condition necessary
-  //await grgTransferProxyInstance.setAuthorizedAddress(grgVault.address)
+  await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
 
   const grgVaultInstance = await hre.ethers.getContractAt(
     "GrgVault",
     grgVault.address
   );
 
+  // same on altchains but different from one deployed on Ethereum
   const staking = await deploy("Staking", {
     from: deployer,
     args: [
@@ -137,6 +139,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  // same on altchains but different from one deployed on Ethereum
   const stakingProxy = await deploy("StakingProxy", {
     from: deployer,
     args: [
@@ -151,6 +154,7 @@ const deploy: DeployFunction = async function (
   await grgVaultInstance.setStakingProxy(stakingProxy.address)
   await grgVaultInstance.removeAuthorizedAddress(deployer)
 
+  // same on altchains but different from one deployed on Ethereum
   const inflation = await deploy("Inflation", {
     from: deployer,
     args: [
@@ -164,6 +168,7 @@ const deploy: DeployFunction = async function (
   await rigoTokenInstance.changeMintingAddress(inflation.address)
   await rigoTokenInstance.changeRigoblockAddress(AddressZero)
 
+  // same on altchains but different from one deployed on Ethereum
   await deploy("ProofOfPerformance", {
     from: deployer,
     args: [stakingProxy.address],
