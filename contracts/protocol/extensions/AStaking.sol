@@ -28,7 +28,7 @@ import { IRigoToken as GRG } from "../../rigoToken/interfaces/IRigoToken.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract AStaking {
-    
+
     address private immutable STAKING_PROXY_ADDRESS;
     address private immutable GRG_TOKEN_ADDRESS;
     address private immutable GRG_TRASFER_PROXY_ADDRESS;
@@ -39,13 +39,20 @@ contract AStaking {
         GRG_TRASFER_PROXY_ADDRESS = _grgTransferProxy;
     }
 
-    // TODO: check if should restrict to only delegatecall (i.e. require adapter != address(this)
+    /// @notice Creating staking pool if doesn't exist effectively locks direct call.
     function stake(uint256 _amount)
         external
     {
         require(_amount != uint256(0), "STAKE_AMOUNT_NULL_ERROR");
         IStaking staking = IStaking(STAKING_PROXY_ADDRESS);
-        bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
+        bytes32 id = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
+
+        // create staking pool if doesn't exist.
+        bytes32 poolId;
+        if (id == bytes32(0)) {
+            poolId = staking.createStakingPool(address(this));
+            require(poolId != 0, "ASTAKING_POOL_CREATION_ERROR");
+        }
 
         GRG(GRG_TOKEN_ADDRESS).approve(GRG_TRASFER_PROXY_ADDRESS, type(uint256).max);
         staking.stake(_amount);
@@ -60,6 +67,8 @@ contract AStaking {
             }),
             _amount
         );
+
+        // we make sure we remove allowance but do not clear storage
         GRG(GRG_TOKEN_ADDRESS).approve(GRG_TRASFER_PROXY_ADDRESS, uint256(1));
     }
 }
