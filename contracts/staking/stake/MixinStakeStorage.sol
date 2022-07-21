@@ -56,14 +56,10 @@ abstract contract MixinStakeStorage is
         IStructs.StoredBalance memory to = _loadCurrentBalance(toPtr);
 
         // sanity check on balance
-        if (amount > from.nextEpochBalance) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InsufficientBalanceError(
-                    amount,
-                    from.nextEpochBalance
-                )
-            );
-        }
+        require(
+            amount <= from.nextEpochBalance,
+            "STAKING_INSUFFICIENT_BALANCE_ERROR"
+        );
 
         // move stake for next epoch
         from.nextEpochBalance = uint256(from.nextEpochBalance).safeSub(amount).downcastToUint96();

@@ -59,11 +59,10 @@ contract StakingProxy is
     {
         // Sanity check that we have a staking contract to call
         address stakingContract_ = stakingContract;
-        if (stakingContract_ == NIL_ADDRESS) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.ProxyDestinationCannotBeNilError()
-            );
-        }
+        require(
+            stakingContract_ != NIL_ADDRESS,
+            "STAKING_ADDRESS_NULL_ERROR"
+        );
 
         // Call the staking contract with the provided calldata.
         (bool success, bytes memory returnData) = stakingContract_.delegatecall(msg.data);
@@ -117,11 +116,7 @@ contract StakingProxy is
         address staking = stakingContract;
 
         // Ensure that a staking contract has been attached to the proxy.
-        if (staking == NIL_ADDRESS) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.ProxyDestinationCannotBeNilError()
-            );
-        }
+        require(staking != NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
 
         // Execute all of the calls encoded in the provided calldata.
         for (uint256 i = 0; i != dataLength; i++) {

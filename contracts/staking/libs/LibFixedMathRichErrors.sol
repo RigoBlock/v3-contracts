@@ -20,8 +20,6 @@
 
 pragma solidity >=0.5.9 <0.8.0;
 
-import "../../utils/0xUtils/LibRichErrors.sol";
-
 
 library LibFixedMathRichErrors {
 

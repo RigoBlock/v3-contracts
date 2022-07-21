@@ -22,9 +22,7 @@ pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
 import "../../utils/owned/IOwnedUninitialized.sol";
-import "../../utils/0xUtils/LibRichErrors.sol";
 import "../../utils/0xUtils/LibSafeMath.sol";
-import "../libs/LibStakingRichErrors.sol";
 import "../interfaces/IStructs.sol";
 import "../sys/MixinAbstract.sol";
 import "./MixinStakingPoolRewards.sol";
