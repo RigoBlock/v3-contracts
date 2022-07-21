@@ -54,7 +54,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  // TODO: check if should move nav verifier approval to authority extensions entirely
   await authorityInstance.setNavVerifier(navVerifier.address)
+  await authorityExtensionsInstance.whitelistAdapter(navVerifier.address)
 
   // as long as authority address is same on all chains, pool implementation will have same address
   const poolImplementation = await deploy("RigoblockV3Pool", {
@@ -149,6 +151,19 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
+
+  const aStaking = await deploy("AStaking", {
+    from: deployer,
+    args: [
+        stakingProxy.address,
+        rigoToken.address,
+        grgTransferProxy.address
+    ],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await authorityExtensionsInstance.whitelistAdapter(aStaking.address)
 
   await grgVaultInstance.addAuthorizedAddress(deployer)
   await grgVaultInstance.setStakingProxy(stakingProxy.address)

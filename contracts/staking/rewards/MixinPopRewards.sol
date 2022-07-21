@@ -38,6 +38,12 @@ abstract contract MixinPopRewards is
 {
     using LibSafeMath for uint256;
 
+    /// @dev Asserts that the call is coming from a valid pop.
+    modifier onlyPop() {
+        require(validPops[msg.sender], "STAKING_ONLY_CALLABLE_BY_POP_ERROR");
+        _;
+    }
+
     /// @dev Credits the value of a pool's pop reward.
     ///      Only a known RigoBlock pop can call this method. See
     ///      (MixinPopManager).
@@ -57,15 +63,11 @@ abstract contract MixinPopRewards is
 
         // Only attribute the pop reward to a pool if the pool account is
         // registered to a pool.
-        if (poolId == NIL_POOL_ID) {
-            return;
-        }
+        require(poolId != NIL_POOL_ID, "STAKING_POP_REWARD_NULL_ADDRESS_ERROR");
 
         uint256 poolStake = getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
         // Ignore pools with dust stake.
-        if (poolStake < minimumPoolStake) {
-            return;
-        }
+        require(poolStake >= minimumPoolStake, "STAKING_STAKE_BELOW_MINIMUM_ERROR");
 
         // Look up the pool stats and aggregated stats for this epoch.
         uint256 currentEpoch_ = currentEpoch;

@@ -31,6 +31,8 @@ interface IAuthorityExtensions {
     event WhitelisterSet(address indexed whitelister);
     event WhitelistedAsset(address indexed asset, bool approved);
     event WhitelistedExchange(address indexed exchange, bool approved);
+    event WhitelistedAdapter(address indexed adapter);
+    event RemovedAdapter(address indexed adapter, address indexed owner);
     event WhitelistedWrapper(address indexed wrapper, bool approved);
     event WhitelistedProxy(address indexed proxy, bool approved);
     event WhitelistedMethod(bytes4 indexed method, address indexed adapter);
@@ -51,6 +53,13 @@ interface IAuthorityExtensions {
     /// @param _whitelister Address of the whitelister
     /// @param _isWhitelisted Bool whitelisted
     function setWhitelister(address _whitelister, bool _isWhitelisted)
+        external;
+
+    function whitelistAdapter(address _adapter)
+        external;
+
+    /// @notice This method won't allow blacklisting adapter methods at once.
+    function removeAdapter(address _adapter)
         external;
 
     /// @dev Allows a whitelister to whitelist an asset
