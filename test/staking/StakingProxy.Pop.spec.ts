@@ -42,7 +42,6 @@ describe("StakingProxy-Pop", async () => {
         )
         await factory.createPool('testpool','TEST',AddressZero)
         const stakingProxy = Staking.attach(StakingProxyInstance.address)
-        await stakingProxy.createStakingPool(newPoolAddress)
         return {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
             grgVault: GrgVault.attach(GrgVaultInstance.address),
@@ -61,6 +60,7 @@ describe("StakingProxy-Pop", async () => {
             const amount = parseEther("100")
             await grgToken.approve(grgTransferProxyAddress, amount)
             await stakingProxy.stake(amount)
+            await stakingProxy.createStakingPool(newPoolAddress)
             const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
@@ -73,9 +73,10 @@ describe("StakingProxy-Pop", async () => {
             const { stakingProxy, pop, grgToken, newPoolAddress, poolId } = await setupTests()
             const amount = parseEther("100")
             await grgToken.transfer(newPoolAddress, amount)
-            // must define pool as pool address on adapter instance
+            // pool address on adapter interface
             const Pool = await hre.ethers.getContractFactory("AStaking")
             const pool = Pool.attach(newPoolAddress)
+            // will automatically create staking pool if doesn't exist (pool is staking pal)
             await pool.stake(amount)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()

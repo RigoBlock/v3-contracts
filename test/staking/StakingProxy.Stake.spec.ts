@@ -105,6 +105,18 @@ describe("StakingProxy-Stake", async () => {
     })
 
     describe("moveStake", async () => {
+        it('should revert if staking pool does not exist', async () => {
+            const { stakingProxy, grgToken, grgTransferProxyAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await expect(
+              stakingProxy.moveStake(fromInfo, toInfo, amount)
+            ).to.be.revertedWith("STAKING_POOL_DOES_NOT_EXIST_ERROR")
+        })
+
         it('should revert if 0 amount delegated', async () => {
             const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
             const amount = parseEther("100")
