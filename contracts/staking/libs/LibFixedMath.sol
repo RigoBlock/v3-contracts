@@ -112,19 +112,15 @@ library LibFixedMath {
     /// @dev Convert unsigned `n` / 1 to a fixed-point number.
     ///      Reverts if `n` is too large to fit in a fixed-point number.
     function toFixed(uint256 n) internal pure returns (int256 f) {
-        require(int256(n) >= int256(0), "TOO_LARGE");
+        require(int256(n) >= int256(0), "N_TOO_LARGE_ERROR");
         f = _mul(int256(n), FIXED_1);
     }
 
     /// @dev Convert unsigned `n` / `d` to a fixed-point number.
     ///      Reverts if `n` / `d` is too large to fit in a fixed-point number.
     function toFixed(uint256 n, uint256 d) internal pure returns (int256 f) {
-        if (int256(n) < int256(0)) {
-            revert("N_TOO_LARGE_ERROR");
-        }
-        if (int256(d) < int256(0)) {
-            revert("D_TOO_LARGE_ERROR");
-        }
+        require(int256(n) >= int256(0), "N_TOO_LARGE_ERROR");
+        require(int256(d) >= int256(0), "D_TOO_LARGE_ERROR");
         f = _div(_mul(int256(n), FIXED_1), int256(d));
     }
 
@@ -135,15 +131,13 @@ library LibFixedMath {
 
     /// @dev Get the natural logarithm of a fixed-point number 0 < `x` <= LN_MAX_VAL
     function ln(int256 x) internal pure returns (int256 r) {
-        if (x > LN_MAX_VAL) {
-            revert("X_TOO_LARGE_ERROR");
-        }
-        if (x <= 0) {
-            revert("X_TOO_SMALL_ERROR");
-        }
+        require(x <= LN_MAX_VAL, "X_TOO_LARGE_ERROR");
+        require(x > 0, "X_TOO_SMALL_ERROR");
+
         if (x == FIXED_1) {
             return 0;
         }
+
         if (x <= LN_MIN_VAL) {
             return EXP_MIN_VAL;
         }

@@ -47,9 +47,10 @@ abstract contract MixinStakeStorage is
         internal
     {
         // do nothing if pointers are equal
-        if (_arePointersEqual(fromPtr, toPtr)) {
-            revert("STAKING_POINTERS_EQUAL_ERROR");
-        }
+        require(
+            !_arePointersEqual(fromPtr, toPtr),
+            "STAKING_POINTERS_EQUAL_ERROR"
+        );
 
         // load current balances from storage
         IStructs.StoredBalance memory from = _loadCurrentBalance(fromPtr);
