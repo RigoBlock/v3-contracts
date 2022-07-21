@@ -15,8 +15,6 @@
 pragma solidity >=0.5.9 <0.9.0;
 
 import "./interfaces/IOwnable.sol";
-import "./LibOwnableRichErrors.sol";
-import "./LibRichErrors.sol";
 
 
 abstract contract Ownable is
@@ -42,23 +40,15 @@ abstract contract Ownable is
         override
         onlyOwner
     {
-        if (newOwner == address(0)) {
-            LibRichErrors.rrevert(LibOwnableRichErrors.TransferOwnerToZeroError());
-        } else {
-            owner = newOwner;
-            emit OwnershipTransferred(msg.sender, newOwner);
-        }
+        require(newOwner != address(0), "INPUT_ADDRESS_NULL_ERROR");
+        owner = newOwner;
+        emit OwnershipTransferred(msg.sender, newOwner);
     }
 
     function _assertSenderIsOwner()
         internal
         view
     {
-        if (msg.sender != owner) {
-            LibRichErrors.rrevert(LibOwnableRichErrors.OnlyOwnerError(
-                msg.sender,
-                owner
-            ));
-        }
+        require(msg.sender == owner, "CALLER_NOT_OWNER_ERROR");
     }
 }
