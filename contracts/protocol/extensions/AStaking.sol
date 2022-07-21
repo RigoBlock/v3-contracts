@@ -39,6 +39,7 @@ contract AStaking {
         GRG_TRASFER_PROXY_ADDRESS = _grgTransferProxy;
     }
 
+    // TODO: must develop methods undelegateStake, unStake, withdrawDelegatorRewards
     /// @notice Creating staking pool if doesn't exist effectively locks direct call.
     function stake(uint256 _amount)
         external
