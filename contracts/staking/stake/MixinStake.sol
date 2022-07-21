@@ -23,7 +23,6 @@ pragma experimental ABIEncoderV2;
 
 import "../../utils/0xUtils/LibSafeMath.sol";
 import "../staking_pools/MixinStakingPool.sol";
-import "../libs/LibStakingRichErrors.sol";
 
 
 abstract contract MixinStake is

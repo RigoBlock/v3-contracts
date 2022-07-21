@@ -23,7 +23,6 @@ pragma experimental ABIEncoderV2;
 
 import "../../utils/0xUtils/LibSafeMath.sol";
 import "../libs/LibCobbDouglas.sol";
-import "../libs/LibStakingRichErrors.sol";
 import "../interfaces/IStructs.sol";
 import "../staking_pools/MixinStakingPoolRewards.sol";
 import "../../rigoToken/interfaces/IInflation.sol";

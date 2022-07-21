@@ -25,7 +25,6 @@ import "./MixinConstants.sol";
 import "../../utils/0xUtils/Authorizable.sol";
 import "../interfaces/IGrgVault.sol";
 import "../interfaces/IStructs.sol";
-import "../libs/LibStakingRichErrors.sol";
 
 
 // solhint-disable max-states-count, no-empty-blocks
