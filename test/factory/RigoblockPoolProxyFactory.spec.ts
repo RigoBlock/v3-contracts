@@ -146,4 +146,49 @@ describe("ProxyFactory", async () => {
             ).to.be.revertedWith("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR")
         })
     })
+
+    describe("setImplementation", async () => {
+        it('should revert if caller not dao address', async () => {
+            const { factory, registry } = await setupTests()
+            const [ user1, user2 ] = waffle.provider.getWallets()
+            await expect(
+                factory.connect(user2).setImplementation(AddressZero)
+            ).to.be.revertedWith("FACTORY_CALLER_NOT_DAO_ERROR")
+            await expect(
+                factory.setImplementation(user1.address)
+            ).to.be.revertedWith("FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR")
+            await expect(
+                factory.setImplementation(AddressZero)
+            ).to.be.revertedWith("FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR")
+            await expect(
+                factory.setImplementation(registry.address)
+            ).to.emit(factory, "Upgraded").withArgs(registry.address)
+            expect(await factory.implementation()).to.be.eq(registry.address)
+        })
+    })
+
+    describe("setRegistry", async () => {
+        it('should revert if caller not dao address', async () => {
+            const { factory, registry } = await setupTests()
+            const [ user1, user2 ] = waffle.provider.getWallets()
+            await expect(
+                factory.connect(user2).setRegistry(AddressZero)
+            ).to.be.revertedWith("FACTORY_CALLER_NOT_DAO_ERROR")
+            await expect(
+                factory.setRegistry(user1.address)
+            ).to.be.revertedWith("FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR")
+            await expect(
+                factory.setRegistry(AddressZero)
+            ).to.be.revertedWith("FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR")
+            // TODO: check if should prevent same address input, as no hard would be done
+            await expect(
+                factory.setRegistry(factory.address)
+            ).to.emit(factory, "RegistryUpgraded").withArgs(factory.address)
+            expect(await factory.getRegistry()).to.be.eq(factory.address)
+            // pool registry will always emit return error on failure
+            await expect(
+                factory.createPool('testpool', 'TEST', AddressZero)
+            ).to.be.reverted
+        })
+    })
 })
