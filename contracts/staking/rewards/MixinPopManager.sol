@@ -33,12 +33,6 @@ abstract contract MixinPopManager is
     IStakingEvents,
     MixinStorage
 {
-    /// @dev Asserts that the call is coming from a valid pop.
-    modifier onlyPop() {
-        require(validPops[msg.sender], "STAKING_ONLY_CALLABLE_BY_POP_ERROR");
-        _;
-    }
-
     /// @dev Adds a new pop address.
     /// @param addr Address of pop contract to add.
     function addPopAddress(address addr)
