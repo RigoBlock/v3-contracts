@@ -201,7 +201,13 @@ describe("StakingProxy-Stake", async () => {
             const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
             const amount = parseEther("100")
             await grgToken.approve(grgTransferProxyAddress, amount)
+            expect(
+                await stakingProxy.callStatic.getTotalStake(user1.address)
+            ).to.be.eq(0)
             await stakingProxy.stake(amount)
+            expect(
+                await stakingProxy.callStatic.getTotalStake(user1.address)
+            ).to.be.eq(amount)
             await stakingProxy.createStakingPool(newPoolAddress)
             const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
