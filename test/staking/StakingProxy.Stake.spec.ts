@@ -161,6 +161,9 @@ describe("StakingProxy-Stake", async () => {
               StakeStatus.Delegated,
               poolId
             )
+            await expect(
+                stakingProxy.moveStake(toInfo, toInfo, amount)
+            ).to.be.revertedWith("STAKING_POINTERS_EQUAL_ERROR")
         })
 
         it('should not allow to unstake delegated stake', async () => {
@@ -203,6 +206,11 @@ describe("StakingProxy-Stake", async () => {
             const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            const tooBigAmount = parseEther("150")
+            // TODO: check why returned error is k�^-c!� instead (prob max library returned error)
+            await expect(
+                stakingProxy.moveStake(toInfo, fromInfo, tooBigAmount)
+            ).to.be.reverted //revertedWith("STAKING_INSUFFICIENT_BALANCE_ERROR")
             await stakingProxy.moveStake(toInfo, fromInfo, amount)
             await expect(
               stakingProxy.unstake(amount)
