@@ -20,9 +20,6 @@
 
 pragma solidity >=0.5.9 <0.8.0;
 
-import "../../utils/0xUtils/LibRichErrors.sol";
-import "../../utils/0xUtils/LibSafeMathRichErrors.sol";
-
 
 library LibSafeDowncast {
 
@@ -34,12 +31,7 @@ library LibSafeDowncast {
         returns (uint96 b)
     {
         b = uint96(a);
-        if (uint256(b) != a) {
-            LibRichErrors.rrevert(LibSafeMathRichErrors.Uint256DowncastError(
-                LibSafeMathRichErrors.DowncastErrorCodes.VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT96,
-                a
-            ));
-        }
+        require(uint256(b) == a, "VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT96");
         return b;
     }
 
@@ -51,12 +43,7 @@ library LibSafeDowncast {
         returns (uint64 b)
     {
         b = uint64(a);
-        if (uint256(b) != a) {
-            LibRichErrors.rrevert(LibSafeMathRichErrors.Uint256DowncastError(
-                LibSafeMathRichErrors.DowncastErrorCodes.VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT64,
-                a
-            ));
-        }
+        require(uint256(b) == a, "VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT64");
         return b;
     }
 
@@ -68,12 +55,7 @@ library LibSafeDowncast {
         returns (uint32 b)
     {
         b = uint32(a);
-        if (uint256(b) != a) {
-            LibRichErrors.rrevert(LibSafeMathRichErrors.Uint256DowncastError(
-                LibSafeMathRichErrors.DowncastErrorCodes.VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT32,
-                a
-            ));
-        }
+        require(uint256(b) == a, "VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT32");
         return b;
     }
 }

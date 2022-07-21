@@ -47,23 +47,20 @@ abstract contract MixinStakeStorage is
         internal
     {
         // do nothing if pointers are equal
-        if (_arePointersEqual(fromPtr, toPtr)) {
-            return;
-        }
+        require(
+            !_arePointersEqual(fromPtr, toPtr),
+            "STAKING_POINTERS_EQUAL_ERROR"
+        );
 
         // load current balances from storage
         IStructs.StoredBalance memory from = _loadCurrentBalance(fromPtr);
         IStructs.StoredBalance memory to = _loadCurrentBalance(toPtr);
 
         // sanity check on balance
-        if (amount > from.nextEpochBalance) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InsufficientBalanceError(
-                    amount,
-                    from.nextEpochBalance
-                )
-            );
-        }
+        require(
+            amount <= from.nextEpochBalance,
+            "STAKING_INSUFFICIENT_BALANCE_ERROR"
+        );
 
         // move stake for next epoch
         from.nextEpochBalance = uint256(from.nextEpochBalance).safeSub(amount).downcastToUint96();

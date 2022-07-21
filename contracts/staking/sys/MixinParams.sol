@@ -21,13 +21,11 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
-import "../../utils/0xUtils/LibRichErrors.sol";
 import "../immutable/MixinStorage.sol";
 import "../immutable/MixinConstants.sol";
 import "../interfaces/IStakingEvents.sol";
 import "../interfaces/IStakingProxy.sol";
 import "../interfaces/IStaking.sol";
-import "../libs/LibStakingRichErrors.sol";
 
 
 abstract contract MixinParams is
@@ -125,11 +123,7 @@ abstract contract MixinParams is
             cobbDouglasAlphaNumerator != 0 &&
             cobbDouglasAlphaDenominator != 0
         ) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InitializationError(
-                    LibStakingRichErrors.InitializationErrorCodes.MixinParamsAlreadyInitialized
-                )
-            );
+            revert("STAKING_PARAMS_ALREADY_INIZIALIZED_ERROR");
         }
     }
 

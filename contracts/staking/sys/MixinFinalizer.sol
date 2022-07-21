@@ -21,10 +21,8 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
-import "../../utils/0xUtils/LibRichErrors.sol";
 import "../../utils/0xUtils/LibSafeMath.sol";
 import "../libs/LibCobbDouglas.sol";
-import "../libs/LibStakingRichErrors.sol";
 import "../interfaces/IStructs.sol";
 import "../staking_pools/MixinStakingPoolRewards.sol";
 import "../../rigoToken/interfaces/IInflation.sol";
@@ -49,14 +47,10 @@ abstract contract MixinFinalizer is
 
         // Make sure the previous epoch has been fully finalized.
         uint256 numPoolsToFinalizeFromPrevEpoch = aggregatedStatsByEpoch[prevEpoch].numPoolsToFinalize;
-        if (numPoolsToFinalizeFromPrevEpoch != 0) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.PreviousEpochNotFinalizedError(
-                    prevEpoch,
-                    numPoolsToFinalizeFromPrevEpoch
-                )
-            );
-        }
+        require(
+            numPoolsToFinalizeFromPrevEpoch == 0,
+            "STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR"
+        );
 
         // mint epoch inflation, jump first epoch as all regitered pool accounts will become active from following epoch
         //  mint happens before time has passed check, therefore tokens will be allocated even before expiry if method is called
@@ -215,14 +209,10 @@ abstract contract MixinFinalizer is
         IStructs.PoolStats memory poolStats = poolStatsByEpoch[poolId][prevEpoch];
 
         // A pool that has any fees remaining has not been finalized
-        if (poolStats.feesCollected != 0) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.PoolNotFinalizedError(
-                    poolId,
-                    prevEpoch
-                )
-            );
-        }
+        require(
+            poolStats.feesCollected == 0,
+            "STAKING_POOL_NOT_FINALIZED_ERROR"
+        );
     }
 
     /// @dev Computes the reward owed to a pool during finalization.

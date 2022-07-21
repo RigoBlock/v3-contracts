@@ -22,12 +22,10 @@
 pragma solidity 0.7.4;
 
 import "../utils/0xUtils/Authorizable.sol";
-import "../utils/0xUtils/LibRichErrors.sol";
 import "../utils/0xUtils/LibSafeMath.sol";
 import "../utils/0xUtils/IAssetProxy.sol";
 import "../utils/0xUtils/IAssetData.sol";
 import "../utils/0xUtils/IERC20Token.sol";
-import "./libs/LibStakingRichErrors.sol";
 import "./interfaces/IGrgVault.sol";
 
 
@@ -234,11 +232,9 @@ contract GrgVault is
         private
         view
     {
-        if (msg.sender != stakingProxyAddress) {
-            LibRichErrors.rrevert(LibStakingRichErrors.OnlyCallableByStakingContractError(
-                msg.sender
-            ));
-        }
+        require(msg.sender == stakingProxyAddress,
+            "GRG_VAULT_ONLY_CALLABLE_BY_STAKING_PROXY_ERROR"
+        );
     }
 
     /// @dev Asserts that vault is in catastrophic failure mode.
@@ -246,9 +242,9 @@ contract GrgVault is
         private
         view
     {
-        if (!isInCatastrophicFailure) {
-            LibRichErrors.rrevert(LibStakingRichErrors.OnlyCallableIfInCatastrophicFailureError());
-        }
+        require(isInCatastrophicFailure,
+            "GRG_VAULT_NOT_IN_CATASTROPHIC_FAILURE_ERROR"
+        );
     }
 
     /// @dev Asserts that vault is not in catastrophic failure mode.
@@ -256,8 +252,8 @@ contract GrgVault is
         private
         view
     {
-        if (isInCatastrophicFailure) {
-            LibRichErrors.rrevert(LibStakingRichErrors.OnlyCallableIfNotInCatastrophicFailureError());
-        }
+        require(!isInCatastrophicFailure,
+            "GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR"
+        );
     }
 }

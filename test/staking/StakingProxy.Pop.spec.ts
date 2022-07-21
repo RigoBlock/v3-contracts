@@ -84,6 +84,22 @@ describe("StakingProxy-Pop", async () => {
             ).to.be.revertedWith("STAKING_ONLY_CALLABLE_BY_POP_ERROR")
         })
 
+        it('should revert if stake below minimum', async () => {
+            const { stakingProxy, pop, grgToken, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("50")
+            await grgToken.transfer(newPoolAddress, amount)
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.be.revertedWith("STAKING_STAKE_BELOW_MINIMUM_ERROR")
+        })
+
         it('should credit pop rewards for existing pool', async () => {
             const { stakingProxy, pop, grgToken, newPoolAddress, poolId } = await setupTests()
             const amount = parseEther("100")
@@ -97,6 +113,8 @@ describe("StakingProxy-Pop", async () => {
             await stakingProxy.endEpoch()
             await stakingProxy.addAuthorizedAddress(user1.address)
             await stakingProxy.addPopAddress(pop.address)
+            const newEpochPoolStats = await stakingProxy.getStakingPoolStatsThisEpoch(poolId)
+            expect(newEpochPoolStats.feesCollected).to.be.eq(0)
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
@@ -150,12 +168,48 @@ describe("StakingProxy-Pop", async () => {
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             await expect(
-              pop.creditPopRewardToStakingProxy(newPoolAddress)
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
             const newEpochPoolStats = await stakingProxy.getStakingPoolStatsThisEpoch(poolId)
             expect(newEpochPoolStats.feesCollected).to.be.eq(amount)
             expect(newEpochPoolStats.weightedStake).to.be.eq(parseEther("90"))
             expect(newEpochPoolStats.membersStake).to.be.eq(parseEther("100"))
+        })
+    })
+
+    describe("addPopAddress", async () => {
+        it('should revert pop registration if already registered', async () => {
+            const { stakingProxy, pop } = await setupTests()
+            await expect(
+                stakingProxy.addPopAddress(pop.address)
+            ).to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
+            await expect(
+                stakingProxy.connect(user2).addAuthorizedAddress(user2.address)
+            ).to.be.revertedWith("CALLER_NOT_OWNER_ERROR")
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await expect(
+                stakingProxy.addPopAddress(pop.address)
+            ).to.emit(stakingProxy, "PopAdded").withArgs(pop.address)
+            await expect(
+                stakingProxy.addPopAddress(pop.address)
+            ).to.be.revertedWith("STAKING_POP_ALREADY_REGISTERED_ERROR")
+        })
+    })
+
+    describe("removePopAddress", async () => {
+        it('should revert removing non-registered pop', async () => {
+            const { stakingProxy, pop } = await setupTests()
+            await expect(
+                stakingProxy.removePopAddress(pop.address)
+            ).to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await expect(
+                stakingProxy.removePopAddress(pop.address)
+            ).to.be.revertedWith("STAKING_POP_NOT_REGISTERED_ERROR")
+            await stakingProxy.addPopAddress(pop.address)
+            await expect(
+                stakingProxy.removePopAddress(pop.address)
+            ).to.emit(stakingProxy, "PopRemoved").withArgs(pop.address)
         })
     })
 })

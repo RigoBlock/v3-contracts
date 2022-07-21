@@ -161,6 +161,9 @@ describe("StakingProxy-Stake", async () => {
               StakeStatus.Delegated,
               poolId
             )
+            await expect(
+                stakingProxy.moveStake(toInfo, toInfo, amount)
+            ).to.be.revertedWith("STAKING_POINTERS_EQUAL_ERROR")
         })
 
         it('should not allow to unstake delegated stake', async () => {
@@ -172,6 +175,14 @@ describe("StakingProxy-Stake", async () => {
             const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            const undelegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Undelegated)
+            const delegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Delegated)
+            expect(undelegated.currentEpoch).to.be.eq(1)
+            expect(undelegated.currentEpochBalance).to.be.eq(amount)
+            expect(undelegated.nextEpochBalance).to.be.eq(0)
+            expect(delegated.currentEpoch).to.be.eq(1)
+            expect(delegated.currentEpochBalance).to.be.eq(0)
+            expect(delegated.nextEpochBalance).to.be.eq(amount)
             await expect(
               stakingProxy.unstake(amount)
             ).to.be.revertedWith("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
@@ -188,7 +199,25 @@ describe("StakingProxy-Stake", async () => {
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
+            let undelegated
+            let delegated
+            undelegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Undelegated)
+            delegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Delegated)
+            expect(undelegated.currentEpoch).to.be.eq(2)
+            expect(undelegated.currentEpochBalance).to.be.eq(0)
+            expect(undelegated.nextEpochBalance).to.be.eq(0)
+            expect(delegated.currentEpoch).to.be.eq(2)
+            expect(delegated.currentEpochBalance).to.be.eq(amount)
+            expect(delegated.nextEpochBalance).to.be.eq(amount)
             await stakingProxy.moveStake(toInfo, fromInfo, amount)
+            undelegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Undelegated)
+            delegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Delegated)
+            expect(undelegated.currentEpoch).to.be.eq(2)
+            expect(undelegated.currentEpochBalance).to.be.eq(0)
+            expect(undelegated.nextEpochBalance).to.be.eq(amount)
+            expect(delegated.currentEpoch).to.be.eq(2)
+            expect(delegated.currentEpochBalance).to.be.eq(amount)
+            expect(delegated.nextEpochBalance).to.be.eq(0)
             await expect(
               stakingProxy.unstake(amount)
             ).to.be.revertedWith("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
@@ -198,15 +227,66 @@ describe("StakingProxy-Stake", async () => {
             const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
             const amount = parseEther("100")
             await grgToken.approve(grgTransferProxyAddress, amount)
+            expect(
+                await stakingProxy.callStatic.getTotalStake(user1.address)
+            ).to.be.eq(0)
             await stakingProxy.stake(amount)
+            expect(
+                await stakingProxy.callStatic.getTotalStake(user1.address)
+            ).to.be.eq(amount)
             await stakingProxy.createStakingPool(newPoolAddress)
             const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            const tooBigAmount = parseEther("150")
+            // TODO: check why returned error is k�^-c!� instead (prob max library returned error)
+            await expect(
+                stakingProxy.moveStake(toInfo, fromInfo, tooBigAmount)
+            ).to.be.reverted //revertedWith("STAKING_INSUFFICIENT_BALANCE_ERROR")
             await stakingProxy.moveStake(toInfo, fromInfo, amount)
             await expect(
               stakingProxy.unstake(amount)
             ).to.emit(stakingProxy, "Unstake").withArgs(user1.address, amount)
+            const undelegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Undelegated)
+            const delegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Delegated)
+            expect(undelegated.currentEpoch).to.be.eq(1)
+            expect(undelegated.currentEpochBalance).to.be.eq(0)
+            expect(undelegated.nextEpochBalance).to.be.eq(0)
+            expect(delegated.currentEpoch).to.be.eq(1)
+            expect(delegated.currentEpochBalance).to.be.eq(0)
+            expect(delegated.nextEpochBalance).to.be.eq(0)
+        })
+    })
+
+    describe("getGlobalStakeByStatus", async () => {
+        it('should return system stake by status', async () => {
+            const { stakingProxy, grgToken, grgTransferProxyAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            let undelegated
+            let delegated
+            undelegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Undelegated)
+            delegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Delegated)
+            expect(undelegated.currentEpoch).to.be.eq(1)
+            expect(undelegated.currentEpochBalance).to.be.eq(0)
+            expect(undelegated.nextEpochBalance).to.be.eq(0)
+            expect(delegated.currentEpoch).to.be.eq(1)
+            expect(delegated.currentEpochBalance).to.be.eq(0)
+            expect(delegated.nextEpochBalance).to.be.eq(0)
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            undelegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Undelegated)
+            delegated = await stakingProxy.getGlobalStakeByStatus(StakeStatus.Delegated)
+            expect(undelegated.currentEpoch).to.be.eq(1)
+            expect(undelegated.currentEpochBalance).to.be.eq(amount)
+            expect(undelegated.nextEpochBalance).to.be.eq(amount)
+            expect(delegated.currentEpoch).to.be.eq(1)
+            expect(delegated.currentEpochBalance).to.be.eq(0)
+            expect(delegated.nextEpochBalance).to.be.eq(0)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await expect(
+              stakingProxy.moveStake(fromInfo, toInfo, amount)
+            ).to.be.revertedWith("STAKING_POOL_DOES_NOT_EXIST_ERROR")
         })
     })
 })
@@ -218,4 +298,8 @@ export enum StakeStatus {
 
 export class StakeInfo {
     constructor(public status: StakeStatus, public poolId: any) {}
+}
+
+export class StoredBalance {
+    constructor(public currentEpoch: Number, public currentEpochBalance: Number, public nextEpochBalance: Number) {}
 }

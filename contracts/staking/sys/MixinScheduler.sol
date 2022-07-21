@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0 
+// SPDX-License-Identifier: Apache 2.0
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
@@ -21,9 +21,7 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
-import "../../utils/0xUtils/LibRichErrors.sol";
 import "../../utils/0xUtils/LibSafeMath.sol";
-import "../libs/LibStakingRichErrors.sol";
 import "../immutable/MixinStorage.sol";
 import "../interfaces/IStakingEvents.sol";
 import "../interfaces/IStaking.sol";
@@ -91,12 +89,9 @@ abstract contract MixinScheduler is
         internal
         view
     {
-        if (currentEpochStartTimeInSeconds != 0) {
-            LibRichErrors.rrevert(
-                LibStakingRichErrors.InitializationError(
-                    LibStakingRichErrors.InitializationErrorCodes.MixinSchedulerAlreadyInitialized
-                )
-            );
-        }
+        require(
+            currentEpochStartTimeInSeconds == 0,
+            "STAKING_SCHEDULER_ALREADY_INITIALIZED_ERROR"
+        );
     }
 }

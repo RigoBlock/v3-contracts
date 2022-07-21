@@ -20,8 +20,6 @@
 pragma solidity >=0.5.9 <0.9.0;
 
 import "./interfaces/IAuthorizable.sol";
-import "./LibAuthorizableRichErrors.sol";
-import "./LibRichErrors.sol";
 import "./Ownable.sol";
 
 
@@ -68,9 +66,7 @@ abstract contract Authorizable is
         override
         onlyOwner
     {
-        if (!authorized[target]) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.TargetNotAuthorizedError(target));
-        }
+        require(authorized[target], "TARGET_NOT_AUTHORIZED");
         for (uint256 i = 0; i < authorities.length; i++) {
             if (authorities[i] == target) {
                 _removeAuthorizedAddressAtIndex(target, i);
@@ -110,7 +106,7 @@ abstract contract Authorizable is
         view
     {
         require(
-            authorized[msg.sender] == true,
+            authorized[msg.sender],
             "AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR"
         );
     }
@@ -121,14 +117,10 @@ abstract contract Authorizable is
         internal
     {
         // Ensure that the target is not the zero address.
-        if (target == address(0)) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.ZeroCantBeAuthorizedError());
-        }
+        require(target != address(0), "AUTHORIZABLE_NULL_ADDRESS_ERROR");
 
         // Ensure that the target is not already authorized.
-        if (authorized[target]) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.TargetAlreadyAuthorizedError(target));
-        }
+        require(!authorized[target], "AUTHORIZABLE_ALREADY_AUTHORIZED_ERROR");
 
         authorized[target] = true;
         authorities.push(target);
@@ -144,21 +136,9 @@ abstract contract Authorizable is
     )
         internal
     {
-        if (!authorized[target]) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.TargetNotAuthorizedError(target));
-        }
-        if (index >= authorities.length) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.IndexOutOfBoundsError(
-                index,
-                authorities.length
-            ));
-        }
-        if (authorities[index] != target) {
-            LibRichErrors.rrevert(LibAuthorizableRichErrors.AuthorizedAddressMismatchError(
-                authorities[index],
-                target
-            ));
-        }
+        require(authorized[target], "AUTHORIZABLE_ADDRESS_NOT_AUTHORIZED_ERROR");
+        require(index < authorities.length, "AUTHORIZABLE_INDEX_OUT_OF_BOUNDS_ERROR");
+        require(authorities[index] == target, "AUTHORIZABLE_ADDRESS_MISMATCH_ERROR");
 
         delete authorized[target];
         authorities[index] = authorities[authorities.length - 1];

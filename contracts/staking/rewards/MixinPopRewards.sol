@@ -22,9 +22,7 @@ pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
 import "../../utils/0xUtils/LibMath.sol";
-import "../../utils/0xUtils/LibRichErrors.sol";
 import "../../utils/0xUtils/LibSafeMath.sol";
-import "../libs/LibStakingRichErrors.sol";
 import "../interfaces/IStructs.sol";
 import "../sys/MixinFinalizer.sol";
 import "../staking_pools/MixinStakingPool.sol";
@@ -63,7 +61,7 @@ abstract contract MixinPopRewards is
 
         // Only attribute the pop reward to a pool if the pool account is
         // registered to a pool.
-        require(poolId != NIL_POOL_ID, "STAKING_POP_REWARD_NULL_ADDRESS_ERROR");
+        require(poolId != NIL_POOL_ID, "STAKING_NULL_POOL_ID_ERROR");
 
         uint256 poolStake = getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
         // Ignore pools with dust stake.
