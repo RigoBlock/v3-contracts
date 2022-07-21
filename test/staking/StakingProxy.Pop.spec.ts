@@ -84,6 +84,22 @@ describe("StakingProxy-Pop", async () => {
             ).to.be.revertedWith("STAKING_ONLY_CALLABLE_BY_POP_ERROR")
         })
 
+        it('should revert if stake below minimum', async () => {
+            const { stakingProxy, pop, grgToken, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("50")
+            await grgToken.transfer(newPoolAddress, amount)
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.be.revertedWith("STAKING_STAKE_BELOW_MINIMUM_ERROR")
+        })
+
         it('should credit pop rewards for existing pool', async () => {
             const { stakingProxy, pop, grgToken, newPoolAddress, poolId } = await setupTests()
             const amount = parseEther("100")
@@ -97,6 +113,8 @@ describe("StakingProxy-Pop", async () => {
             await stakingProxy.endEpoch()
             await stakingProxy.addAuthorizedAddress(user1.address)
             await stakingProxy.addPopAddress(pop.address)
+            const newEpochPoolStats = await stakingProxy.getStakingPoolStatsThisEpoch(poolId)
+            expect(newEpochPoolStats.feesCollected).to.be.eq(0)
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
