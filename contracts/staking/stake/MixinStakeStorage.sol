@@ -48,7 +48,7 @@ abstract contract MixinStakeStorage is
     {
         // do nothing if pointers are equal
         if (_arePointersEqual(fromPtr, toPtr)) {
-            return;
+            revert("STAKING_POINTERS_EQUAL_ERROR");
         }
 
         // load current balances from storage
