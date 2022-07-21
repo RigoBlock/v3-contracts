@@ -118,6 +118,12 @@ describe("StakingProxy-Pop", async () => {
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await timeTravel({ days: 14, mine:true })
+            await expect(
+                stakingProxy.endEpoch()
+            ).to.be.revertedWith("STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR")
         })
     })
 
