@@ -126,4 +126,17 @@ describe("StakingProxy", async () => {
             )
         })
     })
+
+    describe("init", async () => {
+        it('should revert if already initialized', async () => {
+            const { stakingProxy } = await setupTests()
+            await expect(
+                stakingProxy.init()
+            ).to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await expect(
+                stakingProxy.init()
+            ).to.be.revertedWith("STAKING_SCHEDULER_ALREADY_INITIALIZED_ERROR")
+        })
+    })
 })
