@@ -19,7 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-/// @title Extensions Authority Interface - A helper contract for the extensions adapters.
+/// @title Extensions Authority Interface - A helper contract for the Rigoblock extensions.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IAuthorityExtensions {
@@ -27,45 +27,24 @@ interface IAuthorityExtensions {
     /*
      * EVENTS
      */
-    event AuthoritySet(address indexed authority);
-    event WhitelisterSet(address indexed whitelister);
     event WhitelistedAsset(address indexed asset, bool approved);
     event WhitelistedExchange(address indexed exchange, bool approved);
-    event WhitelistedAdapter(address indexed adapter);
-    event RemovedAdapter(address indexed adapter, address indexed owner);
     event WhitelistedWrapper(address indexed wrapper, bool approved);
     event WhitelistedProxy(address indexed proxy, bool approved);
-    event WhitelistedMethod(bytes4 indexed method, address indexed adapter);
-    event NewSigVerifier(address indexed sigVerifier);
-    event NewExchangeEventful(address indexed exchangeEventful);
-    event NewCasper(address indexed casper);
 
     /*
      * CORE FUNCTIONS
      */
-    /// @dev Allows the owner to whitelist an authority
-    /// @param _authority Address of the authority
-    /// @param _isWhitelisted Bool whitelisted
-    function setAuthority(address _authority, bool _isWhitelisted)
-        external;
-
-    /// @dev Allows the owner to whitelist a whitelister
-    /// @param _whitelister Address of the whitelister
-    /// @param _isWhitelisted Bool whitelisted
-    function setWhitelister(address _whitelister, bool _isWhitelisted)
-        external;
-
-    function whitelistAdapter(address _adapter)
-        external;
-
-    /// @notice This method won't allow blacklisting adapter methods at once.
-    function removeAdapter(address _adapter)
-        external;
-
     /// @dev Allows a whitelister to whitelist an asset
-    /// @param _asset Address of the token
+    /// @param _token Address of the token
     /// @param _isWhitelisted Bool whitelisted
-    function whitelistAsset(address _asset, bool _isWhitelisted)
+    function whitelistToken(address _token, bool _isWhitelisted)
+        external;
+
+    /// @dev Allows a whitelister to whitelist an exchange
+    /// @param _exchange Address of the target exchange
+    /// @param _isWhitelisted Bool whitelisted
+    function whitelistExchange(address _exchange, bool _isWhitelisted)
         external;
 
     /// @dev Allows a whitelister to whitelist an token wrapper
@@ -82,11 +61,11 @@ interface IAuthorityExtensions {
         external;
 
     /// @dev Allows a whitelister to enable trading on a particular exchange
-    /// @param _asset Address of the token
+    /// @param _token Address of the token
     /// @param _exchange Address of the exchange
     /// @param _isWhitelisted Bool whitelisted
-    function whitelistAssetOnExchange(
-        address _asset,
+    function whitelistTokenOnExchange(
+        address _token,
         address _exchange,
         bool _isWhitelisted)
         external;
@@ -101,32 +80,13 @@ interface IAuthorityExtensions {
         bool _isWhitelisted)
         external;
 
-    /// @dev Allows an admin to whitelist a factory
-    /// @param _method Hex of the function ABI
-    function whitelistMethod(
-        bytes4 _method,
-        address _adapter)
-        external;
-
-    /// @dev Allows the owner to set the signature verifier
-    /// @param _sigVerifier Address of the logs contract
-    function setSignatureVerifier(address _sigVerifier)
-        external;
-
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Provides whether an address is an authority
-    /// @param _authority Address of the target authority
-    /// @return Bool is whitelisted
-    function isAuthority(address _authority)
-        external view
-        returns (bool);
-
-    /// @dev Provides whether an asset is whitelisted
-    /// @param _asset Address of the target asset
-    /// @return Bool is whitelisted
-    function isWhitelistedAsset(address _asset)
+    /// @dev Provides whether an asset is whitelisted.
+    /// @param _token Address of the target token.
+    /// @return Bool is whitelisted.
+    function isWhitelistedToken(address _token)
         external view
         returns (bool);
 
@@ -151,17 +111,6 @@ interface IAuthorityExtensions {
         external view
         returns (bool);
 
-    function getApplicationAdapter(bytes4 _selector)
-        external
-        view
-        returns (address);
-
-    /// @dev Provides the address of the signature verifier
-    /// @return Address of the verifier
-    function getSigVerifier()
-        external view
-        returns (address);
-
     /// @dev Checkes whether a token is allowed on an exchange
     /// @param _token Address of the token
     /// @param _exchange Address of the exchange
@@ -174,11 +123,6 @@ interface IAuthorityExtensions {
     /// @param _token Address of the token
     /// @return Bool the token is whitelisted on the exchange
     function canWrapTokenOnWrapper(address _token, address _wrapper)
-        external view
-        returns (bool);
-
-    /// @dev Checkes whether a method is whitelisted.
-    function isMethodAllowed(bytes4 _method)
         external view
         returns (bool);
 }

@@ -19,142 +19,81 @@
 
 pragma solidity 0.8.14;
 
-import { OwnedUninitialized as Owned } from "../../utils/owned/OwnedUninitialized.sol";
+import { IAuthorityCore as Authority } from "../interfaces/IAuthorityCore.sol";
 import { IAuthorityExtensions } from "../interfaces/IAuthorityExtensions.sol";
 
-/// @title AuthorityExtensions - A helper contract for the exchange adapters.
+/// @title AuthorityExtensions - A helper contract for the Rigoblock extensions.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract AuthorityExtensions is Owned, IAuthorityExtensions {
+contract AuthorityExtensions is IAuthorityExtensions {
 
-    BuildingBlocks public blocks;
-    Type public types;
+    // TODO: simplify this contract's storage as well
+    address private immutable AUTHORITY_CORE;
 
-    mapping(address => Account) public accounts;
-    mapping(address => bool) whitelisted;
+    GroupsList private groupsList;
 
-    address[] adapters;
+    mapping(address => address) approvedTokenOnExchange;
+    mapping(address => address) approvedTokenOnWrapper;
+    mapping(address => Permission) private permission;
 
-    struct List {
-        address target;
+    enum Group {
+        EXCHANGE,
+        TOKEN,
+        WRAPPER,
+        PROXY
     }
 
-    struct Type {
-        string types;
-        List[] list;
+    struct Permission {
+        mapping(Group => bool) authorized;
     }
 
-    struct Group {
-        bool whitelister;
-        bool exchange;
-        bool asset;
-        bool authority;
-        bool wrapper;
-        bool proxy;
-    }
-
-    struct Account {
-        address account;
-        bool authorized;
-        mapping(bool => Group) groups; //mapping account to bool authorized to bool group
-    }
-
-    struct BuildingBlocks {
-        address exchangeEventful;
-        address sigVerifier;
-        // TODO: remove caspter variable
-        address casper;
-        mapping(address => bool) initialized;
-        mapping(address => address) adapter;
-        // Mapping of exchange => method => approved
-        mapping(bytes4 => address) adapterBySelector;
-        // TODO: only map address to address, and to address 0 to revoke (will save gas)
-        mapping(address => mapping(address => bool)) allowedTokens;
-        mapping(address => mapping(address => bool)) allowedWrappers;
+    struct GroupsList {
+        address[] exchanges;
+        address[] tokens;
+        address[] wrappers;
+        address[] proxies;
     }
 
     /*
      * MODIFIERS
      */
-    modifier onlyAdmin {
-        require(msg.sender == owner || isWhitelister(msg.sender));
-        _;
-    }
-
     modifier onlyWhitelister {
         require(isWhitelister(msg.sender));
         _;
     }
 
-    constructor(address _owner) {
-      owner = _owner;
+    constructor(address _authorityCore) {
+        AUTHORITY_CORE = _authorityCore;
     }
 
     /*
      * CORE FUNCTIONS
      */
-    /// @dev Allows the owner to whitelist an authority
-    /// @param _authority Address of the authority
-    /// @param _isWhitelisted Bool whitelisted
-    function setAuthority(address _authority, bool _isWhitelisted)
+    /// @dev Allows a whitelister to whitelist a token.
+    /// @param _token Address of the token.
+    /// @param _isWhitelisted Bool whitelisted.
+    // TODO: fix following methods as _isWhitelisted not used for removing, but returned in log
+    function whitelistToken(address _token, bool _isWhitelisted)
         external
-        onlyOwner
-    {
-        setAuthorityInternal(_authority, _isWhitelisted);
-    }
-
-    /// @dev Allows the owner to whitelist a whitelister
-    /// @param _whitelister Address of the whitelister
-    /// @param _isWhitelisted Bool whitelisted
-    function setWhitelister(address _whitelister, bool _isWhitelisted)
-        external
-        onlyOwner
-    {
-        setWhitelisterInternal(_whitelister, _isWhitelisted);
-    }
-
-    // this method will allow whitelisting of methods
-    function whitelistAdapter(address _adapter)
-        external
-        onlyOwner
-    {
-        require(_adapter != address(0), "NULL_ADAPTER_ADDRESS_ERROR");
-        require(!whitelisted[_adapter], "ALREADY_WHITELISTED_ADAPTER_ERROR");
-        adapters.push(_adapter);
-        whitelisted[_adapter] = true;
-        emit WhitelistedAdapter(_adapter);
-    }
-
-    /// @notice This method won't allow blacklisting adapter methods at once.
-    function removeAdapter(address _adapter)
-        external
-        onlyOwner
-    {
-        require(whitelisted[_adapter] == true, "ADAPTER_NOT_WHITELISTED_ERROR");
-
-        for (uint256 i = 0; i < adapters.length; i++) {
-            if (adapters[i] == _adapter) {
-                delete whitelisted[_adapter];
-                adapters[i] = adapters[adapters.length - 1];
-                adapters.pop();
-                emit RemovedAdapter(_adapter, msg.sender);
-                break;
-            }
-        }
-    }
-
-    /// @dev Allows a whitelister to whitelist an asset
-    /// @param _asset Address of the token
-    /// @param _isWhitelisted Bool whitelisted
-    function whitelistAsset(address _asset, bool _isWhitelisted)
-        external
+        override
         onlyWhitelister
     {
-        accounts[_asset].account = _asset;
-        accounts[_asset].authorized = _isWhitelisted;
-        accounts[_asset].groups[_isWhitelisted].asset = _isWhitelisted;
-        types.list.push(List(_asset));
-        emit WhitelistedAsset(_asset, _isWhitelisted);
+        permission[_token].authorized[Group.TOKEN] = true;
+        groupsList.tokens.push(_token);
+        emit WhitelistedAsset(_token, _isWhitelisted);
+    }
+
+    /// @dev Allows a whitelister to whitelist an exchange
+    /// @param _exchange Address of the target exchange
+    /// @param _isWhitelisted Bool whitelisted
+    function whitelistExchange(address _exchange, bool _isWhitelisted)
+        external
+        override
+        onlyWhitelister
+    {
+        permission[_exchange].authorized[Group.EXCHANGE] = true;
+        groupsList.exchanges.push(_exchange);
+        emit WhitelistedExchange(_exchange, _isWhitelisted);
     }
 
     /// @dev Allows a whitelister to whitelist an token wrapper
@@ -162,12 +101,11 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
     /// @param _isWhitelisted Bool whitelisted
     function whitelistWrapper(address _wrapper, bool _isWhitelisted)
         external
+        override
         onlyWhitelister
     {
-        accounts[_wrapper].account = _wrapper;
-        accounts[_wrapper].authorized = _isWhitelisted;
-        accounts[_wrapper].groups[_isWhitelisted].wrapper = _isWhitelisted;
-        types.list.push(List(_wrapper));
+        permission[_wrapper].authorized[Group.WRAPPER] = true;
+        groupsList.wrappers.push(_wrapper);
         emit WhitelistedWrapper(_wrapper, _isWhitelisted);
     }
 
@@ -178,28 +116,28 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
         address _tokenTransferProxy,
         bool _isWhitelisted)
         external
+        override
         onlyWhitelister
     {
-        accounts[_tokenTransferProxy].account = _tokenTransferProxy;
-        accounts[_tokenTransferProxy].authorized = _isWhitelisted;
-        accounts[_tokenTransferProxy].groups[_isWhitelisted].proxy = _isWhitelisted;
-        types.list.push(List(_tokenTransferProxy));
+        permission[_tokenTransferProxy].authorized[Group.PROXY] = true;
+        groupsList.proxies.push(_tokenTransferProxy);
         emit WhitelistedProxy(_tokenTransferProxy, _isWhitelisted);
     }
 
     /// @dev Allows a whitelister to enable trading on a particular exchange
-    /// @param _asset Address of the token
+    /// @param _token Address of the token
     /// @param _exchange Address of the exchange
     /// @param _isWhitelisted Bool whitelisted
-    function whitelistAssetOnExchange(
-        address _asset,
+    function whitelistTokenOnExchange(
+        address _token,
         address _exchange,
         bool _isWhitelisted)
         external
-        onlyAdmin
+        override
+        onlyWhitelister
     {
-        blocks.allowedTokens[_exchange][_asset] = _isWhitelisted;
-        emit WhitelistedAsset(_asset, _isWhitelisted);
+        approvedTokenOnExchange[_token] = _exchange;
+        emit WhitelistedAsset(_token, _isWhitelisted);
     }
 
     /// @dev Allows a whitelister to enable assiciate wrappers to a token
@@ -208,112 +146,62 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
     /// @param _isWhitelisted Bool whitelisted
     function whitelistTokenOnWrapper(address _token, address _wrapper, bool _isWhitelisted)
         external
-        onlyAdmin
+        override
+        onlyWhitelister
     {
-        blocks.allowedWrappers[_wrapper][_token] = _isWhitelisted;
+        approvedTokenOnWrapper[_token] = _wrapper;
         emit WhitelistedAsset(_token, _isWhitelisted);
-    }
-
-    /// @dev Allows an admin to whitelist a factory.
-    /// @param _selector Bytes4 hex of the method interface.
-    /// @notice setting _adapter to address(0) will effectively revoke method.
-    // TODO controlled by owner or whitelister, check desired permissions
-    // TODO: must removeMethod(selector, adapter)
-    function whitelistMethod(
-        bytes4 _selector,
-        address _adapter
-    )
-        external
-        onlyAdmin
-    {
-        require(whitelisted[_adapter], "ADAPTER_NOT_WHITELISTED_ERROR");
-        require(
-            blocks.adapterBySelector[_selector] == address(0),
-            "SELECTOR_EXISTS_ERROR"
-        );
-        blocks.adapterBySelector[_selector] = _adapter;
-        emit WhitelistedMethod(_selector, _adapter);
-    }
-
-    /// @dev Allows the owner to set the signature verifier
-    /// @param _sigVerifier Address of the verifier contract
-    function setSignatureVerifier(address _sigVerifier)
-        external
-        onlyOwner
-    {
-        blocks.sigVerifier = _sigVerifier;
-        emit NewSigVerifier(blocks.sigVerifier);
     }
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Provides whether an address is an authority
-    /// @param _authority Address of the target authority
-    /// @return Bool is whitelisted
-    function isAuthority(address _authority)
-        external view
+    /// @dev Provides whether an asset is whitelisted.
+    /// @param _token Address of the target token.
+    /// @return Bool is whitelisted.
+    function isWhitelistedToken(address _token)
+        external
+        view
+        override
         returns (bool)
     {
-        return accounts[_authority].groups[true].authority;
-    }
-
-    /// @dev Provides whether an asset is whitelisted
-    /// @param _asset Address of the target asset
-    /// @return Bool is whitelisted
-    function isWhitelistedAsset(address _asset)
-        external view
-        returns (bool)
-    {
-        return accounts[_asset].groups[true].asset;
+        return permission[_token].authorized[Group.TOKEN];
     }
 
     /// @dev Provides whether an exchange is whitelisted
     /// @param _exchange Address of the target exchange
     /// @return Bool is whitelisted
     function isWhitelistedExchange(address _exchange)
-        external view
+        external
+        view
+        override
         returns (bool)
     {
-        return accounts[_exchange].groups[true].exchange;
+        return permission[_exchange].authorized[Group.EXCHANGE];
     }
 
     /// @dev Provides whether a token wrapper is whitelisted
     /// @param _wrapper Address of the target exchange
     /// @return Bool is whitelisted
     function isWhitelistedWrapper(address _wrapper)
-        external view
+        external
+        view
+        override
         returns (bool)
     {
-        return accounts[_wrapper].groups[true].wrapper;
+        return permission[_wrapper].authorized[Group.WRAPPER];
     }
 
     /// @dev Provides whether a proxy is whitelisted
     /// @param _tokenTransferProxy Address of the proxy
     /// @return Bool is whitelisted
     function isWhitelistedProxy(address _tokenTransferProxy)
-        external view
-        returns (bool)
-    {
-        return accounts[_tokenTransferProxy].groups[true].proxy;
-    }
-
-    function getApplicationAdapter(bytes4 _selector)
         external
         view
         override
-        returns (address)
+        returns (bool)
     {
-        return blocks.adapterBySelector[_selector];
-    }
-
-    /// @dev Provides the address of the signature verifier
-    /// @return Address of the verifier
-    function getSigVerifier()
-        external view
-        returns (address)
-    {
-        return blocks.sigVerifier;
+        return permission[_tokenTransferProxy].authorized[Group.PROXY];
     }
 
     /// @dev Checkes whether a token is allowed on an exchange
@@ -321,10 +209,12 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
     /// @param _exchange Address of the exchange
     /// @return Bool the token is whitelisted on the exchange
     function canTradeTokenOnExchange(address _token, address _exchange)
-        external view
+        external
+        view
+        override
         returns (bool)
     {
-        return blocks.allowedTokens[_exchange][_token];
+        return approvedTokenOnExchange[_token] == _exchange;
     }
 
     /// @dev Checkes whether a token is allowed on a wrapper
@@ -332,63 +222,25 @@ contract AuthorityExtensions is Owned, IAuthorityExtensions {
     /// @param _wrapper Address of the token wrapper
     /// @return Bool the token is whitelisted on the exchange
     function canWrapTokenOnWrapper(address _token, address _wrapper)
-        external view
+        external
+        view
+        override
         returns (bool)
     {
-        return blocks.allowedWrappers[_wrapper][_token];
-    }
-
-    /// @dev Checkes whether a method is allowed on an exchange
-    /// @param _selector Bytes4 of the function signature
-    /// @return Bool the method is allowed
-    function isMethodAllowed(bytes4 _selector)
-        external view
-        returns (bool)
-    {
-        return (blocks.adapterBySelector[_selector] != address(0));
+        return approvedTokenOnWrapper[_token] == _wrapper;
     }
 
     /*
      * INTERNAL FUNCTIONS
      */
-    /// @dev Allows to whitelist an authority
-    /// @param _authority Address of the authority
-    /// @param _isWhitelisted Bool whitelisted
-    function setAuthorityInternal(
-        address _authority,
-        bool _isWhitelisted)
-        internal
-    {
-        accounts[_authority].account = _authority;
-        accounts[_authority].authorized = _isWhitelisted;
-        accounts[_authority].groups[_isWhitelisted].authority = _isWhitelisted;
-        setWhitelisterInternal(_authority, _isWhitelisted);
-        types.list.push(List(_authority));
-        emit AuthoritySet(_authority);
-    }
-
-    /// @dev Allows the owner to whitelist a whitelister
-    /// @param _whitelister Address of the whitelister
-    /// @param _isWhitelisted Bool whitelisted
-    function setWhitelisterInternal(
-        address _whitelister,
-        bool _isWhitelisted)
-        internal
-    {
-        accounts[_whitelister].account = _whitelister;
-        accounts[_whitelister].authorized = _isWhitelisted;
-        accounts[_whitelister].groups[_isWhitelisted].whitelister = _isWhitelisted;
-        types.list.push(List(_whitelister));
-        emit WhitelisterSet(_whitelister);
-    }
-
     /// @dev Provides whether an address is whitelister
-    /// @param _whitelister Address of the target whitelister
+    /// @param _target Address of the target whitelister
     /// @return Bool is whitelisted
-    function isWhitelister(address _whitelister)
-        internal view
+    function isWhitelister(address _target)
+        internal
+        view
         returns (bool)
     {
-        return accounts[_whitelister].groups[true].whitelister;
+        return Authority(AUTHORITY_CORE).isWhitelister(_target);
     }
 }
