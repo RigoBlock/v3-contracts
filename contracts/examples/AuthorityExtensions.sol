@@ -19,8 +19,8 @@
 
 pragma solidity 0.8.14;
 
-import { IAuthorityCore as Authority } from "../interfaces/IAuthorityCore.sol";
-import { IAuthorityExtensions } from "../interfaces/IAuthorityExtensions.sol";
+import { IAuthorityCore as Authority } from "../protocol/interfaces/IAuthorityCore.sol";
+import { IAuthorityExtensions } from "./IAuthorityExtensions.sol";
 
 /// @title AuthorityExtensions - A helper contract for the Rigoblock extensions.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
