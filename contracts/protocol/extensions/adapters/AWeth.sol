@@ -19,20 +19,10 @@
 
 pragma solidity 0.8.14;
 
-import { IAuthorityCore as Authority } from "../../interfaces/IAuthorityCore.sol";
-import { IAuthorityExtensions as ExtensionsAuthority } from "../../interfaces/IAuthorityExtensions.sol";
 
 abstract contract WETH9 {
     function deposit() external payable virtual;
     function withdraw(uint256 wad) external virtual;
-}
-
-abstract contract Drago {
-
-    address public owner;
-
-    function getEventful() external view virtual returns (address);
-    function getExtensionsAuthority() external view virtual returns (address);
 }
 
 /// @title WETH adapter - A helper to wrap ETH to the wrapper token.
@@ -40,75 +30,21 @@ abstract contract Drago {
 // solhint-disable-next-line
 contract AWeth {
 
+    address public immutable WETH_ADDRESS;
+
+    constructor(address _wethAddress) {
+        WETH_ADDRESS = _wethAddress;
+    }
+
     /// @dev allows a manager to deposit eth to an approved eth wrapper.
-    /// @param wrapper Address of the target wrapper.
     /// @param amount Value of the Eth in wei
-    // TODO: must initialize immutable WETH9 address
-    function wrapEth(
-        address payable wrapper,
-        uint256 amount)
-        external
-    {
-        require(
-            Drago(
-                address(uint160(address(this)))
-            )
-            .owner() == msg.sender
-        );
-        require(
-            ExtensionsAuthority(
-                Drago(
-                    address(uint160(address(this)))
-                )
-                .getExtensionsAuthority()
-            )
-            .isWhitelistedWrapper(wrapper)
-        );
-        require(
-            ExtensionsAuthority(
-                Drago(
-                    address(uint160(address(this)))
-                )
-                .getExtensionsAuthority()
-            )
-            .canWrapTokenOnWrapper(address(0), wrapper)
-        );
-        WETH9(wrapper).deposit{value: amount}();
+    function wrapEth(uint256 amount) external {
+        WETH9(WETH_ADDRESS).deposit{value: amount}();
     }
 
     /// @dev allows a manager to withdraw ETH from WETH9
-    /// @param wrapper Address of the weth9 contract
     /// @param amount Value of the Eth in wei
-    function unwrapEth(
-        address payable wrapper,
-        uint256 amount)
-        external
-    {
-        require(
-            Drago(
-                address(uint160(address(this)))
-            )
-            .owner() == msg.sender
-        );
-        require(
-            ExtensionsAuthority(
-                Drago(
-                    address(uint160(address(this)))
-                )
-                .getExtensionsAuthority()
-            )
-            .isWhitelistedWrapper(wrapper)
-        );
-        require(
-            ExtensionsAuthority(
-                Drago(
-                    address(uint160(address(this)))
-                )
-                .getExtensionsAuthority()
-            )
-            .canWrapTokenOnWrapper(address(0), wrapper)
-        );
-
-        WETH9(wrapper).withdraw(amount);
+    function unwrapEth(uint256 amount) external {
+        WETH9(WETH_ADDRESS).withdraw(amount);
     }
 }
