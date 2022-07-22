@@ -25,12 +25,12 @@ describe("StakingProxy-Pop", async () => {
         const Staking = await hre.ethers.getContractFactory("Staking")
         const GrgTransferProxyInstance = await deployments.get("ERC20Proxy")
         const grgTransferProxyAddress = GrgTransferProxyInstance.address
-        const AuthorityExtensionsInstance = await deployments.get("AuthorityExtensions")
-        const AuthorityExtensions = await hre.ethers.getContractFactory("AuthorityExtensions")
+        const AuthorityCoreInstance = await deployments.get("AuthorityCore")
+        const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
         const AStakingInstance = await deployments.get("AStaking")
-        const authorityExtensions = AuthorityExtensions.attach(AuthorityExtensionsInstance.address)
+        const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
         //"a694fc3a": "stake(uint256)"
-        await authorityExtensions.whitelistMethod(
+        await authority.whitelistMethod(
             "0xa694fc3a",
             AStakingInstance.address
         )
@@ -49,8 +49,7 @@ describe("StakingProxy-Pop", async () => {
             stakingProxy,
             grgTransferProxyAddress,
             newPoolAddress,
-            poolId,
-            authorityExtensions
+            poolId
         }
     });
 

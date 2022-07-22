@@ -31,7 +31,7 @@ describe("PoolRegistry", async () => {
             const mockBytes32 = hre.ethers.utils.formatBytes32String('mock')
             await expect(
                 registry.register(AddressZero, 'testpool', 'TEST', mockBytes32)
-            ).to.be.revertedWith("REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR")
+            ).to.be.revertedWith("REGISTRY_FACTORY_NOT_WHITELISTED_ERROR")
         })
 
         it('should revert if address already registered', async () => {
