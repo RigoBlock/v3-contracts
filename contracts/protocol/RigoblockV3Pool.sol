@@ -20,8 +20,6 @@
 pragma solidity 0.8.14;
 
 import { IAuthorityCore as Authority } from "./interfaces/IAuthorityCore.sol";
-// TODO: modify import after contracts renaming
-import { IAuthorityExtensions as AuthorityExtensions } from "./interfaces/IAuthorityExtensions.sol";
 import { INavVerifier as NavVerifier } from "./interfaces/INavVerifier.sol";
 import { IKyc as Kyc } from "./interfaces/IKyc.sol";
 import { IERC20 as Token } from "./interfaces/IERC20.sol";
