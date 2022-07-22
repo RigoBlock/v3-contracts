@@ -30,8 +30,32 @@ describe("PoolRegistry", async () => {
             const { registry } = await setupTests()
             const mockBytes32 = hre.ethers.utils.formatBytes32String('mock')
             await expect(
-                registry.register(AddressZero, ' testpool', 'TEST', mockBytes32)
+                registry.register(AddressZero, 'testpool', 'TEST', mockBytes32)
             ).to.be.revertedWith("REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR")
+        })
+
+        it('should revert if address already registered', async () => {
+            const { authority, registry } = await setupTests()
+            await authority.whitelistFactory(user1.address, 1)
+            const mockBytes32 = hre.ethers.utils.formatBytes32String('mock')
+            await registry.register(AddressZero, 'testpool', 'TEST', mockBytes32)
+            await expect(
+                registry.register(AddressZero, ' testpool', 'TEST', mockBytes32)
+            ).to.be.revertedWith("REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR")
+        })
+
+        it('should revert if name longer than 32 characters', async () => {
+            const { authority, registry } = await setupTests()
+            await authority.whitelistFactory(user1.address, 1)
+            const mockBytes32 = hre.ethers.utils.formatBytes32String('mock')
+            const longName = '40 characters are way too long for a name'
+            const shortName = 'sho'
+            await expect(
+                registry.register(AddressZero, longName, 'TEST', mockBytes32)
+            ).to.be.revertedWith("REGISTRY_NAME_LENGTH_ERROR")
+            await expect(
+                registry.register(AddressZero, shortName, 'TEST', mockBytes32)
+            ).to.be.revertedWith("REGISTRY_NAME_LENGTH_ERROR")
         })
     })
 
