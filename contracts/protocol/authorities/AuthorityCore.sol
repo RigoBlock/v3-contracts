@@ -88,7 +88,6 @@ contract AuthorityCore is
         onlyOwner
     {
         _changePermission(_factory, _isWhitelisted, PermissionType.FACTORY);
-        _changePermission(_factory, _isWhitelisted, PermissionType.AUTHORITY);
     }
 
     /// @dev Allows the owner to set the extensions authority.
@@ -137,6 +136,7 @@ contract AuthorityCore is
     /*
      * INTERNAL FUNCTIONS
      */
+    // TODO: if not using whitelisters, remove. We are using in extensions auth but here is defined internal.
     /// @dev Provides whether an address is whitelister.
     /// @param _whitelister Address of the target whitelister.
     /// @return Bool is whitelisted.
