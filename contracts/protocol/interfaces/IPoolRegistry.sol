@@ -41,13 +41,15 @@ interface IPoolRegistry {
         bytes32 value
     );
 
+    event AuthorityChanged(address indexed athority);
+    event RigoblockDaoChanged(address indexed rigoblockDaoAddress);
+
     /*
      * STORAGE
     */
-    function rigoblockDaoAddress()
-        external
-        view
-        returns (address);
+    function authority() external view returns (address);
+
+    function rigoblockDaoAddress()external view returns (address);
 
     /*
      * CORE FUNCTIONS

@@ -30,9 +30,8 @@ import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
 // solhint-disable-next-line
 contract PoolRegistry is IPoolRegistry {
 
+    address public authority;
     address public rigoblockDaoAddress;
-
-    address private authority;
 
     mapping(address => bytes32) private mapIdByAddress;
 
@@ -47,7 +46,7 @@ contract PoolRegistry is IPoolRegistry {
      */
     modifier onlyAuthority {
         require(
-            Authority(authority).isAuthority(msg.sender) == true,
+            Authority(authority).isAuthority(msg.sender),
             "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
         );
         _;
@@ -64,7 +63,7 @@ contract PoolRegistry is IPoolRegistry {
     modifier onlyRigoblockDao {
         require(
             msg.sender == rigoblockDaoAddress,
-            "FACTORY_CALLER_NOT_DAO_ERROR"
+            "REGISTRY_CALLER_NOT_DAO_ERROR"
         );
         _;
     }
@@ -145,10 +144,15 @@ contract PoolRegistry is IPoolRegistry {
         onlyRigoblockDao
     {
         require(
+            _authority != authority,
+            "REGISTRY_SAME_INPUT_ADDRESS_ERROR"
+        );
+        require(
             _isContract(_authority),
-            "FACTORY_NEW_AUTHORITY_NOT_CONTRACT_ERROR"
+            "REGISTRY_NEW_AUTHORITY_NOT_CONTRACT_ERROR"
         );
         authority = _authority;
+        emit AuthorityChanged(_authority);
     }
 
     /// @dev Allows Rigoblock DAO/factory to update its address
@@ -160,10 +164,15 @@ contract PoolRegistry is IPoolRegistry {
         onlyRigoblockDao
     {
         require(
+            _newRigoblockDao != rigoblockDaoAddress,
+            "REGISTRY_SAME_INPUT_ADDRESS_ERROR"
+        );
+        require(
             _isContract(_newRigoblockDao),
-            "FACTORY_NEW_DAO_NOT_CONTRACT_ERROR"
+            "REGISTRY_NEW_DAO_NOT_CONTRACT_ERROR"
         );
         rigoblockDaoAddress = _newRigoblockDao;
+        emit RigoblockDaoChanged(_newRigoblockDao);
     }
 
     /*
