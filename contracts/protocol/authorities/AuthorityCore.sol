@@ -170,18 +170,20 @@ contract AuthorityCore is
             }
         } else {
             require(accounts[_target].authorized[_permissionType], "NOT_AUTHORIZED");
+            delete accounts[_target].authorized[_permissionType];
+
             for (uint i = 0; i < list.authorities.length; i++) {
                 if (list.authorities[i] == _target) {
-                    delete accounts[_target].authorized[_permissionType];
-                    list.authorities[i] = list.authorities[list.authorities.length - 1];
-
                     if (_permissionType == PermissionType.AUTHORITY) {
+                        list.authorities[i] = list.authorities[list.authorities.length - 1];
                         list.authorities.pop();
                         emit RemovedAuthority(_target);
                     } else if (_permissionType == PermissionType.FACTORY) {
+                        list.factories[i] = list.factories[list.factories.length - 1];
                         list.factories.pop();
                         emit RemovedFactory(_target);
                     } else {
+                        list.whitelisters[i] = list.whitelisters[list.whitelisters.length - 1];
                         list.whitelisters.pop();
                         emit RemovedWhitelister(_target);
                     }
