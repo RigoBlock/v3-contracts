@@ -29,8 +29,12 @@ interface IAuthorityCore {
      */
     event AuthoritySet(address indexed authority);
     event WhitelisterSet(address indexed whitelister);
+    // TODO: check if should return msg.sender as well
+    event WhitelistedAdapter(address indexed adapter);
     event WhitelistedFactory(address indexed factory);
+    event WhitelistedMethod(bytes4 indexed selector, address indexed adapter);
     event RemovedAuthority(address indexed authority);
+    event RemovedAdapter(address indexed adapter);
     event RemovedFactory(address indexed factory);
     event RemovedWhitelister(address indexed whitelsiter);
     event NewExtensionsAuthority(address indexed extensionsAuthority);
@@ -43,10 +47,27 @@ interface IAuthorityCore {
     function setWhitelister(address _whitelister, bool _isWhitelisted) external;
     function whitelistFactory(address _factory, bool _isWhitelisted) external;
 
+    function whitelistAdapter(address _adapter, bool _isWhitelisted) external;
+
+    function whitelistMethod(
+        bytes4 _selector,
+        address _adapter
+    )
+        external;
+
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function isAuthority(address _authority) external view returns (bool);
-    function isWhitelistedFactory(address _factory) external view returns (bool);
+    function isAuthority(address _target) external view returns (bool);
+    function isWhitelistedFactory(address _target) external view returns (bool);
+    function getApplicationAdapter(bytes4 _selector) external view returns (address);
     function getAuthorityExtensions() external view returns (address);
+
+    /// @dev Provides whether an address is whitelister.
+    /// @param _target Address of the target whitelister.
+    /// @return Bool is whitelisted.
+    function isWhitelister(address _target)
+        external
+        view
+        returns (bool);
 }
