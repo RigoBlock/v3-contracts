@@ -87,12 +87,16 @@ describe("Inflation", async () => {
         // when deploying on alt-chains we must set rigoblock dao to address 0 in Rigo token after setup
         it('should not allow changing rigoblock address in grg after set to 0', async () => {
             const { inflation, stakingProxy, rigoToken } = await setupTests()
-            // GRG does not return rich errors. Note: we set minter to 0 after initial setup
-            await expect(rigoToken.changeMintingAddress(user2.address)).to.be.reverted
+            expect(await rigoToken.minter()).to.be.eq(inflation.address)
             await expect(rigoToken.mintToken(AddressZero, 5)).to.be.reverted
-            // following tests will always fail as we set rigoblock address to 0 in grg token after initial setup
-            //await expect(inflation.connect(user2).mintInflation(40000)).to.be.reverted
-            //expect(await rigoToken.balanceOf(user2.address)).to.be.eq(40000)
+            await rigoToken.changeMintingAddress(user2.address)
+            await expect(
+                rigoToken.connect(user2).mintToken(AddressZero, 5)
+            ).to.emit(rigoToken, "TokenMinted").withArgs(AddressZero, 5)
+            // GRG does not return rich errors. Note: we set minter to 0 after initial setup
+            await rigoToken.changeRigoblockAddress(AddressZero)
+            await expect(rigoToken.changeMintingAddress(user1.address)).to.be.reverted
+            await expect(rigoToken.mintToken(AddressZero, 5)).to.be.reverted
         })
     })
 
