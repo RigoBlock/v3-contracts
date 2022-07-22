@@ -90,6 +90,7 @@ describe("StakingProxy-Pop", async () => {
             await grgToken.transfer(newPoolAddress, amount)
             const Pool = await hre.ethers.getContractFactory("AStaking")
             const pool = Pool.attach(newPoolAddress)
+            await expect(pool.stake(0)).to.be.revertedWith("STAKE_AMOUNT_NULL_ERROR")
             await pool.stake(amount)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
