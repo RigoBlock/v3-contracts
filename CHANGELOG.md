@@ -1,3 +1,30 @@
+# [0.6.0](https://github.com/rigoblock/v3-contracts/compare/v0.5.0...v0.6.0) (2022-07-22)
+
+
+### Bug Fixes
+
+* add ERC20 proxy contract and deps ([be00be7](https://github.com/rigoblock/v3-contracts/commit/be00be709b2dd93193801ac2e9105e2d83c79205))
+* add event to factory ([c1ed72d](https://github.com/rigoblock/v3-contracts/commit/c1ed72dae136bf29dbf0bb56c0b212232d71ddab))
+* add revert reason to stake method ([e7bbe1f](https://github.com/rigoblock/v3-contracts/commit/e7bbe1f4420e898b7921e3345d4f3ebebeb26b3f))
+* initialize owner in constructor for staking, proxy, vault ([f17aa09](https://github.com/rigoblock/v3-contracts/commit/f17aa09f2cf7af0e13cf23b9b975e7ebd1adf78f))
+* initialize staking deployment immutables in constructor ([303807f](https://github.com/rigoblock/v3-contracts/commit/303807f487b8b0b57707b17d12274fc8d9be768e))
+* move modifier from pop mgr o pop rewards contract ([1991a77](https://github.com/rigoblock/v3-contracts/commit/1991a773df607c2e7cef8fd970c3e09857bd039d))
+* remove LibStakingRichErrors and imports ([1953cac](https://github.com/rigoblock/v3-contracts/commit/1953cac3bd4cf597e351ab9fb28306f4d2112cd6))
+* simplify mixin staking pool rich return errors ([1fb2482](https://github.com/rigoblock/v3-contracts/commit/1fb2482c0c2f1e6109e378862850c42980ed4f1a))
+* simplify pop manager rich returned errors ([5fec6c5](https://github.com/rigoblock/v3-contracts/commit/5fec6c5070d12fea5659f4eb11433e015e5d1715))
+* update staking deployment pipeline to staking updates ([e429dcf](https://github.com/rigoblock/v3-contracts/commit/e429dcfede0920d5e524f34762b81b8404d14403))
+
+
+### Features
+
+* add staking adapter to tests deploy pipeline ([6b62784](https://github.com/rigoblock/v3-contracts/commit/6b62784e115f4cbf6a399ccb7e2e2b79b77246e2))
+* create staking adapter ([021c24a](https://github.com/rigoblock/v3-contracts/commit/021c24aabfabfa2b016cc83982b410db9a8aa561))
+* create staking pool from rigoblock pool if doesn't exist ([c38845a](https://github.com/rigoblock/v3-contracts/commit/c38845a68d0ecb363266ea2b70e7a3d3688bf8cb))
+* remove use of encoded rich error for return rich errors in staking ([5a6b85d](https://github.com/rigoblock/v3-contracts/commit/5a6b85db370fdb2afa93e4c008006d9a9bd1ea82))
+* whitelist adapter in extensions authority ([34974db](https://github.com/rigoblock/v3-contracts/commit/34974db6038ecd406caccef35cf2f9f63784b3ce))
+
+
+
 # [0.5.0](https://github.com/rigoblock/v3-contracts/compare/v0.4.0...v0.5.0) (2022-07-18)
 
 
@@ -102,11 +129,6 @@
 ### Bug Fixes
 
 * ci bump package version ([a8620d6](https://github.com/rigoblock/v3-contracts/commit/a8620d647d786074298ec33b2f6aae8cd87f7998))
-* event indexing in registry interface ([996d81e](https://github.com/rigoblock/v3-contracts/commit/996d81e6d666a27ec2f99dea5a9adf4d8bdd4703))
-* registry contract ([522a51d](https://github.com/rigoblock/v3-contracts/commit/522a51df2c9190b568706a00270381d29e6ffae8))
-* removed poolId from factory library ([f311d83](https://github.com/rigoblock/v3-contracts/commit/f311d83ddae3feec5fd2f88aa02ed34fce4a2717))
-* revert to correct pool creation flow ([2c72b91](https://github.com/rigoblock/v3-contracts/commit/2c72b9125ba0c6804f861971c41566abbc491a6f))
-* update version script ([75ac5ed](https://github.com/rigoblock/v3-contracts/commit/75ac5ed2f52f3b49db772c2ef7308c64303066c0))
 * use conventional changelog instead of github tag action ([ad8e887](https://github.com/rigoblock/v3-contracts/commit/ad8e88753ff2da04d24619d5b3e499602fccd4b6))
 
 
