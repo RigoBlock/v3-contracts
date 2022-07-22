@@ -54,8 +54,6 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: check if should move nav verifier approval to authority extensions entirely
-  await authorityInstance.setNavVerifier(navVerifier.address)
   await authorityExtensionsInstance.whitelistAdapter(navVerifier.address)
 
   // as long as authority address is same on all chains, pool implementation will have same address
