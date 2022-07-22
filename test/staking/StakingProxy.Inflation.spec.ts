@@ -127,6 +127,11 @@ describe("Inflation", async () => {
             await expect(
                 proxy.attachStakingContract(mockImplementation.address)
             ).to.be.reverted
+            await expect(stakingProxy.endEpoch()).to.be.revertedWith("STAKING_ADDRESS_NULL_ERROR")
+            const stakingInstance = await deployments.get("Staking")
+            await expect(
+                proxy.attachStakingContract(stakingInstance.address)
+            ).to.be.revertedWith("STAKING_SCHEDULER_ALREADY_INITIALIZED_ERROR")
         })
     })
 
