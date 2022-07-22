@@ -642,9 +642,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         view
         returns (address)
     {
-        return AuthorityExtensions(
-            _getAuthorityExtensions()
-        ).getApplicationAdapter(_selector);
+        return Authority(AUTHORITY).getApplicationAdapter(_selector);
     }
 
     function _checkDelegateCall() private view {
@@ -659,20 +657,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             _amount >= _getUnitaryValue() / MINIMUM_ORDER_DIVISOR,
             "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
         );
-    }
-
-    /// @dev Finds the extensions authority.
-    /// @return Address of the extensions authority.
-    // TODO: check under what circumstances we call this method, as can
-    //  initialize extensions authority address as well as authority, and skip
-    //  1 read operation in this call. Governance must upgrade implementation
-    //   when it upgrades extensions authority.
-    function _getAuthorityExtensions()
-        private
-        view
-        returns (address)
-    {
-        return Authority(AUTHORITY).getAuthorityExtensions();
     }
 
     function _getMinPeriod() private view returns (uint32) {
