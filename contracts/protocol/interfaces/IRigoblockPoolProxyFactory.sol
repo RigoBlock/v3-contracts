@@ -30,6 +30,8 @@ interface IRigoblockPoolProxyFactory {
 
     event Upgraded(address indexed implementation);
 
+    event RegistryUpgraded(address indexed registry);
+
     /// @dev Creates a new Rigoblock pool.
     /// @param _name String of the name.
     /// @param _symbol String of the symbol.

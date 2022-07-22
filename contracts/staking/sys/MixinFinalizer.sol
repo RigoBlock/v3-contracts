@@ -52,7 +52,7 @@ abstract contract MixinFinalizer is
             "STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR"
         );
 
-        // mint epoch inflation, jump first epoch as all regitered pool accounts will become active from following epoch
+        // mint epoch inflation, jump first epoch as all registered pool accounts will become active from following epoch
         //  mint happens before time has passed check, therefore tokens will be allocated even before expiry if method is called
         //  but will not be minted again until epoch time has passed. This could happen when epoch length is changed only.
         if (currentEpoch_ > uint256(1)) {

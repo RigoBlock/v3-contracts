@@ -64,7 +64,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPoolInternal(
             _name,
             _symbol,
-            _baseToken    
+            _baseToken
         );
         newPoolAddress = address(proxy);
         poolId = newPoolId;
@@ -107,6 +107,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
             "FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR"
         );
         registryAddress = _newRegistry;
+        emit RegistryUpgraded(_newRegistry);
     }
 
     /*

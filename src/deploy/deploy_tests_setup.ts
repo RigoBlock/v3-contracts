@@ -181,7 +181,6 @@ const deploy: DeployFunction = async function (
   });
 
   await rigoTokenInstance.changeMintingAddress(inflation.address)
-  await rigoTokenInstance.changeRigoblockAddress(AddressZero)
 
   // same on altchains but different from one deployed on Ethereum
   await deploy("ProofOfPerformance", {
