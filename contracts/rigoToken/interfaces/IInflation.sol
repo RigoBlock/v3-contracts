@@ -25,25 +25,32 @@ pragma solidity >=0.4.22 <0.9.0;
 interface IInflation {
 
     /*
-     * PUBLIC VARIABLES
+     * STORAGE
      */
-    // solhint-disable-next-line
+    /// @dev Returns the address of the GRG token.
+    /// @return Address of the Rigo token contract.
     function RIGO_TOKEN_ADDRESS()
         external
         view
         returns (address);
 
-    //solhint-disable-next-line
+    /// @dev Returns the address of the GRG staking proxy.
+    /// @return Address of the proxy contract.
     function STAKING_PROXY_ADDRESS()
         external
         view
         returns (address);
 
+    /// @dev Returns epoch slot.
+    /// @return Number of latest epoch slot.
+    /// @notice Increases by one every new epoch.
     function slot()
         external
         view
         returns (uint256);
 
+    /// @dev Allows staking proxy to mint rewards.
+    /// @return mintedInflation Number of allocated tokens.
     function epochLength()
         external
         view

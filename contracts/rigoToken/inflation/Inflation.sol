@@ -33,10 +33,16 @@ import { IStaking } from "../../staking/interfaces/IStaking.sol";
 contract Inflation is
     IInflation
 {
+    /// @inheritdoc IInflation
     address public immutable override RIGO_TOKEN_ADDRESS;
+
+    /// @inheritdoc IInflation
     address public immutable override STAKING_PROXY_ADDRESS;
 
+    /// @inheritdoc IInflation
     uint256 public override slot;
+
+    /// @inheritdoc IInflation
     uint256 public override epochLength;
 
     uint32 internal immutable PPM_DENOMINATOR = 10**6; // 100% in parts-per-million
@@ -60,8 +66,7 @@ contract Inflation is
     /*
      * CORE FUNCTIONS
      */
-    /// @dev Allows staking proxy to mint rewards.
-    /// @return mintedInflation Number of allocated tokens.
+    /// @inheritdoc IInflation
     function mintInflation()
         external
         override
@@ -101,8 +106,7 @@ contract Inflation is
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Returns whether an epoch has ended.
-    /// @return Bool the epoch has ended.
+    /// @inheritdoc IInflation
     function epochEnded()
         external
         override
@@ -115,8 +119,7 @@ contract Inflation is
         } else return false;
     }
 
-    /// @dev Returns how long until next claim.
-    /// @return Number in seconds.
+    /// @inheritdoc IInflation
     function timeUntilNextClaim()
         external
         view
@@ -130,8 +133,7 @@ contract Inflation is
         /* solhint-disable not-rely-on-time */
     }
 
-    /// @dev Returns the epoch inflation.
-    /// @return Value of units of GRG minted in an epoch.
+    /// @inheritdoc IInflation
     function getEpochInflation()
         public
         view
