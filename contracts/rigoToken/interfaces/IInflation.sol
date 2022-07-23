@@ -41,17 +41,17 @@ interface IInflation {
         view
         returns (address);
 
-    /// @dev Returns epoch slot.
-    /// @return Number of latest epoch slot.
-    /// @notice Increases by one every new epoch.
-    function slot()
+    /// @dev Allows staking proxy to mint rewards.
+    /// @return mintedInflation Number of allocated tokens.
+    function epochLength()
         external
         view
         returns (uint256);
 
-    /// @dev Allows staking proxy to mint rewards.
-    /// @return mintedInflation Number of allocated tokens.
-    function epochLength()
+    /// @dev Returns epoch slot.
+    /// @return Number of latest epoch slot.
+    /// @notice Increases by one every new epoch.
+    function slot()
         external
         view
         returns (uint256);
@@ -75,16 +75,16 @@ interface IInflation {
         view
         returns (bool);
 
-    /// @dev Returns how long until next claim.
-    /// @return Number in seconds.
-    function timeUntilNextClaim()
+    /// @dev Returns the epoch inflation.
+    /// @return Value of units of GRG minted in an epoch.
+    function getEpochInflation()
         external
         view
         returns (uint256);
 
-    /// @dev Returns the epoch inflation.
-    /// @return Value of units of GRG minted in an epoch.
-    function getEpochInflation()
+    /// @dev Returns how long until next claim.
+    /// @return Number in seconds.
+    function timeUntilNextClaim()
         external
         view
         returns (uint256);

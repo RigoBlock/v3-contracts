@@ -40,13 +40,13 @@ contract Inflation is
     address public immutable override STAKING_PROXY_ADDRESS;
 
     /// @inheritdoc IInflation
-    uint256 public override slot;
-
-    /// @inheritdoc IInflation
     uint256 public override epochLength;
 
-    uint32 internal immutable PPM_DENOMINATOR = 10**6; // 100% in parts-per-million
+    /// @inheritdoc IInflation
+    uint256 public override slot;
+
     uint256 internal immutable ANNUAL_INFLATION_RATE = 2 * 10**4; // 2% annual inflation
+    uint32 internal immutable PPM_DENOMINATOR = 10**6; // 100% in parts-per-million
 
     uint256 private epochEndTime;
 
@@ -120,20 +120,6 @@ contract Inflation is
     }
 
     /// @inheritdoc IInflation
-    function timeUntilNextClaim()
-        external
-        view
-        override
-        returns (uint256)
-    {
-        /* solhint-disable not-rely-on-time */
-        if (block.timestamp < epochEndTime) {
-            return (epochEndTime - block.timestamp);
-        } else return (uint256(0));
-        /* solhint-disable not-rely-on-time */
-    }
-
-    /// @inheritdoc IInflation
     function getEpochInflation()
         public
         view
@@ -146,6 +132,20 @@ contract Inflation is
             ANNUAL_INFLATION_RATE * epochLength * _getGRGTotalSupply()
             / PPM_DENOMINATOR / 365 days
         );
+    }
+
+    /// @inheritdoc IInflation
+    function timeUntilNextClaim()
+        external
+        view
+        override
+        returns (uint256)
+    {
+        /* solhint-disable not-rely-on-time */
+        if (block.timestamp < epochEndTime) {
+            return (epochEndTime - block.timestamp);
+        } else return (uint256(0));
+        /* solhint-disable not-rely-on-time */
     }
 
     /*
