@@ -14,8 +14,6 @@ describe("Proxy", async () => {
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
-        const ResitryInstance = await deployments.get("PoolRegistry")
-        const Registry = await hre.ethers.getContractFactory("PoolRegistry")
         const NavVerifierInstance = await deployments.get("NavVerifier")
         const NavVerifier = await hre.ethers.getContractFactory("NavVerifier")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
@@ -30,17 +28,14 @@ describe("Proxy", async () => {
             newPoolAddress
         )
         return {
-            factory,
             pool,
-            registry: Registry.attach(ResitryInstance.address),
             navVerifier: NavVerifier.attach(NavVerifierInstance.address)
         }
     });
 
     describe("receive", async () => {
         it('should receive ether', async () => {
-            // TODO: remove unused factory import (in pool tests as well)
-            const { factory, pool } = await setupTests()
+            const { pool } = await setupTests()
             const etherAmount = parseEther("5")
             await user1.sendTransaction({ to: pool.address, value: etherAmount})
             await expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(etherAmount)
@@ -49,34 +44,34 @@ describe("Proxy", async () => {
 
     describe("poolStorage", async () => {
         it('should return pool name from new pool', async () => {
-            const { factory, pool } = await setupTests()
+            const { pool } = await setupTests()
             const poolData = await pool.getData()
             expect(poolData.poolName).to.be.eq('testpool')
         })
 
         it('should return pool owner', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             expect(await pool.owner()).to.be.eq(user1.address)
         })
     })
 
     describe("setTransactionFee", async () => {
         it('should set the transaction fee', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             await pool.setTransactionFee(2)
             const poolData = await pool.getAdminData()
             expect(poolData.transactionFee).to.be.eq(2)
         })
 
         it('should not set fee if caller not owner', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             await pool.setOwner(user2.address)
             await expect(pool.setTransactionFee(2)
             ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
         })
 
         it('should not set fee higher than 1 percent', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             await expect(
               pool.setTransactionFee(101) // 100 / 10000 = 1%
             ).to.be.revertedWith("POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR")
@@ -85,7 +80,7 @@ describe("Proxy", async () => {
 
     describe("mint", async () => {
         it('should create new tokens', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
             const etherAmount = parseEther("1")
             const name = await pool.name()
@@ -111,7 +106,7 @@ describe("Proxy", async () => {
         })
 
         it('should revert with order below minimum', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             const etherAmount = parseEther("0.0001")
             await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
@@ -120,7 +115,7 @@ describe("Proxy", async () => {
 
     describe("_initializePool", async () => {
         it('should revert when already initialized', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             await expect(
                 pool._initializePool(
                     'testpool',
@@ -134,7 +129,7 @@ describe("Proxy", async () => {
 
     describe("setPrices", async () => {
         it('should revert when caller is not owner', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             await pool.setOwner(user2.address)
             const newPrice = parseEther("1.1")
             const signaturevaliduntilBlock = 1 // relevant only when checked
@@ -150,7 +145,7 @@ describe("Proxy", async () => {
         })
 
         it('should revert when price error', async () => {
-            const { factory, registry, pool } = await setupTests()
+            const { pool } = await setupTests()
             const newPrice = parseEther("11")
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
@@ -165,7 +160,7 @@ describe("Proxy", async () => {
         })
 
         it('should set price when caller is owner', async () => {
-            const { factory, pool, registry, navVerifier } = await setupTests()
+            const { pool, navVerifier } = await setupTests()
             const newValue = parseEther("1.1")
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
