@@ -215,6 +215,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         if (_baseToken != address(0)) {
             admin.baseToken = _baseToken;
             uint8 tokenDecimals = Token(_baseToken).decimals();
+            assert(tokenDecimals <= 18);
             if (tokenDecimals != COINBASE_DECIMALS) {
                 poolData.decimals = tokenDecimals;
                 poolData.unitaryValue = 1 * 10**tokenDecimals; // initial value is 1
