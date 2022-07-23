@@ -109,6 +109,13 @@ describe("Authority", async () => {
             ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
         })
 
+        it('should revert with zero address input', async () => {
+            const { authority } = await setupTests()
+            await expect(
+                authority.setWhitelister(AddressZero, true)
+            ).to.be.revertedWith("AUTHORITY_TARGET_NULL_ADDRESS_ERROR")
+        })
+
         it('should revert if adding already added whitelister', async () => {
             const { authority } = await setupTests()
             await authority.setWhitelister(user2.address, true)
@@ -152,6 +159,13 @@ describe("Authority", async () => {
             ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
         })
 
+        it('should revert with zero address input', async () => {
+            const { authority } = await setupTests()
+            await expect(
+                authority.setFactory(AddressZero, true)
+            ).to.be.revertedWith("AUTHORITY_TARGET_NULL_ADDRESS_ERROR")
+        })
+
         it('should revert if already whitelisted factory', async () => {
             const { authority } = await setupTests()
             await authority.setFactory(user2.address, true)
@@ -193,6 +207,13 @@ describe("Authority", async () => {
             await expect(
                 authority.connect(user2).setAdapter(user2.address, true)
             ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+        })
+
+        it('should revert with zero address input', async () => {
+            const { authority } = await setupTests()
+            await expect(
+                authority.setAdapter(AddressZero, true)
+            ).to.be.revertedWith("AUTHORITY_TARGET_NULL_ADDRESS_ERROR")
         })
 
         it('should revert if whitelisting already whitelisted adapter', async () => {

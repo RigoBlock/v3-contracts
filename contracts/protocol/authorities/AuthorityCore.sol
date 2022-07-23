@@ -188,7 +188,7 @@ contract AuthorityCore is
     )
         private
     {
-        require(_target != address(0), "AUTHORITY_NULL_ADDRESS_ERROR");
+        require(_target != address(0), "AUTHORITY_TARGET_NULL_ADDRESS_ERROR");
         if (_isWhitelisted) {
             require(
                 !permission[_target].authorized[_role],
