@@ -74,19 +74,13 @@ contract Inflation is
         returns (uint256 mintedInflation)
     {
         // solhint-disable-next-line not-rely-on-time
-        if (block.timestamp < epochEndTime) {
-            revert("NOT_ENOUGH_TIME_ERROR");
-        }
-
+        assert(block.timestamp >= epochEndTime);
         (uint256 epochDurationInSeconds, , , , ) = IStaking(STAKING_PROXY_ADDRESS).getParams();
 
         // sanity check for epoch length queried from staking
         if (epochLength != epochDurationInSeconds) {
-            if (epochDurationInSeconds < 5 days || epochDurationInSeconds > 90 days) {
-                revert("STAKING_EPOCH_TIME_ANOMALY_DETECTED_ERROR");
-            } else {
-                epochLength = epochDurationInSeconds;
-            }
+            assert(epochDurationInSeconds >= 5 days && epochDurationInSeconds <= 90 days);
+            epochLength = epochDurationInSeconds;
         }
 
         uint256 epochInflation = getEpochInflation();
