@@ -29,7 +29,8 @@ contract AuthorityCore is
     Owned,
     IAuthorityCore
 {
-    address public extensionsAuthority;
+    /// @inheritdoc IAuthorityCore
+    address public override extensionsAuthority;
 
     mapping(bytes4 => address) private adapterBySelector;
     mapping(address => Permission) private permission;

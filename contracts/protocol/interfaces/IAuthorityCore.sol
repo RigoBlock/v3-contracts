@@ -56,6 +56,12 @@ interface IAuthorityCore {
     /*
      * CORE FUNCTIONS
      */
+    /// @dev Returns the address of the extensions authority.
+    function extensionsAuthority() external view returns (address);
+
+    /*
+     * CORE FUNCTIONS
+     */
     /// @dev Allows a whitelister to whitelist a method.
     /// @param _selector Bytes4 hex of the method selector.
     /// @param _adapter Address of the adapter implementing the method.
