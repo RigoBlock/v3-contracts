@@ -39,8 +39,10 @@ contract ProofOfPerformance is
         STAKING = IStaking(_stakingProxyAddress);
     }
 
-    /// @dev Credits the pop reward to the Staking Proxy contract.
-    /// @param _poolAddress Address of the pool.
+    /*
+     * EXTERNAL FUNCTIONS
+     */
+    /// @inheritdoc IProofOfPerformance
     function creditPopRewardToStakingProxy(
         address _poolAddress
     )
@@ -58,7 +60,6 @@ contract ProofOfPerformance is
             "POP_STAKING_POOL_BALANCES_NULL_ERROR"
         );
 
-        // TODO: crediting reward in staking requires minimum stake, we might skip previous check
         STAKING.creditPopReward(
             _poolAddress,
             poolLockedBalances
@@ -68,10 +69,7 @@ contract ProofOfPerformance is
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-
-    /// @dev Returns the proof of performance reward for a pool.
-    /// @param _poolAddress Address of the pool.
-    /// @return Value of the pop reward in Rigo tokens.
+    /// @inheritdoc IProofOfPerformance
     function proofOfPerformance(address _poolAddress)
         external
         view
