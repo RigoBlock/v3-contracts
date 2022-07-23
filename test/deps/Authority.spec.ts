@@ -47,6 +47,7 @@ describe("Authority", async () => {
             await expect(
                 authority.setAuthority(user2.address, true)
             ).to.emit(authority, "PermissionAdded").withArgs(user1.address, user2.address, Role.Authority)
+            expect(await authority.isAuthority(user2.address)).to.be.eq(true)
         })
 
         it('should remove authority', async () => {
@@ -200,6 +201,18 @@ describe("Authority", async () => {
                 authority.whitelistMethod(selector, adapter)
             ).to.emit(authority, "WhitelistedMethod").withArgs(selector, adapter)
             expect(await authority.getApplicationAdapter(selector)).to.be.eq(adapter)
+        })
+
+        it('should revert if method already whitelisted', async () => {
+            const { authority } = await setupTests()
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
+            await authority.setWhitelister(user1.address, true)
+            await authority.whitelistAdapter(adapter, true)
+            await authority.whitelistMethod(selector, adapter)
+            await expect(
+                authority.whitelistMethod(selector, adapter)
+            ).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
         })
     })
 
