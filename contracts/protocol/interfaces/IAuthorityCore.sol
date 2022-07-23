@@ -54,9 +54,10 @@ interface IAuthorityCore {
     );
 
     /*
-     * CORE FUNCTIONS
+     * STORAGE
      */
     /// @dev Returns the address of the extensions authority.
+    /// @return Address of the extensions authority.
     function extensionsAuthority() external view returns (address);
 
     /*

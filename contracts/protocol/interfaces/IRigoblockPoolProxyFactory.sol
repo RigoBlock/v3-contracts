@@ -32,6 +32,16 @@ interface IRigoblockPoolProxyFactory {
 
     event RegistryUpgraded(address indexed registry);
 
+    /*
+     * PUBLIC FUNCTIONS
+     */
+    /// @dev Returns the implementation address for the pool proxies.
+    /// @return Address of the implementation.
+    function implementation() external view returns (address);
+
+    /*
+     * PUBLIC FUNCTIONS
+     */
     /// @dev Creates a new Rigoblock pool.
     /// @param _name String of the name.
     /// @param _symbol String of the symbol.
@@ -46,18 +56,20 @@ interface IRigoblockPoolProxyFactory {
         external
         returns (address newPoolAddress, bytes32 poolId);
 
+    /// @dev Allows owner to update the registry.
+    /// @param _newRegistry Address of the new registry.
     function setRegistry(address _newRegistry)
         external;
 
     function setImplementation(address _newImplementation)
         external;
 
+    /*
+     * CONSTANT PUBLIC FUNCTIONS
+     */
+    /// @dev Returns the address of the pool registry.
+    /// @return Address of the registry.
     function getRegistry()
-        external
-        view
-        returns (address);
-
-    function implementation()
         external
         view
         returns (address);

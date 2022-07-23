@@ -48,7 +48,8 @@ interface IPoolRegistry {
     /*
      * STORAGE
     */
-    /// @dev Returns the address of the authority contract.
+    /// @dev Returns the address of the Rigoblock authority contract.
+    /// @return Address of the authority contract.
     function authority() external view returns (address);
 
     /// @dev Returns the address of the Rigoblock Dao.
