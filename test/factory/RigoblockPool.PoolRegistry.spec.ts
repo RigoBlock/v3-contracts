@@ -61,7 +61,7 @@ describe("PoolRegistry", async () => {
 
     describe("setMeta", async () => {
         it('should revert if caller is not pool owner', async () => {
-            const { factory, registry } = await setupTests()
+            const { registry } = await setupTests()
             const source = `
             contract Owned {
                 address public owner;
@@ -77,7 +77,7 @@ describe("PoolRegistry", async () => {
         })
 
         it('should revert if pool not registered', async () => {
-            const { factory, registry, authority } = await setupTests()
+            const { registry, authority } = await setupTests()
             const source = `
             contract Owned {
                 address public owner;
