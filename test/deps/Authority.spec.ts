@@ -19,43 +19,85 @@ describe("Authority", async () => {
         }
     });
 
-    describe("setAuthority", async () => {
-        it('should revert if caller not owner', async () => {
+    describe("addMethod", async () => {
+        it('should revert if caller not whitelister', async () => {
             const { authority } = await setupTests()
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
             await expect(
-                authority.connect(user2).setAuthority(user2.address, true)
-            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+                authority.addMethod(selector, adapter)
+            ).to.be.revertedWith("AUTHORITY_SENDER_NOT_WHITELISTER_ERROR")
         })
 
-        it('should revert if whitelisting already whitelisted authority', async () => {
+        it('should revert if adapter not whitelisted', async () => {
             const { authority } = await setupTests()
-            await authority.setAuthority(user2.address, true)
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
+            await authority.setWhitelister(user1.address, true)
             await expect(
-                authority.setAuthority(user2.address, true)
-            ).to.be.revertedWith("ALREADY_WHITELISTED_ERROR")
+                authority.addMethod(selector, adapter)
+            ).to.be.revertedWith("ADAPTER_NOT_WHITELISTED_ERROR")
         })
 
-        it('should revert if blacklisting non-whitelisted authority', async () => {
+        it('should whitelist method', async () => {
             const { authority } = await setupTests()
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
+            await authority.setWhitelister(user1.address, true)
+            await authority.setAdapter(adapter, true)
             await expect(
-                authority.setAuthority(user2.address, false)
-            ).to.be.revertedWith("NOT_ALREADY_WHITELISTED")
+                authority.addMethod(selector, adapter)
+            ).to.emit(
+                authority, "WhitelistedMethod"
+            ).withArgs(user1.address, adapter, selector)
+            expect(await authority.getApplicationAdapter(selector)).to.be.eq(adapter)
         })
 
-        it('should whitelist authority', async () => {
+        it('should revert if method already whitelisted', async () => {
             const { authority } = await setupTests()
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
+            await authority.setWhitelister(user1.address, true)
+            await authority.setAdapter(adapter, true)
+            await authority.addMethod(selector, adapter)
             await expect(
-                authority.setAuthority(user2.address, true)
-            ).to.emit(authority, "PermissionAdded").withArgs(user1.address, user2.address, Role.Authority)
-            expect(await authority.isAuthority(user2.address)).to.be.eq(true)
+                authority.addMethod(selector, adapter)
+            ).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
+        })
+    })
+
+    describe("removeMethod", async () => {
+        it('should revert if caller not whitelister', async () => {
+            const { authority } = await setupTests()
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
+            await expect(
+                authority.connect(user2).removeMethod(selector, adapter)
+            ).to.be.revertedWith("AUTHORITY_SENDER_NOT_WHITELISTER_ERROR")
         })
 
-        it('should remove authority', async () => {
+        it('should revert if method not whitelisted', async () => {
             const { authority } = await setupTests()
-            await authority.setAuthority(user2.address, true)
+            await authority.setWhitelister(user2.address, true)
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
             await expect(
-                authority.setAuthority(user2.address, false)
-            ).to.emit(authority, "PermissionRemoved").withArgs(user1.address, user2.address, Role.Authority)
+                authority.connect(user2).removeMethod(selector, adapter)
+            ).to.be.revertedWith("AUTHORITY_METHOD_NOT_APPROVED_ERROR")
+        })
+
+        it('should remove method', async () => {
+            const { authority } = await setupTests()
+            await authority.setWhitelister(user2.address, true)
+            const selector = "0xa694fc3a"
+            const adapter = user2.address
+            await authority.setAdapter(adapter, true)
+            await authority.connect(user2).addMethod(selector, adapter)
+            await expect(
+                authority.connect(user2).removeMethod(selector, adapter)
+            ).to.emit(
+                authority, "RemovedMethod"
+            ).withArgs(user2.address, adapter, selector)
         })
     })
 
@@ -86,7 +128,9 @@ describe("Authority", async () => {
             const { authority } = await setupTests()
             await expect(
                 authority.setWhitelister(user2.address, true)
-            ).to.emit(authority, "PermissionAdded").withArgs(user1.address, user2.address, Role.Whitelister)
+            ).to.emit(
+                authority, "PermissionAdded"
+            ).withArgs(user1.address, user2.address, Role.Whitelister)
         })
 
         it('should remove whitelister', async () => {
@@ -94,125 +138,90 @@ describe("Authority", async () => {
             await authority.setWhitelister(user2.address, true)
             await expect(
                 authority.setWhitelister(user2.address, false)
-            ).to.emit(authority, "PermissionRemoved").withArgs(user1.address, user2.address, Role.Whitelister)
+            ).to.emit(
+                authority, "PermissionRemoved"
+            ).withArgs(user1.address, user2.address, Role.Whitelister)
         })
     })
 
-    describe("whitelistFactory", async () => {
+    describe("setFactory", async () => {
         it('should revert if caller not owner', async () => {
             const { authority } = await setupTests()
             await expect(
-                authority.connect(user2).whitelistFactory(user2.address, true)
+                authority.connect(user2).setFactory(user2.address, true)
             ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
         })
 
-        it('should revert if whitelisting already whitelisted adapter', async () => {
+        it('should revert if already whitelisted factory', async () => {
             const { authority } = await setupTests()
-            await authority.whitelistFactory(user2.address, true)
+            await authority.setFactory(user2.address, true)
             await expect(
-                authority.whitelistFactory(user2.address, true)
+                authority.setFactory(user2.address, true)
             ).to.be.revertedWith("ALREADY_WHITELISTED_ERROR")
         })
 
-        it('should revert if blacklisting non-whitelisted adapter', async () => {
+        it('should revert if removing non-whitelisted factory', async () => {
             const { authority } = await setupTests()
             await expect(
-                authority.whitelistFactory(user2.address, false)
+                authority.setFactory(user2.address, false)
             ).to.be.revertedWith("NOT_ALREADY_WHITELISTED")
         })
 
         it('should whitelist factory', async () => {
             const { authority } = await setupTests()
             await expect(
-                authority.whitelistFactory(user2.address, true)
-            ).to.emit(authority, "PermissionAdded").withArgs(user1.address, user2.address, Role.Factory)
+                authority.setFactory(user2.address, true)
+            ).to.emit(
+                authority, "PermissionAdded"
+            ).withArgs(user1.address, user2.address, Role.Factory)
         })
 
         it('should remove factory', async () => {
             const { authority } = await setupTests()
-            await authority.whitelistFactory(user2.address, true)
+            await authority.setFactory(user2.address, true)
             await expect(
-                authority.whitelistFactory(user2.address, false)
-            ).to.emit(authority, "PermissionRemoved").withArgs(user1.address, user2.address, Role.Factory)
+                authority.setFactory(user2.address, false)
+            ).to.emit(
+                authority, "PermissionRemoved"
+            ).withArgs(user1.address, user2.address, Role.Factory)
         })
     })
 
-    describe("whitelistAdapter", async () => {
+    describe("setAdapter", async () => {
         it('should revert if caller not owner', async () => {
             const { authority } = await setupTests()
             await expect(
-                authority.connect(user2).whitelistAdapter(user2.address, true)
+                authority.connect(user2).setAdapter(user2.address, true)
             ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
         })
 
         it('should revert if whitelisting already whitelisted adapter', async () => {
             const { authority } = await setupTests()
-            await authority.whitelistAdapter(user2.address, true)
+            await authority.setAdapter(user2.address, true)
             await expect(
-                authority.whitelistAdapter(user2.address, true)
+                authority.setAdapter(user2.address, true)
             ).to.be.revertedWith("ALREADY_WHITELISTED_ERROR")
         })
 
         it('should revert if blacklisting non-whitelisted adapter', async () => {
             const { authority } = await setupTests()
             await expect(
-                authority.whitelistAdapter(user2.address, false)
+                authority.setAdapter(user2.address, false)
             ).to.be.revertedWith("NOT_ALREADY_WHITELISTED")
         })
 
         it('should whitelist adapter', async () => {
             const { authority } = await setupTests()
             await expect(
-                authority.whitelistAdapter(user2.address, true)
-            ).to.emit(authority, "PermissionAdded").withArgs(user1.address, user2.address, Role.Adapter)
+                authority.setAdapter(user2.address, true)
+            ).to.emit(
+                authority, "PermissionAdded"
+            ).withArgs(user1.address, user2.address, Role.Adapter)
             await expect(
-                authority.whitelistAdapter(user2.address, false)
-            ).to.emit(authority, "PermissionRemoved").withArgs(user1.address, user2.address, Role.Adapter)
-        })
-    })
-
-    describe("whitelistMethod", async () => {
-        it('should revert if caller not whitelister', async () => {
-            const { authority } = await setupTests()
-            const selector = "0xa694fc3a"
-            const adapter = user2.address
-            await expect(
-                authority.whitelistMethod(selector, adapter)
-            ).to.be.revertedWith("AUTHORITY_SENDER_NOT_WHITELISTER_ERROR")
-        })
-
-        it('should revert if adapter not whitelisted', async () => {
-            const { authority } = await setupTests()
-            const selector = "0xa694fc3a"
-            const adapter = user2.address
-            await authority.setWhitelister(user1.address, true)
-            await expect(
-                authority.whitelistMethod(selector, adapter)
-            ).to.be.revertedWith("ADAPTER_NOT_WHITELISTED_ERROR")
-        })
-
-        it('should whitelist method', async () => {
-            const { authority } = await setupTests()
-            const selector = "0xa694fc3a"
-            const adapter = user2.address
-            await authority.setWhitelister(user1.address, true)
-            await authority.whitelistAdapter(adapter, true)
-            await expect(
-                authority.whitelistMethod(selector, adapter)
-            ).to.emit(authority, "WhitelistedMethod").withArgs(selector, adapter)
-            expect(await authority.getApplicationAdapter(selector)).to.be.eq(adapter)
-        })
-
-        it('should revert if method already whitelisted', async () => {
-            const { authority } = await setupTests()
-            const selector = "0xa694fc3a"
-            const adapter = user2.address
-            await authority.setWhitelister(user1.address, true)
-            await authority.whitelistAdapter(adapter, true)
-            await authority.whitelistMethod(selector, adapter)
-            await expect(
-                authority.whitelistMethod(selector, adapter)
-            ).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
+                authority.setAdapter(user2.address, false)
+            ).to.emit(
+                authority, "PermissionRemoved"
+            ).withArgs(user1.address, user2.address, Role.Adapter)
         })
     })
 
@@ -225,14 +234,15 @@ describe("Authority", async () => {
             await expect(
                 authority.setExtensionsAuthority(user2.address)
             ).to.emit(authority, "NewExtensionsAuthority").withArgs(user2.address)
-            expect(await authority.getAuthorityExtensions()).to.be.eq(user2.address)
+            expect(
+                await authority.getAuthorityExtensions()
+            ).to.be.eq(user2.address)
         })
     })
 })
 
 export enum Role {
     Adapter,
-    Authority,
     Factory,
     Whitelister
 }

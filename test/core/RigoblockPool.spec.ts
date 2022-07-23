@@ -183,7 +183,7 @@ describe("Proxy", async () => {
             const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
             const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
             //"9e4e93d0": "isValidNav(uint256,uint256,bytes32,bytes)"
-            await authority.whitelistMethod(
+            await authority.addMethod(
                 "0x9e4e93d0",
                 navVerifier.address
             )

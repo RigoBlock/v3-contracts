@@ -36,7 +36,7 @@ describe("PoolRegistry", async () => {
 
         it('should revert if address already registered', async () => {
             const { authority, registry } = await setupTests()
-            await authority.whitelistFactory(user1.address, 1)
+            await authority.setFactory(user1.address, true)
             const mockBytes32 = hre.ethers.utils.formatBytes32String('mock')
             await registry.register(AddressZero, 'testpool', 'TEST', mockBytes32)
             await expect(
@@ -46,7 +46,7 @@ describe("PoolRegistry", async () => {
 
         it('should revert if name longer than 32 characters', async () => {
             const { authority, registry } = await setupTests()
-            await authority.whitelistFactory(user1.address, 1)
+            await authority.setFactory(user1.address, true)
             const mockBytes32 = hre.ethers.utils.formatBytes32String('mock')
             const longName = '40 characters are way too long for a name'
             const shortName = 'sho'
@@ -92,7 +92,7 @@ describe("PoolRegistry", async () => {
             await expect(
                 registry.connect(user2).setMeta(poolAddress, key, value)
             ).to.be.revertedWith("REGISTRY_ADDRESS_NOT_REGISTERED_ERROR")
-            await authority.whitelistFactory(user1.address, 1)
+            await authority.setFactory(user1.address, true)
             await registry.register(poolAddress, 'testName', 'TEST', poolId)
             await expect(
                 registry.connect(user2).setMeta(poolAddress, key, value)

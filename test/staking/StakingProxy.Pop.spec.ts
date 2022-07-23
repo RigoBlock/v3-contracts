@@ -30,7 +30,7 @@ describe("StakingProxy-Pop", async () => {
         const AStakingInstance = await deployments.get("AStaking")
         const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
         //"a694fc3a": "stake(uint256)"
-        await authority.whitelistMethod(
+        await authority.addMethod(
             "0xa694fc3a",
             AStakingInstance.address
         )
