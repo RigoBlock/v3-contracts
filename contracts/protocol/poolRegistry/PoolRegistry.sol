@@ -30,8 +30,11 @@ import { IPoolRegistry } from "../interfaces/IPoolRegistry.sol";
 // solhint-disable-next-line
 contract PoolRegistry is IPoolRegistry {
 
-    address public authority;
-    address public rigoblockDaoAddress;
+    /// @inheritdoc IPoolRegistry
+    address public override authority;
+
+    /// @inheritdoc IPoolRegistry
+    address public override rigoblockDaoAddress;
 
     mapping(address => bytes32) private mapIdByAddress;
 
@@ -95,10 +98,7 @@ contract PoolRegistry is IPoolRegistry {
     /*
      * CORE FUNCTIONS
      */
-    /// @dev Allows a factory which is an authority to register a pool.
-    /// @param _poolAddress Address of the pool.
-    /// @param _name Name of the pool.
-    /// @param _symbol Symbol of the pool.
+    /// @inheritdoc IPoolRegistry
     function register(
         address _poolAddress,
         string calldata _name,
@@ -122,22 +122,7 @@ contract PoolRegistry is IPoolRegistry {
         );
     }
 
-    /// @dev Allows pool owner to set metadata for a pool.
-    /// @param _poolAddress Address of the pool.
-    /// @param _key Bytes32 of the key.
-    /// @param _value Bytes32 of the value.
-    function setMeta(address _poolAddress, bytes32 _key, bytes32 _value)
-        external
-        override
-        onlyPoolOwner(_poolAddress)
-        whenPoolRegistered(_poolAddress)
-    {
-        poolMetaByAddress[_poolAddress].meta[_key] = _value;
-        emit MetaChanged(_poolAddress, _key, _value);
-    }
-
-    /// @dev Allows Rigoblock governance to update authority.
-    /// @param _authority Address of the authority contract.
+    /// @inheritdoc IPoolRegistry
     function setAuthority (address _authority)
         external
         override
@@ -155,9 +140,18 @@ contract PoolRegistry is IPoolRegistry {
         emit AuthorityChanged(_authority);
     }
 
-    /// @dev Allows Rigoblock DAO/factory to update its address
-    /// @dev Creates internal record
-    /// @param _newRigoblockDao Address of the Rigoblock DAO
+    /// @inheritdoc IPoolRegistry
+    function setMeta(address _poolAddress, bytes32 _key, bytes32 _value)
+        external
+        override
+        onlyPoolOwner(_poolAddress)
+        whenPoolRegistered(_poolAddress)
+    {
+        poolMetaByAddress[_poolAddress].meta[_key] = _value;
+        emit MetaChanged(_poolAddress, _key, _value);
+    }
+
+    /// @inheritdoc IPoolRegistry
     function setRigoblockDao(address _newRigoblockDao)
         external
         override
@@ -178,8 +172,7 @@ contract PoolRegistry is IPoolRegistry {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Provides a pool's struct data
-    /// @param _poolAddress Address of the pool
+    /// @inheritdoc IPoolRegistry
     function getPoolIdFromAddress(address _poolAddress)
         external
         view
@@ -189,10 +182,7 @@ contract PoolRegistry is IPoolRegistry {
         poolAddress = mapIdByAddress[_poolAddress];
     }
 
-    /// @dev Provides a pool's metadata.
-    /// @param _poolAddress Address of the pool.
-    /// @param _key Bytes32 key.
-    /// @return poolMeta Meta by key.
+    /// @inheritdoc IPoolRegistry
     function getMeta(address _poolAddress, bytes32 _key)
         external
         view
