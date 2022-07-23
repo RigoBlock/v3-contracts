@@ -33,8 +33,7 @@ contract AuthorityCore is
 
     mapping(bytes4 => address) private adapterBySelector;
     mapping(address => Permission) private permission;
-
-    TypesList private list;
+    mapping(Role => address[]) roleToList;
 
     enum Role {
         ADAPTER,
@@ -45,13 +44,6 @@ contract AuthorityCore is
 
     struct Permission {
         mapping(Role => bool) authorized;
-    }
-
-    struct TypesList {
-        address[] adapters;
-        address[] authorities;
-        address[] factories;
-        address[] whitelisters;
     }
 
     modifier onlyWhitelister {
@@ -115,7 +107,7 @@ contract AuthorityCore is
     /// @dev Allows an admin to whitelist a factory.
     /// @param _selector Bytes4 hex of the method interface.
     /// @notice setting _adapter to address(0) will effectively revoke method.
-    // TODO: must removeMethod(selector, adapter)
+    // TODO: must removeMethod(selector, adapter). Check if should add methods list as could get big.
     function whitelistMethod(
         bytes4 _selector,
         address _adapter
@@ -187,7 +179,7 @@ contract AuthorityCore is
     /// @dev Provides the address of the exchanges authority.
     /// @return Address of the adapter.
     function getAuthorityExtensions()
-        external 
+        external
         view
         override
         returns (address)
@@ -218,45 +210,22 @@ contract AuthorityCore is
         private
     {
         if (_isWhitelisted) {
-            require(!permission[_target].authorized[_role], "ALREADY_WHITELISTED_ERROR");
+            require(
+                !permission[_target].authorized[_role],
+                "ALREADY_WHITELISTED_ERROR"
+            );
             permission[_target].authorized[_role] = _isWhitelisted;
-
-            if (_role == Role.AUTHORITY) {
-                list.authorities.push(_target);
-                emit AuthoritySet(_target);
-            } else if (_role == Role.FACTORY) {
-                list.factories.push(_target);
-                emit WhitelistedFactory(_target);
-            } else if (_role == Role.WHITELISTER) {
-                list.whitelisters.push(_target);
-                emit WhitelisterSet(_target);
-            } else { // remaining role is "ADAPTER"
-                list.adapters.push(_target);
-                emit WhitelistedAdapter(_target);
-            }
+            roleToList[_role].push(_target);
+            emit PermissionAdded(msg.sender, _target, uint8(_role));
         } else {
-            require(permission[_target].authorized[_role], "NOT_AUTHORIZED");
+            require(permission[_target].authorized[_role], "NOT_ALREADY_WHITELISTED");
             delete permission[_target].authorized[_role];
-
-            for (uint i = 0; i < list.authorities.length; i++) {
-                if (list.authorities[i] == _target) {
-                    if (_role == Role.AUTHORITY) {
-                        list.authorities[i] = list.authorities[list.authorities.length - 1];
-                        list.authorities.pop();
-                        emit RemovedAuthority(_target);
-                    } else if (_role == Role.FACTORY) {
-                        list.factories[i] = list.factories[list.factories.length - 1];
-                        list.factories.pop();
-                        emit RemovedFactory(_target);
-                    } else if (_role == Role.WHITELISTER) {
-                        list.whitelisters[i] = list.whitelisters[list.whitelisters.length - 1];
-                        list.whitelisters.pop();
-                        emit RemovedWhitelister(_target);
-                    } else { // remaining role is "ADAPTER"
-                        list.adapters[i] = list.adapters[list.adapters.length - 1];
-                        list.adapters.pop();
-                        emit RemovedAdapter(_target);
-                    }
+            uint256 length = roleToList[_role].length;
+            for (uint i = 0; i < length; i++) {
+                if (roleToList[_role][i] == _target) {
+                    roleToList[_role][i] = roleToList[_role][length - 1];
+                    roleToList[_role].pop();
+                    emit PermissionRemoved(msg.sender, _target, uint8(_role));
 
                     break;
                 }

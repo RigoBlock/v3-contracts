@@ -27,16 +27,9 @@ interface IAuthorityCore {
     /*
      * EVENTS
      */
-    event AuthoritySet(address indexed authority);
-    event WhitelisterSet(address indexed whitelister);
-    // TODO: check if should return msg.sender as well
-    event WhitelistedAdapter(address indexed adapter);
-    event WhitelistedFactory(address indexed factory);
+    event PermissionAdded(address indexed from, address indexed target, uint8 indexed permissionType);
+    event PermissionRemoved(address indexed from, address indexed target, uint8 indexed permissionType);
     event WhitelistedMethod(bytes4 indexed selector, address indexed adapter);
-    event RemovedAuthority(address indexed authority);
-    event RemovedAdapter(address indexed adapter);
-    event RemovedFactory(address indexed factory);
-    event RemovedWhitelister(address indexed whitelsiter);
     event NewExtensionsAuthority(address indexed extensionsAuthority);
 
     /*
