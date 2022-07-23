@@ -16,8 +16,6 @@ describe("Proxy", async () => {
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const ResitryInstance = await deployments.get("PoolRegistry")
         const Registry = await hre.ethers.getContractFactory("PoolRegistry")
-        const AuthorityExtensionsInstance = await deployments.get("AuthorityExtensions")
-        const AuthorityExtensions = await hre.ethers.getContractFactory("AuthorityExtensions")
         const NavVerifierInstance = await deployments.get("NavVerifier")
         const NavVerifier = await hre.ethers.getContractFactory("NavVerifier")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
@@ -35,7 +33,6 @@ describe("Proxy", async () => {
             factory,
             pool,
             registry: Registry.attach(ResitryInstance.address),
-            authorityExtensions: AuthorityExtensions.attach(AuthorityExtensionsInstance.address),
             navVerifier: NavVerifier.attach(NavVerifierInstance.address)
         }
     });
@@ -168,7 +165,7 @@ describe("Proxy", async () => {
         })
 
         it('should set price when caller is owner', async () => {
-            const { factory, pool, registry, authorityExtensions, navVerifier } = await setupTests()
+            const { factory, pool, registry, navVerifier } = await setupTests()
             const newValue = parseEther("1.1")
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
@@ -181,8 +178,12 @@ describe("Proxy", async () => {
                     bytes32hash
                 )
             ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+
+            const AuthorityCoreInstance = await deployments.get("AuthorityCore")
+            const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
+            const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
             //"9e4e93d0": "isValidNav(uint256,uint256,bytes32,bytes)"
-            await authorityExtensions.whitelistMethod(
+            await authority.whitelistMethod(
                 "0x9e4e93d0",
                 navVerifier.address
             )

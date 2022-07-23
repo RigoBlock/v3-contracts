@@ -141,7 +141,7 @@ contract Inflation is
         // 2% of GRG total supply
         // total supply * annual percentage inflation * time period (1 epoch)
         return (
-            ANNUAL_INFLATION_RATE * epochLength * getGRGTotalSupply()
+            ANNUAL_INFLATION_RATE * epochLength * _getGRGTotalSupply()
             / PPM_DENOMINATOR / 365 days
         );
     }
@@ -151,7 +151,7 @@ contract Inflation is
      */
     /// @dev Asserts that the caller is the Staking Proxy.
     function _assertCallerIsStakingProxy()
-        internal
+        private
         view
     {
         if (msg.sender != STAKING_PROXY_ADDRESS) {
@@ -159,8 +159,8 @@ contract Inflation is
         }
     }
 
-    function getGRGTotalSupply()
-        internal
+    function _getGRGTotalSupply()
+        private
         view
         returns (uint256)
     {

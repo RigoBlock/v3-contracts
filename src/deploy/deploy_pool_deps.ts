@@ -8,13 +8,6 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-/*  await deploy("ExchangesAuthority", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
-*/
   await deploy("NavVerifier", {
     from: deployer,
     args: [],

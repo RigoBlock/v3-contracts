@@ -44,10 +44,10 @@ contract PoolRegistry is IPoolRegistry {
     /*
      * MODIFIERS
      */
-    modifier onlyAuthority {
+    modifier onlyWhitelistedFactory {
         require(
-            Authority(authority).isAuthority(msg.sender),
-            "REGISTRY_CALLER_IS_NOT_AUTHORITY_ERROR"
+            Authority(authority).isWhitelistedFactory(msg.sender),
+            "REGISTRY_FACTORY_NOT_WHITELISTED_ERROR"
         );
         _;
     }
@@ -107,7 +107,7 @@ contract PoolRegistry is IPoolRegistry {
     )
         external
         override
-        onlyAuthority
+        onlyWhitelistedFactory
         whenAddressFree(_poolAddress)
     {
         _assertValidNameAndSymbol(_name, _symbol);

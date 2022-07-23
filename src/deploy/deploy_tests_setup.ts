@@ -21,21 +21,7 @@ const deploy: DeployFunction = async function (
     authority.address
   );
 
-  const authorityExtensions = await deploy("AuthorityExtensions", {
-    from: deployer,
-    args: [deployer], // address _owner
-    log: true,
-    deterministicDeployment: true
-  });
-
-  const authorityExtensionsInstance = await hre.ethers.getContractAt(
-    "AuthorityExtensions",
-    authorityExtensions.address
-  );
-
-  // TODO: file renaming for hardhat issue creates confusion with method names
-  await authorityInstance.setExtensionsAuthority(authorityExtensions.address);
-  await authorityExtensionsInstance.setWhitelister(deployer, true);
+  await authorityInstance.setWhitelister(deployer, true);
 
   const registry = await deploy("PoolRegistry", {
     from: deployer,
@@ -54,9 +40,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: check if should move nav verifier approval to authority extensions entirely
-  await authorityInstance.setNavVerifier(navVerifier.address)
-  await authorityExtensionsInstance.whitelistAdapter(navVerifier.address)
+  await authorityInstance.whitelistAdapter(navVerifier.address, true)
 
   // as long as authority address is same on all chains, pool implementation will have same address
   const poolImplementation = await deploy("RigoblockV3Pool", {
@@ -163,7 +147,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await authorityExtensionsInstance.whitelistAdapter(aStaking.address)
+  await authorityInstance.whitelistAdapter(aStaking.address, true)
 
   await grgVaultInstance.addAuthorizedAddress(deployer)
   await grgVaultInstance.setStakingProxy(stakingProxy.address)

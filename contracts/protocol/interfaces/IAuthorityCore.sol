@@ -27,16 +27,9 @@ interface IAuthorityCore {
     /*
      * EVENTS
      */
-    event AuthoritySet(address indexed authority);
-    event WhitelisterSet(address indexed whitelister);
-    event WhitelistedUser(address indexed target, bool approved);
-    event WhitelistedRegistry(address indexed registry, bool approved);
-    event WhitelistedFactory(address indexed factory, bool approved);
-    event WhitelistedVault(address indexed vault, bool approved);
-    event WhitelistedDrago(address indexed drago, bool isWhitelisted);
-    event NewDragoEventful(address indexed dragoEventful);
-    event NewVaultEventful(address indexed vaultEventful);
-    event NewNavVerifier(address indexed navVerifier);
+    event PermissionAdded(address indexed from, address indexed target, uint8 indexed permissionType);
+    event PermissionRemoved(address indexed from, address indexed target, uint8 indexed permissionType);
+    event WhitelistedMethod(bytes4 indexed selector, address indexed adapter);
     event NewExtensionsAuthority(address indexed extensionsAuthority);
 
     /*
@@ -45,22 +38,29 @@ interface IAuthorityCore {
     function setAuthority(address _authority, bool _isWhitelisted) external;
     function setExtensionsAuthority(address _extensionsAuthority) external;
     function setWhitelister(address _whitelister, bool _isWhitelisted) external;
-    function whitelistUser(address _target, bool _isWhitelisted) external;
-    function whitelistDrago(address _drago, bool _isWhitelisted) external;
-    function whitelistVault(address _vault, bool _isWhitelisted) external;
-    function whitelistRegistry(address _registry, bool _isWhitelisted) external;
     function whitelistFactory(address _factory, bool _isWhitelisted) external;
-    function setNavVerifier(address _navVerifier) external;
+
+    function whitelistAdapter(address _adapter, bool _isWhitelisted) external;
+
+    function whitelistMethod(
+        bytes4 _selector,
+        address _adapter
+    )
+        external;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function isWhitelistedUser(address _target) external view returns (bool);
-    function isAuthority(address _authority) external view returns (bool);
-    function isWhitelistedRegistry(address _registry) external view returns (bool);
-    function isWhitelistedDrago(address _drago) external view returns (bool);
-    function isWhitelistedVault(address _vault) external view returns (bool);
-    function isWhitelistedFactory(address _factory) external view returns (bool);
-    function getNavVerifier() external view returns (address);
+    function isAuthority(address _target) external view returns (bool);
+    function isWhitelistedFactory(address _target) external view returns (bool);
+    function getApplicationAdapter(bytes4 _selector) external view returns (address);
     function getAuthorityExtensions() external view returns (address);
+
+    /// @dev Provides whether an address is whitelister.
+    /// @param _target Address of the target whitelister.
+    /// @return Bool is whitelisted.
+    function isWhitelister(address _target)
+        external
+        view
+        returns (bool);
 }

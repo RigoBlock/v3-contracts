@@ -52,7 +52,7 @@ contract AStaking {
         bytes32 poolId;
         if (id == bytes32(0)) {
             poolId = staking.createStakingPool(address(this));
-            require(poolId != 0, "ASTAKING_POOL_CREATION_ERROR");
+            assert(poolId != 0);
         } else { poolId = id; }
 
         GRG(GRG_TOKEN_ADDRESS).approve(GRG_TRASFER_PROXY_ADDRESS, type(uint256).max);
