@@ -106,10 +106,12 @@ describe("Inflation", async () => {
             const StakingProxy = await hre.ethers.getContractFactory("StakingProxy")
             const proxy = StakingProxy.attach(StakingProxyInstance.address)
             // we must preserve storage in order to overwrite the correct storage slot
-            // TODO: develop RogueStaking.sol in contracts/test and attach new staking proxy there
-            // as we are overcomplicating things here
+            // unfortunately we must declare all preceding variables
             const source = `
-            contract Staking {
+            contract RogueStaking {
+                address public owner;
+                mapping(address => bool) public authorized;
+                address[] public authorities;
                 address public stakingContract;
                 mapping(uint8 => StoredBalance) internal _globalStakeByStatus;
                 mapping(uint8 => mapping(address => StoredBalance)) internal _ownerStakeByStatus;
@@ -128,58 +130,44 @@ describe("Inflation", async () => {
                 uint256 public minimumPoolStake; // 1e19
                 uint32 public cobbDouglasAlphaNumerator; // 2
                 uint32 public cobbDouglasAlphaDenominator; // 3
-                uint32 constant internal PPM_DENOMINATOR = 1e6;
-                struct StoredBalance {
-                    uint64 currentEpoch;
-                    uint96 currentEpochBalance;
-                    uint96 nextEpochBalance;
-                }
-                struct Pool {
-                    address operator;
-                    address stakingPal;
-                    uint32 operatorShare;
-                    uint32 stakingPalShare;
-                }
-                struct Fraction {
-                    uint256 numerator;
-                    uint256 denominator;
-                }
+                address public inflation;
+                struct PoolStats { uint256 feesCollected; uint256 weightedStake; uint256 membersStake; }
+                struct AggregatedStats { uint256 rewardsAvailable; uint256 numPoolsToFinalize; uint256 totalFeesCollected; uint256 totalWeightedStake; uint256 totalRewardsFinalized; }
+                struct StoredBalance { uint64 currentEpoch; uint96 currentEpochBalance; uint96 nextEpochBalance; }
+                struct Pool { address operator; address stakingPal; uint32 operatorShare; uint32 stakingPalShare; }
+                struct Fraction { uint256 numerator; uint256 denominator; }
                 function init() public {}
-                function setDuration(uint256 _duration) external {
-                    epochDurationInSeconds = _duration;
-                }
-                function setTarget(address _inflation, uint256 _duration) external {
-                    epochDurationInSeconds = _duration;
-                }
-                /*function endEpoch(address _inflation) external returns (bytes memory) {
+                function setDuration(uint256 _duration) public { epochDurationInSeconds = _duration; }
+                function setStaking(address _staking) public { stakingContract = _staking; }
+                function setInflation(address _inflation) public { inflation = _inflation; }
+                function endEpoch() public returns (uint256) {
                     bytes4 selector = bytes4(keccak256(bytes("mintInflation()")));
-                    (bool success, bytes memory data) = _inflation.call(abi.encodeWithSelector(selector));
+                    address inflationAddress = inflation;
+                    //bytes memory data = abi.encodeWithSelector(selector);
                     assembly {
-                        switch success
-                        case 0 {
-                            revert(add(0x20, data), mload(data))
-                        }
-                        default {
-                            return(add(0x20, data), mload(data))
-                        }
-                    }
-                }*/
+                        let x := mload(0x40)
+                        mstore(x,selector)
+                        let success := call(gas(), inflationAddress, 0, x, 0, x, 0x20)
+                        if iszero(success) { revert(0, returndatasize()) } return(0, returndatasize()) }
+                }
+                function getParams() external view returns (uint256, uint32, uint256, uint32, uint32) {
+                    return (epochDurationInSeconds, 1, 1, 1, 1);
+                }
             }`
             const rogueImplementation = await deployContract(user1, source)
+            const rogueProxy = rogueImplementation.attach(proxy.address)
             await proxy.addAuthorizedAddress(user1.address)
             await expect(
                 proxy.detachStakingContract()
             ).to.emit(proxy, "StakingContractDetachedFromProxy")
+            await expect(stakingProxy.endEpoch()).to.be.revertedWith("STAKING_ADDRESS_NULL_ERROR")
             await expect(
                 proxy.attachStakingContract(rogueImplementation.address)
             ).to.be.emit(proxy, "StakingContractAttachedToProxy").withArgs(rogueImplementation.address)
-            const rogueProxy = rogueImplementation.attach(proxy.address)
-            console.log(await rogueProxy.epochDurationInSeconds(), 'PRE')
-            // TODO: we can write inflation address but cannot overwrite epoch duration here
             await rogueProxy.setDuration(1)
-            console.log(await rogueProxy.epochDurationInSeconds())
-            //console.log(Number(await rogueProxy.epochDurationInSeconds()))
-            //await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted")
+            await rogueProxy.setInflation(inflation.address)
+            // TODO: we want to inflation error to be returned here
+            await expect(rogueProxy.endEpoch()).to.be.revertedWith("Transaction reverted without a reason")
         })
 
         it('should not attach staking with invalid params', async () => {
