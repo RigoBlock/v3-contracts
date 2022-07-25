@@ -144,8 +144,13 @@ describe("Inflation", async () => {
                     bytes4 selector = bytes4(keccak256(bytes("mintInflation()")));
                     bytes memory encodedCall = abi.encodeWithSelector(selector);
                     (bool success, bytes memory data) = inflation.call(encodedCall);
-                    assembly {
-                        if eq(success, 0) { revert(0, data) } return(0, data) }
+                    if (!success) { revert(string(data)); } return uint256(bytes32(data));
+                }
+                function getInflation() public view returns (uint256) {
+                    bytes4 selector = bytes4(keccak256(bytes("getEpochInflation()")));
+                    bytes memory encodedCall = abi.encodeWithSelector(selector);
+                    ( , bytes memory data) = inflation.staticcall(encodedCall);
+                    return uint256(bytes32(data));
                 }
                 function getParams() external view returns (uint256, uint32, uint256, uint32, uint32) {
                     return (epochDurationInSeconds, 1, 1, 1, 1);
@@ -165,15 +170,17 @@ describe("Inflation", async () => {
             // TODO: following tests work, but do not return expected errror
             // max 90 days duration
             await rogueProxy.setDuration(77760001)
-            await expect(rogueProxy.endEpoch()).to.be.reverted
+            await expect(rogueProxy.endEpoch()).to.be.revertedWith("INFLATION_TIME_ANOMALY_ERROR")
             // min 5 days duration
             await rogueProxy.setDuration(431999)
-            await expect(rogueProxy.endEpoch()).to.be.reverted
+            await expect(rogueProxy.endEpoch()).to.be.revertedWith("INFLATION_TIME_ANOMALY_ERROR")
             await rogueProxy.setDuration(432000)
             await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted")
             await expect(rogueProxy.endEpoch()).to.be.reverted
             await timeTravel({ days: 5, mine:true })
-            await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted")
+            const mintAmount = await rogueProxy.getInflation()
+            expect(await rogueProxy.callStatic.endEpoch()).to.be.eq(mintAmount)
+            await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted").withArgs(proxy.address, mintAmount)
         })
 
         it('should not attach staking with invalid params', async () => {
