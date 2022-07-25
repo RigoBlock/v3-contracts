@@ -165,5 +165,23 @@ describe("StakingProxy", async () => {
                 proxy.attachStakingContract(rogueImplementation.address)
             ).to.be.revertedWith("STAKING_PROXY_INVALID_EPOCH_DURATION_ERROR")
         })
+
+        it('should revert if staking did not succeed', async () => {
+            const { inflation, stakingProxy, rigoToken } = await setupTests()
+            const StakingProxyInstance = await deployments.get("StakingProxy")
+            const StakingProxy = await hre.ethers.getContractFactory("StakingProxy")
+            const proxy = StakingProxy.attach(StakingProxyInstance.address)
+            const source = `
+            contract RogueStaking {
+                function init() public { revert("STAKING_INIT_FAILED_ERROR"); }
+            }`
+            const rogueImplementation = await deployContract(user1, source)
+            await proxy.addAuthorizedAddress(user1.address)
+            await proxy.detachStakingContract()
+            const rogueProxy = rogueImplementation.attach(proxy.address)
+            await expect(
+                proxy.attachStakingContract(rogueImplementation.address)
+            ).to.be.revertedWith("STAKING_INIT_FAILED_ERROR")
+        })
     })
 })
