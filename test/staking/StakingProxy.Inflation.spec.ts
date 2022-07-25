@@ -98,41 +98,6 @@ describe("Inflation", async () => {
             await expect(rigoToken.changeMintingAddress(user1.address)).to.be.reverted
             await expect(rigoToken.mintToken(AddressZero, 5)).to.be.reverted
         })
-
-        // this test should assure that a rogue upgrade of staking implementation won't affect token issuance
-        it('should revert on time anomalies', async () => {
-            const { inflation, stakingProxy, rigoToken } = await setupTests()
-            const StakingProxyInstance = await deployments.get("StakingProxy")
-            const StakingProxy = await hre.ethers.getContractFactory("StakingProxy")
-            const proxy = StakingProxy.attach(StakingProxyInstance.address)
-            const source = `
-            contract Staking {
-                uint256 public _epochDurationInSeconds = 14 days;
-                address private inflation;
-                bytes4 immutable private SELECTOR = bytes4(keccak256(bytes("mintInflation()")));
-                function init(address _inflation) external { inflation = _inflation; }
-                function endEpoch() external returns (uint256) {
-                    (bool success, bytes memory data) = inflation.call(abi.encodeWithSelector(SELECTOR));
-                }
-                function setDuration() external { _epochDurationInSeconds = 0; }
-            }`
-            // TODO: must create init method with moch times
-            const mockImplementation = await deployContract(user1, source)
-            await mockImplementation.init(inflation.address)
-            await proxy.addAuthorizedAddress(user1.address)
-            await expect(
-                proxy.detachStakingContract()
-            ).to.emit(proxy, "StakingContractDetachedFromProxy")
-            // staking contract should revert on adding contract with invalid parameters
-            await expect(
-                proxy.attachStakingContract(mockImplementation.address)
-            ).to.be.reverted
-            await expect(stakingProxy.endEpoch()).to.be.revertedWith("STAKING_ADDRESS_NULL_ERROR")
-            const stakingInstance = await deployments.get("Staking")
-            await expect(
-                proxy.attachStakingContract(stakingInstance.address)
-            ).to.be.revertedWith("STAKING_SCHEDULER_ALREADY_INITIALIZED_ERROR")
-        })
     })
 
     describe("timeUntilNextClaim", async () => {

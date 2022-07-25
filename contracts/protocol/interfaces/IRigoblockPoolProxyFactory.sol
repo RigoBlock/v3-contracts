@@ -33,7 +33,7 @@ interface IRigoblockPoolProxyFactory {
     event RegistryUpgraded(address indexed registry);
 
     /*
-     * PUBLIC FUNCTIONS
+     * STORAGE
      */
     /// @dev Returns the implementation address for the pool proxies.
     /// @return Address of the implementation.
