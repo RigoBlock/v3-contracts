@@ -142,13 +142,10 @@ describe("Inflation", async () => {
                 function setInflation(address _inflation) public { inflation = _inflation; }
                 function endEpoch() public returns (uint256) {
                     bytes4 selector = bytes4(keccak256(bytes("mintInflation()")));
-                    address inflationAddress = inflation;
-                    //bytes memory data = abi.encodeWithSelector(selector);
+                    bytes memory encodedCall = abi.encodeWithSelector(selector);
+                    (bool success, bytes memory data) = inflation.call(encodedCall);
                     assembly {
-                        let x := mload(0x40)
-                        mstore(x,selector)
-                        let success := call(gas(), inflationAddress, 0, x, 0, x, 0x20)
-                        if iszero(success) { revert(0, returndatasize()) } return(0, returndatasize()) }
+                        if eq(success, 0) { revert(0, data) } return(0, data) }
                 }
                 function getParams() external view returns (uint256, uint32, uint256, uint32, uint32) {
                     return (epochDurationInSeconds, 1, 1, 1, 1);
@@ -164,10 +161,19 @@ describe("Inflation", async () => {
             await expect(
                 proxy.attachStakingContract(rogueImplementation.address)
             ).to.be.emit(proxy, "StakingContractAttachedToProxy").withArgs(rogueImplementation.address)
-            await rogueProxy.setDuration(1)
             await rogueProxy.setInflation(inflation.address)
-            // TODO: we want to inflation error to be returned here
-            await expect(rogueProxy.endEpoch()).to.be.revertedWith("Transaction reverted without a reason")
+            // TODO: following tests work, but do not return expected errror
+            // max 90 days duration
+            await rogueProxy.setDuration(77760001)
+            await expect(rogueProxy.endEpoch()).to.be.reverted
+            // min 5 days duration
+            await rogueProxy.setDuration(431999)
+            await expect(rogueProxy.endEpoch()).to.be.reverted
+            await rogueProxy.setDuration(432000)
+            await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted")
+            await expect(rogueProxy.endEpoch()).to.be.reverted
+            await timeTravel({ days: 5, mine:true })
+            await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted")
         })
 
         it('should not attach staking with invalid params', async () => {
