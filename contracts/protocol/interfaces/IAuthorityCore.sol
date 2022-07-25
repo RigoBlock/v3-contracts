@@ -27,34 +27,97 @@ interface IAuthorityCore {
     /*
      * EVENTS
      */
-    event PermissionAdded(address indexed from, address indexed target, uint8 indexed permissionType);
-    event PermissionRemoved(address indexed from, address indexed target, uint8 indexed permissionType);
-    event WhitelistedMethod(bytes4 indexed selector, address indexed adapter);
     event NewExtensionsAuthority(address indexed extensionsAuthority);
+
+    event PermissionAdded(
+        address indexed from,
+        address indexed target,
+        uint8 indexed permissionType
+    );
+
+    event PermissionRemoved(
+        address indexed from,
+        address indexed target,
+        uint8 indexed permissionType
+    );
+
+    event RemovedMethod(
+        address indexed from,
+        address indexed adapter,
+        bytes4 indexed selector
+    );
+
+    event WhitelistedMethod(
+        address indexed from,
+        address indexed adapter,
+        bytes4 indexed selector
+    );
+
+    /*
+     * STORAGE
+     */
+    /// @dev Returns the address of the extensions authority.
+    /// @return Address of the extensions authority.
+    function extensionsAuthority() external view returns (address);
 
     /*
      * CORE FUNCTIONS
      */
-    function setAuthority(address _authority, bool _isWhitelisted) external;
-    function setExtensionsAuthority(address _extensionsAuthority) external;
-    function setWhitelister(address _whitelister, bool _isWhitelisted) external;
-    function whitelistFactory(address _factory, bool _isWhitelisted) external;
-
-    function whitelistAdapter(address _adapter, bool _isWhitelisted) external;
-
-    function whitelistMethod(
+    /// @dev Allows a whitelister to whitelist a method.
+    /// @param _selector Bytes4 hex of the method selector.
+    /// @param _adapter Address of the adapter implementing the method.
+    /// @notice We do not save list of approved as better queried by events.
+    function addMethod(
         bytes4 _selector,
         address _adapter
     )
         external;
 
+    /// @dev Allows a whitelister to remove a method.
+    /// @param _selector Bytes4 hex of the method selector.
+    /// @param _adapter Address of the adapter implementing the method.
+    function removeMethod(
+        bytes4 _selector,
+        address _adapter
+    )
+        external;
+
+    /// @dev Allows owner to set extension adapter address.
+    /// @param _adapter Address of the target adapter.
+    /// @param _isWhitelisted Bool whitelisted.
+    function setAdapter(address _adapter, bool _isWhitelisted) external;
+
+    /// @dev Allows the owner to set the extensions authority.
+    /// @param _extensionsAuthority Address of the extensions authority.
+    function setExtensionsAuthority(address _extensionsAuthority) external;
+
+    /// @dev Allows an admin to set factory permission.
+    /// @param _factory Address of the target factory.
+    /// @param _isWhitelisted Bool whitelisted.
+    function setFactory(address _factory, bool _isWhitelisted) external;
+
+    /// @dev Allows the owner to set whitelister permission.
+    /// @param _whitelister Address of the whitelister.
+    /// @param _isWhitelisted Bool whitelisted.
+    /// @notice Whitelister permission is required to approve methods in extensions adapter.
+    function setWhitelister(address _whitelister, bool _isWhitelisted) external;
+
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function isAuthority(address _target) external view returns (bool);
-    function isWhitelistedFactory(address _target) external view returns (bool);
+    /// @dev Returns the address of the adapter associated to the signature.
+    /// @param _selector Hex of the method signature.
+    /// @return Address of the adapter.
     function getApplicationAdapter(bytes4 _selector) external view returns (address);
+
+    /// @dev Provides the address of the exchanges authority.
+    /// @return Address of the adapter.
     function getAuthorityExtensions() external view returns (address);
+
+    /// @dev Provides whether a factory is whitelisted.
+    /// @param _target Address of the target factory.
+    /// @return Bool is whitelisted.
+    function isWhitelistedFactory(address _target) external view returns (bool);
 
     /// @dev Provides whether an address is whitelister.
     /// @param _target Address of the target whitelister.

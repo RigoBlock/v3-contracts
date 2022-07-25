@@ -28,7 +28,8 @@ import { RigoblockPoolProxy } from "./RigoblockPoolProxy.sol";
 // solhint-disable-next-line
 contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
-    address public implementation;
+    /// @inheritdoc IRigoblockPoolProxyFactory
+    address public override implementation;
 
     address private registryAddress;
 
@@ -82,6 +83,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         }
     }
 
+    /// @inheritdoc IRigoblockPoolProxyFactory
     function setImplementation(address _newImplementation)
         external
         override
@@ -95,8 +97,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         emit Upgraded(_newImplementation);
     }
 
-    /// @dev Allows owner to update the registry
-    /// @param _newRegistry Address of the new registry
+    /// @inheritdoc IRigoblockPoolProxyFactory
     function setRegistry(address _newRegistry)
         external
         override
@@ -113,8 +114,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Returns the address of the pool registry
-    /// @return Address of the registry
+    /// @inheritdoc IRigoblockPoolProxyFactory
     function getRegistry()
         external
         view
@@ -166,6 +166,8 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         );
     }
 
+    /// @dev Returns whether an address is a contract.
+    /// @return Bool target address has code.
     function _isContract(address _target)
         private
         view

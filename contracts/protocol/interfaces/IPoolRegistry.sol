@@ -27,6 +27,14 @@ interface IPoolRegistry {
     /*
      * EVENTS
      */
+    event AuthorityChanged(address indexed athority);
+
+    event MetaChanged(
+        address indexed poolAddress,
+        bytes32 indexed key,
+        bytes32 value
+    );
+
     event Registered(
         address indexed group,
         address poolAddress,
@@ -35,25 +43,25 @@ interface IPoolRegistry {
         bytes32 id
     );
 
-    event MetaChanged(
-        address indexed poolAddress,
-        bytes32 indexed key,
-        bytes32 value
-    );
-
-    event AuthorityChanged(address indexed athority);
     event RigoblockDaoChanged(address indexed rigoblockDaoAddress);
 
     /*
      * STORAGE
     */
+    /// @dev Returns the address of the Rigoblock authority contract.
+    /// @return Address of the authority contract.
     function authority() external view returns (address);
 
+    /// @dev Returns the address of the Rigoblock Dao.
     function rigoblockDaoAddress()external view returns (address);
 
     /*
      * CORE FUNCTIONS
      */
+    /// @dev Allows a factory which is an authority to register a pool.
+    /// @param _poolAddress Address of the pool.
+    /// @param _name Name of the pool.
+    /// @param _symbol Symbol of the pool.
     function register(
         address _poolAddress,
         string calldata  _name,
@@ -67,6 +75,10 @@ interface IPoolRegistry {
     function setAuthority (address _authority)
         external;
 
+    /// @dev Allows pool owner to set metadata for a pool.
+    /// @param _poolAddress Address of the pool.
+    /// @param _key Bytes32 of the key.
+    /// @param _value Bytes32 of the value.
     function setMeta(
         address _poolAddress,
         bytes32 _key,
@@ -74,19 +86,18 @@ interface IPoolRegistry {
     )
         external;
 
-    /// @dev Allows Rigoblock DAO/factory to update its address
-    /// @dev Creates internal record
-    /// @param _newRigoblockDao Address of the Rigoblock DAO
+    /// @dev Allows Rigoblock Dao to update its address.
+    /// @dev Creates internal record.
+    /// @param _newRigoblockDao Address of the Rigoblock Dao.
     function setRigoblockDao(address _newRigoblockDao) external;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function getPoolIdFromAddress(address _poolAddress)
-        external
-        view
-        returns (bytes32 poolAddress);
-
+    /// @dev Provides a pool's metadata.
+    /// @param _poolAddress Address of the pool.
+    /// @param _key Bytes32 key.
+    /// @return poolMeta Meta by key.
     function getMeta(
         address _poolAddress,
         bytes32 _key
@@ -94,4 +105,11 @@ interface IPoolRegistry {
         external
         view
         returns (bytes32 poolMeta);
+
+    /// @dev Provides a pool's struct data.
+    /// @param _poolAddress Address of the pool.
+    function getPoolIdFromAddress(address _poolAddress)
+        external
+        view
+        returns (bytes32 poolAddress);
 }

@@ -11,20 +11,17 @@ describe("ProxyGasCost", async () => {
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
-        const ResitryInstance = await deployments.get("PoolRegistry")
-        const Registry = await hre.ethers.getContractFactory("PoolRegistry")
         const RigoTokenInstance = await deployments.get("RigoToken")
         const RigoToken = await hre.ethers.getContractFactory("RigoToken")
         return {
             factory: Factory.attach(RigoblockPoolProxyFactory.address),
-            registry: Registry.attach(ResitryInstance.address),
             grgToken: RigoToken.attach(RigoTokenInstance.address)
         }
     });
 
     describe("calculateCost", async () => {
         it('should create pool whose size is smaller than 500k gas', async () => {
-            const { factory, registry } = await setupTests()
+            const { factory } = await setupTests()
             const txReceipt = await factory.createPool(
                 't est pool',
                 'TEST',
@@ -38,7 +35,7 @@ describe("ProxyGasCost", async () => {
         })
 
         it('should cost less than 500k gas with base token', async () => {
-            const { factory, registry, grgToken } = await setupTests()
+            const { factory, grgToken } = await setupTests()
             const txReceipt = await factory.createPool(
                 't est pool',
                 'TEST',

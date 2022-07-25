@@ -29,7 +29,8 @@ contract AuthorityCore is
     Owned,
     IAuthorityCore
 {
-    address public extensionsAuthority;
+    /// @inheritdoc IAuthorityCore
+    address public override extensionsAuthority;
 
     mapping(bytes4 => address) private adapterBySelector;
     mapping(address => Permission) private permission;
@@ -37,7 +38,6 @@ contract AuthorityCore is
 
     enum Role {
         ADAPTER,
-        AUTHORITY,
         FACTORY,
         WHITELISTER
     }
@@ -61,54 +61,8 @@ contract AuthorityCore is
     /*
      * CORE FUNCTIONS
      */
-    /// @dev Allows the owner to whitelist an authority.
-    /// @param _authority Address of the authority.
-    /// @param _isWhitelisted Bool whitelisted.
-    function setAuthority(address _authority, bool _isWhitelisted)
-        external
-        override
-        onlyOwner
-    {
-        _changePermission(_authority, _isWhitelisted, Role.AUTHORITY);
-    }
-
-    /// @dev Allows the owner to whitelist a whitelister.
-    /// @param _whitelister Address of the whitelister.
-    /// @param _isWhitelisted Bool whitelisted.
-    /// @notice Whitelister permission is required to approve methods in extensions adapter.
-    function setWhitelister(address _whitelister, bool _isWhitelisted)
-        external
-        override
-        onlyOwner
-    {
-        _changePermission(_whitelister, _isWhitelisted, Role.WHITELISTER);
-    }
-
-    /// @dev Allows an admin to whitelist a factory.
-    /// @param _factory Address of the target factory.
-    /// @param _isWhitelisted Bool whitelisted.
-    function whitelistFactory(address _factory, bool _isWhitelisted)
-        external
-        override
-        onlyOwner
-    {
-        _changePermission(_factory, _isWhitelisted, Role.FACTORY);
-    }
-
-    /// @notice Allows owner to whitelist methods.
-    function whitelistAdapter(address _adapter, bool _isWhitelisted)
-        external
-        override
-        onlyOwner
-    {
-        _changePermission(_adapter, _isWhitelisted, Role.ADAPTER);
-    }
-
-    /// @dev Allows an admin to whitelist a factory.
-    /// @param _selector Bytes4 hex of the method interface.
-    /// @notice setting _adapter to address(0) will effectively revoke method.
-    // TODO: must removeMethod(selector, adapter). Check if should add methods list as could get big.
-    function whitelistMethod(
+    /// @inheritdoc IAuthorityCore
+    function addMethod(
         bytes4 _selector,
         address _adapter
     )
@@ -125,11 +79,27 @@ contract AuthorityCore is
             "SELECTOR_EXISTS_ERROR"
         );
         adapterBySelector[_selector] = _adapter;
-        emit WhitelistedMethod(_selector, _adapter);
+        emit WhitelistedMethod(msg.sender, _adapter, _selector);
     }
 
-    /// @dev Allows the owner to set the extensions authority.
-    /// @param _extensionsAuthority Address of the extensions authority.
+    /// @inheritdoc IAuthorityCore
+    function removeMethod(
+        bytes4 _selector,
+        address _adapter
+    )
+        external
+        override
+        onlyWhitelister
+    {
+        require(
+            adapterBySelector[_selector] != address(0),
+            "AUTHORITY_METHOD_NOT_APPROVED_ERROR"
+        );
+        delete adapterBySelector[_selector];
+        emit RemovedMethod(msg.sender, _adapter, _selector);
+    }
+
+    /// @inheritdoc IAuthorityCore
     function setExtensionsAuthority(address _extensionsAuthority)
         external
         override
@@ -139,25 +109,37 @@ contract AuthorityCore is
         emit NewExtensionsAuthority(extensionsAuthority);
     }
 
+    /// @inheritdoc IAuthorityCore
+    function setWhitelister(address _whitelister, bool _isWhitelisted)
+        external
+        override
+        onlyOwner
+    {
+        _changePermission(_whitelister, _isWhitelisted, Role.WHITELISTER);
+    }
+
+    /// @inheritdoc IAuthorityCore
+    function setAdapter(address _adapter, bool _isWhitelisted)
+        external
+        override
+        onlyOwner
+    {
+        _changePermission(_adapter, _isWhitelisted, Role.ADAPTER);
+    }
+
+    /// @inheritdoc IAuthorityCore
+    function setFactory(address _factory, bool _isWhitelisted)
+        external
+        override
+        onlyOwner
+    {
+        _changePermission(_factory, _isWhitelisted, Role.FACTORY);
+    }
+
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-
-    /// @dev Provides whether an address is an authority.
-    /// @param _target Address of the target authority.
-    /// @return Bool is whitelisted.
-    function isAuthority(address _target)
-        external
-        view
-        override
-        returns (bool)
-    {
-        return permission[_target].authorized[Role.AUTHORITY];
-    }
-
-    /// @dev Provides whether a factory is whitelisted.
-    /// @param _target Address of the target factory.
-    /// @return Bool is whitelisted.
+    /// @inheritdoc IAuthorityCore
     function isWhitelistedFactory(address _target)
         external
         view
@@ -176,8 +158,7 @@ contract AuthorityCore is
             return adapterBySelector[_selector];
     }
 
-    /// @dev Provides the address of the exchanges authority.
-    /// @return Address of the adapter.
+    /// @inheritdoc IAuthorityCore
     function getAuthorityExtensions()
         external
         view
@@ -187,9 +168,7 @@ contract AuthorityCore is
         return extensionsAuthority;
     }
 
-    /// @dev Provides whether an address is whitelister.
-    /// @param _target Address of the target whitelister.
-    /// @return Bool is whitelisted.
+    /// @inheritdoc IAuthorityCore
     function isWhitelister(address _target)
         public
         view
@@ -209,6 +188,7 @@ contract AuthorityCore is
     )
         private
     {
+        require(_target != address(0), "AUTHORITY_TARGET_NULL_ADDRESS_ERROR");
         if (_isWhitelisted) {
             require(
                 !permission[_target].authorized[_role],
@@ -218,7 +198,10 @@ contract AuthorityCore is
             roleToList[_role].push(_target);
             emit PermissionAdded(msg.sender, _target, uint8(_role));
         } else {
-            require(permission[_target].authorized[_role], "NOT_ALREADY_WHITELISTED");
+            require(
+                permission[_target].authorized[_role],
+                "NOT_ALREADY_WHITELISTED"
+            );
             delete permission[_target].authorized[_role];
             uint256 length = roleToList[_role].length;
             for (uint i = 0; i < length; i++) {

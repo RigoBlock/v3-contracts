@@ -21,7 +21,7 @@ describe("ProxyFactory", async () => {
 
     describe("createPool", async () => {
         it('should revert with space before pool name', async () => {
-            const { factory, registry } = await setupTests()
+            const { factory } = await setupTests()
             await expect(
                 factory.createPool(' testpool', 'TEST', AddressZero)
             ).to.be.revertedWith("LIBSANITIZE_SPACE_AT_BEGINNING_ERROR")
@@ -108,7 +108,7 @@ describe("ProxyFactory", async () => {
         })
 
         it('should create pool with duplicate name', async () => {
-            const { factory, registry } = await setupTests()
+            const { factory } = await setupTests()
             await expect(
                 factory.createPool('duplicateName', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
@@ -118,7 +118,7 @@ describe("ProxyFactory", async () => {
         })
 
         it('should create pool with duplicate symbol', async () => {
-            const { factory, registry } = await setupTests()
+            const { factory } = await setupTests()
             await factory.createPool('someName', 'TEST', AddressZero)
             await expect(
               factory.createPool('someOtherName', 'TEST', AddressZero)
@@ -169,7 +169,7 @@ describe("ProxyFactory", async () => {
 
     describe("setRegistry", async () => {
         it('should revert if caller not dao address', async () => {
-            const { factory, registry } = await setupTests()
+            const { factory } = await setupTests()
             const [ user1, user2 ] = waffle.provider.getWallets()
             await expect(
                 factory.connect(user2).setRegistry(AddressZero)

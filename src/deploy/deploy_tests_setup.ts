@@ -40,7 +40,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await authorityInstance.whitelistAdapter(navVerifier.address, true)
+  await authorityInstance.setAdapter(navVerifier.address, true)
 
   // as long as authority address is same on all chains, pool implementation will have same address
   const poolImplementation = await deploy("RigoblockV3Pool", {
@@ -61,7 +61,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await authorityInstance.whitelistFactory(proxyFactory.address, true)
+  await authorityInstance.setFactory(proxyFactory.address, true)
 
   // same on altchains but different from one deployed on Ethereum
   const rigoToken = await deploy("RigoToken", {
@@ -147,7 +147,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await authorityInstance.whitelistAdapter(aStaking.address, true)
+  await authorityInstance.setAdapter(aStaking.address, true)
 
   await grgVaultInstance.addAuthorizedAddress(deployer)
   await grgVaultInstance.setStakingProxy(stakingProxy.address)
