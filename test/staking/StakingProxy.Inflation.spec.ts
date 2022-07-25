@@ -181,6 +181,7 @@ describe("Inflation", async () => {
             const mintAmount = await rogueProxy.getInflation()
             expect(await rogueProxy.callStatic.endEpoch()).to.be.eq(mintAmount)
             await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted").withArgs(proxy.address, mintAmount)
+            await expect(rogueProxy.endEpoch()).to.be.revertedWith("INFLATION_EPOCH_END_ERROR")
         })
 
         it('should not attach staking with invalid params', async () => {

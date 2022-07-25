@@ -74,7 +74,6 @@ contract Inflation is
         returns (uint256 mintedInflation)
     {
         // solhint-disable-next-line not-rely-on-time
-        //assert(block.timestamp >= epochEndTime);
         require(block.timestamp >= epochEndTime, "INFLATION_EPOCH_END_ERROR");
         (uint256 epochDurationInSeconds, , , , ) = IStaking(STAKING_PROXY_ADDRESS).getParams();
 
