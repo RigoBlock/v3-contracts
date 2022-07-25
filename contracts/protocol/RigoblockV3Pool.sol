@@ -308,6 +308,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         //require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
         require(
             _isValidNav(
+                NavVerifier(address(this)),
                 _unitaryValue,
                 _signaturevaliduntilBlock,
                 _hash,
@@ -616,16 +617,17 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _signedData Proof of nav validity.
     /// @return isValid Bool validity of signed price update.
     function _isValidNav(
+        NavVerifier this_,
         uint256 _unitaryValue,
         uint256 _signatureValidUntilBlock,
         bytes32 _hash,
-        // TODO: check are we are using calldata instead of memory
-        bytes calldata _signedData)
+        bytes calldata _signedData
+    )
         internal
-        view
+        pure
         returns (bool)
     {
-        return NavVerifier(address(this)).isValidNav(
+        return this_.isValidNav(
             _unitaryValue,
             _signatureValidUntilBlock,
             _hash,
