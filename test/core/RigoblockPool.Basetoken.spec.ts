@@ -158,8 +158,8 @@ describe("BaseTokenProxy", async () => {
             await factory.createPool('USDC pool','USDP',usdc.address)
             const poolUsdc = pool.attach(newPool.newPoolAddress)
             expect(await poolUsdc.decimals()).to.be.eq(6)
-            await usdc.transfer(user2.address, 700000)
-            await poolUsdc.connect(user2).mint(user2.address, 700000)
+            await usdc.transfer(user2.address, 2000000)
+            await poolUsdc.connect(user2).mint(user2.address, 100000)
             const AuthorityCoreInstance = await deployments.get("AuthorityCore")
             const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
             const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
@@ -170,13 +170,32 @@ describe("BaseTokenProxy", async () => {
             await authority.addMethod("0x9e4e93d0", navVerifier.address)
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
             // TODO: test subsequent minting with growing unitary value (test underflow)
-            await poolUsdc.setUnitaryValue(200001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(40001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(8001, 1, bytes32hash, bytes32hash)
-            await timeTravel({ seconds: 1, mine: true })
+            await poolUsdc.setUnitaryValue(4999999, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(24999990, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(124999900, 1, bytes32hash, bytes32hash)
             await expect(
-                poolUsdc.connect(user2).burn(665000)
-            ).to.emit(poolUsdc, "Transfer").withArgs(user2.address, AddressZero, 665000)
+                poolUsdc.connect(user2).mint(user2.address, 100000)
+            ).be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
+            await poolUsdc.setUnitaryValue(25000001, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(5000001, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(1000001, 1, bytes32hash, bytes32hash)
+            await timeTravel({ seconds: 1, mine: true })
+            await poolUsdc.setUnitaryValue(200001, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(50001, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(10001, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(2001, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(401, 1, bytes32hash, bytes32hash)
+            // TODO: _getUnitaryValue() / MINIMUM_ORDER_DIVISOR underflows, check if logic is intended
+            // as with lower value base token minimum decreases, while increases with higher value.
+            await expect(
+                poolUsdc.connect(user2).mint(user2.address, 1)
+            ).to.emit(poolUsdc, "Transfer").withArgs(AddressZero, user2.address, 2493)
+            await timeTravel({ seconds: 1, mine: true })
+            const burnAmount = 6000
+            // TODO: check if burning underflows netRevenue
+            await expect(
+                poolUsdc.connect(user2).burn(burnAmount)
+            ).to.emit(poolUsdc, "Transfer").withArgs(user2.address, AddressZero, burnAmount)
         })
     })
 
