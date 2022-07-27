@@ -1,3 +1,33 @@
+# [0.7.0](https://github.com/rigoblock/v3-contracts/compare/v0.6.0...v0.7.0) (2022-07-27)
+
+
+### Bug Fixes
+
+* assert instead of revert with reason in inflation ([ca1add6](https://github.com/rigoblock/v3-contracts/commit/ca1add6419cecbaf9184a61a9063849c6dd355de))
+* correctly delete from storage when removing in authority ([11099ad](https://github.com/rigoblock/v3-contracts/commit/11099ad0bafea6892d37a3753424283b71090dda))
+* declare isValidNav as pure instead of view ([b9562db](https://github.com/rigoblock/v3-contracts/commit/b9562dbba7886b5dff148d7de3e2f74d9f5a9144))
+* further authority linting ([c78416f](https://github.com/rigoblock/v3-contracts/commit/c78416ff9fefcd7625fa75727be716b053b53e49))
+* further simplify authority core ([92fedd8](https://github.com/rigoblock/v3-contracts/commit/92fedd8f670523c1c056faca291343bb5e2a1c06))
+* just assert without return error in staking adapter ([8cc2272](https://github.com/rigoblock/v3-contracts/commit/8cc22724f36be68b2d6a50c65ea274bfb643d666))
+* minimum amount as base / 1e3 instead of value / 1e3 ([0a89c3b](https://github.com/rigoblock/v3-contracts/commit/0a89c3ba755590e31e74ac5a0c0bfb977c4dc127))
+* pool registry linting ([a8cebd9](https://github.com/rigoblock/v3-contracts/commit/a8cebd990979664a6bee525cc630830af6c7bbc7))
+* remove authority exchanges use in weth adapter  ([36395f6](https://github.com/rigoblock/v3-contracts/commit/36395f68079403cd61fc1ab77804e027b02ed1d9))
+* remove concept of authority group ([1ff95a5](https://github.com/rigoblock/v3-contracts/commit/1ff95a543fd3fd3c7d4cc79eb14d2c07d3a75e0d))
+* remove use of authority extensions in pool ([5245c39](https://github.com/rigoblock/v3-contracts/commit/5245c3930d0f6b62f42c3fd2609e4fd68c27f041))
+* rename internal to private in inflation and rename internal method ([ffe0261](https://github.com/rigoblock/v3-contracts/commit/ffe026192a289ca9d22b63cafc387ec3f96407fa))
+* revert with error in inflation time anomaly instead of assert ([752d186](https://github.com/rigoblock/v3-contracts/commit/752d186cacd266622416504a63bee477b32acc0a))
+* upgrade solc  dep to 0.8.15 from 0.7.4 ([653365e](https://github.com/rigoblock/v3-contracts/commit/653365e69d712a3b895a218f8a7377cb9924973b))
+
+
+### Features
+
+* better naming convensions in authority and registry modifier ([71e52af](https://github.com/rigoblock/v3-contracts/commit/71e52af937840eeda61d0e475d41e67c605d5874))
+* simplify authority contract ([e53c111](https://github.com/rigoblock/v3-contracts/commit/e53c111f2b9fe43ae53b991b6e6a49b23f181b74))
+* simplify authority core storage ([37e0226](https://github.com/rigoblock/v3-contracts/commit/37e022642dcdfedeb696eb550c2dd4cf72f1591f))
+* simplify authority extensions storage ([bc07a2c](https://github.com/rigoblock/v3-contracts/commit/bc07a2c58953089f6137a6a7de5879654b72eab5))
+
+
+
 # [0.6.0](https://github.com/rigoblock/v3-contracts/compare/v0.5.0...v0.6.0) (2022-07-22)
 
 
@@ -120,16 +150,6 @@
 * pool registry refactoring ([6998d01](https://github.com/rigoblock/v3-contracts/commit/6998d012d531447d288f963e4480ad0dbe25a17c))
 * query registry from address instead of id and map from address ([544ca6b](https://github.com/rigoblock/v3-contracts/commit/544ca6bc8c2e10eaacae50ff71964f95ab695663))
 * refactory pop on pool locked stake instead of own assets ([c2df80b](https://github.com/rigoblock/v3-contracts/commit/c2df80b90277b48024869331562fb3356ccd427e))
-
-
-
-## [0.2.2](https://github.com/rigoblock/v3-contracts/compare/v0.2.1...v0.2.2) (2022-06-22)
-
-
-### Bug Fixes
-
-* ci bump package version ([a8620d6](https://github.com/rigoblock/v3-contracts/commit/a8620d647d786074298ec33b2f6aae8cd87f7998))
-* use conventional changelog instead of github tag action ([ad8e887](https://github.com/rigoblock/v3-contracts/commit/ad8e88753ff2da04d24619d5b3e499602fccd4b6))
 
 
 
