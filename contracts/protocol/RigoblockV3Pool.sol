@@ -538,6 +538,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         /// @notice Each mint on same recipient resets prior activation.
         /// @notice Lock recipient tokens, max lockup 30 days cannot overflow.
+        // TODO: write activation and balance to struct at same time
         unchecked {
             userAccount[_recipient].activation = uint32(block.timestamp) + _getMinPeriod();
         }
