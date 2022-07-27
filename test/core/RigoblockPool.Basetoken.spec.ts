@@ -66,10 +66,14 @@ describe("BaseTokenProxy", async () => {
 
     describe("mint", async () => {
         it('should create new tokens with input tokens', async () => {
-            // TODO: test minimum order assertion with small amounts
             const { pool, grgToken } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
             expect(await grgToken.balanceOf(pool.address)).to.be.eq(0)
+            const dustAmount = parseEther("0.000999")
+            expect(await pool.decimals()).to.be.eq(18)
+            await expect(
+                pool.mint(user1.address, dustAmount)
+            ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
             const tokenAmountIn = parseEther("1")
             await grgToken.approve(pool.address, tokenAmountIn)
             expect(await grgToken.allowance(user1.address, pool.address)).to.be.eq(tokenAmountIn)
@@ -103,11 +107,15 @@ describe("BaseTokenProxy", async () => {
             const tokenAmountIn = parseEther("1")
             await grgToken.approve(pool.address, tokenAmountIn)
             const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn)
+            const minimumLockup = 2
+            expect((await pool.getAdminData()).minPeriod).to.be.eq(minimumLockup)
             await pool.mint(user1.address, tokenAmountIn)
             expect(await pool.totalSupply()).to.be.not.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(userTokens)
             let userPoolBalance = await pool.balanceOf(user1.address)
-            // TODO: write tests failing before lockup expiry
+            await expect(pool.burn(userPoolBalance)).to.be.revertedWith("POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR")
+            // tests run 1 tx per block, therefore moving one second ahead results in being 2 seconds from mint
+            // TODO: test changeMinPeriod with higher periods
             await timeTravel({ seconds: 1, mine: true })
             const netRevenue = await pool.callStatic.burn(userPoolBalance)
             // the following is true with fee set as 0
@@ -132,7 +140,7 @@ describe("BaseTokenProxy", async () => {
             const decimals = await pool.decimals()
             const revenue = userPoolBalance * unitaryValue / (10**decimals)
             // TODO: check why difference of 128 wei, possibly approximation
-            expect(userPoolBalance - revenue).to.be.lt(129)
+            expect(userPoolBalance - revenue).to.be.eq(128)
             //expect(netRevenue.toString()).to.be.deep.eq(revenue.toString())
         })
     })
@@ -169,27 +177,23 @@ describe("BaseTokenProxy", async () => {
             //"9e4e93d0": "isValidNav(uint256,uint256,bytes32,bytes)"
             await authority.addMethod("0x9e4e93d0", navVerifier.address)
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
-            // TODO: test subsequent minting with growing unitary value (test underflow)
             await poolUsdc.setUnitaryValue(4999999, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(24999990, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(124999900, 1, bytes32hash, bytes32hash)
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 100000)
-            ).be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
+            ).be.emit(poolUsdc, "Transfer").withArgs(AddressZero, user2.address, 760)
+            await expect(
+                poolUsdc.connect(user2).mint(user2.address, 999)
+            ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
             await poolUsdc.setUnitaryValue(25000001, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(5000001, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(1000001, 1, bytes32hash, bytes32hash)
-            await timeTravel({ seconds: 1, mine: true })
             await poolUsdc.setUnitaryValue(200001, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(50001, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(10001, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(2001, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(401, 1, bytes32hash, bytes32hash)
-            // TODO: _getUnitaryValue() / MINIMUM_ORDER_DIVISOR underflows, check if logic is intended
-            // as with lower value base token minimum decreases, while increases with higher value.
-            await expect(
-                poolUsdc.connect(user2).mint(user2.address, 1)
-            ).to.emit(poolUsdc, "Transfer").withArgs(AddressZero, user2.address, 2493)
             await timeTravel({ seconds: 1, mine: true })
             const burnAmount = 6000
             // TODO: check if burning underflows netRevenue
