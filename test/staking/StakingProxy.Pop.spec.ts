@@ -154,7 +154,6 @@ describe("StakingProxy-Pop", async () => {
     })
 
     describe("getStakingPoolStatsThisEpoch", async () => {
-        // TODO: will return 0 until pool has positive active stake
         it('should return staking pool earned rewards', async () => {
             const { stakingProxy, grgToken, pop, poolId, newPoolAddress } = await setupTests()
             await stakingProxy.addAuthorizedAddress(user1.address)

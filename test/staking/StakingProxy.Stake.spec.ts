@@ -239,7 +239,7 @@ describe("StakingProxy-Stake", async () => {
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
             const tooBigAmount = parseEther("150")
-            // TODO: check why returned error is k�^-c!� instead (prob max library returned error)
+            // TODO: check why no returned error (prob max library returned error)
             await expect(
                 stakingProxy.moveStake(toInfo, fromInfo, tooBigAmount)
             ).to.be.reverted //revertedWith("STAKING_INSUFFICIENT_BALANCE_ERROR")

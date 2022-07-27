@@ -106,7 +106,6 @@ describe("StakingProxy", async () => {
                 proxy.attachStakingContract(rogueImplementation.address)
             ).to.be.emit(proxy, "StakingContractAttachedToProxy").withArgs(rogueImplementation.address)
             await rogueProxy.setInflation(inflation.address)
-            // TODO: following tests work, but do not return expected errror
             // max 90 days duration
             await rogueProxy.setDuration(77760001)
             await expect(rogueProxy.endEpoch()).to.be.revertedWith("INFLATION_TIME_ANOMALY_ERROR")
