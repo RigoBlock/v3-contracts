@@ -180,7 +180,7 @@ describe("ProxyFactory", async () => {
             await expect(
                 factory.setRegistry(AddressZero)
             ).to.be.revertedWith("FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR")
-            // TODO: check if should prevent same address input, as no hard would be done
+            // TODO: check if should prevent same address input, as no harm would be done
             await expect(
                 factory.setRegistry(factory.address)
             ).to.emit(factory, "RegistryUpgraded").withArgs(factory.address)

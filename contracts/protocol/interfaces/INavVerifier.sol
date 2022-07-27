@@ -38,6 +38,6 @@ interface INavVerifier {
         bytes calldata _signedData
     )
         external
-        view
+        pure
         returns (bool isValid);
 }
