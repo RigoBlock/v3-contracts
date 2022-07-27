@@ -104,18 +104,16 @@ describe("BaseTokenProxy", async () => {
     describe("burn", async () => {
         it('should burn tokens with input tokens', async () => {
             const { pool, grgToken } = await setupTests()
-            const tokenAmountIn = parseEther("1")
+            const tokenAmountIn = parseEther("10")
             await grgToken.approve(pool.address, tokenAmountIn)
             const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn)
-            const minimumLockup = 2
-            expect((await pool.getAdminData()).minPeriod).to.be.eq(minimumLockup)
+            expect((await pool.getAdminData()).minPeriod).to.be.eq(2)
             await pool.mint(user1.address, tokenAmountIn)
             expect(await pool.totalSupply()).to.be.not.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(userTokens)
             let userPoolBalance = await pool.balanceOf(user1.address)
             await expect(pool.burn(userPoolBalance)).to.be.revertedWith("POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR")
-            // tests run 1 tx per block, therefore moving one second ahead results in being 2 seconds from mint
-            // TODO: test changeMinPeriod with higher periods
+            // we do not mine as want to check transaction does not happen in same block
             await timeTravel({ seconds: 1, mine: true })
             const netRevenue = await pool.callStatic.burn(userPoolBalance)
             // the following is true with fee set as 0
@@ -131,17 +129,17 @@ describe("BaseTokenProxy", async () => {
             const tokenDelta = Number(tokenAmountIn) - netRevenue
             const poolGrgBalance = await grgToken.balanceOf(pool.address)
             expect(poolGrgBalance).to.be.eq(tokenDelta.toString())
-
             // if fee != 0 and caller not fee recipient, supply will not be 0
             const poolData = await pool.getData()
-            const spread = userPoolBalance * poolData.spread / 10000 // spread
-            userPoolBalance -= spread
+            const spread = poolData.spread
+            const markup = userPoolBalance.mul(spread).div(10000)
+            userPoolBalance -= markup
             const unitaryValue = poolData.unitaryValue
             const decimals = await pool.decimals()
-            const revenue = userPoolBalance * unitaryValue / (10**decimals)
-            // TODO: check why difference of 128 wei, possibly approximation
-            expect(userPoolBalance - revenue).to.be.eq(128)
-            //expect(netRevenue.toString()).to.be.deep.eq(revenue.toString())
+            // we need to multiply by fraction as ts overflows otherwise
+            const revenue = unitaryValue / (10**decimals) * userPoolBalance
+            expect(userPoolBalance - revenue).to.be.eq(0)
+            expect(Number(netRevenue)).to.be.deep.eq(revenue)
         })
     })
 
