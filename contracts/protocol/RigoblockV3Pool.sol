@@ -50,7 +50,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     uint256 private constant SPREAD_BASE = 10000;
 
     uint32 private constant MAX_LOCKUP = 30 days;
-    uint32 private constant MIN_LOCKUP = 1;
+    uint32 private constant MIN_LOCKUP = 2;
 
     // EIP1967 standard, must be immutable to be compile-time constant.
     address private immutable _implementation;
@@ -209,9 +209,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         poolData.name = _poolName;
         poolData.symbol = _poolSymbol;
         owner = _owner;
-        /// @notice We only initialize if different from default values.
-        /// @notice Be very careful with new releases as default values must be returned unless poolData overwritten.
-        // TODO: test different initialization scenarios
+        /// we do not initialize unless values different from default ones
+        /// careful with new releases as default values must be returned unless poolData overwritten
         if (_baseToken != address(0)) {
             admin.baseToken = _baseToken;
             uint8 tokenDecimals = Token(_baseToken).decimals();
@@ -220,7 +219,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
                 poolData.decimals = tokenDecimals;
                 poolData.unitaryValue = 1 * 10**tokenDecimals; // initial value is 1
             }
-        } // we do not initialize unless values different from default ones.
+        }
 
         emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
     }
@@ -235,15 +234,15 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         override
         returns (uint256 recipientAmount)
     {
-        /// @notice for ether transfers we later require value transferred equals amount in.
-        _assertBiggerThanMinimum(_amountIn);
         // require whitelisted user if kyc is enforced
-        if (_isKycEnforced() == true) {
+        if (_isKycEnforced()) {
             require(
                 Kyc(admin.kycProvider).isWhitelistedUser(_recipient),
                 "POOL_CALLER_NOT_WHITELISTED_ERROR"
             );
         }
+
+        _assertBiggerThanMinimum(_amountIn);
 
         if (admin.baseToken == address(0)) {
             require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
@@ -432,6 +431,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         view
         override
+        // TODO: check if should name returned poolOwner
         returns (
             address,  //owner
             address feeCollector,
@@ -475,9 +475,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @return Number of decimals.
     /// @notice We use this method to save gas on base currency pools.
     function decimals() public view override returns (uint8) {
-        if (admin.baseToken != address(0)) {
-            return Token(admin.baseToken).decimals();
-        } else return COINBASE_DECIMALS;
+        return poolData.decimals != 0 ? poolData.decimals : COINBASE_DECIMALS;
     }
 
     /*
@@ -539,11 +537,9 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         returns (uint256 recipientAmount)
     {
         /// @notice Each mint on same recipient resets prior activation.
-        /// @notice Lock receipient tokens.
+        /// @notice Lock recipient tokens, max lockup 30 days cannot overflow.
         unchecked {
-            userAccount[_recipient].activation = (
-                uint32(block.timestamp) + _getMinPeriod()
-            );
+            userAccount[_recipient].activation = uint32(block.timestamp) + _getMinPeriod();
         }
 
         if (poolData.transactionFee != uint256(0)) {
@@ -655,24 +651,21 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     function _assertBiggerThanMinimum(uint256 _amount) private view {
         require (
-            _amount >= _getUnitaryValue() / MINIMUM_ORDER_DIVISOR,
+            _amount >= 10**decimals() / MINIMUM_ORDER_DIVISOR,
             "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR"
         );
     }
 
     function _getMinPeriod() private view returns (uint32) {
-        return poolData.minPeriod == 0 ? MIN_LOCKUP : poolData.minPeriod;
+        return poolData.minPeriod != 0 ? poolData.minPeriod : MIN_LOCKUP;
     }
 
     function _getSpread() private view returns (uint256) {
-        return poolData.spread == 0 ? INITIAL_SPREAD : poolData.spread;
+        return poolData.spread != 0 ? poolData.spread : INITIAL_SPREAD;
     }
 
     function _getUnitaryValue() private view returns (uint256) {
-        return (
-            poolData.unitaryValue == 0 ? COINBASE_UNITARY_VALUE
-            : poolData.unitaryValue
-        );
+        return poolData.unitaryValue != 0 ? poolData.unitaryValue : COINBASE_UNITARY_VALUE;
     }
 
     function _isKycEnforced() private view returns (bool) {
