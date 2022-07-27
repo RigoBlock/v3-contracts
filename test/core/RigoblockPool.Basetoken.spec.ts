@@ -76,7 +76,9 @@ describe("BaseTokenProxy", async () => {
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
             const tokenAmountIn = parseEther("1")
             await grgToken.approve(pool.address, tokenAmountIn)
-            expect(await grgToken.allowance(user1.address, pool.address)).to.be.eq(tokenAmountIn)
+            expect(
+                await grgToken.allowance(user1.address, pool.address)
+            ).to.be.eq(tokenAmountIn)
             const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn)
             await expect(
                 pool.mint(user1.address, tokenAmountIn)
@@ -104,7 +106,7 @@ describe("BaseTokenProxy", async () => {
     describe("burn", async () => {
         it('should burn tokens with input tokens', async () => {
             const { pool, grgToken } = await setupTests()
-            const tokenAmountIn = parseEther("10")
+            const tokenAmountIn = parseEther("1")
             await grgToken.approve(pool.address, tokenAmountIn)
             const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn)
             expect((await pool.getAdminData()).minPeriod).to.be.eq(2)
@@ -112,7 +114,9 @@ describe("BaseTokenProxy", async () => {
             expect(await pool.totalSupply()).to.be.not.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(userTokens)
             let userPoolBalance = await pool.balanceOf(user1.address)
-            await expect(pool.burn(userPoolBalance)).to.be.revertedWith("POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR")
+            await expect(
+                pool.burn(userPoolBalance)
+            ).to.be.revertedWith("POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR")
             // we do not mine as want to check transaction does not happen in same block
             await timeTravel({ seconds: 1, mine: true })
             const netRevenue = await pool.callStatic.burn(userPoolBalance)
