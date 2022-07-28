@@ -177,9 +177,9 @@ contract PoolRegistry is IPoolRegistry {
         external
         view
         override
-        returns (bytes32 poolAddress)
+        returns (bytes32 poolId)
     {
-        poolAddress = mapIdByAddress[_poolAddress];
+        poolId = mapIdByAddress[_poolAddress];
     }
 
     /// @inheritdoc IPoolRegistry
