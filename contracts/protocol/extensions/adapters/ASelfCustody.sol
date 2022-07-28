@@ -71,7 +71,7 @@ contract ASelfCustody is IASelfCustody {
                 _safeTransfer(token, selfCustodyAccount, amount);
             }
             emit SelfCustodyTransfer(address(this), selfCustodyAccount, token, amount);
-        } else revert("POOL_STAKED_GRG_MINIMUM_NOT_SATISFIED_ERROR");
+        } else revert("ASELFCUSTODY_MINIMUM_GRG_ERROR");
     }
 
     /// @inheritdoc IASelfCustody
