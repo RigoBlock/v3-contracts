@@ -52,7 +52,7 @@ describe("ASelfCustody", async () => {
             newPoolAddress,
             poolId
         }
-    });
+    })
 
     describe("transferToSelfCustody", async () => {
         it('should revert without active stake', async () => {
@@ -78,15 +78,36 @@ describe("ASelfCustody", async () => {
             expect(await scPool.poolGrgShortfall(newPoolAddress)).to.be.eq(0)
             const grgVaultAddress = await scPool.GRG_VAULT_ADDRESS()
             expect(await stakingProxy.getGrgVault()).to.be.eq(grgVaultAddress)
-            const delegatedBalance = (await stakingProxy.getTotalStakeDelegatedToPool(poolId))
+            const delegatedBalance = await stakingProxy.getTotalStakeDelegatedToPool(poolId)
             expect(await grgVault.balanceOf(newPoolAddress)).to.be.eq(delegatedBalance.currentEpochBalance)
+            await expect(
+                scPool.transferToSelfCustody(user2.address, grgToken.address, 10000)
+            ).to.be.revertedWith("ASELFCUSTODY_TRANSFER_FAILED_ERROR")
+            await expect(
+                scPool.transferToSelfCustody(user2.address, AddressZero, 10000)
+            ).to.be.revertedWith("ASELFCUSTODY_BALANCE_NOT_ENOUGH_ERROR")
             await grgToken.transfer(newPoolAddress, 10000)
+            await expect(
+                scPool.transferToSelfCustody(user2.address, grgToken.address, 0)
+            ).to.be.revertedWith("ASELFCUSTODY_NULL_AMOUNT_ERROR")
             await expect(
                 scPool.transferToSelfCustody(user2.address, grgToken.address, 10000)
             ).to.emit(scPool, "SelfCustodyTransfer").withArgs(
                 newPoolAddress,
                 user2.address,
                 grgToken.address,
+                10000
+            ).to.emit(grgToken, "Transfer").withArgs(newPoolAddress, user2.address, 10000)
+            const DefaultPool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            const defaultPool = DefaultPool.attach(newPoolAddress)
+            // we make sure pool has enough eth
+            await defaultPool.mint(user1.address, parseEther("1"), { value: parseEther("1") })
+            await expect(
+                scPool.transferToSelfCustody(user2.address, AddressZero, 10000)
+            ).to.emit(scPool, "SelfCustodyTransfer").withArgs(
+                newPoolAddress,
+                user2.address,
+                AddressZero,
                 10000
             )
         })
