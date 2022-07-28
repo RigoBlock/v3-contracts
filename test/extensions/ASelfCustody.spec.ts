@@ -67,6 +67,9 @@ describe("ASelfCustody", async () => {
             const ScPool = await hre.ethers.getContractFactory("ASelfCustody")
             const scPool = ScPool.attach(newPoolAddress)
             expect(await scPool.poolGrgShortfall(newPoolAddress)).to.be.not.eq(0)
+            await expect(
+                scPool.transferToSelfCustody(user2.address, grgToken.address, 10000)
+            ).to.be.revertedWith("ASELFCUSTODY_MINIMUM_GRG_ERROR")
             amount = parseEther("100000")
             await grgToken.transfer(newPoolAddress, amount)
             await pool.stake(amount)
