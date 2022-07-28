@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2019 RigoBlock, Gabriele Rigo.
+ Copyright 2019-2022 RigoBlock, Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -20,270 +20,83 @@
 // solhint-disable-next-line
 pragma solidity =0.8.14;
 
-interface Token {
-
-    function transfer(address _to, uint256 _value) external returns (bool success);
-
-    function balanceOf(address _who) external view returns (uint256);
-}
-
-interface DragoEventful {
-
-    function customDragoLog(bytes4 _methodHash, bytes calldata _encodedParams) external returns (bool success);
-}
-
-abstract contract Drago {
-
-    address public owner;
-
-    function getEventful() external view virtual returns (address);
-}
+import "../../../staking/interfaces/IStaking.sol";
+import "../../../staking/interfaces/IStorage.sol";
+import "../../../staking/interfaces/IGrgVault.sol";
+import "./interfaces/IASelfCustody.sol";
 
 /// @title Self Custody adapter - A helper contract for self custody.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract ASelfCustody {
-    
-    // Mainnet GRG Address
-    address constant private GRG_ADDRESS = address(0x4FbB350052Bca5417566f188eB2EBCE5b19BC964);
+contract ASelfCustody is IASelfCustody {
 
-    // Ropsten GRG Address
-    // address constant private GRG_ADDRESS = address(0x6FA8590920c5966713b1a86916f7b0419411e474);
+    address public immutable override GRG_VAULT_ADDRESS;
 
-    uint256 constant internal MIN_TOKEN_VALUE = 1e21;
-    
+    // minimum 100k GRG to unlock self custody
+    uint256 private constant MINIMUM_GRG_STAKE = 1e23;
     bytes4 private constant SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
 
-    /// @dev transfers ETH or tokens to self custody.
-    /// @param selfCustodyAccount Address of the target account.
-    /// @param token Address of the target token.
-    /// @param amount Number of tokens.
-    /// @return Bool the transaction was successful.
-    /// @return Number of GRG pool operator shortfall.
-    /// @notice Transfeer of tokens excluded from GRG requirement for now.
+    address private immutable STAKING_PROXY_ADDRESS;
+    address private immutable aSelfCustody;
+
+    constructor(address _grgVaultAddress, address _stakingProxyAddress) {
+        GRG_VAULT_ADDRESS = _grgVaultAddress;
+        STAKING_PROXY_ADDRESS = _stakingProxyAddress;
+        aSelfCustody = address(this);
+    }
+
+    /// @inheritdoc IASelfCustody
     function transferToSelfCustody(
         address payable selfCustodyAccount,
         address token,
-        uint256 amount)
+        uint256 amount
+    )
         external
-        returns (bool, uint256)
+        override
+        returns (uint256 shortfall)
     {
+        // we prevent direct calls to this extension
+        assert(aSelfCustody != address(this));
+        require(amount != 0, "ASELFCUSTODY_NULL_AMOUNT_ERROR");
+        shortfall = poolGrgShortfall(address(this));
+
+        if (shortfall == 0) {
+            if (token == address(0)) {
+                require(
+                    address(this).balance > amount,
+                    "ASELFCUSTODY_BALANCE_NOT_ENOUGH_ERROR"
+                );
+                selfCustodyAccount.transfer(amount);
+            } else {
+                _safeTransfer(token, selfCustodyAccount, amount);
+            }
+            emit SelfCustodyTransfer(address(this), selfCustodyAccount, token, amount);
+        } else revert("ASELFCUSTODY_MINIMUM_GRG_ERROR");
+    }
+
+    /// @inheritdoc IASelfCustody
+    function poolGrgShortfall(address _poolAddress)
+        public
+        view
+        override
+        returns (uint256)
+    {
+        bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(_poolAddress);
+        uint256 poolStake = IStaking(STAKING_PROXY_ADDRESS).getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
+
+        // we assert the staking implementation has not been compromised by requiring all staked GRG to be delegated to self.
         require(
-            Drago(
-                address(this)
-            ).owner() == msg.sender,
-            "FAIL_OWNER_CHECK"
+            poolStake == IGrgVault(GRG_VAULT_ADDRESS).balanceOf(_poolAddress),
+            "ASELFCUSTODY_GRG_BALANCE_MISMATCH_ERROR"
         );
 
-        require(amount != uint256(0));
-
-        (bool satisfied, uint256 shortfall) = _poolGRGminimumSatisfied(GRG_ADDRESS, token, amount);
-        if (satisfied == true) {
-            require(
-                transferToSelfCustodyInternal(selfCustodyAccount, token, amount),
-                "TRANSFER_FAIL_GRG_REQ_SATISFIED_ERROR"
-                );
-            require(
-                logTransferToSelfCustody(selfCustodyAccount, token, amount),
-                "LOG_FAIL_GRG_REQ_SATISFIED_ERROR"
-                );
-            return (true, shortfall);
-        } else {
-            return (false, shortfall);
-        }
+        if (poolStake >= MINIMUM_GRG_STAKE) {
+            return 0;
+        }  else {
+            return MINIMUM_GRG_STAKE - poolStake;
+        } // unchecked
     }
 
-    /// @dev external check if minimum pool GRG amount requirement satisfied.
-    /// @param grgTokenAddress Address of the Rigo token.
-    /// @param tokenAddress Address of the token to be transferred.
-    /// @param amount Number of tokens to be transferred.
-    /// @return satisfied Bool the transaction was successful.
-    /// @return shortfall Number of GRG pool operator shortfall.
-    /// @notice built around powers of pi number.
-    function poolGRGminimumSatisfied (
-        address grgTokenAddress,
-        address tokenAddress,
-        uint256 amount
-    )
-        external
-        view
-        returns (bool satisfied, uint256 shortfall)
-    {
-        return _poolGRGminimumSatisfied(grgTokenAddress, tokenAddress, amount);
-    }
-
-    /*
-     * INTERNAL FUNCTIONS
-     */
-    /// @dev checks if minimum pool GRG amount requirement satisfied.
-    /// @param grgTokenAddress Address of the Rigo token.
-    /// @param tokenAddress Address of the token to be transferred.
-    /// @param amount Number of tokens to be transferred.
-    /// @return satisfied Bool the transaction was successful.
-    /// @return shortfall Number of GRG pool operator shortfall.
-    /// @notice built around powers of pi number.
-    function _poolGRGminimumSatisfied(
-        address grgTokenAddress,
-        address tokenAddress,
-        uint256 amount
-    )
-        internal
-        view
-        returns (bool satisfied, uint256 shortfall)
-    {
-        uint256 etherBase = 18;
-        uint256 rationalBase = 36;
-        uint256 rationalizedAmountBase36 = amount * (10 ** (rationalBase - etherBase));
-        uint256 poolRationalizedGrgBalanceBase36 = Token(grgTokenAddress).balanceOf(address(this)) * (10 ** (rationalBase - etherBase));
-
-        if (tokenAddress != address(0)) {
-            uint256 poolGrgBalance = Token(grgTokenAddress).balanceOf(address(this));
-            satisfied = poolGrgBalance >= MIN_TOKEN_VALUE;
-            shortfall = poolGrgBalance < MIN_TOKEN_VALUE ? MIN_TOKEN_VALUE - poolGrgBalance : uint256(0);
-
-        } else if (rationalizedAmountBase36 < findPi2()) {
-            if (poolRationalizedGrgBalanceBase36 < findPi4()) {
-                satisfied = false;
-                shortfall = (findPi4() - poolRationalizedGrgBalanceBase36) / (10 ** (rationalBase - etherBase));
-            } else {
-                satisfied = true;
-                shortfall = uint256(0);
-            }
-
-        } else if (rationalizedAmountBase36 < findPi3()) {
-            if (poolRationalizedGrgBalanceBase36 < findPi5()) {
-                satisfied = false;
-                shortfall = (findPi5() - poolRationalizedGrgBalanceBase36) / (10 ** (rationalBase - etherBase));
-            } else {
-                satisfied = true;
-                shortfall = uint256(0);
-            }
-
-        } else if (rationalizedAmountBase36 >= findPi3()) {
-            if (poolRationalizedGrgBalanceBase36 < findPi6()) {
-                satisfied = false;
-                shortfall = (findPi6() - poolRationalizedGrgBalanceBase36) / (10 ** (rationalBase - etherBase));
-            } else {
-                satisfied = true;
-                shortfall = uint256(0);
-            }
-
-        } else {
-            revert("UNKNOWN_GRG_MINIMUM_ERROR");
-        }
-
-        return (satisfied, shortfall);
-    }
-
-    /// @dev returns the base 36 value of pi number.
-    /// @return pi1 Value of pi.
-    function findPi() internal pure returns (uint256 pi1) {
-        uint8 power = 1;
-        uint256 pi = 3141592;
-        uint256 piBase = 6;
-        uint256 rationalBase = 36;
-        pi1 = pi ** power * 10 ** (rationalBase - piBase * power);
-    }
-
-    /// @dev returns the base 36 value of pi^2 number.
-    /// @return pi2 Value of pi^2.
-    function findPi2() internal pure returns (uint256 pi2) {
-        uint8 power = 2;
-        uint256 pi = 3141592;
-        uint256 piBase = 6;
-        uint256 rationalBase = 36;
-        pi2 = pi ** power * 10 ** (rationalBase - piBase * power);
-    }
-
-    /// @dev returns the base 36 value of pi^3 number.
-    /// @return pi3 Value of pi^3.
-    function findPi3() internal pure returns (uint256 pi3) {
-        uint8 power = 3;
-        uint256 pi = 3141592;
-        uint256 piBase = 6;
-        uint256 rationalBase = 36;
-        pi3 = pi ** power * 10 ** (rationalBase - piBase * power);
-    }
-
-    /// @dev returns the base 36 value of pi^4 number.
-    /// @return pi4 Value of pi^4.
-    function findPi4() internal pure returns (uint256 pi4) {
-        uint8 power = 4;
-        uint256 pi = 3141592;
-        uint256 piBase = 6;
-        uint256 rationalBase = 36;
-        pi4 = pi ** power * 10 ** (rationalBase - piBase * power);
-    }
-
-    /// @dev returns the base 36 value of pi^5 number.
-    /// @return pi5 Value of pi^5.
-    function findPi5() internal pure returns (uint256 pi5) {
-        uint8 power = 5;
-        uint256 pi = 3141592;
-        uint256 piBase = 6;
-        uint256 rationalBase = 36;
-        pi5 = pi ** power * 10 ** (rationalBase - piBase * power);
-    }
-
-    /// @dev returns the base 36 value of pi^6 number.
-    /// @return pi6 Value of pi^6.
-    function findPi6() internal pure returns (uint256 pi6) {
-        uint8 power = 6;
-        uint256 pi = 3141592;
-        uint256 piBase = 6;
-        uint256 rationalBase = 36;
-        pi6 = pi ** power * 10 ** (rationalBase - piBase * power);
-    }
-
-    /// @dev prints a custom log of the transfer.
-    /// @param selfCustodyAccount Address of the self custody account.
-    /// @param token Address of the token transferred.
-    /// @param amount Number of tokens.
-    /// @return Bool the log is printed correctly.
-    function logTransferToSelfCustody(
-        address selfCustodyAccount,
-        address token,
-        uint256 amount)
-        internal
-        returns (bool)
-    {
-        DragoEventful events = DragoEventful(getDragoEventful());
-        bytes4 methodHash = bytes4(keccak256("transferToSelfCustody(address,address,uint256)"));
-        bytes memory encodedParams = abi.encode(
-            address(this),
-            selfCustodyAccount,
-            token,
-            amount
-            );
-        require(
-            events.customDragoLog(methodHash, encodedParams),
-            "ISSUE_IN_EVENTFUL"
-            );
-        return true;
-    }
-
-    /// @dev executes the ETH or token transfer.
-    /// @param selfCustodyAccount Address of the self custody account.
-    /// @param token Address of the target token.
-    /// @param amount Number of tokens to be transferred.
-    /// @return success Bool the transfer executed correctly.
-    function transferToSelfCustodyInternal(
-        address payable selfCustodyAccount,
-        address token,
-        uint256 amount)
-        internal
-        returns (bool success)
-    {
-        if (token == address(0)) {
-            selfCustodyAccount.transfer(amount);
-            success = true;
-        } else {
-            _safeTransfer(token, selfCustodyAccount, amount);
-            success = true;
-        }
-        return success;
-    }
-    
     /// @dev executes a safe transfer to any ERC20 token
     /// @param token Address of the origin
     /// @param to Address of the target
@@ -293,21 +106,7 @@ contract ASelfCustody {
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
         require(
             success && (data.length == 0 || abi.decode(data, (bool))),
-            "RIGOBLOCK_TRANSFER_FAILED"
+            "ASELFCUSTODY_TRANSFER_FAILED_ERROR"
         );
-    }
-
-    /// @dev Gets the address of the logger contract.
-    /// @return Address of the logger contrac.
-    function getDragoEventful()
-        internal
-        view
-        returns (address)
-    {
-        address dragoEvenfulAddress =
-            Drago(
-                address(this)
-            ).getEventful();
-        return dragoEvenfulAddress;
     }
 }

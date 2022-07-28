@@ -53,6 +53,7 @@ interface IPoolRegistry {
     function authority() external view returns (address);
 
     /// @dev Returns the address of the Rigoblock Dao.
+    /// @return Address of the Rigoblock Dao.
     function rigoblockDaoAddress()external view returns (address);
 
     /*
@@ -94,7 +95,7 @@ interface IPoolRegistry {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Provides a pool's metadata.
+    /// @dev Returns metadata for a given pool.
     /// @param _poolAddress Address of the pool.
     /// @param _key Bytes32 key.
     /// @return poolMeta Meta by key.
@@ -106,10 +107,11 @@ interface IPoolRegistry {
         view
         returns (bytes32 poolMeta);
 
-    /// @dev Provides a pool's struct data.
+    /// @dev Returns the id of a pool from its address.
     /// @param _poolAddress Address of the pool.
+    /// @return poolId Id of the pool.
     function getPoolIdFromAddress(address _poolAddress)
         external
         view
-        returns (bytes32 poolAddress);
+        returns (bytes32 poolId);
 }

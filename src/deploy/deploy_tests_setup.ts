@@ -173,6 +173,16 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
+
+  await deploy("ASelfCustody", {
+    from: deployer,
+    args: [
+        grgVault.address,
+        stakingProxy.address
+    ],
+    log: true,
+    deterministicDeployment: true,
+  })
 };
 
 deploy.tags = ['tests-setup', 'l2-suite', 'main-suite']

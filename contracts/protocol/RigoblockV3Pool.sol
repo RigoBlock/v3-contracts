@@ -203,9 +203,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         external
         override
     {
-        // TODO: check gas savings in batching variables | and returning individually
-        // uint256 | uint256
-        // TODO: check if initialize smaller uints at smaller higher cost
         poolData.name = _poolName;
         poolData.symbol = _poolSymbol;
         owner = _owner;
@@ -413,8 +410,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         // TODO: check if we should reorg return data for client efficiency
         return(
-            poolName = poolData.name,
-            poolSymbol = poolData.symbol,
+            poolName = name(),
+            poolSymbol = symbol(),
             baseToken = admin.baseToken,
             _getUnitaryValue(),
             _getSpread()
@@ -463,11 +460,11 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         return poolData.totalSupply;
     }
 
-    function name() external view override returns (string memory) {
+    function name() public view override returns (string memory) {
         return poolData.name;
     }
 
-    function symbol() external view override returns (string memory) {
+    function symbol() public view override returns (string memory) {
         return poolData.symbol;
     }
 
@@ -538,7 +535,6 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     {
         /// @notice Each mint on same recipient resets prior activation.
         /// @notice Lock recipient tokens, max lockup 30 days cannot overflow.
-        // TODO: write activation and balance to struct at same time
         unchecked {
             userAccount[_recipient].activation = uint32(block.timestamp) + _getMinPeriod();
         }

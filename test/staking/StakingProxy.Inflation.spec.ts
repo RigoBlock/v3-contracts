@@ -74,14 +74,23 @@ describe("Inflation", async () => {
             await expect(
                 stakingProxy.endEpoch()
             ).to.emit(stakingProxy, "EpochFinalized").withArgs(1, 0, 0)
-            //expect(await inflation.epochEnded()).to.be.eq(false)
+            expect(await inflation.epochEnded()).to.be.eq(true)
             expect(await rigoToken.balanceOf(stakingProxy.address)).to.be.eq(0)
             await timeTravel({ days: 14, mine:true })
             await expect(
                 stakingProxy.endEpoch()
             ).to.emit(stakingProxy, "GrgMintEvent")
-            const mintedAmount = await inflation.getEpochInflation()
-            expect(await rigoToken.balanceOf(stakingProxy.address)).to.be.not.eq(0)
+            expect(await inflation.epochEnded()).to.be.eq(false)
+            const mintedAmount = await rigoToken.balanceOf(stakingProxy.address)
+            expect(mintedAmount).to.be.not.eq(0)
+
+            const nextMintAmount = await inflation.getEpochInflation()
+            await timeTravel({ days: 14, mine:true })
+            const rewardsAvailable = BigInt(mintedAmount) + BigInt(nextMintAmount)
+            await expect(
+                stakingProxy.endEpoch()
+            ).to.emit(stakingProxy, "EpochFinalized").withArgs(3, 0, rewardsAvailable)
+            expect(await rigoToken.balanceOf(stakingProxy.address)).to.be.eq(rewardsAvailable)
         })
 
         // when deploying on alt-chains we must set rigoblock dao to address 0 in Rigo token after setup
