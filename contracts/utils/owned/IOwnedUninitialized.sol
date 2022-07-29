@@ -24,7 +24,8 @@ pragma solidity >=0.7.0;
 // solhint-disable-next-line
 interface IOwnedUninitialized {
     event NewOwner(address indexed old, address indexed current);
-    
+
     function setOwner(address _new) external;
+
     function owner() external view returns (address);
 }

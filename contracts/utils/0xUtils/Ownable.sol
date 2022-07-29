@@ -16,15 +16,12 @@ pragma solidity >=0.5.9 <0.9.0;
 
 import "./interfaces/IOwnable.sol";
 
-
-abstract contract Ownable is
-    IOwnable
-{
+abstract contract Ownable is IOwnable {
     /// @dev The owner of this contract.
     /// @return 0 The owner address.
     address public owner;
 
-    constructor (address _owner) {
+    constructor(address _owner) {
         owner = _owner;
     }
 
@@ -35,20 +32,13 @@ abstract contract Ownable is
 
     /// @dev Change the owner of this contract.
     /// @param newOwner New owner address.
-    function transferOwnership(address newOwner)
-        public
-        override
-        onlyOwner
-    {
+    function transferOwnership(address newOwner) public override onlyOwner {
         require(newOwner != address(0), "INPUT_ADDRESS_NULL_ERROR");
         owner = newOwner;
         emit OwnershipTransferred(msg.sender, newOwner);
     }
 
-    function _assertSenderIsOwner()
-        internal
-        view
-    {
+    function _assertSenderIsOwner() internal view {
         require(msg.sender == owner, "CALLER_NOT_OWNER_ERROR");
     }
 }

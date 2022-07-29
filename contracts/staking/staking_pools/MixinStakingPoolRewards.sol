@@ -27,47 +27,29 @@ import "../interfaces/IStaking.sol";
 import "./MixinCumulativeRewards.sol";
 import "../sys/MixinAbstract.sol";
 
-
-abstract contract MixinStakingPoolRewards is
-    IStaking,
-    MixinAbstract,
-    MixinCumulativeRewards
-{
+abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumulativeRewards {
     using LibSafeMath for uint256;
 
     /// @dev Withdraws the caller's WETH rewards that have accumulated
     ///      until the last epoch.
     /// @param poolId Unique id of pool.
-    function withdrawDelegatorRewards(bytes32 poolId)
-        external
-        override
-    {
+    function withdrawDelegatorRewards(bytes32 poolId) external override {
         _withdrawAndSyncDelegatorRewards(poolId, msg.sender);
     }
 
     /// @dev Computes the reward balance in ETH of the operator of a pool.
     /// @param poolId Unique id of pool.
     /// @return reward totalReward Balance in ETH.
-    function computeRewardBalanceOfOperator(bytes32 poolId)
-        external
-        view
-        override
-        returns (uint256 reward)
-    {
+    function computeRewardBalanceOfOperator(bytes32 poolId) external view override returns (uint256 reward) {
         // Because operator rewards are immediately withdrawn as WETH
         // on finalization, the only factor in this function are unfinalized
         // rewards.
         IStructs.Pool memory pool = _poolById[poolId];
         // Get any unfinalized rewards.
-        (uint256 unfinalizedTotalRewards, uint256 unfinalizedMembersStake) =
-            _getUnfinalizedPoolRewards(poolId);
+        (uint256 unfinalizedTotalRewards, uint256 unfinalizedMembersStake) = _getUnfinalizedPoolRewards(poolId);
 
         // Get the operators' portion.
-        (reward,) = _computePoolRewardsSplit(
-            pool.operatorShare,
-            unfinalizedTotalRewards,
-            unfinalizedMembersStake
-        );
+        (reward, ) = _computePoolRewardsSplit(pool.operatorShare, unfinalizedTotalRewards, unfinalizedMembersStake);
         return reward;
     }
 
@@ -75,59 +57,40 @@ abstract contract MixinStakingPoolRewards is
     /// @param poolId Unique id of pool.
     /// @param member The member of the pool.
     /// @return reward totalReward Balance in ETH.
-    function computeRewardBalanceOfDelegator(bytes32 poolId, address member)
-        external
-        view
-        override
-        returns (uint256 reward)
-    {
+    function computeRewardBalanceOfDelegator(bytes32 poolId, address member) external view override returns (uint256 reward) {
         IStructs.Pool memory pool = _poolById[poolId];
         // Get any unfinalized rewards.
-        (uint256 unfinalizedTotalRewards, uint256 unfinalizedMembersStake) =
-            _getUnfinalizedPoolRewards(poolId);
+        (uint256 unfinalizedTotalRewards, uint256 unfinalizedMembersStake) = _getUnfinalizedPoolRewards(poolId);
 
         // Get the members' portion.
-        (, uint256 unfinalizedMembersReward) = _computePoolRewardsSplit(
-            pool.operatorShare,
-            unfinalizedTotalRewards,
-            unfinalizedMembersStake
-        );
-        return _computeDelegatorReward(
-            poolId,
-            member,
-            unfinalizedMembersReward,
-            unfinalizedMembersStake
-        );
+        (, uint256 unfinalizedMembersReward) =
+            _computePoolRewardsSplit(pool.operatorShare, unfinalizedTotalRewards, unfinalizedMembersStake);
+        return _computeDelegatorReward(poolId, member, unfinalizedMembersReward, unfinalizedMembersStake);
     }
 
     /// @dev Syncs rewards for a delegator. This includes withdrawing rewards
     ///      rewards and adding/removing dependencies on cumulative rewards.
     /// @param poolId Unique id of pool.
     /// @param member of the pool.
-    function _withdrawAndSyncDelegatorRewards(
-        bytes32 poolId,
-        address member
-    )
-        internal
-    {
+    function _withdrawAndSyncDelegatorRewards(bytes32 poolId, address member) internal {
         // Ensure the pool is finalized.
         _assertPoolFinalizedLastEpoch(poolId);
 
         // Compute balance owed to delegator
-        uint256 balance = _computeDelegatorReward(
-            poolId,
-            member,
-            // No unfinalized values because we ensured the pool is already
-            // finalized.
-            0,
-            0
-        );
+        uint256 balance =
+            _computeDelegatorReward(
+                poolId,
+                member,
+                // No unfinalized values because we ensured the pool is already
+                // finalized.
+                0,
+                0
+            );
 
         // Sync the delegated stake balance. This will ensure future calls of
         // `_computeDelegatorReward` during this epoch will return 0,
         // preventing a delegator from withdrawing more than once an epoch.
-        _delegatedStakeToPoolByOwner[member][poolId] =
-            _loadCurrentBalance(_delegatedStakeToPoolByOwner[member][poolId]);
+        _delegatedStakeToPoolByOwner[member][poolId] = _loadCurrentBalance(_delegatedStakeToPoolByOwner[member][poolId]);
 
         // Withdraw non-0 balance
         if (balance != 0) {
@@ -158,18 +121,11 @@ abstract contract MixinStakingPoolRewards is
         bytes32 poolId,
         uint256 reward,
         uint256 membersStake
-    )
-        internal
-        returns (uint256 operatorReward, uint256 membersReward)
-    {
+    ) internal returns (uint256 operatorReward, uint256 membersReward) {
         IStructs.Pool memory pool = _poolById[poolId];
 
         // Split the reward between operator and members
-        (operatorReward, membersReward) = _computePoolRewardsSplit(
-            pool.operatorShare,
-            reward,
-            membersStake
-        );
+        (operatorReward, membersReward) = _computePoolRewardsSplit(pool.operatorShare, reward, membersStake);
 
         if (operatorReward > 0) {
             if (pool.operator == pool.stakingPal) {
@@ -207,19 +163,11 @@ abstract contract MixinStakingPoolRewards is
         uint32 operatorShare,
         uint256 totalReward,
         uint256 membersStake
-    )
-        internal
-        pure
-        returns (uint256 operatorReward, uint256 membersReward)
-    {
+    ) internal pure returns (uint256 operatorReward, uint256 membersReward) {
         if (membersStake == 0) {
             operatorReward = totalReward;
         } else {
-            operatorReward = LibMath.getPartialAmountCeil(
-                uint256(operatorShare),
-                PPM_DENOMINATOR,
-                totalReward
-            );
+            operatorReward = LibMath.getPartialAmountCeil(uint256(operatorShare), PPM_DENOMINATOR, totalReward);
             membersReward = totalReward.safeSub(operatorReward);
         }
         return (operatorReward, membersReward);
@@ -236,11 +184,7 @@ abstract contract MixinStakingPoolRewards is
         address member,
         uint256 unfinalizedMembersReward,
         uint256 unfinalizedMembersStake
-    )
-        private
-        view
-        returns (uint256 reward)
-    {
+    ) private view returns (uint256 reward) {
         uint256 currentEpoch_ = currentEpoch;
         IStructs.StoredBalance memory delegatedStake = _delegatedStakeToPoolByOwner[member][poolId];
 
@@ -254,12 +198,7 @@ abstract contract MixinStakingPoolRewards is
         // We account for rewards over 3 intervals, below.
 
         // 1/3 Unfinalized rewards earned in `currentEpoch - 1`.
-        reward = _computeUnfinalizedDelegatorReward(
-            delegatedStake,
-            currentEpoch_,
-            unfinalizedMembersReward,
-            unfinalizedMembersStake
-        );
+        reward = _computeUnfinalizedDelegatorReward(delegatedStake, currentEpoch_, unfinalizedMembersReward, unfinalizedMembersStake);
 
         // 2/3 Finalized rewards earned in epochs [`delegatedStake.currentEpoch + 1` .. `currentEpoch - 1`]
         uint256 delegatedStakeNextEpoch = uint256(delegatedStake.currentEpoch).safeAdd(1);
@@ -274,12 +213,7 @@ abstract contract MixinStakingPoolRewards is
 
         // 3/3 Finalized rewards earned in epoch `delegatedStake.currentEpoch`.
         reward = reward.safeAdd(
-            _computeMemberRewardOverInterval(
-                poolId,
-                delegatedStake.nextEpochBalance,
-                delegatedStakeNextEpoch,
-                currentEpoch_
-            )
+            _computeMemberRewardOverInterval(poolId, delegatedStake.nextEpochBalance, delegatedStakeNextEpoch, currentEpoch_)
         );
 
         return reward;
@@ -296,11 +230,7 @@ abstract contract MixinStakingPoolRewards is
         uint256 currentEpoch_,
         uint256 unfinalizedMembersReward,
         uint256 unfinalizedMembersStake
-    )
-        private
-        pure
-        returns (uint256)
-    {
+    ) private pure returns (uint256) {
         // If there are unfinalized rewards this epoch, compute the member's
         // share.
         if (unfinalizedMembersReward == 0 || unfinalizedMembersStake == 0) {
@@ -309,9 +239,8 @@ abstract contract MixinStakingPoolRewards is
 
         // Unfinalized rewards are always earned from stake in
         // the prior epoch so we want the stake at `currentEpoch_-1`.
-        uint256 unfinalizedStakeBalance = delegatedStake.currentEpoch >= currentEpoch_.safeSub(1) ?
-            delegatedStake.currentEpochBalance :
-            delegatedStake.nextEpochBalance;
+        uint256 unfinalizedStakeBalance =
+            delegatedStake.currentEpoch >= currentEpoch_.safeSub(1) ? delegatedStake.currentEpochBalance : delegatedStake.nextEpochBalance;
 
         // Sanity check to save gas on computation
         if (unfinalizedStakeBalance == 0) {
@@ -319,19 +248,13 @@ abstract contract MixinStakingPoolRewards is
         }
 
         // Compute unfinalized reward
-        return LibMath.getPartialAmountFloor(
-            unfinalizedMembersReward,
-            unfinalizedMembersStake,
-            unfinalizedStakeBalance
-        );
+        return LibMath.getPartialAmountFloor(unfinalizedMembersReward, unfinalizedMembersStake, unfinalizedStakeBalance);
     }
 
     /// @dev Increases rewards for a pool.
     /// @param poolId Unique id of pool.
     /// @param amount Amount to increment rewards by.
-    function _increasePoolRewards(bytes32 poolId, uint256 amount)
-        private
-    {
+    function _increasePoolRewards(bytes32 poolId, uint256 amount) private {
         rewardsByPoolId[poolId] = rewardsByPoolId[poolId].safeAdd(amount);
         grgReservedForPoolRewards = grgReservedForPoolRewards.safeAdd(amount);
     }
@@ -339,9 +262,7 @@ abstract contract MixinStakingPoolRewards is
     /// @dev Decreases rewards for a pool.
     /// @param poolId Unique id of pool.
     /// @param amount Amount to decrement rewards by.
-    function _decreasePoolRewards(bytes32 poolId, uint256 amount)
-        private
-    {
+    function _decreasePoolRewards(bytes32 poolId, uint256 amount) private {
         rewardsByPoolId[poolId] = rewardsByPoolId[poolId].safeSub(amount);
         grgReservedForPoolRewards = grgReservedForPoolRewards.safeSub(amount);
     }

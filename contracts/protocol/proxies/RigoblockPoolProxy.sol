@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/storageSlot/StorageSlot.sol";
-import { IRigoblockPoolProxyFactory as Beacon } from "../interfaces/IRigoblockPoolProxyFactory.sol";
+import {IRigoblockPoolProxyFactory as Beacon} from "../interfaces/IRigoblockPoolProxyFactory.sol";
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -16,7 +16,7 @@ contract RigoblockPoolProxy {
     /// @param _data Initialization parameters.
     constructor(address _beacon, bytes memory _data) payable {
         // store beacon address in beacon slot value
-        assert(_BEACON_SLOT == bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1));
+        assert(_BEACON_SLOT == bytes32(uint256(keccak256("eip1967.proxy.beacon")) - 1));
         StorageSlot.getAddressSlot(_BEACON_SLOT).value = _beacon;
 
         // initialize pool
@@ -29,9 +29,7 @@ contract RigoblockPoolProxy {
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
-        address _implementation = Beacon(
-            StorageSlot.getAddressSlot(_BEACON_SLOT).value
-        ).implementation();
+        address _implementation = Beacon(StorageSlot.getAddressSlot(_BEACON_SLOT).value).implementation();
         // solhint-disable-next-line no-inline-assembly
         assembly {
             calldatacopy(0, 0, calldatasize())

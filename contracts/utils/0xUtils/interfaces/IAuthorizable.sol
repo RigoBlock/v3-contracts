@@ -14,48 +14,27 @@
 
 pragma solidity >=0.5.9 <0.9.0;
 
-
 abstract contract IAuthorizable {
-
     // Event logged when a new address is authorized.
-    event AuthorizedAddressAdded(
-        address indexed target,
-        address indexed caller
-    );
+    event AuthorizedAddressAdded(address indexed target, address indexed caller);
 
     // Event logged when a currently authorized address is unauthorized.
-    event AuthorizedAddressRemoved(
-        address indexed target,
-        address indexed caller
-    );
+    event AuthorizedAddressRemoved(address indexed target, address indexed caller);
 
     /// @dev Authorizes an address.
     /// @param target Address to authorize.
-    function addAuthorizedAddress(address target)
-        external
-        virtual;
+    function addAuthorizedAddress(address target) external virtual;
 
     /// @dev Removes authorizion of an address.
     /// @param target Address to remove authorization from.
-    function removeAuthorizedAddress(address target)
-        external
-        virtual;
+    function removeAuthorizedAddress(address target) external virtual;
 
     /// @dev Removes authorizion of an address.
     /// @param target Address to remove authorization from.
     /// @param index Index of target in authorities array.
-    function removeAuthorizedAddressAtIndex(
-        address target,
-        uint256 index
-    )
-        external
-        virtual;
+    function removeAuthorizedAddressAtIndex(address target, uint256 index) external virtual;
 
     /// @dev Gets all authorized addresses.
     /// @return Array of authorized addresses.
-    function getAuthorizedAddresses()
-        external
-        view
-        virtual
-        returns (address[] memory);
+    function getAuthorizedAddresses() external view virtual returns (address[] memory);
 }

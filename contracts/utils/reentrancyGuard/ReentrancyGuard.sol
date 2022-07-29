@@ -20,7 +20,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 abstract contract ReentrancyGuard {
-
     // Locked state of mutex
     bool private locked = false;
 
@@ -28,10 +27,7 @@ abstract contract ReentrancyGuard {
     ///      before function execution and unlocked after.
     modifier nonReentrant() {
         // Ensure mutex is unlocked
-        require(
-            !locked,
-            "REENTRANCY_ILLEGAL"
-        );
+        require(!locked, "REENTRANCY_ILLEGAL");
 
         // Lock mutex before function call
         locked = true;

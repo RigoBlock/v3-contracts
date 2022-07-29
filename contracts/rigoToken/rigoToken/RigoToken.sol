@@ -19,16 +19,15 @@
 
 pragma solidity 0.8.14;
 
-import { UnlimitedAllowanceToken } from "../../tokens/UnlimitedAllowanceToken/UnlimitedAllowanceToken.sol";
+import {UnlimitedAllowanceToken} from "../../tokens/UnlimitedAllowanceToken/UnlimitedAllowanceToken.sol";
 
 /// @title Rigo Token - Rules of the Rigo token.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice UnlimitedAllowanceToken is ERC20
 contract RigoToken is UnlimitedAllowanceToken {
-
-    string constant public name = "Rigo Token";
-    string constant public symbol = "GRG";
-    uint8 constant public decimals = 18;
+    string public constant name = "Rigo Token";
+    string public constant symbol = "GRG";
+    uint8 public constant decimals = 18;
 
     address public minter;
     address public rigoblock;
@@ -68,12 +67,7 @@ contract RigoToken is UnlimitedAllowanceToken {
     /// @dev Allows minter to create new tokens
     /// @param _recipient Address of who receives new tokens
     /// @param _amount Number of new tokens
-    function mintToken(
-        address _recipient,
-        uint256 _amount)
-        external
-        onlyMinter
-    {
+    function mintToken(address _recipient, uint256 _amount) external onlyMinter {
         balances[_recipient] += _amount;
         totalSupply += _amount;
         emit TokenMinted(_recipient, _amount);
@@ -81,19 +75,13 @@ contract RigoToken is UnlimitedAllowanceToken {
 
     /// @dev Allows rigoblock dao to change minter
     /// @param _newAddress Address of the new minter
-    function changeMintingAddress(address _newAddress)
-        external
-        onlyRigoblock
-    {
+    function changeMintingAddress(address _newAddress) external onlyRigoblock {
         minter = _newAddress;
     }
 
     /// @dev Allows rigoblock dao to upgrade dao
     /// @param _newAddress Address of the new rigoblock dao
-    function changeRigoblockAddress(address _newAddress)
-        external
-        onlyRigoblock
-    {
+    function changeRigoblockAddress(address _newAddress) external onlyRigoblock {
         rigoblock = _newAddress;
     }
 }

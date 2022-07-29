@@ -26,11 +26,8 @@ import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
 import "../sys/MixinScheduler.sol";
 
-
 /// @dev This mixin contains logic for managing stake storage.
-abstract contract MixinStakeStorage is
-    MixinScheduler
-{
+abstract contract MixinStakeStorage is MixinScheduler {
     using LibSafeMath for uint256;
     using LibSafeDowncast for uint256;
 
@@ -43,24 +40,16 @@ abstract contract MixinStakeStorage is
         IStructs.StoredBalance storage fromPtr,
         IStructs.StoredBalance storage toPtr,
         uint256 amount
-    )
-        internal
-    {
+    ) internal {
         // do nothing if pointers are equal
-        require(
-            !_arePointersEqual(fromPtr, toPtr),
-            "STAKING_POINTERS_EQUAL_ERROR"
-        );
+        require(!_arePointersEqual(fromPtr, toPtr), "STAKING_POINTERS_EQUAL_ERROR");
 
         // load current balances from storage
         IStructs.StoredBalance memory from = _loadCurrentBalance(fromPtr);
         IStructs.StoredBalance memory to = _loadCurrentBalance(toPtr);
 
         // sanity check on balance
-        require(
-            amount <= from.nextEpochBalance,
-            "STAKING_INSUFFICIENT_BALANCE_ERROR"
-        );
+        require(amount <= from.nextEpochBalance, "STAKING_INSUFFICIENT_BALANCE_ERROR");
 
         // move stake for next epoch
         from.nextEpochBalance = uint256(from.nextEpochBalance).safeSub(amount).downcastToUint96();
@@ -74,11 +63,7 @@ abstract contract MixinStakeStorage is
     /// @dev Loads a balance from storage and updates its fields to reflect values for the current epoch.
     /// @param balancePtr to load.
     /// @return balance current balance.
-    function _loadCurrentBalance(IStructs.StoredBalance storage balancePtr)
-        internal
-        view
-        returns (IStructs.StoredBalance memory balance)
-    {
+    function _loadCurrentBalance(IStructs.StoredBalance storage balancePtr) internal view returns (IStructs.StoredBalance memory balance) {
         balance = balancePtr;
         uint256 currentEpoch_ = currentEpoch;
         if (currentEpoch_ > balance.currentEpoch) {
@@ -91,9 +76,7 @@ abstract contract MixinStakeStorage is
     /// @dev Increments both the `current` and `next` fields.
     /// @param balancePtr storage pointer to balance.
     /// @param amount to mint.
-    function _increaseCurrentAndNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount)
-        internal
-    {
+    function _increaseCurrentAndNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Remove stake from balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
         balance.nextEpochBalance = uint256(balance.nextEpochBalance).safeAdd(amount).downcastToUint96();
@@ -106,9 +89,7 @@ abstract contract MixinStakeStorage is
     /// @dev Decrements both the `current` and `next` fields.
     /// @param balancePtr storage pointer to balance.
     /// @param amount to mint.
-    function _decreaseCurrentAndNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount)
-        internal
-    {
+    function _decreaseCurrentAndNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Remove stake from balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
         balance.nextEpochBalance = uint256(balance.nextEpochBalance).safeSub(amount).downcastToUint96();
@@ -121,9 +102,7 @@ abstract contract MixinStakeStorage is
     /// @dev Increments the `next` field (but not the `current` field).
     /// @param balancePtr storage pointer to balance.
     /// @param amount to increment by.
-    function _increaseNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount)
-        internal
-    {
+    function _increaseNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Add stake to balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
         balance.nextEpochBalance = uint256(balance.nextEpochBalance).safeAdd(amount).downcastToUint96();
@@ -135,9 +114,7 @@ abstract contract MixinStakeStorage is
     /// @dev Decrements the `next` field (but not the `current` field).
     /// @param balancePtr storage pointer to balance.
     /// @param amount to decrement by.
-    function _decreaseNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount)
-        internal
-    {
+    function _decreaseNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Remove stake from balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
         balance.nextEpochBalance = uint256(balance.nextEpochBalance).safeSub(amount).downcastToUint96();
@@ -149,12 +126,7 @@ abstract contract MixinStakeStorage is
     /// @dev Stores a balance in storage.
     /// @param balancePtr points to where `balance` will be stored.
     /// @param balance to save to storage.
-    function _storeBalance(
-        IStructs.StoredBalance storage balancePtr,
-        IStructs.StoredBalance memory balance
-    )
-        private
-    {
+    function _storeBalance(IStructs.StoredBalance storage balancePtr, IStructs.StoredBalance memory balance) private {
         // note - this compresses into a single `sstore` when optimizations are enabled,
         // since the StoredBalance struct occupies a single word of storage.
         balancePtr.currentEpoch = balance.currentEpoch;
@@ -171,16 +143,9 @@ abstract contract MixinStakeStorage is
         IStructs.StoredBalance storage balancePtrA,
         // solhint-disable-next-line no-unused-vars
         IStructs.StoredBalance storage balancePtrB
-    )
-        private
-        pure
-        returns (bool areEqual)
-    {
+    ) private pure returns (bool areEqual) {
         assembly {
-            areEqual := and(
-                eq(balancePtrA.slot, balancePtrB.slot),
-                eq(balancePtrA.offset, balancePtrB.offset)
-            )
+            areEqual := and(eq(balancePtrA.slot, balancePtrB.slot), eq(balancePtrA.offset, balancePtrB.offset))
         }
         return areEqual;
     }

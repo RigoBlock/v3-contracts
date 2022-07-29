@@ -29,24 +29,15 @@ interface IPool {
     /// @dev Calculates how many shares a user holds.
     /// @param _who Address of the target account.
     /// @return Number of shares.
-    function balanceOf(address _who)
-        external
-        view
-        returns (uint256);
-    
+    function balanceOf(address _who) external view returns (uint256);
+
     /// @dev Returns the total amount of issued tokens for this drago.
     /// @return totaSupply Number of shares.
-    function totalSupply()
-        external
-        view
-        returns (uint256 totaSupply);
+    function totalSupply() external view returns (uint256 totaSupply);
 
     /// @dev Gets the address of the logger contract.
     /// @return Address of the logger contract.
-    function getEventful()
-        external
-        view
-        returns (address);
+    function getEventful() external view returns (address);
 
     /// @dev Finds details of a drago pool.
     /// @return name String name of a drago.
@@ -65,10 +56,7 @@ interface IPool {
 
     /// @dev Returns the price of a pool.
     /// @return Value of the share price in wei.
-    function calcSharePrice()
-        external
-        view
-        returns (uint256);
+    function calcSharePrice() external view returns (uint256);
 
     /// @dev Finds the administrative data of the pool.
     /// @return Address of the account where a user collects fees.

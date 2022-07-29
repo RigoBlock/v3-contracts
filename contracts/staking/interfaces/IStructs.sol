@@ -20,9 +20,7 @@
 
 pragma solidity >=0.5.9 <0.9.0;
 
-
 interface IStructs {
-
     /// @dev Stats for a pool that earned rewards.
     /// @param feesCollected Fees collected in ETH by this pool.
     /// @param weightedStake Amount of weighted stake in the pool.
@@ -64,10 +62,7 @@ interface IStructs {
     /// @dev Statuses that stake can exist in.
     ///      Any stake can be (re)delegated effective at the next epoch
     ///      Undelegated stake can be withdrawn if it is available in both the current and next epoch
-    enum StakeStatus {
-        UNDELEGATED,
-        DELEGATED
-    }
+    enum StakeStatus {UNDELEGATED, DELEGATED}
 
     /// @dev Info used to describe a status.
     /// @param status Status of the stake.

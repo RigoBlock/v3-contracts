@@ -20,9 +20,7 @@
 
 pragma solidity >=0.5.4 <0.9.0;
 
-
 abstract contract IAssetProxy {
-
     /// @dev Transfers assets. Either succeeds or throws.
     /// @param assetData Byte array encoded for the respective asset proxy.
     /// @param from Address to transfer asset from.
@@ -33,15 +31,9 @@ abstract contract IAssetProxy {
         address from,
         address to,
         uint256 amount
-    )
-        external
-        virtual;
+    ) external virtual;
 
     /// @dev Gets the proxy id associated with the proxy address.
     /// @return Proxy id.
-    function getProxyId()
-        external
-        pure
-        virtual
-        returns (bytes4);
+    function getProxyId() external pure virtual returns (bytes4);
 }

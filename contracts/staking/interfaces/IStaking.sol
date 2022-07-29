@@ -21,46 +21,37 @@
 pragma solidity >=0.5.9 <0.9.0;
 pragma experimental ABIEncoderV2;
 
-import  { IPoolRegistry as PoolRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
-import { IRigoToken as RigoToken } from "../../rigoToken/interfaces/IRigoToken.sol";
+import {IPoolRegistry as PoolRegistry} from "../../protocol/interfaces/IPoolRegistry.sol";
+import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol";
 import "./IStructs.sol";
-import { IGrgVault as GrgVault } from "./IGrgVault.sol";
-
+import {IGrgVault as GrgVault} from "./IGrgVault.sol";
 
 interface IStaking {
-
     /// @dev Adds a new proof_of_performance address.
     /// @param addr Address of proof_of_performance contract to add.
-    function addPopAddress(address addr)
-        external;
+    function addPopAddress(address addr) external;
 
     /// @dev Create a new staking pool. The sender will be the staking pal of this pool.
     /// Note that a staking pal must be payable.
     /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
     /// @return poolId The unique pool id generated for this pool.
-    function createStakingPool(address rigoblockPoolAddress)
-        external
-        returns (bytes32 poolId);
+    function createStakingPool(address rigoblockPoolAddress) external returns (bytes32 poolId);
 
     /// @dev Allows the operator to update the staking pal address.
     /// @param poolId Unique id of pool.
     /// @param newStakingPalAddress Address of the new staking pal.
-    function setStakingPalAddress(bytes32 poolId, address newStakingPalAddress)
-        external;
+    function setStakingPalAddress(bytes32 poolId, address newStakingPalAddress) external;
 
     /// @dev Decreases the operator share for the given pool (i.e. increases pool rewards for members).
     /// @param poolId Unique Id of pool.
     /// @param newOperatorShare The newly decreased percentage of any rewards owned by the operator.
-    function decreaseStakingPoolOperatorShare(bytes32 poolId, uint32 newOperatorShare)
-        external;
+    function decreaseStakingPoolOperatorShare(bytes32 poolId, uint32 newOperatorShare) external;
 
     /// @dev Begins a new epoch, preparing the prior one for finalization.
     ///      Throws if not enough time has passed between epochs or if the
     ///      previous epoch was not fully finalized.
     /// @return numPoolsToFinalize The number of unfinalized pools.
-    function endEpoch()
-        external
-        returns (uint256);
+    function endEpoch() external returns (uint256);
 
     /// @dev Instantly finalizes a single pool that earned rewards in the previous
     ///      epoch, crediting it rewards for members and withdrawing operator's
@@ -68,14 +59,12 @@ interface IStaking {
     ///      to finalize a pool immediately. Does nothing if the pool is already
     ///      finalized or did not earn rewards in the previous epoch.
     /// @param poolId The pool ID to finalize.
-    function finalizePool(bytes32 poolId)
-        external;
+    function finalizePool(bytes32 poolId) external;
 
     /// @dev Initialize storage owned by this contract.
     ///      This function should not be called directly.
     ///      The StakingProxy contract will call it in `attachStakingContract()`.
-    function init()
-        external;
+    function init() external;
 
     /// @dev Moves stake between statuses: 'undelegated' or 'delegated'.
     ///      Delegated stake can also be moved between pools.
@@ -87,25 +76,18 @@ interface IStaking {
         IStructs.StakeInfo calldata from,
         IStructs.StakeInfo calldata to,
         uint256 amount
-    )
-        external;
+    ) external;
 
     /// @dev Credits the value of a pool's pop reward.
     ///      Only a known RigoBlock pop can call this method. See
     ///      (MixinPopManager).
     /// @param poolAccount The address of the rigoblock pool account.
     /// @param popReward The pop reward.
-    function creditPopReward(
-        address poolAccount,
-        uint256 popReward
-    )
-        external
-        payable;
+    function creditPopReward(address poolAccount, uint256 popReward) external payable;
 
     /// @dev Removes an existing proof_of_performance address.
     /// @param addr Address of proof_of_performance contract to remove.
-    function removePopAddress(address addr)
-        external;
+    function removePopAddress(address addr) external;
 
     /// @dev Set all configurable parameters at once.
     /// @param _epochDurationInSeconds Minimum seconds between epochs.
@@ -119,70 +101,51 @@ interface IStaking {
         uint256 _minimumPoolStake,
         uint32 _cobbDouglasAlphaNumerator,
         uint32 _cobbDouglasAlphaDenominator
-    )
-        external;
+    ) external;
 
     /// @dev Stake GRG tokens. Tokens are deposited into the GRG Vault.
     ///      Unstake to retrieve the GRG. Stake is in the 'Active' status.
     /// @param amount of GRG to stake.
-    function stake(uint256 amount)
-        external;
+    function stake(uint256 amount) external;
 
     /// @dev Unstake. Tokens are withdrawn from the GRG Vault and returned to
     ///      the staker. Stake must be in the 'undelegated' status in both the
     ///      current and next epoch in order to be unstaked.
     /// @param amount of GRG to unstake.
-    function unstake(uint256 amount)
-        external;
+    function unstake(uint256 amount) external;
 
     /// @dev Withdraws the caller's WETH rewards that have accumulated
     ///      until the last epoch.
     /// @param poolId Unique id of pool.
-    function withdrawDelegatorRewards(bytes32 poolId)
-        external;
+    function withdrawDelegatorRewards(bytes32 poolId) external;
 
     /// @dev Computes the reward balance in ETH of a specific member of a pool.
     /// @param poolId Unique id of pool.
     /// @param member The member of the pool.
     /// @return reward Balance in ETH.
-    function computeRewardBalanceOfDelegator(bytes32 poolId, address member)
-        external
-        view
-        returns (uint256 reward);
+    function computeRewardBalanceOfDelegator(bytes32 poolId, address member) external view returns (uint256 reward);
 
     /// @dev Computes the reward balance in ETH of the operator of a pool.
     /// @param poolId Unique id of pool.
     /// @return reward Balance in ETH.
-    function computeRewardBalanceOfOperator(bytes32 poolId)
-        external
-        view
-        returns (uint256 reward);
+    function computeRewardBalanceOfOperator(bytes32 poolId) external view returns (uint256 reward);
 
     /// @dev Returns the earliest end time in seconds of this epoch.
     ///      The next epoch can begin once this time is reached.
     ///      Epoch period = [startTimeInSeconds..endTimeInSeconds)
     /// @return Time in seconds.
-    function getCurrentEpochEarliestEndTimeInSeconds()
-        external
-        view
-        returns (uint256);
+    function getCurrentEpochEarliestEndTimeInSeconds() external view returns (uint256);
 
     /// @dev Gets global stake for a given status.
     /// @param stakeStatus UNDELEGATED or DELEGATED
     /// @return balance Global stake for given status.
-    function getGlobalStakeByStatus(IStructs.StakeStatus stakeStatus)
-        external
-        view
-        returns (IStructs.StoredBalance memory balance);
+    function getGlobalStakeByStatus(IStructs.StakeStatus stakeStatus) external view returns (IStructs.StoredBalance memory balance);
 
     /// @dev Gets an owner's stake balances by status.
     /// @param staker Owner of stake.
     /// @param stakeStatus UNDELEGATED or DELEGATED
     /// @return balance Owner's stake balances for given status.
-    function getOwnerStakeByStatus(
-        address staker,
-        IStructs.StakeStatus stakeStatus
-    )
+    function getOwnerStakeByStatus(address staker, IStructs.StakeStatus stakeStatus)
         external
         view
         returns (IStructs.StoredBalance memory balance);
@@ -190,10 +153,7 @@ interface IStaking {
     /// @dev Returns the total stake for a given staker.
     /// @param staker of stake.
     /// @return Total GRG staked by `staker`.
-    function getTotalStake(address staker)
-        external
-        view
-        returns (uint256);
+    function getTotalStake(address staker) external view returns (uint256);
 
     /// @dev Retrieves all configurable parameter values.
     /// @return _epochDurationInSeconds Minimum seconds between epochs.
@@ -215,56 +175,35 @@ interface IStaking {
     /// @param staker of stake.
     /// @param poolId Unique Id of pool.
     /// @return balance Stake delegated to pool by staker.
-    function getStakeDelegatedToPoolByOwner(address staker, bytes32 poolId)
-        external
-        view
-        returns (IStructs.StoredBalance memory balance);
+    function getStakeDelegatedToPoolByOwner(address staker, bytes32 poolId) external view returns (IStructs.StoredBalance memory balance);
 
     /// @dev Returns a staking pool
     /// @param poolId Unique id of pool.
-    function getStakingPool(bytes32 poolId)
-        external
-        view
-        returns (IStructs.Pool memory);
+    function getStakingPool(bytes32 poolId) external view returns (IStructs.Pool memory);
 
     /// @dev Get stats on a staking pool in this epoch.
     /// @param poolId Pool Id to query.
     /// @return PoolStats struct for pool id.
-    function getStakingPoolStatsThisEpoch(bytes32 poolId)
-        external
-        view
-        returns (IStructs.PoolStats memory);
+    function getStakingPoolStatsThisEpoch(bytes32 poolId) external view returns (IStructs.PoolStats memory);
 
     /// @dev Returns the total stake delegated to a specific staking pool,
     ///      across all members.
     /// @param poolId Unique Id of pool.
     /// @return balance Total stake delegated to pool.
-    function getTotalStakeDelegatedToPool(bytes32 poolId)
-        external
-        view
-        returns (IStructs.StoredBalance memory balance);
+    function getTotalStakeDelegatedToPool(bytes32 poolId) external view returns (IStructs.StoredBalance memory balance);
 
     /// @dev An overridable way to access the deployed GRG contract.
     ///      Must be view to allow overrides to access state.
     /// @return grgContract The GRG contract instance.
-    function getGrgContract()
-        external
-        view
-        returns (RigoToken);
+    function getGrgContract() external view returns (RigoToken);
 
     /// @dev An overridable way to access the deployed rigoblock pool registry.
     ///      Must be view to allow overrides to access state.
     /// @return poolRegistry The pool registry contract.
-    function getPoolRegistry()
-        external
-        view
-        returns (PoolRegistry);
+    function getPoolRegistry() external view returns (PoolRegistry);
 
     /// @dev An overridable way to access the deployed grgVault.
     ///      Must be view to allow overrides to access state.
     /// @return grgVault The grgVault contract.
-    function getGrgVault()
-        external
-        view
-        returns (GrgVault);
+    function getGrgVault() external view returns (GrgVault);
 }

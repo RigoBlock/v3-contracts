@@ -23,9 +23,7 @@ pragma experimental ABIEncoderV2;
 
 import "./LibFixedMath.sol";
 
-
 library LibCobbDouglas {
-
     /// @dev The cobb-douglas function used to compute fee-based rewards for
     ///      staking pools in a given epoch. This function does not perform
     ///      bounds checking on the inputs, but the following conditions
@@ -50,11 +48,7 @@ library LibCobbDouglas {
         uint256 totalStake,
         uint32 alphaNumerator,
         uint32 alphaDenominator
-    )
-        internal
-        pure
-        returns (uint256 rewards)
-    {
+    ) internal pure returns (uint256 rewards) {
         int256 feeRatio = LibFixedMath.toFixed(fees, totalFees);
         int256 stakeRatio = LibFixedMath.toFixed(stake, totalStake);
         if (feeRatio == 0 || stakeRatio == 0) {
@@ -74,24 +68,14 @@ library LibCobbDouglas {
         // `e^(alpha * ln(feeRatio/stakeRatio))` if feeRatio <= stakeRatio
         // or
         // `e^(alpa * ln(stakeRatio/feeRatio))` if feeRatio > stakeRatio
-        int256 n = feeRatio <= stakeRatio ?
-            LibFixedMath.div(feeRatio, stakeRatio) :
-            LibFixedMath.div(stakeRatio, feeRatio);
-        n = LibFixedMath.exp(
-            LibFixedMath.mulDiv(
-                LibFixedMath.ln(n),
-                int256(alphaNumerator),
-                int256(alphaDenominator)
-            )
-        );
+        int256 n = feeRatio <= stakeRatio ? LibFixedMath.div(feeRatio, stakeRatio) : LibFixedMath.div(stakeRatio, feeRatio);
+        n = LibFixedMath.exp(LibFixedMath.mulDiv(LibFixedMath.ln(n), int256(alphaNumerator), int256(alphaDenominator)));
         // Compute
         // `totalRewards * n` if feeRatio <= stakeRatio
         // or
         // `totalRewards / n` if stakeRatio > feeRatio
         // depending on the choice we made earlier.
-        n = feeRatio <= stakeRatio ?
-            LibFixedMath.mul(stakeRatio, n) :
-            LibFixedMath.div(stakeRatio, n);
+        n = feeRatio <= stakeRatio ? LibFixedMath.mul(stakeRatio, n) : LibFixedMath.div(stakeRatio, n);
         // Multiply the above with totalRewards.
         rewards = LibFixedMath.uintMul(n, totalRewards);
     }

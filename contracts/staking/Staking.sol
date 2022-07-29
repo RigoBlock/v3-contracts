@@ -28,36 +28,19 @@ import "./sys/MixinParams.sol";
 import "./stake/MixinStake.sol";
 import "./rewards/MixinPopRewards.sol";
 
-
-contract Staking is
-    IStaking,
-    MixinParams,
-    MixinStake,
-    MixinPopRewards
-{
+contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
     constructor(
         address _owner,
         address _grgVault,
         address _poolRegistry,
         address _rigoToken
-    )
-        Authorizable(_owner)
-        MixinDeploymentConstants(
-            _grgVault,
-            _poolRegistry,
-            _rigoToken
-        )
-    {}
+    ) Authorizable(_owner) MixinDeploymentConstants(_grgVault, _poolRegistry, _rigoToken) {}
 
     // TODO: prevent direct calls to this contract
     /// @dev Initialize storage owned by this contract.
     ///      This function should not be called directly.
     ///      The StakingProxy contract will call it in `attachStakingContract()`.
-    function init()
-        public
-        override
-        onlyAuthorized
-    {
+    function init() public override onlyAuthorized {
         // DANGER! When performing upgrades, take care to modify this logic
         // to prevent accidentally clearing prior state.
         _initMixinScheduler();

@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.14;
 
-import { LibBytes } from "../utils/LibBytes/LibBytes.sol";
+import {LibBytes} from "../utils/LibBytes/LibBytes.sol";
 
 /// @title SigVerifier - Allows verify whether a transaction has been signed correctly.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -28,7 +28,6 @@ import { LibBytes } from "../utils/LibBytes/LibBytes.sol";
 ///   registered directly to the 0x protocol. Will be most likely removed.
 // solhint-disable-next-line
 abstract contract SigVerifier {
-
     using LibBytes for bytes;
 
     // abstract function to call self variable
@@ -43,57 +42,35 @@ abstract contract SigVerifier {
         /* solhint-disable */
         bytes32 hash,
         bytes calldata signature
-        /* solhint-disable */
     )
         external
         view
-        returns (bool isValid)
+        returns (
+            /* solhint-disable */
+            bool isValid
+        )
     {
         address recoveredEIP712 = returnRecoveredEIP712Internal(hash, signature);
         address recoveredETHSIGN = returnRecoveredETHSIGNInternal(hash, signature);
 
         if (recoveredEIP712 != address(0)) {
-            require(
-                isValid = recoveredEIP712 == owner(),
-                "EIP712_SIGNER_INVALID"
-            );
+            require(isValid = recoveredEIP712 == owner(), "EIP712_SIGNER_INVALID");
         } else if (recoveredETHSIGN != address(0)) {
-            require(
-                isValid = recoveredETHSIGN == owner(),
-                "EIP712_SIGNER_INVALID"
-            );
+            require(isValid = recoveredETHSIGN == owner(), "EIP712_SIGNER_INVALID");
         } else revert("SIGNATURE_INVALID2");
     }
 
-    function returnRecoveredEIP712(
-        bytes32 hash,
-        bytes calldata signature)
-        external
-        pure
-        returns (address recovered)
-    {
+    function returnRecoveredEIP712(bytes32 hash, bytes calldata signature) external pure returns (address recovered) {
         return returnRecoveredEIP712Internal(hash, signature);
     }
 
-    function returnRecoveredETHSIGN(
-        bytes32 hash,
-        bytes calldata signature)
-        external
-        pure
-        returns (address recovered)
-    {
+    function returnRecoveredETHSIGN(bytes32 hash, bytes calldata signature) external pure returns (address recovered) {
         return returnRecoveredETHSIGNInternal(hash, signature);
     }
 
     // INTERNAL FUNCTIONS
 
-    function returnRecoveredEIP712Internal(
-        bytes32 hash,
-        bytes memory signature)
-        internal
-        pure
-        returns (address recovered)
-    {
+    function returnRecoveredEIP712Internal(bytes32 hash, bytes memory signature) internal pure returns (address recovered) {
         uint8 v;
         bytes32 r;
         bytes32 s;
@@ -102,22 +79,11 @@ abstract contract SigVerifier {
         r = signature.readBytes32(1);
         s = signature.readBytes32(33);
 
-        recovered = ecrecover(
-                hash,
-                v,
-                r,
-                s
-            );
+        recovered = ecrecover(hash, v, r, s);
         return recovered;
     }
 
-    function returnRecoveredETHSIGNInternal(
-        bytes32 hash,
-        bytes memory signature)
-        internal
-        pure
-        returns (address recovered)
-    {
+    function returnRecoveredETHSIGNInternal(bytes32 hash, bytes memory signature) internal pure returns (address recovered) {
         uint8 v;
         bytes32 r;
         bytes32 s;
@@ -126,15 +92,7 @@ abstract contract SigVerifier {
         r = signature.readBytes32(1);
         s = signature.readBytes32(33);
 
-        recovered = ecrecover(
-                keccak256(abi.encodePacked(
-                    "\x19Ethereum Signed Message:\n32",
-                    hash
-                )),
-                v,
-                r,
-                s
-            );
+        recovered = ecrecover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)), v, r, s);
         return recovered;
     }
 }

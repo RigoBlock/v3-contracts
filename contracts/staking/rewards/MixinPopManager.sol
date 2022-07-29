@@ -25,19 +25,10 @@ import "../interfaces/IStakingEvents.sol";
 import "../interfaces/IStaking.sol";
 import "../immutable/MixinStorage.sol";
 
-
-abstract contract MixinPopManager is
-    IStaking,
-    IStakingEvents,
-    MixinStorage
-{
+abstract contract MixinPopManager is IStaking, IStakingEvents, MixinStorage {
     /// @dev Adds a new pop address.
     /// @param addr Address of pop contract to add.
-    function addPopAddress(address addr)
-        external
-        override
-        onlyAuthorized
-    {
+    function addPopAddress(address addr) external override onlyAuthorized {
         require(!validPops[addr], "STAKING_POP_ALREADY_REGISTERED_ERROR");
         validPops[addr] = true;
         emit PopAdded(addr);
@@ -45,11 +36,7 @@ abstract contract MixinPopManager is
 
     /// @dev Removes an existing proof_of_performance address.
     /// @param addr Address of proof_of_performance contract to remove.
-    function removePopAddress(address addr)
-        external
-        override
-        onlyAuthorized
-    {
+    function removePopAddress(address addr) external override onlyAuthorized {
         require(validPops[addr], "STAKING_POP_NOT_REGISTERED_ERROR");
         validPops[addr] = false;
         emit PopRemoved(addr);

@@ -22,18 +22,21 @@ pragma solidity =0.8.14;
 
 import "../../staking/interfaces/IStaking.sol";
 import "../../staking/interfaces/IStorage.sol";
-import { IRigoToken as GRG } from "../../rigoToken/interfaces/IRigoToken.sol";
+import {IRigoToken as GRG} from "../../rigoToken/interfaces/IRigoToken.sol";
 
 /// @title Self Custody adapter - A helper contract for self custody.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract AStaking {
-
     address private immutable STAKING_PROXY_ADDRESS;
     address private immutable GRG_TOKEN_ADDRESS;
     address private immutable GRG_TRASFER_PROXY_ADDRESS;
 
-    constructor(address _stakingProxy, address _grgToken, address _grgTransferProxy) {
+    constructor(
+        address _stakingProxy,
+        address _grgToken,
+        address _grgTransferProxy
+    ) {
         STAKING_PROXY_ADDRESS = _stakingProxy;
         GRG_TOKEN_ADDRESS = _grgToken;
         GRG_TRASFER_PROXY_ADDRESS = _grgTransferProxy;
@@ -41,9 +44,7 @@ contract AStaking {
 
     // TODO: must develop methods undelegateStake, unStake, withdrawDelegatorRewards
     /// @notice Creating staking pool if doesn't exist effectively locks direct call.
-    function stake(uint256 _amount)
-        external
-    {
+    function stake(uint256 _amount) external {
         require(_amount != uint256(0), "STAKE_AMOUNT_NULL_ERROR");
         IStaking staking = IStaking(STAKING_PROXY_ADDRESS);
         bytes32 id = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
@@ -53,19 +54,15 @@ contract AStaking {
         if (id == bytes32(0)) {
             poolId = staking.createStakingPool(address(this));
             assert(poolId != 0);
-        } else { poolId = id; }
+        } else {
+            poolId = id;
+        }
 
         GRG(GRG_TOKEN_ADDRESS).approve(GRG_TRASFER_PROXY_ADDRESS, type(uint256).max);
         staking.stake(_amount);
         staking.moveStake(
-            IStructs.StakeInfo({
-                status: IStructs.StakeStatus.UNDELEGATED,
-                poolId: poolId
-            }),
-            IStructs.StakeInfo({
-                status: IStructs.StakeStatus.DELEGATED,
-                poolId: poolId
-            }),
+            IStructs.StakeInfo({status: IStructs.StakeStatus.UNDELEGATED, poolId: poolId}),
+            IStructs.StakeInfo({status: IStructs.StakeStatus.DELEGATED, poolId: poolId}),
             _amount
         );
 

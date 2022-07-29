@@ -28,11 +28,7 @@ import "../utils/0xUtils/IAssetData.sol";
 import "../utils/0xUtils/IERC20Token.sol";
 import "./interfaces/IGrgVault.sol";
 
-
-contract GrgVault is
-    Authorizable,
-    IGrgVault
-{
+contract GrgVault is Authorizable, IGrgVault {
     using LibSafeMath for uint256;
 
     // Address of staking proxy contract
@@ -78,25 +74,16 @@ contract GrgVault is
         address _grgProxyAddress,
         address _grgTokenAddress,
         address _owner
-    )
-        Authorizable(_owner)
-    {
+    ) Authorizable(_owner) {
         grgAssetProxy = IAssetProxy(_grgProxyAddress);
         _grgToken = IERC20Token(_grgTokenAddress);
-        _grgAssetData = abi.encodeWithSelector(
-            IAssetData(address(0)).ERC20Token.selector,
-            _grgTokenAddress
-        );
+        _grgAssetData = abi.encodeWithSelector(IAssetData(address(0)).ERC20Token.selector, _grgTokenAddress);
     }
 
     /// @dev Sets the address of the StakingProxy contract.
     /// Note that only the contract owner can call this function.
     /// @param _stakingProxyAddress Address of Staking proxy contract.
-    function setStakingProxy(address _stakingProxyAddress)
-        external
-        override
-        onlyAuthorized
-    {
+    function setStakingProxy(address _stakingProxyAddress) external override onlyAuthorized {
         stakingProxyAddress = _stakingProxyAddress;
         emit StakingProxySet(_stakingProxyAddress);
     }
@@ -104,12 +91,7 @@ contract GrgVault is
     /// @dev Vault enters into Catastrophic Failure Mode.
     /// *** WARNING - ONCE IN CATOSTROPHIC FAILURE MODE, YOU CAN NEVER GO BACK! ***
     /// Note that only the contract owner can call this function.
-    function enterCatastrophicFailure()
-        external
-        override
-        onlyAuthorized
-        onlyNotInCatastrophicFailure
-    {
+    function enterCatastrophicFailure() external override onlyAuthorized onlyNotInCatastrophicFailure {
         isInCatastrophicFailure = true;
         emit InCatastrophicFailureMode(msg.sender);
     }
@@ -118,12 +100,7 @@ contract GrgVault is
     /// Note that only an authorized address can call this function.
     /// Note that this can only be called when *not* in Catastrophic Failure mode.
     /// @param _grgProxyAddress Address of the RigoBlock Grg Proxy.
-    function setGrgProxy(address _grgProxyAddress)
-        external
-        override
-        onlyAuthorized
-        onlyNotInCatastrophicFailure
-    {
+    function setGrgProxy(address _grgProxyAddress) external override onlyAuthorized onlyNotInCatastrophicFailure {
         grgAssetProxy = IAssetProxy(_grgProxyAddress);
         emit GrgProxySet(_grgProxyAddress);
     }
@@ -133,12 +110,7 @@ contract GrgVault is
     /// Note that this can only be called when *not* in Catastrophic Failure mode.
     /// @param staker of Grg Tokens.
     /// @param amount of Grg Tokens to deposit.
-    function depositFrom(address staker, uint256 amount)
-        external
-        override
-        onlyStakingProxy
-        onlyNotInCatastrophicFailure
-    {
+    function depositFrom(address staker, uint256 amount) external override onlyStakingProxy onlyNotInCatastrophicFailure {
         // update balance
         _balances[staker] = _balances[staker].safeAdd(amount);
 
@@ -146,12 +118,7 @@ contract GrgVault is
         emit Deposit(staker, amount);
 
         // deposit GRG from staker
-        grgAssetProxy.transferFrom(
-            _grgAssetData,
-            staker,
-            address(this),
-            amount
-        );
+        grgAssetProxy.transferFrom(_grgAssetData, staker, address(this), amount);
     }
 
     /// @dev Withdraw an `amount` of Grg Tokens to `staker` from the vault.
@@ -159,24 +126,14 @@ contract GrgVault is
     /// Note that this can only be called when *not* in Catastrophic Failure mode.
     /// @param staker of Grg Tokens.
     /// @param amount of Grg Tokens to withdraw.
-    function withdrawFrom(address staker, uint256 amount)
-        external
-        override
-        onlyStakingProxy
-        onlyNotInCatastrophicFailure
-    {
+    function withdrawFrom(address staker, uint256 amount) external override onlyStakingProxy onlyNotInCatastrophicFailure {
         _withdrawFrom(staker, amount);
     }
 
     /// @dev Withdraw ALL Grg Tokens to `staker` from the vault.
     /// Note that this can only be called when *in* Catastrophic Failure mode.
     /// @param staker of Grg Tokens.
-    function withdrawAllFrom(address staker)
-        external
-        override
-        onlyInCatastrophicFailure
-        returns (uint256)
-    {
+    function withdrawAllFrom(address staker) external override onlyInCatastrophicFailure returns (uint256) {
         // get total balance
         uint256 totalBalance = _balances[staker];
 
@@ -187,31 +144,19 @@ contract GrgVault is
 
     /// @dev Returns the balance in Grg Tokens of the `staker`
     /// @return Balance in Grg.
-    function balanceOf(address staker)
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function balanceOf(address staker) external view override returns (uint256) {
         return _balances[staker];
     }
 
     /// @dev Returns the entire balance of Grg tokens in the vault.
-    function balanceOfGrgVault()
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function balanceOfGrgVault() external view override returns (uint256) {
         return _grgToken.balanceOf(address(this));
     }
 
     /// @dev Withdraw an `amount` of Grg Tokens to `staker` from the vault.
     /// @param staker of Grg Tokens.
     /// @param amount of Grg Tokens to withdraw.
-    function _withdrawFrom(address staker, uint256 amount)
-        internal
-    {
+    function _withdrawFrom(address staker, uint256 amount) internal {
         // update balance
         // note that this call will revert if trying to withdraw more
         // than the current balance
@@ -221,39 +166,21 @@ contract GrgVault is
         emit Withdraw(staker, amount);
 
         // withdraw GRG to staker
-        _grgToken.transfer(
-            staker,
-            amount
-        );
+        _grgToken.transfer(staker, amount);
     }
 
     /// @dev Asserts that sender is stakingProxy contract.
-    function _assertSenderIsStakingProxy()
-        private
-        view
-    {
-        require(msg.sender == stakingProxyAddress,
-            "GRG_VAULT_ONLY_CALLABLE_BY_STAKING_PROXY_ERROR"
-        );
+    function _assertSenderIsStakingProxy() private view {
+        require(msg.sender == stakingProxyAddress, "GRG_VAULT_ONLY_CALLABLE_BY_STAKING_PROXY_ERROR");
     }
 
     /// @dev Asserts that vault is in catastrophic failure mode.
-    function _assertInCatastrophicFailure()
-        private
-        view
-    {
-        require(isInCatastrophicFailure,
-            "GRG_VAULT_NOT_IN_CATASTROPHIC_FAILURE_ERROR"
-        );
+    function _assertInCatastrophicFailure() private view {
+        require(isInCatastrophicFailure, "GRG_VAULT_NOT_IN_CATASTROPHIC_FAILURE_ERROR");
     }
 
     /// @dev Asserts that vault is not in catastrophic failure mode.
-    function _assertNotInCatastrophicFailure()
-        private
-        view
-    {
-        require(!isInCatastrophicFailure,
-            "GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR"
-        );
+    function _assertNotInCatastrophicFailure() private view {
+        require(!isInCatastrophicFailure, "GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR");
     }
 }

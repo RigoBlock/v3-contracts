@@ -26,19 +26,11 @@ import "../../utils/0xUtils/LibSafeMath.sol";
 import "../stake/MixinStakeBalances.sol";
 import "../immutable/MixinConstants.sol";
 
-
-abstract contract MixinCumulativeRewards is
-    MixinStakeBalances,
-    MixinConstants
-{
+abstract contract MixinCumulativeRewards is MixinStakeBalances, MixinConstants {
     using LibSafeMath for uint256;
 
     /// @dev returns true iff Cumulative Rewards are set
-    function _isCumulativeRewardSet(IStructs.Fraction memory cumulativeReward)
-        internal
-        pure
-        returns (bool)
-    {
+    function _isCumulativeRewardSet(IStructs.Fraction memory cumulativeReward) internal pure returns (bool) {
         // We use the denominator as a proxy for whether the cumulative
         // reward is set, as setting the cumulative reward always sets this
         // field to at least 1.
@@ -57,9 +49,7 @@ abstract contract MixinCumulativeRewards is
         bytes32 poolId,
         uint256 reward,
         uint256 stake
-    )
-        internal
-    {
+    ) internal {
         // Fetch the last epoch at which we stored an entry for this pool;
         // this is the most up-to-date cumulative rewards for this pool.
         uint256 lastStoredEpoch = _cumulativeRewardsByPoolLastStored[poolId];
@@ -70,8 +60,7 @@ abstract contract MixinCumulativeRewards is
             return;
         }
 
-        IStructs.Fraction memory mostRecentCumulativeReward =
-            _cumulativeRewardsByPool[poolId][lastStoredEpoch];
+        IStructs.Fraction memory mostRecentCumulativeReward = _cumulativeRewardsByPool[poolId][lastStoredEpoch];
 
         // Compute new cumulative reward
         IStructs.Fraction memory cumulativeReward;
@@ -101,9 +90,7 @@ abstract contract MixinCumulativeRewards is
     ///      using the last stored cumulative rewards. If we've already set
     ///      a CR for this epoch, this is a no-op.
     /// @param poolId The pool ID.
-    function _updateCumulativeReward(bytes32 poolId)
-        internal
-    {
+    function _updateCumulativeReward(bytes32 poolId) internal {
         // Just add empty rewards for this epoch, which will be added to
         // the previous CR, so we end up with the previous CR being set for
         // this epoch.
@@ -122,11 +109,7 @@ abstract contract MixinCumulativeRewards is
         uint256 memberStakeOverInterval,
         uint256 beginEpoch,
         uint256 endEpoch
-    )
-        internal
-        view
-        returns (uint256 reward)
-    {
+    ) internal view returns (uint256 reward) {
         // Sanity check if we can skip computation, as it will result in zero.
         if (memberStakeOverInterval == 0 || beginEpoch == endEpoch) {
             return 0;
@@ -152,11 +135,7 @@ abstract contract MixinCumulativeRewards is
     /// @dev Fetch the most recent cumulative reward entry for a pool.
     /// @param poolId Unique ID of pool.
     /// @return cumulativeReward The most recent cumulative reward `poolId`.
-    function _getMostRecentCumulativeReward(bytes32 poolId)
-        private
-        view
-        returns (IStructs.Fraction memory cumulativeReward)
-    {
+    function _getMostRecentCumulativeReward(bytes32 poolId) private view returns (IStructs.Fraction memory cumulativeReward) {
         uint256 lastStoredEpoch = _cumulativeRewardsByPoolLastStored[poolId];
         return _cumulativeRewardsByPool[poolId][lastStoredEpoch];
     }
@@ -167,11 +146,7 @@ abstract contract MixinCumulativeRewards is
     /// @param poolId Unique ID of pool.
     /// @param epoch The epoch to find the
     /// @return cumulativeReward The cumulative reward for `poolId` at `epoch`.
-    function _getCumulativeRewardAtEpoch(bytes32 poolId, uint256 epoch)
-        private
-        view
-        returns (IStructs.Fraction memory cumulativeReward)
-    {
+    function _getCumulativeRewardAtEpoch(bytes32 poolId, uint256 epoch) private view returns (IStructs.Fraction memory cumulativeReward) {
         // Return CR at `epoch`, given it's set.
         cumulativeReward = _cumulativeRewardsByPool[poolId][epoch];
         if (_isCumulativeRewardSet(cumulativeReward)) {

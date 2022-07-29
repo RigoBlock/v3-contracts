@@ -22,56 +22,34 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Lib Sanitize - Sanitize strings in smart contracts.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 library LibSanitize {
-
-    function assertIsValidCheck(string memory str)
-        internal
-        pure
-    {
+    function assertIsValidCheck(string memory str) internal pure {
         bytes memory bStr = bytes(str);
-        uint arrayLength = bStr.length;
-        require(
-            bStr[0] != bytes1(uint8(32)),
-            "LIBSANITIZE_SPACE_AT_BEGINNING_ERROR"
-        );
-        require(
-            bStr[arrayLength - 1] != bytes1(uint8(32)),
-            "LIBSANITIZE_SPACE_AT_END_ERROR"
-        );
-        for (uint i = 0; i < arrayLength; i++) {
+        uint256 arrayLength = bStr.length;
+        require(bStr[0] != bytes1(uint8(32)), "LIBSANITIZE_SPACE_AT_BEGINNING_ERROR");
+        require(bStr[arrayLength - 1] != bytes1(uint8(32)), "LIBSANITIZE_SPACE_AT_END_ERROR");
+        for (uint256 i = 0; i < arrayLength; i++) {
             if (
-                (
-                    bStr[i] < bytes1(uint8(48)) ||
+                (bStr[i] < bytes1(uint8(48)) ||
                     bStr[i] > bytes1(uint8(122)) ||
-                    bStr[i] > bytes1(uint8(57)) && bStr[i] < bytes1(uint8(65)) ||
-                    bStr[i] > bytes1(uint8(90)) && bStr[i] < bytes1(uint8(97))
-                ) && bStr[i] != bytes1(uint8(32))
+                    (bStr[i] > bytes1(uint8(57)) && bStr[i] < bytes1(uint8(65))) ||
+                    (bStr[i] > bytes1(uint8(90)) && bStr[i] < bytes1(uint8(97)))) && bStr[i] != bytes1(uint8(32))
             ) revert("LIBSANITIZE_SPECIAL_CHARACTER_ERROR");
         }
     }
 
-    function assertIsLowercase(string memory str)
-        internal
-        pure
-    {
+    function assertIsLowercase(string memory str) internal pure {
         bytes memory bStr = bytes(str);
-        uint arrayLength = bStr.length;
-		    for (uint i = 0; i < arrayLength; i++) {
-			    if (
-                    (bStr[i] >= bytes1(uint8(65))) && (bStr[i] <= bytes1(uint8(90)))
-                ) revert("LIBSANITIZE_LOWERCASE_CHARACTER_ERROR");
-		    }
+        uint256 arrayLength = bStr.length;
+        for (uint256 i = 0; i < arrayLength; i++) {
+            if ((bStr[i] >= bytes1(uint8(65))) && (bStr[i] <= bytes1(uint8(90)))) revert("LIBSANITIZE_LOWERCASE_CHARACTER_ERROR");
+        }
     }
 
-    function assertIsUppercase(string memory str)
-        internal
-        pure
-    {
+    function assertIsUppercase(string memory str) internal pure {
         bytes memory bStr = bytes(str);
-        uint arrayLength = bStr.length;
-        for (uint i = 0; i < arrayLength; i++) {
-            if (
-                (bStr[i] >= bytes1(uint8(97))) && (bStr[i] <= bytes1(uint8(122)))
-            ) revert("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR");
+        uint256 arrayLength = bStr.length;
+        for (uint256 i = 0; i < arrayLength; i++) {
+            if ((bStr[i] >= bytes1(uint8(97))) && (bStr[i] <= bytes1(uint8(122)))) revert("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR");
         }
     }
 }

@@ -23,14 +23,10 @@ pragma experimental ABIEncoderV2;
 
 import "./IStructs.sol";
 
-
 abstract contract IStakingProxy {
-
     /// @dev Emitted by StakingProxy when a staking contract is attached.
     /// @param newStakingContractAddress Address of newly attached staking contract.
-    event StakingContractAttachedToProxy(
-        address newStakingContractAddress
-    );
+    event StakingContractAttachedToProxy(address newStakingContractAddress);
 
     /// @dev Emitted by StakingProxy when a staking contract is detached.
     event StakingContractDetachedFromProxy();
@@ -38,23 +34,16 @@ abstract contract IStakingProxy {
     /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
     /// Note that this is callable only by an authorized address.
     /// @param _stakingContract Address of staking contract.
-    function attachStakingContract(address _stakingContract)
-        external
-        virtual;
+    function attachStakingContract(address _stakingContract) external virtual;
 
     /// @dev Detach the current staking contract.
     /// Note that this is callable only by an authorized address.
-    function detachStakingContract()
-        external
-        virtual;
+    function detachStakingContract() external virtual;
 
     /// @dev Asserts that an epoch is between 5 and 30 days long.
     //       Asserts that 0 < cobb douglas alpha value <= 1.
     //       Asserts that a stake weight is <= 100%.
     //       Asserts that pools allow >= 1 maker.
     //       Asserts that all addresses are initialized.
-    function assertValidStorageParams()
-        external
-        view
-        virtual;
+    function assertValidStorageParams() external view virtual;
 }

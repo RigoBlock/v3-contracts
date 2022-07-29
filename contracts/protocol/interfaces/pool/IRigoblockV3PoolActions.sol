@@ -23,7 +23,6 @@ pragma solidity >=0.8.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockV3PoolActions {
-
     /*
      * CORE FUNCTIONS
      */
@@ -32,15 +31,9 @@ interface IRigoblockV3PoolActions {
         string calldata _poolSymbol,
         address _baseToken,
         address _owner
-    )
-        external;
+    ) external;
 
-    function mint(address _recipient, uint256 _amountIn)
-        external
-        payable
-        returns (uint256);
+    function mint(address _recipient, uint256 _amountIn) external payable returns (uint256);
 
-    function burn(uint256 _amount)
-        external
-        returns (uint256);  // netRevenue
+    function burn(uint256 _amount) external returns (uint256); // netRevenue
 }

@@ -27,13 +27,7 @@ import "../interfaces/IStakingEvents.sol";
 import "../interfaces/IStakingProxy.sol";
 import "../interfaces/IStaking.sol";
 
-
-abstract contract MixinParams is
-    IStaking,
-    IStakingEvents,
-    MixinStorage,
-    MixinConstants
-{
+abstract contract MixinParams is IStaking, IStakingEvents, MixinStorage, MixinConstants {
     /// @dev Set all configurable parameters at once.
     /// @param _epochDurationInSeconds Minimum seconds between epochs.
     /// @param _rewardDelegatedStakeWeight How much delegated stake is weighted vs operator stake, in ppm.
@@ -46,11 +40,7 @@ abstract contract MixinParams is
         uint256 _minimumPoolStake,
         uint32 _cobbDouglasAlphaNumerator,
         uint32 _cobbDouglasAlphaDenominator
-    )
-        external
-        override
-        onlyAuthorized
-    {
+    ) external override onlyAuthorized {
         _setParams(
             _epochDurationInSeconds,
             _rewardDelegatedStakeWeight,
@@ -90,9 +80,7 @@ abstract contract MixinParams is
     }
 
     /// @dev Initialize storage belonging to this mixin.
-    function _initMixinParams()
-        internal
-    {
+    function _initMixinParams() internal {
         // Ensure state is uninitialized.
         _assertParamsNotInitialized();
 
@@ -113,11 +101,9 @@ abstract contract MixinParams is
     }
 
     /// @dev Asserts that upgradable storage has not yet been initialized.
-    function _assertParamsNotInitialized()
-        internal
-        view
-    {
-        if (epochDurationInSeconds != 0 &&
+    function _assertParamsNotInitialized() internal view {
+        if (
+            epochDurationInSeconds != 0 &&
             rewardDelegatedStakeWeight != 0 &&
             minimumPoolStake != 0 &&
             cobbDouglasAlphaNumerator != 0 &&
@@ -139,9 +125,7 @@ abstract contract MixinParams is
         uint256 _minimumPoolStake,
         uint32 _cobbDouglasAlphaNumerator,
         uint32 _cobbDouglasAlphaDenominator
-    )
-        private
-    {
+    ) private {
         epochDurationInSeconds = _epochDurationInSeconds;
         rewardDelegatedStakeWeight = _rewardDelegatedStakeWeight;
         minimumPoolStake = _minimumPoolStake;

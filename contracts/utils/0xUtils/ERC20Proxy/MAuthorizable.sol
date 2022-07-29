@@ -19,11 +19,12 @@
 
 pragma solidity 0.8.14;
 
-import "../interfaces/IAuthorizable.sol"; 
+import "../interfaces/IAuthorizable.sol";
 
-abstract contract MAuthorizable is
-    IAuthorizable
-{
+abstract contract MAuthorizable is IAuthorizable {
     /// @dev Only authorized addresses can invoke functions with this modifier.
-    modifier onlyAuthorized virtual { revert(); _; }
+    modifier onlyAuthorized virtual {
+        revert();
+        _;
+    }
 }

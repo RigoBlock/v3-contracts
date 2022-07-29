@@ -23,17 +23,12 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IPoolRegistry {
-
     /*
      * EVENTS
      */
     event AuthorityChanged(address indexed athority);
 
-    event MetaChanged(
-        address indexed poolAddress,
-        bytes32 indexed key,
-        bytes32 value
-    );
+    event MetaChanged(address indexed poolAddress, bytes32 indexed key, bytes32 value);
 
     event Registered(
         address indexed group,
@@ -47,14 +42,14 @@ interface IPoolRegistry {
 
     /*
      * STORAGE
-    */
+     */
     /// @dev Returns the address of the Rigoblock authority contract.
     /// @return Address of the authority contract.
     function authority() external view returns (address);
 
     /// @dev Returns the address of the Rigoblock Dao.
     /// @return Address of the Rigoblock Dao.
-    function rigoblockDaoAddress()external view returns (address);
+    function rigoblockDaoAddress() external view returns (address);
 
     /*
      * CORE FUNCTIONS
@@ -65,16 +60,14 @@ interface IPoolRegistry {
     /// @param _symbol Symbol of the pool.
     function register(
         address _poolAddress,
-        string calldata  _name,
+        string calldata _name,
         string calldata _symbol,
         bytes32 poolId
-    )
-        external;
+    ) external;
 
     /// @dev Allows Rigoblock governance to update authority.
     /// @param _authority Address of the authority contract.
-    function setAuthority (address _authority)
-        external;
+    function setAuthority(address _authority) external;
 
     /// @dev Allows pool owner to set metadata for a pool.
     /// @param _poolAddress Address of the pool.
@@ -84,8 +77,7 @@ interface IPoolRegistry {
         address _poolAddress,
         bytes32 _key,
         bytes32 _value
-    )
-        external;
+    ) external;
 
     /// @dev Allows Rigoblock Dao to update its address.
     /// @dev Creates internal record.
@@ -99,19 +91,10 @@ interface IPoolRegistry {
     /// @param _poolAddress Address of the pool.
     /// @param _key Bytes32 key.
     /// @return poolMeta Meta by key.
-    function getMeta(
-        address _poolAddress,
-        bytes32 _key
-    )
-        external
-        view
-        returns (bytes32 poolMeta);
+    function getMeta(address _poolAddress, bytes32 _key) external view returns (bytes32 poolMeta);
 
     /// @dev Returns the id of a pool from its address.
     /// @param _poolAddress Address of the pool.
     /// @return poolId Id of the pool.
-    function getPoolIdFromAddress(address _poolAddress)
-        external
-        view
-        returns (bytes32 poolId);
+    function getPoolIdFromAddress(address _poolAddress) external view returns (bytes32 poolId);
 }

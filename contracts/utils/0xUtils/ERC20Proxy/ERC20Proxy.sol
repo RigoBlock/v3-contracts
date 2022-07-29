@@ -21,20 +21,14 @@ pragma solidity 0.8.14;
 
 import "./MixinAuthorizable.sol";
 
-contract ERC20Proxy is
-    MixinAuthorizable
-{
-    constructor(address _owner)
-        Ownable(_owner)
-    {}
+contract ERC20Proxy is MixinAuthorizable {
+    constructor(address _owner) Ownable(_owner) {}
 
     // Id of this proxy.
-    bytes4 constant internal PROXY_ID = bytes4(keccak256("ERC20Token(address)"));
+    bytes4 internal constant PROXY_ID = bytes4(keccak256("ERC20Token(address)"));
 
     // solhint-disable-next-line payable-fallback
-    fallback()
-        external
-    {
+    fallback() external {
         assembly {
             // The first 4 bytes of calldata holds the function selector
             let selector := and(calldataload(0), 0xffffffff00000000000000000000000000000000000000000000000000000000)
@@ -46,7 +40,6 @@ contract ERC20Proxy is
             // amount Amount of asset to transfer.
             // bytes4(keccak256("transferFrom(bytes,address,address,uint256)")) = 0xa85e59e4
             if eq(selector, 0xa85e59e400000000000000000000000000000000000000000000000000000000) {
-
                 // To lookup a value in a mapping, we load from the storage location keccak256(k, p),
                 // where k is the key left padded to 32 bytes and p is the storage slot
                 let start := mload(64)
@@ -135,13 +128,13 @@ contract ERC20Proxy is
 
                 /////// Call `token.transferFrom` using the calldata ///////
                 let success := call(
-                    gas(),            // forward all gas
-                    token,          // call address of token contract
-                    0,              // don't send any ETH
-                    0,              // pointer to start of input
-                    100,            // length of input
-                    0,              // write output over input
-                    32              // output size should be 32 bytes
+                    gas(), // forward all gas
+                    token, // call address of token contract
+                    0, // don't send any ETH
+                    0, // pointer to start of input
+                    100, // length of input
+                    0, // write output over input
+                    32 // output size should be 32 bytes
                 )
 
                 /////// Check return data. ///////
@@ -152,13 +145,7 @@ contract ERC20Proxy is
                 // nonzero 32 bytes value.
                 // So the transfer succeeded if the call succeeded and either
                 // returned nothing, or returned a non-zero 32 byte value.
-                success := and(success, or(
-                    iszero(returndatasize()),
-                    and(
-                        eq(returndatasize(), 32),
-                        gt(mload(0), 0)
-                    )
-                ))
+                success := and(success, or(iszero(returndatasize()), and(eq(returndatasize(), 32), gt(mload(0), 0))))
                 if success {
                     return(0, 0)
                 }
@@ -178,11 +165,7 @@ contract ERC20Proxy is
 
     /// @dev Gets the proxy id associated with the proxy address.
     /// @return Proxy id.
-    function getProxyId()
-        external
-        pure
-        returns (bytes4)
-    {
+    function getProxyId() external pure returns (bytes4) {
         return PROXY_ID;
     }
 }

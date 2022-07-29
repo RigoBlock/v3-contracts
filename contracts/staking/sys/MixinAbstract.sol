@@ -21,30 +21,18 @@
 pragma solidity >=0.5.9 <0.8.0;
 pragma experimental ABIEncoderV2;
 
-
 /// @dev Exposes some internal functions from various contracts to avoid
 ///      cyclical dependencies.
 abstract contract MixinAbstract {
-
     /// @dev Computes the reward owed to a pool during finalization.
     ///      Does nothing if the pool is already finalized.
     /// @param poolId The pool's ID.
     /// @return totalReward The total reward owed to a pool.
     /// @return membersStake The total stake for all non-operator members in
     ///         this pool.
-    function _getUnfinalizedPoolRewards(bytes32 poolId)
-        internal
-        view
-        virtual
-        returns (
-            uint256 totalReward,
-            uint256 membersStake
-        );
+    function _getUnfinalizedPoolRewards(bytes32 poolId) internal view virtual returns (uint256 totalReward, uint256 membersStake);
 
     /// @dev Asserts that a pool has been finalized last epoch.
     /// @param poolId The id of the pool that should have been finalized.
-    function _assertPoolFinalizedLastEpoch(bytes32 poolId)
-        internal
-        view
-        virtual;
+    function _assertPoolFinalizedLastEpoch(bytes32 poolId) internal view virtual;
 }

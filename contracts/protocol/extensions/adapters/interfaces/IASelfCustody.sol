@@ -21,13 +21,7 @@
 pragma solidity =0.8.14;
 
 interface IASelfCustody {
-
-    event SelfCustodyTransfer(
-        address indexed from,
-        address indexed to,
-        address indexed token,
-        uint256 amount
-    );
+    event SelfCustodyTransfer(address indexed from, address indexed to, address indexed token, uint256 amount);
 
     function GRG_VAULT_ADDRESS() external view returns (address);
 
@@ -40,13 +34,9 @@ interface IASelfCustody {
         address payable selfCustodyAccount,
         address token,
         uint256 amount
-    )
-        external returns (uint256 shortfall);
+    ) external returns (uint256 shortfall);
 
     /// @dev external check if minimum pool GRG amount requirement satisfied.
     /// @return shortfall Number of GRG pool operator shortfall.
-    function poolGrgShortfall(address _poolAddress)
-        external
-        view
-        returns (uint256);
+    function poolGrgShortfall(address _poolAddress) external view returns (uint256);
 }

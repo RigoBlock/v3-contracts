@@ -23,16 +23,40 @@ pragma solidity >=0.5.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice used in order to access public variable
 abstract contract Pool {
-
     address public owner;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    function balanceOf(address _who) external virtual view returns (uint256);
-    function totalSupply() external virtual view returns (uint256 totaSupply);
-    function getEventful() external virtual view returns (address);
-    function getData() external virtual view returns (string memory name, string memory symbol, uint256 sellPrice, uint256 buyPrice);
-    function calcSharePrice() external virtual view returns (uint256);
-    function getAdminData() external virtual view returns (address, address feeCollector, address dragodAO, uint256 ratio, uint256 transactionFee, uint32 minPeriod);
+    function balanceOf(address _who) external view virtual returns (uint256);
+
+    function totalSupply() external view virtual returns (uint256 totaSupply);
+
+    function getEventful() external view virtual returns (address);
+
+    function getData()
+        external
+        view
+        virtual
+        returns (
+            string memory name,
+            string memory symbol,
+            uint256 sellPrice,
+            uint256 buyPrice
+        );
+
+    function calcSharePrice() external view virtual returns (uint256);
+
+    function getAdminData()
+        external
+        view
+        virtual
+        returns (
+            address,
+            address feeCollector,
+            address dragodAO,
+            uint256 ratio,
+            uint256 transactionFee,
+            uint32 minPeriod
+        );
 }

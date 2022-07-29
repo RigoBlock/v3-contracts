@@ -28,21 +28,13 @@ import "./immutable/MixinConstants.sol";
 import "./interfaces/IStorageInit.sol";
 import "./interfaces/IStakingProxy.sol";
 
-
 /// #dev The RigoBlock Staking contract.
-contract StakingProxy is
-    IStakingProxy,
-    MixinStorage,
-    MixinConstants
-{
+contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     using LibSafeDowncast for uint256;
 
     /// @dev Constructor.
     /// @param _stakingContract Staking contract to delegate calls to.
-    constructor(address _stakingContract, address _owner)
-        Authorizable(_owner)
-        MixinStorage()
-    {
+    constructor(address _stakingContract, address _owner) Authorizable(_owner) MixinStorage() {
         // Deployer address must be authorized in order to call `init`
         _addAuthorizedAddress(msg.sender);
 
@@ -54,15 +46,10 @@ contract StakingProxy is
     }
 
     /// @dev Delegates calls to the staking contract, if it is set.
-    fallback()
-        external
-    {
+    fallback() external {
         // Sanity check that we have a staking contract to call
         address stakingContract_ = stakingContract;
-        require(
-            stakingContract_ != NIL_ADDRESS,
-            "STAKING_ADDRESS_NULL_ERROR"
-        );
+        require(stakingContract_ != NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
 
         // Call the staking contract with the provided calldata.
         (bool success, bytes memory returnData) = stakingContract_.delegatecall(msg.data);
@@ -70,33 +57,25 @@ contract StakingProxy is
         // Revert on failure or return on success.
         assembly {
             switch success
-            case 0 {
-                revert(add(0x20, returnData), mload(returnData))
-            }
-            default {
-                return(add(0x20, returnData), mload(returnData))
-            }
+                case 0 {
+                    revert(add(0x20, returnData), mload(returnData))
+                }
+                default {
+                    return(add(0x20, returnData), mload(returnData))
+                }
         }
     }
 
     /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
     /// Note that this is callable only by an authorized address.
     /// @param _stakingContract Address of staking contract.
-    function attachStakingContract(address _stakingContract)
-        external
-        override
-        onlyAuthorized
-    {
+    function attachStakingContract(address _stakingContract) external override onlyAuthorized {
         _attachStakingContract(_stakingContract);
     }
 
     /// @dev Detach the current staking contract.
     /// Note that this is callable only by an authorized address.
-    function detachStakingContract()
-        external
-        override
-        onlyAuthorized
-    {
+    function detachStakingContract() external override onlyAuthorized {
         stakingContract = NIL_ADDRESS;
         emit StakingContractDetachedFromProxy();
     }
@@ -104,10 +83,7 @@ contract StakingProxy is
     /// @dev Batch executes a series of calls to the staking contract.
     /// @param data An array of data that encodes a sequence of functions to
     ///             call in the staking contracts.
-    function batchExecute(bytes[] calldata data)
-        external
-        returns (bytes[] memory batchReturnData)
-    {
+    function batchExecute(bytes[] calldata data) external returns (bytes[] memory batchReturnData) {
         // Initialize commonly used variables.
         bool success;
         bytes memory returnData;
@@ -142,53 +118,36 @@ contract StakingProxy is
     //       Asserts that a stake weight is <= 100%.
     //       Asserts that pools allow >= 1 maker.
     //       Asserts that all addresses are initialized.
-    function assertValidStorageParams()
-        public
-        view
-        override
-    {
+    function assertValidStorageParams() public view override {
         // Epoch length must be between 5 and 90 days long
         uint256 _epochDurationInSeconds = epochDurationInSeconds;
-        require(
-            _epochDurationInSeconds >= 5 days && _epochDurationInSeconds <= 90 days,
-            "STAKING_PROXY_INVALID_EPOCH_DURATION_ERROR"
-        );
+        require(_epochDurationInSeconds >= 5 days && _epochDurationInSeconds <= 90 days, "STAKING_PROXY_INVALID_EPOCH_DURATION_ERROR");
 
         // Alpha must be 0 < x <= 1
         uint32 _cobbDouglasAlphaDenominator = cobbDouglasAlphaDenominator;
         require(
-            cobbDouglasAlphaNumerator <= _cobbDouglasAlphaDenominator &&
-                _cobbDouglasAlphaDenominator != 0,
+            cobbDouglasAlphaNumerator <= _cobbDouglasAlphaDenominator && _cobbDouglasAlphaDenominator != 0,
             "STAKING_PROXY_INVALID_COBB_DOUGLAS_ALPHA_ERROR"
         );
 
         // Weight of delegated stake must be <= 100%
-        require(
-            rewardDelegatedStakeWeight <= PPM_DENOMINATOR,
-            "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR"
-        );
+        require(rewardDelegatedStakeWeight <= PPM_DENOMINATOR, "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR");
 
         // Minimum stake must be > 1
         // TODO: check if is intended as could require 2 * MIN_TOKEN_VALUE
-        require(
-            minimumPoolStake >= 2,
-            "STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR"
-        );
+        require(minimumPoolStake >= 2, "STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR");
     }
 
     /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
     /// @param _stakingContract Address of staking contract.
-    function _attachStakingContract(address _stakingContract)
-        internal
-    {
+    function _attachStakingContract(address _stakingContract) internal {
         // Attach the staking contract
         stakingContract = _stakingContract;
         emit StakingContractAttachedToProxy(_stakingContract);
 
         // Call `init()` on the staking contract to initialize storage.
-        (bool didInitSucceed, bytes memory initReturnData) = stakingContract.delegatecall(
-            abi.encodeWithSelector(IStorageInit(0).init.selector)
-        );
+        (bool didInitSucceed, bytes memory initReturnData) =
+            stakingContract.delegatecall(abi.encodeWithSelector(IStorageInit(0).init.selector));
 
         if (!didInitSucceed) {
             assembly {

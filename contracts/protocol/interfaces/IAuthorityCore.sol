@@ -23,35 +23,18 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IAuthorityCore {
-
     /*
      * EVENTS
      */
     event NewExtensionsAuthority(address indexed extensionsAuthority);
 
-    event PermissionAdded(
-        address indexed from,
-        address indexed target,
-        uint8 indexed permissionType
-    );
+    event PermissionAdded(address indexed from, address indexed target, uint8 indexed permissionType);
 
-    event PermissionRemoved(
-        address indexed from,
-        address indexed target,
-        uint8 indexed permissionType
-    );
+    event PermissionRemoved(address indexed from, address indexed target, uint8 indexed permissionType);
 
-    event RemovedMethod(
-        address indexed from,
-        address indexed adapter,
-        bytes4 indexed selector
-    );
+    event RemovedMethod(address indexed from, address indexed adapter, bytes4 indexed selector);
 
-    event WhitelistedMethod(
-        address indexed from,
-        address indexed adapter,
-        bytes4 indexed selector
-    );
+    event WhitelistedMethod(address indexed from, address indexed adapter, bytes4 indexed selector);
 
     /*
      * STORAGE
@@ -67,20 +50,12 @@ interface IAuthorityCore {
     /// @param _selector Bytes4 hex of the method selector.
     /// @param _adapter Address of the adapter implementing the method.
     /// @notice We do not save list of approved as better queried by events.
-    function addMethod(
-        bytes4 _selector,
-        address _adapter
-    )
-        external;
+    function addMethod(bytes4 _selector, address _adapter) external;
 
     /// @dev Allows a whitelister to remove a method.
     /// @param _selector Bytes4 hex of the method selector.
     /// @param _adapter Address of the adapter implementing the method.
-    function removeMethod(
-        bytes4 _selector,
-        address _adapter
-    )
-        external;
+    function removeMethod(bytes4 _selector, address _adapter) external;
 
     /// @dev Allows owner to set extension adapter address.
     /// @param _adapter Address of the target adapter.
@@ -122,8 +97,5 @@ interface IAuthorityCore {
     /// @dev Provides whether an address is whitelister.
     /// @param _target Address of the target whitelister.
     /// @return Bool is whitelisted.
-    function isWhitelister(address _target)
-        external
-        view
-        returns (bool);
+    function isWhitelister(address _target) external view returns (bool);
 }

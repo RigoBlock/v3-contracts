@@ -27,11 +27,7 @@ import "../interfaces/IStructs.sol";
 import "../immutable/MixinDeploymentConstants.sol";
 import "./MixinStakeStorage.sol";
 
-
-abstract contract MixinStakeBalances is
-    MixinStakeStorage,
-    MixinDeploymentConstants
-{
+abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConstants {
     using LibSafeMath for uint256;
     using LibSafeDowncast for uint256;
 
@@ -44,9 +40,7 @@ abstract contract MixinStakeBalances is
         override
         returns (IStructs.StoredBalance memory balance)
     {
-        balance = _loadCurrentBalance(
-            _globalStakeByStatus[uint8(IStructs.StakeStatus.DELEGATED)]
-        );
+        balance = _loadCurrentBalance(_globalStakeByStatus[uint8(IStructs.StakeStatus.DELEGATED)]);
         if (stakeStatus == IStructs.StakeStatus.UNDELEGATED) {
             // Undelegated stake is the difference between total stake and delegated stake
             // Note that any ZRX erroneously sent to the vault will be counted as undelegated stake
@@ -61,30 +55,20 @@ abstract contract MixinStakeBalances is
     /// @param staker Owner of stake.
     /// @param stakeStatus UNDELEGATED or DELEGATED
     /// @return balance Owner's stake balances for given status.
-    function getOwnerStakeByStatus(
-        address staker,
-        IStructs.StakeStatus stakeStatus
-    )
+    function getOwnerStakeByStatus(address staker, IStructs.StakeStatus stakeStatus)
         external
         view
         override
         returns (IStructs.StoredBalance memory balance)
     {
-        balance = _loadCurrentBalance(
-            _ownerStakeByStatus[uint8(stakeStatus)][staker]
-        );
+        balance = _loadCurrentBalance(_ownerStakeByStatus[uint8(stakeStatus)][staker]);
         return balance;
     }
 
     /// @dev Returns the total stake for a given staker.
     /// @param staker of stake.
     /// @return Total GRG staked by `staker`.
-    function getTotalStake(address staker)
-        public
-        view
-        override
-        returns (uint256)
-    {
+    function getTotalStake(address staker) public view override returns (uint256) {
         return getGrgVault().balanceOf(staker);
     }
 
@@ -106,12 +90,7 @@ abstract contract MixinStakeBalances is
     ///      across all members.
     /// @param poolId Unique Id of pool.
     /// @return balance Total stake delegated to pool.
-    function getTotalStakeDelegatedToPool(bytes32 poolId)
-        public
-        view
-        override
-        returns (IStructs.StoredBalance memory balance)
-    {
+    function getTotalStakeDelegatedToPool(bytes32 poolId) public view override returns (IStructs.StoredBalance memory balance) {
         balance = _loadCurrentBalance(_delegatedStakeByPoolId[poolId]);
         return balance;
     }
