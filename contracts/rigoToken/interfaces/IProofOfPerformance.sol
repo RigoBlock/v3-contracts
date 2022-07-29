@@ -23,14 +23,12 @@ pragma solidity >=0.4.22 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IProofOfPerformance {
-
     /*
      * CORE FUNCTIONS
      */
     /// @dev Credits the pop reward to the Staking Proxy contract.
     /// @param _poolAddress Address of the pool.
-    function creditPopRewardToStakingProxy(address _poolAddress)
-        external;
+    function creditPopRewardToStakingProxy(address _poolAddress) external;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
@@ -38,8 +36,5 @@ interface IProofOfPerformance {
     /// @dev Returns the proof of performance reward for a pool.
     /// @param _poolAddress Address of the pool.
     /// @return Value of the pop reward in Rigo tokens.
-    function proofOfPerformance(address _poolAddress)
-        external
-        view
-        returns (uint256);
+    function proofOfPerformance(address _poolAddress) external view returns (uint256);
 }

@@ -22,15 +22,10 @@ pragma solidity 0.8.14;
 /// @title Find Method Library - library to find the method of a call.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 library LibFindMethod {
-
     /// @dev Returns the method of an ABIencoded call
     /// @param assembledData Bytes of the call data
     /// @return method Bytes4 of the function signature
-    function findMethod(bytes memory assembledData)
-        internal
-        pure
-        returns (bytes4 method)
-    {
+    function findMethod(bytes memory assembledData) internal pure returns (bytes4 method) {
         // find the bytes4(keccak256('functionABI')) of the function
         assembly {
             // Load free memory pointer

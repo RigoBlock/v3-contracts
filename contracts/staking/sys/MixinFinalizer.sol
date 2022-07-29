@@ -27,30 +27,20 @@ import "../interfaces/IStructs.sol";
 import "../staking_pools/MixinStakingPoolRewards.sol";
 import "../../rigoToken/interfaces/IInflation.sol";
 
-
-abstract contract MixinFinalizer is
-    MixinStakingPoolRewards
-{
+abstract contract MixinFinalizer is MixinStakingPoolRewards {
     using LibSafeMath for uint256;
 
     /// @dev Begins a new epoch, preparing the prior one for finalization.
     ///      Throws if not enough time has passed between epochs or if the
     ///      previous epoch was not fully finalized.
     /// @return numPoolsToFinalize The number of unfinalized pools.
-    function endEpoch()
-        external
-        override
-        returns (uint256)
-    {
+    function endEpoch() external override returns (uint256) {
         uint256 currentEpoch_ = currentEpoch;
         uint256 prevEpoch = currentEpoch_.safeSub(1);
 
         // Make sure the previous epoch has been fully finalized.
         uint256 numPoolsToFinalizeFromPrevEpoch = aggregatedStatsByEpoch[prevEpoch].numPoolsToFinalize;
-        require(
-            numPoolsToFinalizeFromPrevEpoch == 0,
-            "STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR"
-        );
+        require(numPoolsToFinalizeFromPrevEpoch == 0, "STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR");
 
         // mint epoch inflation, jump first epoch as all registered pool accounts will become active from following epoch
         //  mint happens before time has passed check, therefore tokens will be allocated even before expiry if method is called
@@ -95,10 +85,7 @@ abstract contract MixinFinalizer is
     ///      to finalize a pool immediately. Does nothing if the pool is already
     ///      finalized or did not earn rewards in the previous epoch.
     /// @param poolId The pool ID to finalize.
-    function finalizePool(bytes32 poolId)
-        external
-        override
-    {
+    function finalizePool(bytes32 poolId) external override {
         // Compute relevant epochs
         uint256 currentEpoch_ = currentEpoch;
         uint256 prevEpoch = currentEpoch_.safeSub(1);
@@ -125,31 +112,22 @@ abstract contract MixinFinalizer is
         // Pay the operator and update rewards for the pool.
         // Note that we credit at the CURRENT epoch even though these rewards
         // were earned in the previous epoch.
-        (uint256 operatorReward, uint256 membersReward) = _syncPoolRewards(
-            poolId,
-            rewards,
-            poolStats.membersStake
-        );
+        (uint256 operatorReward, uint256 membersReward) = _syncPoolRewards(poolId, rewards, poolStats.membersStake);
 
         // Emit an event.
-        emit RewardsPaid(
-            currentEpoch_,
-            poolId,
-            operatorReward,
-            membersReward
-        );
+        emit RewardsPaid(currentEpoch_, poolId, operatorReward, membersReward);
 
         uint256 totalReward = operatorReward.safeAdd(membersReward);
 
         // Increase `totalRewardsFinalized`.
-        aggregatedStatsByEpoch[prevEpoch].totalRewardsFinalized =
-            aggregatedStats.totalRewardsFinalized =
-            aggregatedStats.totalRewardsFinalized.safeAdd(totalReward);
+        aggregatedStatsByEpoch[prevEpoch].totalRewardsFinalized = aggregatedStats.totalRewardsFinalized = aggregatedStats
+            .totalRewardsFinalized
+            .safeAdd(totalReward);
 
         // Decrease the number of unfinalized pools left.
-        aggregatedStatsByEpoch[prevEpoch].numPoolsToFinalize =
-            aggregatedStats.numPoolsToFinalize =
-            aggregatedStats.numPoolsToFinalize.safeSub(1);
+        aggregatedStatsByEpoch[prevEpoch].numPoolsToFinalize = aggregatedStats.numPoolsToFinalize = aggregatedStats
+            .numPoolsToFinalize
+            .safeSub(1);
 
         // If there are no more unfinalized pools remaining, the epoch is
         // finalized.
@@ -168,16 +146,7 @@ abstract contract MixinFinalizer is
     /// @return reward The total reward owed to a pool.
     /// @return membersStake The total stake for all non-operator members in
     ///         this pool.
-    function _getUnfinalizedPoolRewards(bytes32 poolId)
-        internal
-        view
-        virtual
-        override
-        returns (
-            uint256 reward,
-            uint256 membersStake
-        )
-    {
+    function _getUnfinalizedPoolRewards(bytes32 poolId) internal view virtual override returns (uint256 reward, uint256 membersStake) {
         uint256 prevEpoch = currentEpoch.safeSub(1);
         IStructs.PoolStats memory poolStats = poolStatsByEpoch[poolId][prevEpoch];
         reward = _getUnfinalizedPoolRewardsFromPoolStats(poolStats, aggregatedStatsByEpoch[prevEpoch]);
@@ -186,43 +155,27 @@ abstract contract MixinFinalizer is
 
     /// @dev Returns the GRG balance of this contract, minus
     ///      any GRG that has already been reserved for rewards.
-    function _getAvailableGrgBalance()
-        internal
-        view
-        returns (uint256 grgBalance)
-    {
-        grgBalance = getGrgContract().balanceOf(address(this))
-            .safeSub(grgReservedForPoolRewards);
+    function _getAvailableGrgBalance() internal view returns (uint256 grgBalance) {
+        grgBalance = getGrgContract().balanceOf(address(this)).safeSub(grgReservedForPoolRewards);
 
         return grgBalance;
     }
 
     /// @dev Asserts that a pool has been finalized last epoch.
     /// @param poolId The id of the pool that should have been finalized.
-    function _assertPoolFinalizedLastEpoch(bytes32 poolId)
-        internal
-        view
-        virtual
-        override
-    {
+    function _assertPoolFinalizedLastEpoch(bytes32 poolId) internal view virtual override {
         uint256 prevEpoch = currentEpoch.safeSub(1);
         IStructs.PoolStats memory poolStats = poolStatsByEpoch[poolId][prevEpoch];
 
         // A pool that has any fees remaining has not been finalized
-        require(
-            poolStats.feesCollected == 0,
-            "STAKING_POOL_NOT_FINALIZED_ERROR"
-        );
+        require(poolStats.feesCollected == 0, "STAKING_POOL_NOT_FINALIZED_ERROR");
     }
 
     /// @dev Computes the reward owed to a pool during finalization.
     /// @param poolStats Stats for a specific pool.
     /// @param aggregatedStats Stats aggregated across all pools.
     /// @return rewards Unfinalized rewards for the input pool.
-    function _getUnfinalizedPoolRewardsFromPoolStats(
-        IStructs.PoolStats memory poolStats,
-        IStructs.AggregatedStats memory aggregatedStats
-    )
+    function _getUnfinalizedPoolRewardsFromPoolStats(IStructs.PoolStats memory poolStats, IStructs.AggregatedStats memory aggregatedStats)
         private
         view
         returns (uint256 rewards)

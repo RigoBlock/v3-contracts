@@ -29,7 +29,6 @@ import "./interfaces/IASelfCustody.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract ASelfCustody is IASelfCustody {
-
     address public immutable override GRG_VAULT_ADDRESS;
 
     // minimum 100k GRG to unlock self custody
@@ -50,11 +49,7 @@ contract ASelfCustody is IASelfCustody {
         address payable selfCustodyAccount,
         address token,
         uint256 amount
-    )
-        external
-        override
-        returns (uint256 shortfall)
-    {
+    ) external override returns (uint256 shortfall) {
         // we prevent direct calls to this extension
         assert(aSelfCustody != address(this));
         require(amount != 0, "ASELFCUSTODY_NULL_AMOUNT_ERROR");
@@ -62,10 +57,7 @@ contract ASelfCustody is IASelfCustody {
 
         if (shortfall == 0) {
             if (token == address(0)) {
-                require(
-                    address(this).balance > amount,
-                    "ASELFCUSTODY_BALANCE_NOT_ENOUGH_ERROR"
-                );
+                require(address(this).balance > amount, "ASELFCUSTODY_BALANCE_NOT_ENOUGH_ERROR");
                 selfCustodyAccount.transfer(amount);
             } else {
                 _safeTransfer(token, selfCustodyAccount, amount);
@@ -75,24 +67,16 @@ contract ASelfCustody is IASelfCustody {
     }
 
     /// @inheritdoc IASelfCustody
-    function poolGrgShortfall(address _poolAddress)
-        public
-        view
-        override
-        returns (uint256)
-    {
+    function poolGrgShortfall(address _poolAddress) public view override returns (uint256) {
         bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(_poolAddress);
         uint256 poolStake = IStaking(STAKING_PROXY_ADDRESS).getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
 
         // we assert the staking implementation has not been compromised by requiring all staked GRG to be delegated to self.
-        require(
-            poolStake == IGrgVault(GRG_VAULT_ADDRESS).balanceOf(_poolAddress),
-            "ASELFCUSTODY_GRG_BALANCE_MISMATCH_ERROR"
-        );
+        require(poolStake == IGrgVault(GRG_VAULT_ADDRESS).balanceOf(_poolAddress), "ASELFCUSTODY_GRG_BALANCE_MISMATCH_ERROR");
 
         if (poolStake >= MINIMUM_GRG_STAKE) {
             return 0;
-        }  else {
+        } else {
             return MINIMUM_GRG_STAKE - poolStake;
         } // unchecked
     }
@@ -101,12 +85,13 @@ contract ASelfCustody is IASelfCustody {
     /// @param token Address of the origin
     /// @param to Address of the target
     /// @param value Amount to transfer
-    function _safeTransfer(address token, address to, uint value) private {
+    function _safeTransfer(
+        address token,
+        address to,
+        uint256 value
+    ) private {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "ASELFCUSTODY_TRANSFER_FAILED_ERROR"
-        );
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "ASELFCUSTODY_TRANSFER_FAILED_ERROR");
     }
 }

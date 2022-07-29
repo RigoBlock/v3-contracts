@@ -26,32 +26,20 @@ import "../immutable/MixinStorage.sol";
 import "../interfaces/IStakingEvents.sol";
 import "../interfaces/IStaking.sol";
 
-
-abstract contract MixinScheduler is
-    IStaking,
-    IStakingEvents,
-    MixinStorage
-{
+abstract contract MixinScheduler is IStaking, IStakingEvents, MixinStorage {
     using LibSafeMath for uint256;
 
     /// @dev Returns the earliest end time in seconds of this epoch.
     ///      The next epoch can begin once this time is reached.
     ///      Epoch period = [startTimeInSeconds..endTimeInSeconds)
     /// @return Time in seconds.
-    function getCurrentEpochEarliestEndTimeInSeconds()
-        public
-        view
-        override
-        returns (uint256)
-    {
+    function getCurrentEpochEarliestEndTimeInSeconds() public view override returns (uint256) {
         return currentEpochStartTimeInSeconds.safeAdd(epochDurationInSeconds);
     }
 
     /// @dev Initializes state owned by this mixin.
     ///      Fails if state was already initialized.
-    function _initMixinScheduler()
-        internal
-    {
+    function _initMixinScheduler() internal {
         // assert the current values before overwriting them.
         _assertSchedulerNotInitialized();
 
@@ -63,19 +51,14 @@ abstract contract MixinScheduler is
     /// @dev Moves to the next epoch, given the current epoch period has ended.
     ///      Time intervals that are measured in epochs (like timeLocks) are also incremented, given
     ///      their periods have ended.
-    function _goToNextEpoch()
-        internal
-    {
+    function _goToNextEpoch() internal {
         // get current timestamp
         // solhint-disable-next-line not-rely-on-time
         uint256 currentBlockTimestamp = block.timestamp;
 
         // validate that we can increment the current epoch
         uint256 epochEndTime = getCurrentEpochEarliestEndTimeInSeconds();
-        require(
-            epochEndTime <= currentBlockTimestamp,
-            "STAKING_TIMESTAMP_TOO_LOW_ERROR"
-        );
+        require(epochEndTime <= currentBlockTimestamp, "STAKING_TIMESTAMP_TOO_LOW_ERROR");
 
         // incremment epoch
         uint256 nextEpoch = currentEpoch.safeAdd(1);
@@ -85,13 +68,7 @@ abstract contract MixinScheduler is
 
     /// @dev Assert scheduler state before initializing it.
     /// This must be updated for each migration.
-    function _assertSchedulerNotInitialized()
-        internal
-        view
-    {
-        require(
-            currentEpochStartTimeInSeconds == 0,
-            "STAKING_SCHEDULER_ALREADY_INITIALIZED_ERROR"
-        );
+    function _assertSchedulerNotInitialized() internal view {
+        require(currentEpochStartTimeInSeconds == 0, "STAKING_SCHEDULER_ALREADY_INITIALIZED_ERROR");
     }
 }

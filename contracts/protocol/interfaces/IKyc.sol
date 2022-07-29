@@ -22,8 +22,6 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title KycFace - allows interaction with a Kyc provider.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IKyc
-
-{
+interface IKyc {
     function isWhitelistedUser(address hodler) external view returns (bool);
 }

@@ -20,16 +20,10 @@
 
 pragma solidity >=0.5.9 <0.8.0;
 
-
 library LibSafeDowncast {
-
     /// @dev Safely downcasts to a uint96
     /// Note that this reverts if the input value is too large.
-    function downcastToUint96(uint256 a)
-        internal
-        pure
-        returns (uint96 b)
-    {
+    function downcastToUint96(uint256 a) internal pure returns (uint96 b) {
         b = uint96(a);
         require(uint256(b) == a, "VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT96");
         return b;
@@ -37,11 +31,7 @@ library LibSafeDowncast {
 
     /// @dev Safely downcasts to a uint64
     /// Note that this reverts if the input value is too large.
-    function downcastToUint64(uint256 a)
-        internal
-        pure
-        returns (uint64 b)
-    {
+    function downcastToUint64(uint256 a) internal pure returns (uint64 b) {
         b = uint64(a);
         require(uint256(b) == a, "VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT64");
         return b;
@@ -49,11 +39,7 @@ library LibSafeDowncast {
 
     /// @dev Safely downcasts to a uint32
     /// Note that this reverts if the input value is too large.
-    function downcastToUint32(uint256 a)
-        internal
-        pure
-        returns (uint32 b)
-    {
+    function downcastToUint32(uint256 a) internal pure returns (uint32 b) {
         b = uint32(a);
         require(uint256(b) == a, "VALUE_TOO_LARGE_TO_DOWNCAST_TO_UINT32");
         return b;

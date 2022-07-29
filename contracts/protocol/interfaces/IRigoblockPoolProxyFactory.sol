@@ -23,10 +23,7 @@ pragma solidity 0.8.14;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockPoolProxyFactory {
-
-    event PoolCreated(
-        address poolAddress
-    );
+    event PoolCreated(address poolAddress);
 
     event Upgraded(address indexed implementation);
 
@@ -52,25 +49,18 @@ interface IRigoblockPoolProxyFactory {
         string calldata _name,
         string calldata _symbol,
         address _baseToken
-    )
-        external
-        returns (address newPoolAddress, bytes32 poolId);
+    ) external returns (address newPoolAddress, bytes32 poolId);
 
     /// @dev Allows owner to update the registry.
     /// @param _newRegistry Address of the new registry.
-    function setRegistry(address _newRegistry)
-        external;
+    function setRegistry(address _newRegistry) external;
 
-    function setImplementation(address _newImplementation)
-        external;
+    function setImplementation(address _newImplementation) external;
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @dev Returns the address of the pool registry.
     /// @return Address of the registry.
-    function getRegistry()
-        external
-        view
-        returns (address);
+    function getRegistry() external view returns (address);
 }

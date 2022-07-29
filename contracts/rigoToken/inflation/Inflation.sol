@@ -22,17 +22,14 @@
 pragma solidity 0.8.9;
 pragma experimental ABIEncoderV2;
 
-import { IInflation } from "../interfaces/IInflation.sol";
-import { IRigoToken } from "../interfaces/IRigoToken.sol";
-import { IStaking } from "../../staking/interfaces/IStaking.sol";
-
+import {IInflation} from "../interfaces/IInflation.sol";
+import {IRigoToken} from "../interfaces/IRigoToken.sol";
+import {IStaking} from "../../staking/interfaces/IStaking.sol";
 
 /// @title Inflation - Allows ProofOfPerformance to mint tokens.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract Inflation is
-    IInflation
-{
+contract Inflation is IInflation {
     /// @inheritdoc IInflation
     address public immutable override RIGO_TOKEN_ADDRESS;
 
@@ -55,10 +52,7 @@ contract Inflation is
         _;
     }
 
-    constructor(
-        address _rigoTokenAddress,
-        address _stakingProxyAddress
-    ) {
+    constructor(address _rigoTokenAddress, address _stakingProxyAddress) {
         RIGO_TOKEN_ADDRESS = _rigoTokenAddress;
         STAKING_PROXY_ADDRESS = _stakingProxyAddress;
     }
@@ -67,23 +61,14 @@ contract Inflation is
      * CORE FUNCTIONS
      */
     /// @inheritdoc IInflation
-    function mintInflation()
-        external
-        override
-        onlyStakingProxy
-        returns (uint256 mintedInflation)
-    {
+    function mintInflation() external override onlyStakingProxy returns (uint256 mintedInflation) {
         // solhint-disable-next-line not-rely-on-time
         require(block.timestamp >= epochEndTime, "INFLATION_EPOCH_END_ERROR");
         (uint256 epochDurationInSeconds, , , , ) = IStaking(STAKING_PROXY_ADDRESS).getParams();
 
         // sanity check for epoch length queried from staking
         if (epochLength != epochDurationInSeconds) {
-            require(
-                epochDurationInSeconds >= 5 days &&
-                    epochDurationInSeconds <= 90 days,
-                "INFLATION_TIME_ANOMALY_ERROR"
-            );
+            require(epochDurationInSeconds >= 5 days && epochDurationInSeconds <= 90 days, "INFLATION_TIME_ANOMALY_ERROR");
             epochLength = epochDurationInSeconds;
         }
 
@@ -94,10 +79,7 @@ contract Inflation is
         slot = slot + 1;
 
         // mint rewards
-        IRigoToken(RIGO_TOKEN_ADDRESS).mintToken(
-            STAKING_PROXY_ADDRESS,
-            epochInflation
-        );
+        IRigoToken(RIGO_TOKEN_ADDRESS).mintToken(STAKING_PROXY_ADDRESS, epochInflation);
         return (mintedInflation = epochInflation);
     }
 
@@ -105,12 +87,7 @@ contract Inflation is
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @inheritdoc IInflation
-    function epochEnded()
-        external
-        override
-        view
-        returns (bool)
-    {
+    function epochEnded() external view override returns (bool) {
         // solhint-disable-next-line not-rely-on-time
         if (block.timestamp >= epochEndTime) {
             return true;
@@ -118,27 +95,14 @@ contract Inflation is
     }
 
     /// @inheritdoc IInflation
-    function getEpochInflation()
-        public
-        view
-        override
-        returns (uint256)
-    {
+    function getEpochInflation() public view override returns (uint256) {
         // 2% of GRG total supply
         // total supply * annual percentage inflation * time period (1 epoch)
-        return (
-            ANNUAL_INFLATION_RATE * epochLength * _getGRGTotalSupply()
-            / PPM_DENOMINATOR / 365 days
-        );
+        return ((ANNUAL_INFLATION_RATE * epochLength * _getGRGTotalSupply()) / PPM_DENOMINATOR / 365 days);
     }
 
     /// @inheritdoc IInflation
-    function timeUntilNextClaim()
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function timeUntilNextClaim() external view override returns (uint256) {
         /* solhint-disable not-rely-on-time */
         if (block.timestamp < epochEndTime) {
             return (epochEndTime - block.timestamp);
@@ -150,20 +114,13 @@ contract Inflation is
      * INTERNAL METHODS
      */
     /// @dev Asserts that the caller is the Staking Proxy.
-    function _assertCallerIsStakingProxy()
-        private
-        view
-    {
+    function _assertCallerIsStakingProxy() private view {
         if (msg.sender != STAKING_PROXY_ADDRESS) {
             revert("CALLER_NOT_STAKING_PROXY_ERROR");
         }
     }
 
-    function _getGRGTotalSupply()
-        private
-        view
-        returns (uint256)
-    {
+    function _getGRGTotalSupply() private view returns (uint256) {
         return IRigoToken(RIGO_TOKEN_ADDRESS).totalSupply();
     }
 }

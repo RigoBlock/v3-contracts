@@ -26,11 +26,8 @@ import "../../utils/0xUtils/Authorizable.sol";
 import "../interfaces/IGrgVault.sol";
 import "../interfaces/IStructs.sol";
 
-
 // solhint-disable max-states-count, no-empty-blocks
-abstract contract MixinStorage is
-    Authorizable
-{
+abstract contract MixinStorage is Authorizable {
     // address of staking contract
     address public stakingContract;
 

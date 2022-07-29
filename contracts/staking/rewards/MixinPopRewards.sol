@@ -28,12 +28,7 @@ import "../sys/MixinFinalizer.sol";
 import "../staking_pools/MixinStakingPool.sol";
 import "./MixinPopManager.sol";
 
-
-abstract contract MixinPopRewards is
-    MixinPopManager,
-    MixinStakingPool,
-    MixinFinalizer
-{
+abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFinalizer {
     using LibSafeMath for uint256;
 
     /// @dev Asserts that the call is coming from a valid pop.
@@ -47,15 +42,7 @@ abstract contract MixinPopRewards is
     ///      (MixinPopManager).
     /// @param poolAccount The address of the rigoblock pool account.
     /// @param popReward The pop reward.
-    function creditPopReward(
-        address poolAccount,
-        uint256 popReward
-    )
-        external
-        payable
-        override
-        onlyPop
-    {
+    function creditPopReward(address poolAccount, uint256 popReward) external payable override onlyPop {
         // Get the pool id of the maker address.
         bytes32 poolId = poolIdByRbPoolAccount[poolAccount];
 
@@ -95,22 +82,14 @@ abstract contract MixinPopRewards is
             poolStatsPtr.feesCollected = popReward;
 
             // Increase the total fees collected this epoch.
-            aggregatedStatsPtr.totalFeesCollected = aggregatedStatsPtr
-                .totalFeesCollected
-                .safeAdd(popReward)
-                .safeSub(feesCollectedByPool);
+            aggregatedStatsPtr.totalFeesCollected = aggregatedStatsPtr.totalFeesCollected.safeAdd(popReward).safeSub(feesCollectedByPool);
         }
     }
 
     /// @dev Get stats on a staking pool in this epoch.
     /// @param poolId Pool Id to query.
     /// @return PoolStats struct for pool id.
-    function getStakingPoolStatsThisEpoch(bytes32 poolId)
-        external
-        view
-        override
-        returns (IStructs.PoolStats memory)
-    {
+    function getStakingPoolStatsThisEpoch(bytes32 poolId) external view override returns (IStructs.PoolStats memory) {
         return poolStatsByEpoch[poolId][currentEpoch];
     }
 
@@ -120,27 +99,15 @@ abstract contract MixinPopRewards is
     /// @param totalStake Total (unweighted) stake in the pool.
     /// @return membersStake Non-operator stake in the pool.
     /// @return weightedStake Weighted stake of the pool.
-    function _computeMembersAndWeightedStake(
-        bytes32 poolId,
-        uint256 totalStake
-    )
+    function _computeMembersAndWeightedStake(bytes32 poolId, uint256 totalStake)
         private
         view
         returns (uint256 membersStake, uint256 weightedStake)
     {
-        uint256 operatorStake = getStakeDelegatedToPoolByOwner(
-            _poolById[poolId].operator,
-            poolId
-        ).currentEpochBalance;
+        uint256 operatorStake = getStakeDelegatedToPoolByOwner(_poolById[poolId].operator, poolId).currentEpochBalance;
 
         membersStake = totalStake.safeSub(operatorStake);
-        weightedStake = operatorStake.safeAdd(
-            LibMath.getPartialAmountFloor(
-                rewardDelegatedStakeWeight,
-                PPM_DENOMINATOR,
-                membersStake
-            )
-        );
+        weightedStake = operatorStake.safeAdd(LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, PPM_DENOMINATOR, membersStake));
         return (membersStake, weightedStake);
     }
 }

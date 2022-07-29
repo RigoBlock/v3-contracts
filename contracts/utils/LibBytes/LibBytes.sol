@@ -19,9 +19,7 @@
 
 pragma solidity >=0.4.25;
 
-
 library LibBytes {
-
     using LibBytes for bytes;
 
     /// @dev Gets the memory address for a byte array.
@@ -29,11 +27,7 @@ library LibBytes {
     /// @return memoryAddress Memory address of byte array. This
     ///         points to the header of the byte array which contains
     ///         the length.
-    function rawAddress(bytes memory input)
-        internal
-        pure
-        returns (uint256 memoryAddress)
-    {
+    function rawAddress(bytes memory input) internal pure returns (uint256 memoryAddress) {
         assembly {
             memoryAddress := input
         }
@@ -43,11 +37,7 @@ library LibBytes {
     /// @dev Gets the memory address for the contents of a byte array.
     /// @param input Byte array to lookup.
     /// @return memoryAddress Memory address of the contents of the byte array.
-    function contentAddress(bytes memory input)
-        internal
-        pure
-        returns (uint256 memoryAddress)
-    {
+    function contentAddress(bytes memory input) internal pure returns (uint256 memoryAddress) {
         assembly {
             memoryAddress := add(input, 32)
         }
@@ -62,10 +52,7 @@ library LibBytes {
         uint256 dest,
         uint256 source,
         uint256 length
-    )
-        internal
-        pure
-    {
+    ) internal pure {
         if (length < 32) {
             // Handle a partial word by reading destination and masking
             // off the bits we are interested in.
@@ -117,7 +104,11 @@ library LibBytes {
                     // Note: the first check is always true,
                     // this could have been a do-while loop.
                     // solhint-disable-next-line no-empty-blocks
-                    for {} lt(source, sEnd) {} {
+                    for {
+
+                    } lt(source, sEnd) {
+
+                    } {
                         mstore(dest, mload(source))
                         source := add(source, 32)
                         dest := add(dest, 32)
@@ -148,7 +139,11 @@ library LibBytes {
                     // Note: the first check is always true,
                     // this could have been a do-while loop.
                     // solhint-disable-next-line no-empty-blocks
-                    for {} slt(dest, dEnd) {} {
+                    for {
+
+                    } slt(dest, dEnd) {
+
+                    } {
                         mstore(dEnd, mload(sEnd))
                         sEnd := sub(sEnd, 32)
                         dEnd := sub(dEnd, 32)
@@ -170,27 +165,13 @@ library LibBytes {
         bytes memory b,
         uint256 from,
         uint256 to
-    )
-        internal
-        pure
-        returns (bytes memory result)
-    {
-        require(
-            from <= to,
-            "FROM_LESS_THAN_TO_REQUIRED"
-        );
-        require(
-            to <= b.length,
-            "TO_LESS_THAN_LENGTH_REQUIRED"
-        );
+    ) internal pure returns (bytes memory result) {
+        require(from <= to, "FROM_LESS_THAN_TO_REQUIRED");
+        require(to <= b.length, "TO_LESS_THAN_LENGTH_REQUIRED");
 
         // Create a new bytes structure and copy contents
         result = new bytes(to - from);
-        memCopy(
-            result.contentAddress(),
-            b.contentAddress() + from,
-            result.length
-        );
+        memCopy(result.contentAddress(), b.contentAddress() + from, result.length);
         return result;
     }
 
@@ -204,19 +185,9 @@ library LibBytes {
         bytes memory b,
         uint256 from,
         uint256 to
-    )
-        internal
-        pure
-        returns (bytes memory result)
-    {
-        require(
-            from <= to,
-            "FROM_LESS_THAN_TO_REQUIRED"
-        );
-        require(
-            to <= b.length,
-            "TO_LESS_THAN_LENGTH_REQUIRED"
-        );
+    ) internal pure returns (bytes memory result) {
+        require(from <= to, "FROM_LESS_THAN_TO_REQUIRED");
+        require(to <= b.length, "TO_LESS_THAN_LENGTH_REQUIRED");
 
         // Create a new bytes structure around [from, to) in-place.
         assembly {
@@ -229,15 +200,8 @@ library LibBytes {
     /// @dev Pops the last byte off of a byte array by modifying its length.
     /// @param b Byte array that will be modified.
     /// @return result The byte that was popped off.
-    function popLastByte(bytes memory b)
-        internal
-        pure
-        returns (bytes1 result)
-    {
-        require(
-            b.length > 0,
-            "GREATER_THAN_ZERO_LENGTH_REQUIRED"
-        );
+    function popLastByte(bytes memory b) internal pure returns (bytes1 result) {
+        require(b.length > 0, "GREATER_THAN_ZERO_LENGTH_REQUIRED");
 
         // Store last byte.
         result = b[b.length - 1];
@@ -253,15 +217,8 @@ library LibBytes {
     /// @dev Pops the last 20 bytes off of a byte array by modifying its length.
     /// @param b Byte array that will be modified.
     /// @return result The 20 byte address that was popped off.
-    function popLast20Bytes(bytes memory b)
-        internal
-        pure
-        returns (address result)
-    {
-        require(
-            b.length >= 20,
-            "GREATER_OR_EQUAL_TO_20_LENGTH_REQUIRED"
-        );
+    function popLast20Bytes(bytes memory b) internal pure returns (address result) {
+        require(b.length >= 20, "GREATER_OR_EQUAL_TO_20_LENGTH_REQUIRED");
 
         // Store last 20 bytes.
         result = readAddress(b, b.length - 20);
@@ -278,14 +235,7 @@ library LibBytes {
     /// @param lhs First byte array to compare.
     /// @param rhs Second byte array to compare.
     /// @return equal True if arrays are the same. False otherwise.
-    function equals(
-        bytes memory lhs,
-        bytes memory rhs
-    )
-        internal
-        pure
-        returns (bool equal)
-    {
+    function equals(bytes memory lhs, bytes memory rhs) internal pure returns (bool equal) {
         // Keccak gas cost is 30 + numWords * 6. This is a cheap way to compare.
         // We early exit on unequal lengths, but keccak would also correctly
         // handle this.
@@ -296,16 +246,9 @@ library LibBytes {
     /// @param b Byte array containing an address.
     /// @param index Index in byte array of address.
     /// @return result address from byte array.
-    function readAddress(
-        bytes memory b,
-        uint256 index
-    )
-        internal
-        pure
-        returns (address result)
-    {
+    function readAddress(bytes memory b, uint256 index) internal pure returns (address result) {
         require(
-            b.length >= index + 20,  // 20 is length of address
+            b.length >= index + 20, // 20 is length of address
             "GREATER_OR_EQUAL_TO_20_LENGTH_REQUIRED"
         );
 
@@ -332,12 +275,9 @@ library LibBytes {
         bytes memory b,
         uint256 index,
         address input
-    )
-        internal
-        pure
-    {
+    ) internal pure {
         require(
-            b.length >= index + 20,  // 20 is length of address
+            b.length >= index + 20, // 20 is length of address
             "GREATER_OR_EQUAL_TO_20_LENGTH_REQUIRED"
         );
 
@@ -356,10 +296,7 @@ library LibBytes {
             // 1. Add index to address of bytes array
             // 2. Load 32-byte word from memory
             // 3. Apply 12-byte mask to obtain extra bytes occupying word of memory where we'll store the address
-            let neighbors := and(
-                mload(add(b, index)),
-                0xffffffffffffffffffffffff0000000000000000000000000000000000000000
-            )
+            let neighbors := and(mload(add(b, index)), 0xffffffffffffffffffffffff0000000000000000000000000000000000000000)
 
             // Make sure input address is clean.
             // (Solidity does not guarantee this)
@@ -374,18 +311,8 @@ library LibBytes {
     /// @param b Byte array containing a bytes32 value.
     /// @param index Index in byte array of bytes32 value.
     /// @return result bytes32 value from byte array.
-    function readBytes32(
-        bytes memory b,
-        uint256 index
-    )
-        internal
-        pure
-        returns (bytes32 result)
-    {
-        require(
-            b.length >= index + 32,
-            "GREATER_OR_EQUAL_TO_32_LENGTH_REQUIRED"
-        );
+    function readBytes32(bytes memory b, uint256 index) internal pure returns (bytes32 result) {
+        require(b.length >= index + 32, "GREATER_OR_EQUAL_TO_32_LENGTH_REQUIRED");
 
         // Arrays are prefixed by a 256 bit length parameter
         index += 32;
@@ -405,14 +332,8 @@ library LibBytes {
         bytes memory b,
         uint256 index,
         bytes32 input
-    )
-        internal
-        pure
-    {
-        require(
-            b.length >= index + 32,
-            "GREATER_OR_EQUAL_TO_32_LENGTH_REQUIRED"
-        );
+    ) internal pure {
+        require(b.length >= index + 32, "GREATER_OR_EQUAL_TO_32_LENGTH_REQUIRED");
 
         // Arrays are prefixed by a 256 bit length parameter
         index += 32;
@@ -427,14 +348,7 @@ library LibBytes {
     /// @param b Byte array containing a uint256 value.
     /// @param index Index in byte array of uint256 value.
     /// @return result uint256 value from byte array.
-    function readUint256(
-        bytes memory b,
-        uint256 index
-    )
-        internal
-        pure
-        returns (uint256 result)
-    {
+    function readUint256(bytes memory b, uint256 index) internal pure returns (uint256 result) {
         result = uint256(readBytes32(b, index));
         return result;
     }
@@ -447,10 +361,7 @@ library LibBytes {
         bytes memory b,
         uint256 index,
         uint256 input
-    )
-        internal
-        pure
-    {
+    ) internal pure {
         writeBytes32(b, index, bytes32(input));
     }
 
@@ -458,18 +369,8 @@ library LibBytes {
     /// @param b Byte array containing a bytes4 value.
     /// @param index Index in byte array of bytes4 value.
     /// @return result bytes4 value from byte array.
-    function readBytes4(
-        bytes memory b,
-        uint256 index
-    )
-        internal
-        pure
-        returns (bytes4 result)
-    {
-        require(
-            b.length >= index + 4,
-            "GREATER_OR_EQUAL_TO_4_LENGTH_REQUIRED"
-        );
+    function readBytes4(bytes memory b, uint256 index) internal pure returns (bytes4 result) {
+        require(b.length >= index + 4, "GREATER_OR_EQUAL_TO_4_LENGTH_REQUIRED");
 
         // Arrays are prefixed by a 32 byte length field
         index += 32;
@@ -490,24 +391,14 @@ library LibBytes {
     /// @param b Byte array containing nested bytes.
     /// @param index Index of nested bytes.
     /// @return result Nested bytes.
-    function readBytesWithLength(
-        bytes memory b,
-        uint256 index
-    )
-        internal
-        pure
-        returns (bytes memory result)
-    {
+    function readBytesWithLength(bytes memory b, uint256 index) internal pure returns (bytes memory result) {
         // Read length of nested bytes
         uint256 nestedBytesLength = readUint256(b, index);
         index += 32;
 
         // Assert length of <b> is valid, given
         // length of nested bytes
-        require(
-            b.length >= index + nestedBytesLength,
-            "GREATER_OR_EQUAL_TO_NESTED_BYTES_LENGTH_REQUIRED"
-        );
+        require(b.length >= index + nestedBytesLength, "GREATER_OR_EQUAL_TO_NESTED_BYTES_LENGTH_REQUIRED");
 
         // Return a pointer to the byte array as it exists inside `b`
         assembly {
@@ -524,14 +415,11 @@ library LibBytes {
         bytes memory b,
         uint256 index,
         bytes memory input
-    )
-        internal
-        pure
-    {
+    ) internal pure {
         // Assert length of <b> is valid, given
         // length of input
         require(
-            b.length >= index + 32 + input.length,  // 32 bytes to store length
+            b.length >= index + 32 + input.length, // 32 bytes to store length
             "GREATER_OR_EQUAL_TO_NESTED_BYTES_LENGTH_REQUIRED"
         );
 
@@ -539,30 +427,17 @@ library LibBytes {
         memCopy(
             b.contentAddress() + index,
             input.rawAddress(), // includes length of <input>
-            input.length + 32   // +32 bytes to store <input> length
+            input.length + 32 // +32 bytes to store <input> length
         );
     }
 
     /// @dev Performs a deep copy of a byte array onto another byte array of greater than or equal length.
     /// @param dest Byte array that will be overwritten with source bytes.
     /// @param source Byte array to copy onto dest bytes.
-    function deepCopyBytes(
-        bytes memory dest,
-        bytes memory source
-    )
-        internal
-        pure
-    {
+    function deepCopyBytes(bytes memory dest, bytes memory source) internal pure {
         uint256 sourceLen = source.length;
         // Dest length must be >= source length, or some bytes would not be copied.
-        require(
-            dest.length >= sourceLen,
-            "GREATER_OR_EQUAL_TO_SOURCE_BYTES_LENGTH_REQUIRED"
-        );
-        memCopy(
-            dest.contentAddress(),
-            source.contentAddress(),
-            sourceLen
-        );
+        require(dest.length >= sourceLen, "GREATER_OR_EQUAL_TO_SOURCE_BYTES_LENGTH_REQUIRED");
+        memCopy(dest.contentAddress(), source.contentAddress(), sourceLen);
     }
 }

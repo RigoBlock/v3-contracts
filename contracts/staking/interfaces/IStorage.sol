@@ -24,61 +24,26 @@ pragma experimental ABIEncoderV2;
 import "../interfaces/IGrgVault.sol";
 import "../interfaces/IStructs.sol";
 
-
 interface IStorage {
+    function stakingContract() external view returns (address);
 
-    function stakingContract()
-        external
-        view
-        returns (address);
+    function poolIdByRbPoolAccount(address) external view returns (bytes32);
 
-    function poolIdByRbPoolAccount(address)
-        external
-        view
-        returns (bytes32);
+    function currentEpoch() external view returns (uint256);
 
-    function currentEpoch()
-        external
-        view
-        returns (uint256);
+    function currentEpochStartTimeInSeconds() external view returns (uint256);
 
-    function currentEpochStartTimeInSeconds()
-        external
-        view
-        returns (uint256);
+    function protocolFeesThisEpochByPool(bytes32 poolId) external view returns (uint256);
 
-    function protocolFeesThisEpochByPool(bytes32 poolId)
-        external
-        view
-        returns (uint256);
+    function validPops(address popAddress) external view returns (bool);
 
-    function validPops(address popAddress)
-        external
-        view
-        returns (bool);
+    function epochDurationInSeconds() external view returns (uint256);
 
-    function epochDurationInSeconds()
-        external
-        view
-        returns (uint256);
+    function rewardDelegatedStakeWeight() external view returns (uint32);
 
-    function rewardDelegatedStakeWeight()
-        external
-        view
-        returns(uint32);
+    function minimumPoolStake() external view returns (uint256);
 
-    function minimumPoolStake()
-        external
-        view
-        returns (uint256);
+    function cobbDouglasAlphaNumerator() external view returns (uint32);
 
-    function cobbDouglasAlphaNumerator()
-        external
-        view
-        returns (uint32);
-
-    function cobbDouglasAlphaDenominator()
-        external
-        view
-        returns (uint32);
+    function cobbDouglasAlphaDenominator() external view returns (uint32);
 }

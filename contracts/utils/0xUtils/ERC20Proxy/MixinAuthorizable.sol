@@ -19,36 +19,23 @@
 
 pragma solidity 0.8.14;
 
-import "../Ownable.sol"; 
+import "../Ownable.sol";
 import "./MAuthorizable.sol";
 
-abstract contract MixinAuthorizable is
-    Ownable,
-    MAuthorizable
-{
+abstract contract MixinAuthorizable is Ownable, MAuthorizable {
     /// @dev Only authorized addresses can invoke functions with this modifier.
     modifier onlyAuthorized override {
-        require(
-            authorized[msg.sender],
-            "SENDER_NOT_AUTHORIZED"
-        );
+        require(authorized[msg.sender], "SENDER_NOT_AUTHORIZED");
         _;
     }
 
-    mapping (address => bool) public authorized;
+    mapping(address => bool) public authorized;
     address[] public authorities;
 
     /// @dev Authorizes an address.
     /// @param target Address to authorize.
-    function addAuthorizedAddress(address target)
-        external
-        override
-        onlyOwner
-    {
-        require(
-            !authorized[target],
-            "TARGET_ALREADY_AUTHORIZED"
-        );
+    function addAuthorizedAddress(address target) external override onlyOwner {
+        require(!authorized[target], "TARGET_ALREADY_AUTHORIZED");
 
         authorized[target] = true;
         authorities.push(target);
@@ -57,15 +44,8 @@ abstract contract MixinAuthorizable is
 
     /// @dev Removes authorizion of an address.
     /// @param target Address to remove authorization from.
-    function removeAuthorizedAddress(address target)
-        external
-        override
-        onlyOwner
-    {
-        require(
-            authorized[target],
-            "TARGET_NOT_AUTHORIZED"
-        );
+    function removeAuthorizedAddress(address target) external override onlyOwner {
+        require(authorized[target], "TARGET_NOT_AUTHORIZED");
 
         delete authorized[target];
         for (uint256 i = 0; i < authorities.length; i++) {
@@ -81,26 +61,10 @@ abstract contract MixinAuthorizable is
     /// @dev Removes authorizion of an address.
     /// @param target Address to remove authorization from.
     /// @param index Index of target in authorities array.
-    function removeAuthorizedAddressAtIndex(
-        address target,
-        uint256 index
-    )
-        external
-        override
-        onlyOwner
-    {
-        require(
-            authorized[target],
-            "TARGET_NOT_AUTHORIZED"
-        );
-        require(
-            index < authorities.length,
-            "INDEX_OUT_OF_BOUNDS"
-        );
-        require(
-            authorities[index] == target,
-            "AUTHORIZED_ADDRESS_MISMATCH"
-        );
+    function removeAuthorizedAddressAtIndex(address target, uint256 index) external override onlyOwner {
+        require(authorized[target], "TARGET_NOT_AUTHORIZED");
+        require(index < authorities.length, "INDEX_OUT_OF_BOUNDS");
+        require(authorities[index] == target, "AUTHORIZED_ADDRESS_MISMATCH");
 
         delete authorized[target];
         authorities[index] = authorities[authorities.length - 1];
@@ -110,12 +74,7 @@ abstract contract MixinAuthorizable is
 
     /// @dev Gets all authorized addresses.
     /// @return Array of authorized addresses.
-    function getAuthorizedAddresses()
-        external
-        override
-        view
-        returns (address[] memory)
-    {
+    function getAuthorizedAddresses() external view override returns (address[] memory) {
         return authorities;
     }
 }

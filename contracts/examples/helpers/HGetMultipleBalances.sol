@@ -19,13 +19,12 @@
 
 pragma solidity 0.8.14;
 
-import { IERC20 as Token } from "../../tokens/ERC20/IERC20.sol";
+import {IERC20 as Token} from "../../tokens/ERC20/IERC20.sol";
 
 /// @title Multiple Balances Helper - Allows to receive a list of pools for a specific group.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract HGetMultipleBalances {
-
     mapping(uint256 => address) private inLine;
     uint256 public numTokens = 0;
 
@@ -34,26 +33,17 @@ contract HGetMultipleBalances {
      */
     /// @dev Allows associating a number to an address.
     /// @param _token Address of the target token.
-    function addTokenAddress(
-        address _token
-        )
-        external
-    {
+    function addTokenAddress(address _token) external {
         ++numTokens;
-        require (inLine[numTokens] == address(0));
+        require(inLine[numTokens] == address(0));
         inLine[numTokens] = _token;
     }
 
     /// @dev Allows associating a number to an address.
     /// @param _number Integer associated with the token address.
     /// @param _token Address of the target token.
-    function numberToAddress(
-        uint256 _number,
-        address _token
-        )
-        external
-    {
-        require (inLine[_number] == address(0));
+    function numberToAddress(uint256 _number, address _token) external {
+        require(inLine[_number] == address(0));
         inLine[_number] = _token;
     }
 
@@ -64,14 +54,7 @@ contract HGetMultipleBalances {
     /// @param _token Address of the target token.
     /// @param _who Address of the target owner.
     /// @return amount Number of token balance.
-    function getBalance(
-        address _token,
-        address _who
-        )
-        external
-        view
-        returns (uint256 amount)
-    {
+    function getBalance(address _token, address _who) external view returns (uint256 amount) {
         amount = Token(_token).balanceOf(_who);
     }
 
@@ -80,16 +63,10 @@ contract HGetMultipleBalances {
     /// @param _who Address of the target owner.
     /// @return balances Array of token balances in base unit.
     /// @return tokenAddresses Array of token addresses.
-    function getMultiBalancesWithNumber(
-        uint[] calldata _tokenNumbers,
-        address _who
-        )
+    function getMultiBalancesWithNumber(uint256[] calldata _tokenNumbers, address _who)
         external
         view
-        returns (
-            uint256[] memory balances,
-            address[] memory tokenAddresses
-        )
+        returns (uint256[] memory balances, address[] memory tokenAddresses)
     {
         uint256 length = _tokenNumbers.length;
         balances = new uint256[](length);
@@ -108,16 +85,7 @@ contract HGetMultipleBalances {
     /// @param _who Address of the target owner.
     /// @return balances Array of token balances in base unit.
     /// @return tokenAddresses Array of token addresses.
-    function getMultiBalances(
-        address _who
-        )
-        external
-        view
-        returns (
-            uint256[] memory balances,
-            address[] memory tokenAddresses
-        )
-    {
+    function getMultiBalances(address _who) external view returns (uint256[] memory balances, address[] memory tokenAddresses) {
         uint256 length = numTokens;
         balances = new uint256[](length);
         tokenAddresses = new address[](length);
@@ -135,9 +103,7 @@ contract HGetMultipleBalances {
     /// @param _tokenAddresses Array of token addresses.
     /// @param _who Address of the target holder.
     /// @return balances Array of token balances in base unit.
-    function getMultiBalancesFromAddresses(
-        address[] calldata _tokenAddresses,
-        address _who)
+    function getMultiBalancesFromAddresses(address[] calldata _tokenAddresses, address _who)
         external
         view
         returns (uint256[] memory balances)
@@ -157,15 +123,10 @@ contract HGetMultipleBalances {
     /// @param _who Address of the target holder.
     /// @return balances Array of token balances in base unit.
     /// @return tokenAddresses Array of token addresses.
-    function getMultiBalancesAndAddressesFromAddresses(
-        address[] calldata _tokenAddresses,
-        address _who)
+    function getMultiBalancesAndAddressesFromAddresses(address[] calldata _tokenAddresses, address _who)
         external
         view
-        returns (
-            uint256[] memory balances,
-            address[] memory tokenAddresses
-        )
+        returns (uint256[] memory balances, address[] memory tokenAddresses)
     {
         uint256 length = _tokenAddresses.length;
         balances = new uint256[](length);
@@ -184,15 +145,10 @@ contract HGetMultipleBalances {
     /// @param _who Address of the target holder.
     /// @return balances Array of token balances in base unit.
     /// @return tokenAddresses Array of token addresses.
-    function getPositiveBalancesAndAddressesFromAddresses(
-        address[] calldata _tokenAddresses,
-        address _who)
+    function getPositiveBalancesAndAddressesFromAddresses(address[] calldata _tokenAddresses, address _who)
         external
         view
-        returns (
-            uint256[] memory balances,
-            address[] memory tokenAddresses
-        )
+        returns (uint256[] memory balances, address[] memory tokenAddresses)
     {
         uint256 length = _tokenAddresses.length;
         balances = new uint256[](length);
@@ -213,12 +169,7 @@ contract HGetMultipleBalances {
     /// @dev Returns an address from a number.
     /// @param _number Number of the token in the token array.
     /// @return Address of the token.
-    function getAddressFromNumber(
-        uint256 _number)
-        internal
-        view
-        returns (address)
-    {
-        return(inLine[_number]);
+    function getAddressFromNumber(uint256 _number) internal view returns (address) {
+        return (inLine[_number]);
     }
 }

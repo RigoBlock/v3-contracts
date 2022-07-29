@@ -2,10 +2,9 @@
 pragma solidity >=0.8.0;
 
 interface IRigoblockV3PoolState {
-
     /*
      * IMMUTABLE STORAGE
-    */
+     */
     function AUTHORITY() external view returns (address);
 
     function name() external view returns (string memory);
@@ -16,7 +15,7 @@ interface IRigoblockV3PoolState {
 
     /*
      * VIEW METHODS
-    */
+     */
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
@@ -44,10 +43,7 @@ interface IRigoblockV3PoolState {
             uint32 minPeriod
         );
 
-    function getKycProvider()
-        external
-        view
-        returns (address);
+    function getKycProvider() external view returns (address);
 
     function totalSupply() external view returns (uint256);
 }

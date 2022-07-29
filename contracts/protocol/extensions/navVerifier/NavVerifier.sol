@@ -23,7 +23,6 @@ pragma solidity 0.8.14;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract NavVerifier {
-
     /// @dev Verifies that a signature is valid.
     /// @param _unitaryValue Value of 1 token in wei units.
     /// @param _signatureValidUntilBlock Number of blocks.
@@ -36,11 +35,7 @@ contract NavVerifier {
         uint256 _signatureValidUntilBlock,
         bytes32 _hash,
         bytes calldata _signedData
-    )
-        external
-        pure
-        returns (bool isValid)
-    {
+    ) external pure returns (bool isValid) {
         // following line mock to silence solhint warnings
         abi.encodePacked(_unitaryValue, _signatureValidUntilBlock, _hash, _signedData);
         return isValid = true;

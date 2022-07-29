@@ -22,13 +22,9 @@ pragma solidity >=0.5.9 <0.9.0;
 import "./interfaces/IAuthorizable.sol";
 import "./Ownable.sol";
 
-
 // solhint-disable no-empty-blocks
-abstract contract Authorizable is
-    // TODO: check if should use OwnedUninitialized and remove duplicate contract
-    Ownable,
-    IAuthorizable
-{
+// TODO: check if should use OwnedUninitialized and remove duplicate contract
+abstract contract Authorizable is Ownable, IAuthorizable {
     /// @dev Only authorized addresses can invoke functions with this modifier.
     modifier onlyAuthorized {
         _assertSenderIsAuthorized();
@@ -45,27 +41,17 @@ abstract contract Authorizable is
     address[] public authorities;
 
     /// @dev Initializes the `owner` address.
-    constructor(address _owner)
-        Ownable(_owner)
-    {}
+    constructor(address _owner) Ownable(_owner) {}
 
     /// @dev Authorizes an address.
     /// @param target Address to authorize.
-    function addAuthorizedAddress(address target)
-        external
-        override
-        onlyOwner
-    {
+    function addAuthorizedAddress(address target) external override onlyOwner {
         _addAuthorizedAddress(target);
     }
 
     /// @dev Removes authorizion of an address.
     /// @param target Address to remove authorization from.
-    function removeAuthorizedAddress(address target)
-        external
-        override
-        onlyOwner
-    {
+    function removeAuthorizedAddress(address target) external override onlyOwner {
         require(authorized[target], "TARGET_NOT_AUTHORIZED");
         for (uint256 i = 0; i < authorities.length; i++) {
             if (authorities[i] == target) {
@@ -78,44 +64,24 @@ abstract contract Authorizable is
     /// @dev Removes authorizion of an address.
     /// @param target Address to remove authorization from.
     /// @param index Index of target in authorities array.
-    function removeAuthorizedAddressAtIndex(
-        address target,
-        uint256 index
-    )
-        external
-        override
-        onlyOwner
-    {
+    function removeAuthorizedAddressAtIndex(address target, uint256 index) external override onlyOwner {
         _removeAuthorizedAddressAtIndex(target, index);
     }
 
     /// @dev Gets all authorized addresses.
     /// @return Array of authorized addresses.
-    function getAuthorizedAddresses()
-        external
-        view
-        override
-        returns (address[] memory)
-    {
+    function getAuthorizedAddresses() external view override returns (address[] memory) {
         return authorities;
     }
 
     /// @dev Reverts if msg.sender is not authorized.
-    function _assertSenderIsAuthorized()
-        internal
-        view
-    {
-        require(
-            authorized[msg.sender],
-            "AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR"
-        );
+    function _assertSenderIsAuthorized() internal view {
+        require(authorized[msg.sender], "AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR");
     }
 
     /// @dev Authorizes an address.
     /// @param target Address to authorize.
-    function _addAuthorizedAddress(address target)
-        internal
-    {
+    function _addAuthorizedAddress(address target) internal {
         // Ensure that the target is not the zero address.
         require(target != address(0), "AUTHORIZABLE_NULL_ADDRESS_ERROR");
 
@@ -130,12 +96,7 @@ abstract contract Authorizable is
     /// @dev Removes authorization of an address.
     /// @param target Address to remove authorization from.
     /// @param index Index of target in authorities array.
-    function _removeAuthorizedAddressAtIndex(
-        address target,
-        uint256 index
-    )
-        internal
-    {
+    function _removeAuthorizedAddressAtIndex(address target, uint256 index) internal {
         require(authorized[target], "AUTHORIZABLE_ADDRESS_NOT_AUTHORIZED_ERROR");
         require(index < authorities.length, "AUTHORIZABLE_INDEX_OUT_OF_BOUNDS_ERROR");
         require(authorities[index] == target, "AUTHORIZABLE_ADDRESS_MISMATCH_ERROR");

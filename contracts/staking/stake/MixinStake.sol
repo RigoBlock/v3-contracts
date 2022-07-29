@@ -24,75 +24,48 @@ pragma experimental ABIEncoderV2;
 import "../../utils/0xUtils/LibSafeMath.sol";
 import "../staking_pools/MixinStakingPool.sol";
 
-
-abstract contract MixinStake is
-    MixinStakingPool
-{
+abstract contract MixinStake is MixinStakingPool {
     using LibSafeMath for uint256;
 
     /// @dev Stake GRG tokens. Tokens are deposited into the GRG Vault.
     ///      Unstake to retrieve the GRG. Stake is in the 'Active' status.
     /// @param amount Amount of GRG to stake.
-    function stake(uint256 amount)
-        external
-        override
-    {
+    function stake(uint256 amount) external override {
         address staker = msg.sender;
 
         // deposit equivalent amount of GRG into vault
         getGrgVault().depositFrom(staker, amount);
 
         // mint stake
-        _increaseCurrentAndNextBalance(
-            _ownerStakeByStatus[uint8(IStructs.StakeStatus.UNDELEGATED)][staker],
-            amount
-        );
+        _increaseCurrentAndNextBalance(_ownerStakeByStatus[uint8(IStructs.StakeStatus.UNDELEGATED)][staker], amount);
 
         // notify
-        emit Stake(
-            staker,
-            amount
-        );
+        emit Stake(staker, amount);
     }
 
     /// @dev Unstake. Tokens are withdrawn from the GRG Vault and returned to
     ///      the staker. Stake must be in the 'undelegated' status in both the
     ///      current and next epoch in order to be unstaked.
     /// @param amount Amount of GRG to unstake.
-    function unstake(uint256 amount)
-        external
-        override
-    {
+    function unstake(uint256 amount) external override {
         address staker = msg.sender;
 
         IStructs.StoredBalance memory undelegatedBalance =
             _loadCurrentBalance(_ownerStakeByStatus[uint8(IStructs.StakeStatus.UNDELEGATED)][staker]);
 
         // stake must be undelegated in current and next epoch to be withdrawn
-        uint256 currentWithdrawableStake = LibSafeMath.min256(
-            undelegatedBalance.currentEpochBalance,
-            undelegatedBalance.nextEpochBalance
-        );
+        uint256 currentWithdrawableStake = LibSafeMath.min256(undelegatedBalance.currentEpochBalance, undelegatedBalance.nextEpochBalance);
 
-        require(
-            amount <= currentWithdrawableStake,
-            "MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR"
-        );
+        require(amount <= currentWithdrawableStake, "MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR");
 
         // burn undelegated stake
-        _decreaseCurrentAndNextBalance(
-            _ownerStakeByStatus[uint8(IStructs.StakeStatus.UNDELEGATED)][staker],
-            amount
-        );
+        _decreaseCurrentAndNextBalance(_ownerStakeByStatus[uint8(IStructs.StakeStatus.UNDELEGATED)][staker], amount);
 
         // withdraw equivalent amount of GRG from vault
         getGrgVault().withdrawFrom(staker, amount);
 
         // emit stake event
-        emit Unstake(
-            staker,
-            amount
-        );
+        emit Unstake(staker, amount);
     }
 
     /// @dev Moves stake between statuses: 'undelegated' or 'delegated'.
@@ -105,55 +78,33 @@ abstract contract MixinStake is
         IStructs.StakeInfo calldata from,
         IStructs.StakeInfo calldata to,
         uint256 amount
-    )
-        external
-        override
-    {
+    ) external override {
         address staker = msg.sender;
 
         // Sanity check: no-op if no stake is being moved.
         require(amount != 0, "MOVE_STAKE_AMOUNT_NULL_ERROR");
 
         // Sanity check: no-op if moving stake from undelegated to undelegated.
-        if (from.status == IStructs.StakeStatus.UNDELEGATED &&
-            to.status == IStructs.StakeStatus.UNDELEGATED
-        ) { revert("MOVE_STAKE_UNDELEGATED_STATUS_UNCHANGED_ERROR"); }
+        if (from.status == IStructs.StakeStatus.UNDELEGATED && to.status == IStructs.StakeStatus.UNDELEGATED) {
+            revert("MOVE_STAKE_UNDELEGATED_STATUS_UNCHANGED_ERROR");
+        }
 
         // handle delegation
         if (from.status == IStructs.StakeStatus.DELEGATED) {
-            _undelegateStake(
-                from.poolId,
-                staker,
-                amount
-            );
+            _undelegateStake(from.poolId, staker, amount);
         }
 
         if (to.status == IStructs.StakeStatus.DELEGATED) {
-            _delegateStake(
-                to.poolId,
-                staker,
-                amount
-            );
+            _delegateStake(to.poolId, staker, amount);
         }
 
         // execute move
         IStructs.StoredBalance storage fromPtr = _ownerStakeByStatus[uint8(from.status)][staker];
         IStructs.StoredBalance storage toPtr = _ownerStakeByStatus[uint8(to.status)][staker];
-        _moveStake(
-            fromPtr,
-            toPtr,
-            amount
-        );
+        _moveStake(fromPtr, toPtr, amount);
 
         // notify
-        emit MoveStake(
-            staker,
-            amount,
-            uint8(from.status),
-            from.poolId,
-            uint8(to.status),
-            to.poolId
-        );
+        emit MoveStake(staker, amount, uint8(from.status), from.poolId, uint8(to.status), to.poolId);
     }
 
     /// @dev Delegates a owners stake to a staking pool.
@@ -164,34 +115,20 @@ abstract contract MixinStake is
         bytes32 poolId,
         address staker,
         uint256 amount
-    )
-        private
-    {
+    ) private {
         // Sanity check the pool we're delegating to exists.
         _assertStakingPoolExists(poolId);
 
-        _withdrawAndSyncDelegatorRewards(
-            poolId,
-            staker
-        );
+        _withdrawAndSyncDelegatorRewards(poolId, staker);
 
         // Increase how much stake the staker has delegated to the input pool.
-        _increaseNextBalance(
-            _delegatedStakeToPoolByOwner[staker][poolId],
-            amount
-        );
+        _increaseNextBalance(_delegatedStakeToPoolByOwner[staker][poolId], amount);
 
         // Increase how much stake has been delegated to pool.
-        _increaseNextBalance(
-            _delegatedStakeByPoolId[poolId],
-            amount
-        );
+        _increaseNextBalance(_delegatedStakeByPoolId[poolId], amount);
 
         // Increase next balance of global delegated stake.
-        _increaseNextBalance(
-            _globalStakeByStatus[uint8(IStructs.StakeStatus.DELEGATED)],
-            amount
-        );
+        _increaseNextBalance(_globalStakeByStatus[uint8(IStructs.StakeStatus.DELEGATED)], amount);
     }
 
     /// @dev Un-Delegates a owners stake from a staking pool.
@@ -202,33 +139,19 @@ abstract contract MixinStake is
         bytes32 poolId,
         address staker,
         uint256 amount
-    )
-        private
-    {
+    ) private {
         // sanity check the pool we're undelegating from exists
         _assertStakingPoolExists(poolId);
 
-        _withdrawAndSyncDelegatorRewards(
-            poolId,
-            staker
-        );
+        _withdrawAndSyncDelegatorRewards(poolId, staker);
 
         // Decrease how much stake the staker has delegated to the input pool.
-        _decreaseNextBalance(
-            _delegatedStakeToPoolByOwner[staker][poolId],
-            amount
-        );
+        _decreaseNextBalance(_delegatedStakeToPoolByOwner[staker][poolId], amount);
 
         // Decrease how much stake has been delegated to pool.
-        _decreaseNextBalance(
-            _delegatedStakeByPoolId[poolId],
-            amount
-        );
+        _decreaseNextBalance(_delegatedStakeByPoolId[poolId], amount);
 
         // Decrease next balance of global delegated stake (aggregated across all stakers).
-        _decreaseNextBalance(
-            _globalStakeByStatus[uint8(IStructs.StakeStatus.DELEGATED)],
-            amount
-        );
+        _decreaseNextBalance(_globalStakeByStatus[uint8(IStructs.StakeStatus.DELEGATED)], amount);
     }
 }

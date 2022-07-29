@@ -19,9 +19,9 @@
 
 pragma solidity 0.8.14;
 
-
 abstract contract WETH9 {
     function deposit() external payable virtual;
+
     function withdraw(uint256 wad) external virtual;
 }
 
@@ -29,7 +29,6 @@ abstract contract WETH9 {
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract AWeth {
-
     address public immutable WETH_ADDRESS;
 
     constructor(address _wethAddress) {

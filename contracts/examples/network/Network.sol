@@ -19,18 +19,15 @@
 
 pragma solidity 0.8.14;
 
-import { IPool } from "../../utils/pool/IPool.sol";
-import { IPoolRegistry } from "../../protocol/interfaces/IPoolRegistry.sol";
+import {IPool} from "../../utils/pool/IPool.sol";
+import {IPoolRegistry} from "../../protocol/interfaces/IPoolRegistry.sol";
 
 /// @title Network - Returns data of active pools and network value.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract Network {
-
     address public POOLREGISTRYADDRESS;
 
-    constructor(
-        address poolRegistryAddress)
-    {
+    constructor(address poolRegistryAddress) {
         POOLREGISTRYADDRESS = poolRegistryAddress;
     }
 
@@ -41,13 +38,7 @@ contract Network {
     /// @param _poolAddresses Array of addresses.
     /// @return poolPrices Array of the prices of the active pools.
     /// @return totalTokens Array of the number of tokens of each pool.
-    function getPoolsPrices(address[] memory _poolAddresses)
-        external view
-        returns (
-            uint256[] memory,
-            uint256[] memory
-        )
-    {
+    function getPoolsPrices(address[] memory _poolAddresses) external view returns (uint256[] memory, uint256[] memory) {
         uint256 length = _poolAddresses.length;
         uint256[] memory poolPrices = new uint256[](length);
         uint256[] memory totalTokens = new uint256[](length);
@@ -56,31 +47,20 @@ contract Network {
             poolPrices[i] = poolInstance.calcSharePrice();
             totalTokens[i] = poolInstance.totalSupply();
         }
-        return (
-            poolPrices,
-            totalTokens
-        );
+        return (poolPrices, totalTokens);
     }
 
     /// @dev Returns the value of the assets in the rigoblock network.
     /// @param _addresses Array of addresses.
     /// @return networkValue alue of the rigoblock network in wei.
     /// @return numberOfPools Number of active funds.
-    function calcNetworkValue(address[] memory _addresses)
-        external
-        view
-        returns (
-            uint256 networkValue,
-            uint256 numberOfPools
-        )
-    {
+    function calcNetworkValue(address[] memory _addresses) external view returns (uint256 networkValue, uint256 numberOfPools) {
         numberOfPools = _addresses.length;
         for (uint256 i = 0; i < numberOfPools; ++i) {
             (uint256 poolValue, ) = calcPoolValue(_addresses[i]);
             networkValue += poolValue;
         }
     }
-
 
     /*
      * INTERNAL FUNCTIONS
@@ -89,14 +69,7 @@ contract Network {
     /// @param _poolAddress Address of the pool
     /// @return poolPrice Price of the pool in wei
     /// @return totalTokens Number of tokens of a pool (totalSupply)
-    function getPoolPrice(address _poolAddress)
-        internal
-        view
-        returns (
-            uint256 poolPrice,
-            uint256 totalTokens
-        )
-    {
+    function getPoolPrice(address _poolAddress) internal view returns (uint256 poolPrice, uint256 totalTokens) {
         IPool poolInstance = IPool(_poolAddress);
         poolPrice = poolInstance.calcSharePrice();
         totalTokens = poolInstance.totalSupply();
@@ -106,16 +79,10 @@ contract Network {
     /// @param _poolAddress Address of the pool.
     /// @return aum Address of the target pool.
     /// @return success Address of the pool's group.
-    function calcPoolValue(address _poolAddress)
-        internal view
-        returns (
-            uint256 aum,
-            bool success
-        )
-    {
+    function calcPoolValue(address _poolAddress) internal view returns (uint256 aum, bool success) {
         (uint256 price, uint256 supply) = getPoolPrice(_poolAddress);
         return (
-            aum = (price * supply / 1000000), //1000000 is the base (6 decimals)
+            aum = ((price * supply) / 1000000), //1000000 is the base (6 decimals)
             success = true
         );
     }

@@ -20,15 +20,13 @@
 
 pragma solidity >=0.5.9 <0.8.0;
 
-
 abstract contract MixinConstants {
-
     // 100% in parts-per-million.
-    uint32 constant internal PPM_DENOMINATOR = 10**6;
+    uint32 internal constant PPM_DENOMINATOR = 10**6;
 
-    bytes32 constant internal NIL_POOL_ID = 0x0000000000000000000000000000000000000000000000000000000000000000;
+    bytes32 internal constant NIL_POOL_ID = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
-    address constant internal NIL_ADDRESS = 0x0000000000000000000000000000000000000000;
+    address internal constant NIL_ADDRESS = 0x0000000000000000000000000000000000000000;
 
-    uint256 constant internal MIN_TOKEN_VALUE = 10**18;
+    uint256 internal constant MIN_TOKEN_VALUE = 10**18;
 }

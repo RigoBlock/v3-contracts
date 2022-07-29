@@ -20,10 +20,7 @@
 
 pragma solidity >=0.5.9 <0.8.0;
 
-
 interface IStorageInit {
-
     /// @dev Initialize storage owned by this contract.
-    function init()
-        external;
+    function init() external;
 }

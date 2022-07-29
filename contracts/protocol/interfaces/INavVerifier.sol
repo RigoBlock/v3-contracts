@@ -23,7 +23,6 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface INavVerifier {
-
     /// @dev Verifies that a signature is valid.
     /// @param _unitaryValue Value of 1 token in wei units.
     /// @param _signatureValidUntilBlock Number of blocks.
@@ -36,8 +35,5 @@ interface INavVerifier {
         uint256 _signatureValidUntilBlock,
         bytes32 _hash,
         bytes calldata _signedData
-    )
-        external
-        pure
-        returns (bool isValid);
+    ) external pure returns (bool isValid);
 }
