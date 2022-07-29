@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../immutable/MixinConstants.sol";
-import "../immutable/MixinImmutables.sol";
-import "../immutable/MixinStorage.sol";
+import "./MixinUserActions.sol";
 import "../../interfaces/INavVerifier.sol";
 
-abstract contract MixinOwnerActions is MixinConstants, MixinImmutables, MixinStorage {
+abstract contract MixinOwnerActions is MixinUserActions {
     /// @dev We keep this check to prevent accidental failure in Nav calculations.
     modifier notPriceError(uint256 _newUnitaryValue) {
         /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
@@ -76,7 +74,7 @@ abstract contract MixinOwnerActions is MixinConstants, MixinImmutables, MixinSto
         // TODO: should emit event
     }
 
-    function _getUnitaryValue() internal view virtual returns (uint256) {
+    function _getUnitaryValue() internal view override returns (uint256) {
         return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
     }
 

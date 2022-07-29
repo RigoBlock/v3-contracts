@@ -24,8 +24,8 @@ import "../../IRigoblockV3Pool.sol";
 abstract contract MixinImmutables is IRigoblockV3Pool {
     constructor(address _authority) {
         authority = _authority;
-        _conibaseDecimals = 18;
-        _coinbaseUnitaryValue = 1 * 10**_conibaseDecimals;
+        _coinbaseDecimals = 18;
+        _coinbaseUnitaryValue = 1 * 10**_coinbaseDecimals;
         _implementation = address(this);
     }
 
@@ -34,7 +34,7 @@ abstract contract MixinImmutables is IRigoblockV3Pool {
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
 
-    uint8 internal immutable _conibaseDecimals;
+    uint8 internal immutable _coinbaseDecimals;
 
     uint256 internal immutable _coinbaseUnitaryValue;
 }

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinOwnerActions.sol";
+import "../state/MixinPoolState.sol";
 import "../../interfaces/IKyc.sol";
 
-abstract contract MixinUserActions is MixinOwnerActions {
+abstract contract MixinUserActions is MixinPoolState {
+    /*
+     * MODIFIERS
+     */
     modifier hasEnough(uint256 _amount) {
         require(userAccount[msg.sender].balance >= _amount, "POOL_BURN_NOT_ENOUGH_ERROR");
         _;
@@ -15,6 +18,9 @@ abstract contract MixinUserActions is MixinOwnerActions {
         _;
     }
 
+    /*
+     * PUBLIC METHODS
+     */
     /// @dev Allows a user to mint pool tokens on behalf of an address.
     /// @param _recipient Address receiving the tokens.
     /// @param _amountIn Amount of base tokens.
@@ -70,22 +76,28 @@ abstract contract MixinUserActions is MixinOwnerActions {
         }
     }
 
-    function decimals() public view override virtual returns (uint8) {
-        return poolData.decimals != 0 ? poolData.decimals : _conibaseDecimals;
+    function decimals() public view override returns (uint8) {
+        return poolData.decimals != 0 ? poolData.decimals : _coinbaseDecimals;
     }
 
-    function _getMinPeriod() internal view virtual returns (uint32) {
+    /*
+     * INTERNAL METHODS
+     */
+    function _getMinPeriod() internal view override returns (uint32) {
         return poolData.minPeriod != 0 ? poolData.minPeriod : MIN_LOCKUP;
     }
 
-    function _getSpread() internal view virtual returns (uint256) {
+    function _getSpread() internal view override returns (uint256) {
         return poolData.spread != 0 ? poolData.spread : INITIAL_SPREAD;
     }
 
-    function _getUnitaryValue() internal view override virtual returns (uint256) {
+    function _getUnitaryValue() internal view virtual override returns (uint256) {
         return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
     }
 
+    /*
+     * PRIVATE METHODS
+     */
     /// @dev Allocates tokens to recipient.
     /// @param _recipient Address of the recipient.
     /// @param _mintedAmount Value of issued tokens.
