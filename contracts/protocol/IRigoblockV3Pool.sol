@@ -39,5 +39,5 @@ interface IRigoblockV3Pool is
     IRigoblockV3PoolOwnerActions,
     IRigoblockV3PoolEvents
 {
-
+    receive() external payable;
 }

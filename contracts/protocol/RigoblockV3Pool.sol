@@ -38,7 +38,6 @@ contract RigoblockV3Pool is
     MixinImmutables,
     MixinStorage
 {
-    // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
 
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
@@ -120,9 +119,7 @@ contract RigoblockV3Pool is
     }
 
     // prevent accidental transfer to implementation
-    receive() external payable onlyDelegateCall {
-        assert(msg.value > 0);
-    }
+    receive() external payable onlyDelegateCall {}
 
     // pool can only be initialized at creation, meaning this method cannot be
     //  called directly to implementation.
