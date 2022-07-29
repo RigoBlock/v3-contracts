@@ -39,6 +39,12 @@ interface IAuthorityCore {
     /*
      * STORAGE
      */
+    enum Role {ADAPTER, FACTORY, WHITELISTER}
+
+    struct Permission {
+        mapping(Role => bool) authorized;
+    }
+
     /// @dev Returns the address of the extensions authority.
     /// @return Address of the extensions authority.
     function extensionsAuthority() external view returns (address);

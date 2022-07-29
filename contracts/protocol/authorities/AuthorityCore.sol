@@ -31,13 +31,7 @@ contract AuthorityCore is Owned, IAuthorityCore {
 
     mapping(bytes4 => address) private adapterBySelector;
     mapping(address => Permission) private permission;
-    mapping(Role => address[]) roleToList;
-
-    enum Role {ADAPTER, FACTORY, WHITELISTER}
-
-    struct Permission {
-        mapping(Role => bool) authorized;
-    }
+    mapping(Role => address[]) private roleToList;
 
     modifier onlyWhitelister {
         require(isWhitelister(msg.sender), "AUTHORITY_SENDER_NOT_WHITELISTER_ERROR");
