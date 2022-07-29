@@ -90,7 +90,12 @@ abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConsta
     ///      across all members.
     /// @param poolId Unique Id of pool.
     /// @return balance Total stake delegated to pool.
-    function getTotalStakeDelegatedToPool(bytes32 poolId) public view override returns (IStructs.StoredBalance memory balance) {
+    function getTotalStakeDelegatedToPool(bytes32 poolId)
+        public
+        view
+        override
+        returns (IStructs.StoredBalance memory balance)
+    {
         balance = _loadCurrentBalance(_delegatedStakeByPoolId[poolId]);
         return balance;
     }

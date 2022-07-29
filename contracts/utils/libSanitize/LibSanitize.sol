@@ -41,7 +41,8 @@ library LibSanitize {
         bytes memory bStr = bytes(str);
         uint256 arrayLength = bStr.length;
         for (uint256 i = 0; i < arrayLength; i++) {
-            if ((bStr[i] >= bytes1(uint8(65))) && (bStr[i] <= bytes1(uint8(90)))) revert("LIBSANITIZE_LOWERCASE_CHARACTER_ERROR");
+            if ((bStr[i] >= bytes1(uint8(65))) && (bStr[i] <= bytes1(uint8(90))))
+                revert("LIBSANITIZE_LOWERCASE_CHARACTER_ERROR");
         }
     }
 
@@ -49,7 +50,8 @@ library LibSanitize {
         bytes memory bStr = bytes(str);
         uint256 arrayLength = bStr.length;
         for (uint256 i = 0; i < arrayLength; i++) {
-            if ((bStr[i] >= bytes1(uint8(97))) && (bStr[i] <= bytes1(uint8(122)))) revert("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR");
+            if ((bStr[i] >= bytes1(uint8(97))) && (bStr[i] <= bytes1(uint8(122))))
+                revert("LIBSANITIZE_UPPERCASE_CHARACTER_ERROR");
         }
     }
 }

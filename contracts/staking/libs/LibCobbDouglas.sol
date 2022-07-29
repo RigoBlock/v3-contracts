@@ -68,7 +68,8 @@ library LibCobbDouglas {
         // `e^(alpha * ln(feeRatio/stakeRatio))` if feeRatio <= stakeRatio
         // or
         // `e^(alpa * ln(stakeRatio/feeRatio))` if feeRatio > stakeRatio
-        int256 n = feeRatio <= stakeRatio ? LibFixedMath.div(feeRatio, stakeRatio) : LibFixedMath.div(stakeRatio, feeRatio);
+        int256 n =
+            feeRatio <= stakeRatio ? LibFixedMath.div(feeRatio, stakeRatio) : LibFixedMath.div(stakeRatio, feeRatio);
         n = LibFixedMath.exp(LibFixedMath.mulDiv(LibFixedMath.ln(n), int256(alphaNumerator), int256(alphaDenominator)));
         // Compute
         // `totalRewards * n` if feeRatio <= stakeRatio

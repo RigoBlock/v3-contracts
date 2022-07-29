@@ -63,7 +63,11 @@ abstract contract MixinStakeStorage is MixinScheduler {
     /// @dev Loads a balance from storage and updates its fields to reflect values for the current epoch.
     /// @param balancePtr to load.
     /// @return balance current balance.
-    function _loadCurrentBalance(IStructs.StoredBalance storage balancePtr) internal view returns (IStructs.StoredBalance memory balance) {
+    function _loadCurrentBalance(IStructs.StoredBalance storage balancePtr)
+        internal
+        view
+        returns (IStructs.StoredBalance memory balance)
+    {
         balance = balancePtr;
         uint256 currentEpoch_ = currentEpoch;
         if (currentEpoch_ > balance.currentEpoch) {

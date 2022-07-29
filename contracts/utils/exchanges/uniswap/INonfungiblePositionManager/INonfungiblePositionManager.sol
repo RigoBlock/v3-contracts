@@ -115,7 +115,10 @@ interface INonfungiblePositionManager {
     /// deadline The time by which the transaction must be included to effect the change
     /// @return amount0 The amount of token0 accounted to the position's tokens owed
     /// @return amount1 The amount of token1 accounted to the position's tokens owed
-    function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
+    function decreaseLiquidity(DecreaseLiquidityParams calldata params)
+        external
+        payable
+        returns (uint256 amount0, uint256 amount1);
 
     struct CollectParams {
         uint256 tokenId;

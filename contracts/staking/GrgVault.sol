@@ -110,7 +110,12 @@ contract GrgVault is Authorizable, IGrgVault {
     /// Note that this can only be called when *not* in Catastrophic Failure mode.
     /// @param staker of Grg Tokens.
     /// @param amount of Grg Tokens to deposit.
-    function depositFrom(address staker, uint256 amount) external override onlyStakingProxy onlyNotInCatastrophicFailure {
+    function depositFrom(address staker, uint256 amount)
+        external
+        override
+        onlyStakingProxy
+        onlyNotInCatastrophicFailure
+    {
         // update balance
         _balances[staker] = _balances[staker].safeAdd(amount);
 
@@ -126,7 +131,12 @@ contract GrgVault is Authorizable, IGrgVault {
     /// Note that this can only be called when *not* in Catastrophic Failure mode.
     /// @param staker of Grg Tokens.
     /// @param amount of Grg Tokens to withdraw.
-    function withdrawFrom(address staker, uint256 amount) external override onlyStakingProxy onlyNotInCatastrophicFailure {
+    function withdrawFrom(address staker, uint256 amount)
+        external
+        override
+        onlyStakingProxy
+        onlyNotInCatastrophicFailure
+    {
         _withdrawFrom(staker, amount);
     }
 

@@ -128,7 +128,11 @@ contract HGetPools {
     /// @param _dragoRegistry Address of the pools registry.
     /// @param _group Number of the target drago group.
     /// @return Arrays of structs of data and related address of a pool.
-    function queryAllPoolsByGroup(address _dragoRegistry, address _group) external view returns (PoolBaseData[] memory) {
+    function queryAllPoolsByGroup(address _dragoRegistry, address _group)
+        external
+        view
+        returns (PoolBaseData[] memory)
+    {
         DragoRegistryFace dragoRegistryInstance = DragoRegistryFace(_dragoRegistry);
         uint256 length = dragoRegistryInstance.dragoCount();
         PoolBaseData[] memory poolBaseData = new PoolBaseData[](length);
@@ -152,7 +156,11 @@ contract HGetPools {
     /// @param _dragoRegistry Address of the pools registry.
     /// @param _group Number of the target drago group.
     /// @return Arrays of structs of data and related address of a pool.
-    function queryAllPoolsByCaller(address _dragoRegistry, address _group) external view returns (PoolBaseData[] memory) {
+    function queryAllPoolsByCaller(address _dragoRegistry, address _group)
+        external
+        view
+        returns (PoolBaseData[] memory)
+    {
         DragoRegistryFace dragoRegistryInstance = DragoRegistryFace(_dragoRegistry);
         uint256 length = dragoRegistryInstance.dragoCount();
         PoolBaseData[] memory poolBaseData = new PoolBaseData[](length);

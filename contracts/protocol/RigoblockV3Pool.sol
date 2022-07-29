@@ -120,7 +120,10 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev We keep this check to prevent accidental failure in Nav calculations.
     modifier notPriceError(uint256 _newUnitaryValue) {
         /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
-        require(_newUnitaryValue < _getUnitaryValue() * 5 && _newUnitaryValue > _getUnitaryValue() / 5, "POOL_INPUT_VALUE_ERROR");
+        require(
+            _newUnitaryValue < _getUnitaryValue() * 5 && _newUnitaryValue > _getUnitaryValue() / 5,
+            "POOL_INPUT_VALUE_ERROR"
+        );
         _;
     }
 
@@ -230,7 +233,14 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @dev Allows a pool holder to burn pool tokens.
     /// @param _amountIn Number of tokens to burn.
     /// @return netRevenue Net amount of burnt pool tokens.
-    function burn(uint256 _amountIn) external override nonReentrant hasEnough(_amountIn) minimumPeriodPast returns (uint256 netRevenue) {
+    function burn(uint256 _amountIn)
+        external
+        override
+        nonReentrant
+        hasEnough(_amountIn)
+        minimumPeriodPast
+        returns (uint256 netRevenue)
+    {
         require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
 
         /// @notice allocate pool token transfers and log events.
@@ -337,7 +347,13 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
         )
     {
         // TODO: check if we should reorg return data for client efficiency
-        return (poolName = name(), poolSymbol = symbol(), baseToken = admin.baseToken, _getUnitaryValue(), _getSpread());
+        return (
+            poolName = name(),
+            poolSymbol = symbol(),
+            baseToken = admin.baseToken,
+            _getUnitaryValue(),
+            _getSpread()
+        );
     }
 
     /// @dev Finds the administrative data of the pool.
@@ -519,7 +535,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     function _safeTransfer(address _to, uint256 _amount) private {
         // solhint-disable-next-line avoid-low-level-calls
         // TODO: we may want to use assembly here
-        (bool success, bytes memory data) = admin.baseToken.call(abi.encodeWithSelector(TRANSFER_SELECTOR, _to, _amount));
+        (bool success, bytes memory data) =
+            admin.baseToken.call(abi.encodeWithSelector(TRANSFER_SELECTOR, _to, _amount));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FROM_FAILED_ERROR");
     }
 
@@ -530,7 +547,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     ) private {
         // solhint-disable-next-line avoid-low-level-calls
         // TODO: we may want to use assembly here
-        (bool success, bytes memory data) = admin.baseToken.call(abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, _from, _to, _amount));
+        (bool success, bytes memory data) =
+            admin.baseToken.call(abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, _from, _to, _amount));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FROM_FAILED_ERROR");
     }
 }

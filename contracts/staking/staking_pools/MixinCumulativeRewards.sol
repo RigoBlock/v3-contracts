@@ -135,7 +135,11 @@ abstract contract MixinCumulativeRewards is MixinStakeBalances, MixinConstants {
     /// @dev Fetch the most recent cumulative reward entry for a pool.
     /// @param poolId Unique ID of pool.
     /// @return cumulativeReward The most recent cumulative reward `poolId`.
-    function _getMostRecentCumulativeReward(bytes32 poolId) private view returns (IStructs.Fraction memory cumulativeReward) {
+    function _getMostRecentCumulativeReward(bytes32 poolId)
+        private
+        view
+        returns (IStructs.Fraction memory cumulativeReward)
+    {
         uint256 lastStoredEpoch = _cumulativeRewardsByPoolLastStored[poolId];
         return _cumulativeRewardsByPool[poolId][lastStoredEpoch];
     }
@@ -146,7 +150,11 @@ abstract contract MixinCumulativeRewards is MixinStakeBalances, MixinConstants {
     /// @param poolId Unique ID of pool.
     /// @param epoch The epoch to find the
     /// @return cumulativeReward The cumulative reward for `poolId` at `epoch`.
-    function _getCumulativeRewardAtEpoch(bytes32 poolId, uint256 epoch) private view returns (IStructs.Fraction memory cumulativeReward) {
+    function _getCumulativeRewardAtEpoch(bytes32 poolId, uint256 epoch)
+        private
+        view
+        returns (IStructs.Fraction memory cumulativeReward)
+    {
         // Return CR at `epoch`, given it's set.
         cumulativeReward = _cumulativeRewardsByPool[poolId][epoch];
         if (_isCumulativeRewardSet(cumulativeReward)) {

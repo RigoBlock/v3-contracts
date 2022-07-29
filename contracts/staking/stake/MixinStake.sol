@@ -54,7 +54,8 @@ abstract contract MixinStake is MixinStakingPool {
             _loadCurrentBalance(_ownerStakeByStatus[uint8(IStructs.StakeStatus.UNDELEGATED)][staker]);
 
         // stake must be undelegated in current and next epoch to be withdrawn
-        uint256 currentWithdrawableStake = LibSafeMath.min256(undelegatedBalance.currentEpochBalance, undelegatedBalance.nextEpochBalance);
+        uint256 currentWithdrawableStake =
+            LibSafeMath.min256(undelegatedBalance.currentEpochBalance, undelegatedBalance.nextEpochBalance);
 
         require(amount <= currentWithdrawableStake, "MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR");
 

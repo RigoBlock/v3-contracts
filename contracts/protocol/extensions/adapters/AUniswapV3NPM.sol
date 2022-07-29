@@ -50,7 +50,8 @@ contract AUniswapV3NPM {
     // immutable variables, initialized here it to facilitate etherscan verification
     // addresses are same on all networks
     // TODO: initialize in constructor
-    address payable private immutable UNISWAP_V3_NPM_ADDRESS = payable(address(0xC36442b4a4522E871399CD717aBDD847Ab11FE88));
+    address payable private immutable UNISWAP_V3_NPM_ADDRESS =
+        payable(address(0xC36442b4a4522E871399CD717aBDD847Ab11FE88));
 
     // TODO: define as constant, add sig hash and comment explanation
     bytes4 private immutable APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
@@ -180,7 +181,8 @@ contract AUniswapV3NPM {
                 amount1Max: type(uint128).max
             })
         );
-        (, , , , , , , uint128 liquidity, , , , ) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).positions(params.tokenId);
+        (, , , , , , , uint128 liquidity, , , , ) =
+            INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).positions(params.tokenId);
         if (liquidity == uint128(0)) {
             burnInternal(params.tokenId);
         }
@@ -208,7 +210,10 @@ contract AUniswapV3NPM {
     /// amount1Max The maximum amount of token1 to collect
     /// @return amount0 The amount of fees collected in token0
     /// @return amount1 The amount of fees collected in token1
-    function collectInternal(INonfungiblePositionManager.CollectParams memory params) internal returns (uint256 amount0, uint256 amount1) {
+    function collectInternal(INonfungiblePositionManager.CollectParams memory params)
+        internal
+        returns (uint256 amount0, uint256 amount1)
+    {
         (amount0, amount1) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: params.tokenId,
@@ -278,7 +283,12 @@ contract AUniswapV3NPM {
         uint24 fee,
         uint160 sqrtPriceX96
     ) external payable returns (address pool) {
-        pool = IPoolInitializer(UNISWAP_V3_NPM_ADDRESS).createAndInitializePoolIfNecessary(token0, token1, fee, sqrtPriceX96);
+        pool = IPoolInitializer(UNISWAP_V3_NPM_ADDRESS).createAndInitializePoolIfNecessary(
+            token0,
+            token1,
+            fee,
+            sqrtPriceX96
+        );
     }
 
     function _safeApprove(
