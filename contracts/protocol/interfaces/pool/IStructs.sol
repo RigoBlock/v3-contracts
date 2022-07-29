@@ -19,21 +19,27 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-/// @title Rigoblock V3 Pool Interface - Allows interaction with the pool contract.
-/// @author Gabriele Rigo - <gab@rigoblock.com>
-// solhint-disable-next-line
-interface IRigoblockV3PoolActions {
-    /*
-     * CORE FUNCTIONS
-     */
-    function _initializePool(
-        string calldata _poolName,
-        string calldata _poolSymbol,
-        address _baseToken,
-        address _owner
-    ) external;
+interface IStructs {
+    struct Account {
+        uint256 balance;
+        uint32 activation;
+    }
 
-    function mint(address _recipient, uint256 _amountIn) external payable returns (uint256);
+    struct PoolData {
+        string name;
+        string symbol;
+        uint256 unitaryValue; // initially = 1 * 10**decimals
+        // TODO: check if we get benefit as storing spread as uint32
+        uint256 spread; // in basis points 1 = 0.01%
+        uint256 totalSupply;
+        uint256 transactionFee; // in basis points 1 = 0.01%
+        uint32 minPeriod;
+        uint8 decimals;
+    }
 
-    function burn(uint256 _amount) external returns (uint256); // netRevenue
+    struct Admin {
+        address feeCollector;
+        address kycProvider;
+        address baseToken; // TODO: check where best to store
+    }
 }

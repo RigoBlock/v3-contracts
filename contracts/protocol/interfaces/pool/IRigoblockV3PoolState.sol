@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 interface IRigoblockV3PoolState {
     /*
      * IMMUTABLE STORAGE
      */
-    function AUTHORITY() external view returns (address);
+    function authority() external view returns (address);
 
     function name() external view returns (string memory);
 

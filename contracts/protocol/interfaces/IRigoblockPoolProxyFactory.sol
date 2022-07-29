@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.14;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Pool Proxy Factory Interface - Allows external interaction with Pool Proxy Factory.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
