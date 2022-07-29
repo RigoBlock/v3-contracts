@@ -63,8 +63,8 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     mapping(address => Account) internal userAccount;
 
-    PoolData poolData;
-    Admin admin;
+    PoolData private poolData;
+    Admin private admin;
 
     struct Account {
         uint256 balance;

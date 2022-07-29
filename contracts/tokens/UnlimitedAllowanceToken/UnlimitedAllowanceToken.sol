@@ -4,7 +4,7 @@ pragma solidity 0.8.14;
 import {ERC20} from "../ERC20/ERC20.sol";
 
 abstract contract UnlimitedAllowanceToken is ERC20 {
-    uint256 constant MAX_UINT = 2**256 - 1;
+    uint256 private constant MAX_UINT = 2**256 - 1;
 
     /// @dev ERC20 transferFrom, modified such that an allowance of MAX_UINT represents an unlimited allowance.
     /// @param _from Address to transfer from.

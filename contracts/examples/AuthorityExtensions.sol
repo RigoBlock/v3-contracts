@@ -31,8 +31,8 @@ contract AuthorityExtensions is IAuthorityExtensions {
 
     GroupsList private groupsList;
 
-    mapping(address => address) approvedTokenOnExchange;
-    mapping(address => address) approvedTokenOnWrapper;
+    mapping(address => address) private approvedTokenOnExchange;
+    mapping(address => address) private approvedTokenOnWrapper;
     mapping(address => Permission) private permission;
 
     enum Group {EXCHANGE, TOKEN, WRAPPER, PROXY}
