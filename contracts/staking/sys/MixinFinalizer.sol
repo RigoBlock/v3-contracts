@@ -120,9 +120,8 @@ abstract contract MixinFinalizer is MixinStakingPoolRewards {
         uint256 totalReward = operatorReward.safeAdd(membersReward);
 
         // Increase `totalRewardsFinalized`.
-        aggregatedStatsByEpoch[prevEpoch].totalRewardsFinalized = aggregatedStats.totalRewardsFinalized = aggregatedStats
-            .totalRewardsFinalized
-            .safeAdd(totalReward);
+        aggregatedStatsByEpoch[prevEpoch].totalRewardsFinalized = aggregatedStats
+            .totalRewardsFinalized = aggregatedStats.totalRewardsFinalized.safeAdd(totalReward);
 
         // Decrease the number of unfinalized pools left.
         aggregatedStatsByEpoch[prevEpoch].numPoolsToFinalize = aggregatedStats.numPoolsToFinalize = aggregatedStats
@@ -146,7 +145,13 @@ abstract contract MixinFinalizer is MixinStakingPoolRewards {
     /// @return reward The total reward owed to a pool.
     /// @return membersStake The total stake for all non-operator members in
     ///         this pool.
-    function _getUnfinalizedPoolRewards(bytes32 poolId) internal view virtual override returns (uint256 reward, uint256 membersStake) {
+    function _getUnfinalizedPoolRewards(bytes32 poolId)
+        internal
+        view
+        virtual
+        override
+        returns (uint256 reward, uint256 membersStake)
+    {
         uint256 prevEpoch = currentEpoch.safeSub(1);
         IStructs.PoolStats memory poolStats = poolStatsByEpoch[poolId][prevEpoch];
         reward = _getUnfinalizedPoolRewardsFromPoolStats(poolStats, aggregatedStatsByEpoch[prevEpoch]);
@@ -175,11 +180,10 @@ abstract contract MixinFinalizer is MixinStakingPoolRewards {
     /// @param poolStats Stats for a specific pool.
     /// @param aggregatedStats Stats aggregated across all pools.
     /// @return rewards Unfinalized rewards for the input pool.
-    function _getUnfinalizedPoolRewardsFromPoolStats(IStructs.PoolStats memory poolStats, IStructs.AggregatedStats memory aggregatedStats)
-        private
-        view
-        returns (uint256 rewards)
-    {
+    function _getUnfinalizedPoolRewardsFromPoolStats(
+        IStructs.PoolStats memory poolStats,
+        IStructs.AggregatedStats memory aggregatedStats
+    ) private view returns (uint256 rewards) {
         // There can't be any rewards if the pool did not collect any fees.
         if (poolStats.feesCollected == 0) {
             return rewards;

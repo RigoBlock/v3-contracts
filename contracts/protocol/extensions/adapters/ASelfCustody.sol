@@ -72,7 +72,10 @@ contract ASelfCustody is IASelfCustody {
         uint256 poolStake = IStaking(STAKING_PROXY_ADDRESS).getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
 
         // we assert the staking implementation has not been compromised by requiring all staked GRG to be delegated to self.
-        require(poolStake == IGrgVault(GRG_VAULT_ADDRESS).balanceOf(_poolAddress), "ASELFCUSTODY_GRG_BALANCE_MISMATCH_ERROR");
+        require(
+            poolStake == IGrgVault(GRG_VAULT_ADDRESS).balanceOf(_poolAddress),
+            "ASELFCUSTODY_GRG_BALANCE_MISMATCH_ERROR"
+        );
 
         if (poolStake >= MINIMUM_GRG_STAKE) {
             return 0;

@@ -139,7 +139,10 @@ interface IStaking {
     /// @dev Gets global stake for a given status.
     /// @param stakeStatus UNDELEGATED or DELEGATED
     /// @return balance Global stake for given status.
-    function getGlobalStakeByStatus(IStructs.StakeStatus stakeStatus) external view returns (IStructs.StoredBalance memory balance);
+    function getGlobalStakeByStatus(IStructs.StakeStatus stakeStatus)
+        external
+        view
+        returns (IStructs.StoredBalance memory balance);
 
     /// @dev Gets an owner's stake balances by status.
     /// @param staker Owner of stake.
@@ -175,7 +178,10 @@ interface IStaking {
     /// @param staker of stake.
     /// @param poolId Unique Id of pool.
     /// @return balance Stake delegated to pool by staker.
-    function getStakeDelegatedToPoolByOwner(address staker, bytes32 poolId) external view returns (IStructs.StoredBalance memory balance);
+    function getStakeDelegatedToPoolByOwner(address staker, bytes32 poolId)
+        external
+        view
+        returns (IStructs.StoredBalance memory balance);
 
     /// @dev Returns a staking pool
     /// @param poolId Unique id of pool.

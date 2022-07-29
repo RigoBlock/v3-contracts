@@ -67,7 +67,12 @@ abstract contract MixinStakingPool is MixinAbstract, MixinStakingPoolRewards {
 
         // create and store pool
         IStructs.Pool memory pool =
-            IStructs.Pool({operator: operator, stakingPal: stakingPal, operatorShare: operatorShare, stakingPalShare: stakingPalShare});
+            IStructs.Pool({
+                operator: operator,
+                stakingPal: stakingPal,
+                operatorShare: operatorShare,
+                stakingPalShare: stakingPalShare
+            });
         _poolById[poolId] = pool;
 
         // Staking pool has been created
@@ -81,16 +86,27 @@ abstract contract MixinStakingPool is MixinAbstract, MixinStakingPoolRewards {
     /// @dev Allows the operator to update the staking pal address.
     /// @param poolId Unique id of pool.
     /// @param newStakingPalAddress Address of the new staking pal.
-    function setStakingPalAddress(bytes32 poolId, address newStakingPalAddress) external override onlyStakingPoolOperator(poolId) {
+    function setStakingPalAddress(bytes32 poolId, address newStakingPalAddress)
+        external
+        override
+        onlyStakingPoolOperator(poolId)
+    {
         IStructs.Pool storage pool = _poolById[poolId];
-        require(newStakingPalAddress != address(0) && pool.stakingPal != newStakingPalAddress, "STAKING_PAL_NULL_OR_SAME_ERROR");
+        require(
+            newStakingPalAddress != address(0) && pool.stakingPal != newStakingPalAddress,
+            "STAKING_PAL_NULL_OR_SAME_ERROR"
+        );
         pool.stakingPal = newStakingPalAddress;
     }
 
     /// @dev Decreases the operator share for the given pool (i.e. increases pool rewards for members).
     /// @param poolId Unique Id of pool.
     /// @param newOperatorShare The newly decreased percentage of any rewards owned by the operator.
-    function decreaseStakingPoolOperatorShare(bytes32 poolId, uint32 newOperatorShare) external override onlyStakingPoolOperator(poolId) {
+    function decreaseStakingPoolOperatorShare(bytes32 poolId, uint32 newOperatorShare)
+        external
+        override
+        onlyStakingPoolOperator(poolId)
+    {
         // load pool and assert that we can decrease
         uint32 currentOperatorShare = _poolById[poolId].operatorShare;
         _assertNewOperatorShare(currentOperatorShare, newOperatorShare);

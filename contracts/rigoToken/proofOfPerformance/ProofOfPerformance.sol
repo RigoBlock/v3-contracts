@@ -40,7 +40,8 @@ contract ProofOfPerformance is IProofOfPerformance {
      */
     /// @inheritdoc IProofOfPerformance
     function creditPopRewardToStakingProxy(address _poolAddress) external override {
-        uint256 poolLockedBalances = STAKING.getOwnerStakeByStatus(_poolAddress, IStructs.StakeStatus.DELEGATED).currentEpochBalance;
+        uint256 poolLockedBalances =
+            STAKING.getOwnerStakeByStatus(_poolAddress, IStructs.StakeStatus.DELEGATED).currentEpochBalance;
 
         // if address has locked balances, staking pool exists.
         require(poolLockedBalances != uint256(0), "POP_STAKING_POOL_BALANCES_NULL_ERROR");

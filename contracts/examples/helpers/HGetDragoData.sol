@@ -229,7 +229,11 @@ contract HGetDragoData {
     /// @param _dragoRegistry Address of the pools registry.
     /// @param _dragoId Number of the target drago ID.
     /// @return dragoData Structs of data.
-    function queryDataFromId(address _dragoRegistry, uint256 _dragoId) external view returns (DragoData memory dragoData) {
+    function queryDataFromId(address _dragoRegistry, uint256 _dragoId)
+        external
+        view
+        returns (DragoData memory dragoData)
+    {
         address drago;
         DragoRegistryFace dragoRegistryInstance = DragoRegistryFace(_dragoRegistry);
         (drago, , , , , ) = dragoRegistryInstance.fromId(_dragoId);
@@ -242,7 +246,11 @@ contract HGetDragoData {
     /// @param _dragoRegistry Address of the pools registry.
     /// @param _dragoAddress Array of addresses of the target drago.
     /// @return dragoData Arrays of structs of data.
-    function queryDataFromAddress(address _dragoRegistry, address _dragoAddress) external view returns (DragoData memory dragoData) {
+    function queryDataFromAddress(address _dragoRegistry, address _dragoAddress)
+        external
+        view
+        returns (DragoData memory dragoData)
+    {
         uint256 dragoId;
         DragoRegistryFace dragoRegistryInstance = DragoRegistryFace(_dragoRegistry);
         (dragoId, , , , , ) = dragoRegistryInstance.fromAddress(_dragoAddress);
@@ -255,7 +263,11 @@ contract HGetDragoData {
     /// @param _dragoRegistry Address of the drago registry.
     /// @param _dragoIds Array of IDs of the target dragos.
     /// @return Arrays of structs of data and related address of a drago.
-    function queryMultiDataFromId(address _dragoRegistry, uint256[] calldata _dragoIds) external view returns (DragoData[] memory) {
+    function queryMultiDataFromId(address _dragoRegistry, uint256[] calldata _dragoIds)
+        external
+        view
+        returns (DragoData[] memory)
+    {
         uint256 length = _dragoIds.length;
         DragoData[] memory dragoData = new DragoData[](length);
         address[] memory dragos = new address[](length);

@@ -30,7 +30,11 @@ abstract contract MixinAbstract {
     /// @return totalReward The total reward owed to a pool.
     /// @return membersStake The total stake for all non-operator members in
     ///         this pool.
-    function _getUnfinalizedPoolRewards(bytes32 poolId) internal view virtual returns (uint256 totalReward, uint256 membersStake);
+    function _getUnfinalizedPoolRewards(bytes32 poolId)
+        internal
+        view
+        virtual
+        returns (uint256 totalReward, uint256 membersStake);
 
     /// @dev Asserts that a pool has been finalized last epoch.
     /// @param poolId The id of the pool that should have been finalized.

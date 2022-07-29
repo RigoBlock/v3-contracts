@@ -94,7 +94,11 @@ contract AuthorityExtensions is IAuthorityExtensions {
     /// @dev Allows a whitelister to whitelist a tokenTransferProxy
     /// @param _tokenTransferProxy Address of the proxy
     /// @param _isWhitelisted Bool whitelisted
-    function whitelistTokenTransferProxy(address _tokenTransferProxy, bool _isWhitelisted) external override onlyWhitelister {
+    function whitelistTokenTransferProxy(address _tokenTransferProxy, bool _isWhitelisted)
+        external
+        override
+        onlyWhitelister
+    {
         permission[_tokenTransferProxy].authorized[Group.PROXY] = true;
         groupsList.proxies.push(_tokenTransferProxy);
         emit WhitelistedProxy(_tokenTransferProxy, _isWhitelisted);

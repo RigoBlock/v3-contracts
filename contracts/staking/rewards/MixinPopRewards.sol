@@ -63,7 +63,8 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
         uint256 feesCollectedByPool = poolStatsPtr.feesCollected;
         if (feesCollectedByPool == 0) {
             // Compute member and total weighted stake.
-            (uint256 membersStakeInPool, uint256 weightedStakeInPool) = _computeMembersAndWeightedStake(poolId, poolStake);
+            (uint256 membersStakeInPool, uint256 weightedStakeInPool) =
+                _computeMembersAndWeightedStake(poolId, poolStake);
             poolStatsPtr.membersStake = membersStakeInPool;
             poolStatsPtr.weightedStake = weightedStakeInPool;
 
@@ -82,7 +83,9 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
             poolStatsPtr.feesCollected = popReward;
 
             // Increase the total fees collected this epoch.
-            aggregatedStatsPtr.totalFeesCollected = aggregatedStatsPtr.totalFeesCollected.safeAdd(popReward).safeSub(feesCollectedByPool);
+            aggregatedStatsPtr.totalFeesCollected = aggregatedStatsPtr.totalFeesCollected.safeAdd(popReward).safeSub(
+                feesCollectedByPool
+            );
         }
     }
 
@@ -107,7 +110,9 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
         uint256 operatorStake = getStakeDelegatedToPoolByOwner(_poolById[poolId].operator, poolId).currentEpochBalance;
 
         membersStake = totalStake.safeSub(operatorStake);
-        weightedStake = operatorStake.safeAdd(LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, PPM_DENOMINATOR, membersStake));
+        weightedStake = operatorStake.safeAdd(
+            LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, PPM_DENOMINATOR, membersStake)
+        );
         return (membersStake, weightedStake);
     }
 }

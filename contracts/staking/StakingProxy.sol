@@ -121,7 +121,10 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     function assertValidStorageParams() public view override {
         // Epoch length must be between 5 and 90 days long
         uint256 _epochDurationInSeconds = epochDurationInSeconds;
-        require(_epochDurationInSeconds >= 5 days && _epochDurationInSeconds <= 90 days, "STAKING_PROXY_INVALID_EPOCH_DURATION_ERROR");
+        require(
+            _epochDurationInSeconds >= 5 days && _epochDurationInSeconds <= 90 days,
+            "STAKING_PROXY_INVALID_EPOCH_DURATION_ERROR"
+        );
 
         // Alpha must be 0 < x <= 1
         uint32 _cobbDouglasAlphaDenominator = cobbDouglasAlphaDenominator;

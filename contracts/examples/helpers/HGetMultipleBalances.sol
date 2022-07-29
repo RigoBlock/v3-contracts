@@ -85,7 +85,11 @@ contract HGetMultipleBalances {
     /// @param _who Address of the target owner.
     /// @return balances Array of token balances in base unit.
     /// @return tokenAddresses Array of token addresses.
-    function getMultiBalances(address _who) external view returns (uint256[] memory balances, address[] memory tokenAddresses) {
+    function getMultiBalances(address _who)
+        external
+        view
+        returns (uint256[] memory balances, address[] memory tokenAddresses)
+    {
         uint256 length = numTokens;
         balances = new uint256[](length);
         tokenAddresses = new address[](length);

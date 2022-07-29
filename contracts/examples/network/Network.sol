@@ -38,7 +38,11 @@ contract Network {
     /// @param _poolAddresses Array of addresses.
     /// @return poolPrices Array of the prices of the active pools.
     /// @return totalTokens Array of the number of tokens of each pool.
-    function getPoolsPrices(address[] memory _poolAddresses) external view returns (uint256[] memory, uint256[] memory) {
+    function getPoolsPrices(address[] memory _poolAddresses)
+        external
+        view
+        returns (uint256[] memory, uint256[] memory)
+    {
         uint256 length = _poolAddresses.length;
         uint256[] memory poolPrices = new uint256[](length);
         uint256[] memory totalTokens = new uint256[](length);
@@ -54,7 +58,11 @@ contract Network {
     /// @param _addresses Array of addresses.
     /// @return networkValue alue of the rigoblock network in wei.
     /// @return numberOfPools Number of active funds.
-    function calcNetworkValue(address[] memory _addresses) external view returns (uint256 networkValue, uint256 numberOfPools) {
+    function calcNetworkValue(address[] memory _addresses)
+        external
+        view
+        returns (uint256 networkValue, uint256 numberOfPools)
+    {
         numberOfPools = _addresses.length;
         for (uint256 i = 0; i < numberOfPools; ++i) {
             (uint256 poolValue, ) = calcPoolValue(_addresses[i]);

@@ -57,7 +57,12 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
     /// @param poolId Unique id of pool.
     /// @param member The member of the pool.
     /// @return reward totalReward Balance in ETH.
-    function computeRewardBalanceOfDelegator(bytes32 poolId, address member) external view override returns (uint256 reward) {
+    function computeRewardBalanceOfDelegator(bytes32 poolId, address member)
+        external
+        view
+        override
+        returns (uint256 reward)
+    {
         IStructs.Pool memory pool = _poolById[poolId];
         // Get any unfinalized rewards.
         (uint256 unfinalizedTotalRewards, uint256 unfinalizedMembersStake) = _getUnfinalizedPoolRewards(poolId);
@@ -90,7 +95,9 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         // Sync the delegated stake balance. This will ensure future calls of
         // `_computeDelegatorReward` during this epoch will return 0,
         // preventing a delegator from withdrawing more than once an epoch.
-        _delegatedStakeToPoolByOwner[member][poolId] = _loadCurrentBalance(_delegatedStakeToPoolByOwner[member][poolId]);
+        _delegatedStakeToPoolByOwner[member][poolId] = _loadCurrentBalance(
+            _delegatedStakeToPoolByOwner[member][poolId]
+        );
 
         // Withdraw non-0 balance
         if (balance != 0) {
@@ -198,7 +205,12 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         // We account for rewards over 3 intervals, below.
 
         // 1/3 Unfinalized rewards earned in `currentEpoch - 1`.
-        reward = _computeUnfinalizedDelegatorReward(delegatedStake, currentEpoch_, unfinalizedMembersReward, unfinalizedMembersStake);
+        reward = _computeUnfinalizedDelegatorReward(
+            delegatedStake,
+            currentEpoch_,
+            unfinalizedMembersReward,
+            unfinalizedMembersStake
+        );
 
         // 2/3 Finalized rewards earned in epochs [`delegatedStake.currentEpoch + 1` .. `currentEpoch - 1`]
         uint256 delegatedStakeNextEpoch = uint256(delegatedStake.currentEpoch).safeAdd(1);
@@ -213,7 +225,12 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
 
         // 3/3 Finalized rewards earned in epoch `delegatedStake.currentEpoch`.
         reward = reward.safeAdd(
-            _computeMemberRewardOverInterval(poolId, delegatedStake.nextEpochBalance, delegatedStakeNextEpoch, currentEpoch_)
+            _computeMemberRewardOverInterval(
+                poolId,
+                delegatedStake.nextEpochBalance,
+                delegatedStakeNextEpoch,
+                currentEpoch_
+            )
         );
 
         return reward;
@@ -240,7 +257,9 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         // Unfinalized rewards are always earned from stake in
         // the prior epoch so we want the stake at `currentEpoch_-1`.
         uint256 unfinalizedStakeBalance =
-            delegatedStake.currentEpoch >= currentEpoch_.safeSub(1) ? delegatedStake.currentEpochBalance : delegatedStake.nextEpochBalance;
+            delegatedStake.currentEpoch >= currentEpoch_.safeSub(1)
+                ? delegatedStake.currentEpochBalance
+                : delegatedStake.nextEpochBalance;
 
         // Sanity check to save gas on computation
         if (unfinalizedStakeBalance == 0) {
@@ -248,7 +267,8 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         }
 
         // Compute unfinalized reward
-        return LibMath.getPartialAmountFloor(unfinalizedMembersReward, unfinalizedMembersStake, unfinalizedStakeBalance);
+        return
+            LibMath.getPartialAmountFloor(unfinalizedMembersReward, unfinalizedMembersStake, unfinalizedStakeBalance);
     }
 
     /// @dev Increases rewards for a pool.

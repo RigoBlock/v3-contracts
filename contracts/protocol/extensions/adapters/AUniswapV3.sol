@@ -46,20 +46,24 @@ contract AUniswapV3 {
     using Path for bytes;
 
     // TODO: initialize in constructor
-    address payable private immutable UNISWAP_V3_SWAP_ROUTER_ADDRESS = payable(address(0xE592427A0AEce92De3Edee1F18E0157C05861564));
+    address payable private immutable UNISWAP_V3_SWAP_ROUTER_ADDRESS =
+        payable(address(0xE592427A0AEce92De3Edee1F18E0157C05861564));
 
     // TODO: calculate sig hashes and add explanation in comment to save gas, make constants.
     bytes4 private immutable APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
     bytes4 private immutable EXACT_INPUT_SELECTOR = bytes4(keccak256("exactInput(ISwapRouter.ExactInputParams)"));
-    bytes4 private immutable EXACT_INPUT_SINGLE_SELECTOR = bytes4(keccak256("exactInputSingle(ISwapRouter.ExactInputSingleParams)"));
+    bytes4 private immutable EXACT_INPUT_SINGLE_SELECTOR =
+        bytes4(keccak256("exactInputSingle(ISwapRouter.ExactInputSingleParams)"));
     bytes4 private immutable EXACT_OUTPUT_SELECTOR = bytes4(keccak256("exactOutput(ISwapRouter.exactOutputParams)"));
-    bytes4 private immutable EXACT_OUTPUT_SINGLE_SELECTOR = bytes4(keccak256("exactOutputSingle(ISwapRouter.ExactOutputSingleParams)"));
+    bytes4 private immutable EXACT_OUTPUT_SINGLE_SELECTOR =
+        bytes4(keccak256("exactOutputSingle(ISwapRouter.ExactOutputSingleParams)"));
     bytes4 private immutable REFUND_ETH_SELECTOR = bytes4(keccak256("refundETH()"));
     bytes4 private immutable SWEEP_TOKEN_SELECTOR = bytes4(keccak256("sweepToken(address,uint256,address)"));
     bytes4 private immutable SWEEP_TOKEN_WITH_FEE_SELECTOR =
         bytes4(keccak256("sweepTokenWithFee(address,uint256,address,uint256,address)"));
     bytes4 private immutable UNWRAP_WETH9_SELECTOR = bytes4(keccak256("unwrapWETH9(uint256,address)"));
-    bytes4 private immutable UNWRAP_WETH9_WITH_FEE_SELECTOR = bytes4(keccak256("unwrapWETH9WithFee(uint256,address,uint256,address)"));
+    bytes4 private immutable UNWRAP_WETH9_WITH_FEE_SELECTOR =
+        bytes4(keccak256("unwrapWETH9WithFee(uint256,address,uint256,address)"));
     bytes4 private immutable WRAP_ETH_SELECTOR = bytes4(keccak256("wrapETH(uint256)"));
 
     /// @notice Call multiple functions in the current contract and return the data from all of them if they all succeed
@@ -89,7 +93,8 @@ contract AUniswapV3 {
             } else if (selector == REFUND_ETH_SELECTOR) {
                 _refundETH();
             } else if (selector == SWEEP_TOKEN_SELECTOR) {
-                (address token, uint256 amountMinimum, address recipient) = abi.decode(data[i], (address, uint256, address));
+                (address token, uint256 amountMinimum, address recipient) =
+                    abi.decode(data[i], (address, uint256, address));
                 _sweepToken(token, amountMinimum, recipient);
             } else if (selector == UNWRAP_WETH9_WITH_FEE_SELECTOR) {
                 (uint256 amountMinimum, address recipient, uint256 feeBips, address feeRecipient) =
@@ -119,7 +124,11 @@ contract AUniswapV3 {
     /// @notice Swaps `amountIn` of one token for as much as possible of another token
     /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in memory
     /// @return amountOut The amount of the received token
-    function exactInputSingle(ISwapRouter.ExactInputSingleParams calldata params) external payable returns (uint256 amountOut) {
+    function exactInputSingle(ISwapRouter.ExactInputSingleParams calldata params)
+        external
+        payable
+        returns (uint256 amountOut)
+    {
         amountOut = _exactInputSingle(params);
     }
 
@@ -176,7 +185,11 @@ contract AUniswapV3 {
     /// @notice Swaps as little as possible of one token for `amountOut` of another token
     /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in memory
     /// @return amountIn The amount of the input token
-    function exactOutputSingle(ISwapRouter.ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn) {
+    function exactOutputSingle(ISwapRouter.ExactOutputSingleParams calldata params)
+        external
+        payable
+        returns (uint256 amountIn)
+    {
         amountIn = _exactOutputSingle(params);
     }
 

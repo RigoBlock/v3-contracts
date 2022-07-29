@@ -70,7 +70,11 @@ abstract contract SigVerifier {
 
     // INTERNAL FUNCTIONS
 
-    function returnRecoveredEIP712Internal(bytes32 hash, bytes memory signature) internal pure returns (address recovered) {
+    function returnRecoveredEIP712Internal(bytes32 hash, bytes memory signature)
+        internal
+        pure
+        returns (address recovered)
+    {
         uint8 v;
         bytes32 r;
         bytes32 s;
@@ -83,7 +87,11 @@ abstract contract SigVerifier {
         return recovered;
     }
 
-    function returnRecoveredETHSIGNInternal(bytes32 hash, bytes memory signature) internal pure returns (address recovered) {
+    function returnRecoveredETHSIGNInternal(bytes32 hash, bytes memory signature)
+        internal
+        pure
+        returns (address recovered)
+    {
         uint8 v;
         bytes32 r;
         bytes32 s;
