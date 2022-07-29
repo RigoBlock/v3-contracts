@@ -23,71 +23,22 @@ import {IAuthorityCore as Authority} from "./interfaces/IAuthorityCore.sol";
 import {INavVerifier as NavVerifier} from "./interfaces/INavVerifier.sol";
 import {IKyc as Kyc} from "./interfaces/IKyc.sol";
 import {IERC20 as Token} from "./interfaces/IERC20.sol";
-import {OwnedUninitialized as Owned} from "../utils/owned/OwnedUninitialized.sol";
-import {ReentrancyGuard} from "../utils/reentrancyGuard/ReentrancyGuard.sol";
 
-import {IRigoblockV3Pool} from "./IRigoblockV3Pool.sol";
+import "./IRigoblockV3Pool.sol";
+import "./core/immutable/MixinConstants.sol";
+import "./core/immutable/MixinImmutables.sol";
+import "./core/immutable/MixinStorage.sol";
 
 /// @title RigoblockV3Pool - A set of rules for Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
+contract RigoblockV3Pool is
+    IRigoblockV3Pool,
+    MixinConstants,
+    MixinImmutables,
+    MixinStorage
+{
     // TODO: move owned methods into rigoblock v3 subcontracts, move reentrancy guard to subcontracts.
-
-    string public constant override VERSION = "HF 3.1.0";
-
-    address public immutable override AUTHORITY;
-
-    // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
-    uint256 private constant FEE_BASE = 10000;
-    uint256 private constant INITIAL_SPREAD = 500; // +-5%, in basis points
-    uint256 private constant MAX_SPREAD = 1000; // +-10%, in basis points
-    uint256 private constant MAX_TRANSACTION_FEE = 100; // maximum 1%
-
-    // minimum order size 1/1000th of unitary value to avoid dust clogging things up
-    uint256 private constant MINIMUM_ORDER_DIVISOR = 1e3;
-
-    uint256 private constant SPREAD_BASE = 10000;
-
-    uint32 private constant MAX_LOCKUP = 30 days;
-    uint32 private constant MIN_LOCKUP = 2;
-
-    // EIP1967 standard, must be immutable to be compile-time constant.
-    address private immutable _implementation;
-
-    uint8 private immutable COINBASE_DECIMALS;
-    uint256 private immutable COINBASE_UNITARY_VALUE;
-
-    bytes4 private immutable TRANSFER_FROM_SELECTOR = bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
-    bytes4 private immutable TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
-
-    mapping(address => Account) internal userAccount;
-
-    PoolData private poolData;
-    Admin private admin;
-
-    struct Account {
-        uint256 balance;
-        uint32 activation;
-    }
-
-    struct PoolData {
-        string name;
-        string symbol;
-        uint256 unitaryValue; // initially = 1 * 10**decimals
-        // TODO: check if we get benefit as storing spread as uint32
-        uint256 spread; // in basis points 1 = 0.01%
-        uint256 totalSupply;
-        uint256 transactionFee; // in basis points 1 = 0.01%
-        uint32 minPeriod;
-        uint8 decimals;
-    }
-
-    struct Admin {
-        address feeCollector;
-        address kycProvider;
-        address baseToken; // TODO: check where best to store
-    }
 
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
@@ -129,11 +80,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
 
     /// @notice Owner is initialized to 0 to lock owner actions in this implementation.
     /// @notice Kyc provider set as will effectively lock direct mint/burn actions.
-    constructor(address _authority) {
-        AUTHORITY = _authority;
-        COINBASE_DECIMALS = 18;
-        COINBASE_UNITARY_VALUE = 1 * 10**COINBASE_DECIMALS;
-        _implementation = address(this);
+    constructor(address _authority) MixinImmutables(_authority) {
         // must lock implementation after initializing _implementation
         owner = address(0);
         admin.kycProvider == address(1);
@@ -194,7 +141,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
             admin.baseToken = _baseToken;
             uint8 tokenDecimals = Token(_baseToken).decimals();
             assert(tokenDecimals <= 18);
-            if (tokenDecimals != COINBASE_DECIMALS) {
+            if (tokenDecimals != _conibaseDecimals) {
                 poolData.decimals = tokenDecimals;
                 poolData.unitaryValue = 1 * 10**tokenDecimals; // initial value is 1
             }
@@ -404,7 +351,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @return Number of decimals.
     /// @notice We use this method to save gas on base currency pools.
     function decimals() public view override returns (uint8) {
-        return poolData.decimals != 0 ? poolData.decimals : COINBASE_DECIMALS;
+        return poolData.decimals != 0 ? poolData.decimals : _conibaseDecimals;
     }
 
     /*
@@ -505,7 +452,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     /// @param _selector Hash of the method signature.
     /// @return Address of the application adapter.
     function _getApplicationAdapter(bytes4 _selector) internal view returns (address) {
-        return Authority(AUTHORITY).getApplicationAdapter(_selector);
+        return Authority(authority).getApplicationAdapter(_selector);
     }
 
     function _checkDelegateCall() private view {
@@ -525,7 +472,7 @@ contract RigoblockV3Pool is Owned, ReentrancyGuard, IRigoblockV3Pool {
     }
 
     function _getUnitaryValue() private view returns (uint256) {
-        return poolData.unitaryValue != 0 ? poolData.unitaryValue : COINBASE_UNITARY_VALUE;
+        return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
     }
 
     function _isKycEnforced() private view returns (bool) {
