@@ -239,9 +239,9 @@ describe("Proxy", async () => {
 
         it('should revert with rogue values', async () => {
             const { pool } = await setupTests()
-            // TODO: check why it returns 500 when set to 0
-            //await pool.changeSpread(0)
-            //expect((await pool.getData()).spread).to.be.eq(0)
+            await expect(
+                pool.changeSpread(0)
+            ).to.be.revertedWith("POOL_SPREAD_NULL_ERROR")
             await expect(
                 pool.changeSpread(1001)
             ).to.be.revertedWith("POOL_SPREAD_TOO_HIGH_ERROR")
@@ -252,6 +252,33 @@ describe("Proxy", async () => {
             expect((await pool.getData()).spread).to.be.eq(500)
             await pool.changeSpread(100)
             expect((await pool.getData()).spread).to.be.eq(100)
+        })
+    })
+
+    describe("changeMinPeriod", async () => {
+        it('should revert if caller not pool owner', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.connect(user2).changeMinPeriod(1)
+            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+        })
+
+        it('should revert with rogue values', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.changeMinPeriod(1)
+            ).to.be.revertedWith("POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR")
+            // max 30 days lockup
+            await expect(
+                pool.changeMinPeriod(2592001)
+            ).to.be.revertedWith("POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR")
+        })
+
+        it('should change spread', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getAdminData()).minPeriod).to.be.eq(2)
+            await pool.changeMinPeriod(2592000)
+            expect((await pool.getAdminData()).minPeriod).to.be.eq(2592000)
         })
     })
 })
