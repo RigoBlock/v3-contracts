@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../immutable/MixinConstants.sol";
-import "../immutable/MixinImmutables.sol";
-import "../immutable/MixinStorage.sol";
+import "../actions/MixinOwnerActions.sol";
 
-abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorage {
+abstract contract MixinPoolState is MixinOwnerActions {
     /*
      * EXTERNAL VIEW METHODS
      */
@@ -77,7 +75,7 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
     /// @dev Decimals are initialized at proxy creation only if base token not null.
     /// @return Number of decimals.
     /// @notice We use this method to save gas on base currency pools.
-    function decimals() public view virtual override returns (uint8) {
+    function decimals() public view override returns (uint8) {
         return poolData.decimals != 0 ? poolData.decimals : _coinbaseDecimals;
     }
 
@@ -94,9 +92,15 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
     /*
      * INTERNAL VIEW METHODS
      */
-    function _getMinPeriod() internal view virtual returns (uint32);
+    function _getMinPeriod() internal view override returns (uint32) {
+        return poolData.minPeriod != 0 ? poolData.minPeriod : MIN_LOCKUP;
+    }
 
-    function _getSpread() internal view virtual returns (uint256);
+    function _getSpread() internal view override returns (uint256) {
+        return poolData.spread != 0 ? poolData.spread : INITIAL_SPREAD;
+    }
 
-    function _getUnitaryValue() internal view virtual returns (uint256);
+    function _getUnitaryValue() internal view override returns (uint256) {
+        return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
+    }
 }

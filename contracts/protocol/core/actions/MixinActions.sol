@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinOwnerActions.sol";
+import "../immutable/MixinConstants.sol";
+import "../immutable/MixinImmutables.sol";
+import "../immutable/MixinStorage.sol";
 import "../../interfaces/IKyc.sol";
 
-abstract contract MixinActions is MixinOwnerActions {
+abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage {
     /*
      * MODIFIERS
      */
@@ -76,24 +78,16 @@ abstract contract MixinActions is MixinOwnerActions {
         }
     }
 
-    function decimals() public view override returns (uint8) {
-        return poolData.decimals != 0 ? poolData.decimals : _coinbaseDecimals;
-    }
+    function decimals() public view virtual override returns (uint8);
 
     /*
      * INTERNAL METHODS
      */
-    function _getMinPeriod() internal view override returns (uint32) {
-        return poolData.minPeriod != 0 ? poolData.minPeriod : MIN_LOCKUP;
-    }
+    function _getMinPeriod() internal view virtual returns (uint32);
 
-    function _getSpread() internal view override returns (uint256) {
-        return poolData.spread != 0 ? poolData.spread : INITIAL_SPREAD;
-    }
+    function _getSpread() internal view virtual returns (uint256);
 
-    function _getUnitaryValue() internal view override returns (uint256) {
-        return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
-    }
+    function _getUnitaryValue() internal view virtual returns (uint256);
 
     /*
      * PRIVATE METHODS

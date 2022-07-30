@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../state/MixinPoolState.sol";
+import "./MixinActions.sol";
 import "../../interfaces/INavVerifier.sol";
 
-abstract contract MixinOwnerActions is MixinPoolState {
+abstract contract MixinOwnerActions is MixinActions {
     /// @dev We keep this check to prevent accidental failure in Nav calculations.
     modifier notPriceError(uint256 _newUnitaryValue) {
         /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
