@@ -23,9 +23,6 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IAuthorityCore {
-    /*
-     * EVENTS
-     */
     event NewExtensionsAuthority(address indexed extensionsAuthority);
 
     event PermissionAdded(address indexed from, address indexed target, uint8 indexed permissionType);
@@ -36,9 +33,6 @@ interface IAuthorityCore {
 
     event WhitelistedMethod(address indexed from, address indexed adapter, bytes4 indexed selector);
 
-    /*
-     * STORAGE
-     */
     enum Role {ADAPTER, FACTORY, WHITELISTER}
 
     struct Permission {
@@ -49,9 +43,6 @@ interface IAuthorityCore {
     /// @return Address of the extensions authority.
     function extensionsAuthority() external view returns (address);
 
-    /*
-     * CORE FUNCTIONS
-     */
     /// @dev Allows a whitelister to whitelist a method.
     /// @param _selector Bytes4 hex of the method selector.
     /// @param _adapter Address of the adapter implementing the method.
@@ -83,9 +74,6 @@ interface IAuthorityCore {
     /// @notice Whitelister permission is required to approve methods in extensions adapter.
     function setWhitelister(address _whitelister, bool _isWhitelisted) external;
 
-    /*
-     * CONSTANT PUBLIC FUNCTIONS
-     */
     /// @dev Returns the address of the adapter associated to the signature.
     /// @param _selector Hex of the method signature.
     /// @return Address of the adapter.

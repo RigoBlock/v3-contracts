@@ -19,18 +19,21 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-/// @title Rigoblock V3 Pool Actions Interface - Allows interaction with the pool contract.
+/// @title Rigoblock V3 Pool Initializer Interface - Allows initializing a pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IRigoblockV3PoolActions {
-    /// @dev Allows a user to mint pool tokens on behalf of an address.
-    /// @param _recipient Address receiving the tokens.
-    /// @param _amountIn Amount of base tokens.
-    /// @return recipientAmount Number of tokens minted to recipient.
-    function mint(address _recipient, uint256 _amountIn) external payable returns (uint256);
-
-    /// @dev Allows a pool holder to burn pool tokens.
-    /// @param _amountIn Number of tokens to burn.
-    /// @return netRevenue Net amount of burnt pool tokens.
-    function burn(uint256 _amountIn) external returns (uint256); // netRevenue
+interface IRigoblockV3PoolInitializer {
+    /// @dev Initializes to pool storage.
+    /// @param _poolName String of the pool name.
+    /// @param _poolSymbol String of the pool symbol.
+    /// @param _baseToken Address of the base token.
+    /// @param _owner Address of the pool operator.
+    /// @notice Pool can only be initialized at creation, meaning this method cannot be
+    ///   called directly to implementation.
+    function _initializePool(
+        string calldata _poolName,
+        string calldata _poolSymbol,
+        address _baseToken,
+        address _owner
+    ) external;
 }
