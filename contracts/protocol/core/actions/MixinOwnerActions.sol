@@ -32,7 +32,7 @@ abstract contract MixinOwnerActions is MixinActions {
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeSpread(uint256 _newSpread) external override onlyOwner {
         // TODO: check what happens with value 0
-        require(_newSpread < MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
+        require(_newSpread <= MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
         poolData.spread = _newSpread;
         // TODO: should emit event
     }
