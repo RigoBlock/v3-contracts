@@ -27,8 +27,8 @@ pragma solidity >=0.8.0 <0.9.0;
 abstract contract MixinStorage is IStructs, Owned, ReentrancyGuard {
     mapping(address => Account) internal userAccount;
 
-    PoolData internal poolData;
     Admin internal admin;
+    PoolData internal poolData;
 
     // new variables must be assigned a dedicated storage position and queried from slot
 }

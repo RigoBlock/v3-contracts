@@ -15,6 +15,28 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
+    function getAdminData()
+        external
+        view
+        override
+        returns (
+            // TODO: check if should name returned poolOwner
+            address, //owner
+            address feeCollector,
+            uint256 transactionFee,
+            uint32 minPeriod
+        )
+    {
+        return (
+            owner,
+            // TODO: must return internal method
+            admin.feeCollector,
+            poolData.transactionFee,
+            _getMinPeriod()
+        );
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
     function getData()
         external
         view
@@ -34,28 +56,6 @@ abstract contract MixinPoolState is MixinOwnerActions {
             baseToken = admin.baseToken,
             _getUnitaryValue(),
             _getSpread()
-        );
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function getAdminData()
-        external
-        view
-        override
-        returns (
-            // TODO: check if should name returned poolOwner
-            address, //owner
-            address feeCollector,
-            uint256 transactionFee,
-            uint32 minPeriod
-        )
-    {
-        return (
-            owner,
-            // TODO: must return internal method
-            admin.feeCollector,
-            poolData.transactionFee,
-            _getMinPeriod()
         );
     }
 

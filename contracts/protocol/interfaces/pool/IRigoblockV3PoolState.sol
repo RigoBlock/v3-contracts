@@ -4,6 +4,21 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolState {
+    /// @dev Finds the administrative data of the pool.
+    /// @return Address of the owner.
+    /// @return feeCollector Address of the account where a user collects fees.
+    /// @return transactionFee Value of the transaction fee in basis points.
+    /// @return minPeriod Number of the minimum holding period for tokens.
+    function getAdminData()
+        external
+        view
+        returns (
+            address,
+            address feeCollector,
+            uint256 transactionFee,
+            uint32 minPeriod
+        );
+
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.
@@ -19,21 +34,6 @@ interface IRigoblockV3PoolState {
             address baseToken,
             uint256 unitaryValue,
             uint256 spread
-        );
-
-    /// @dev Finds the administrative data of the pool.
-    /// @return Address of the owner.
-    /// @return feeCollector Address of the account where a user collects fees.
-    /// @return transactionFee Value of the transaction fee in basis points.
-    /// @return minPeriod Number of the minimum holding period for tokens.
-    function getAdminData()
-        external
-        view
-        returns (
-            address,
-            address feeCollector,
-            uint256 transactionFee,
-            uint32 minPeriod
         );
 
     /// @dev Returns the address of the pools whitelists.

@@ -23,9 +23,6 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IPoolRegistry {
-    /*
-     * EVENTS
-     */
     event AuthorityChanged(address indexed athority);
 
     event MetaChanged(address indexed poolAddress, bytes32 indexed key, bytes32 value);
@@ -40,9 +37,6 @@ interface IPoolRegistry {
 
     event RigoblockDaoChanged(address indexed rigoblockDaoAddress);
 
-    /*
-     * STORAGE
-     */
     /// @dev Returns the address of the Rigoblock authority contract.
     /// @return Address of the authority contract.
     function authority() external view returns (address);
@@ -51,9 +45,6 @@ interface IPoolRegistry {
     /// @return Address of the Rigoblock Dao.
     function rigoblockDaoAddress() external view returns (address);
 
-    /*
-     * CORE FUNCTIONS
-     */
     /// @dev Allows a factory which is an authority to register a pool.
     /// @param _poolAddress Address of the pool.
     /// @param _name Name of the pool.
@@ -84,9 +75,6 @@ interface IPoolRegistry {
     /// @param _newRigoblockDao Address of the Rigoblock Dao.
     function setRigoblockDao(address _newRigoblockDao) external;
 
-    /*
-     * CONSTANT PUBLIC FUNCTIONS
-     */
     /// @dev Returns metadata for a given pool.
     /// @param _poolAddress Address of the pool.
     /// @param _key Bytes32 key.

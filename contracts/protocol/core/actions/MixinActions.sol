@@ -21,32 +21,8 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     }
 
     /*
-     * PUBLIC METHODS
+     * EXTERNAL METHODS
      */
-    /// @inheritdoc IRigoblockV3PoolActions
-    function mint(address _recipient, uint256 _amountIn) public payable override returns (uint256 recipientAmount) {
-        // require whitelisted user if kyc is enforced
-        if (_isKycEnforced()) {
-            require(IKyc(admin.kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
-        }
-
-        _assertBiggerThanMinimum(_amountIn);
-
-        if (admin.baseToken == address(0)) {
-            require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
-        } else {
-            _safeTransferFrom(msg.sender, address(this), _amountIn);
-        }
-
-        uint256 markup = (_amountIn * _getSpread()) / SPREAD_BASE;
-        _amountIn -= markup;
-        uint256 mintedAmount = (_amountIn * 10**decimals()) / _getUnitaryValue();
-        poolData.totalSupply += mintedAmount;
-
-        /// @notice allocate pool token transfers and log events.
-        recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
-    }
-
     /// @inheritdoc IRigoblockV3PoolActions
     function burn(uint256 _amountIn)
         external
@@ -73,6 +49,33 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         }
     }
 
+    /// @inheritdoc IRigoblockV3PoolActions
+    function mint(address _recipient, uint256 _amountIn) public payable override returns (uint256 recipientAmount) {
+        // require whitelisted user if kyc is enforced
+        if (_isKycEnforced()) {
+            require(IKyc(admin.kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
+        }
+
+        _assertBiggerThanMinimum(_amountIn);
+
+        if (admin.baseToken == address(0)) {
+            require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
+        } else {
+            _safeTransferFrom(msg.sender, address(this), _amountIn);
+        }
+
+        uint256 markup = (_amountIn * _getSpread()) / SPREAD_BASE;
+        _amountIn -= markup;
+        uint256 mintedAmount = (_amountIn * 10**decimals()) / _getUnitaryValue();
+        poolData.totalSupply += mintedAmount;
+
+        /// @notice allocate pool token transfers and log events.
+        recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
+    }
+
+    /*
+     * PUBLIC METHODS
+     */
     function decimals() public view virtual override returns (uint8);
 
     /*

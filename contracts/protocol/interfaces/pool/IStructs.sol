@@ -27,6 +27,12 @@ interface IStructs {
         uint32 activation;
     }
 
+    struct Admin {
+        address feeCollector;
+        address kycProvider;
+        address baseToken; // TODO: check where best to store
+    }
+
     struct PoolData {
         string name;
         string symbol;
@@ -37,11 +43,5 @@ interface IStructs {
         uint256 transactionFee; // in basis points 1 = 0.01%
         uint32 minPeriod;
         uint8 decimals;
-    }
-
-    struct Admin {
-        address feeCollector;
-        address kycProvider;
-        address baseToken; // TODO: check where best to store
     }
 }
