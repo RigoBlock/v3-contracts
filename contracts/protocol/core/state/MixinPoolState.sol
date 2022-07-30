@@ -95,7 +95,7 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
     /// @dev Decimals are initialized at proxy creation only if base token not null.
     /// @return Number of decimals.
     /// @notice We use this method to save gas on base currency pools.
-    function decimals() public view override virtual returns (uint8) {
+    function decimals() public view virtual override returns (uint8) {
         return poolData.decimals != 0 ? poolData.decimals : _coinbaseDecimals;
     }
 
