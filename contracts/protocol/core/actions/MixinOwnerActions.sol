@@ -74,9 +74,7 @@ abstract contract MixinOwnerActions is MixinPoolState {
         // TODO: should emit event
     }
 
-    function _getUnitaryValue() internal view virtual override returns (uint256) {
-        return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
-    }
+    function _getUnitaryValue() internal view virtual override returns (uint256);
 
     /// @dev Verifies that a signature is valid.
     /// @param _unitaryValue Value of 1 token in wei units.

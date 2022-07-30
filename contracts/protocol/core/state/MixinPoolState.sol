@@ -16,13 +16,7 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
         return userAccount[_who].balance;
     }
 
-    /// @dev Finds details of this pool.
-    /// @return poolName String name of this pool.
-    /// @return poolSymbol String symbol of this pool.
-    /// @return baseToken Address of base token (0 for coinbase).
-    /// @return unitaryValue Value of the token in wei unit.
-    /// @return spread Value of the spread from unitary value.
-    // TODO: can inheritdoc only if implemented in subcontract
+    /// @inheritdoc IRigoblockV3PoolState
     function getData()
         external
         view
@@ -45,11 +39,7 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
         );
     }
 
-    /// @dev Finds the administrative data of the pool.
-    /// @return Address of the owner.
-    /// @return feeCollector Address of the account where a user collects fees.
-    /// @return transactionFee Value of the transaction fee in basis points.
-    /// @return minPeriod Number of the minimum holding period for tokens.
+    /// @inheritdoc IRigoblockV3PoolState
     function getAdminData()
         external
         view
@@ -71,12 +61,12 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
         );
     }
 
+    /// @inheritdoc IRigoblockV3PoolState
     function getKycProvider() external view override returns (address kycProviderAddress) {
         return kycProviderAddress = admin.kycProvider;
     }
 
-    /// @dev Returns the total amount of issued tokens for this pool.
-    /// @return Number of tokens.
+    /// @inheritdoc IRigoblockV3PoolState
     function totalSupply() external view override returns (uint256) {
         return poolData.totalSupply;
     }
@@ -84,14 +74,6 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
     /*
      * PUBLIC VIEW METHODS
      */
-    function name() public view override returns (string memory) {
-        return poolData.name;
-    }
-
-    function symbol() public view override returns (string memory) {
-        return poolData.symbol;
-    }
-
     /// @dev Decimals are initialized at proxy creation only if base token not null.
     /// @return Number of decimals.
     /// @notice We use this method to save gas on base currency pools.
@@ -99,18 +81,22 @@ abstract contract MixinPoolState is MixinConstants, MixinImmutables, MixinStorag
         return poolData.decimals != 0 ? poolData.decimals : _coinbaseDecimals;
     }
 
+    /// @inheritdoc IRigoblockV3PoolImmutable
+    function name() public view override returns (string memory) {
+        return poolData.name;
+    }
+
+    /// @inheritdoc IRigoblockV3PoolImmutable
+    function symbol() public view override returns (string memory) {
+        return poolData.symbol;
+    }
+
     /*
      * INTERNAL VIEW METHODS
      */
-    function _getMinPeriod() internal view virtual returns (uint32) {
-        return poolData.minPeriod != 0 ? poolData.minPeriod : MIN_LOCKUP;
-    }
+    function _getMinPeriod() internal view virtual returns (uint32);
 
-    function _getSpread() internal view virtual returns (uint256) {
-        return poolData.spread != 0 ? poolData.spread : INITIAL_SPREAD;
-    }
+    function _getSpread() internal view virtual returns (uint256);
 
-    function _getUnitaryValue() internal view virtual returns (uint256) {
-        return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
-    }
+    function _getUnitaryValue() internal view virtual returns (uint256);
 }
