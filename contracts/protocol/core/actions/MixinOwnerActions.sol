@@ -39,6 +39,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setKycProvider(address _kycProvider) external override onlyOwner {
+        require(_isContract(_kycProvider), "POOL_INPUT_NOT_CONTRACT_ERROR");
         admin.kycProvider = _kycProvider;
         // TODO: should emit event
     }
@@ -69,6 +70,14 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     function _getUnitaryValue() internal view virtual override returns (uint256);
+
+    function _isContract(address _target) private view returns (bool) {
+        uint256 size;
+        assembly {
+            size := extcodesize(_target)
+        }
+        return size > 0;
+    }
 
     /// @dev Verifies that a signature is valid.
     /// @param _unitaryValue Value of 1 token in wei units.
