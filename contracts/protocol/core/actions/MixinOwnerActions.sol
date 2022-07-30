@@ -32,6 +32,7 @@ abstract contract MixinOwnerActions is MixinActions {
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeSpread(uint256 _newSpread) external override onlyOwner {
         // TODO: check what happens with value 0
+        require(_newSpread > 0, "POOL_SPREAD_NULL_ERROR");
         require(_newSpread <= MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
         poolData.spread = _newSpread;
         // TODO: should emit event
@@ -60,6 +61,7 @@ abstract contract MixinOwnerActions is MixinActions {
     ) external override onlyOwner notPriceError(_unitaryValue) {
         /// @notice Value can be updated only after first mint.
         // TODO: fix tests to apply following
+        // we require positive value as would return to default value if storage cleared
         //require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
         require(
             _isValidNav(INavVerifier(address(this)), _unitaryValue, _signaturevaliduntilBlock, _hash, _signedData),
