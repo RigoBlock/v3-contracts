@@ -40,6 +40,4 @@ interface IRigoblockV3Pool is
     IRigoblockV3PoolActions,
     IRigoblockV3PoolOwnerActions,
     IRigoblockV3PoolState
-{
-
-}
+{}

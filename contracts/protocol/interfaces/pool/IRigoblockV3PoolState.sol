@@ -21,6 +21,11 @@ interface IRigoblockV3PoolState {
             uint256 spread
         );
 
+    /// @dev Finds the administrative data of the pool.
+    /// @return Address of the owner.
+    /// @return feeCollector Address of the account where a user collects fees.
+    /// @return transactionFee Value of the transaction fee in basis points.
+    /// @return minPeriod Number of the minimum holding period for tokens.
     function getAdminData()
         external
         view
@@ -31,7 +36,11 @@ interface IRigoblockV3PoolState {
             uint32 minPeriod
         );
 
+    /// @dev Returns the address of the pools whitelists.
+    /// @return Address of the provider contract.
     function getKycProvider() external view returns (address);
 
+    /// @dev Returns the total amount of issued tokens for this pool.
+    /// @return Number of tokens.
     function totalSupply() external view returns (uint256);
 }
