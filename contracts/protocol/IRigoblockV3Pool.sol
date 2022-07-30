@@ -34,12 +34,12 @@ import "./interfaces/pool/IRigoblockV3PoolState.sol";
 interface IRigoblockV3Pool is
     IERC20,
     IRigoblockV3PoolImmutable,
-    IRigoblockV3PoolState,
+    IRigoblockV3PoolEvents,
     IRigoblockV3PoolFallback,
     IRigoblockV3PoolInitializer,
     IRigoblockV3PoolActions,
     IRigoblockV3PoolOwnerActions,
-    IRigoblockV3PoolEvents
+    IRigoblockV3PoolState
 {
 
 }
