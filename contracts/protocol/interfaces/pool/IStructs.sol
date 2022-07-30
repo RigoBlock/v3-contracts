@@ -19,6 +19,8 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+/// @title IStructs - Pool struct variables.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IStructs {
     struct Account {
         uint256 balance;

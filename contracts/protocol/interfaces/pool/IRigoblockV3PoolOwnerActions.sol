@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
+/// @title Rigoblock V3 Pool Owner Actions Interface - Interface of the owner methods.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolOwnerActions {
     function setUnitaryValue(
         uint256 _unitaryValue,

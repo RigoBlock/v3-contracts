@@ -19,7 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-/// @title Rigoblock V3 Pool Interface - Allows interaction with the pool contract.
+/// @title Rigoblock V3 Pool Actions Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockV3PoolActions {
