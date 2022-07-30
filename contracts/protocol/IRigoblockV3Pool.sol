@@ -20,12 +20,13 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./interfaces/IERC20.sol";
-import "./interfaces/pool/IRigoblockV3PoolImmutable.sol";
-import "./interfaces/pool/IRigoblockV3PoolState.sol";
-import "./interfaces/pool/IRigoblockV3PoolFallback.sol";
 import "./interfaces/pool/IRigoblockV3PoolActions.sol";
-import "./interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
 import "./interfaces/pool/IRigoblockV3PoolEvents.sol";
+import "./interfaces/pool/IRigoblockV3PoolFallback.sol";
+import "./interfaces/pool/IRigoblockV3PoolImmutable.sol";
+import "./interfaces/pool/IRigoblockV3PoolInitializer.sol";
+import "./interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
+import "./interfaces/pool/IRigoblockV3PoolState.sol";
 
 /// @title Rigoblock V3 Pool Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -35,6 +36,7 @@ interface IRigoblockV3Pool is
     IRigoblockV3PoolImmutable,
     IRigoblockV3PoolState,
     IRigoblockV3PoolFallback,
+    IRigoblockV3PoolInitializer,
     IRigoblockV3PoolActions,
     IRigoblockV3PoolOwnerActions,
     IRigoblockV3PoolEvents

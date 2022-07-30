@@ -26,13 +26,6 @@ interface IRigoblockV3PoolActions {
     /*
      * CORE FUNCTIONS
      */
-    function _initializePool(
-        string calldata _poolName,
-        string calldata _poolSymbol,
-        address _baseToken,
-        address _owner
-    ) external;
-
     function mint(address _recipient, uint256 _amountIn) external payable returns (uint256);
 
     function burn(uint256 _amount) external returns (uint256); // netRevenue
