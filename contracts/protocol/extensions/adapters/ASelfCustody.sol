@@ -52,6 +52,7 @@ contract ASelfCustody is IASelfCustody {
     ) external override returns (uint256 shortfall) {
         // we prevent direct calls to this extension
         assert(aSelfCustody != address(this));
+        require(!_isContract(selfCustodyAccount), "ASELFCUSTODY_TARGET_IS_CONTRACT_ERROR");
         require(amount != 0, "ASELFCUSTODY_NULL_AMOUNT_ERROR");
         shortfall = poolGrgShortfall(address(this));
 
@@ -82,6 +83,14 @@ contract ASelfCustody is IASelfCustody {
         } else {
             return MINIMUM_GRG_STAKE - poolStake;
         } // unchecked
+    }
+
+    function _isContract(address _target) private view returns (bool) {
+        uint256 size;
+        assembly {
+            size := extcodesize(_target)
+        }
+        return size > 0;
     }
 
     /// @dev executes a safe transfer to any ERC20 token

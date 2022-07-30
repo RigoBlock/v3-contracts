@@ -193,4 +193,92 @@ describe("Proxy", async () => {
             )
         })
     })
+
+    describe("setKycProvider", async () => {
+        it('should revert if caller not pool owner', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.connect(user2).setKycProvider(user2.address)
+            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+        })
+
+        it('should set pool kyc provider', async () => {
+            const { pool } = await setupTests()
+            expect(await pool.getKycProvider()).to.be.eq(AddressZero)
+            await expect(pool.setKycProvider(user2.address)).to.be.revertedWith("POOL_INPUT_NOT_CONTRACT_ERROR")
+            await pool.setKycProvider(pool.address)
+            expect(await pool.getKycProvider()).to.be.eq(pool.address)
+        })
+    })
+
+    describe("changeFeeCollector", async () => {
+        it('should revert if caller not pool owner', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.connect(user2).changeFeeCollector(user2.address)
+            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+        })
+
+        it('should set fee collector', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getAdminData()).feeCollector).to.be.eq(AddressZero)
+            await expect(
+                pool.changeFeeCollector(user2.address)
+            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
+            expect((await pool.getAdminData()).feeCollector).to.be.eq(user2.address)
+        })
+    })
+
+    describe("changeSpread", async () => {
+        it('should revert if caller not pool owner', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.connect(user2).changeSpread(1)
+            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+        })
+
+        it('should revert with rogue values', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.changeSpread(0)
+            ).to.be.revertedWith("POOL_SPREAD_NULL_ERROR")
+            await expect(
+                pool.changeSpread(1001)
+            ).to.be.revertedWith("POOL_SPREAD_TOO_HIGH_ERROR")
+        })
+
+        it('should change spread', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getData()).spread).to.be.eq(500)
+            await pool.changeSpread(100)
+            expect((await pool.getData()).spread).to.be.eq(100)
+        })
+    })
+
+    describe("changeMinPeriod", async () => {
+        it('should revert if caller not pool owner', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.connect(user2).changeMinPeriod(1)
+            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+        })
+
+        it('should revert with rogue values', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.changeMinPeriod(1)
+            ).to.be.revertedWith("POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR")
+            // max 30 days lockup
+            await expect(
+                pool.changeMinPeriod(2592001)
+            ).to.be.revertedWith("POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR")
+        })
+
+        it('should change spread', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getAdminData()).minPeriod).to.be.eq(2)
+            await pool.changeMinPeriod(2592000)
+            expect((await pool.getAdminData()).minPeriod).to.be.eq(2592000)
+        })
+    })
 })

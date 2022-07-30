@@ -113,10 +113,19 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, tokenAmountIn)
             expect(await pool.totalSupply()).to.be.not.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(userTokens)
+            const biggerthanBalance = parseEther("1.1")
             let userPoolBalance = await pool.balanceOf(user1.address)
             await expect(
                 pool.burn(userPoolBalance)
             ).to.be.revertedWith("POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR")
+            // following condition is true with spread > 0
+            // TODO: check why this test fails when placed before previous one
+            await expect(
+                pool.burn(tokenAmountIn)
+            ).to.be.revertedWith("POOL_BURN_NOT_ENOUGH_ERROR")
+            await expect(
+                pool.burn(0)
+            ).to.be.revertedWith("POOL_BURN_NULL_AMOUNT_ERROR")
             // we do not mine as want to check transaction does not happen in same block
             await timeTravel({ seconds: 1, mine: true })
             const netRevenue = await pool.callStatic.burn(userPoolBalance)
