@@ -20,9 +20,9 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./interfaces/IERC20.sol";
-import "./interfaces/pool/IRigoblockV3PoolFallback.sol";
 import "./interfaces/pool/IRigoblockV3PoolImmutable.sol";
 import "./interfaces/pool/IRigoblockV3PoolState.sol";
+import "./interfaces/pool/IRigoblockV3PoolFallback.sol";
 import "./interfaces/pool/IRigoblockV3PoolActions.sol";
 import "./interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
 import "./interfaces/pool/IRigoblockV3PoolEvents.sol";
@@ -32,12 +32,12 @@ import "./interfaces/pool/IRigoblockV3PoolEvents.sol";
 // solhint-disable-next-line
 interface IRigoblockV3Pool is
     IERC20,
-    IRigoblockV3PoolFallback,
     IRigoblockV3PoolImmutable,
     IRigoblockV3PoolState,
+    IRigoblockV3PoolFallback,
     IRigoblockV3PoolActions,
     IRigoblockV3PoolOwnerActions,
     IRigoblockV3PoolEvents
 {
-    receive() external payable;
+
 }

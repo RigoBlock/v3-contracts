@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../actions/MixinOwnerActions.sol";
+//import "../actions/MixinActions.sol";
+import "../immutable/MixinImmutables.sol";
+import "../immutable/MixinStorage.sol";
 import "../../interfaces/IAuthorityCore.sol";
 
-abstract contract MixinFallback is MixinOwnerActions {
+abstract contract MixinFallback is MixinImmutables, MixinStorage {
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
         _checkDelegateCall();

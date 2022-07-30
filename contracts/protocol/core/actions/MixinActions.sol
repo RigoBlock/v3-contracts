@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../state/MixinPoolState.sol";
+import "./MixinOwnerActions.sol";
 import "../../interfaces/IKyc.sol";
 
-abstract contract MixinUserActions is MixinPoolState {
+abstract contract MixinActions is MixinOwnerActions {
     /*
      * MODIFIERS
      */
@@ -91,7 +91,7 @@ abstract contract MixinUserActions is MixinPoolState {
         return poolData.spread != 0 ? poolData.spread : INITIAL_SPREAD;
     }
 
-    function _getUnitaryValue() internal view virtual override returns (uint256) {
+    function _getUnitaryValue() internal view override returns (uint256) {
         return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
     }
 

@@ -20,18 +20,22 @@
 pragma solidity 0.8.14;
 
 import "./IRigoblockV3Pool.sol";
+import "./core/actions/MixinActions.sol";
+import "./core/immutable/MixinStorage.sol";
 import "./core/sys/MixinAbstract.sol";
-import "./core/sys/MixinFallback.sol";
 import "./core/sys/MixinInitializer.sol";
+import "./core/sys/MixinFallback.sol";
 
 /// @title RigoblockV3Pool - A set of rules for Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract RigoblockV3Pool is
     IRigoblockV3Pool,
-    MixinAbstract,
+    MixinStorage,
     MixinFallback,
-    MixinInitializer
+    MixinInitializer,
+    MixinActions,
+    MixinAbstract
 {
     /// @notice Owner is initialized to 0 to lock owner actions in this implementation.
     /// @notice Kyc provider set as will effectively lock direct mint/burn actions.
