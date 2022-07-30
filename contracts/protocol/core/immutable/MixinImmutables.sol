@@ -22,19 +22,20 @@ pragma solidity >=0.8.0 <0.9.0;
 import "../../IRigoblockV3Pool.sol";
 
 abstract contract MixinImmutables is IRigoblockV3Pool {
+    // TODO: should fix how authority and owned are imported (interface methods imported but not declared in pool interfaces)
+    address public immutable override authority;
+
+    // EIP1967 standard, must be immutable to be compile-time constant.
+    address internal immutable _implementation;
+
+    uint256 internal immutable _coinbaseUnitaryValue;
+
+    uint8 internal immutable _coinbaseDecimals;
+
     constructor(address _authority) {
         authority = _authority;
         _coinbaseDecimals = 18;
         _coinbaseUnitaryValue = 1 * 10**_coinbaseDecimals;
         _implementation = address(this);
     }
-
-    address public immutable override authority;
-
-    // EIP1967 standard, must be immutable to be compile-time constant.
-    address internal immutable _implementation;
-
-    uint8 internal immutable _coinbaseDecimals;
-
-    uint256 internal immutable _coinbaseUnitaryValue;
 }

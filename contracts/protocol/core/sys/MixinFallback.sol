@@ -46,9 +46,6 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     // prevent accidental transfer to implementation
     receive() external payable onlyDelegateCall {}
 
-    /*
-     * PRIVATE METHODS
-     */
     function _checkDelegateCall() private view {
         require(address(this) != _implementation, "POOL_IMPLEMENTATION_DIRECT_CALL_NOT_ALLOWED_ERROR");
     }

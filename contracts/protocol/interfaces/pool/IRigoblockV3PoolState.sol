@@ -4,9 +4,6 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolState {
-    /*
-     * VIEW METHODS
-     */
     /// @dev Finds details of this pool.
     /// @return poolName String name of this pool.
     /// @return poolSymbol String symbol of this pool.

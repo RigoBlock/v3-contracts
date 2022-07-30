@@ -23,9 +23,6 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockV3PoolInitializer {
-    /*
-     * CORE FUNCTIONS
-     */
     function _initializePool(
         string calldata _poolName,
         string calldata _poolSymbol,
