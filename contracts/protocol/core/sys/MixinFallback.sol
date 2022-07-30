@@ -13,8 +13,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
         _;
     }
 
-    /// @dev Delegate calls to extension.
-    // restricting delegatecall to owner effectively locks direct calls
+    /// @inheritdoc IRigoblockV3PoolFallback
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
@@ -43,7 +42,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
         }
     }
 
-    // prevent accidental transfer to implementation
+    /// @inheritdoc IRigoblockV3PoolFallback
     receive() external payable onlyDelegateCall {}
 
     function _checkDelegateCall() private view {

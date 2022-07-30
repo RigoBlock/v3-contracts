@@ -23,10 +23,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     /*
      * PUBLIC METHODS
      */
-    /// @dev Allows a user to mint pool tokens on behalf of an address.
-    /// @param _recipient Address receiving the tokens.
-    /// @param _amountIn Amount of base tokens.
-    /// @return recipientAmount Number of tokens minted to recipient.
+    /// @inheritdoc IRigoblockV3PoolActions
     function mint(address _recipient, uint256 _amountIn) public payable override returns (uint256 recipientAmount) {
         // require whitelisted user if kyc is enforced
         if (_isKycEnforced()) {
@@ -50,9 +47,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
     }
 
-    /// @dev Allows a pool holder to burn pool tokens.
-    /// @param _amountIn Number of tokens to burn.
-    /// @return netRevenue Net amount of burnt pool tokens.
+    /// @inheritdoc IRigoblockV3PoolActions
     function burn(uint256 _amountIn)
         external
         override

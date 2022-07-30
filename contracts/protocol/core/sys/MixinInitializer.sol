@@ -18,8 +18,7 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         _;
     }
 
-    // pool can only be initialized at creation, meaning this method cannot be
-    //  called directly to implementation.
+    /// @inheritdoc IRigoblockV3PoolInitializer
     function _initializePool(
         string calldata _poolName,
         string calldata _poolSymbol,
@@ -29,8 +28,9 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         poolData.name = _poolName;
         poolData.symbol = _poolSymbol;
         owner = _owner;
-        /// we do not initialize unless values different from default ones
-        /// careful with new releases as default values must be returned unless poolData overwritten
+
+        // we do not initialize unless values different from default ones
+        // DANGER! Careful with new releases as default values must be returned unless poolData overwritten
         if (_baseToken != address(0)) {
             admin.baseToken = _baseToken;
             uint8 tokenDecimals = IERC20(_baseToken).decimals();

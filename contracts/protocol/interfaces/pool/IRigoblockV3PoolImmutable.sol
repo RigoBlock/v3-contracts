@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Rigoblock V3 Pool Immutable - Interface of the pool storage.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolImmutable {
+    /// @dev Returns the address of the authority contract.
     function authority() external view returns (address);
 
     /// @dev Returns a string of the pool name.

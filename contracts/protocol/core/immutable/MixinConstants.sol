@@ -22,6 +22,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import "../../IRigoblockV3Pool.sol";
 
 abstract contract MixinConstants is IRigoblockV3Pool {
+    /// @inheritdoc IRigoblockV3PoolImmutable
     string public constant override VERSION = "HF 3.1.0";
 
     // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
