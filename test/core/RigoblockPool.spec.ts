@@ -193,4 +193,14 @@ describe("Proxy", async () => {
             )
         })
     })
+
+    describe("setKycProvider", async () => {
+        it('should set pool kyc provider', async () => {
+            const { pool } = await setupTests()
+            expect(await pool.getKycProvider()).to.be.eq(AddressZero)
+            await expect(pool.setKycProvider(user2.address)).to.be.revertedWith("POOL_INPUT_NOT_CONTRACT_ERROR")
+            await pool.setKycProvider(pool.address)
+            expect(await pool.getKycProvider()).to.be.eq(pool.address)
+        })
+    })
 })
