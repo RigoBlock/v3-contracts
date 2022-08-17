@@ -41,6 +41,7 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
             }
         }
 
+        // TODO: check if should add indexed base token
         emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
     }
 }
