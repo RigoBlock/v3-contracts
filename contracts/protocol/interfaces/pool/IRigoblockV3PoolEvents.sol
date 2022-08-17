@@ -8,9 +8,10 @@ interface IRigoblockV3PoolEvents {
     /// @notice Emitted after new pool created.
     /// @param group Address of the factory.
     /// @param owner Address of the owner.
+    /// @param baseToken Address of the base token.
     /// @param name String name of the pool.
     /// @param symbol String symbol of the pool.
-    event PoolInitialized(address group, address indexed owner, string name, string symbol);
+    event PoolInitialized(address indexed group, address indexed owner, address indexed baseToken, string name, string symbol);
 
     /// @dev Logs update of NAV.
     /// @notice Emitted when pool operator updates NAV.
