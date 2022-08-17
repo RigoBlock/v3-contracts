@@ -41,6 +41,6 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
             }
         }
 
-        emit PoolInitialized(msg.sender, _owner, _poolName, _poolSymbol);
+        emit PoolInitialized(msg.sender, _owner, _baseToken, _poolName, _poolSymbol);
     }
 }

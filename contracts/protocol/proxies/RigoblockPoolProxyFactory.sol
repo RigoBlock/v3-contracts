@@ -105,7 +105,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
                 _baseToken,
                 msg.sender
             );
-        salt = keccak256(encodedInitialization);
+        salt = keccak256(abi.encode(_name, msg.sender));
         bytes memory deploymentData =
             abi.encodePacked(
                 type(RigoblockPoolProxy).creationCode, // bytecode
