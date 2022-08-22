@@ -1,3 +1,39 @@
+# [0.8.0](https://github.com/rigoblock/v3-contracts/compare/v0.7.0...v0.8.0) (2022-08-22)
+
+
+### Bug Fixes
+
+* add log indexed base token at pool initialization ([53afe47](https://github.com/rigoblock/v3-contracts/commit/53afe47b7d21f10cd8d92fe761d437d05dc38b5c))
+* add pool initializer interface to pool interface ([0cd5c68](https://github.com/rigoblock/v3-contracts/commit/0cd5c68d2a83a910d2c11b3408c278a07d5dc133))
+* add receive to interface and do nothing when eth received ([f0e2656](https://github.com/rigoblock/v3-contracts/commit/f0e26565ad5bd5c2203faf18b0e5dd5677cf1849))
+* allow spread up to 10% instead of < 10% ([e345a45](https://github.com/rigoblock/v3-contracts/commit/e345a45121ef9763dd481e845212ee49d4063b52))
+* fix typo in burn method plus get fee collector from internal method ([1454005](https://github.com/rigoblock/v3-contracts/commit/14540052e17c2dc2b57db6b937e3fa5cc006fd88))
+* fixed returned error message when failed transfer from pool ([f378fb7](https://github.com/rigoblock/v3-contracts/commit/f378fb76df8f176a9119f3433a5563e3a0c4d880))
+* hash name and owner address to produce salt ([7553ccc](https://github.com/rigoblock/v3-contracts/commit/7553cccbde8b7814a5907d2697d91f0322e7dc7d))
+* implement overrides in mixin pool state and virtual elsewhere ([e8dae35](https://github.com/rigoblock/v3-contracts/commit/e8dae35ab4c303df236f5845de607b9c157139e3))
+* make public 2 methods in pool (prev external) and remove TODO ([f9171c8](https://github.com/rigoblock/v3-contracts/commit/f9171c8d63145398671c46db6d912d3c2df3b1e6))
+* moved unused Atoken and AWeth to examples folder ([2486b46](https://github.com/rigoblock/v3-contracts/commit/2486b46a7e0de50b0bfe52e8b1dc5a010954d3b0))
+* renamed factory internal method _createPoolInternal to _createPool ([8332f9f](https://github.com/rigoblock/v3-contracts/commit/8332f9f5aade330e0be5e1030a7f6bf369cf4d56))
+* require kyc provider is contract ([6238e6f](https://github.com/rigoblock/v3-contracts/commit/6238e6f7eb771ca8879f30b7ef41ca0f252c4e4d))
+* require target not contract in self custody adapter ([c5322f9](https://github.com/rigoblock/v3-contracts/commit/c5322f9c49143f7bdcaebcb0d20c3cadb3706429))
+* return fee collector from internal method ([136c62f](https://github.com/rigoblock/v3-contracts/commit/136c62f1819fe6dba4981ecf792abd47f5c0b1d0))
+* returned variable naming ([4e1058a](https://github.com/rigoblock/v3-contracts/commit/4e1058ad5bc46750a82ff7116208cb8162e31c9f))
+* revert if spread set to 0 ([97ae7f3](https://github.com/rigoblock/v3-contracts/commit/97ae7f3d19e538f788002a6cde64d7949e7c3e59))
+* update order of subcontracts import and declare storage import ([8a647b3](https://github.com/rigoblock/v3-contracts/commit/8a647b3430cddbdde9c48b8e647f5f5d1a113617))
+* update pool subcontracts interfaces correctly ([6410220](https://github.com/rigoblock/v3-contracts/commit/6410220ddad288851289fe693ab72ef96347e438))
+
+
+### Features
+
+* added self custody adapter interface ([463b293](https://github.com/rigoblock/v3-contracts/commit/463b29339487320e2cd8969c469ce9dc5096009f))
+* complete migration of pool methods to subcontracts ([cb9294d](https://github.com/rigoblock/v3-contracts/commit/cb9294d0ee957c244d04437d0edd32c84fce6fcb))
+* move owner actions to dedicated subcontract ([4c12833](https://github.com/rigoblock/v3-contracts/commit/4c12833a6d6af318d155ccafbe728a9277d3bc0a))
+* move storage and init constants to subcontracts ([8fdf8bf](https://github.com/rigoblock/v3-contracts/commit/8fdf8bfd7f4f749b9adac6050ff2eb4ceedd798e))
+* move user actions to abstract subcontract ([8df8451](https://github.com/rigoblock/v3-contracts/commit/8df845111a07e85721de5b3e7f1de36b776d8c76))
+* simplify self custody and require minimum delegated GRG stake ([0746a27](https://github.com/rigoblock/v3-contracts/commit/0746a27dc1f7ea676356e87347d1f4e782995c3d))
+
+
+
 # [0.7.0](https://github.com/rigoblock/v3-contracts/compare/v0.6.0...v0.7.0) (2022-07-27)
 
 
@@ -120,36 +156,6 @@
 * remove allowance after op without clearing storage ([84a9a52](https://github.com/rigoblock/v3-contracts/commit/84a9a52c594dc72fbab171621d8c3be2dc81a92f))
 * remove dao intervention in pool ([1d2ec9c](https://github.com/rigoblock/v3-contracts/commit/1d2ec9c6b9f0b8cf1c51ab4c3e9e59fe9dd09149))
 * remove unused authority references from proxy factory ([58b27df](https://github.com/rigoblock/v3-contracts/commit/58b27dfcf6ac461af2ea9364155ebc145cafeb1d))
-
-
-
-# [0.3.0](https://github.com/rigoblock/v3-contracts/compare/v0.2.2...v0.3.0) (2022-07-09)
-
-
-### Bug Fixes
-
-* add overrides in registry ([7f4c322](https://github.com/rigoblock/v3-contracts/commit/7f4c32236ff7486b1892e0297a9ba794beb84f78))
-* add return errors in registry ([fa0b21b](https://github.com/rigoblock/v3-contracts/commit/fa0b21b5985fb096b8d47061b171b8b32c6f7b37))
-* added missing return method poolIdByRbPoolAccount in IStorage ([b1d0ebd](https://github.com/rigoblock/v3-contracts/commit/b1d0ebdce4bd2bcc14bb49251636429d225e6147))
-* factory library creation address check ([a6f9b6e](https://github.com/rigoblock/v3-contracts/commit/a6f9b6e51a8a0406158a73690e64a9a0d3aca635))
-* factory pool creation partial rewrite and optimizations ([905a99a](https://github.com/rigoblock/v3-contracts/commit/905a99a20ba31f11e1df53e2a64a712c1833e088))
-* factory tests ([6268a9c](https://github.com/rigoblock/v3-contracts/commit/6268a9ce58881909f8c64551cd07007511bc24ba))
-* optimize pool creation by not passing duplicate owner address ([b62b0e0](https://github.com/rigoblock/v3-contracts/commit/b62b0e099bb1ffe91776634bbc1647d036be162c))
-* pool factory interface linting and renaming drago to pool ([ca7d2bd](https://github.com/rigoblock/v3-contracts/commit/ca7d2bdccc04922d03056f0394e6ce7558af3032))
-* pool registry linting and sanitize assertions ([2332054](https://github.com/rigoblock/v3-contracts/commit/2332054a6e42160d79fe73fdccc37fc72333a10f))
-* pool registry optimizations plus drago to pool renaming ([32e4748](https://github.com/rigoblock/v3-contracts/commit/32e4748dde3c24d379844ced344b43eed98659da))
-* reduce use of assembly in proxy fallback and add commented methods ([96f8c87](https://github.com/rigoblock/v3-contracts/commit/96f8c87c97dfa6086a449dd1f296bbbcb3eea07e))
-* sanitize registry name and symbol outside of modifiers  ([92a3152](https://github.com/rigoblock/v3-contracts/commit/92a3152c5052485668f84a9e427d2849b5344528))
-* save new pool address in storage in factory library ([3a87397](https://github.com/rigoblock/v3-contracts/commit/3a87397081416e35d43f3d49c4e3f79aa6bece3f))
-
-
-### Features
-
-* add initial factory tests ([65e0301](https://github.com/rigoblock/v3-contracts/commit/65e030148368bcd86b3f033b4e285f672fa812b1))
-* added test contract to estimate pool proxy deploy gas consumption ([897faf5](https://github.com/rigoblock/v3-contracts/commit/897faf5a7097f2bdb7d48a7648ce072b6a373641))
-* pool registry refactoring ([6998d01](https://github.com/rigoblock/v3-contracts/commit/6998d012d531447d288f963e4480ad0dbe25a17c))
-* query registry from address instead of id and map from address ([544ca6b](https://github.com/rigoblock/v3-contracts/commit/544ca6bc8c2e10eaacae50ff71964f95ab695663))
-* refactory pop on pool locked stake instead of own assets ([c2df80b](https://github.com/rigoblock/v3-contracts/commit/c2df80b90277b48024869331562fb3356ccd427e))
 
 
 
