@@ -169,21 +169,20 @@ describe("Proxy", async () => {
             await timeTravel({ seconds: 2, mine: true })
             const transactionFee = 50
             await pool.setTransactionFee(transactionFee)
-            const userPoolBalance = await pool.balanceOf(user1.address)
+            let userPoolBalance = await pool.balanceOf(user1.address)
             await expect(
                 pool.burn(userPoolBalance.div(2))
             ).to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, userPoolBalance.div(2))
             const feeCollector = user3.address
             await pool.changeFeeCollector(feeCollector)
-            const burntAmount = await pool.callStatic.burn(userPoolBalance.div(2))
-            const fee = parseEther("0.00225625")
-            const netAmount = burntAmount.sub(fee)
-            // TODO: fix following assertion as args not correct
+            userPoolBalance = await pool.balanceOf(user1.address)
+            const fee = userPoolBalance.div(10000).mul(transactionFee)
+            const burntAmount = userPoolBalance.sub(fee)
             await expect(
-                pool.burn(userPoolBalance.div(2))
+                pool.burn(userPoolBalance)
             )
-                .to.emit(pool, "Transfer") //.withArgs(user1.address, feeCollector, fee)
-                //.and.to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, netAmount)
+                .to.emit(pool, "Transfer").withArgs(user1.address, feeCollector, fee)
+                .and.to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, burntAmount)
         })
     })
 
