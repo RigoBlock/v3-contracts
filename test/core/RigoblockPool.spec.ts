@@ -122,12 +122,19 @@ describe("Proxy", async () => {
             await pool.setTransactionFee(50)
             let feeCollector = (await pool.getAdminData()).feeCollector
             expect(await pool.owner()).to.be.eq(feeCollector)
-            const feeAmount = parseEther("0.995")
             // when fee collector is mint recipient, fee collector receives full amount
-            const mintedAmount = await pool.callStatic.mint(user1.address, etherAmount, { value: etherAmount })
+            let mintedAmount = await pool.callStatic.mint(user1.address, etherAmount, { value: etherAmount })
             await expect(
                 pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, mintedAmount)
+            // when fee collector not same as recipient, fee gets allocated to fee recipient
+            mintedAmount = await pool.callStatic.mint(user2.address, etherAmount,  { value: etherAmount })
+            // TODO: check as fee creates dilution
+            await expect(
+                pool.mint(user2.address, etherAmount,  { value: etherAmount })
+            )
+                .to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, parseEther("0.00475"))
+                .and.to.emit(pool, "Transfer").withArgs(AddressZero, user2.address, mintedAmount)
         })
     })
 
