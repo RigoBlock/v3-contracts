@@ -75,6 +75,9 @@ describe("BaseTokenProxy", async () => {
                 pool.mint(user1.address, dustAmount)
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
             const tokenAmountIn = parseEther("1")
+            await expect(
+                pool.mint(user1.address, tokenAmountIn)
+            ).to.be.revertedWith("POOL_TRANSFER_FROM_FAILED_ERROR")
             await grgToken.approve(pool.address, tokenAmountIn)
             expect(
                 await grgToken.allowance(user1.address, pool.address)
@@ -128,6 +131,19 @@ describe("BaseTokenProxy", async () => {
             ).to.be.revertedWith("POOL_BURN_NULL_AMOUNT_ERROR")
             // we do not mine as want to check transaction does not happen in same block
             await timeTravel({ seconds: 1, mine: true })
+            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
+            const AuthorityCoreInstance = await deployments.get("AuthorityCore")
+            const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
+            const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
+            const NavVerifierInstance = await deployments.get("NavVerifier")
+            //"9e4e93d0": "isValidNav(uint256,uint256,bytes32,bytes)"
+            await authority.addMethod("0x9e4e93d0", NavVerifierInstance.address)
+            // will not be able to send more owned tokens than pool balance
+            await pool.setUnitaryValue(parseEther("2"), 0, bytes32hash, bytes32hash)
+            await expect(
+                pool.burn(userPoolBalance)
+            ).to.be.revertedWith("POOL_TRANSFER_FAILED_ERROR")
+            await pool.setUnitaryValue(parseEther("1"), 0, bytes32hash, bytes32hash)
             const netRevenue = await pool.callStatic.burn(userPoolBalance)
             // the following is true with fee set as 0
             await expect(
