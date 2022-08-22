@@ -9,7 +9,7 @@ import { timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("Proxy", async () => {
-    const [ user1, user2 ] = waffle.provider.getWallets()
+    const [ user1, user2, user3 ] = waffle.provider.getWallets()
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -119,7 +119,8 @@ describe("Proxy", async () => {
         it('should allocate fee tokens to fee recipient', async () => {
             const { pool } = await setupTests()
             const etherAmount = parseEther("1")
-            await pool.setTransactionFee(50)
+            const transactionFee = 50
+            await pool.setTransactionFee(transactionFee)
             let feeCollector = (await pool.getAdminData()).feeCollector
             expect(await pool.owner()).to.be.eq(feeCollector)
             // when fee collector is mint recipient, fee collector receives full amount
@@ -128,13 +129,18 @@ describe("Proxy", async () => {
                 pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, mintedAmount)
             // when fee collector not same as recipient, fee gets allocated to fee recipient
+            const fee = mintedAmount.div(10000).mul(transactionFee)
             mintedAmount = await pool.callStatic.mint(user2.address, etherAmount,  { value: etherAmount })
-            // TODO: check as fee creates dilution
             await expect(
-                pool.mint(user2.address, etherAmount,  { value: etherAmount })
+                pool.mint(user2.address, etherAmount, { value: etherAmount })
             )
-                .to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, parseEther("0.00475"))
+                .to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, fee)
                 .and.to.emit(pool, "Transfer").withArgs(AddressZero, user2.address, mintedAmount)
+            await pool.changeFeeCollector(user3.address)
+            feeCollector = (await pool.getAdminData()).feeCollector
+            expect(feeCollector).to.be.eq(user3.address)
+            await pool.mint(user1.address, etherAmount, { value: etherAmount })
+            expect(await pool.balanceOf(user3.address)).to.be.eq(fee)
         })
     })
 
