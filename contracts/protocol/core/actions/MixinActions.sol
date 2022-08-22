@@ -35,12 +35,12 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
 
         /// @notice allocate pool token transfers and log events.
-        uint256 buntAmount = _allocateBurnTokens(_amountIn);
-        poolData.totalSupply -= buntAmount;
+        uint256 burntAmount = _allocateBurnTokens(_amountIn);
+        poolData.totalSupply -= burntAmount;
 
-        uint256 markup = (buntAmount * _getSpread()) / SPREAD_BASE;
-        buntAmount -= markup;
-        netRevenue = (buntAmount * _getUnitaryValue()) / 10**decimals();
+        uint256 markup = (burntAmount * _getSpread()) / SPREAD_BASE;
+        burntAmount -= markup;
+        netRevenue = (burntAmount * _getUnitaryValue()) / 10**decimals();
 
         if (admin.baseToken == address(0)) {
             payable(msg.sender).transfer(netRevenue);
@@ -127,27 +127,28 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
 
     /// @dev Destroys tokens of holder.
     /// @param _amountIn Value of tokens to be burnt.
-    /// @return buntAmount Number of net burnt tokens.
+    /// @return burntAmount Number of net burnt tokens.
     /// @notice Fee is paid in pool tokens.
-    function _allocateBurnTokens(uint256 _amountIn) private returns (uint256 buntAmount) {
+    function _allocateBurnTokens(uint256 _amountIn) private returns (uint256 burntAmount) {
         if (poolData.transactionFee != uint256(0)) {
-            address feeCollector = (admin.feeCollector != address(0) ? admin.feeCollector : owner);
+            address feeCollector = _getFeeCollector();
+
             if (msg.sender == feeCollector) {
-                buntAmount = _amountIn;
-                userAccount[msg.sender].balance -= buntAmount;
-                emit Transfer(msg.sender, address(0), buntAmount);
+                burntAmount = _amountIn;
+                userAccount[msg.sender].balance -= burntAmount;
+                emit Transfer(msg.sender, address(0), burntAmount);
             } else {
                 uint256 feePool = (_amountIn * poolData.transactionFee) / FEE_BASE;
-                buntAmount = _amountIn - feePool;
+                burntAmount = _amountIn - feePool;
                 userAccount[feeCollector].balance += feePool;
-                userAccount[msg.sender].balance -= buntAmount;
+                userAccount[msg.sender].balance -= burntAmount;
                 emit Transfer(msg.sender, feeCollector, feePool);
-                emit Transfer(msg.sender, address(0), buntAmount);
+                emit Transfer(msg.sender, address(0), burntAmount);
             }
         } else {
-            buntAmount = _amountIn;
-            userAccount[msg.sender].balance -= buntAmount;
-            emit Transfer(msg.sender, address(0), buntAmount);
+            burntAmount = _amountIn;
+            userAccount[msg.sender].balance -= burntAmount;
+            emit Transfer(msg.sender, address(0), burntAmount);
         }
     }
 
