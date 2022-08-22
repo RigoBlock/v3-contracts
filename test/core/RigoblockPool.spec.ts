@@ -5,7 +5,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
-import { timeTravel } from "../utils/utils";
+import { deployContract, timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("Proxy", async () => {
@@ -114,6 +114,28 @@ describe("Proxy", async () => {
             const etherAmount = parseEther("0.0001")
             await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
+        })
+
+        it('should revert if user not whitelisted when whitelist enabled', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            const source = `
+            contract Kyc {
+                mapping(address => bool) whitelisted;
+                function whitelistUser(address user) public { whitelisted[user] = true; }
+                function isWhitelistedUser(address user) public view returns (bool) { return whitelisted[user] == true; }
+            }`
+            const kyc = await deployContract(user1, source)
+            await pool.setKycProvider(kyc.address)
+            const recipient = user1.address
+            await expect(
+                pool.mint(recipient, etherAmount, { value: etherAmount })
+            ).to.be.revertedWith("POOL_CALLER_NOT_WHITELISTED_ERROR")
+            await kyc.whitelistUser(recipient)
+            const mintedAmount = await pool.callStatic.mint(recipient, etherAmount, { value: etherAmount })
+            await expect(
+                pool.mint(recipient, etherAmount, { value: etherAmount })
+            ).to.emit(pool, "Transfer").withArgs(AddressZero, recipient, mintedAmount)
         })
 
         it('should allocate fee tokens to fee recipient', async () => {
