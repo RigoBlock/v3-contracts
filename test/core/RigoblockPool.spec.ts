@@ -5,6 +5,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
+import { timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("Proxy", async () => {
@@ -113,6 +114,25 @@ describe("Proxy", async () => {
             const etherAmount = parseEther("0.0001")
             await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
+        })
+    })
+
+    describe("burn", async () => {
+        it('should burn tokens', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.mint(user1.address, etherAmount, { value: etherAmount })
+            const userPoolBalance = await pool.balanceOf(user1.address)
+            // TODO: should be able to burn after 1 second, just like with base token
+            await timeTravel({ seconds: 2, mine: true })
+            // the following is true with fee set as 0
+            await expect(
+                pool.burn(userPoolBalance)
+            ).to.emit(pool, "Transfer").withArgs(
+                user1.address,
+                AddressZero,
+                userPoolBalance
+            )
         })
     })
 
