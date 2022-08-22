@@ -115,6 +115,20 @@ describe("Proxy", async () => {
             await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
         })
+
+        it('should allocate fee tokens to fee recipient', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.setTransactionFee(50)
+            let feeCollector = (await pool.getAdminData()).feeCollector
+            expect(await pool.owner()).to.be.eq(feeCollector)
+            const feeAmount = parseEther("0.995")
+            // when fee collector is mint recipient, fee collector receives full amount
+            const mintedAmount = await pool.callStatic.mint(user1.address, etherAmount, { value: etherAmount })
+            await expect(
+                pool.mint(user1.address, etherAmount, { value: etherAmount })
+            ).to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, mintedAmount)
+        })
     })
 
     describe("burn", async () => {
@@ -244,7 +258,8 @@ describe("Proxy", async () => {
 
         it('should set fee collector', async () => {
             const { pool } = await setupTests()
-            expect((await pool.getAdminData()).feeCollector).to.be.eq(AddressZero)
+            // default fee collector is pool owner
+            expect((await pool.getAdminData()).feeCollector).to.be.eq(await pool.owner())
             await expect(
                 pool.changeFeeCollector(user2.address)
             ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
