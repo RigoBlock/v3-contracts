@@ -29,8 +29,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
     {
         return (
             owner,
-            // TODO: must return internal method
-            admin.feeCollector,
+            _getFeeCollector(),
             poolData.transactionFee,
             _getMinPeriod()
         );
@@ -92,6 +91,10 @@ abstract contract MixinPoolState is MixinOwnerActions {
     /*
      * INTERNAL VIEW METHODS
      */
+    function _getFeeCollector() internal view override returns (address) {
+        return admin.feeCollector != address(0) ? admin.feeCollector : owner;
+    }
+
     function _getMinPeriod() internal view override returns (uint32) {
         return poolData.minPeriod != 0 ? poolData.minPeriod : MIN_LOCKUP;
     }

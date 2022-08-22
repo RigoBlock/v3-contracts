@@ -51,7 +51,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         string calldata _symbol,
         address _baseToken
     ) external override returns (address newPoolAddress, bytes32 poolId) {
-        (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPoolInternal(_name, _symbol, _baseToken);
+        (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPool(_name, _symbol, _baseToken);
         newPoolAddress = address(proxy);
         poolId = newPoolId;
         try PoolRegistry(registryAddress).register(newPoolAddress, _name, _symbol, poolId) {
@@ -92,7 +92,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /// @param _name String of the name.
     /// @param _symbol String of the symbol.
     /// @param _baseToken Address of the base token.
-    function _createPoolInternal(
+    function _createPool(
         string calldata _name,
         string calldata _symbol,
         address _baseToken

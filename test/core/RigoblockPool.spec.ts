@@ -5,10 +5,11 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
+import { deployContract, timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("Proxy", async () => {
-    const [ user1, user2 ] = waffle.provider.getWallets()
+    const [ user1, user2, user3 ] = waffle.provider.getWallets()
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -91,6 +92,9 @@ describe("Proxy", async () => {
                   { value: etherAmount }
             )
             await expect(
+                pool.mint(user1.address, parseEther("2"), { value: etherAmount })
+            ).to.be.revertedWith("POOL_MINT_AMOUNTIN_ERROR")
+            await expect(
                 pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.emit(pool, "Transfer").withArgs(
                 AddressZero,
@@ -110,6 +114,97 @@ describe("Proxy", async () => {
             const etherAmount = parseEther("0.0001")
             await expect(pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
+        })
+
+        it('should revert if user not whitelisted when whitelist enabled', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            const source = `
+            contract Kyc {
+                mapping(address => bool) whitelisted;
+                function whitelistUser(address user) public { whitelisted[user] = true; }
+                function isWhitelistedUser(address user) public view returns (bool) { return whitelisted[user] == true; }
+            }`
+            const kyc = await deployContract(user1, source)
+            await pool.setKycProvider(kyc.address)
+            const recipient = user1.address
+            await expect(
+                pool.mint(recipient, etherAmount, { value: etherAmount })
+            ).to.be.revertedWith("POOL_CALLER_NOT_WHITELISTED_ERROR")
+            await kyc.whitelistUser(recipient)
+            const mintedAmount = await pool.callStatic.mint(recipient, etherAmount, { value: etherAmount })
+            await expect(
+                pool.mint(recipient, etherAmount, { value: etherAmount })
+            ).to.emit(pool, "Transfer").withArgs(AddressZero, recipient, mintedAmount)
+        })
+
+        it('should allocate fee tokens to fee recipient', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            const transactionFee = 50
+            await pool.setTransactionFee(transactionFee)
+            let feeCollector = (await pool.getAdminData()).feeCollector
+            expect(await pool.owner()).to.be.eq(feeCollector)
+            // when fee collector is mint recipient, fee collector receives full amount
+            let mintedAmount = await pool.callStatic.mint(user1.address, etherAmount, { value: etherAmount })
+            await expect(
+                pool.mint(user1.address, etherAmount, { value: etherAmount })
+            ).to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, mintedAmount)
+            // when fee collector not same as recipient, fee gets allocated to fee recipient
+            const fee = mintedAmount.div(10000).mul(transactionFee)
+            mintedAmount = await pool.callStatic.mint(user2.address, etherAmount,  { value: etherAmount })
+            await expect(
+                pool.mint(user2.address, etherAmount, { value: etherAmount })
+            )
+                .to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, fee)
+                .and.to.emit(pool, "Transfer").withArgs(AddressZero, user2.address, mintedAmount)
+            await pool.changeFeeCollector(user3.address)
+            feeCollector = (await pool.getAdminData()).feeCollector
+            expect(feeCollector).to.be.eq(user3.address)
+            await pool.mint(user1.address, etherAmount, { value: etherAmount })
+            expect(await pool.balanceOf(user3.address)).to.be.eq(fee)
+        })
+    })
+
+    describe("burn", async () => {
+        it('should burn tokens', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.mint(user1.address, etherAmount, { value: etherAmount })
+            const userPoolBalance = await pool.balanceOf(user1.address)
+            // TODO: should be able to burn after 1 second, just like with base token
+            await timeTravel({ seconds: 2, mine: true })
+            // the following is true with fee set as 0
+            await expect(
+                pool.burn(userPoolBalance)
+            ).to.emit(pool, "Transfer").withArgs(
+                user1.address,
+                AddressZero,
+                userPoolBalance
+            )
+        })
+
+        it('should allocate fee tokens to fee recipient', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.mint(user1.address, etherAmount, { value: etherAmount })
+            await timeTravel({ seconds: 2, mine: true })
+            const transactionFee = 50
+            await pool.setTransactionFee(transactionFee)
+            let userPoolBalance = await pool.balanceOf(user1.address)
+            await expect(
+                pool.burn(userPoolBalance.div(2))
+            ).to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, userPoolBalance.div(2))
+            const feeCollector = user3.address
+            await pool.changeFeeCollector(feeCollector)
+            userPoolBalance = await pool.balanceOf(user1.address)
+            const fee = userPoolBalance.div(10000).mul(transactionFee)
+            const burntAmount = userPoolBalance.sub(fee)
+            await expect(
+                pool.burn(userPoolBalance)
+            )
+                .to.emit(pool, "Transfer").withArgs(user1.address, feeCollector, fee)
+                .and.to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, burntAmount)
         })
     })
 
@@ -170,7 +265,7 @@ describe("Proxy", async () => {
                     newValue,
                     signaturevaliduntilBlock,
                     bytes32hash,
-                    bytes32hash
+                    bytesSignedData
                 )
             ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
 
@@ -184,7 +279,7 @@ describe("Proxy", async () => {
                     newValue,
                     signaturevaliduntilBlock,
                     bytes32hash,
-                    bytes32hash
+                    bytesSignedData
                 )
             ).to.emit(pool, "NewNav").withArgs(
                 user1.address,
@@ -221,7 +316,8 @@ describe("Proxy", async () => {
 
         it('should set fee collector', async () => {
             const { pool } = await setupTests()
-            expect((await pool.getAdminData()).feeCollector).to.be.eq(AddressZero)
+            // default fee collector is pool owner
+            expect((await pool.getAdminData()).feeCollector).to.be.eq(await pool.owner())
             await expect(
                 pool.changeFeeCollector(user2.address)
             ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
