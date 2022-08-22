@@ -91,6 +91,9 @@ describe("Proxy", async () => {
                   { value: etherAmount }
             )
             await expect(
+                pool.mint(user1.address, parseEther("2"), { value: etherAmount })
+            ).to.be.revertedWith("POOL_MINT_AMOUNTIN_ERROR")
+            await expect(
                 pool.mint(user1.address, etherAmount, { value: etherAmount })
             ).to.emit(pool, "Transfer").withArgs(
                 AddressZero,
@@ -170,7 +173,7 @@ describe("Proxy", async () => {
                     newValue,
                     signaturevaliduntilBlock,
                     bytes32hash,
-                    bytes32hash
+                    bytesSignedData
                 )
             ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
 
@@ -184,7 +187,7 @@ describe("Proxy", async () => {
                     newValue,
                     signaturevaliduntilBlock,
                     bytes32hash,
-                    bytes32hash
+                    bytesSignedData
                 )
             ).to.emit(pool, "NewNav").withArgs(
                 user1.address,
