@@ -81,6 +81,8 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     /*
      * INTERNAL METHODS
      */
+    function _getFeeCollector() internal view virtual returns (address);
+
     function _getMinPeriod() internal view virtual returns (uint32);
 
     function _getSpread() internal view virtual returns (uint256);
@@ -100,8 +102,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         unchecked {userAccount[_recipient].activation = uint32(block.timestamp) + _getMinPeriod();}
 
         if (poolData.transactionFee != uint256(0)) {
-            // TODO: test
-            address feeCollector = (admin.feeCollector != address(0) ? admin.feeCollector : owner);
+            address feeCollector = _getFeeCollector();
 
             if (feeCollector == _recipient) {
                 recipientAmount = _mintedAmount;
