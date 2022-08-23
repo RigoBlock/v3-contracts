@@ -33,8 +33,8 @@ contract AUniswapV3NPM {
 
     address payable private immutable WethAddress;
 
-    constructor(address _uniswap_npm) {
-        UNISWAP_V3_NPM_ADDRESS = payable(_uniswap_npm);
+    constructor(address _uniswapNpm) {
+        UNISWAP_V3_NPM_ADDRESS = payable(_uniswapNpm);
         WethAddress = payable(address(IWETH9(IPeripheryImmutableState(UNISWAP_V3_NPM_ADDRESS).WETH9())));
     }
     // TODO: check if methods must be payable since transaction executed in the pool context
