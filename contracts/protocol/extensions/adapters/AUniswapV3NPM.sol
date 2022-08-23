@@ -20,33 +20,12 @@
 // solhint-disable-next-line
 pragma solidity 0.8.14;
 
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/interfaces/IPeripheryPayments.sol";
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol";
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/interfaces/IPoolInitializer.sol";
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
-
+import "../../interfaces/IWETH9.sol";
 import "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 
-interface Token {
-    function approve(address _spender, uint256 _value) external returns (bool success);
-
-    function allowance(address _owner, address _spender) external view returns (uint256);
-
-    function balanceOf(address _who) external view returns (uint256);
-}
-
-/// @title Interface for WETH9
-interface IWETH9 {
-    /// @notice Deposit ether to get wrapped ether
-    function deposit() external payable;
-
-    /// @notice Withdraw wrapped ether to get ether
-    function withdraw(uint256) external;
-}
-
+// TODO: inherit from IAUniswapV3NPM + inheritdocs
 contract AUniswapV3NPM {
-    using Path for bytes;
-
+    // TODO: check npm address unchanged and check input in constructor.
     // immutable variables, initialized here it to facilitate etherscan verification
     // addresses are same on all networks
     // TODO: initialize in constructor
@@ -56,14 +35,26 @@ contract AUniswapV3NPM {
     // TODO: define as constant, add sig hash and comment explanation
     bytes4 private immutable APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
 
-    /// @notice Wraps ETH when value input is non-null
-    /// @param value The ETH amount to be wrapped
-    function wrapETH(uint256 value) external payable {
-        if (value > uint256(0)) {
-            IWETH9(IPeripheryImmutableState(UNISWAP_V3_NPM_ADDRESS).WETH9()).deposit{value: value}();
+    /// @notice Enables calling multiple methods in a single call to the contract
+    function multicall(bytes[] calldata data) public payable returns (bytes[] memory results) {
+        results = new bytes[](data.length);
+        for (uint256 i = 0; i < data.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
+
+            if (!success) {
+                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
+                if (result.length < 68) revert();
+                assembly {
+                    result := add(result, 0x04)
+                }
+                revert(abi.decode(result, (string)));
+            }
+
+            results[i] = result;
         }
     }
 
+    // TODO: check under what conditions we could add liquidity with eth and add wrap eth (will be wrapped in multicall before mint)
     /// @notice Creates a new position wrapped in a NFT
     /// @dev Call this when the pool does exist and is initialized. Note that if the pool is created but not initialized
     /// a method does not exist, i.e. the pool is assumed to be initialized.
@@ -73,7 +64,7 @@ contract AUniswapV3NPM {
     /// @return amount0 The amount of token0
     /// @return amount1 The amount of token1
     function mint(INonfungiblePositionManager.MintParams calldata params)
-        external
+        public
         payable
         returns (
             uint256 tokenId,
@@ -119,7 +110,7 @@ contract AUniswapV3NPM {
     /// @return amount0 The amount of token0 to acheive resulting liquidity
     /// @return amount1 The amount of token1 to acheive resulting liquidity
     function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
-        external
+        public
         payable
         returns (
             uint128 liquidity,
@@ -160,7 +151,7 @@ contract AUniswapV3NPM {
     /// @return amount0 The amount of token0 accounted to the position's tokens owed
     /// @return amount1 The amount of token1 accounted to the position's tokens owed
     function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
-        external
+        public
         payable
         returns (uint256 amount0, uint256 amount1)
     {
@@ -173,7 +164,7 @@ contract AUniswapV3NPM {
                 deadline: params.deadline
             })
         );
-        collectInternal(
+        collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: params.tokenId,
                 recipient: address(this), // this pool is always the recipient
@@ -184,7 +175,7 @@ contract AUniswapV3NPM {
         (, , , , , , , uint128 liquidity, , , , ) =
             INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).positions(params.tokenId);
         if (liquidity == uint128(0)) {
-            burnInternal(params.tokenId);
+            burn(params.tokenId);
         }
     }
 
@@ -195,23 +186,9 @@ contract AUniswapV3NPM {
     /// amount1Max The maximum amount of token1 to collect
     /// @return amount0 The amount of fees collected in token0
     /// @return amount1 The amount of fees collected in token1
-    function collect(INonfungiblePositionManager.CollectParams calldata params)
-        external
+    function collect(INonfungiblePositionManager.CollectParams memory params)
+        public
         payable
-        returns (uint256 amount0, uint256 amount1)
-    {
-        (amount0, amount1) = collectInternal(params);
-    }
-
-    /// @notice Collects up to a maximum amount of fees owed to a specific position to the recipient
-    /// @param params tokenId The ID of the NFT for which tokens are being collected,
-    /// recipient The account that should receive the tokens,
-    /// amount0Max The maximum amount of token0 to collect,
-    /// amount1Max The maximum amount of token1 to collect
-    /// @return amount0 The amount of fees collected in token0
-    /// @return amount1 The amount of fees collected in token1
-    function collectInternal(INonfungiblePositionManager.CollectParams memory params)
-        internal
         returns (uint256 amount0, uint256 amount1)
     {
         (amount0, amount1) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).collect(
@@ -227,19 +204,24 @@ contract AUniswapV3NPM {
     /// @notice Burns a token ID, which deletes it from the NFT contract. The token must have 0 liquidity and all tokens
     /// must be collected first.
     /// @param tokenId The ID of the token that is being burned
-    function burn(uint256 tokenId) external payable {
-        burnInternal(tokenId);
+    function burn(uint256 tokenId) public payable {
+        INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).burn(tokenId);
     }
 
-    function burnInternal(uint256 tokenId) internal {
-        INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).burn(tokenId);
+    // TODO: check if this is needed
+    /// @notice Wraps ETH when value input is non-null
+    /// @param value The ETH amount to be wrapped
+    function wrapETH(uint256 value) external payable {
+        if (value > uint256(0)) {
+            IWETH9(IPeripheryImmutableState(UNISWAP_V3_NPM_ADDRESS).WETH9()).deposit{value: value}();
+        }
     }
 
     /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
     /// @param amountMinimum The minimum amount of WETH9 to unwrap
     /// @param recipient The address receiving ETH
-    function unwrapWETH9(uint256 amountMinimum, address recipient) external payable {
+    function unwrapWETH9(uint256 amountMinimum, address recipient) public payable {
         IPeripheryPayments(UNISWAP_V3_NPM_ADDRESS).unwrapWETH9(
             amountMinimum,
             recipient != address(this) ? address(this) : address(this) // this pool is always the recipient
@@ -249,7 +231,7 @@ contract AUniswapV3NPM {
     /// @notice Refunds any ETH balance held by this contract to the `msg.sender`
     /// @dev Useful for bundling with mint or increase liquidity that uses ether, or exact output swaps
     /// that use ether for the input amount
-    function refundETH() external payable {
+    function refundETH() public payable {
         IPeripheryPayments(UNISWAP_V3_NPM_ADDRESS).refundETH();
     }
 
@@ -262,7 +244,7 @@ contract AUniswapV3NPM {
         address token,
         uint256 amountMinimum,
         address recipient
-    ) external payable {
+    ) public payable {
         IPeripheryPayments(UNISWAP_V3_NPM_ADDRESS).sweepToken(
             token,
             amountMinimum,
@@ -282,7 +264,7 @@ contract AUniswapV3NPM {
         address token1,
         uint24 fee,
         uint160 sqrtPriceX96
-    ) external payable returns (address pool) {
+    ) public payable returns (address pool) {
         pool = IPoolInitializer(UNISWAP_V3_NPM_ADDRESS).createAndInitializePoolIfNecessary(
             token0,
             token1,
