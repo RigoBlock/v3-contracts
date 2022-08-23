@@ -25,16 +25,19 @@ import "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungibl
 
 // TODO: inherit from IAUniswapV3NPM + inheritdocs
 contract AUniswapV3NPM {
-    // TODO: check npm address unchanged and check input in constructor.
-    // immutable variables, initialized here it to facilitate etherscan verification
-    // addresses are same on all networks
-    // TODO: initialize in constructor
-    address payable private immutable UNISWAP_V3_NPM_ADDRESS =
-        payable(address(0xC36442b4a4522E871399CD717aBDD847Ab11FE88));
+    // storage must be immutable as needs to be rutime consistent
+    bytes4 private constant APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
 
-    // TODO: define as constant, add sig hash and comment explanation
-    bytes4 private immutable APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
+    // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
+    address payable public immutable UNISWAP_V3_NPM_ADDRESS;
 
+    address payable private immutable WethAddress;
+
+    constructor(address _uniswap_npm) {
+        UNISWAP_V3_NPM_ADDRESS = payable(_uniswap_npm);
+        WethAddress = payable(address(IWETH9(IPeripheryImmutableState(UNISWAP_V3_NPM_ADDRESS).WETH9())));
+    }
+    // TODO: check if methods must be payable since transaction executed in the pool context
     /// @notice Enables calling multiple methods in a single call to the contract
     function multicall(bytes[] calldata data) public payable returns (bytes[] memory results) {
         results = new bytes[](data.length);
@@ -63,7 +66,7 @@ contract AUniswapV3NPM {
     /// @return liquidity The amount of liquidity for this position
     /// @return amount0 The amount of token0
     /// @return amount1 The amount of token1
-    function mint(INonfungiblePositionManager.MintParams calldata params)
+    function mint(INonfungiblePositionManager.MintParams memory params)
         public
         payable
         returns (
@@ -73,11 +76,19 @@ contract AUniswapV3NPM {
             uint256 amount1
         )
     {
+        if (params.token0 == address(0)) {
+            _wrapETH(amount0);
+            params.token0 = WethAddress;
+        } else if (params.token1 == address(0)) {
+            _wrapETH(amount1);
+            params.token1 = WethAddress;
+        }
+
         // we first set the allowance to the uniswap position manager
         _safeApprove(params.token0, UNISWAP_V3_NPM_ADDRESS, type(uint256).max);
         _safeApprove(params.token1, UNISWAP_V3_NPM_ADDRESS, type(uint256).max);
 
-        // finally, we mint the liquidity token
+        // only then do we mint the liquidity token
         (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).mint(
             INonfungiblePositionManager.MintParams({
                 token0: params.token0,
@@ -109,7 +120,7 @@ contract AUniswapV3NPM {
     /// @return liquidity The new liquidity amount as a result of the increase
     /// @return amount0 The amount of token0 to acheive resulting liquidity
     /// @return amount1 The amount of token1 to acheive resulting liquidity
-    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
+    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params)
         public
         payable
         returns (
@@ -120,6 +131,12 @@ contract AUniswapV3NPM {
     {
         (, , address token0, address token1, , , , , , , , ) =
             INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).positions(params.tokenId);
+        
+        if (token0 == WethAddress && IWETH9(WethAddress).balanceOf(address(this)) < params.amount0Desired) {
+            _wrapETH(params.amount0Desired);
+        } else if (token1 == WethAddress && IWETH9(WethAddress).balanceOf(address(this)) < params.amount1Desired) {
+            _wrapETH(params.amount1Desired);
+        }
 
         // we first set the allowance to the uniswap position manager
         _safeApprove(token0, UNISWAP_V3_NPM_ADDRESS, type(uint256).max);
@@ -208,15 +225,6 @@ contract AUniswapV3NPM {
         INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).burn(tokenId);
     }
 
-    // TODO: check if this is needed
-    /// @notice Wraps ETH when value input is non-null
-    /// @param value The ETH amount to be wrapped
-    function wrapETH(uint256 value) external payable {
-        if (value > uint256(0)) {
-            IWETH9(IPeripheryImmutableState(UNISWAP_V3_NPM_ADDRESS).WETH9()).deposit{value: value}();
-        }
-    }
-
     /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
     /// @param amountMinimum The minimum amount of WETH9 to unwrap
@@ -281,5 +289,13 @@ contract AUniswapV3NPM {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(APPROVE_SELECTOR, spender, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "AUNISWAPV3NPM_TOKEN_APPROVE_FAILED_ERROR");
+    }
+
+    /// @notice Wraps ETH when value input is non-null
+    /// @param value The ETH amount to be wrapped
+    function _wrapETH(uint256 value) private {
+        if (value > uint256(0)) {
+            IWETH9(WethAddress).deposit{value: value}();
+        }
     }
 }
