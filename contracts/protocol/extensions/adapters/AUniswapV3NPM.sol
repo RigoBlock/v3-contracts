@@ -175,15 +175,12 @@ contract AUniswapV3NPM {
         INonfungiblePositionManager(_getUniswapNpmAddress()).burn(tokenId);
     }
 
-    /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH.
-    /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
-    /// @param amountMinimum The minimum amount of WETH9 to unwrap
-    /// @param recipient The address receiving ETH
+    /// @notice Unwraps ETH from WETH9.
+    /// @param amountMinimum The minimum amount of WETH9 to unwrap.
+    /// @param recipient The address to keep same uniswap npm selector.
     function unwrapWETH9(uint256 amountMinimum, address recipient) external {
-        INonfungiblePositionManager(_getUniswapNpmAddress()).unwrapWETH9(
-            amountMinimum,
-            recipient != address(this) ? address(this) : address(this) // this pool is always the recipient
-        );
+        if (recipient != address(this)) { recipient = address(this); }
+        IWETH9(_getWethAddress()).withdraw(amountMinimum);
     }
 
     // TODO: check if better used in custom adapter
