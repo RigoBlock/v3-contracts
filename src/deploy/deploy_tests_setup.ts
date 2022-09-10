@@ -183,6 +183,20 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   })
+
+  const mockUniswapNpm = await deploy("MockUniswapNpm", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  await deploy("AUniswapV3NPM", {
+    from: deployer,
+    args: [mockUniswapNpm.address],
+    log: true,
+    deterministicDeployment: true,
+  })
 };
 
 deploy.tags = ['tests-setup', 'l2-suite', 'main-suite']
