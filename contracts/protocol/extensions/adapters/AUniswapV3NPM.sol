@@ -189,7 +189,7 @@ contract AUniswapV3NPM {
     /// @param value The ETH amount to be wrapped.
     function wrapETH(uint256 value) external {
         if (value > uint256(0)) {
-            IWETH9(WethAddress).deposit{value: value}();
+            IWETH9(_getWethAddress()).deposit{value: value}();
         }
     }
 
