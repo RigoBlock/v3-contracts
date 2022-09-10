@@ -2,13 +2,14 @@
 
 pragma solidity 0.8.14;
 
+import { WETH9 as WETH9Contract } from "../tokens/WETH9/WETH9.sol";
 import "../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 
 contract MockUniswapNpm {
     address public immutable WETH9;
 
-    constructor(address _wethAddress) {
-        WETH9 = _wethAddress;
+    constructor() {
+        WETH9 = address(new WETH9Contract());
     }
 
     function mint(INonfungiblePositionManager.MintParams memory params)
