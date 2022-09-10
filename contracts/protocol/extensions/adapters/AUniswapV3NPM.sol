@@ -193,12 +193,9 @@ contract AUniswapV3NPM {
         }
     }
 
-    /// @notice Refunds any ETH balance held by this contract to the `msg.sender`
-    /// @dev Useful for bundling with mint or increase liquidity that uses ether, or exact output swaps
-    /// that use ether for the input amount
-    function refundETH() external {
-        INonfungiblePositionManager(_getUniswapNpmAddress()).refundETH();
-    }
+    /// @notice Allows sending pool transactions exactly as Uniswap original transactions.
+    /// @dev Declared virtual as we never send ETH to Uniswap router contract.
+    function refundETH() external virtual {}
 
     /// @notice Transfers the full amount of a token held by this contract to recipient
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users
