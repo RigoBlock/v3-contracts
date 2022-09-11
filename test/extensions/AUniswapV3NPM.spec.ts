@@ -84,6 +84,33 @@ describe("AUniswapV3NPM", async () => {
                 recipient: pool.address,
                 deadline: 1
             })
+            await pool.increaseLiquidity({
+                tokenId: 5,
+                amount0Desired: 100,
+                amount1Desired: 100,
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: 1
+            })
+            await pool.decreaseLiquidity({
+                tokenId: 5,
+                liquidity: 25,
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: 1
+            })
+            await pool.collect({
+                tokenId: 5,
+                recipient: pool.address,
+                amount0Max: parseEther("10000"),
+                amount1Max: parseEther("10000")
+            })
+            await expect(pool.burn(5)).to.be.revertedWith("POOL_BURN_NOT_ENOUGH_ERROR")
+            await pool.wrapETH(parseEther("100"))
+            await pool.unwrapWETH9(parseEther("50"), pool.address)
+            await pool.refundETH()
+            await pool.sweepToken(grgToken.address, 50, pool.address)
+            // TODO: test in multicall format
         })
     })
 })
