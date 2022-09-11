@@ -30,8 +30,7 @@ contract AUniswapV3NPM {
 
     // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
     address payable public immutable UNISWAP_V3_NPM_ADDRESS;
-
-    address payable private immutable WethAddress;
+    address payable public immutable WethAddress;
 
     constructor(address _uniswapNpm) {
         UNISWAP_V3_NPM_ADDRESS = payable(_uniswapNpm);
