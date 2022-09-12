@@ -60,6 +60,8 @@ describe("AUniswapV3NPM", async () => {
         await factory.createPool('testpool','TEST',AddressZero)
         return {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
+            aUniswapNpm: AUniswapV3NPMInstance.address,
+            authority,
             newPoolAddress,
             poolId
         }
@@ -120,7 +122,7 @@ describe("AUniswapV3NPM", async () => {
 
     describe("multicall", async () => {
         it('should send transaction in multicall format', async () => {
-            const { grgToken, newPoolAddress, poolId } = await setupTests()
+            const { grgToken, aUniswapNpm, authority, newPoolAddress, poolId } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswapV3NPM")
             const pool = Pool.attach(newPoolAddress)
             const amount = parseEther("100")
@@ -145,6 +147,14 @@ describe("AUniswapV3NPM", async () => {
                     encodedCreateData
                 ]
             )
+            const encodedRefundData = pool.interface.encodeFunctionData(
+                'refundETH'
+            )
+            await multicallPool.multicall([encodedRefundData])
+            await authority.removeMethod("0x12210e8a", aUniswapNpm)
+            await expect(
+                multicallPool.multicall([encodedRefundData])
+            ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
         })
     })
 })
