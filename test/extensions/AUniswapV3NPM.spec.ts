@@ -47,6 +47,10 @@ describe("AUniswapV3NPM", async () => {
         await authority.addMethod("0xdf2ab5bb", AUniswapV3NPMInstance.address)
         await authority.addMethod("0x49404b7c", AUniswapV3NPMInstance.address)
         await authority.addMethod("0x1c58db4f", AUniswapV3NPMInstance.address)
+        const AMulticallInstance = await deployments.get("AMulticall")
+        await authority.setAdapter(AMulticallInstance.address, true)
+        // "ac9650d8": "multicall(bytes[])"
+        await authority.addMethod("0xac9650d8", AMulticallInstance.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
@@ -111,6 +115,25 @@ describe("AUniswapV3NPM", async () => {
             await pool.refundETH()
             await pool.sweepToken(grgToken.address, 50, pool.address)
             // TODO: test in multicall format
+        })
+    })
+
+    describe("multicall", async () => {
+        it('should send transaction in multicall format', async () => {
+            const { grgToken, newPoolAddress, poolId } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswapV3NPM")
+            const pool = Pool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            const encodedCreate = pool.interface.encodeFunctionData(
+                'createAndInitializePoolIfNecessary',
+                [grgToken.address, grgToken.address, 1, 1]
+            )
+            const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
+            const multicallPool = MulticallPool.attach(newPoolAddress)
+            await multicallPool.multicall([encodedCreate])
         })
     })
 })
