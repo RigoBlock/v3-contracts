@@ -14,6 +14,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     }
 
     /// @inheritdoc IRigoblockV3PoolFallback
+    // TODO: check if should make this method restricted from direct calls
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance

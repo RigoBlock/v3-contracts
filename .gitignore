@@ -17,3 +17,6 @@ yarn-error.log
 *artifacts/
 contracts/**/**/*.json
 contracts/**/**/**/*.json
+
+#contracts deps
+contracts/.deps/

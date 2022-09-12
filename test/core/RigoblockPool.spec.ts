@@ -29,17 +29,27 @@ describe("Proxy", async () => {
             newPoolAddress
         )
         return {
-            pool,
-            navVerifier: NavVerifier.attach(NavVerifierInstance.address)
+            factory,
+            navVerifier: NavVerifier.attach(NavVerifierInstance.address),
+            pool
         }
     });
 
     describe("receive", async () => {
+        it('should revert if direct call to implementation', async () => {
+            const { factory } = await setupTests()
+            const etherAmount = parseEther("5")
+            const implementation = await factory.implementation()
+            await expect(
+                user1.sendTransaction({ to: implementation, value: etherAmount})
+            ).to.be.revertedWith("POOL_IMPLEMENTATION_DIRECT_CALL_NOT_ALLOWED_ERROR")
+        })
+
         it('should receive ether', async () => {
             const { pool } = await setupTests()
             const etherAmount = parseEther("5")
             await user1.sendTransaction({ to: pool.address, value: etherAmount})
-            await expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(etherAmount)
+            expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(etherAmount)
         })
     })
 
