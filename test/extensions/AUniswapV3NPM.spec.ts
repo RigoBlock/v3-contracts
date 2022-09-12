@@ -134,6 +134,7 @@ describe("AUniswapV3NPM", async () => {
             const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
             const multicallPool = MulticallPool.attach(newPoolAddress)
             await multicallPool.multicall([encodedCreateData])
+            // while original uniswap client sends value for ETH transactions, we wrap ETH within the pool first.
             const encodedWrapData = pool.interface.encodeFunctionData(
                 'wrapETH',
                 [parseEther("100")]
