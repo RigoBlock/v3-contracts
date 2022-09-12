@@ -197,6 +197,13 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   })
+
+  await deploy("AMulticall", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
 };
 
 deploy.tags = ['tests-setup', 'l2-suite', 'main-suite']
