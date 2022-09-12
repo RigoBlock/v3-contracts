@@ -127,13 +127,23 @@ describe("AUniswapV3NPM", async () => {
             // we send both Ether and GRG to the pool
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await grgToken.transfer(newPoolAddress, amount)
-            const encodedCreate = pool.interface.encodeFunctionData(
+            const encodedCreateData = pool.interface.encodeFunctionData(
                 'createAndInitializePoolIfNecessary',
                 [grgToken.address, grgToken.address, 1, 1]
             )
             const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
             const multicallPool = MulticallPool.attach(newPoolAddress)
-            await multicallPool.multicall([encodedCreate])
+            await multicallPool.multicall([encodedCreateData])
+            const encodedWrapData = pool.interface.encodeFunctionData(
+                'wrapETH',
+                [parseEther("100")]
+            )
+            await multicallPool.multicall(
+                [
+                    encodedWrapData,
+                    encodedCreateData
+                ]
+            )
         })
     })
 })
