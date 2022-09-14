@@ -12,6 +12,11 @@ contract MockUniswapNpm {
         WETH9 = address(new WETH9Contract());
     }
 
+    // TODO: must move in separate MockUniswapRouter contract
+    function positionManager() external view returns (address) {
+        return address(this);
+    }
+
     function mint(INonfungiblePositionManager.MintParams memory params)
         external
         returns (
