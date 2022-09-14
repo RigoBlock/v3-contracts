@@ -8,7 +8,7 @@ import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../
 import { timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
-describe("AUniswapV3NPM", async () => {
+describe("AUniswap", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
@@ -21,7 +21,7 @@ describe("AUniswapV3NPM", async () => {
         const AuthorityCoreInstance = await deployments.get("AuthorityCore")
         const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
         const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
-        const AUniswapV3NPMInstance = await deployments.get("AUniswapV3NPM")
+        const AUniswapV3NPMInstance = await deployments.get("AUniswap")
         await authority.setAdapter(AUniswapV3NPMInstance.address, true)
         // "88316456": "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
         // "c20ec580": "UNISWAP_V3_NPM_ADDRESS()",
@@ -70,7 +70,7 @@ describe("AUniswapV3NPM", async () => {
     describe("mint", async () => {
         it('should mint an NFT', async () => {
             const { grgToken, newPoolAddress, poolId } = await setupTests()
-            const Pool = await hre.ethers.getContractFactory("AUniswapV3NPM")
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
@@ -113,17 +113,17 @@ describe("AUniswapV3NPM", async () => {
             })
             await expect(pool.burn(5)).to.be.revertedWith("POOL_BURN_NOT_ENOUGH_ERROR")
             await pool.wrapETH(parseEther("100"))
-            await pool.unwrapWETH9(parseEther("50"), pool.address)
+            // TODO: hardhat does not recognize duplicate method with different inputs. Check if upgrading fixes
+            //await pool.unwrapWETH9(parseEther("50"), pool.address)
             await pool.refundETH()
-            await pool.sweepToken(grgToken.address, 50, pool.address)
-            // TODO: test in multicall format
+            //await pool.sweepToken(grgToken.address, 50, pool.address)
         })
     })
 
     describe("multicall", async () => {
         it('should send transaction in multicall format', async () => {
             const { grgToken, aUniswapNpm, authority, newPoolAddress, poolId } = await setupTests()
-            const Pool = await hre.ethers.getContractFactory("AUniswapV3NPM")
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
@@ -147,10 +147,24 @@ describe("AUniswapV3NPM", async () => {
                     encodedCreateData
                 ]
             )
+            const encodedUnwrapData = pool.interface.encodeFunctionData(
+                'unwrapWETH9(uint256,address)',
+                [parseEther("50"), pool.address]
+            )
+            multicallPool.multicall([encodedUnwrapData])
             const encodedRefundData = pool.interface.encodeFunctionData(
                 'refundETH'
             )
             await multicallPool.multicall([encodedRefundData])
+            const encodedSweepData = pool.interface.encodeFunctionData(
+                'sweepToken(address,uint256,address)',
+                [
+                    grgToken.address,
+                    50,
+                    pool.address
+                ]
+            )
+            await multicallPool.multicall([encodedSweepData])
             await authority.removeMethod("0x12210e8a", aUniswapNpm)
             await expect(
                 multicallPool.multicall([encodedRefundData])
