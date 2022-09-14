@@ -65,7 +65,12 @@ contract AUniswap is AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external returns (uint256 amountOut) {
-        amountOut = ISwapRouter02(_getUniswapRouter2()).swapExactTokensForTokens(amountIn, amountOutMin, path, to);
+        amountOut = ISwapRouter02(_getUniswapRouter2()).swapExactTokensForTokens(
+            amountIn,
+            amountOutMin,
+            path,
+            to != address(this) ? address(this) : to
+        );
     }
 
     /// @notice Swaps as little as possible of one token for an exact amount of another token
@@ -80,7 +85,12 @@ contract AUniswap is AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external returns (uint256 amountIn) {
-        amountIn = ISwapRouter02(_getUniswapRouter2()).swapTokensForExactTokens(amountOut, amountInMax, path, to);
+        amountIn = ISwapRouter02(_getUniswapRouter2()).swapTokensForExactTokens(
+            amountOut,
+            amountInMax,
+            path,
+            to != address(this) ? address(this) : to
+        );
     }
 
     /*
@@ -232,6 +242,22 @@ contract AUniswap is AUniswapV3NPM {
         ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
             token,
             amountMinimum,
+            feeBips,
+            feeRecipient
+        );
+    }
+
+    function sweepTokenWithFee(
+        address token,
+        uint256 amountMinimum,
+        address recipient,
+        uint256 feeBips,
+        address feeRecipient
+    ) external {
+        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
+            token,
+            amountMinimum,
+            recipient != address(this) ? address(this) : address(this), // this pool is always the recipient
             feeBips,
             feeRecipient
         );
