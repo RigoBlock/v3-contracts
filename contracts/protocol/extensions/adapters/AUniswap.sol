@@ -65,7 +65,7 @@ contract AUniswap is AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external returns (uint256 amountOut) {
-        amountOut = ISwapRouter02(getUniswapRouter2()).swapExactTokensForTokens(amountIn, amountOutMin, path, to);
+        amountOut = ISwapRouter02(_getUniswapRouter2()).swapExactTokensForTokens(amountIn, amountOutMin, path, to);
     }
 
     /// @notice Swaps as little as possible of one token for an exact amount of another token
@@ -80,7 +80,7 @@ contract AUniswap is AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external returns (uint256 amountIn) {
-        amountIn = ISwapRouter02(getUniswapRouter2()).swapTokensForExactTokens(amountOut, amountInMax, path, to);
+        amountIn = ISwapRouter02(_getUniswapRouter2()).swapTokensForExactTokens(amountOut, amountInMax, path, to);
     }
 
     /*
@@ -94,10 +94,10 @@ contract AUniswap is AUniswapV3NPM {
         returns (uint256 amountOut)
     {
         // we first set the allowance to the uniswap router
-        _safeApprove(params.tokenIn, getUniswapRouter2(), type(uint256).max);
+        _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
 
         // finally, we swap the tokens
-        amountOut = ISwapRouter02(getUniswapRouter2()).exactInputSingle(
+        amountOut = ISwapRouter02(_getUniswapRouter2()).exactInputSingle(
             IV3SwapRouter.ExactInputSingleParams({
                 tokenIn: params.tokenIn,
                 tokenOut: params.tokenOut,
@@ -110,7 +110,7 @@ contract AUniswap is AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.tokenIn, getUniswapRouter2(), uint256(1));
+        _safeApprove(params.tokenIn, _getUniswapRouter2(), uint256(1));
     }
 
     /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
@@ -120,10 +120,10 @@ contract AUniswap is AUniswapV3NPM {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
         // we first set the allowance to the uniswap router
-        _safeApprove(tokenIn, getUniswapRouter2(), type(uint256).max);
+        _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
 
         // finally, we swap the tokens
-        amountOut = ISwapRouter02(getUniswapRouter2()).exactInput(
+        amountOut = ISwapRouter02(_getUniswapRouter2()).exactInput(
             IV3SwapRouter.ExactInputParams({
                 path: params.path,
                 recipient: address(this), // this pool is always the recipient
@@ -133,7 +133,7 @@ contract AUniswap is AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(tokenIn, getUniswapRouter2(), uint256(1));
+        _safeApprove(tokenIn, _getUniswapRouter2(), uint256(1));
     }
 
     /// @notice Swaps as little as possible of one token for `amountOut` of another token
@@ -144,10 +144,10 @@ contract AUniswap is AUniswapV3NPM {
         returns (uint256 amountIn)
     {
         // we first set the allowance to the uniswap router
-        _safeApprove(params.tokenIn, getUniswapRouter2(), type(uint256).max);
+        _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
 
         // finally, we swap the tokens
-        amountIn = ISwapRouter02(getUniswapRouter2()).exactOutputSingle(
+        amountIn = ISwapRouter02(_getUniswapRouter2()).exactOutputSingle(
             IV3SwapRouter.ExactOutputSingleParams({
                 tokenIn: params.tokenIn,
                 tokenOut: params.tokenOut,
@@ -160,7 +160,7 @@ contract AUniswap is AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.tokenIn, getUniswapRouter2(), uint256(1));
+        _safeApprove(params.tokenIn, _getUniswapRouter2(), uint256(1));
     }
 
     /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
@@ -170,10 +170,10 @@ contract AUniswap is AUniswapV3NPM {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
         // we first set the allowance to the uniswap router
-        _safeApprove(tokenIn, getUniswapRouter2(), type(uint256).max);
+        _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
 
         // finally, we swap the tokens
-        amountIn = ISwapRouter02(getUniswapRouter2()).exactOutput(
+        amountIn = ISwapRouter02(_getUniswapRouter2()).exactOutput(
             IV3SwapRouter.ExactOutputParams({
                 path: params.path,
                 recipient: address(this), // this pool is always the recipient
@@ -183,7 +183,7 @@ contract AUniswap is AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(tokenIn, getUniswapRouter2(), uint256(1));
+        _safeApprove(tokenIn, _getUniswapRouter2(), uint256(1));
     }
 
     /*
@@ -197,7 +197,7 @@ contract AUniswap is AUniswapV3NPM {
         address token,
         uint256 amountMinimum
     ) external {
-        ISwapRouter02(getUniswapRouter2()).sweepToken(
+        ISwapRouter02(_getUniswapRouter2()).sweepToken(
             token,
             amountMinimum
         );
@@ -213,7 +213,7 @@ contract AUniswap is AUniswapV3NPM {
         uint256 amountMinimum,
         address recipient
     ) external {
-        ISwapRouter02(getUniswapRouter2()).sweepToken(
+        ISwapRouter02(_getUniswapRouter2()).sweepToken(
             token,
             amountMinimum,
             recipient != address(this) ? address(this) : address(this) // this pool is always the recipient
@@ -229,7 +229,7 @@ contract AUniswap is AUniswapV3NPM {
         uint256 feeBips,
         address feeRecipient
     ) external {
-        ISwapRouter02(getUniswapRouter2()).sweepTokenWithFee(
+        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
             token,
             amountMinimum,
             feeBips,
@@ -303,7 +303,7 @@ contract AUniswap is AUniswapV3NPM {
         return UNISWAP_V3_NPM_ADDRESS;
     }
 
-    function getUniswapRouter2() internal view returns (address) {
+    function _getUniswapRouter2() internal view returns (address) {
         return UNISWAP_SWAP_ROUTER_2_ADDRESS;
     }
 
