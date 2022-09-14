@@ -21,8 +21,8 @@ describe("AUniswap", async () => {
         const AuthorityCoreInstance = await deployments.get("AuthorityCore")
         const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
         const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
-        const AUniswapV3NPMInstance = await deployments.get("AUniswap")
-        await authority.setAdapter(AUniswapV3NPMInstance.address, true)
+        const AUniswapInstance = await deployments.get("AUniswap")
+        await authority.setAdapter(AUniswapInstance.address, true)
         // "88316456": "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
         // "c20ec580": "UNISWAP_V3_NPM_ADDRESS()",
         // "a785a3d8": "WethAddress()",
@@ -35,18 +35,18 @@ describe("AUniswap", async () => {
         // "df2ab5bb": "sweepToken(address,uint256,address)",
         // "49404b7c": "unwrapWETH9(uint256,address)",
         // "1c58db4f": "wrapETH(uint256)"
-        await authority.addMethod("0x88316456", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0xc20ec580", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0xa785a3d8", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0x42966c68", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0xfc6f7865", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0x13ead562", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0x0c49ccbe", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0x219f5d17", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0x12210e8a", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0xdf2ab5bb", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0x49404b7c", AUniswapV3NPMInstance.address)
-        await authority.addMethod("0x1c58db4f", AUniswapV3NPMInstance.address)
+        await authority.addMethod("0x88316456", AUniswapInstance.address)
+        await authority.addMethod("0xc20ec580", AUniswapInstance.address)
+        await authority.addMethod("0xa785a3d8", AUniswapInstance.address)
+        await authority.addMethod("0x42966c68", AUniswapInstance.address)
+        await authority.addMethod("0xfc6f7865", AUniswapInstance.address)
+        await authority.addMethod("0x13ead562", AUniswapInstance.address)
+        await authority.addMethod("0x0c49ccbe", AUniswapInstance.address)
+        await authority.addMethod("0x219f5d17", AUniswapInstance.address)
+        await authority.addMethod("0x12210e8a", AUniswapInstance.address)
+        await authority.addMethod("0xdf2ab5bb", AUniswapInstance.address)
+        await authority.addMethod("0x49404b7c", AUniswapInstance.address)
+        await authority.addMethod("0x1c58db4f", AUniswapInstance.address)
         const AMulticallInstance = await deployments.get("AMulticall")
         await authority.setAdapter(AMulticallInstance.address, true)
         // "ac9650d8": "multicall(bytes[])"
@@ -60,7 +60,7 @@ describe("AUniswap", async () => {
         await factory.createPool('testpool','TEST',AddressZero)
         return {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
-            aUniswapNpm: AUniswapV3NPMInstance.address,
+            aUniswap: AUniswapInstance.address,
             authority,
             newPoolAddress,
             poolId
@@ -111,7 +111,7 @@ describe("AUniswap", async () => {
                 amount0Max: parseEther("10000"),
                 amount1Max: parseEther("10000")
             })
-            await expect(pool.burn(5)).to.be.revertedWith("POOL_BURN_NOT_ENOUGH_ERROR")
+            await pool.burn(5)
             await pool.wrapETH(parseEther("100"))
             // TODO: hardhat does not recognize duplicate method with different inputs. Check if upgrading fixes
             //await pool.unwrapWETH9(parseEther("50"), pool.address)
@@ -122,7 +122,7 @@ describe("AUniswap", async () => {
 
     describe("multicall", async () => {
         it('should send transaction in multicall format', async () => {
-            const { grgToken, aUniswapNpm, authority, newPoolAddress, poolId } = await setupTests()
+            const { grgToken, aUniswap, authority, newPoolAddress, poolId } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             const amount = parseEther("100")
@@ -165,10 +165,121 @@ describe("AUniswap", async () => {
                 ]
             )
             await multicallPool.multicall([encodedSweepData])
-            await authority.removeMethod("0x12210e8a", aUniswapNpm)
+            await authority.removeMethod("0x12210e8a", aUniswap)
             await expect(
                 multicallPool.multicall([encodedRefundData])
             ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+        })
+    })
+
+    describe("burn", async () => {
+        it('should call uniswap npm', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await expect(authority.addMethod("0x42966c68", aUniswap))
+                .to.be.revertedWith("SELECTOR_EXISTS_ERROR")
+            await pool.burn(100)
+        })
+    })
+
+    // TODO: check calldata vs memory in contract
+    describe("swapExactTokensForTokens", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x472b43f3", aUniswap)
+            await pool.swapExactTokensForTokens(
+                100,
+                100,
+                [grgToken.address, grgToken.address],
+                newPoolAddress
+            )
+        })
+    })
+
+    describe("swapTokensForExactTokens", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x42712a67", aUniswap)
+            await pool.swapTokensForExactTokens(
+                100,
+                100,
+                [grgToken.address, grgToken.address],
+                newPoolAddress
+            )
+        })
+    })
+/*
+    describe("exactInputSingle", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x04e45aaf", aUniswap)
+            await pool.exactInputSingle({
+                tokenIn: grgToken.address,
+                tokenOut: grgToken.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1,
+                sqrtPriceLimitX96: 4
+            })
+        })
+    })
+*/
+    describe("exactInput", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0xb858183f", aUniswap)
+            const mockPath = hre.ethers.utils.hexZeroPad(ethers.utils.hexlify(1), 64)
+            await pool.exactInput({
+                path: mockPath,
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })
+        })
+    })
+/*
+    describe("exactOutputSingle", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x5023b4df", aUniswap)
+            await pool.exactOutputSingle({
+                tokenIn: grgToken.address,
+                tokenOut: grgToken.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMinimum: 1,
+                sqrtPriceLimitX96: 4
+            })
+        })
+    })
+*/
+    describe("exactOutput", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x09b81346", aUniswap)
+            const mockPath = hre.ethers.utils.hexZeroPad(ethers.utils.hexlify(1), 64)
+            /*await pool.exactOutput({
+                path: mockPath,
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMinimum: 10
+            })
+            */
         })
     })
 })
