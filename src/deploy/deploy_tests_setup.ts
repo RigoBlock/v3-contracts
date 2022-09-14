@@ -185,18 +185,16 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  // TODO: deploy from mockUniswapRouter which returns the npm address
-  const mockUniswapNpm = await deploy("MockUniswapNpm", {
+  const mockUniswapRouter = await deploy("MockUniswapRouter", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   })
 
-  // TODO: change input to correct uniswap router address
   await deploy("AUniswap", {
     from: deployer,
-    args: [mockUniswapNpm.address],
+    args: [mockUniswapRouter.address],
     log: true,
     deterministicDeployment: true,
   })
