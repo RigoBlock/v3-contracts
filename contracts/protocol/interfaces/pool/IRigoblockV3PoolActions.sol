@@ -27,10 +27,10 @@ interface IRigoblockV3PoolActions {
     /// @param _recipient Address receiving the tokens.
     /// @param _amountIn Amount of base tokens.
     /// @return recipientAmount Number of tokens minted to recipient.
-    function mint(address _recipient, uint256 _amountIn) external payable returns (uint256);
+    function mintToken(address _recipient, uint256 _amountIn) external payable returns (uint256);
 
     /// @dev Allows a pool holder to burn pool tokens.
     /// @param _amountIn Number of tokens to burn.
     /// @return netRevenue Net amount of burnt pool tokens.
-    function burn(uint256 _amountIn) external returns (uint256); // netRevenue
+    function burnToken(uint256 _amountIn) external returns (uint256); // netRevenue
 }

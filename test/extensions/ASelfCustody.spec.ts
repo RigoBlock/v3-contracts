@@ -107,7 +107,7 @@ describe("ASelfCustody", async () => {
             const DefaultPool = await hre.ethers.getContractFactory("RigoblockV3Pool")
             const defaultPool = DefaultPool.attach(newPoolAddress)
             // we make sure pool has enough eth
-            await defaultPool.mint(user1.address, parseEther("1"), { value: parseEther("1") })
+            await defaultPool.mintToken(user1.address, parseEther("1"), { value: parseEther("1") })
             await expect(
                 scPool.transferToSelfCustody(user2.address, AddressZero, 10000)
             ).to.emit(scPool, "SelfCustodyTransfer").withArgs(

@@ -24,7 +24,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
      * EXTERNAL METHODS
      */
     /// @inheritdoc IRigoblockV3PoolActions
-    function burn(uint256 _amountIn)
+    function burnToken(uint256 _amountIn)
         external
         override
         nonReentrant
@@ -50,7 +50,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
-    function mint(address _recipient, uint256 _amountIn) public payable override returns (uint256 recipientAmount) {
+    function mintToken(address _recipient, uint256 _amountIn) public payable override returns (uint256 recipientAmount) {
         // require whitelisted user if kyc is enforced
         if (_isKycEnforced()) {
             require(IKyc(admin.kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
