@@ -59,6 +59,7 @@ abstract contract MixinOwnerActions is MixinActions {
         bytes32 _hash,
         bytes calldata _signedData
     ) external override onlyOwner notPriceError(_unitaryValue) {
+        // TODO: check if can move notPriceError modifier to extension
         /// @notice Value can be updated only after first mint.
         // TODO: fix tests to apply following
         // we require positive value as would return to default value if storage cleared
