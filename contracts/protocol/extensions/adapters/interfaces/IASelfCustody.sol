@@ -18,7 +18,7 @@
 */
 
 // solhint-disable-next-line
-pragma solidity =0.8.14;
+pragma solidity >=0.8.14;
 
 interface IASelfCustody {
     event SelfCustodyTransfer(address indexed from, address indexed to, address indexed token, uint256 amount);
