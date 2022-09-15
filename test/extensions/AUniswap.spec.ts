@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
+import { defaultAbiCoder } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
@@ -213,7 +214,7 @@ describe("AUniswap", async () => {
             )
         })
     })
-/*
+
     describe("exactInputSingle", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
@@ -231,14 +232,17 @@ describe("AUniswap", async () => {
             })
         })
     })
-*/
+
     describe("exactInput", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0xb858183f", aUniswap)
-            const mockPath = hre.ethers.utils.hexZeroPad(ethers.utils.hexlify(1), 64)
+            const mockPath = defaultAbiCoder.encode(
+                ['address', 'address', 'uint24'],
+                [grgToken.address, grgToken.address, 0]
+            )
             await pool.exactInput({
                 path: mockPath,
                 recipient: newPoolAddress,
@@ -247,7 +251,7 @@ describe("AUniswap", async () => {
             })
         })
     })
-/*
+
     describe("exactOutputSingle", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
@@ -260,26 +264,28 @@ describe("AUniswap", async () => {
                 fee: 0,
                 recipient: newPoolAddress,
                 amountOut: 20,
-                amountInMinimum: 1,
+                amountInMaximum: 1,
                 sqrtPriceLimitX96: 4
             })
         })
     })
-*/
+
     describe("exactOutput", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x09b81346", aUniswap)
-            const mockPath = hre.ethers.utils.hexZeroPad(ethers.utils.hexlify(1), 64)
-            /*await pool.exactOutput({
+            const mockPath = defaultAbiCoder.encode(
+                ['address', 'address', 'uint24'],
+                [grgToken.address, grgToken.address, 0]
+            )
+            await pool.exactOutput({
                 path: mockPath,
                 recipient: newPoolAddress,
                 amountOut: 20,
-                amountInMinimum: 10
+                amountInMaximum: 10
             })
-            */
         })
     })
 })
