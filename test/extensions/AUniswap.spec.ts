@@ -114,6 +114,7 @@ describe("AUniswap", async () => {
             })
             await pool.burn(5)
             await pool.wrapETH(parseEther("100"))
+            await pool.wrapETH(0)
             await pool.refundETH()
         })
     })
@@ -351,10 +352,10 @@ describe("AUniswap", async () => {
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await pool.wrapETH(amount)
             let encodedUnwrapData
-            // TODO: test with different recipient always returns ETH to pool
+            // TODO: check different recipient always returns ETH to pool
             encodedUnwrapData = pool.interface.encodeFunctionData(
                 'unwrapWETH9(uint256,address)',
-                [50, newPoolAddress]
+                [50, user1.address]
             )
             await expect(authority.addMethod("0x49404b7c", aUniswap)).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
