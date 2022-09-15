@@ -19,25 +19,47 @@
 
 pragma solidity 0.8.14;
 
+import "../../interfaces/IERC20.sol";
+
 /// @title Nav Verifier - Allows to check if new NAV comes from approved authority.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract NavVerifier {
     /// @dev Verifies that a signature is valid.
+    /// @notice Returns true if liquidity at least 3% of total supply.
     /// @param _unitaryValue Value of 1 token in wei units.
     /// @param _signatureValidUntilBlock Number of blocks.
     /// @param _hash Message hash that is signed.
     /// @param _signedData Proof of nav validity.
     /// @return isValid Bool validity of signed data.
-    /// @notice mock function which returns true
     function isValidNav(
         uint256 _unitaryValue,
         uint256 _signatureValidUntilBlock,
         bytes32 _hash,
         bytes calldata _signedData
-    ) external pure returns (bool isValid) {
+    ) external view returns (bool isValid) {
         // following line mock to silence solhint warnings
-        abi.encodePacked(_unitaryValue, _signatureValidUntilBlock, _hash, _signedData);
-        return isValid = true;
+        abi.encodePacked(_signatureValidUntilBlock, _hash, _signedData);
+        // TODO: check if baseToken should be moved to immutable storage
+        ( , , address baseToken, , ) = getData();
+        //address baseToken = address(0);
+        uint256 minimumLiquidity = _unitaryValue * totalSupply() / 10**decimals() / 100 * 3;
+        if (baseToken == address(0)) {
+            isValid = address(this).balance >= minimumLiquidity;
+        } else {
+            isValid = IERC20(baseToken).balanceOf(address(this)) >= minimumLiquidity;
+        }
     }
+
+    function getData() internal view virtual returns (
+        string memory poolName,
+        string memory poolSymbol,
+        address baseToken,
+        uint256 unitaryValue,
+        uint256 spread
+    ) {}
+
+    function totalSupply() internal view virtual returns (uint256) {}
+
+    function decimals() internal view virtual returns (uint8) {}
 }
