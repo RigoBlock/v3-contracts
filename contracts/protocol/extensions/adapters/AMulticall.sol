@@ -3,8 +3,10 @@
 // solhint-disable-next-line
 pragma solidity 0.8.14;
 
-contract AMulticall {
-    /// @notice Enables calling multiple methods in a single call to the contract
+import "./interfaces/IAMulticall.sol";
+
+contract AMulticall is IAMulticall {
+    /// @inheritdoc IAMulticall
     function multicall(bytes[] calldata data) external returns (bytes[] memory results) {
         results = new bytes[](data.length);
         for (uint256 i = 0; i < data.length; i++) {

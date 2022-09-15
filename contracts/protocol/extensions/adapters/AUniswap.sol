@@ -20,15 +20,16 @@
 // solhint-disable-next-line
 pragma solidity 0.8.14;
 
+import "./AUniswapV3NPM.sol";
+import "./interfaces/IAUniswap.sol";
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "../../interfaces/IWETH9.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
-import "./AUniswapV3NPM.sol";
 
 // @notice We implement sweep token methods routed to uniswap router even though could be defined as virtual and not implemented,
 //  because we always wrap/unwrap ETH within the pool and never accidentally send tokens to uniswap router or npm contracts.
 //  This allows to avoid clasing signatures and correctly reach target address for payment methods.
-contract AUniswap is AUniswapV3NPM {
+contract AUniswap is IAUniswap, AUniswapV3NPM {
     using Path for bytes;
 
     // storage must be immutable as needs to be rutime consistent
@@ -38,7 +39,7 @@ contract AUniswap is AUniswapV3NPM {
     // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
     address public immutable UNISWAP_V3_NPM_ADDRESS;
 
-    address payable public immutable WETH_ADDRESS;
+    address public immutable WETH_ADDRESS;
 
     constructor(address _uniswapRouter02) {
         UNISWAP_SWAP_ROUTER_2_ADDRESS = _uniswapRouter02;
@@ -49,14 +50,7 @@ contract AUniswap is AUniswapV3NPM {
     /*
      * UNISWAP V2 METHODS
     */
-    /// @notice Swaps `amountIn` of one token for as much as possible of another token.
-    /// @dev Setting `amountIn` to 0 will cause the contract to look up its own balance,
-    /// and swap the entire amount, enabling contracts to send tokens before calling this function.
-    /// @param amountIn The amount of token to swap.
-    /// @param amountOutMin The minimum amount of output that must be received.
-    /// @param path The ordered list of tokens to swap through.
-    /// @param to The recipient address.
-    /// @return amountOut The amount of the received token.
+    /// @inheritdoc IAUniswap
     function swapExactTokensForTokens(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -71,12 +65,7 @@ contract AUniswap is AUniswapV3NPM {
         );
     }
 
-    /// @notice Swaps as little as possible of one token for an exact amount of another token.
-    /// @param amountOut The amount of token to swap for.
-    /// @param amountInMax The maximum amount of input that the caller will pay.
-    /// @param path The ordered list of tokens to swap through.
-    /// @param to The recipient address.
-    /// @return amountIn The amount of token to pay.
+    /// @inheritdoc IAUniswap
     function swapTokensForExactTokens(
         uint256 amountOut,
         uint256 amountInMax,
@@ -94,9 +83,7 @@ contract AUniswap is AUniswapV3NPM {
     /*
      * UNISWAP V3 SWAP METHODS
     */
-    /// @notice Swaps `amountIn` of one token for as much as possible of another token.
-    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in memory.
-    /// @return amountOut The amount of the received token.
+    /// @inheritdoc IAUniswap
     function exactInputSingle(ISwapRouter02.ExactInputSingleParams calldata params)
         external
         returns (uint256 amountOut)
@@ -121,9 +108,7 @@ contract AUniswap is AUniswapV3NPM {
         _safeApprove(params.tokenIn, _getUniswapRouter2(), uint256(1));
     }
 
-    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path.
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in memory.
-    /// @return amountOut The amount of the received token.
+    /// @inheritdoc IAUniswap
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external returns (uint256 amountOut) {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
@@ -144,9 +129,7 @@ contract AUniswap is AUniswapV3NPM {
         _safeApprove(tokenIn, _getUniswapRouter2(), uint256(1));
     }
 
-    /// @notice Swaps as little as possible of one token for `amountOut` of another token.
-    /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in memory.
-    /// @return amountIn The amount of the input token.
+    /// @inheritdoc IAUniswap
     function exactOutputSingle(ISwapRouter02.ExactOutputSingleParams calldata params)
         external
         returns (uint256 amountIn)
@@ -171,9 +154,7 @@ contract AUniswap is AUniswapV3NPM {
         _safeApprove(params.tokenIn, _getUniswapRouter2(), uint256(1));
     }
 
-    /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed).
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in memory.
-    /// @return amountIn The amount of the input token.
+    /// @inheritdoc IAUniswap
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external returns (uint256 amountIn) {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
@@ -197,10 +178,7 @@ contract AUniswap is AUniswapV3NPM {
     /*
      * UNISWAP V3 PAYMENT METHODS
     */
-    /// @notice Transfers the full amount of a token held by this contract to recipient.
-    /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users.
-    /// @param token The contract address of the token which will be transferred to `recipient`.
-    /// @param amountMinimum The minimum amount of token required for a transfer.
+    /// @inheritdoc IAUniswap
     function sweepToken(
         address token,
         uint256 amountMinimum
@@ -211,11 +189,7 @@ contract AUniswap is AUniswapV3NPM {
         );
     }
 
-    /// @notice Transfers the full amount of a token held by this contract to recipient.
-    /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users.
-    /// @param token The contract address of the token which will be transferred to `recipient`.
-    /// @param amountMinimum The minimum amount of token required for a transfer.
-    /// @param recipient The destination address of the token.
+    /// @inheritdoc IAUniswap
     function sweepToken(
         address token,
         uint256 amountMinimum,
@@ -228,9 +202,7 @@ contract AUniswap is AUniswapV3NPM {
         );
     }
 
-    /// @notice Transfers the full amount of a token held by this contract to recipient, with a percentage between
-    /// 0 (exclusive) and 1 (inclusive) going to feeRecipient.
-    /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users.
+    /// @inheritdoc IAUniswap
     function sweepTokenWithFee(
         address token,
         uint256 amountMinimum,
@@ -245,6 +217,7 @@ contract AUniswap is AUniswapV3NPM {
         );
     }
 
+    /// @inheritdoc IAUniswap
     function sweepTokenWithFee(
         address token,
         uint256 amountMinimum,
@@ -261,51 +234,40 @@ contract AUniswap is AUniswapV3NPM {
         );
     }
 
-    /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH.
-    /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
-    /// @param amountMinimum The minimum amount of WETH9 to unwrap.
+    /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external {
         IWETH9(_getWethAddress()).withdraw(amountMinimum);
     }
 
-    /// @notice Unwraps ETH from WETH9.
-    /// @param amountMinimum The minimum amount of WETH9 to unwrap.
-    /// @param recipient The address to keep same uniswap npm selector.
+    /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum, address recipient) external {
         if (recipient != address(this)) { recipient = address(this); }
         IWETH9(_getWethAddress()).withdraw(amountMinimum);
     }
 
-    /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH, with a percentage between
-    /// 0 (exclusive), and 1 (inclusive) going to feeRecipient.
-    /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
+    /// @inheritdoc IAUniswap
     function unwrapWETH9WithFee(
         uint256 amountMinimum,
         uint256 feeBips,
         address feeRecipient
     ) external virtual {}
 
-    /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH, with a percentage between
-    /// 0 (exclusive), and 1 (inclusive) going to feeRecipient.
-    /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
+    /// @inheritdoc IAUniswap
     function unwrapWETH9WithFee(
         uint256 amountMinimum,
         address recipient,
         uint256 feeBips,
         address feeRecipient
-    ) external virtual{}
+    ) external virtual {}
 
-    /// @dev Wraps ETH.
-    /// @notice Client must wrap if input is native currency.
-    /// @param value The ETH amount to be wrapped.
+    /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external {
         if (value > uint256(0)) {
             IWETH9(_getWethAddress()).deposit{value: value}();
         }
     }
 
-    /// @notice Allows sending pool transactions exactly as Uniswap original transactions.
-    /// @dev Declared virtual as we never send ETH to Uniswap router contract.
+    /// @inheritdoc IAUniswap
     function refundETH() external virtual {}
 
     function _safeApprove(
