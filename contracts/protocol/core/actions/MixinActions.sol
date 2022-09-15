@@ -24,7 +24,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
      * EXTERNAL METHODS
      */
     /// @inheritdoc IRigoblockV3PoolActions
-    function burn(uint256 _amountIn)
+    function burn(uint256 _amountIn, uint256 _amountOutMin)
         external
         override
         nonReentrant
@@ -41,6 +41,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         uint256 markup = (burntAmount * _getSpread()) / SPREAD_BASE;
         burntAmount -= markup;
         netRevenue = (burntAmount * _getUnitaryValue()) / 10**decimals();
+        require(netRevenue >= _amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
 
         if (admin.baseToken == address(0)) {
             payable(msg.sender).transfer(netRevenue);
@@ -50,7 +51,11 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
-    function mint(address _recipient, uint256 _amountIn) public payable override returns (uint256 recipientAmount) {
+    function mint(
+        address _recipient,
+        uint256 _amountIn,
+        uint256 _amountOutMin
+    ) public payable override returns (uint256 recipientAmount) {
         // require whitelisted user if kyc is enforced
         if (_isKycEnforced()) {
             require(IKyc(admin.kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
@@ -67,6 +72,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         uint256 markup = (_amountIn * _getSpread()) / SPREAD_BASE;
         _amountIn -= markup;
         uint256 mintedAmount = (_amountIn * 10**decimals()) / _getUnitaryValue();
+        require(mintedAmount > _amountOutMin, "POOL_MINT_OUTPUT_AMOUNT_ERROR");
         poolData.totalSupply += mintedAmount;
 
         /// @notice allocate pool token transfers and log events.

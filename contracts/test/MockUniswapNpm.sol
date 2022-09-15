@@ -43,12 +43,6 @@ contract MockUniswapNpm {
 
     function burn(uint256 tokenId) external {}
 
-    function sweepToken(
-        address token,
-        uint256 amountMinimum,
-        address recipient
-    ) external {}
-
     function createAndInitializePoolIfNecessary(
         address token0,
         address token1,

@@ -174,6 +174,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  // TODO: check if we can move adapters deploy inside the tests
   await deploy("ASelfCustody", {
     from: deployer,
     args: [
@@ -184,16 +185,16 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  const mockUniswapNpm = await deploy("MockUniswapNpm", {
+  const mockUniswapRouter = await deploy("MockUniswapRouter", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   })
 
-  await deploy("AUniswapV3NPM", {
+  await deploy("AUniswap", {
     from: deployer,
-    args: [mockUniswapNpm.address],
+    args: [mockUniswapRouter.address],
     log: true,
     deterministicDeployment: true,
   })
