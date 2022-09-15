@@ -147,9 +147,11 @@ describe("AUniswap", async () => {
             )
             const encodedUnwrapData = pool.interface.encodeFunctionData(
                 'unwrapWETH9(uint256,address)',
-                [parseEther("50"), pool.address]
+                [parseEther("70"), pool.address]
             )
             multicallPool.multicall([encodedUnwrapData])
+            // will fail silently in Weth contract when not enough wrapped ETH
+            await expect(multicallPool.multicall([encodedUnwrapData])).to.be.revertedWith("Transaction reverted without a reason")
             const encodedRefundData = pool.interface.encodeFunctionData(
                 'refundETH'
             )
