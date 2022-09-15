@@ -64,7 +64,7 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
-    describe("mintToken", async () => {
+    describe("mint", async () => {
         it('should create new tokens with input tokens', async () => {
             const { pool, grgToken } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
@@ -72,19 +72,22 @@ describe("BaseTokenProxy", async () => {
             const dustAmount = parseEther("0.000999")
             expect(await pool.decimals()).to.be.eq(18)
             await expect(
-                pool.mintToken(user1.address, dustAmount)
+                pool.mint(user1.address, dustAmount, 0)
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
             const tokenAmountIn = parseEther("1")
             await expect(
-                pool.mintToken(user1.address, tokenAmountIn)
+                pool.mint(user1.address, tokenAmountIn, 0)
             ).to.be.revertedWith("POOL_TRANSFER_FROM_FAILED_ERROR")
             await grgToken.approve(pool.address, tokenAmountIn)
             expect(
                 await grgToken.allowance(user1.address, pool.address)
             ).to.be.eq(tokenAmountIn)
-            const userTokens = await pool.callStatic.mintToken(user1.address, tokenAmountIn)
             await expect(
-                pool.mintToken(user1.address, tokenAmountIn)
+                pool.mint(user1.address, tokenAmountIn, tokenAmountIn)
+            ).to.be.revertedWith("POOL_MINT_OUTPUT_AMOUNT_ERROR")
+            const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn, 0)
+            await expect(
+                pool.mint(user1.address, tokenAmountIn, 0)
             ).to.emit(pool, "Transfer").withArgs(
                 AddressZero,
                 user1.address,
@@ -106,28 +109,28 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
-    describe("burnToken", async () => {
+    describe("burn", async () => {
         it('should burn tokens with input tokens', async () => {
             const { pool, grgToken } = await setupTests()
             const tokenAmountIn = parseEther("1")
             await grgToken.approve(pool.address, tokenAmountIn)
-            const userTokens = await pool.callStatic.mintToken(user1.address, tokenAmountIn)
+            const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn, 0)
             expect((await pool.getAdminData()).minPeriod).to.be.eq(2)
-            await pool.mintToken(user1.address, tokenAmountIn)
+            await pool.mint(user1.address, tokenAmountIn, 0)
             expect(await pool.totalSupply()).to.be.not.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(userTokens)
             const biggerthanBalance = parseEther("1.1")
             let userPoolBalance = await pool.balanceOf(user1.address)
             await expect(
-                pool.burnToken(userPoolBalance)
+                pool.burn(userPoolBalance, 0)
             ).to.be.revertedWith("POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR")
             // following condition is true with spread > 0
             // TODO: check why this test fails when placed before previous one
             await expect(
-                pool.burnToken(tokenAmountIn)
+                pool.burn(tokenAmountIn, 0)
             ).to.be.revertedWith("POOL_BURN_NOT_ENOUGH_ERROR")
             await expect(
-                pool.burnToken(0)
+                pool.burn(0, 0)
             ).to.be.revertedWith("POOL_BURN_NULL_AMOUNT_ERROR")
             // we do not mine as want to check transaction does not happen in same block
             await timeTravel({ seconds: 1, mine: true })
@@ -141,13 +144,16 @@ describe("BaseTokenProxy", async () => {
             // will not be able to send more owned tokens than pool balance
             await pool.setUnitaryValue(parseEther("2"), 0, bytes32hash, bytes32hash)
             await expect(
-                pool.burnToken(userPoolBalance)
+                pool.burn(userPoolBalance, 0)
             ).to.be.revertedWith("POOL_TRANSFER_FAILED_ERROR")
             await pool.setUnitaryValue(parseEther("1"), 0, bytes32hash, bytes32hash)
-            const netRevenue = await pool.callStatic.burnToken(userPoolBalance)
+            await expect(
+                pool.burn(userPoolBalance, userPoolBalance)
+            ).to.be.revertedWith("POOL_BURN_OUTPUT_AMOUNT_ERROR")
+            const netRevenue = await pool.callStatic.burn(userPoolBalance, 0)
             // the following is true with fee set as 0
             await expect(
-                pool.burnToken(userPoolBalance)
+                pool.burn(userPoolBalance, 1)
             ).to.emit(grgToken, "Transfer").withArgs(
                 pool.address,
                 user1.address,
@@ -172,7 +178,7 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
-    describe("burnToken", async () => {
+    describe("burn", async () => {
         it('should burn tokens with 6-decimal base token', async () => {
             const { pool, factory } = await setupTests()
             const source = `
@@ -194,7 +200,7 @@ describe("BaseTokenProxy", async () => {
             const poolUsdc = pool.attach(newPool.newPoolAddress)
             expect(await poolUsdc.decimals()).to.be.eq(6)
             await usdc.transfer(user2.address, 2000000)
-            await poolUsdc.connect(user2).mintToken(user2.address, 100000)
+            await poolUsdc.connect(user2).mint(user2.address, 100000, 1)
             const AuthorityCoreInstance = await deployments.get("AuthorityCore")
             const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
             const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
@@ -208,10 +214,10 @@ describe("BaseTokenProxy", async () => {
             await poolUsdc.setUnitaryValue(24999990, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(124999900, 1, bytes32hash, bytes32hash)
             await expect(
-                poolUsdc.connect(user2).mintToken(user2.address, 100000)
+                poolUsdc.connect(user2).mint(user2.address, 100000, 0)
             ).be.emit(poolUsdc, "Transfer").withArgs(AddressZero, user2.address, 760)
             await expect(
-                poolUsdc.connect(user2).mintToken(user2.address, 999)
+                poolUsdc.connect(user2).mint(user2.address, 999, 0)
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
             await poolUsdc.setUnitaryValue(25000001, 1, bytes32hash, bytes32hash)
             await poolUsdc.setUnitaryValue(5000001, 1, bytes32hash, bytes32hash)
@@ -225,7 +231,7 @@ describe("BaseTokenProxy", async () => {
             const burnAmount = 6000
             // TODO: check if burning underflows netRevenue
             await expect(
-                poolUsdc.connect(user2).burnToken(burnAmount)
+                poolUsdc.connect(user2).burn(burnAmount, 1)
             ).to.emit(poolUsdc, "Transfer").withArgs(user2.address, AddressZero, burnAmount)
         })
     })
