@@ -78,19 +78,24 @@ describe("AUniswap", async () => {
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await grgToken.transfer(newPoolAddress, amount)
             await pool.createAndInitializePoolIfNecessary(grgToken.address, grgToken.address, 1, 1)
-            await pool.mint({
-                token0: grgToken.address,
-                token1: grgToken.address,
-                fee: 10,
-                tickLower: 1,
-                tickUpper: 200,
-                amount0Desired: 100,
-                amount1Desired: 100,
-                amount0Min: 0,
-                amount1Min: 0,
-                recipient: pool.address,
-                deadline: 1
-            })
+            // hardhat does not understand that this mint method has different selector than rigoblock pool mint, therefore we encode it.
+            const encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: grgToken.address,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
             await pool.increaseLiquidity({
                 tokenId: 5,
                 amount0Desired: 100,
@@ -112,7 +117,13 @@ describe("AUniswap", async () => {
                 amount0Max: parseEther("10000"),
                 amount1Max: parseEther("10000")
             })
-            await pool.burn(5)
+            // hardhat does not understand method is different from rigoblock pool burn, hence we encode it.
+            //await pool.burn(5)
+            const encodedBurnData = pool.interface.encodeFunctionData(
+                'burn(uint256)',
+                [5]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedBurnData})
             await pool.wrapETH(parseEther("100"))
             await pool.wrapETH(0)
             await pool.refundETH()
