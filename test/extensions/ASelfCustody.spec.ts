@@ -91,9 +91,6 @@ describe("ASelfCustody", async () => {
             ).to.be.revertedWith("ASELFCUSTODY_BALANCE_NOT_ENOUGH_ERROR")
             await grgToken.transfer(newPoolAddress, 10000)
             await expect(
-                scPool.transferToSelfCustody(stakingProxy.address, grgToken.address, 0)
-            ).to.be.revertedWith("ASELFCUSTODY_TARGET_IS_CONTRACT_ERROR")
-            await expect(
                 scPool.transferToSelfCustody(user2.address, grgToken.address, 0)
             ).to.be.revertedWith("ASELFCUSTODY_NULL_AMOUNT_ERROR")
             await expect(
