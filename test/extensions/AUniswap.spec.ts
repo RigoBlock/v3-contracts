@@ -114,10 +114,7 @@ describe("AUniswap", async () => {
             })
             await pool.burn(5)
             await pool.wrapETH(parseEther("100"))
-            // TODO: hardhat does not recognize duplicate method with different inputs. Check if upgrading fixes
-            //await pool.unwrapWETH9(parseEther("50"), pool.address)
             await pool.refundETH()
-            //await pool.sweepToken(grgToken.address, 50, pool.address)
         })
     })
 
@@ -252,6 +249,7 @@ describe("AUniswap", async () => {
         })
     })
 
+    // hardhat does not recognize methods with same name but different signature/inputs
     describe("exactOutputSingle", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
@@ -286,6 +284,106 @@ describe("AUniswap", async () => {
                 amountOut: 20,
                 amountInMaximum: 10
             })
+        })
+    })
+
+    describe("sweepToken", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            let encodedSweepData
+            encodedSweepData = pool.interface.encodeFunctionData(
+                'sweepToken(address,uint256,address)',
+                [
+                    grgToken.address,
+                    50,
+                    pool.address
+                ]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData})
+            encodedSweepData = pool.interface.encodeFunctionData(
+                'sweepToken(address,uint256)',
+                [grgToken.address, 50]
+            )
+            await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData}))
+                .to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            await authority.addMethod("0xe90a182f", aUniswap)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData})
+        })
+    })
+
+    describe("sweepTokenWithFee", async () => {
+        it('should call uniswap router', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            let encodedSweepData
+            encodedSweepData = pool.interface.encodeFunctionData(
+                'sweepTokenWithFee(address,uint256,address,uint256,address)',
+                [
+                    grgToken.address,
+                    50,
+                    pool.address,
+                    50,
+                    grgToken.address
+                ]
+            )
+            await authority.addMethod("0xe0e189a0", aUniswap)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData})
+            encodedSweepData = pool.interface.encodeFunctionData(
+                'sweepTokenWithFee(address,uint256,uint256,address)',
+                [grgToken.address, 50, 50, grgToken.address]
+            )
+            await authority.addMethod("0x3068c554", aUniswap)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData})
+        })
+    })
+
+    describe("unwrapWETH9", async () => {
+        it('should call WETH contract', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await pool.wrapETH(amount)
+            let encodedUnwrapData
+            // TODO: test with different recipient always returns ETH to pool
+            encodedUnwrapData = pool.interface.encodeFunctionData(
+                'unwrapWETH9(uint256,address)',
+                [50, newPoolAddress]
+            )
+            await expect(authority.addMethod("0x49404b7c", aUniswap)).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
+            encodedUnwrapData = pool.interface.encodeFunctionData(
+                'unwrapWETH9(uint256)',
+                [50]
+            )
+            await authority.addMethod("0x49616997", aUniswap)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
+        })
+    })
+
+    describe("unwrapWETH9WithFee", async () => {
+        it('should call WETH contract', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            // following methods are marked as virtual, do not require wrapping ETH first.
+            let encodedUnwrapData
+            encodedUnwrapData = pool.interface.encodeFunctionData(
+                'unwrapWETH9WithFee(uint256,address,uint256,address)',
+                [50, newPoolAddress, 50, newPoolAddress]
+            )
+            await authority.addMethod("0x9b2c0a37", aUniswap)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
+            encodedUnwrapData = pool.interface.encodeFunctionData(
+                'unwrapWETH9WithFee(uint256,uint256,address)',
+                [50, 50, newPoolAddress]
+            )
+            await authority.addMethod("0xd4ef38de", aUniswap)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
         })
     })
 })
