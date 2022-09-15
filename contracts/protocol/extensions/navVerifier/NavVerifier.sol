@@ -19,19 +19,14 @@
 
 pragma solidity 0.8.14;
 
+import "../adapters/interfaces/INavVerifier.sol";
 import "../../interfaces/IERC20.sol";
 
 /// @title Nav Verifier - Allows to check if new NAV comes from approved authority.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract NavVerifier {
-    /// @dev Verifies that a signature is valid.
-    /// @notice Returns true if liquidity at least 3% of total supply.
-    /// @param _unitaryValue Value of 1 token in wei units.
-    /// @param _signatureValidUntilBlock Number of blocks.
-    /// @param _hash Message hash that is signed.
-    /// @param _signedData Proof of nav validity.
-    /// @return isValid Bool validity of signed data.
+contract NavVerifier is INavVerifier {
+    /// @inheritdoc INavVerifier
     function isValidNav(
         uint256 _unitaryValue,
         uint256 _signatureValidUntilBlock,
