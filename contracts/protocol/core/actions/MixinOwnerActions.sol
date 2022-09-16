@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./MixinActions.sol";
-import "../../interfaces/INavVerifier.sol";
 
 abstract contract MixinOwnerActions is MixinActions {
     /// @dev We keep this check to prevent accidental failure in Nav calculations.
@@ -53,23 +52,32 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
-    function setUnitaryValue(
-        uint256 _unitaryValue,
-        uint256 _signaturevaliduntilBlock,
-        bytes32 _hash,
-        bytes calldata _signedData
-    ) external override onlyOwner notPriceError(_unitaryValue) {
-        /// @notice Value can be updated only after first mint.
-        // TODO: fix tests to apply following
-        // we require positive value as would return to default value if storage cleared
-        //require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
-        require(
-            _isValidNav(INavVerifier(address(this)), _unitaryValue, _signaturevaliduntilBlock, _hash, _signedData),
-            "POOL_NAV_NOT_VALID_ERROR"
-        );
+    function setUnitaryValue(uint256 _unitaryValue)
+        external
+        override
+        onlyOwner
+        notPriceError(_unitaryValue)
+    {
+        // unitary value can be updated only after first mint. we require positive value as would
+        //  return to default value if storage cleared
+        require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
+
+        // This will underflow with small decimals tokens at some point, which is ok
+        uint256 minimumLiquidity = _unitaryValue * totalSupply() / 10**decimals() / 100 * 3;
+
+        // TODO: check if baseToken should be moved to immutable storage
+        if (admin.baseToken == address(0)) {
+            require(address(this).balance >= minimumLiquidity, "POOL_CURRENCY_BALANCE_TOO_LOW_ERROR");
+        } else {
+            require(IERC20(admin.baseToken).balanceOf(address(this)) >= minimumLiquidity, "POOL_TOKEN_BALANCE_TOO_LOW_ERROR");
+        }
+
         poolData.unitaryValue = _unitaryValue;
         emit NewNav(msg.sender, address(this), _unitaryValue);
     }
+
+    function totalSupply() public view virtual override returns (uint256) {}
+    function decimals() public view virtual override returns (uint8) {}
 
     function _getUnitaryValue() internal view virtual override returns (uint256);
 
@@ -79,21 +87,5 @@ abstract contract MixinOwnerActions is MixinActions {
             size := extcodesize(_target)
         }
         return size > 0;
-    }
-
-    /// @dev Verifies that a signature is valid.
-    /// @param _unitaryValue Value of 1 token in wei units.
-    /// @param _signatureValidUntilBlock Number of blocks.
-    /// @param _hash Message hash that is signed.
-    /// @param _signedData Proof of nav validity.
-    /// @return isValid Bool validity of signed price update.
-    function _isValidNav(
-        INavVerifier this_,
-        uint256 _unitaryValue,
-        uint256 _signatureValidUntilBlock,
-        bytes32 _hash,
-        bytes calldata _signedData
-    ) private pure returns (bool) {
-        return this_.isValidNav(_unitaryValue, _signatureValidUntilBlock, _hash, _signedData);
     }
 }

@@ -37,7 +37,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolState
     function getData()
-        external
+        public
         view
         override
         returns (
@@ -64,7 +64,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    function totalSupply() external view override returns (uint256) {
+    function totalSupply() public view override returns (uint256) {
         return poolData.totalSupply;
     }
 

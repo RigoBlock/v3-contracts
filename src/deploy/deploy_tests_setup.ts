@@ -33,15 +33,6 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const navVerifier = await deploy("NavVerifier", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  await authorityInstance.setAdapter(navVerifier.address, true)
-
   // as long as authority address is same on all chains, pool implementation will have same address
   const poolImplementation = await deploy("RigoblockV3Pool", {
     from: deployer,
