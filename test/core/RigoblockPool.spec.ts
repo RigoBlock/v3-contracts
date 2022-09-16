@@ -15,8 +15,6 @@ describe("Proxy", async () => {
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
-        const NavVerifierInstance = await deployments.get("NavVerifier")
-        const NavVerifier = await hre.ethers.getContractFactory("NavVerifier")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress } = await factory.callStatic.createPool(
             'testpool',
@@ -30,7 +28,6 @@ describe("Proxy", async () => {
         )
         return {
             factory,
-            navVerifier: NavVerifier.attach(NavVerifierInstance.address),
             pool
         }
     });
@@ -266,25 +263,11 @@ describe("Proxy", async () => {
         })
 
         it('should set price when caller is owner', async () => {
-            const { pool, navVerifier } = await setupTests()
+            const { pool } = await setupTests()
             const newValue = parseEther("1.1")
             const signaturevaliduntilBlock = 1 // relevant only when checked
             const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
             const bytesSignedData = hre.ethers.utils.formatBytes32String('notused')
-            await expect(
-                pool.setUnitaryValue(
-                    newValue,
-                    signaturevaliduntilBlock,
-                    bytes32hash,
-                    bytesSignedData
-                )
-            ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
-
-            const AuthorityCoreInstance = await deployments.get("AuthorityCore")
-            const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
-            const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
-            //"9e4e93d0": "isValidNav(uint256,uint256,bytes32,bytes)"
-            await authority.addMethod("0x9e4e93d0", navVerifier.address)
             await expect(
                 pool.setUnitaryValue(
                     newValue,
