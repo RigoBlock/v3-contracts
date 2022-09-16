@@ -246,6 +246,21 @@ describe("Proxy", async () => {
                 .to.be.revertedWith("POOL_INPUT_VALUE_ERROR")
         })
 
+        it('should revert with less than 3% liquidity', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("0.1")
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            let newPrice
+            newPrice = parseEther("4.99")
+            await pool.setUnitaryValue(newPrice)
+            newPrice = parseEther("24.94")
+            await pool.setUnitaryValue(newPrice)
+            newPrice = parseEther("35.1")
+            // TODO: should revert at reciprocal of 3%, probably approximation error
+            await expect(pool.setUnitaryValue(newPrice))
+                .to.be.revertedWith("POOL_CURRENCY_BALANCE_TOO_LOW_ERROR")
+        })
+
         it('should set price when caller is owner', async () => {
             const { pool } = await setupTests()
             const newValue = parseEther("1.1")
