@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./MixinActions.sol";
-import "../../interfaces/INavVerifier.sol";
 
 abstract contract MixinOwnerActions is MixinActions {
     /// @dev We keep this check to prevent accidental failure in Nav calculations.
@@ -53,17 +52,17 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
-    function setUnitaryValue(
-        uint256 _unitaryValue,
-        uint256 _signaturevaliduntilBlock,
-        bytes32 _hash,
-        bytes calldata _signedData
-    ) external override onlyOwner notPriceError(_unitaryValue) {
-        abi.encode(_signaturevaliduntilBlock, _hash, _signedData);
-        /// @notice Value can be updated only after first mint.
-        // TODO: fix tests to apply following
-        // we require positive value as would return to default value if storage cleared
-        //require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
+    function setUnitaryValue(uint256 _unitaryValue )
+        external
+        override
+        onlyOwner
+        notPriceError(_unitaryValue)
+    {
+        // unitary value can be updated only after first mint. we require positive value as would
+        //  return to default value if storage cleared
+        require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
+        
+        // This will underflow with small decimals tokens at some point, which is ok
         uint256 minimumLiquidity = _unitaryValue * totalSupply() / 10**decimals() / 100 * 3;
 
         // TODO: check if baseToken should be moved to immutable storage

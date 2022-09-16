@@ -134,13 +134,12 @@ describe("BaseTokenProxy", async () => {
             ).to.be.revertedWith("POOL_BURN_NULL_AMOUNT_ERROR")
             // we do not mine as want to check transaction does not happen in same block
             await timeTravel({ seconds: 1, mine: true })
-            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
             // will not be able to send more owned tokens than pool balance
-            await pool.setUnitaryValue(parseEther("2"), 0, bytes32hash, bytes32hash)
+            await pool.setUnitaryValue(parseEther("2"))
             await expect(
                 pool.burn(userPoolBalance, 0)
             ).to.be.revertedWith("POOL_TRANSFER_FAILED_ERROR")
-            await pool.setUnitaryValue(parseEther("1"), 0, bytes32hash, bytes32hash)
+            await pool.setUnitaryValue(parseEther("1"))
             await expect(
                 pool.burn(userPoolBalance, userPoolBalance)
             ).to.be.revertedWith("POOL_BURN_OUTPUT_AMOUNT_ERROR")
@@ -198,11 +197,10 @@ describe("BaseTokenProxy", async () => {
             expect(await poolUsdc.decimals()).to.be.eq(6)
             await usdc.transfer(user2.address, 2000000)
             await poolUsdc.connect(user2).mint(user2.address, 100000, 1)
-            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
-            await poolUsdc.setUnitaryValue(4999999, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(24999990, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(4999999)
+            await poolUsdc.setUnitaryValue(24999990)
             await expect(
-                poolUsdc.setUnitaryValue(124999900, 1, bytes32hash, bytes32hash)
+                poolUsdc.setUnitaryValue(124999900)
             ).to.be.revertedWith("POOL_TOKEN_BALANCE_TOO_LOW_ERROR")
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 100000, 0)
@@ -210,17 +208,17 @@ describe("BaseTokenProxy", async () => {
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 999, 0)
             ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
-            await poolUsdc.setUnitaryValue(25000001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(5000001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(1000001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(200001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(50001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(10001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(2001, 1, bytes32hash, bytes32hash)
-            await poolUsdc.setUnitaryValue(401, 1, bytes32hash, bytes32hash)
+            await poolUsdc.setUnitaryValue(25000001)
+            await poolUsdc.setUnitaryValue(5000001)
+            await poolUsdc.setUnitaryValue(1000001)
+            await poolUsdc.setUnitaryValue(200001)
+            await poolUsdc.setUnitaryValue(50001)
+            await poolUsdc.setUnitaryValue(10001)
+            await poolUsdc.setUnitaryValue(2001)
+            // the following line undeflows minimum liquidity (99.96% loss with small decimals), which is ok
+            poolUsdc.setUnitaryValue(401)
             await timeTravel({ seconds: 1, mine: true })
             const burnAmount = 6000
-            // TODO: check if burning underflows netRevenue
             await expect(
                 poolUsdc.connect(user2).burn(burnAmount, 1)
             ).to.emit(poolUsdc, "Transfer").withArgs(user2.address, AddressZero, burnAmount)

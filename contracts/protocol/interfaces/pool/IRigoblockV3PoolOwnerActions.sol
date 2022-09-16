@@ -25,14 +25,5 @@ interface IRigoblockV3PoolOwnerActions {
 
     /// @dev Allows pool owner to set the pool price.
     /// @param _unitaryValue Value of 1 token in wei units.
-    /// @param _signaturevaliduntilBlock Number of blocks until expiry of new poolData.
-    /// @param _hash Bytes32 of the transaction hash.
-    /// @param _signedData Bytes of extradata and signature.
-    function setUnitaryValue(
-        uint256 _unitaryValue,
-        uint256 _signaturevaliduntilBlock,
-        bytes32 _hash,
-        bytes calldata _signedData
-    ) external;
-
+    function setUnitaryValue(uint256 _unitaryValue ) external;
 }

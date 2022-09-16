@@ -235,47 +235,26 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             await pool.setOwner(user2.address)
             const newPrice = parseEther("1.1")
-            const signaturevaliduntilBlock = 1 // relevant only when checked
-            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
-            await expect(
-                pool.setUnitaryValue(
-                    newPrice,
-                    signaturevaliduntilBlock,
-                    bytes32hash,
-                    bytes32hash
-                )
-            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
+            await expect(pool.setUnitaryValue(newPrice))
+                .to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
         })
 
         it('should revert when price error', async () => {
             const { pool } = await setupTests()
             const newPrice = parseEther("11")
-            const signaturevaliduntilBlock = 1 // relevant only when checked
-            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
-            await expect(
-                pool.setUnitaryValue(
-                    newPrice,
-                    signaturevaliduntilBlock,
-                    bytes32hash,
-                    bytes32hash
-                )
-            ).to.be.revertedWith("POOL_INPUT_VALUE_ERROR")
+            await expect(pool.setUnitaryValue(newPrice))
+                .to.be.revertedWith("POOL_INPUT_VALUE_ERROR")
         })
 
         it('should set price when caller is owner', async () => {
             const { pool } = await setupTests()
             const newValue = parseEther("1.1")
-            const signaturevaliduntilBlock = 1 // relevant only when checked
-            const bytes32hash = hre.ethers.utils.formatBytes32String('notused')
-            const bytesSignedData = hre.ethers.utils.formatBytes32String('notused')
-            await expect(
-                pool.setUnitaryValue(
-                    newValue,
-                    signaturevaliduntilBlock,
-                    bytes32hash,
-                    bytesSignedData
-                )
-            ).to.emit(pool, "NewNav").withArgs(
+            await expect(pool.setUnitaryValue(newValue))
+                .to.be.revertedWith("POOL_SUPPLY_NULL_ERROR")
+            const etherAmount = parseEther("0.1")
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            await expect(pool.setUnitaryValue(newValue))
+                .to.emit(pool, "NewNav").withArgs(
                 user1.address,
                 pool.address,
                 newValue
