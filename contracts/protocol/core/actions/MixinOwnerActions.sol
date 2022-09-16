@@ -52,7 +52,7 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
-    function setUnitaryValue(uint256 _unitaryValue )
+    function setUnitaryValue(uint256 _unitaryValue)
         external
         override
         onlyOwner
@@ -61,7 +61,7 @@ abstract contract MixinOwnerActions is MixinActions {
         // unitary value can be updated only after first mint. we require positive value as would
         //  return to default value if storage cleared
         require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
-        
+
         // This will underflow with small decimals tokens at some point, which is ok
         uint256 minimumLiquidity = _unitaryValue * totalSupply() / 10**decimals() / 100 * 3;
 

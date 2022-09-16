@@ -25,5 +25,5 @@ interface IRigoblockV3PoolOwnerActions {
 
     /// @dev Allows pool owner to set the pool price.
     /// @param _unitaryValue Value of 1 token in wei units.
-    function setUnitaryValue(uint256 _unitaryValue ) external;
+    function setUnitaryValue(uint256 _unitaryValue) external;
 }
