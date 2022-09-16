@@ -217,7 +217,8 @@ describe("BaseTokenProxy", async () => {
             await poolUsdc.setUnitaryValue(2001)
             // the following line undeflows minimum liquidity (99.96% loss with small decimals), which is ok
             poolUsdc.setUnitaryValue(401)
-            await timeTravel({ seconds: 1, mine: true })
+            // passes locally with 1 second time travel, fails in CI
+            await timeTravel({ seconds: 2, mine: true })
             const burnAmount = 6000
             await expect(
                 poolUsdc.connect(user2).burn(burnAmount, 1)
