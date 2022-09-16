@@ -44,7 +44,7 @@ contract AStaking is IAStaking {
     }
 
     // TODO: must develop methods undelegateStake, unStake, withdrawDelegatorRewards
-    /// @notice Creating staking pool if doesn't exist effectively locks direct call.
+    /// @inheritdoc IAStaking
     function stake(uint256 _amount) external override {
         require(_amount != uint256(0), "STAKE_AMOUNT_NULL_ERROR");
         IStaking staking = IStaking(STAKING_PROXY_ADDRESS);
