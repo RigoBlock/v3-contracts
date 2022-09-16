@@ -29,6 +29,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     /// @inheritdoc IAUniswapV3NPM
     function mint(INonfungiblePositionManager.MintParams memory params)
         external
+        override
         returns (
             uint256 tokenId,
             uint128 liquidity,
@@ -65,6 +66,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     /// @inheritdoc IAUniswapV3NPM
     function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params)
         external
+        override
         returns (
             uint128 liquidity,
             uint256 amount0,
@@ -98,6 +100,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     /// @inheritdoc IAUniswapV3NPM
     function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
         external
+        override
         returns (uint256 amount0, uint256 amount1)
     {
         (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpmAddress()).decreaseLiquidity(
@@ -114,6 +117,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     /// @inheritdoc IAUniswapV3NPM
     function collect(INonfungiblePositionManager.CollectParams memory params)
         external
+        override
         returns (uint256 amount0, uint256 amount1)
     {
         (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpmAddress()).collect(
@@ -127,7 +131,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswapV3NPM
-    function burn(uint256 tokenId) external {
+    function burn(uint256 tokenId) external override {
         INonfungiblePositionManager(_getUniswapNpmAddress()).burn(tokenId);
     }
 
@@ -137,7 +141,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         address token1,
         uint24 fee,
         uint160 sqrtPriceX96
-    ) external returns (address pool) {
+    ) external override returns (address pool) {
         pool = INonfungiblePositionManager(_getUniswapNpmAddress()).createAndInitializePoolIfNecessary(
             token0,
             token1,

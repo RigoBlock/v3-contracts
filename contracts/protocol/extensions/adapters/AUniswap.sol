@@ -56,7 +56,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 amountOutMin,
         address[] calldata path,
         address to
-    ) external returns (uint256 amountOut) {
+    ) external override returns (uint256 amountOut) {
         amountOut = ISwapRouter02(_getUniswapRouter2()).swapExactTokensForTokens(
             amountIn,
             amountOutMin,
@@ -71,7 +71,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 amountInMax,
         address[] calldata path,
         address to
-    ) external returns (uint256 amountIn) {
+    ) external override returns (uint256 amountIn) {
         amountIn = ISwapRouter02(_getUniswapRouter2()).swapTokensForExactTokens(
             amountOut,
             amountInMax,
@@ -86,6 +86,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function exactInputSingle(ISwapRouter02.ExactInputSingleParams calldata params)
         external
+        override
         returns (uint256 amountOut)
     {
         // we first set the allowance to the uniswap router
@@ -109,7 +110,11 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswap
-    function exactInput(ISwapRouter02.ExactInputParams calldata params) external returns (uint256 amountOut) {
+    function exactInput(ISwapRouter02.ExactInputParams calldata params)
+        external
+        override
+        returns (uint256 amountOut)
+    {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
         // we first set the allowance to the uniswap router
@@ -132,6 +137,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function exactOutputSingle(ISwapRouter02.ExactOutputSingleParams calldata params)
         external
+        override
         returns (uint256 amountIn)
     {
         // we first set the allowance to the uniswap router
@@ -155,7 +161,10 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswap
-    function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external returns (uint256 amountIn) {
+    function exactOutput(ISwapRouter02.ExactOutputParams calldata params)
+        external
+        override
+        returns (uint256 amountIn) {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
         // we first set the allowance to the uniswap router
@@ -182,7 +191,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     function sweepToken(
         address token,
         uint256 amountMinimum
-    ) external {
+    ) external override {
         ISwapRouter02(_getUniswapRouter2()).sweepToken(
             token,
             amountMinimum
@@ -194,7 +203,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address token,
         uint256 amountMinimum,
         address recipient
-    ) external {
+    ) external override {
         ISwapRouter02(_getUniswapRouter2()).sweepToken(
             token,
             amountMinimum,
@@ -208,7 +217,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 amountMinimum,
         uint256 feeBips,
         address feeRecipient
-    ) external {
+    ) external override {
         ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
             token,
             amountMinimum,
@@ -224,7 +233,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address recipient,
         uint256 feeBips,
         address feeRecipient
-    ) external {
+    ) external override {
         ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
             token,
             amountMinimum,
@@ -235,12 +244,12 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswap
-    function unwrapWETH9(uint256 amountMinimum) external {
+    function unwrapWETH9(uint256 amountMinimum) external override {
         IWETH9(_getWethAddress()).withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
-    function unwrapWETH9(uint256 amountMinimum, address recipient) external {
+    function unwrapWETH9(uint256 amountMinimum, address recipient) external override {
         if (recipient != address(this)) { recipient = address(this); }
         IWETH9(_getWethAddress()).withdraw(amountMinimum);
     }
@@ -250,7 +259,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 amountMinimum,
         uint256 feeBips,
         address feeRecipient
-    ) external virtual {}
+    ) external override virtual {}
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9WithFee(
@@ -258,7 +267,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address recipient,
         uint256 feeBips,
         address feeRecipient
-    ) external virtual {}
+    ) external override virtual {}
 
     /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external {
@@ -268,7 +277,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswap
-    function refundETH() external virtual {}
+    function refundETH() external override virtual {}
 
     function _safeApprove(
         address token,
@@ -286,7 +295,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         return UNISWAP_V3_NPM_ADDRESS;
     }
 
-    function _getUniswapRouter2() internal view returns (address) {
+    function _getUniswapRouter2() private view returns (address) {
         return UNISWAP_SWAP_ROUTER_2_ADDRESS;
     }
 

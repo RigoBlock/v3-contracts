@@ -32,7 +32,7 @@ contract NavVerifier is INavVerifier {
         uint256 _signatureValidUntilBlock,
         bytes32 _hash,
         bytes calldata _signedData
-    ) external view returns (bool isValid) {
+    ) external view override returns (bool isValid) {
         // following line mock to silence solhint warnings
         abi.encodePacked(_signatureValidUntilBlock, _hash, _signedData);
         // TODO: check if baseToken should be moved to immutable storage
