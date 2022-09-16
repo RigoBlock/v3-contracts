@@ -20,6 +20,7 @@
 // solhint-disable-next-line
 pragma solidity =0.8.14;
 
+import "./adapters/interfaces/IAStaking.sol";
 import "../../staking/interfaces/IStaking.sol";
 import "../../staking/interfaces/IStorage.sol";
 import {IRigoToken as GRG} from "../../rigoToken/interfaces/IRigoToken.sol";
@@ -27,7 +28,7 @@ import {IRigoToken as GRG} from "../../rigoToken/interfaces/IRigoToken.sol";
 /// @title Self Custody adapter - A helper contract for self custody.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract AStaking {
+contract AStaking is IAStaking {
     address private immutable STAKING_PROXY_ADDRESS;
     address private immutable GRG_TOKEN_ADDRESS;
     address private immutable GRG_TRASFER_PROXY_ADDRESS;
@@ -44,7 +45,7 @@ contract AStaking {
 
     // TODO: must develop methods undelegateStake, unStake, withdrawDelegatorRewards
     /// @notice Creating staking pool if doesn't exist effectively locks direct call.
-    function stake(uint256 _amount) external {
+    function stake(uint256 _amount) external override {
         require(_amount != uint256(0), "STAKE_AMOUNT_NULL_ERROR");
         IStaking staking = IStaking(STAKING_PROXY_ADDRESS);
         bytes32 id = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
