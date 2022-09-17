@@ -1,3 +1,41 @@
+# [0.9.0](https://github.com/rigoblock/v3-contracts/compare/v0.8.0...v0.9.0) (2022-09-17)
+
+
+### Bug Fixes
+
+* add nav verifier adapter interface ([a482b17](https://github.com/rigoblock/v3-contracts/commit/a482b17c7ae942006b38daa3da08ac0172a03f97))
+* add staking adapter interface ([c506819](https://github.com/rigoblock/v3-contracts/commit/c506819839701a0ecd04e6def94596ad1f9db5d9))
+* added missing overrides in adapters ([fe92c84](https://github.com/rigoblock/v3-contracts/commit/fe92c847fafec1a66a0695b294ca111706c40b58))
+* all adapters inherit method and docs from their interfaces ([79cf7dd](https://github.com/rigoblock/v3-contracts/commit/79cf7dd8b747c9fb0a55738f5808bed9b3106b11))
+* check valid nav inside setUnitaryValue method ([9e8bbe3](https://github.com/rigoblock/v3-contracts/commit/9e8bbe3ce8de68e786d3dc7fbbdc945bbfe62433))
+* declare uniswap adapter method refund eth as virtual ([29afe26](https://github.com/rigoblock/v3-contracts/commit/29afe26eefdd3a05775f66f24ed17195f6061040))
+* deprecate nav verifier extension ([f987cc5](https://github.com/rigoblock/v3-contracts/commit/f987cc5c652c66c7a59c5d8f271ea257e687151c))
+* do not require self custody account to be EOA ([b5ce495](https://github.com/rigoblock/v3-contracts/commit/b5ce495d4b52120323ecc08e575e2acba3cca611))
+* import weth9 in AUniswap v3 ([14abf83](https://github.com/rigoblock/v3-contracts/commit/14abf83a8729b48f030ddb2ba894e9d43e1435f6))
+* make uniswap npm adapter abstract ([873fc1b](https://github.com/rigoblock/v3-contracts/commit/873fc1b2a42acdb7b41667b7addf5c467efc4b41))
+* move multicall to dedicated adapter ([f046332](https://github.com/rigoblock/v3-contracts/commit/f046332ba71c3b43b74caf77bc40074c4eb41c16))
+* nav verifier adapter inherits from interface ([bb4fef3](https://github.com/rigoblock/v3-contracts/commit/bb4fef3ba1d042b3d3631399c23076339edc9d94))
+* remove unused inputs in set unitary value ([ab9a7ea](https://github.com/rigoblock/v3-contracts/commit/ab9a7eaf89befd80c50ad74d322348769127ebd0))
+* rename mint/burn in pool to prevent signature clashing ([3eadf68](https://github.com/rigoblock/v3-contracts/commit/3eadf68b2660566efab8903c600ca550caad9fe9))
+* safe approve gas optimization and uniswap adapter minor linting ([5c99829](https://github.com/rigoblock/v3-contracts/commit/5c99829d54545024f46b0a61f8301c80ab3e5307))
+* staking adapter inherits from interface ([2dda2fd](https://github.com/rigoblock/v3-contracts/commit/2dda2fd4de384e0f317d3f1dc5af905cc5d974a2))
+* uniswap npm improvements ([eca81ac](https://github.com/rigoblock/v3-contracts/commit/eca81acedaac50f09ccc9b7ea7c25d1c5aaa0c54))
+* unwrap eth directly from weth contract in npm adapter ([c4397c5](https://github.com/rigoblock/v3-contracts/commit/c4397c543d93068fe747bd5b2452cde43b205c02))
+* update pool actions interface ([a0226ec](https://github.com/rigoblock/v3-contracts/commit/a0226ecde4b72abcb8a121413e4fa80a4b84e74a))
+* update solc to >= from = in self custody adapter interface ([38ac8fe](https://github.com/rigoblock/v3-contracts/commit/38ac8fe7dab6fe09989d76d68327c61d7e95c631))
+* update uniswap npm adapter for supporting eth incoming transfers ([3c69579](https://github.com/rigoblock/v3-contracts/commit/3c695798c6ea8525e89ef22fcbf1d3b1a56d0cb9))
+
+
+### Features
+
+* add minimum received in pool mint/burn ([6dafb40](https://github.com/rigoblock/v3-contracts/commit/6dafb40329069b3d3e89bef269258c7fb991899a))
+* add uniswap adapter in deploy/tests pipeline ([0087cd6](https://github.com/rigoblock/v3-contracts/commit/0087cd68f8b0aca04d0967ef49d188f57ac6b98f))
+* added mock uniswap npm contract ([d6f0a57](https://github.com/rigoblock/v3-contracts/commit/d6f0a578e2351bea74ca6531e59f51e934342e68))
+* require at least 3% liquidity when updating pool price ([d2e8965](https://github.com/rigoblock/v3-contracts/commit/d2e8965944d54af83caedc1e767a469a1d5c2734))
+* update uniswap adapter ([0e698fb](https://github.com/rigoblock/v3-contracts/commit/0e698fb302d0bebd801a1a9594cc288bfa1e695b))
+
+
+
 # [0.8.0](https://github.com/rigoblock/v3-contracts/compare/v0.7.0...v0.8.0) (2022-08-22)
 
 
@@ -124,38 +162,6 @@
 * merge buy and sell prices in pool, introduce spread ([0ee6f0a](https://github.com/rigoblock/v3-contracts/commit/0ee6f0a1f8cc853f04f4574c08e497c1ea9fe828))
 * minimum order check with small-decimals tokens ([27212ea](https://github.com/rigoblock/v3-contracts/commit/27212ea5dd8d1e0104f57ddd614728874d72c0ef))
 * remove dao fee and remove related variables, methods, deps ([57ff575](https://github.com/rigoblock/v3-contracts/commit/57ff5759bf2140678c8bfdc46f5a5fb7110baa02))
-
-
-
-# [0.4.0](https://github.com/rigoblock/v3-contracts/compare/v0.3.0...v0.4.0) (2022-07-12)
-
-
-### Bug Fixes
-
-* allow set meta for registered pools only ([cadc5bf](https://github.com/rigoblock/v3-contracts/commit/cadc5bf53db8d2ce01b927f0c51caf92c8b253f6))
-* correctly initialize pool implementation deploy variables ([dc586ad](https://github.com/rigoblock/v3-contracts/commit/dc586ad6db097cbfdbaa4969903df85719fb2392))
-* define pool implementation immutable storage in state interface ([f63d0e6](https://github.com/rigoblock/v3-contracts/commit/f63d0e627f4e1dd2e3c8ac3de988a0575702c04a))
-* move dao set/set methods from factory to registry ([f24edc7](https://github.com/rigoblock/v3-contracts/commit/f24edc75c5e81bc362a28323d4ab6acef83b5ab5))
-* pool implementation add overrides in public variables ([f2a6a43](https://github.com/rigoblock/v3-contracts/commit/f2a6a43239de6f0757068cd73125c4dcf24f6927))
-* pool registry is not owned and updated deploy input ([adc0f3c](https://github.com/rigoblock/v3-contracts/commit/adc0f3c750cde514af940d6e2281610cbf85cfd9))
-* proxy import deps plus constructor gas optimizations and linting ([7274cf5](https://github.com/rigoblock/v3-contracts/commit/7274cf5b58dde7c337be6720a39126e99f9f6b14))
-* remove fee methods in factory as pay() not implemented ([7e2ef76](https://github.com/rigoblock/v3-contracts/commit/7e2ef762cbb1d81ff278c6df8dfb887bb4799423))
-* rename factory storage variables and remove struct ([ac7aec1](https://github.com/rigoblock/v3-contracts/commit/ac7aec1937db52f30771f14ac1f35b6bdf447910))
-* rename variable drago to pool and methods to mint and burn ([d33a5ba](https://github.com/rigoblock/v3-contracts/commit/d33a5ba42fa219cc805a6f5e347d8870f2a0644b))
-* updatable authority in registry and improved new input checks ([ad86357](https://github.com/rigoblock/v3-contracts/commit/ad86357a70707ef45cb426a8f6ba84c8f5bbb23f))
-
-
-### Features
-
-* add pool tests ([089fa06](https://github.com/rigoblock/v3-contracts/commit/089fa06d71726e7fc3ca7b96a65b6f7c514c6018))
-* emit log when beacon upgrades implementation ([ec44f44](https://github.com/rigoblock/v3-contracts/commit/ec44f4425e3fdaa2ed6e80a0603c95bceb38000f))
-* emit pool initialization log ([0891009](https://github.com/rigoblock/v3-contracts/commit/08910091ab43bdc8581c3407971076ec2fa48cfe))
-* factory now Owned and does not set target pool dao address ([ae9308a](https://github.com/rigoblock/v3-contracts/commit/ae9308a0844e81c0a14b74fe87d6d454e49d751b))
-* move allowance setting from pool to adapter and improve init check ([b1afcc0](https://github.com/rigoblock/v3-contracts/commit/b1afcc0693d28497940d621784447a001c156986))
-* move storage slot library to own file ([e4fd6a6](https://github.com/rigoblock/v3-contracts/commit/e4fd6a60cb3e6e39cd2f928577be51463049d125))
-* remove allowance after op without clearing storage ([84a9a52](https://github.com/rigoblock/v3-contracts/commit/84a9a52c594dc72fbab171621d8c3be2dc81a92f))
-* remove dao intervention in pool ([1d2ec9c](https://github.com/rigoblock/v3-contracts/commit/1d2ec9c6b9f0b8cf1c51ab4c3e9e59fe9dd09149))
-* remove unused authority references from proxy factory ([58b27df](https://github.com/rigoblock/v3-contracts/commit/58b27dfcf6ac461af2ea9364155ebc145cafeb1d))
 
 
 
