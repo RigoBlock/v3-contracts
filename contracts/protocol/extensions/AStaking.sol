@@ -43,7 +43,6 @@ contract AStaking is IAStaking {
         GRG_TRASFER_PROXY_ADDRESS = _grgTransferProxy;
     }
 
-    // TODO: must develop methods undelegateStake, unStake, withdrawDelegatorRewards
     /// @inheritdoc IAStaking
     function stake(uint256 _amount) external override {
         require(_amount != uint256(0), "STAKE_AMOUNT_NULL_ERROR");
@@ -69,5 +68,26 @@ contract AStaking is IAStaking {
 
         // we make sure we remove allowance but do not clear storage
         GRG(GRG_TOKEN_ADDRESS).approve(GRG_TRASFER_PROXY_ADDRESS, uint256(1));
+    }
+
+    /// @inheritdoc IAStaking
+    function undelegateStake(uint256 _amount) external override {
+        bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
+        IStaking(STAKING_PROXY_ADDRESS).moveStake(
+            IStructs.StakeInfo({status: IStructs.StakeStatus.DELEGATED, poolId: poolId}),
+            IStructs.StakeInfo({status: IStructs.StakeStatus.UNDELEGATED, poolId: poolId}),
+            _amount
+        );
+    }
+
+    /// @inheritdoc IAStaking
+    function unstake(uint256 _amount) external override {
+        IStaking(STAKING_PROXY_ADDRESS).unstake(_amount);
+    }
+
+    /// @inheritdoc IAStaking
+    function withdrawDelegatorRewards() external override {
+        bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
+        IStaking(STAKING_PROXY_ADDRESS).withdrawDelegatorRewards(poolId);
     }
 }
