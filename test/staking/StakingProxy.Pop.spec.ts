@@ -176,7 +176,13 @@ describe("StakingProxy-Pop", async () => {
             await stakingProxy.endEpoch()
             await expect(stakingProxy.withdrawDelegatorRewards(poolId))
                 .to.be.revertedWith("STAKING_POOL_NOT_FINALIZED_ERROR")
+            let poolOperatorReward
+            poolOperatorReward = await stakingProxy.computeRewardBalanceOfOperator(poolId)
+            expect(poolOperatorReward).to.be.not.eq(0)
             await stakingProxy.finalizePool(poolId)
+            poolOperatorReward = await stakingProxy.computeRewardBalanceOfOperator(poolId)
+            // reward is paid to pool operator at pool finalization
+            expect(poolOperatorReward).to.be.eq(0)
             const reward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
             await expect(stakingProxy.withdrawDelegatorRewards(poolId))
                 .to.emit(grgToken, "Transfer").withArgs(stakingProxy.address, user1.address, reward)
