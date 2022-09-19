@@ -153,6 +153,36 @@ describe("StakingProxy-Pop", async () => {
         })
     })
 
+    describe("withdrawDelegatorRewards", async () => {
+        it('should withdraw delegator rewards', async () => {
+            const { stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            await stakingProxy.createStakingPool(newPoolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await grgToken.transfer(newPoolAddress, amount)
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await pop.creditPopRewardToStakingProxy(newPoolAddress)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await expect(stakingProxy.withdrawDelegatorRewards(poolId))
+                .to.be.revertedWith("STAKING_POOL_NOT_FINALIZED_ERROR")
+            await stakingProxy.finalizePool(poolId)
+            const reward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
+            await expect(stakingProxy.withdrawDelegatorRewards(poolId))
+                .to.emit(grgToken, "Transfer").withArgs(stakingProxy.address, user1.address, reward)
+        })
+    })
+
     describe("getStakingPoolStatsThisEpoch", async () => {
         it('should return staking pool earned rewards', async () => {
             const { stakingProxy, grgToken, pop, poolId, newPoolAddress } = await setupTests()
