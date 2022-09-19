@@ -58,7 +58,7 @@ contract AStaking is IAStaking {
             poolId = id;
         }
 
-        GRG(GRG_TOKEN_ADDRESS).approve(GRG_TRASFER_PROXY_ADDRESS, type(uint256).max);
+        GRG(_getGrgToken()).approve(_getGrgTransferProxy(), type(uint256).max);
         staking.stake(_amount);
         staking.moveStake(
             IStructs.StakeInfo({status: IStructs.StakeStatus.UNDELEGATED, poolId: poolId}),
@@ -67,13 +67,13 @@ contract AStaking is IAStaking {
         );
 
         // we make sure we remove allowance but do not clear storage
-        GRG(GRG_TOKEN_ADDRESS).approve(GRG_TRASFER_PROXY_ADDRESS, uint256(1));
+        GRG(_getGrgToken()).approve(_getGrgTransferProxy(), uint256(1));
     }
 
     /// @inheritdoc IAStaking
     function undelegateStake(uint256 _amount) external override {
-        bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
-        IStaking(STAKING_PROXY_ADDRESS).moveStake(
+        bytes32 poolId = IStorage(_getStakingProxy()).poolIdByRbPoolAccount(address(this));
+        IStaking(_getStakingProxy()).moveStake(
             IStructs.StakeInfo({status: IStructs.StakeStatus.DELEGATED, poolId: poolId}),
             IStructs.StakeInfo({status: IStructs.StakeStatus.UNDELEGATED, poolId: poolId}),
             _amount
@@ -82,12 +82,26 @@ contract AStaking is IAStaking {
 
     /// @inheritdoc IAStaking
     function unstake(uint256 _amount) external override {
-        IStaking(STAKING_PROXY_ADDRESS).unstake(_amount);
+        IStaking(_getStakingProxy()).unstake(_amount);
     }
 
     /// @inheritdoc IAStaking
     function withdrawDelegatorRewards() external override {
-        bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(address(this));
-        IStaking(STAKING_PROXY_ADDRESS).withdrawDelegatorRewards(poolId);
+        bytes32 poolId = IStorage(_getStakingProxy()).poolIdByRbPoolAccount(address(this));
+        // we finalize the pool in case it has not been finalized, won't do anything otherwise
+        IStaking(_getStakingProxy()).finalizePool(poolId);
+        IStaking(_getStakingProxy()).withdrawDelegatorRewards(poolId);
+    }
+
+    function _getGrgToken() private view returns (address) {
+        return GRG_TOKEN_ADDRESS;
+    }
+
+    function _getGrgTransferProxy() private view returns (address) {
+        return GRG_TRASFER_PROXY_ADDRESS;
+    }
+
+    function _getStakingProxy() private view returns (address) {
+        return STAKING_PROXY_ADDRESS;
     }
 }
