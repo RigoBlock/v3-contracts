@@ -398,6 +398,40 @@ describe("StakingProxy-Stake", async () => {
                 poolId
             )
         })
+
+        it('should revert if implementation detached', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            const encodedStakeData = stakingProxy.interface.encodeFunctionData(
+                'stake',
+                [amount]
+            )
+            const encodedCreatePoolData = stakingProxy.interface.encodeFunctionData(
+                'createStakingPool',
+                [newPoolAddress]
+            )
+            const stakingProxyContract = await deployments.get("StakingProxy")
+            const StakingContract = await hre.ethers.getContractFactory("StakingProxy")
+            const stakingContract = StakingContract.attach(stakingProxyContract.address)
+            await expect(
+                stakingContract.batchExecute([
+                    encodedStakeData,
+                    encodedCreatePoolData,
+                    encodedCreatePoolData
+                ])
+            ).to.be.revertedWith("STAKING_POOL_ALREADY_EXISTS_ERROR")
+            await stakingContract.addAuthorizedAddress(user1.address)
+            await stakingContract.detachStakingContract()
+            await expect(
+                stakingContract.batchExecute([
+                    encodedStakeData,
+                    encodedCreatePoolData
+                ])
+            ).to.be.revertedWith("STAKING_ADDRESS_NULL_ERROR")
+            // TODO: following should revert with detached staking implementation
+            await stakingContract.assertValidStorageParams()
+        })
     })
 })
 
