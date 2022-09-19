@@ -354,6 +354,51 @@ describe("StakingProxy-Stake", async () => {
                 .withArgs(user2.address, stakedBalance)
         })
     })
+
+    describe("batchExecute", async () => {
+        it('should execute multiple transactions', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            const encodedStakeData = stakingProxy.interface.encodeFunctionData(
+                'stake',
+                [amount]
+            )
+            const encodedCreatePoolData = stakingProxy.interface.encodeFunctionData(
+                'createStakingPool',
+                [newPoolAddress]
+            )
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            const encodedMoveStakeData = stakingProxy.interface.encodeFunctionData(
+                'moveStake',
+                [
+                    fromInfo,
+                    toInfo,
+                    amount
+                ]
+            )
+            const stakingProxyContract = await deployments.get("StakingProxy")
+            const StakingContract = await hre.ethers.getContractFactory("StakingProxy")
+            const stakingContract = StakingContract.attach(stakingProxyContract.address)
+            await expect(
+                stakingContract.batchExecute([
+                    encodedStakeData,
+                    encodedCreatePoolData,
+                    encodedMoveStakeData
+                ])
+            ).to.emit(stakingProxy, "Stake").withArgs(user1.address, amount)
+            .to.emit(stakingProxy, "StakingPoolCreated").withArgs(poolId, user1.address, 700000)
+            .to.emit(stakingProxy, "MoveStake").withArgs(
+                user1.address,
+                amount,
+                StakeStatus.Undelegated,
+                poolId,
+                StakeStatus.Delegated,
+                poolId
+            )
+        })
+    })
 })
 
 export enum StakeStatus {
