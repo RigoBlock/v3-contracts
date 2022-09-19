@@ -96,7 +96,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         string calldata _name,
         string calldata _symbol,
         address _baseToken
-    ) internal returns (bytes32 salt, RigoblockPoolProxy proxy) {
+    ) internal returns (bytes32 salt, RigoblockPoolProxy newProxy) {
         bytes memory encodedInitialization =
             abi.encodeWithSelector(
                 0x95d317f0, // RigoblockPool._initializePool.selector
@@ -106,18 +106,12 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
                 msg.sender
             );
         salt = keccak256(abi.encode(_name, msg.sender));
-        bytes memory deploymentData =
-            abi.encodePacked(
-                type(RigoblockPoolProxy).creationCode, // bytecode
-                abi.encode(
-                    uint256(uint160(address(this))), // beacon
-                    encodedInitialization // encoded initialization call
-                )
-            );
-        assembly {
-            proxy := create2(0x0, add(0x20, deploymentData), mload(deploymentData), salt)
+        
+        try new RigoblockPoolProxy{salt: salt}(address(this), encodedInitialization) returns (RigoblockPoolProxy proxy) {
+            newProxy = proxy;
+        } catch (bytes memory) {
+            revert("FACTORY_LIBRARY_CREATE2_FAILED_ERROR");
         }
-        require(address(proxy) != address(0), "FACTORY_LIBRARY_CREATE2_FAILED_ERROR");
     }
 
     /// @dev Returns whether an address is a contract.
