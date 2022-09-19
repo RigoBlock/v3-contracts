@@ -169,6 +169,9 @@ describe("StakingProxy-Pop", async () => {
             const Pool = await hre.ethers.getContractFactory("AStaking")
             const pool = Pool.attach(newPoolAddress)
             await pool.stake(amount)
+            let delegatorReward
+            delegatorReward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
+            expect(delegatorReward).to.be.deep.eq(0)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             await pop.creditPopRewardToStakingProxy(newPoolAddress)
@@ -183,9 +186,9 @@ describe("StakingProxy-Pop", async () => {
             poolOperatorReward = await stakingProxy.computeRewardBalanceOfOperator(poolId)
             // reward is paid to pool operator at pool finalization
             expect(poolOperatorReward).to.be.eq(0)
-            const reward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
+            delegatorReward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
             await expect(stakingProxy.withdrawDelegatorRewards(poolId))
-                .to.emit(grgToken, "Transfer").withArgs(stakingProxy.address, user1.address, reward)
+                .to.emit(grgToken, "Transfer").withArgs(stakingProxy.address, user1.address, delegatorReward)
         })
     })
 
