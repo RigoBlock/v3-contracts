@@ -289,6 +289,69 @@ describe("StakingProxy-Stake", async () => {
             ).to.be.revertedWith("STAKING_POOL_DOES_NOT_EXIST_ERROR")
         })
     })
+
+    // TODO: check if should create GrgVault.spec.ts test file
+    describe("enterCatastrophicFailure", async () => {
+        it('should enter emergency mode', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            await expect(grgVault.enterCatastrophicFailure())
+                .to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
+            await grgVault.addAuthorizedAddress(user1.address)
+            await expect(grgVault.enterCatastrophicFailure())
+                .to.emit(grgVault, "InCatastrophicFailureMode")
+                .withArgs(user1.address)
+            await expect(grgVault.enterCatastrophicFailure())
+                .to.be.revertedWith("GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR")
+        })
+    })
+
+    describe("setGrgProxy", async () => {
+        it('should set GRG transfer proxy', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            await expect(grgVault.setGrgProxy(user2.address))
+                .to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
+            await grgVault.addAuthorizedAddress(user1.address)
+            await expect(grgVault.setGrgProxy(user2.address))
+                .to.emit(grgVault, "GrgProxySet")
+                .withArgs(user2.address)
+            await grgVault.enterCatastrophicFailure()
+            await expect(grgVault.setGrgProxy(user2.address))
+                .to.be.revertedWith("GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR")
+        })
+    })
+
+    describe("withdrawAllFrom", async () => {
+        it('should revert with null staked amount', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            await expect(grgVault.withdrawAllFrom(user2.address))
+                .to.be.revertedWith("GRG_VAULT_NOT_IN_CATASTROPHIC_FAILURE_ERROR")
+            // we need user to be authorized to enter catastrophic failure more
+            await grgVault.addAuthorizedAddress(user1.address)
+            await grgVault.enterCatastrophicFailure()
+            // GRG requires a positive transfer amount
+            await expect(grgVault.withdrawAllFrom(user2.address))
+                .to.be.revertedWith("Transaction reverted without a reason")
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await expect(stakingProxy.stake(amount))
+                .to.be.revertedWith("GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR")
+        })
+
+        it('should withdraw with positive stake', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.transfer(user2.address, amount)
+            await grgToken.connect(user2).approve(grgTransferProxyAddress, amount)
+            await stakingProxy.connect(user2).stake(amount)
+            await grgVault.addAuthorizedAddress(user1.address)
+            await grgVault.enterCatastrophicFailure()
+            const stakedBalance = await grgVault.callStatic.withdrawAllFrom(user2.address)
+            expect(stakedBalance).to.be.deep.eq(amount)
+            await expect(grgVault.withdrawAllFrom(user2.address))
+                .to.emit(grgVault, "Withdraw")
+                .withArgs(user2.address, stakedBalance)
+        })
+    })
 })
 
 export enum StakeStatus {
