@@ -109,8 +109,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         
         try new RigoblockPoolProxy{salt: salt}(address(this), encodedInitialization) returns (RigoblockPoolProxy proxy) {
             newProxy = proxy;
-        } catch Error(string memory reason) {
-            revert(reason);
         } catch (bytes memory) {
             revert("FACTORY_LIBRARY_CREATE2_FAILED_ERROR");
         }
