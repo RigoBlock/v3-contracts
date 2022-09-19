@@ -308,6 +308,8 @@ describe("StakingProxy-Stake", async () => {
     describe("setGrgProxy", async () => {
         it('should set GRG transfer proxy', async () => {
             const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            await expect(grgVault.depositFrom(user1.address, 100))
+                .to.be.revertedWith("GRG_VAULT_ONLY_CALLABLE_BY_STAKING_PROXY_ERROR")
             await expect(grgVault.setGrgProxy(user2.address))
                 .to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
             await grgVault.addAuthorizedAddress(user1.address)
