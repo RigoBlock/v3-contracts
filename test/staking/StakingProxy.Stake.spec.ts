@@ -197,6 +197,8 @@ describe("StakingProxy-Stake", async () => {
             const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await expect(stakingProxy.moveStake(fromInfo, toInfo, amount))
+                .to.be.revertedWith("STAKING_INSUFFICIENT_BALANCE_ERROR")
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             let undelegated
@@ -215,6 +217,8 @@ describe("StakingProxy-Stake", async () => {
             expect(undelegated.currentEpoch).to.be.eq(2)
             expect(undelegated.currentEpochBalance).to.be.eq(0)
             expect(undelegated.nextEpochBalance).to.be.eq(amount)
+            await expect(stakingProxy.moveStake(toInfo, fromInfo, amount))
+                .to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
             expect(delegated.currentEpoch).to.be.eq(2)
             expect(delegated.currentEpochBalance).to.be.eq(amount)
             expect(delegated.nextEpochBalance).to.be.eq(0)
@@ -242,7 +246,7 @@ describe("StakingProxy-Stake", async () => {
             // TODO: check why no returned error (prob max library returned error)
             await expect(
                 stakingProxy.moveStake(toInfo, fromInfo, tooBigAmount)
-            ).to.be.reverted //revertedWith("STAKING_INSUFFICIENT_BALANCE_ERROR")
+            ).to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
             await stakingProxy.moveStake(toInfo, fromInfo, amount)
             await expect(
               stakingProxy.unstake(amount)
