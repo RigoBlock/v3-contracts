@@ -1,3 +1,17 @@
+## [0.9.1](https://github.com/rigoblock/v3-contracts/compare/v0.9.0...v0.9.1) (2022-09-20)
+
+
+### Bug Fixes
+
+* add return errors as string in LibMath, LibSafeMath utils ([3c3423b](https://github.com/rigoblock/v3-contracts/commit/3c3423be9d1b2ae66cde3f7aaed49a4177977728))
+* complete staking adapter ([90fb96d](https://github.com/rigoblock/v3-contracts/commit/90fb96d7523b9884cf885aba3efe8eba47ef83ec))
+* finalize before withdrawing rewards and read from private ([85df039](https://github.com/rigoblock/v3-contracts/commit/85df0396be1f24d0c3e7a1184baf77ca801711e1))
+* removed unused library methods ([0d41969](https://github.com/rigoblock/v3-contracts/commit/0d41969735218a8939c274229230a57d5cf96070))
+* removed unused private method in staking ([126fe36](https://github.com/rigoblock/v3-contracts/commit/126fe36d22952bb8b95f8311d41c075ef5cdb04e))
+* updated staking adapter interface with new methods ([d2991ce](https://github.com/rigoblock/v3-contracts/commit/d2991ce7941d78537736b51521f0639eff14a1f7))
+
+
+
 # [0.9.0](https://github.com/rigoblock/v3-contracts/compare/v0.8.0...v0.9.0) (2022-09-17)
 
 
@@ -126,42 +140,6 @@
 * create staking pool from rigoblock pool if doesn't exist ([c38845a](https://github.com/rigoblock/v3-contracts/commit/c38845a68d0ecb363266ea2b70e7a3d3688bf8cb))
 * remove use of encoded rich error for return rich errors in staking ([5a6b85d](https://github.com/rigoblock/v3-contracts/commit/5a6b85db370fdb2afa93e4c008006d9a9bd1ea82))
 * whitelist adapter in extensions authority ([34974db](https://github.com/rigoblock/v3-contracts/commit/34974db6038ecd406caccef35cf2f9f63784b3ce))
-
-
-
-# [0.5.0](https://github.com/rigoblock/v3-contracts/compare/v0.4.0...v0.5.0) (2022-07-18)
-
-
-### Bug Fixes
-
-* correctly initialize rigo token with deterministic deployment ([5ee6b46](https://github.com/rigoblock/v3-contracts/commit/5ee6b463374094ad05c485d4db20c1ab7e12373e))
-* do not save name and symbol string in memory at pool creation ([fb298dc](https://github.com/rigoblock/v3-contracts/commit/fb298dc104097cd38a518467c8b5fbb7078eddc5))
-* improve pool checks and reorg methods ([7eac151](https://github.com/rigoblock/v3-contracts/commit/7eac151cfc3be8e08d5c80ec1bcfc56d653968ef))
-* make 1 pool method private (prev. external) ([a39c95c](https://github.com/rigoblock/v3-contracts/commit/a39c95c1964954e5c8aa77bb6beecf44584759d5))
-* merge positive amount modifier into burn method ([5412535](https://github.com/rigoblock/v3-contracts/commit/5412535b97dc462c1cafe8fca3980410909abbc3))
-* move sigverifier to examples and made abstract, simplified contract ([5d1bcaf](https://github.com/rigoblock/v3-contracts/commit/5d1bcaf9573a32665780ecd84e43bf0760a9e81c))
-* override pool decimals and set base token ([9f85f2d](https://github.com/rigoblock/v3-contracts/commit/9f85f2d7395a97ed74a9b27f0580502385beb952))
-* prevent flashbot attacks by setting pool initial lockup = 1 ([9a7b52b](https://github.com/rigoblock/v3-contracts/commit/9a7b52bebee864c086b9162447f80216aa186477))
-* remove  pool siverifier method as call delegated to adapter ([d765a6d](https://github.com/rigoblock/v3-contracts/commit/d765a6d480c50fb6a802ba4d0c21508c27e1bda8))
-* remove deprecated eventful contract related methods in authority ([f69d726](https://github.com/rigoblock/v3-contracts/commit/f69d7262088e07243ec93d55e8d5e674176d0d7b))
-* remove mint/burn events and user transfer with address 0 ([3046fa1](https://github.com/rigoblock/v3-contracts/commit/3046fa1aba0e70a719e9c1c6e414a951a71781bb))
-* rename pool method ([d7dd789](https://github.com/rigoblock/v3-contracts/commit/d7dd789d1043545ee49cfbc3fd5cb4637584e99e))
-* simplify logic of pool mint/burn methods and variables renaming ([8f80a60](https://github.com/rigoblock/v3-contracts/commit/8f80a605a4d4fef2a9c39021252e5d082942a6e9))
-* update authority extensions selector related methods ([93244c3](https://github.com/rigoblock/v3-contracts/commit/93244c3ae86956d0be81f86eaf5ec9e0d197ca0b))
-* update nav verifier to single price specs ([2b08d32](https://github.com/rigoblock/v3-contracts/commit/2b08d32058852069e8fc27c6d6ee18634623f895))
-* update new nav log msg ([7d99181](https://github.com/rigoblock/v3-contracts/commit/7d991814bd748ec243acb83d1b92d76f9398bc74))
-* update pool interfaces ([a954011](https://github.com/rigoblock/v3-contracts/commit/a954011ab0353faaa722affd08813b6a52b8210d))
-* updated README.md ([02fbe47](https://github.com/rigoblock/v3-contracts/commit/02fbe47cd9757b8c3b7b0f4cb156382f9932c04b))
-
-
-### Features
-
-* add base token return value in get pool data ([4b6dd72](https://github.com/rigoblock/v3-contracts/commit/4b6dd72889f5556e0b86f33d7eed6fe06674bee8))
-* do not require unique name to prevent race conditions ([2213f27](https://github.com/rigoblock/v3-contracts/commit/2213f27fb792cf01aaa5b31c705e79dc38506c04))
-* implement generic fallback in pool implementation ([57f2d99](https://github.com/rigoblock/v3-contracts/commit/57f2d99bcdc11aeec94e41ae1ed3dc9ef60ed86e))
-* merge buy and sell prices in pool, introduce spread ([0ee6f0a](https://github.com/rigoblock/v3-contracts/commit/0ee6f0a1f8cc853f04f4574c08e497c1ea9fe828))
-* minimum order check with small-decimals tokens ([27212ea](https://github.com/rigoblock/v3-contracts/commit/27212ea5dd8d1e0104f57ddd614728874d72c0ef))
-* remove dao fee and remove related variables, methods, deps ([57ff575](https://github.com/rigoblock/v3-contracts/commit/57ff5759bf2140678c8bfdc46f5a5fb7110baa02))
 
 
 
