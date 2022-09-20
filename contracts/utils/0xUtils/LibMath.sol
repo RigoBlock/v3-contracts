@@ -20,8 +20,6 @@
 pragma solidity >=0.5.9 <0.9.0;
 
 import "./LibSafeMath.sol";
-import "./LibRichErrors.sol";
-import "./LibMathRichErrors.sol";
 
 library LibMath {
     using LibSafeMath for uint256;
@@ -37,9 +35,10 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (uint256 partialAmount) {
-        if (isRoundingErrorFloor(numerator, denominator, target)) {
-            LibRichErrors.rrevert(LibMathRichErrors.RoundingError(numerator, denominator, target));
-        }
+        require(
+            !isRoundingErrorFloor(numerator, denominator, target),
+            "LIBMATH_ROUNDING_FLOOR_ERROR"
+        );
 
         partialAmount = numerator.safeMul(target).safeDiv(denominator);
         return partialAmount;
@@ -56,9 +55,10 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (uint256 partialAmount) {
-        if (isRoundingErrorCeil(numerator, denominator, target)) {
-            LibRichErrors.rrevert(LibMathRichErrors.RoundingError(numerator, denominator, target));
-        }
+        require(
+            !isRoundingErrorCeil(numerator, denominator, target),
+            "LIBMATH_ROUNDING_CEIL_ERROR"
+        );
 
         // safeDiv computes `floor(a / b)`. We use the identity (a, b integer):
         //       ceil(a / b) = floor((a + b - 1) / b)
@@ -110,9 +110,7 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (bool isError) {
-        if (denominator == 0) {
-            LibRichErrors.rrevert(LibMathRichErrors.DivisionByZeroError());
-        }
+        require(denominator != 0, "LIBMATH_DIVISION_BY_ZERO_ERROR");
 
         // The absolute rounding error is the difference between the rounded
         // value and the ideal value. The relative rounding error is the
@@ -155,9 +153,7 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (bool isError) {
-        if (denominator == 0) {
-            LibRichErrors.rrevert(LibMathRichErrors.DivisionByZeroError());
-        }
+        require(denominator != 0, "LIBMATH_DIVISION_BY_ZERO_ERROR");
 
         // See the comments in `isRoundingError`.
         if (target == 0 || numerator == 0) {
