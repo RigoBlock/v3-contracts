@@ -8,8 +8,7 @@ import { BigNumber, Contract } from "ethers";
 describe("TestCobbDouglas", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
 
-    const setupTests = deployments.createFixture(async ({ deployments }) => {
-        await deployments.fixture()
+    const setupTests = deployments.createFixture(async () => {
         const TestCobbDouglas = await hre.ethers.getContractFactory("TestCobbDouglas")
         const testCobbDouglas = await TestCobbDouglas.deploy()
         return {
@@ -17,11 +16,11 @@ describe("TestCobbDouglas", async () => {
         }
     })
 
-    describe("CobbDouglas", async () => {
+    describe("getCobbDouglasReward", async () => {
         it('should return 0 with 0 fee ratio or 0 stake ratio', async () => {
             const { testCobbDouglas } = await setupTests()
             let reward
-            reward = await testCobbDouglas.cobbDouglas(
+            reward = await testCobbDouglas.getCobbDouglasReward(
                 100,
                 10,
                 100,
@@ -31,7 +30,7 @@ describe("TestCobbDouglas", async () => {
                 3
             )
             expect(reward).to.be.not.eq(0)
-            reward = await testCobbDouglas.cobbDouglas(
+            reward = await testCobbDouglas.getCobbDouglasReward(
                 100,
                 0,
                 100,
@@ -41,7 +40,7 @@ describe("TestCobbDouglas", async () => {
                 3
             )
             expect(reward).to.be.deep.eq(0)
-            reward = await testCobbDouglas.cobbDouglas(
+            reward = await testCobbDouglas.getCobbDouglasReward(
                 100,
                 10,
                 100,

@@ -6,7 +6,7 @@ import "../staking/libs/LibCobbDouglas.sol";
 
 contract TestCobbDouglas {
 
-    function cobbDouglas(
+    function getCobbDouglasReward(
         uint256 totalRewards,
         uint256 fees,
         uint256 totalFees,
