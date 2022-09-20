@@ -44,6 +44,7 @@ describe("StakingProxy-Pop", async () => {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
             grgVault: GrgVault.attach(GrgVaultInstance.address),
             pop: Pop.attach(PopInstance.address),
+            factory,
             stakingProxy,
             grgTransferProxyAddress,
             newPoolAddress,
@@ -170,6 +171,39 @@ describe("StakingProxy-Pop", async () => {
             await pop.creditPopRewardToStakingProxy(newPoolAddress)
             newEpochPoolStats = await stakingProxy.getStakingPoolStatsThisEpoch(poolId)
             expect(newEpochPoolStats.feesCollected).to.be.eq(parseEther("1"))
+        })
+    })
+
+    describe("finalize", async () => {
+        it('should finalize with multiple pools', async () => {
+            const { factory, stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            const amount = parseEther("200")
+            await grgToken.transfer(newPoolAddress, amount)
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(parseEther("100"))
+            const pool2Data = await factory.callStatic.createPool(
+                'testpool2',
+                'TEST',
+                AddressZero
+            )
+            await factory.createPool('testpool2','TEST',AddressZero)
+            await grgToken.transfer(pool2Data.newPoolAddress, amount)
+            const pool2 = Pool.attach(pool2Data.newPoolAddress)
+            await pool2.stake(parseEther("200"))
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
+            await expect(
+                pop.creditPopRewardToStakingProxy(pool2Data.newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, pool2Data.poolId)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.finalizePool(poolId)
         })
     })
 
