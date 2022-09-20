@@ -81,6 +81,19 @@ describe("StakingProxy-Pop", async () => {
             ).to.be.revertedWith("STAKING_ONLY_CALLABLE_BY_POP_ERROR")
         })
 
+        it('should revert if staking pool does not exist', async () => {
+            const { stakingProxy, newPoolAddress } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(user2.address)
+            await expect(
+                stakingProxy.connect(user2).creditPopReward(newPoolAddress, 100)
+            ).to.be.revertedWith("STAKING_NULL_POOL_ID_ERROR")
+            await stakingProxy.createStakingPool(newPoolAddress)
+            await expect(
+                stakingProxy.connect(user2).creditPopReward(newPoolAddress, 100)
+            ).to.be.revertedWith("STAKING_STAKE_BELOW_MINIMUM_ERROR")
+        })
+
         it('should revert if stake below minimum', async () => {
             const { stakingProxy, pop, grgToken, newPoolAddress, poolId } = await setupTests()
             const amount = parseEther("50")
