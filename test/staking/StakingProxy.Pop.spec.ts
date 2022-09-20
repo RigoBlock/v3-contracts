@@ -183,6 +183,8 @@ describe("StakingProxy-Pop", async () => {
             poolOperatorReward = await stakingProxy.computeRewardBalanceOfOperator(poolId)
             expect(poolOperatorReward).to.be.not.eq(0)
             await stakingProxy.finalizePool(poolId)
+            // noop if thepool already finalized
+            await stakingProxy.finalizePool(poolId)
             poolOperatorReward = await stakingProxy.computeRewardBalanceOfOperator(poolId)
             // reward is paid to pool operator at pool finalization
             expect(poolOperatorReward).to.be.eq(0)
@@ -206,6 +208,8 @@ describe("StakingProxy-Pop", async () => {
             const Pool = await hre.ethers.getContractFactory("AStaking")
             const pool = Pool.attach(newPoolAddress)
             await pool.stake(amount)
+            // noop if thepool already finalized
+            await stakingProxy.finalizePool(poolId)
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.be.revertedWith("POP_STAKING_POOL_BALANCES_NULL_ERROR")
