@@ -10,18 +10,18 @@ describe("TestCobbDouglas", async () => {
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture()
-        const CobbDouglas = await hre.ethers.getContractFactory("TestCobbDouglas")
-        const cobbDouglas = await CobbDouglas.deploy()
+        const TestCobbDouglas = await hre.ethers.getContractFactory("TestCobbDouglas")
+        const testCobbDouglas = await TestCobbDouglas.deploy()
         return {
-            cobbDouglas
+            testCobbDouglas
         }
     })
 
     describe("CobbDouglas", async () => {
         it('should return 0 with 0 fee ratio or 0 stake ratio', async () => {
-            const { cobbDouglas } = await setupTests()
+            const { testCobbDouglas } = await setupTests()
             let reward
-            reward = await cobbDouglas.cobbDouglas(
+            reward = await testCobbDouglas.cobbDouglas(
                 100,
                 10,
                 100,
@@ -31,7 +31,7 @@ describe("TestCobbDouglas", async () => {
                 3
             )
             expect(reward).to.be.not.eq(0)
-            reward = await cobbDouglas.cobbDouglas(
+            reward = await testCobbDouglas.cobbDouglas(
                 100,
                 0,
                 100,
@@ -41,7 +41,7 @@ describe("TestCobbDouglas", async () => {
                 3
             )
             expect(reward).to.be.deep.eq(0)
-            reward = await cobbDouglas.cobbDouglas(
+            reward = await testCobbDouglas.cobbDouglas(
                 100,
                 10,
                 100,
