@@ -235,6 +235,11 @@ describe("StakingProxy-Pop", async () => {
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             await stakingProxy.finalizePool(mockBytes32)
+            // test system does not get stuck even in case of rogue pop
+            await timeTravel({ days: 14, mine:true })
+            // system won't be able to reduce num pools to finalize if reward credited is 0.
+            // this condition is excluded by both pop contract which reverts if pool self stake below minimum
+            await expect(stakingProxy.endEpoch()).to.be.revertedWith("STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR")
         })
     })
 
