@@ -38,22 +38,6 @@ library LibFixedMath {
     // -63.875
     int256 private constant EXP_MIN_VAL = -int256(0x0000000000000000000000000000001ff0000000000000000000000000000000);
 
-    /// @dev Get one as a fixed-point number.
-    function one() internal pure returns (int256 f) {
-        f = FIXED_1;
-    }
-
-    /// @dev Returns the addition of two fixed point numbers, reverting on overflow.
-    function add(int256 a, int256 b) internal pure returns (int256 c) {
-        c = _add(a, b);
-    }
-
-    /// @dev Returns the addition of two fixed point numbers, reverting on overflow.
-    function sub(int256 a, int256 b) internal pure returns (int256 c) {
-        require(b != MIN_FIXED_VAL, "B_TOO_SMALL_ERROR");
-        c = _add(a, -b);
-    }
-
     /// @dev Returns the multiplication of two fixed point numbers, reverting on overflow.
     function mul(int256 a, int256 b) internal pure returns (int256 c) {
         c = _mul(a, b) / FIXED_1;
@@ -85,49 +69,12 @@ library LibFixedMath {
         return uint256(uint256(c) >> 127);
     }
 
-    /// @dev Returns the absolute value of a fixed point number.
-    function abs(int256 f) internal pure returns (int256 c) {
-        require(f != MIN_FIXED_VAL, "F_TOO_SMALL_ERROR");
-        if (f >= 0) {
-            c = f;
-        } else {
-            c = -f;
-        }
-    }
-
-    /// @dev Returns 1 / `x`, where `x` is a fixed-point number.
-    function invert(int256 f) internal pure returns (int256 c) {
-        c = _div(FIXED_1_SQUARED, f);
-    }
-
-    /// @dev Convert signed `n` / 1 to a fixed-point number.
-    function toFixed(int256 n) internal pure returns (int256 f) {
-        f = _mul(n, FIXED_1);
-    }
-
-    /// @dev Convert signed `n` / `d` to a fixed-point number.
-    function toFixed(int256 n, int256 d) internal pure returns (int256 f) {
-        f = _div(_mul(n, FIXED_1), d);
-    }
-
-    /// @dev Convert unsigned `n` / 1 to a fixed-point number.
-    ///      Reverts if `n` is too large to fit in a fixed-point number.
-    function toFixed(uint256 n) internal pure returns (int256 f) {
-        require(int256(n) >= int256(0), "N_TOO_LARGE_ERROR");
-        f = _mul(int256(n), FIXED_1);
-    }
-
     /// @dev Convert unsigned `n` / `d` to a fixed-point number.
     ///      Reverts if `n` / `d` is too large to fit in a fixed-point number.
     function toFixed(uint256 n, uint256 d) internal pure returns (int256 f) {
         require(int256(n) >= int256(0), "N_TOO_LARGE_ERROR");
         require(int256(d) >= int256(0), "D_TOO_LARGE_ERROR");
         f = _div(_mul(int256(n), FIXED_1), int256(d));
-    }
-
-    /// @dev Convert a fixed-point number to an integer.
-    function toInteger(int256 f) internal pure returns (int256 n) {
-        return f / FIXED_1;
     }
 
     /// @dev Get the natural logarithm of a fixed-point number 0 < `x` <= LN_MAX_VAL
@@ -359,13 +306,5 @@ library LibFixedMath {
             revert("DIVISION_OVERFLOW_ERROR");
         }
         c = a / b;
-    }
-
-    /// @dev Adds two numbers, reverting on overflow.
-    function _add(int256 a, int256 b) private pure returns (int256 c) {
-        c = a + b;
-        if ((a < 0 && b < 0 && c > a) || (a > 0 && b > 0 && c < a)) {
-            revert("ADDITION_OVERFLOW_ERROR");
-        }
     }
 }
