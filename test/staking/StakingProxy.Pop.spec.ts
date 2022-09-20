@@ -5,7 +5,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
-import { timeTravel } from "../utils/utils";
+import { deployContract, timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("StakingProxy-Pop", async () => {
@@ -44,6 +44,7 @@ describe("StakingProxy-Pop", async () => {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
             grgVault: GrgVault.attach(GrgVaultInstance.address),
             pop: Pop.attach(PopInstance.address),
+            authority,
             factory,
             stakingProxy,
             grgTransferProxyAddress,
@@ -204,6 +205,36 @@ describe("StakingProxy-Pop", async () => {
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             await stakingProxy.finalizePool(poolId)
+        })
+
+        it('should credit null reward with rogue pop', async () => {
+            const { factory, authority, stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(user1.address)
+            await authority.setFactory(user1.address, true)
+            const RegistryInstance = await deployments.get("PoolRegistry")
+            const Registry = await hre.ethers.getContractFactory("PoolRegistry")
+            const registry = Registry.attach(RegistryInstance.address)
+            const mockName = "mock name"
+            const mockBytes32 = hre.ethers.utils.formatBytes32String(mockName)
+            const source = `contract MockPool { address public owner = address(1); }`
+            const mockPool = await deployContract(user1, source)
+            await registry.register(mockPool.address, mockName, "TEST", mockBytes32)
+            await stakingProxy.createStakingPool(mockPool.address)
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, mockBytes32)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, mockBytes32)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await expect(
+                stakingProxy.creditPopReward(mockPool.address, 0)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, mockBytes32)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.finalizePool(mockBytes32)
         })
     })
 
