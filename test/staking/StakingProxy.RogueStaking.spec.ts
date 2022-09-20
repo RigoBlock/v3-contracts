@@ -183,4 +183,75 @@ describe("StakingProxy", async () => {
             ).to.be.revertedWith("STAKING_INIT_FAILED_ERROR")
         })
     })
+
+    describe("attachStakingContract", async () => {
+        it('should revert if staking did not succeed', async () => {
+            const StakingProxyInstance = await deployments.get("StakingProxy")
+            const StakingProxy = await hre.ethers.getContractFactory("StakingProxy")
+            const proxy = StakingProxy.attach(StakingProxyInstance.address)
+            const source = `
+            contract RogueStaking {
+                address public owner;
+                mapping(address => bool) public authorized;
+                address[] public authorities;
+                address public stakingContract;
+                mapping(uint8 => StoredBalance) internal _globalStakeByStatus;
+                mapping(uint8 => mapping(address => StoredBalance)) internal _ownerStakeByStatus;
+                mapping(address => mapping(bytes32 => StoredBalance)) internal _delegatedStakeToPoolByOwner;
+                mapping(bytes32 => StoredBalance) internal _delegatedStakeByPoolId;
+                mapping(address => bytes32) public poolIdByRbPoolAccount;
+                mapping(bytes32 => Pool) internal _poolById;
+                mapping(bytes32 => uint256) public rewardsByPoolId;
+                uint256 public currentEpoch;
+                uint256 public currentEpochStartTimeInSeconds;
+                mapping(bytes32 => mapping(uint256 => Fraction)) internal _cumulativeRewardsByPool;
+                mapping(bytes32 => uint256) internal _cumulativeRewardsByPoolLastStored;
+                mapping(address => bool) public validPops;
+                uint256 public epochDurationInSeconds;
+                uint32 public rewardDelegatedStakeWeight;
+                uint256 public minimumPoolStake;
+                uint32 public cobbDouglasAlphaNumerator;
+                uint32 public cobbDouglasAlphaDenominator;
+                struct StoredBalance { uint64 currentEpoch; uint96 currentEpochBalance; uint96 nextEpochBalance; }
+                struct Pool { address operator; address stakingPal; uint32 operatorShare; uint32 stakingPalShare; }
+                struct Fraction { uint256 numerator; uint256 denominator; }
+                function init() public {}
+                function setAlphaNum(uint32 value) public { cobbDouglasAlphaNumerator = value; }
+                function setAlphaDenom(uint32 value) public { cobbDouglasAlphaDenominator = value; }
+                function setMinimumStake(uint256 value) public { minimumPoolStake = value; }
+                function setStakeWeight(uint32 value) public { rewardDelegatedStakeWeight = value; }
+            }`
+            const rogueImplementation = await deployContract(user1, source)
+            await expect(
+                proxy.detachStakingContract()
+            ).to.emit(proxy, "StakingContractDetachedFromProxy")
+            await expect(proxy.attachStakingContract(rogueImplementation.address))
+                .to.emit(proxy, "StakingContractAttachedToProxy").withArgs(rogueImplementation.address)
+            const rogueProxy = rogueImplementation.attach(proxy.address)
+            // following assertion will only revert with error, without return if not error
+            await proxy.assertValidStorageParams()
+            await rogueProxy.setAlphaNum(4)
+            await expect(proxy.assertValidStorageParams())
+                .to.be.revertedWith("STAKING_PROXY_INVALID_COBB_DOUGLAS_ALPHA_ERROR")
+            await rogueProxy.setAlphaNum(2)
+            await proxy.assertValidStorageParams()
+            await rogueProxy.setAlphaDenom(0)
+            await expect(proxy.assertValidStorageParams())
+                .to.be.revertedWith("STAKING_PROXY_INVALID_COBB_DOUGLAS_ALPHA_ERROR")
+            await rogueProxy.setAlphaDenom(3)
+            await proxy.assertValidStorageParams()
+            await rogueProxy.setStakeWeight(1000001)
+            await expect(proxy.assertValidStorageParams())
+                .to.be.revertedWith("STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR")
+            await rogueProxy.setStakeWeight(1000000)
+            await proxy.assertValidStorageParams()
+            // TODO: following assertion should require minimum stake to be higher than 2e18 but deployed staking proxy
+            //  cannot be update and it is not critical. We should check if 1e18 multiplier is used somewhere.
+            await rogueProxy.setMinimumStake(1)
+            await expect(proxy.assertValidStorageParams())
+                .to.be.revertedWith("STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR")
+            await rogueProxy.setMinimumStake(parseEther("2"))
+            await proxy.assertValidStorageParams()
+        })
+    })
 })

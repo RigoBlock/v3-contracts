@@ -197,6 +197,8 @@ describe("StakingProxy-Stake", async () => {
             const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await expect(stakingProxy.moveStake(fromInfo, toInfo, amount))
+                .to.be.revertedWith("STAKING_INSUFFICIENT_BALANCE_ERROR")
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             let undelegated
@@ -215,6 +217,8 @@ describe("StakingProxy-Stake", async () => {
             expect(undelegated.currentEpoch).to.be.eq(2)
             expect(undelegated.currentEpochBalance).to.be.eq(0)
             expect(undelegated.nextEpochBalance).to.be.eq(amount)
+            await expect(stakingProxy.moveStake(toInfo, fromInfo, amount))
+                .to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
             expect(delegated.currentEpoch).to.be.eq(2)
             expect(delegated.currentEpochBalance).to.be.eq(amount)
             expect(delegated.nextEpochBalance).to.be.eq(0)
@@ -242,7 +246,7 @@ describe("StakingProxy-Stake", async () => {
             // TODO: check why no returned error (prob max library returned error)
             await expect(
                 stakingProxy.moveStake(toInfo, fromInfo, tooBigAmount)
-            ).to.be.reverted //revertedWith("STAKING_INSUFFICIENT_BALANCE_ERROR")
+            ).to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
             await stakingProxy.moveStake(toInfo, fromInfo, amount)
             await expect(
               stakingProxy.unstake(amount)
@@ -287,6 +291,150 @@ describe("StakingProxy-Stake", async () => {
             await expect(
               stakingProxy.moveStake(fromInfo, toInfo, amount)
             ).to.be.revertedWith("STAKING_POOL_DOES_NOT_EXIST_ERROR")
+        })
+    })
+
+    // TODO: check if should create GrgVault.spec.ts test file
+    describe("enterCatastrophicFailure", async () => {
+        it('should enter emergency mode', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            await expect(grgVault.enterCatastrophicFailure())
+                .to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
+            await grgVault.addAuthorizedAddress(user1.address)
+            await expect(grgVault.enterCatastrophicFailure())
+                .to.emit(grgVault, "InCatastrophicFailureMode")
+                .withArgs(user1.address)
+            await expect(grgVault.enterCatastrophicFailure())
+                .to.be.revertedWith("GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR")
+        })
+    })
+
+    describe("setGrgProxy", async () => {
+        it('should set GRG transfer proxy', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            await expect(grgVault.depositFrom(user1.address, 100))
+                .to.be.revertedWith("GRG_VAULT_ONLY_CALLABLE_BY_STAKING_PROXY_ERROR")
+            await expect(grgVault.setGrgProxy(user2.address))
+                .to.be.revertedWith("AUTHORIZABLE_SENDER_NOT_AUTHORIZED_ERROR")
+            await grgVault.addAuthorizedAddress(user1.address)
+            await expect(grgVault.setGrgProxy(user2.address))
+                .to.emit(grgVault, "GrgProxySet")
+                .withArgs(user2.address)
+            await grgVault.enterCatastrophicFailure()
+            await expect(grgVault.setGrgProxy(user2.address))
+                .to.be.revertedWith("GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR")
+        })
+    })
+
+    describe("withdrawAllFrom", async () => {
+        it('should revert with null staked amount', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            await expect(grgVault.withdrawAllFrom(user2.address))
+                .to.be.revertedWith("GRG_VAULT_NOT_IN_CATASTROPHIC_FAILURE_ERROR")
+            // we need user to be authorized to enter catastrophic failure more
+            await grgVault.addAuthorizedAddress(user1.address)
+            await grgVault.enterCatastrophicFailure()
+            // GRG requires a positive transfer amount
+            await expect(grgVault.withdrawAllFrom(user2.address))
+                .to.be.revertedWith("Transaction reverted without a reason")
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await expect(stakingProxy.stake(amount))
+                .to.be.revertedWith("GRG_VAULT_IN_CATASTROPHIC_FAILURE_ERROR")
+        })
+
+        it('should withdraw with positive stake', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.transfer(user2.address, amount)
+            await grgToken.connect(user2).approve(grgTransferProxyAddress, amount)
+            await stakingProxy.connect(user2).stake(amount)
+            await grgVault.addAuthorizedAddress(user1.address)
+            await grgVault.enterCatastrophicFailure()
+            const stakedBalance = await grgVault.callStatic.withdrawAllFrom(user2.address)
+            expect(stakedBalance).to.be.deep.eq(amount)
+            await expect(grgVault.withdrawAllFrom(user2.address))
+                .to.emit(grgVault, "Withdraw")
+                .withArgs(user2.address, stakedBalance)
+        })
+    })
+
+    describe("batchExecute", async () => {
+        it('should execute multiple transactions', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            const encodedStakeData = stakingProxy.interface.encodeFunctionData(
+                'stake',
+                [amount]
+            )
+            const encodedCreatePoolData = stakingProxy.interface.encodeFunctionData(
+                'createStakingPool',
+                [newPoolAddress]
+            )
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            const encodedMoveStakeData = stakingProxy.interface.encodeFunctionData(
+                'moveStake',
+                [
+                    fromInfo,
+                    toInfo,
+                    amount
+                ]
+            )
+            const stakingProxyContract = await deployments.get("StakingProxy")
+            const StakingContract = await hre.ethers.getContractFactory("StakingProxy")
+            const stakingContract = StakingContract.attach(stakingProxyContract.address)
+            await expect(
+                stakingContract.batchExecute([
+                    encodedStakeData,
+                    encodedCreatePoolData,
+                    encodedMoveStakeData
+                ])
+            ).to.emit(stakingProxy, "Stake").withArgs(user1.address, amount)
+            .to.emit(stakingProxy, "StakingPoolCreated").withArgs(poolId, user1.address, 700000)
+            .to.emit(stakingProxy, "MoveStake").withArgs(
+                user1.address,
+                amount,
+                StakeStatus.Undelegated,
+                poolId,
+                StakeStatus.Delegated,
+                poolId
+            )
+        })
+
+        it('should revert if implementation detached', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            const encodedStakeData = stakingProxy.interface.encodeFunctionData(
+                'stake',
+                [amount]
+            )
+            const encodedCreatePoolData = stakingProxy.interface.encodeFunctionData(
+                'createStakingPool',
+                [newPoolAddress]
+            )
+            const stakingProxyContract = await deployments.get("StakingProxy")
+            const StakingContract = await hre.ethers.getContractFactory("StakingProxy")
+            const stakingContract = StakingContract.attach(stakingProxyContract.address)
+            await expect(
+                stakingContract.batchExecute([
+                    encodedStakeData,
+                    encodedCreatePoolData,
+                    encodedCreatePoolData
+                ])
+            ).to.be.revertedWith("STAKING_POOL_ALREADY_EXISTS_ERROR")
+            await stakingContract.addAuthorizedAddress(user1.address)
+            await stakingContract.detachStakingContract()
+            await expect(
+                stakingContract.batchExecute([
+                    encodedStakeData,
+                    encodedCreatePoolData
+                ])
+            ).to.be.revertedWith("STAKING_ADDRESS_NULL_ERROR")
+            // TODO: following should revert with detached staking implementation
+            await stakingContract.assertValidStorageParams()
         })
     })
 })

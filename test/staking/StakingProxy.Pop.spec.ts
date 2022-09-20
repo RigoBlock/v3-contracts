@@ -5,7 +5,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
-import { timeTravel } from "../utils/utils";
+import { deployContract, timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("StakingProxy-Pop", async () => {
@@ -30,10 +30,8 @@ describe("StakingProxy-Pop", async () => {
         const AStakingInstance = await deployments.get("AStaking")
         const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
         //"a694fc3a": "stake(uint256)"
-        await authority.addMethod(
-            "0xa694fc3a",
-            AStakingInstance.address
-        )
+        await authority.addMethod("0xa694fc3a", AStakingInstance.address)
+        await authority.addMethod("0x4aace835", AStakingInstance.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
@@ -46,6 +44,8 @@ describe("StakingProxy-Pop", async () => {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
             grgVault: GrgVault.attach(GrgVaultInstance.address),
             pop: Pop.attach(PopInstance.address),
+            authority,
+            factory,
             stakingProxy,
             grgTransferProxyAddress,
             newPoolAddress,
@@ -81,6 +81,19 @@ describe("StakingProxy-Pop", async () => {
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.be.revertedWith("STAKING_ONLY_CALLABLE_BY_POP_ERROR")
+        })
+
+        it('should revert if staking pool does not exist', async () => {
+            const { stakingProxy, newPoolAddress } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(user2.address)
+            await expect(
+                stakingProxy.connect(user2).creditPopReward(newPoolAddress, 100)
+            ).to.be.revertedWith("STAKING_NULL_POOL_ID_ERROR")
+            await stakingProxy.createStakingPool(newPoolAddress)
+            await expect(
+                stakingProxy.connect(user2).creditPopReward(newPoolAddress, 100)
+            ).to.be.revertedWith("STAKING_STAKE_BELOW_MINIMUM_ERROR")
         })
 
         it('should revert if stake below minimum', async () => {
@@ -124,6 +137,109 @@ describe("StakingProxy-Pop", async () => {
             await expect(
                 stakingProxy.endEpoch()
             ).to.be.revertedWith("STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR")
+        })
+
+        it('should not credit null pop rewards for existing pool', async () => {
+            const { stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            await stakingProxy.createStakingPool(newPoolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.be.revertedWith("POP_STAKING_POOL_BALANCES_NULL_ERROR")
+            await grgToken.transfer(newPoolAddress, amount)
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(parseEther("1"))
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await pool.undelegateStake(parseEther("1"))
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(3, poolId)
+            let newEpochPoolStats
+            newEpochPoolStats = await stakingProxy.getStakingPoolStatsThisEpoch(poolId)
+            expect(newEpochPoolStats.feesCollected).to.be.eq(parseEther("1"))
+            // we can call credit reward multiple times but it won't change reward
+            await pop.creditPopRewardToStakingProxy(newPoolAddress)
+            newEpochPoolStats = await stakingProxy.getStakingPoolStatsThisEpoch(poolId)
+            expect(newEpochPoolStats.feesCollected).to.be.eq(parseEther("1"))
+        })
+    })
+
+    describe("finalize", async () => {
+        it('should finalize with multiple pools', async () => {
+            const { factory, stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            const amount = parseEther("200")
+            await grgToken.transfer(newPoolAddress, amount)
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(parseEther("100"))
+            const pool2Data = await factory.callStatic.createPool(
+                'testpool2',
+                'TEST',
+                AddressZero
+            )
+            await factory.createPool('testpool2','TEST',AddressZero)
+            await grgToken.transfer(pool2Data.newPoolAddress, amount)
+            const pool2 = Pool.attach(pool2Data.newPoolAddress)
+            await pool2.stake(parseEther("200"))
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
+            await expect(
+                pop.creditPopRewardToStakingProxy(pool2Data.newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, pool2Data.poolId)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.finalizePool(poolId)
+        })
+
+        it('should credit null reward with rogue pop', async () => {
+            const { factory, authority, stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(user1.address)
+            await authority.setFactory(user1.address, true)
+            const RegistryInstance = await deployments.get("PoolRegistry")
+            const Registry = await hre.ethers.getContractFactory("PoolRegistry")
+            const registry = Registry.attach(RegistryInstance.address)
+            const mockName = "mock name"
+            const mockBytes32 = hre.ethers.utils.formatBytes32String(mockName)
+            const source = `contract MockPool { address public owner = address(1); }`
+            const mockPool = await deployContract(user1, source)
+            await registry.register(mockPool.address, mockName, "TEST", mockBytes32)
+            await stakingProxy.createStakingPool(mockPool.address)
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, mockBytes32)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, mockBytes32)
+            await stakingProxy.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await expect(
+                stakingProxy.creditPopReward(mockPool.address, 0)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, mockBytes32)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            await stakingProxy.finalizePool(mockBytes32)
+            // test system does not get stuck even in case of rogue pop
+            await timeTravel({ days: 14, mine:true })
+            // system won't be able to reduce num pools to finalize if reward credited is 0.
+            // this condition is excluded by both pop contract which reverts if pool self stake below minimum
+            await expect(stakingProxy.endEpoch()).to.be.revertedWith("STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR")
         })
     })
 
@@ -169,6 +285,9 @@ describe("StakingProxy-Pop", async () => {
             const Pool = await hre.ethers.getContractFactory("AStaking")
             const pool = Pool.attach(newPoolAddress)
             await pool.stake(amount)
+            let delegatorReward
+            delegatorReward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
+            expect(delegatorReward).to.be.deep.eq(0)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             await pop.creditPopRewardToStakingProxy(newPoolAddress)
@@ -176,10 +295,18 @@ describe("StakingProxy-Pop", async () => {
             await stakingProxy.endEpoch()
             await expect(stakingProxy.withdrawDelegatorRewards(poolId))
                 .to.be.revertedWith("STAKING_POOL_NOT_FINALIZED_ERROR")
+            let poolOperatorReward
+            poolOperatorReward = await stakingProxy.computeRewardBalanceOfOperator(poolId)
+            expect(poolOperatorReward).to.be.not.eq(0)
             await stakingProxy.finalizePool(poolId)
-            const reward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
+            // noop if thepool already finalized
+            await stakingProxy.finalizePool(poolId)
+            poolOperatorReward = await stakingProxy.computeRewardBalanceOfOperator(poolId)
+            // reward is paid to pool operator at pool finalization
+            expect(poolOperatorReward).to.be.eq(0)
+            delegatorReward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, user1.address)
             await expect(stakingProxy.withdrawDelegatorRewards(poolId))
-                .to.emit(grgToken, "Transfer").withArgs(stakingProxy.address, user1.address, reward)
+                .to.emit(grgToken, "Transfer").withArgs(stakingProxy.address, user1.address, delegatorReward)
         })
     })
 
@@ -197,6 +324,8 @@ describe("StakingProxy-Pop", async () => {
             const Pool = await hre.ethers.getContractFactory("AStaking")
             const pool = Pool.attach(newPoolAddress)
             await pool.stake(amount)
+            // noop if thepool already finalized
+            await stakingProxy.finalizePool(poolId)
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.be.revertedWith("POP_STAKING_POOL_BALANCES_NULL_ERROR")
