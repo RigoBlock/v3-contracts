@@ -80,6 +80,7 @@ describe("TestFixedMath", async () => {
             expect(ln).to.be.lt(0)
             ln = await testFixedMath.ln(parseEther("0.73"))
             expect(ln).to.be.lt(0)
+            ln = await testFixedMath.ln(parseEther("0.21"))
             ln = await testFixedMath.ln(parseEther("1.065"))
             ln = await testFixedMath.ln(parseEther("0.36"))
         })
@@ -96,10 +97,23 @@ describe("TestFixedMath", async () => {
     })
 
     describe("exp", async () => {
+        it('reverts with large number', async () => {
+            const { testFixedMath } = await setupTests()
+            await testFixedMath.exp(-50)
+            await expect(testFixedMath.exp(2)).to.be.revertedWith("X_TOO_LARGE_ERROR")
+        })
+
         it('runs exponent', async () => {
             const { testFixedMath } = await setupTests()
-            testFixedMath.exp(-50)
-            await expect(testFixedMath.exp(2)).to.be.revertedWith("X_TOO_LARGE_ERROR")
+            const expMinVal = -10867768093537472176861526524852097253376
+            let value
+            value = await testFixedMath.exp(BigInt(expMinVal) - BigInt("1"))
+            expect(value).to.be.eq(0)
+            value = await testFixedMath.exp(BigInt(expMinVal))
+            expect(value).to.be.not.eq(0)
+            await testFixedMath.exp(BigNumber.from('-10866000000000000000000'))
+            await testFixedMath.exp(-32)
+            await testFixedMath.exp(-16)
         })
     })
 
