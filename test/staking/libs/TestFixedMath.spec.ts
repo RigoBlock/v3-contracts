@@ -84,8 +84,10 @@ describe("TestFixedMath", async () => {
             ln = await testFixedMath.ln(parseEther("1.065"))
             ln = await testFixedMath.ln(parseEther("0.36"))
             ln = await testFixedMath.ln(parseEther("0.99"))
+            // TODO: complete following check
             const firstThreshold = 2154696114062189943324672
-            ln = await testFixedMath.ln(BigInt(firstThreshold) - BigInt(1))
+            ln = await testFixedMath.ln(BigInt(firstThreshold))
+            expect(ln).to.be.lt(0)
         })
 
         it('returns min ln', async () => {
