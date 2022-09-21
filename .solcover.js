@@ -11,7 +11,7 @@ module.exports = {
     configureYulOptimizer: true,
     solcOptimizerDetails: {
       peephole: false,
-      inliner: false,
+      //inliner: false,
       jumpdestRemover: false,
       orderLiterals: true,
       deduplicate: false,
