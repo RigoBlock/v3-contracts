@@ -65,6 +65,14 @@ describe("TestFixedMath", async () => {
             await expect(testFixedMath.ln(minExpValue)).to.be.revertedWith("X_TOO_SMALL_ERROR")
         })
 
+        it('reverts with big x', async () => {
+            const { testFixedMath } = await setupTests()
+            // reverts with lower than expected numbers, prob due to decimals required
+            const maxInt = BigNumber.from('2').pow(128).sub(2)
+            await expect(testFixedMath.ln(maxInt))
+                .to.be.revertedWith("X_TOO_LARGE_ERROR")
+        })
+
         it('should return log', async () => {
             const { testFixedMath } = await setupTests()
             let ln
@@ -72,6 +80,18 @@ describe("TestFixedMath", async () => {
             expect(ln).to.be.lt(0)
             ln = await testFixedMath.ln(parseEther("0.73"))
             expect(ln).to.be.lt(0)
+            ln = await testFixedMath.ln(parseEther("1.065"))
+            ln = await testFixedMath.ln(parseEther("0.36"))
+        })
+
+        it('returns min ln', async () => {
+            const { testFixedMath } = await setupTests()
+            const lnMinVal = 30920707162
+            const expMinVal = -10867768093537472176861526524852097253376
+            const minLn = await testFixedMath.ln(lnMinVal)
+            const ln = await testFixedMath.ln(BigNumber.from(lnMinVal).sub(1))
+            expect(ln).to.be.eq(minLn)
+            expect(Number(ln)).to.be.eq(Number(expMinVal))
         })
     })
 
@@ -88,12 +108,33 @@ describe("TestFixedMath", async () => {
             const { testFixedMath } = await setupTests()
             await testFixedMath.uintMul(-50, 60)
         })
+
+        it('reverts with big u', async () => {
+            const { testFixedMath } = await setupTests()
+            const maxUint = BigNumber.from('2').pow(255)
+            await expect(testFixedMath.uintMul(-50, maxUint))
+                .to.be.revertedWith("U_TOO_LARGE_ERROR")
+        })
     })
 
     describe("toFixed", async () => {
         it('runs exponent', async () => {
             const { testFixedMath } = await setupTests()
             await testFixedMath.toFixed(40, 50)
+        })
+
+        it('reverts with big n', async () => {
+            const { testFixedMath } = await setupTests()
+            const maxUint = BigNumber.from('2').pow(255)
+            await expect(testFixedMath.toFixed(maxUint, 2))
+                .to.be.revertedWith("N_TOO_LARGE_ERROR")
+        })
+
+        it('reverts with big d', async () => {
+            const { testFixedMath } = await setupTests()
+            const maxUint = BigNumber.from('2').pow(255)
+            await expect(testFixedMath.toFixed(2, maxUint))
+                .to.be.revertedWith("D_TOO_LARGE_ERROR")
         })
     })
 })
