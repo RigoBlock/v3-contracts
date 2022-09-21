@@ -42,7 +42,7 @@ import "./src/tasks/deploy_contracts"
 import "./src/tasks/show_codesize"
 import { BigNumber } from "@ethersproject/bignumber";
 
-const primarySolidityVersion = SOLIDITY_VERSION || "0.8.14"
+const primarySolidityVersion = SOLIDITY_VERSION || "0.8.17"
 const soliditySettings = !!SOLIDITY_SETTINGS ? JSON.parse(SOLIDITY_SETTINGS) : undefined
 
 const deterministicDeployment = CUSTOM_DETERMINISTIC_DEPLOYMENT == "true" ?
@@ -67,6 +67,7 @@ const userConfig: HardhatUserConfig = {
   solidity: {
     compilers: [
       { version: primarySolidityVersion, settings: soliditySettings },
+      { version: "0.8.14", settings: soliditySettings },
       { version: "0.8.9", settings: soliditySettings },
       { version: "0.7.6", settings: soliditySettings },
       { version: "0.7.4", settings: soliditySettings },
