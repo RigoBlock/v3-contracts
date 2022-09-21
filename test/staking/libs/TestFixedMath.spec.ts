@@ -93,6 +93,7 @@ describe("TestFixedMath", async () => {
             const ln = await testFixedMath.ln(BigNumber.from(lnMinVal).sub(1))
             expect(ln).to.be.eq(minLn)
             expect(Number(ln)).to.be.eq(Number(expMinVal))
+            await testFixedMath.ln(BigNumber.from(lnMinVal).add(1))
         })
     })
 
