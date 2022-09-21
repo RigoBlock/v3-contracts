@@ -8,10 +8,12 @@ module.exports = {
         grep: "@skip-on-coverage", // Find everything with this tag
         invert: true               // Run the grep's inverse set.
     },
+    measureStatementCoverage: false,
+    measureFunctionCoverage: false,
     configureYulOptimizer: true,
     solcOptimizerDetails: {
       peephole: false,
-      //inliner: false,
+      inliner: false,
       jumpdestRemover: false,
       orderLiterals: true,
       deduplicate: false,
