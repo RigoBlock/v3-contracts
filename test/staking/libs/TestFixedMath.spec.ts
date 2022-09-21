@@ -65,6 +65,14 @@ describe("TestFixedMath", async () => {
             await expect(testFixedMath.ln(minExpValue)).to.be.revertedWith("X_TOO_SMALL_ERROR")
         })
 
+        it('reverts with big x', async () => {
+            const { testFixedMath } = await setupTests()
+            // reverts with lower than expected numbers, prob due to decimals required
+            const maxInt = BigNumber.from('2').pow(128).sub(2)
+            await expect(testFixedMath.ln(maxInt))
+                .to.be.revertedWith("X_TOO_LARGE_ERROR")
+        })
+
         it('should return log', async () => {
             const { testFixedMath } = await setupTests()
             let ln
@@ -72,14 +80,46 @@ describe("TestFixedMath", async () => {
             expect(ln).to.be.lt(0)
             ln = await testFixedMath.ln(parseEther("0.73"))
             expect(ln).to.be.lt(0)
+            ln = await testFixedMath.ln(parseEther("0.21"))
+            ln = await testFixedMath.ln(parseEther("1.065"))
+            ln = await testFixedMath.ln(parseEther("0.36"))
+            ln = await testFixedMath.ln(parseEther("0.99"))
+            // TODO: complete following check
+            const firstThreshold = 2154696114062189943324672
+            ln = await testFixedMath.ln(BigInt(firstThreshold))
+            expect(ln).to.be.lt(0)
+        })
+
+        it('returns min ln', async () => {
+            const { testFixedMath } = await setupTests()
+            const lnMinVal = 30920707162
+            const expMinVal = -10867768093537472176861526524852097253376
+            const minLn = await testFixedMath.ln(lnMinVal)
+            const ln = await testFixedMath.ln(BigNumber.from(lnMinVal).sub(1))
+            expect(ln).to.be.eq(minLn)
+            expect(Number(ln)).to.be.eq(Number(expMinVal))
+            await testFixedMath.ln(BigNumber.from(lnMinVal).add(1))
         })
     })
 
     describe("exp", async () => {
+        it('reverts with large number', async () => {
+            const { testFixedMath } = await setupTests()
+            await testFixedMath.exp(-50)
+            await expect(testFixedMath.exp(2)).to.be.revertedWith("X_TOO_LARGE_ERROR")
+        })
+
         it('runs exponent', async () => {
             const { testFixedMath } = await setupTests()
-            testFixedMath.exp(-50)
-            await expect(testFixedMath.exp(2)).to.be.revertedWith("X_TOO_LARGE_ERROR")
+            const expMinVal = -10867768093537472176861526524852097253376
+            let value
+            value = await testFixedMath.exp(BigInt(expMinVal) - BigInt("1"))
+            expect(value).to.be.eq(0)
+            value = await testFixedMath.exp(BigInt(expMinVal))
+            expect(value).to.be.not.eq(0)
+            await testFixedMath.exp(BigNumber.from('-10866000000000000000000'))
+            await testFixedMath.exp(-32)
+            await testFixedMath.exp(-16)
         })
     })
 
@@ -88,12 +128,33 @@ describe("TestFixedMath", async () => {
             const { testFixedMath } = await setupTests()
             await testFixedMath.uintMul(-50, 60)
         })
+
+        it('reverts with big u', async () => {
+            const { testFixedMath } = await setupTests()
+            const maxUint = BigNumber.from('2').pow(255)
+            await expect(testFixedMath.uintMul(-50, maxUint))
+                .to.be.revertedWith("U_TOO_LARGE_ERROR")
+        })
     })
 
     describe("toFixed", async () => {
         it('runs exponent', async () => {
             const { testFixedMath } = await setupTests()
             await testFixedMath.toFixed(40, 50)
+        })
+
+        it('reverts with big n', async () => {
+            const { testFixedMath } = await setupTests()
+            const maxUint = BigNumber.from('2').pow(255)
+            await expect(testFixedMath.toFixed(maxUint, 2))
+                .to.be.revertedWith("N_TOO_LARGE_ERROR")
+        })
+
+        it('reverts with big d', async () => {
+            const { testFixedMath } = await setupTests()
+            const maxUint = BigNumber.from('2').pow(255)
+            await expect(testFixedMath.toFixed(2, maxUint))
+                .to.be.revertedWith("D_TOO_LARGE_ERROR")
         })
     })
 })
