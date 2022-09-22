@@ -18,7 +18,7 @@
 */
 
 // solhint-disable-next-line
-pragma solidity =0.8.14;
+pragma solidity =0.8.17;
 
 import "../../../staking/interfaces/IStaking.sol";
 import "../../../staking/interfaces/IStorage.sol";

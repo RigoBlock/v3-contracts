@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.14;
+pragma solidity 0.8.17;
 
 import {IPoolRegistry as PoolRegistry} from "../interfaces/IPoolRegistry.sol";
 import {IRigoblockPoolProxyFactory} from "../interfaces/IRigoblockPoolProxyFactory.sol";
