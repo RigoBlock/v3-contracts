@@ -35,10 +35,7 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (uint256 partialAmount) {
-        require(
-            !isRoundingErrorFloor(numerator, denominator, target),
-            "LIBMATH_ROUNDING_FLOOR_ERROR"
-        );
+        require(!isRoundingErrorFloor(numerator, denominator, target), "LIBMATH_ROUNDING_FLOOR_ERROR");
 
         partialAmount = numerator.safeMul(target).safeDiv(denominator);
         return partialAmount;
@@ -55,10 +52,7 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (uint256 partialAmount) {
-        require(
-            !isRoundingErrorCeil(numerator, denominator, target),
-            "LIBMATH_ROUNDING_CEIL_ERROR"
-        );
+        require(!isRoundingErrorCeil(numerator, denominator, target), "LIBMATH_ROUNDING_CEIL_ERROR");
 
         // safeDiv computes `floor(a / b)`. We use the identity (a, b integer):
         //       ceil(a / b) = floor((a + b - 1) / b)

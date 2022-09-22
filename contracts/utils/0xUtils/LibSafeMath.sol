@@ -7,10 +7,7 @@ library LibSafeMath {
             return 0;
         }
         uint256 c = a * b;
-        require(
-            c / a == b,
-            "LIBSAFEMATH_MULTIPLICATION_OVERFLOW_ERROR"
-        );
+        require(c / a == b, "LIBSAFEMATH_MULTIPLICATION_OVERFLOW_ERROR");
         return c;
     }
 
@@ -27,7 +24,7 @@ library LibSafeMath {
 
     function safeAdd(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
-        require(c >= a, "LIBSAFEMATH_ADDITION_OVERFLOW_ERROR"); 
+        require(c >= a, "LIBSAFEMATH_ADDITION_OVERFLOW_ERROR");
         return c;
     }
 

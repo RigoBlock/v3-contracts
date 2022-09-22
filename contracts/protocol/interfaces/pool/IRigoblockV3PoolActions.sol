@@ -28,7 +28,11 @@ interface IRigoblockV3PoolActions {
     /// @param _amountIn Amount of base tokens.
     /// @param _amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
     /// @return recipientAmount Number of tokens minted to recipient.
-    function mint(address _recipient, uint256 _amountIn, uint256 _amountOutMin) external payable returns (uint256);
+    function mint(
+        address _recipient,
+        uint256 _amountIn,
+        uint256 _amountOutMin
+    ) external payable returns (uint256);
 
     /// @dev Allows a pool holder to burn pool tokens.
     /// @param _amountIn Number of tokens to burn.

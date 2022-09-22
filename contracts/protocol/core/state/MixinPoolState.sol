@@ -27,12 +27,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
             uint32 minPeriod
         )
     {
-        return (
-            owner,
-            _getFeeCollector(),
-            poolData.transactionFee,
-            _getMinPeriod()
-        );
+        return (owner, _getFeeCollector(), poolData.transactionFee, _getMinPeriod());
     }
 
     /// @inheritdoc IRigoblockV3PoolState

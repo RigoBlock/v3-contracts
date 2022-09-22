@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import { WETH9 as WETH9Contract } from "../tokens/WETH9/WETH9.sol";
+import {WETH9 as WETH9Contract} from "../tokens/WETH9/WETH9.sol";
 import "../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import "./MockUniswapNpm.sol";
 
@@ -29,20 +29,19 @@ contract MockUniswapRouter {
 
     function exactInputSingle(ISwapRouter02.ExactInputSingleParams calldata params)
         external
-        returns (uint256 amountOut) {}
+        returns (uint256 amountOut)
+    {}
 
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external returns (uint256 amountOut) {}
 
     function exactOutputSingle(ISwapRouter02.ExactOutputSingleParams calldata params)
         external
-        returns (uint256 amountIn) {}
+        returns (uint256 amountIn)
+    {}
 
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external returns (uint256 amountIn) {}
 
-    function sweepToken(
-        address token,
-        uint256 amountMinimum
-    ) external {}
+    function sweepToken(address token, uint256 amountMinimum) external {}
 
     function sweepToken(
         address token,
