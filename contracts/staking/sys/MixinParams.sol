@@ -19,7 +19,6 @@
 */
 
 pragma solidity >=0.5.9 <0.9.0;
-pragma experimental ABIEncoderV2;
 
 import "../immutable/MixinStorage.sol";
 import "../immutable/MixinConstants.sol";

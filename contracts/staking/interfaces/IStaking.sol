@@ -19,7 +19,6 @@
 */
 
 pragma solidity >=0.5.9 <0.9.0;
-pragma experimental ABIEncoderV2;
 
 import {IPoolRegistry as PoolRegistry} from "../../protocol/interfaces/IPoolRegistry.sol";
 import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol";

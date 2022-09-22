@@ -19,8 +19,6 @@
 */
 
 pragma solidity >=0.5.9 <0.9.0;
-// TODO: 0.8 solc uses encoder v2 by default
-pragma experimental ABIEncoderV2;
 
 import "./IStructs.sol";
 

@@ -19,7 +19,6 @@
 */
 
 pragma solidity >=0.5.9 <0.9.0;
-pragma experimental ABIEncoderV2;
 
 /// @dev Exposes some internal functions from various contracts to avoid
 ///      cyclical dependencies.

@@ -20,7 +20,6 @@
 */
 
 pragma solidity 0.8.17;
-pragma experimental ABIEncoderV2;
 
 import "./libs/LibSafeDowncast.sol";
 import "./immutable/MixinStorage.sol";

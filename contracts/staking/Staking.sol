@@ -21,7 +21,6 @@
 
 // solhint-disable-next-line
 pragma solidity 0.8.17;
-pragma experimental ABIEncoderV2;
 
 import "./interfaces/IStaking.sol";
 import "./sys/MixinParams.sol";
