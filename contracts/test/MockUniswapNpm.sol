@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 
-pragma solidity 0.8.14;
+pragma solidity 0.8.17;
 
 import { WETH9 as WETH9Contract } from "../tokens/WETH9/WETH9.sol";
 import "../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";

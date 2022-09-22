@@ -18,7 +18,7 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.8.14;
+pragma solidity 0.8.17;
 
 import "./interfaces/IAUniswapV3NPM.sol";
 import "../../interfaces/IWETH9.sol";

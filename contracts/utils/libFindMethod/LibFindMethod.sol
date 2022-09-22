@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.14;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Find Method Library - library to find the method of a call.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

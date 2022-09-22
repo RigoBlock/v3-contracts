@@ -17,6 +17,6 @@
 
 */
 
-pragma solidity 0.8.14;
+pragma solidity 0.8.17;
 
 /// @title Rigoblock KYC contract - Allows whitelisting users.
