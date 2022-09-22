@@ -22,14 +22,14 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
 
         // initialize pool
         // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, baseToken, owner)
-        ( , bytes memory returnData) = Beacon(_beacon).implementation().delegatecall(_data);
+        (, bytes memory returnData) = Beacon(_beacon).implementation().delegatecall(_data);
 
         // init params revert with an error, therefore we do not need to assert returnData.length != 0 and can safely delete to save gas.
         delete returnData;
     }
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
-    fallback() external override payable {
+    fallback() external payable override {
         address _implementation = Beacon(StorageSlot.getAddressSlot(_BEACON_SLOT).value).implementation();
         // solhint-disable-next-line no-inline-assembly
         assembly {

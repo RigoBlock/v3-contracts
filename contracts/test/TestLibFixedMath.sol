@@ -5,7 +5,6 @@ pragma solidity >0.7.0 <0.9.0;
 import "../staking/libs/LibFixedMath.sol";
 
 contract TestLibFixedMath {
-
     function mul(int256 a, int256 b) external pure returns (int256 c) {
         c = LibFixedMath.mul(a, b);
     }

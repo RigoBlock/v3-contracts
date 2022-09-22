@@ -6,12 +6,14 @@ import "../../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 
 interface IAUniswap {
     function UNISWAP_SWAP_ROUTER_2_ADDRESS() external view returns (address);
+
     function UNISWAP_V3_NPM_ADDRESS() external view returns (address);
+
     function WETH_ADDRESS() external view returns (address);
 
     /*
      * UNISWAP V2 METHODS
-    */
+     */
     /// @notice Swaps `amountIn` of one token for as much as possible of another token.
     /// @dev Setting `amountIn` to 0 will cause the contract to look up its own balance,
     /// and swap the entire amount, enabling contracts to send tokens before calling this function.
@@ -42,7 +44,7 @@ interface IAUniswap {
 
     /*
      * UNISWAP V3 SWAP METHODS
-    */
+     */
     /// @notice Swaps `amountIn` of one token for as much as possible of another token.
     /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in memory.
     /// @return amountOut The amount of the received token.
@@ -69,15 +71,12 @@ interface IAUniswap {
 
     /*
      * UNISWAP V3 PAYMENT METHODS
-    */
+     */
     /// @notice Transfers the full amount of a token held by this contract to recipient.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users.
     /// @param token The contract address of the token which will be transferred to `recipient`.
     /// @param amountMinimum The minimum amount of token required for a transfer.
-    function sweepToken(
-        address token,
-        uint256 amountMinimum
-    ) external;
+    function sweepToken(address token, uint256 amountMinimum) external;
 
     /// @notice Transfers the full amount of a token held by this contract to recipient.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users.

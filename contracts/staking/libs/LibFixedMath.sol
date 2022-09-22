@@ -40,7 +40,7 @@ library LibFixedMath {
 
     /// @dev Returns the multiplication of two fixed point numbers, reverting on overflow.
     function mul(int256 a, int256 b) internal pure returns (int256 c) {
-        unchecked { c = _mul(a, b) / FIXED_1; }
+        unchecked {c = _mul(a, b) / FIXED_1;}
     }
 
     /// @dev Returns the division of two fixed point numbers.
@@ -291,7 +291,7 @@ library LibFixedMath {
         if (a == 0 || b == 0) {
             return 0;
         }
-        unchecked { c = a * b; }
+        unchecked {c = a * b;}
         if (c / a != b || c / b != a) {
             revert("MULTIPLICATION_OVERFLOW_ERROR");
         }
@@ -305,6 +305,6 @@ library LibFixedMath {
         if (a == MIN_FIXED_VAL && b == -1) {
             revert("DIVISION_OVERFLOW_ERROR");
         }
-        unchecked { c = a / b; }
+        unchecked {c = a / b;}
     }
 }

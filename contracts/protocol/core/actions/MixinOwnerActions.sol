@@ -52,24 +52,22 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
-    function setUnitaryValue(uint256 _unitaryValue)
-        external
-        override
-        onlyOwner
-        notPriceError(_unitaryValue)
-    {
+    function setUnitaryValue(uint256 _unitaryValue) external override onlyOwner notPriceError(_unitaryValue) {
         // unitary value can be updated only after first mint. we require positive value as would
         //  return to default value if storage cleared
         require(poolData.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
 
         // This will underflow with small decimals tokens at some point, which is ok
-        uint256 minimumLiquidity = _unitaryValue * totalSupply() / 10**decimals() / 100 * 3;
+        uint256 minimumLiquidity = ((_unitaryValue * totalSupply()) / 10**decimals() / 100) * 3;
 
         // TODO: check if baseToken should be moved to immutable storage
         if (admin.baseToken == address(0)) {
             require(address(this).balance >= minimumLiquidity, "POOL_CURRENCY_BALANCE_TOO_LOW_ERROR");
         } else {
-            require(IERC20(admin.baseToken).balanceOf(address(this)) >= minimumLiquidity, "POOL_TOKEN_BALANCE_TOO_LOW_ERROR");
+            require(
+                IERC20(admin.baseToken).balanceOf(address(this)) >= minimumLiquidity,
+                "POOL_TOKEN_BALANCE_TOO_LOW_ERROR"
+            );
         }
 
         poolData.unitaryValue = _unitaryValue;
@@ -77,6 +75,7 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     function totalSupply() public view virtual override returns (uint256) {}
+
     function decimals() public view virtual override returns (uint8) {}
 
     function _getUnitaryValue() internal view virtual override returns (uint256);

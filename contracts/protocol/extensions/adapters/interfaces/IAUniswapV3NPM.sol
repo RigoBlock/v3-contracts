@@ -7,7 +7,7 @@ import "../../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfung
 interface IAUniswapV3NPM {
     /*
      * UNISWAP V3 LIQUIDITY METHODS
-    */
+     */
     /// @notice Creates a new position wrapped in a NFT.
     /// @dev Call this when the pool does exist and is initialized. Note that if the pool is created but not initialized
     /// a method does not exist, i.e. the pool is assumed to be initialized.

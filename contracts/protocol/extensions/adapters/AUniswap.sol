@@ -49,7 +49,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /*
      * UNISWAP V2 METHODS
-    */
+     */
     /// @inheritdoc IAUniswap
     function swapExactTokensForTokens(
         uint256 amountIn,
@@ -82,7 +82,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /*
      * UNISWAP V3 SWAP METHODS
-    */
+     */
     /// @inheritdoc IAUniswap
     function exactInputSingle(ISwapRouter02.ExactInputSingleParams calldata params)
         external
@@ -110,11 +110,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswap
-    function exactInput(ISwapRouter02.ExactInputParams calldata params)
-        external
-        override
-        returns (uint256 amountOut)
-    {
+    function exactInput(ISwapRouter02.ExactInputParams calldata params) external override returns (uint256 amountOut) {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
         // we first set the allowance to the uniswap router
@@ -161,10 +157,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswap
-    function exactOutput(ISwapRouter02.ExactOutputParams calldata params)
-        external
-        override
-        returns (uint256 amountIn) {
+    function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external override returns (uint256 amountIn) {
         (address tokenIn, , ) = params.path.decodeFirstPool();
 
         // we first set the allowance to the uniswap router
@@ -186,16 +179,10 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /*
      * UNISWAP V3 PAYMENT METHODS
-    */
+     */
     /// @inheritdoc IAUniswap
-    function sweepToken(
-        address token,
-        uint256 amountMinimum
-    ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepToken(
-            token,
-            amountMinimum
-        );
+    function sweepToken(address token, uint256 amountMinimum) external override {
+        ISwapRouter02(_getUniswapRouter2()).sweepToken(token, amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
@@ -218,12 +205,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 feeBips,
         address feeRecipient
     ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
-            token,
-            amountMinimum,
-            feeBips,
-            feeRecipient
-        );
+        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(token, amountMinimum, feeBips, feeRecipient);
     }
 
     /// @inheritdoc IAUniswap
@@ -250,7 +232,9 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum, address recipient) external override {
-        if (recipient != address(this)) { recipient = address(this); }
+        if (recipient != address(this)) {
+            recipient = address(this);
+        }
         IWETH9(_getWethAddress()).withdraw(amountMinimum);
     }
 
@@ -259,7 +243,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 amountMinimum,
         uint256 feeBips,
         address feeRecipient
-    ) external override virtual {}
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9WithFee(
@@ -267,7 +251,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address recipient,
         uint256 feeBips,
         address feeRecipient
-    ) external override virtual {}
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external {
@@ -277,7 +261,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswap
-    function refundETH() external override virtual {}
+    function refundETH() external virtual override {}
 
     function _safeApprove(
         address token,
@@ -286,7 +270,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     ) internal override {
         // 0x095ea7b3 = bytes4(keccak256(bytes("approve(address,uint256)")))
         // solhint-disable-next-line avoid-low-level-calls
-        ( , bytes memory data) = token.call(abi.encodeWithSelector(0x095ea7b3, spender, value));
+        (, bytes memory data) = token.call(abi.encodeWithSelector(0x095ea7b3, spender, value));
         // approval never fails unless rogue token
         assert(data.length == 0 || abi.decode(data, (bool)));
     }
