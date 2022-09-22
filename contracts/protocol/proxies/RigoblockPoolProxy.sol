@@ -29,7 +29,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
     }
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
-    fallback() external payable {
+    fallback() external override payable {
         address _implementation = Beacon(StorageSlot.getAddressSlot(_BEACON_SLOT).value).implementation();
         // solhint-disable-next-line no-inline-assembly
         assembly {
