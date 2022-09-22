@@ -19,7 +19,7 @@
 
 */
 
-pragma solidity 0.7.4;
+pragma solidity 0.8.17;
 pragma experimental ABIEncoderV2;
 
 import "./libs/LibSafeDowncast.sol";
@@ -150,7 +150,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
 
         // Call `init()` on the staking contract to initialize storage.
         (bool didInitSucceed, bytes memory initReturnData) =
-            stakingContract.delegatecall(abi.encodeWithSelector(IStorageInit(0).init.selector));
+            stakingContract.delegatecall(abi.encodeWithSelector(IStorageInit.init.selector));
 
         if (!didInitSucceed) {
             assembly {

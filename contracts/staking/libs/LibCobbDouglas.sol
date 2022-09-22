@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.8.0;
+pragma solidity >=0.5.9 <0.9.0;
 pragma experimental ABIEncoderV2;
 
 import "./LibFixedMath.sol";
@@ -70,7 +70,7 @@ library LibCobbDouglas {
         // `e^(alpa * ln(stakeRatio/feeRatio))` if feeRatio > stakeRatio
         int256 n =
             feeRatio <= stakeRatio ? LibFixedMath.div(feeRatio, stakeRatio) : LibFixedMath.div(stakeRatio, feeRatio);
-        n = LibFixedMath.exp(LibFixedMath.mulDiv(LibFixedMath.ln(n), int256(alphaNumerator), int256(alphaDenominator)));
+        n = LibFixedMath.exp(LibFixedMath.mulDiv(LibFixedMath.ln(n), int256(int32(alphaNumerator)), int256(int32(alphaDenominator))));
         // Compute
         // `totalRewards * n` if feeRatio <= stakeRatio
         // or

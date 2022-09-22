@@ -19,7 +19,7 @@
 
 */
 
-pragma solidity 0.7.4;
+pragma solidity 0.8.17;
 
 import "../utils/0xUtils/Authorizable.sol";
 import "../utils/0xUtils/LibSafeMath.sol";

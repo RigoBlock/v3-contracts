@@ -98,13 +98,13 @@ abstract contract MixinStorage is Authorizable {
     ///      See `_minimumPoolStake` in `MixinParams`.
     /// @dev 0 Pool ID.
     /// @dev 1 Epoch number.
-    /// @return 0 Pool fee stats.
+    /// @notice Returns 0 Pool fee stats.
     mapping(bytes32 => mapping(uint256 => IStructs.PoolStats)) public poolStatsByEpoch;
 
     /// @dev Aggregated stats across all pools that generated fees with sufficient stake to earn rewards.
     ///      See `_minimumPoolStake` in MixinParams.
     /// @dev 0 Epoch number.
-    /// @return 0 Reward computation stats.
+    /// @notice Returns 0 Reward computation stats.
     mapping(uint256 => IStructs.AggregatedStats) public aggregatedStatsByEpoch;
 
     /// @dev The GRG balance of this contract that is reserved for pool reward payouts.

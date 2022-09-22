@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.8.0;
+pragma solidity >=0.5.9 <0.9.0;
 
 // solhint-disable indent
 /// @dev Signed, fixed-point, 127-bit precision math library.
@@ -25,7 +25,7 @@ library LibFixedMath {
     // 1
     int256 private constant FIXED_1 = int256(0x0000000000000000000000000000000080000000000000000000000000000000);
     // 2**255
-    int256 private constant MIN_FIXED_VAL = int256(0x8000000000000000000000000000000000000000000000000000000000000000);
+    int256 private constant MIN_FIXED_VAL = type(int256).min;
     // 1^2 (in fixed-point)
     int256 private constant FIXED_1_SQUARED =
         int256(0x4000000000000000000000000000000000000000000000000000000000000000);
@@ -40,7 +40,7 @@ library LibFixedMath {
 
     /// @dev Returns the multiplication of two fixed point numbers, reverting on overflow.
     function mul(int256 a, int256 b) internal pure returns (int256 c) {
-        c = _mul(a, b) / FIXED_1;
+        unchecked { c = _mul(a, b) / FIXED_1; }
     }
 
     /// @dev Returns the division of two fixed point numbers.
@@ -291,7 +291,7 @@ library LibFixedMath {
         if (a == 0 || b == 0) {
             return 0;
         }
-        c = a * b;
+        unchecked { c = a * b; }
         if (c / a != b || c / b != a) {
             revert("MULTIPLICATION_OVERFLOW_ERROR");
         }
@@ -305,6 +305,6 @@ library LibFixedMath {
         if (a == MIN_FIXED_VAL && b == -1) {
             revert("DIVISION_OVERFLOW_ERROR");
         }
-        c = a / b;
+        unchecked { c = a / b; }
     }
 }
