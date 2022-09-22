@@ -3,10 +3,11 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/storageSlot/StorageSlot.sol";
 import {IRigoblockPoolProxyFactory as Beacon} from "../interfaces/IRigoblockPoolProxyFactory.sol";
+import "../interfaces/IRigoblockPoolProxy.sol";
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract RigoblockPoolProxy {
+contract RigoblockPoolProxy is IRigoblockPoolProxy {
     // beacon slot is used to store beacon address, a contract that returns the address of the implementation contract.
     // Reduced deployment cost by using internal variable.
     bytes32 internal constant _BEACON_SLOT = 0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
@@ -21,14 +22,14 @@ contract RigoblockPoolProxy {
 
         // initialize pool
         // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, baseToken, owner)
-        (bool success, ) = Beacon(_beacon).implementation().delegatecall(_data);
+        ( , bytes memory returnData) = Beacon(_beacon).implementation().delegatecall(_data);
 
-        // should never be false as initialization parameters are checked with error returned.
-        assert(success == true);
+        // init params revert with an error, therefore we do not need to assert returnData.length != 0 and can safely delete to save gas.
+        delete returnData;
     }
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
-    fallback() external payable {
+    fallback() external override payable {
         address _implementation = Beacon(StorageSlot.getAddressSlot(_BEACON_SLOT).value).implementation();
         // solhint-disable-next-line no-inline-assembly
         assembly {

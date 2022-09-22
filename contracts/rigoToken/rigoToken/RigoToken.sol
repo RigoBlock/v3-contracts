@@ -20,17 +20,18 @@
 pragma solidity 0.8.17;
 
 import {UnlimitedAllowanceToken} from "../../tokens/UnlimitedAllowanceToken/UnlimitedAllowanceToken.sol";
+import "../interfaces/IRigoToken.sol";
 
 /// @title Rigo Token - Rules of the Rigo token.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice UnlimitedAllowanceToken is ERC20
-contract RigoToken is UnlimitedAllowanceToken {
+contract RigoToken is IRigoToken, UnlimitedAllowanceToken {
     string public constant name = "Rigo Token";
     string public constant symbol = "GRG";
     uint8 public constant decimals = 18;
 
-    address public minter;
-    address public rigoblock;
+    address public override minter;
+    address public override rigoblock;
 
     /*
      * EVENTS
@@ -67,7 +68,7 @@ contract RigoToken is UnlimitedAllowanceToken {
     /// @dev Allows minter to create new tokens
     /// @param _recipient Address of who receives new tokens
     /// @param _amount Number of new tokens
-    function mintToken(address _recipient, uint256 _amount) external onlyMinter {
+    function mintToken(address _recipient, uint256 _amount) external override onlyMinter {
         balances[_recipient] += _amount;
         totalSupply += _amount;
         emit TokenMinted(_recipient, _amount);
@@ -75,13 +76,13 @@ contract RigoToken is UnlimitedAllowanceToken {
 
     /// @dev Allows rigoblock dao to change minter
     /// @param _newAddress Address of the new minter
-    function changeMintingAddress(address _newAddress) external onlyRigoblock {
+    function changeMintingAddress(address _newAddress) external override onlyRigoblock {
         minter = _newAddress;
     }
 
     /// @dev Allows rigoblock dao to upgrade dao
     /// @param _newAddress Address of the new rigoblock dao
-    function changeRigoblockAddress(address _newAddress) external onlyRigoblock {
+    function changeRigoblockAddress(address _newAddress) external override onlyRigoblock {
         rigoblock = _newAddress;
     }
 }

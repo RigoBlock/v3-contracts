@@ -34,12 +34,12 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     // storage must be immutable as needs to be rutime consistent
     // 0xE592427A0AEce92De3Edee1F18E0157C05861564 on public networks
-    address public immutable UNISWAP_SWAP_ROUTER_2_ADDRESS;
+    address public immutable override UNISWAP_SWAP_ROUTER_2_ADDRESS;
 
     // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
-    address public immutable UNISWAP_V3_NPM_ADDRESS;
+    address public immutable override UNISWAP_V3_NPM_ADDRESS;
 
-    address public immutable WETH_ADDRESS;
+    address public immutable override WETH_ADDRESS;
 
     constructor(address _uniswapRouter02) {
         UNISWAP_SWAP_ROUTER_2_ADDRESS = _uniswapRouter02;
