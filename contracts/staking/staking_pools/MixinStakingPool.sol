@@ -18,8 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.8.0;
-pragma experimental ABIEncoderV2;
+pragma solidity >=0.5.9 <0.9.0;
 
 import "../../utils/owned/IOwnedUninitialized.sol";
 import "../../utils/0xUtils/LibSafeMath.sol";
