@@ -20,7 +20,6 @@
 
 pragma solidity >=0.5.9 <0.9.0;
 
-import "./MixinConstants.sol";
 import "../../utils/0xUtils/Authorizable.sol";
 import "../interfaces/IGrgVault.sol";
 import "../interfaces/IStructs.sol";
