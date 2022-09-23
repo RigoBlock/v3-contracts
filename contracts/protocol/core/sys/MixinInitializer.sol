@@ -34,6 +34,8 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         if (_baseToken != address(0)) {
             admin.baseToken = _baseToken;
             uint8 tokenDecimals = IERC20(_baseToken).decimals();
+            // a pool with small decimals could easily underflow.
+            assert(tokenDecimals >= 6);
             if (tokenDecimals != _coinbaseDecimals) {
                 poolData.decimals = tokenDecimals;
                 poolData.unitaryValue = 1 * 10**tokenDecimals; // initial value is 1
