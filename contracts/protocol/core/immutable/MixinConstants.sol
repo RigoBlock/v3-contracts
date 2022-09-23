@@ -21,6 +21,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../../IRigoblockV3Pool.sol";
 
+/// @notice Constants are not assigned a storage slot, can be safely added to this contract.
 abstract contract MixinConstants is IRigoblockV3Pool {
     /// @inheritdoc IRigoblockV3PoolImmutable
     string public constant override VERSION = "HF 3.1.0";
