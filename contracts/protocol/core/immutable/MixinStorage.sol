@@ -24,8 +24,11 @@ import {OwnedUninitialized as Owned} from "../../../utils/owned/OwnedUninitializ
 pragma solidity >=0.8.0 <0.9.0;
 
 /// @notice Storage slots must be preserved to prevent storage clashing. Each new variable must be assigned
-/// a dedicated (random/big enough) storage slot and queried from slot, or added at the end of existing storage.
+/// a dedicated (randomly big enough) storage slot and queried from slot, or added at the end of existing storage.
 abstract contract MixinStorage is IStructs, Owned, ReentrancyGuard {
+    // slot(0) declared in Owned contract
+    //address public override owner;
+
     mapping(address => Account) internal userAccount;
 
     Admin internal admin;
