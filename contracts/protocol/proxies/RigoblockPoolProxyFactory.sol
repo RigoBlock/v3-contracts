@@ -111,6 +111,8 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
             RigoblockPoolProxy proxy
         ) {
             newProxy = proxy;
+        } catch Error (string memory revertReason) {
+            revert(revertReason);
         } catch (bytes memory) {
             revert("FACTORY_LIBRARY_CREATE2_FAILED_ERROR");
         }
