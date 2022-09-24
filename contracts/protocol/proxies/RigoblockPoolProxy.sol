@@ -25,7 +25,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
         (, bytes memory returnData) = Beacon(_beacon).implementation().delegatecall(_data);
 
         // we must assert initialization didn't fail, otherwise it could fail silently and still deploy the pool.
-        require(returnData.length == 0, "POOL_INITIALIZATION_FAILED");
+        require(returnData.length == 0, "POOL_INITIALIZATION_FAILED_ERROR");
     }
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
