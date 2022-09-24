@@ -30,6 +30,8 @@ describe("MixinStorageAccessible", async () => {
         }
     });
 
+    // this method is not useful when reading non-null uninitialized params (implementation defaults are used),
+    //  i.e. 'unitaryValue', 'spread', 'minPeriod', 'decimals'
     describe("getStorageAt", async () => {
         it('can read beacon', async () => {
             const { factory, pool } = await setupTests()
@@ -56,17 +58,14 @@ describe("MixinStorageAccessible", async () => {
             expect(adminData).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 96))
         })
 
-        // TODO: reform pool data and move name and symbol to private variables (or internal) as strings are not encoded correctly by ethers
+        // utils.solidityPack batches name and symbol, preventing comparing strings
         it.skip('can read pool data', async () => {
             const { pool } = await setupTests()
             const poolData = await pool.getStorageAt(3, 8)
-            //const name = utils.formatBytes32String('testpool')
-            //const symbol = utils.formatBytes32String('TEST')
             const encodedPack = hre.ethers.utils.solidityPack(
                 ['string', 'string', 'uint256', 'uint256', 'uint256', 'uint256', 'uint32', 'uint8'],
                 ['testpool', 'TEST', 0, 0, 0, 0, 0, 0]
             )
-            console.log(poolData)
             expect(poolData).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 256))
         })
     })
