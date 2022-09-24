@@ -115,4 +115,20 @@ describe("ASelfCustody", async () => {
             )
         })
     })
+
+    describe("poolGrgShortfall", async () => {
+        it('should return pool shortfall when caller is not owner', async () => {
+            const { stakingProxy, grgToken, grgVault, newPoolAddress, poolId } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            let amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.stake(amount)
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            const ScPool = await hre.ethers.getContractFactory("ASelfCustody")
+            const scPool = ScPool.attach(newPoolAddress)
+            expect(await scPool.connect(user2).poolGrgShortfall(newPoolAddress)).to.be.not.eq(0)
+        })
+    })
 })
