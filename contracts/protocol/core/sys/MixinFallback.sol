@@ -14,7 +14,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     }
 
     /// @inheritdoc IRigoblockV3PoolFallback
-    // TODO: check if should make this method restricted from direct calls
+    /// @notice Direct fallback to implementation will result in staticcall to extension as owner is address(1).
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
@@ -35,7 +35,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
             }
             success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
-            // TODO: view methods will never be restricted as onchain data are public, should never revert. We could skip this check
+            // we allow the staticcall to revert with rich error, should we want to add errors to extensions view methods
             if eq(success, 0) {
                 revert(0, returndatasize())
             }

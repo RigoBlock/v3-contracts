@@ -168,7 +168,6 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
 
     function _safeTransfer(address _to, uint256 _amount) private {
         // solhint-disable-next-line avoid-low-level-calls
-        // TODO: we may want to use assembly here
         (bool success, bytes memory data) =
             admin.baseToken.call(abi.encodeWithSelector(TRANSFER_SELECTOR, _to, _amount));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FAILED_ERROR");
@@ -180,7 +179,6 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         uint256 _amount
     ) private {
         // solhint-disable-next-line avoid-low-level-calls
-        // TODO: we may want to use assembly here
         (bool success, bytes memory data) =
             admin.baseToken.call(abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, _from, _to, _amount));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FROM_FAILED_ERROR");
