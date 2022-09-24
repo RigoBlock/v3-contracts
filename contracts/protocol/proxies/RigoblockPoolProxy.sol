@@ -24,8 +24,8 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
         // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, baseToken, owner)
         (, bytes memory returnData) = Beacon(_beacon).implementation().delegatecall(_data);
 
-        // init params revert with an error, therefore we do not need to assert returnData.length != 0 and can safely delete to save gas.
-        delete returnData;
+        // we must assert initialization didn't fail, otherwise it could fail silently and still deploy the pool.
+        require(returnData.length == 0, "POOL_INITIALIZATION_FAILED_ERROR");
     }
 
     /// @dev Fallback function forwards all transactions and returns all received return data.
