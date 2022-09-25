@@ -14,12 +14,12 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     }
 
     /// @inheritdoc IRigoblockV3PoolFallback
-    /// @notice Direct fallback to implementation will result in staticcall to extension as owner is address(1).
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
         require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
 
+        // direct fallback to implementation will result in staticcall to extension as implementation owner is address(1)
         address poolOwner = owner;
         assembly {
             calldatacopy(0, 0, calldatasize())
