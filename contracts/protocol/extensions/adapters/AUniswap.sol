@@ -282,12 +282,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     function isContract(address target) internal view returns (bool) {
-        //return target.code.length > 0;
-        uint256 size;
-        assembly {
-            size := extcodesize(target)
-        }
-        return size > 0;
+        return target.code.length > 0;
     }
 
     function _getUniswapRouter2() private view returns (address) {
