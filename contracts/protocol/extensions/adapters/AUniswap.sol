@@ -268,6 +268,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address spender,
         uint256 value
     ) internal override {
+        // requiring target to being contract can be levied when token whitelist implemented
+        require(isContract(token), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
         // 0x095ea7b3 = bytes4(keccak256(bytes("approve(address,uint256)")))
         // solhint-disable-next-line avoid-low-level-calls
         (, bytes memory data) = token.call(abi.encodeWithSelector(0x095ea7b3, spender, value));
@@ -277,6 +279,15 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _getUniswapNpmAddress() internal view override returns (address) {
         return UNISWAP_V3_NPM_ADDRESS;
+    }
+
+    function isContract(address target) internal view returns (bool) {
+        //return target.code.length > 0;
+        uint256 size;
+        assembly {
+            size := extcodesize(target)
+        }
+        return size > 0;
     }
 
     function _getUniswapRouter2() private view returns (address) {
