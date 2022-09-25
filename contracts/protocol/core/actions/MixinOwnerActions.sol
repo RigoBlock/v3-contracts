@@ -30,7 +30,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeSpread(uint256 _newSpread) external override onlyOwner {
-        // TODO: check what happens with value 0
+        // new spread must always be != 0, otherwise default spread from immutable storage will be returned
         require(_newSpread > 0, "POOL_SPREAD_NULL_ERROR");
         require(_newSpread <= MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
         poolData.spread = _newSpread;
