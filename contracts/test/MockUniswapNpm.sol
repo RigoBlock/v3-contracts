@@ -67,5 +67,19 @@ contract MockUniswapNpm {
             uint128 tokensOwed0,
             uint128 tokensOwed1
         )
-    {}
+    {
+        abi.encode(tokenId);
+        nonce = 1;
+        operator = address(1);
+        token0 = WETH9;
+        token1 = WETH9;
+        fee = 500;
+        tickLower = 100;
+        tickUpper = 1000;
+        liquidity = 400;
+        feeGrowthInside0LastX128 = 2;
+        feeGrowthInside1LastX128 = 3;
+        tokensOwed0 = 16;
+        tokensOwed1 = 15;
+    }
 }
