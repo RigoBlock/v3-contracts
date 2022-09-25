@@ -1,12 +1,12 @@
 import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
-import { defaultAbiCoder } from "@ethersproject/abi";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { timeTravel } from "../utils/utils";
+import { encodePath, FeeAmount } from "../utils/path";
 import { getAddress } from "ethers/lib/utils";
 
 describe("AUniswap", async () => {
@@ -96,6 +96,7 @@ describe("AUniswap", async () => {
                 }]
             )
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            // the following transaction sets approval to WETH9 in TestUniswapNpm.sol as it reads positions(tokenId) but won't revert.
             await pool.increaseLiquidity({
                 tokenId: 5,
                 amount0Desired: 100,
@@ -127,6 +128,36 @@ describe("AUniswap", async () => {
             await pool.wrapETH(parseEther("100"))
             await pool.wrapETH(0)
             await pool.refundETH()
+        })
+
+        it('should revert if token is EOA', async () => {
+            const { grgToken, newPoolAddress, poolId } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.createAndInitializePoolIfNecessary(grgToken.address, user2.address, 1, 1)
+            const encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: user2.address,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            await expect(
+                user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            ).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
         })
     })
 
@@ -250,12 +281,9 @@ describe("AUniswap", async () => {
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0xb858183f", aUniswap)
-            const mockPath = defaultAbiCoder.encode(
-                ['address', 'address', 'uint24'],
-                [grgToken.address, grgToken.address, 0]
-            )
+            // fee amount is irrelevant as long as we test on the mock router and do not query for the actual pool
             await pool.exactInput({
-                path: mockPath,
+                path: encodePath([grgToken.address, grgToken.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
@@ -288,12 +316,8 @@ describe("AUniswap", async () => {
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x09b81346", aUniswap)
-            const mockPath = defaultAbiCoder.encode(
-                ['address', 'address', 'uint24'],
-                [grgToken.address, grgToken.address, 0]
-            )
             await pool.exactOutput({
-                path: mockPath,
+                path: encodePath([grgToken.address, grgToken.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10

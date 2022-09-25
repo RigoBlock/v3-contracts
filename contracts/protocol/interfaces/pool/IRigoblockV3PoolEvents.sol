@@ -39,4 +39,22 @@ interface IRigoblockV3PoolEvents {
     /// @param who Address that is sending the transaction.
     /// @param feeCollector Address of the new fee collector.
     event NewCollector(address indexed poolAddress, address indexed who, address feeCollector);
+
+    /// @dev Logs a change in the minimum period.
+    /// @notice Emitted when pool operator updates minimum holding period.
+    /// @param poolAddress Address of the pool.
+    /// @param minimumPeriod Number of seconds.
+    event MinimumPeriodChanged(address indexed poolAddress, uint32 minimumPeriod);
+
+    /// @dev Logs a change in the spread.
+    /// @notice Emitted when pool operator updates the mint/burn spread.
+    /// @param poolAddress Address of the pool.
+    /// @param spread Number of the spread in basis points.
+    event SpreadChanged(address indexed poolAddress, uint256 spread);
+
+    /// @dev Logs a change in the kyc provider.
+    /// @notice Emitted when pool operator sets a kyc provider.
+    /// @param poolAddress Address of the pool.
+    /// @param kycProvider Address of the kyc provider.
+    event KycProviderSet(address indexed poolAddress, address indexed kycProvider);
 }

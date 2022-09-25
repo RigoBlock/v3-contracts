@@ -25,23 +25,23 @@ abstract contract MixinOwnerActions is MixinActions {
         /// @notice minimum period is always at least 1 to prevent flash txs.
         require(_minPeriod >= MIN_LOCKUP && _minPeriod <= MAX_LOCKUP, "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR");
         poolData.minPeriod = _minPeriod;
-        // TODO: should emit event
+        emit MinimumPeriodChanged(address(this), _minPeriod);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeSpread(uint256 _newSpread) external override onlyOwner {
-        // TODO: check what happens with value 0
+        // new spread must always be != 0, otherwise default spread from immutable storage will be returned
         require(_newSpread > 0, "POOL_SPREAD_NULL_ERROR");
         require(_newSpread <= MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
         poolData.spread = _newSpread;
-        // TODO: should emit event
+        emit SpreadChanged(address(this), _newSpread);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setKycProvider(address _kycProvider) external override onlyOwner {
         require(_isContract(_kycProvider), "POOL_INPUT_NOT_CONTRACT_ERROR");
         admin.kycProvider = _kycProvider;
-        // TODO: should emit event
+        emit KycProviderSet(address(this), _kycProvider);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions

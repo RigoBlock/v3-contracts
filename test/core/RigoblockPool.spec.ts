@@ -289,7 +289,8 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             expect(await pool.getKycProvider()).to.be.eq(AddressZero)
             await expect(pool.setKycProvider(user2.address)).to.be.revertedWith("POOL_INPUT_NOT_CONTRACT_ERROR")
-            await pool.setKycProvider(pool.address)
+            await expect(pool.setKycProvider(pool.address))
+                .to.emit(pool, "KycProviderSet").withArgs(pool.address, pool.address)
             expect(await pool.getKycProvider()).to.be.eq(pool.address)
         })
     })
@@ -323,6 +324,7 @@ describe("Proxy", async () => {
 
         it('should revert with rogue values', async () => {
             const { pool } = await setupTests()
+            // spread must always be != 0, otherwise default value from immutable storage will be returned (i.e. initial spread)
             await expect(
                 pool.changeSpread(0)
             ).to.be.revertedWith("POOL_SPREAD_NULL_ERROR")
@@ -334,7 +336,8 @@ describe("Proxy", async () => {
         it('should change spread', async () => {
             const { pool } = await setupTests()
             expect((await pool.getData()).spread).to.be.eq(500)
-            await pool.changeSpread(100)
+            await expect(pool.changeSpread(100))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 100)
             expect((await pool.getData()).spread).to.be.eq(100)
         })
     })
@@ -361,8 +364,10 @@ describe("Proxy", async () => {
         it('should change spread', async () => {
             const { pool } = await setupTests()
             expect((await pool.getAdminData()).minPeriod).to.be.eq(2)
-            await pool.changeMinPeriod(2592000)
-            expect((await pool.getAdminData()).minPeriod).to.be.eq(2592000)
+            const newPeriod = 2592000
+            await expect(pool.changeMinPeriod(newPeriod))
+                .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
+            expect((await pool.getAdminData()).minPeriod).to.be.eq(newPeriod)
         })
     })
 })

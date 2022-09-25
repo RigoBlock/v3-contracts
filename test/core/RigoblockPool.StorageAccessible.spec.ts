@@ -58,15 +58,20 @@ describe("MixinStorageAccessible", async () => {
             expect(adminData).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 96))
         })
 
-        // utils.solidityPack batches name and symbol, preventing comparing strings
+        // utils.solidityPack batches name and symbol, preventing comparing strings. We can read through the data but
+        //  the encoding is incorrect. Will need some proper bytes manipulation when wanting to use it with string inputs.
         it.skip('can read pool data', async () => {
             const { pool } = await setupTests()
             const poolData = await pool.getStorageAt(3, 8)
-            const encodedPack = hre.ethers.utils.solidityPack(
-                ['string', 'string', 'uint256', 'uint256', 'uint256', 'uint256', 'uint32', 'uint8'],
-                ['testpool', 'TEST', 0, 0, 0, 0, 0, 0]
+            let name = utils.solidityPack(['string'], ['testpool'])
+            name = hre.ethers.utils.hexZeroPad(name, 32)
+            let symbol = utils.solidityPack(['string'], ['TEST'])
+            symbol = hre.ethers.utils.hexZeroPad(symbol, 32)
+            const encodedPack = utils.solidityPack(
+                ['bytes32', 'bytes32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint32', 'uint8'],
+                [name, symbol, 0, 0, 0, 0, 0, 0]
             )
-            expect(poolData).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 256))
+            expect(poolData).to.be.eq(encodedPack)
         })
     })
 })

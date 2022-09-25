@@ -24,7 +24,6 @@ import "./interfaces/IAUniswapV3NPM.sol";
 import "../../interfaces/IWETH9.sol";
 import "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 
-// TODO: inherit from IAUniswapV3NPM + inheritdocs
 abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     /// @inheritdoc IAUniswapV3NPM
     function mint(INonfungiblePositionManager.MintParams memory params)
