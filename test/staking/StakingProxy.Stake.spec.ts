@@ -243,7 +243,6 @@ describe("StakingProxy-Stake", async () => {
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
             const tooBigAmount = parseEther("150")
-            // TODO: check why no returned error (prob max library returned error)
             await expect(
                 stakingProxy.moveStake(toInfo, fromInfo, tooBigAmount)
             ).to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
@@ -294,7 +293,6 @@ describe("StakingProxy-Stake", async () => {
         })
     })
 
-    // TODO: check if should create GrgVault.spec.ts test file
     describe("enterCatastrophicFailure", async () => {
         it('should enter emergency mode', async () => {
             const { grgToken, stakingProxy, grgTransferProxyAddress, grgVault } = await setupTests()
@@ -433,7 +431,7 @@ describe("StakingProxy-Stake", async () => {
                     encodedCreatePoolData
                 ])
             ).to.be.revertedWith("STAKING_ADDRESS_NULL_ERROR")
-            // TODO: following should revert with detached staking implementation
+            // storage params are still valid with detached staking implementation, as read from proxy storage
             await stakingContract.assertValidStorageParams()
         })
     })

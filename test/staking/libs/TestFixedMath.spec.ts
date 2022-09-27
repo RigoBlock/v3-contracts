@@ -60,7 +60,6 @@ describe("TestFixedMath", async () => {
 
         it('should revert with min exp value', async () => {
             const { testFixedMath } = await setupTests()
-            // TODO: must revert with min ln value
             const minExpValue = BigNumber.from('2').pow(255).mul(-1)
             await expect(testFixedMath.ln(minExpValue)).to.be.revertedWith("X_TOO_SMALL_ERROR")
         })
@@ -84,7 +83,6 @@ describe("TestFixedMath", async () => {
             ln = await testFixedMath.ln(parseEther("1.065"))
             ln = await testFixedMath.ln(parseEther("0.36"))
             ln = await testFixedMath.ln(parseEther("0.99"))
-            // TODO: complete following check
             const firstThreshold = 2154696114062189943324672
             ln = await testFixedMath.ln(BigInt(firstThreshold))
             expect(ln).to.be.lt(0)

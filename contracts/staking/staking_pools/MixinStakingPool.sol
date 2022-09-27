@@ -20,13 +20,12 @@
 
 pragma solidity >=0.5.9 <0.9.0;
 
-import "../../utils/owned/IOwnedUninitialized.sol";
+import "../../protocol/IRigoblockV3Pool.sol";
 import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
-import "../sys/MixinAbstract.sol";
 import "./MixinStakingPoolRewards.sol";
 
-abstract contract MixinStakingPool is MixinAbstract, MixinStakingPoolRewards {
+abstract contract MixinStakingPool is MixinStakingPoolRewards {
     using LibSafeMath for uint256;
     using LibSafeDowncast for uint256;
 
@@ -37,17 +36,21 @@ abstract contract MixinStakingPool is MixinAbstract, MixinStakingPoolRewards {
         _;
     }
 
+    modifier onlyDelegateCall() {
+        _assertDelegateCall();
+        _;
+    }
+
     /// @dev Create a new staking pool. The sender will be the staking pal of this pool.
+    /// @notice When governance updates registry address, pools must be migrated to new registry, or this contract must query from both.
     /// Note that a staking pal must be payable.
     /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
     /// @return poolId The unique pool id generated for this pool.
-    // TODO: check what the pool id should be since we are calling it from registry. We must make sure that an upgrade in registry produces same id.
-    function createStakingPool(address rigoblockPoolAddress) external override returns (bytes32 poolId) {
+    function createStakingPool(address rigoblockPoolAddress) external override onlyDelegateCall returns (bytes32 poolId) {
         bytes32 rbPoolId = getPoolRegistry().getPoolIdFromAddress(rigoblockPoolAddress);
         require(rbPoolId != bytes32(0), "NON_REGISTERED_RB_POOL_ERROR");
-        // TODO: test if following return value is correct or reverts from pool proxy
         // note that an operator must be payable
-        address operator = IOwnedUninitialized(rigoblockPoolAddress).owner();
+        address operator = IRigoblockV3Pool(payable(rigoblockPoolAddress)).owner();
 
         // add stakingPal, which receives part of operator reward
         address stakingPal = msg.sender;
@@ -121,6 +124,14 @@ abstract contract MixinStakingPool is MixinAbstract, MixinStakingPoolRewards {
         return _poolById[poolId];
     }
 
+    /// @dev Allows caller to join a staking pool as a rigoblock pool account.
+    /// @param _poold Id of the pool.
+    /// @param _rigoblockPoolAccount Address of pool to be added to staking pool.
+    function _joinStakingPoolAsRbPoolAccount(bytes32 _poold, address _rigoblockPoolAccount) internal {
+        poolIdByRbPoolAccount[_rigoblockPoolAccount] = _poold;
+        emit RbPoolStakingPoolSet(_rigoblockPoolAccount, _poold);
+    }
+
     /// @dev Reverts iff a staking pool does not exist.
     /// @param poolId Unique id of pool.
     function _assertStakingPoolExists(bytes32 poolId) internal view {
@@ -131,6 +142,18 @@ abstract contract MixinStakingPool is MixinAbstract, MixinStakingPoolRewards {
     /// @param poolId Unique id of pool.
     function _assertStakingPoolDoesNotExist(bytes32 poolId) internal view {
         require(_poolById[poolId].operator == NIL_ADDRESS, "STAKING_POOL_ALREADY_EXISTS_ERROR");
+    }
+
+    /// @dev Asserts that the sender is the operator of the input pool.
+    /// @param poolId Pool sender must be operator of.
+    function _assertSenderIsPoolOperator(bytes32 poolId) private view {
+        address operator = _poolById[poolId].operator;
+        require(msg.sender == operator, "CALLER_NOT_OPERATOR_ERROR");
+    }
+
+    /// @dev Preventing direct calls to this contract where applied.
+    function _assertDelegateCall() private view {
+        require(address(this) != IMPLEMENTATION, "STAKING_DIRECT_CALL_NOT_ALLOWED_ERROR");
     }
 
     /// @dev Reverts iff the new operator share is invalid.
@@ -145,20 +168,5 @@ abstract contract MixinStakingPool is MixinAbstract, MixinStakingPoolRewards {
             // new share must be less than or equal to the current share
             revert("OPERATOR_SHARE_BIGGER_THAN_CURRENT_ERROR");
         }
-    }
-
-    /// @dev Asserts that the sender is the operator of the input pool.
-    /// @param poolId Pool sender must be operator of.
-    function _assertSenderIsPoolOperator(bytes32 poolId) private view {
-        address operator = _poolById[poolId].operator;
-        require(msg.sender == operator, "CALLER_NOT_OPERATOR_ERROR");
-    }
-
-    /// @dev Allows caller to join a staking pool as a rigoblock pool account.
-    /// @param _poold Id of the pool.
-    /// @param _rigoblockPoolAccount Address of pool to be added to staking pool.
-    function _joinStakingPoolAsRbPoolAccount(bytes32 _poold, address _rigoblockPoolAccount) internal {
-        poolIdByRbPoolAccount[_rigoblockPoolAccount] = _poold;
-        emit RbPoolStakingPoolSet(_rigoblockPoolAccount, _poold);
     }
 }

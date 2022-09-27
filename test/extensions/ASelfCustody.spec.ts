@@ -12,7 +12,6 @@ describe("ASelfCustody", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
-        // TODO: check if shoud create custom fixture with less contracts initialization
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")

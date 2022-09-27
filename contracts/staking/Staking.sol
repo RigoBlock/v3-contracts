@@ -28,14 +28,16 @@ import "./stake/MixinStake.sol";
 import "./rewards/MixinPopRewards.sol";
 
 contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
+
+    // @notice Setting owner to null address prevents admin direct calls to implementation,
+    //  initializing immutable implementation address is used to allow delegatecalls only,
+    //  locking the implementation contract from direct calls.
     constructor(
-        address _owner,
         address _grgVault,
         address _poolRegistry,
         address _rigoToken
-    ) Authorizable(_owner) MixinDeploymentConstants(_grgVault, _poolRegistry, _rigoToken) {}
+    ) Authorizable(address(0)) MixinDeploymentConstants(_grgVault, _poolRegistry, _rigoToken) {}
 
-    // TODO: prevent direct calls to this contract
     /// @dev Initialize storage owned by this contract.
     ///      This function should not be called directly.
     ///      The StakingProxy contract will call it in `attachStakingContract()`.

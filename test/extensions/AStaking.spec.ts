@@ -92,7 +92,6 @@ describe("AStaking", async () => {
         })
     })
 
-    // TODO: test withdraw positive reward
     describe("withdraw rewards", async () => {
         it('withdraw delegator rewards', async () => {
             const { stakingProxy, pop, grgToken, newPoolAddress } = await setupTests()
@@ -115,6 +114,7 @@ describe("AStaking", async () => {
             await stakingProxy.endEpoch()
             const poolId = await stakingProxy.poolIdByRbPoolAccount(newPoolAddress)
             const reward = await stakingProxy.computeRewardBalanceOfDelegator(poolId, newPoolAddress)
+            expect(reward).to.be.not.eq(0)
             await expect(pool.withdrawDelegatorRewards()).to.emit(grgToken, "Transfer")
                 .withArgs(stakingProxy.address, newPoolAddress, reward)
             const grgPoolBalanceAfterReward = await grgToken.balanceOf(newPoolAddress)

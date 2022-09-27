@@ -23,6 +23,7 @@ pragma solidity >=0.5.9 <0.9.0;
 /// @dev Exposes some internal functions from various contracts to avoid
 ///      cyclical dependencies.
 abstract contract MixinAbstract {
+
     /// @dev Computes the reward owed to a pool during finalization.
     ///      Does nothing if the pool is already finalized.
     /// @param poolId The pool's ID.

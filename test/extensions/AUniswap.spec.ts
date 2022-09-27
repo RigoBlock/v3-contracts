@@ -13,7 +13,6 @@ describe("AUniswap", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
-        // TODO: check if shoud create custom fixture with less contracts initialization
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
@@ -386,14 +385,20 @@ describe("AUniswap", async () => {
             const amount = parseEther("100")
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await pool.wrapETH(amount)
+            expect(await hre.ethers.provider.getBalance(newPoolAddress)).to.be.eq(0)
+            const rogueRecipient = user2.address
+            const rogueBalance = await hre.ethers.provider.getBalance(rogueRecipient)
             let encodedUnwrapData
-            // TODO: check different recipient always returns ETH to pool
+            const unwrapAmount = 50
             encodedUnwrapData = pool.interface.encodeFunctionData(
                 'unwrapWETH9(uint256,address)',
-                [50, user1.address]
+                [unwrapAmount, rogueRecipient]
             )
             await expect(authority.addMethod("0x49404b7c", aUniswap)).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
+            // unwrapped token returned to pool regardless recipient input
+            expect(await hre.ethers.provider.getBalance(rogueRecipient)).to.be.eq(rogueBalance)
+            expect(await hre.ethers.provider.getBalance(newPoolAddress)).to.be.eq(unwrapAmount)
             encodedUnwrapData = pool.interface.encodeFunctionData(
                 'unwrapWETH9(uint256)',
                 [50]

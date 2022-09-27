@@ -28,8 +28,8 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         external
         override
         nonReentrant
-        hasEnough(_amountIn)
         minimumPeriodPast
+        hasEnough(_amountIn)
         returns (uint256 netRevenue)
     {
         require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");

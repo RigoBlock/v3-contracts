@@ -28,6 +28,7 @@ import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol
 
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
+
     constructor(
         address _grgVault,
         address _poolRegistry,
@@ -36,7 +37,11 @@ abstract contract MixinDeploymentConstants is IStaking {
         GRG_VAULT_ADDRESS = _grgVault;
         POOL_REGISTRY_ADDRESS = _poolRegistry;
         GRG_ADDRESS = _rigoToken;
+        IMPLEMENTATION = address(this);
     }
+
+    // we store this address in the bytecode to being able to prevent direct calls to the implementation.
+    address internal immutable IMPLEMENTATION;
 
     address private immutable GRG_VAULT_ADDRESS;
     address private immutable POOL_REGISTRY_ADDRESS;

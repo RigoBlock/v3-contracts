@@ -60,7 +60,6 @@ abstract contract MixinOwnerActions is MixinActions {
         // This will underflow with small decimals tokens at some point, which is ok
         uint256 minimumLiquidity = ((_unitaryValue * totalSupply()) / 10**decimals() / 100) * 3;
 
-        // TODO: check if baseToken should be moved to immutable storage
         if (admin.baseToken == address(0)) {
             require(address(this).balance >= minimumLiquidity, "POOL_CURRENCY_BALANCE_TOO_LOW_ERROR");
         } else {

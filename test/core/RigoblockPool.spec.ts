@@ -180,7 +180,7 @@ describe("Proxy", async () => {
             const etherAmount = parseEther("1")
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             const userPoolBalance = await pool.balanceOf(user1.address)
-            // TODO: should be able to burn after 1 second, just like with base token
+            // TODO: should be able to burn after 1 second, requires 2
             await timeTravel({ seconds: 2, mine: true })
             // the following is true with fee set as 0
             await expect(
