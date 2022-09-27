@@ -385,17 +385,20 @@ describe("AUniswap", async () => {
             const amount = parseEther("100")
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await pool.wrapETH(amount)
+            expect(await hre.ethers.provider.getBalance(newPoolAddress)).to.be.eq(0)
             const rogueRecipient = user2.address
             const rogueBalance = await hre.ethers.provider.getBalance(rogueRecipient)
             let encodedUnwrapData
+            const unwrapAmount = 50
             encodedUnwrapData = pool.interface.encodeFunctionData(
                 'unwrapWETH9(uint256,address)',
-                [50, rogueRecipient]
+                [unwrapAmount, rogueRecipient]
             )
             await expect(authority.addMethod("0x49404b7c", aUniswap)).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
             // unwrapped token returned to pool regardless recipient input
             expect(await hre.ethers.provider.getBalance(rogueRecipient)).to.be.eq(rogueBalance)
+            expect(await hre.ethers.provider.getBalance(newPoolAddress)).to.be.eq(unwrapAmount)
             encodedUnwrapData = pool.interface.encodeFunctionData(
                 'unwrapWETH9(uint256)',
                 [50]
