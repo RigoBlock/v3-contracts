@@ -136,7 +136,6 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         require(rewardDelegatedStakeWeight <= PPM_DENOMINATOR, "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR");
 
         // Minimum stake must be > 1
-        // TODO: check if is intended as could require 2 * MIN_TOKEN_VALUE
         require(minimumPoolStake >= 2, "STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR");
     }
 
