@@ -101,7 +101,6 @@ describe("BaseTokenProxy", async () => {
             // with 0 fees and without changing price, total supply will be equal to userbalance
             expect(userTokens).to.be.eq(await pool.totalSupply())
             // with initial price 1, user tokens are equal to grg transferred to pool
-            // TODO: check why we do not use price here for expect? test when price changes
             const poolData = await pool.getData()
             const spread = poolGrgBalance * poolData.spread / 10000 // spread
             poolGrgBalance -= spread
@@ -125,7 +124,6 @@ describe("BaseTokenProxy", async () => {
                 pool.burn(userPoolBalance, 0)
             ).to.be.revertedWith("POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR")
             // following condition is true with spread > 0
-            // TODO: check why this test fails when placed before previous one
             await expect(
                 pool.burn(tokenAmountIn, 0)
             ).to.be.revertedWith("POOL_BURN_NOT_ENOUGH_ERROR")
