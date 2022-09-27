@@ -245,8 +245,8 @@ describe("StakingProxy", async () => {
                 .to.be.revertedWith("STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR")
             await rogueProxy.setStakeWeight(1000000)
             await proxy.assertValidStorageParams()
-            // TODO: following assertion should require minimum stake to be higher than 2e18 but deployed staking proxy
-            //  cannot be update and it is not critical. We should check if 1e18 multiplier is used somewhere.
+            // following assertion should require minimum stake to be higher than 1e18 but deployed staking proxy
+            //  cannot be update and it is not critical. It makes sure that a pull with null delegated stake cannot receive rewards.
             await rogueProxy.setMinimumStake(1)
             await expect(proxy.assertValidStorageParams())
                 .to.be.revertedWith("STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR")

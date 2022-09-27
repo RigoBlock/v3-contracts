@@ -70,7 +70,7 @@ describe("StakingProxy", async () => {
             ).to.be.revertedWith("STAKING_PAL_NULL_OR_SAME_ERROR")
         })
 
-        // TODO: this test will fail if we do not initialize staking pal if same as owner to save gas
+        // this test will not revert if we do not initialize staking pal if same as owner to save gas
         it('should revert if pal address is same', async () => {
             const { stakingProxy, newPoolAddress, poolId } = await setupTests()
             await stakingProxy.createStakingPool(newPoolAddress)
