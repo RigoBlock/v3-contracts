@@ -107,7 +107,6 @@ const deploy: DeployFunction = async function (
   const staking = await deploy("Staking", {
     from: deployer,
     args: [
-        deployer,  // Authorizable(_owner)
         grgVault.address,
         registry.address,
         rigoToken.address
