@@ -22,6 +22,9 @@ pragma solidity 0.8.17;
 
 import "./AUniswapV3NPM.sol";
 import "./interfaces/IAUniswap.sol";
+// TODO: import extension interface
+//import "./interfaces/IEWhitelist.sol";
+import "../EWhitelist.sol";
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "../../interfaces/IWETH9.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
@@ -57,6 +60,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountOut) {
+        _assertTokenWhitelisted(path[1]);
+
         amountOut = ISwapRouter02(_getUniswapRouter2()).swapExactTokensForTokens(
             amountIn,
             amountOutMin,
@@ -72,6 +77,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountIn) {
+        _assertTokenWhitelisted(path[1]);
+
         amountIn = ISwapRouter02(_getUniswapRouter2()).swapTokensForExactTokens(
             amountOut,
             amountInMax,
@@ -89,6 +96,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         override
         returns (uint256 amountOut)
     {
+        _assertTokenWhitelisted(params.tokenOut);
+
         // we first set the allowance to the uniswap router
         _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
 
@@ -111,7 +120,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external override returns (uint256 amountOut) {
-        (address tokenIn, , ) = params.path.decodeFirstPool();
+        (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
+        _assertTokenWhitelisted(tokenOut);
 
         // we first set the allowance to the uniswap router
         _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
@@ -136,6 +146,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         override
         returns (uint256 amountIn)
     {
+        _assertTokenWhitelisted(params.tokenOut);
+
         // we first set the allowance to the uniswap router
         _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
 
@@ -158,7 +170,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external override returns (uint256 amountIn) {
-        (address tokenIn, , ) = params.path.decodeFirstPool();
+        (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
+        _assertTokenWhitelisted(tokenOut);
 
         // we first set the allowance to the uniswap router
         _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
@@ -283,6 +296,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function isContract(address target) internal view returns (bool) {
         return target.code.length > 0;
+    }
+
+    function _assertTokenWhitelisted(address _token) private view {
+        require(
+            EWhitelist(address(this)).isWhitelisted(_token),
+            "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR"
+        );
     }
 
     function _getUniswapRouter2() private view returns (address) {
