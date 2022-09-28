@@ -175,6 +175,10 @@ describe("ProxyFactory", async () => {
                 factory.setImplementation(registry.address)
             ).to.emit(factory, "Upgraded").withArgs(registry.address)
             expect(await factory.implementation()).to.be.eq(registry.address)
+            // address can be updated to same. No harm as method is restricted to Rigoblock Dao
+            await expect(
+                factory.setImplementation(registry.address)
+            ).to.emit(factory, "Upgraded").withArgs(registry.address)
         })
     })
 
@@ -194,12 +198,10 @@ describe("ProxyFactory", async () => {
             await expect(
                 factory.setRegistry(factory.address)
             ).to.emit(factory, "RegistryUpgraded").withArgs(factory.address)
+            // hardhat bug, which will revert with "Error: Transaction reverted: function selector was not recognized and there's no fallback function"
+            //  but transaction will go through. No harm in setting registry to same address. With hardhat upgrade, this test will most likely fail.
             await expect(factory.setRegistry(factory.address)).to.be.reverted
             expect(await factory.getRegistry()).to.be.eq(factory.address)
-            // pool registry will always emit return error on failure
-            await expect(
-                factory.createPool('testpool', 'TEST', AddressZero)
-            ).to.be.reverted
         })
     })
 })
