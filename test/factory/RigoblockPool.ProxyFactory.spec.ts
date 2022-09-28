@@ -70,6 +70,8 @@ describe("ProxyFactory", async () => {
             expect(
                 await registry.getPoolIdFromAddress(newPoolAddress)
             ).to.be.eq(poolId)
+            // following test used to assert try/catch return bytes error
+            await expect(factory.createPool('testpool','TEST', AddressZero)).to.be.reverted
         })
 
         it('should create pool with space not first or last character', async () => {
