@@ -26,9 +26,6 @@ import {IAuthorityCore} from "../interfaces/IAuthorityCore.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract AuthorityCore is Owned, IAuthorityCore {
-    /// @inheritdoc IAuthorityCore
-    address public override extensionsAuthority;
-
     mapping(bytes4 => address) private adapterBySelector;
     mapping(address => Permission) private permission;
     mapping(Role => address[]) private roleToList;
@@ -61,12 +58,6 @@ contract AuthorityCore is Owned, IAuthorityCore {
     }
 
     /// @inheritdoc IAuthorityCore
-    function setExtensionsAuthority(address _extensionsAuthority) external override onlyOwner {
-        extensionsAuthority = _extensionsAuthority;
-        emit NewExtensionsAuthority(extensionsAuthority);
-    }
-
-    /// @inheritdoc IAuthorityCore
     function setWhitelister(address _whitelister, bool _isWhitelisted) external override onlyOwner {
         _changePermission(_whitelister, _isWhitelisted, Role.WHITELISTER);
     }
@@ -91,11 +82,6 @@ contract AuthorityCore is Owned, IAuthorityCore {
 
     function getApplicationAdapter(bytes4 _selector) external view override returns (address) {
         return adapterBySelector[_selector];
-    }
-
-    /// @inheritdoc IAuthorityCore
-    function getAuthorityExtensions() external view override returns (address) {
-        return extensionsAuthority;
     }
 
     /// @inheritdoc IAuthorityCore
