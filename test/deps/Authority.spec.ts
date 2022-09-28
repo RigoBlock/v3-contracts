@@ -245,21 +245,6 @@ describe("Authority", async () => {
             ).withArgs(user1.address, user2.address, Role.Adapter)
         })
     })
-
-    describe("setExtensionsAuthority", async () => {
-        it('should revert if caller not owner', async () => {
-            const { authority } = await setupTests()
-            await expect(
-                authority.connect(user2).setExtensionsAuthority(user2.address)
-            ).to.be.revertedWith("OWNED_CALLER_IS_NOT_OWNER_ERROR")
-            await expect(
-                authority.setExtensionsAuthority(user2.address)
-            ).to.emit(authority, "NewExtensionsAuthority").withArgs(user2.address)
-            expect(
-                await authority.getAuthorityExtensions()
-            ).to.be.eq(user2.address)
-        })
-    })
 })
 
 export enum Role {

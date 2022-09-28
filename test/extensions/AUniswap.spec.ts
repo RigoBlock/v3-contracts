@@ -51,6 +51,12 @@ describe("AUniswap", async () => {
         await authority.setAdapter(AMulticallInstance.address, true)
         // "ac9650d8": "multicall(bytes[])"
         await authority.addMethod("0xac9650d8", AMulticallInstance.address)
+        // we also need to approve method in EWhitelist so that staticcall can be performed
+        const EWhitelist = await hre.ethers.getContractFactory("EWhitelist")
+        const eWhitelist = await EWhitelist.deploy(authority.address)
+        await authority.setAdapter(eWhitelist.address, true)
+        // "ab37f486": "isWhitelistedToken(address)"
+        await authority.addMethod("0xab37f486", eWhitelist.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
@@ -63,7 +69,8 @@ describe("AUniswap", async () => {
             aUniswap: AUniswapInstance.address,
             authority,
             newPoolAddress,
-            poolId
+            poolId,
+            eWhitelist,
         }
     })
 
@@ -160,6 +167,7 @@ describe("AUniswap", async () => {
         })
     })
 
+    // if we also swap in multicall we will need to whitelist target token, otherwise tx will be reverted with error
     describe("multicall", async () => {
         it('should send transaction in multicall format', async () => {
             const { grgToken, aUniswap, authority, newPoolAddress, poolId } = await setupTests()
@@ -228,14 +236,23 @@ describe("AUniswap", async () => {
     // TODO: check calldata vs memory in contract
     describe("swapExactTokensForTokens", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x472b43f3", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.swapExactTokensForTokens(
+                100,
+                100,
+                [grgToken.address, weth.address],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(weth.address)
             await pool.swapExactTokensForTokens(
                 100,
                 100,
-                [grgToken.address, grgToken.address],
+                [grgToken.address, weth.address],
                 newPoolAddress
             )
         })
@@ -243,14 +260,23 @@ describe("AUniswap", async () => {
 
     describe("swapTokensForExactTokens", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x42712a67", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.swapTokensForExactTokens(
+                100,
+                100,
+                [weth.address, grgToken.address],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(grgToken.address)
             await pool.swapTokensForExactTokens(
                 100,
                 100,
-                [grgToken.address, grgToken.address],
+                [weth.address, grgToken.address],
                 newPoolAddress
             )
         })
@@ -258,13 +284,25 @@ describe("AUniswap", async () => {
 
     describe("exactInputSingle", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x04e45aaf", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.exactInputSingle({
+                tokenIn: grgToken.address,
+                tokenOut: weth.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1,
+                sqrtPriceLimitX96: 4
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(weth.address)
             await pool.exactInputSingle({
                 tokenIn: grgToken.address,
-                tokenOut: grgToken.address,
+                tokenOut: weth.address,
                 fee: 0,
                 recipient: newPoolAddress,
                 amountIn: 20,
@@ -276,13 +314,22 @@ describe("AUniswap", async () => {
 
     describe("exactInput", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0xb858183f", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.exactInput({
+                path: encodePath([weth.address, grgToken.address], [FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(grgToken.address)
             // fee amount is irrelevant as long as we test on the mock router and do not query for the actual pool
             await pool.exactInput({
-                path: encodePath([grgToken.address, grgToken.address], [FeeAmount.MEDIUM]),
+                path: encodePath([weth.address, grgToken.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
@@ -293,12 +340,24 @@ describe("AUniswap", async () => {
     // hardhat does not recognize methods with same name but different signature/inputs
     describe("exactOutputSingle", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x5023b4df", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.exactOutputSingle({
+                tokenIn: weth.address,
+                tokenOut: grgToken.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 1,
+                sqrtPriceLimitX96: 4
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(grgToken.address)
             await pool.exactOutputSingle({
-                tokenIn: grgToken.address,
+                tokenIn: weth.address,
                 tokenOut: grgToken.address,
                 fee: 0,
                 recipient: newPoolAddress,
@@ -311,12 +370,21 @@ describe("AUniswap", async () => {
 
     describe("exactOutput", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x09b81346", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.exactOutput({
+                path: encodePath([grgToken.address, weth.address], [FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(weth.address)
             await pool.exactOutput({
-                path: encodePath([grgToken.address, grgToken.address], [FeeAmount.MEDIUM]),
+                path: encodePath([grgToken.address, weth.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10

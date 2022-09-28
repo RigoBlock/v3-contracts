@@ -23,8 +23,6 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IAuthorityCore {
-    event NewExtensionsAuthority(address indexed extensionsAuthority);
-
     event PermissionAdded(address indexed from, address indexed target, uint8 indexed permissionType);
 
     event PermissionRemoved(address indexed from, address indexed target, uint8 indexed permissionType);
@@ -43,10 +41,6 @@ interface IAuthorityCore {
         mapping(Role => bool) authorized;
     }
 
-    /// @dev Returns the address of the extensions authority.
-    /// @return Address of the extensions authority.
-    function extensionsAuthority() external view returns (address);
-
     /// @dev Allows a whitelister to whitelist a method.
     /// @param _selector Bytes4 hex of the method selector.
     /// @param _adapter Address of the adapter implementing the method.
@@ -63,10 +57,6 @@ interface IAuthorityCore {
     /// @param _isWhitelisted Bool whitelisted.
     function setAdapter(address _adapter, bool _isWhitelisted) external;
 
-    /// @dev Allows the owner to set the extensions authority.
-    /// @param _extensionsAuthority Address of the extensions authority.
-    function setExtensionsAuthority(address _extensionsAuthority) external;
-
     /// @dev Allows an admin to set factory permission.
     /// @param _factory Address of the target factory.
     /// @param _isWhitelisted Bool whitelisted.
@@ -82,10 +72,6 @@ interface IAuthorityCore {
     /// @param _selector Hex of the method signature.
     /// @return Address of the adapter.
     function getApplicationAdapter(bytes4 _selector) external view returns (address);
-
-    /// @dev Provides the address of the exchanges authority.
-    /// @return Address of the adapter.
-    function getAuthorityExtensions() external view returns (address);
 
     /// @dev Provides whether a factory is whitelisted.
     /// @param _target Address of the target factory.
