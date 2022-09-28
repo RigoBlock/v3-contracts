@@ -24,7 +24,7 @@ import "./MAuthorizable.sol";
 
 abstract contract MixinAuthorizable is Ownable, MAuthorizable {
     /// @dev Only authorized addresses can invoke functions with this modifier.
-    modifier onlyAuthorized override {
+    modifier onlyAuthorized() override {
         require(authorized[msg.sender], "SENDER_NOT_AUTHORIZED");
         _;
     }

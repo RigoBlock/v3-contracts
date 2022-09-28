@@ -46,7 +46,7 @@ contract PoolRegistry is IPoolRegistry {
     /*
      * MODIFIERS
      */
-    modifier onlyWhitelistedFactory {
+    modifier onlyWhitelistedFactory() {
         require(Authority(authority).isWhitelistedFactory(msg.sender), "REGISTRY_FACTORY_NOT_WHITELISTED_ERROR");
         _;
     }
@@ -56,7 +56,7 @@ contract PoolRegistry is IPoolRegistry {
         _;
     }
 
-    modifier onlyRigoblockDao {
+    modifier onlyRigoblockDao() {
         require(msg.sender == rigoblockDaoAddress, "REGISTRY_CALLER_NOT_DAO_ERROR");
         _;
     }

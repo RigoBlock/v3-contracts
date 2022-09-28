@@ -33,7 +33,11 @@ interface IAuthorityCore {
 
     event WhitelistedMethod(address indexed from, address indexed adapter, bytes4 indexed selector);
 
-    enum Role {ADAPTER, FACTORY, WHITELISTER}
+    enum Role {
+        ADAPTER,
+        FACTORY,
+        WHITELISTER
+    }
 
     struct Permission {
         mapping(Role => bool) authorized;

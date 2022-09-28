@@ -6,7 +6,7 @@ import {IOwnedUninitialized} from "./IOwnedUninitialized.sol";
 abstract contract OwnedUninitialized is IOwnedUninitialized {
     address public override owner;
 
-    modifier onlyOwner {
+    modifier onlyOwner() {
         require(msg.sender == owner, "OWNED_CALLER_IS_NOT_OWNER_ERROR");
         _;
     }

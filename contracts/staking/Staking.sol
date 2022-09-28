@@ -28,7 +28,6 @@ import "./stake/MixinStake.sol";
 import "./rewards/MixinPopRewards.sol";
 
 contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
-
     // @notice Setting owner to null address prevents admin direct calls to implementation,
     //  initializing immutable implementation address is used to allow delegatecalls only,
     //  locking the implementation contract from direct calls.

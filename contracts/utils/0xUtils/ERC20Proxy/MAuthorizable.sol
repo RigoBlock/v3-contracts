@@ -23,7 +23,7 @@ import "../interfaces/IAuthorizable.sol";
 
 abstract contract MAuthorizable is IAuthorizable {
     /// @dev Only authorized addresses can invoke functions with this modifier.
-    modifier onlyAuthorized virtual {
+    modifier onlyAuthorized() virtual {
         revert();
         _;
     }

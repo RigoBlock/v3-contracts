@@ -41,12 +41,12 @@ contract RigoToken is IRigoToken, UnlimitedAllowanceToken {
     /*
      * MODIFIERS
      */
-    modifier onlyMinter {
+    modifier onlyMinter() {
         require(msg.sender == minter);
         _;
     }
 
-    modifier onlyRigoblock {
+    modifier onlyRigoblock() {
         require(msg.sender == rigoblock);
         _;
     }

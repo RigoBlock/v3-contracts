@@ -32,7 +32,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     address private registryAddress;
 
-    modifier onlyRigoblockDao {
+    modifier onlyRigoblockDao() {
         require(PoolRegistry(registryAddress).rigoblockDaoAddress() == msg.sender, "FACTORY_CALLER_NOT_DAO_ERROR");
         _;
     }
@@ -97,21 +97,20 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         string calldata _symbol,
         address _baseToken
     ) internal returns (bytes32 salt, RigoblockPoolProxy newProxy) {
-        bytes memory encodedInitialization =
-            abi.encodeWithSelector(
-                0x95d317f0, // RigoblockPool._initializePool.selector
-                _name,
-                _symbol,
-                _baseToken,
-                msg.sender
-            );
+        bytes memory encodedInitialization = abi.encodeWithSelector(
+            0x95d317f0, // RigoblockPool._initializePool.selector
+            _name,
+            _symbol,
+            _baseToken,
+            msg.sender
+        );
         salt = keccak256(abi.encode(_name, msg.sender));
 
         try new RigoblockPoolProxy{salt: salt}(address(this), encodedInitialization) returns (
             RigoblockPoolProxy proxy
         ) {
             newProxy = proxy;
-        } catch Error (string memory revertReason) {
+        } catch Error(string memory revertReason) {
             revert(revertReason);
         } catch (bytes memory) {
             revert("FACTORY_LIBRARY_CREATE2_FAILED_ERROR");

@@ -72,8 +72,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 amount1
         )
     {
-        (, , address token0, address token1, , , , , , , , ) =
-            INonfungiblePositionManager(_getUniswapNpmAddress()).positions(params.tokenId);
+        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(_getUniswapNpmAddress())
+            .positions(params.tokenId);
 
         // we first set the allowance to the uniswap position manager
         _safeApprove(token0, _getUniswapNpmAddress(), type(uint256).max);

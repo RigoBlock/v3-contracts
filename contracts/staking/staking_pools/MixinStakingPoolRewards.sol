@@ -67,8 +67,11 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         (uint256 unfinalizedTotalRewards, uint256 unfinalizedMembersStake) = _getUnfinalizedPoolRewards(poolId);
 
         // Get the members' portion.
-        (, uint256 unfinalizedMembersReward) =
-            _computePoolRewardsSplit(pool.operatorShare, unfinalizedTotalRewards, unfinalizedMembersStake);
+        (, uint256 unfinalizedMembersReward) = _computePoolRewardsSplit(
+            pool.operatorShare,
+            unfinalizedTotalRewards,
+            unfinalizedMembersStake
+        );
         return _computeDelegatorReward(poolId, member, unfinalizedMembersReward, unfinalizedMembersStake);
     }
 
@@ -81,15 +84,14 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         _assertPoolFinalizedLastEpoch(poolId);
 
         // Compute balance owed to delegator
-        uint256 balance =
-            _computeDelegatorReward(
-                poolId,
-                member,
-                // No unfinalized values because we ensured the pool is already
-                // finalized.
-                0,
-                0
-            );
+        uint256 balance = _computeDelegatorReward(
+            poolId,
+            member,
+            // No unfinalized values because we ensured the pool is already
+            // finalized.
+            0,
+            0
+        );
 
         // Sync the delegated stake balance. This will ensure future calls of
         // `_computeDelegatorReward` during this epoch will return 0,
@@ -255,10 +257,9 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
 
         // Unfinalized rewards are always earned from stake in
         // the prior epoch so we want the stake at `currentEpoch_-1`.
-        uint256 unfinalizedStakeBalance =
-            delegatedStake.currentEpoch >= currentEpoch_.safeSub(1)
-                ? delegatedStake.currentEpochBalance
-                : delegatedStake.nextEpochBalance;
+        uint256 unfinalizedStakeBalance = delegatedStake.currentEpoch >= currentEpoch_.safeSub(1)
+            ? delegatedStake.currentEpochBalance
+            : delegatedStake.nextEpochBalance;
 
         // Sanity check to save gas on computation
         if (unfinalizedStakeBalance == 0) {

@@ -47,7 +47,7 @@ contract Inflation is IInflation {
 
     uint256 private epochEndTime;
 
-    modifier onlyStakingProxy {
+    modifier onlyStakingProxy() {
         _assertCallerIsStakingProxy();
         _;
     }

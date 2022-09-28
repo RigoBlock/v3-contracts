@@ -35,7 +35,12 @@ contract AuthorityExtensions is IAuthorityExtensions {
     mapping(address => address) private approvedTokenOnWrapper;
     mapping(address => Permission) private permission;
 
-    enum Group {EXCHANGE, TOKEN, WRAPPER, PROXY}
+    enum Group {
+        EXCHANGE,
+        TOKEN,
+        WRAPPER,
+        PROXY
+    }
 
     struct Permission {
         mapping(Group => bool) authorized;
@@ -51,7 +56,7 @@ contract AuthorityExtensions is IAuthorityExtensions {
     /*
      * MODIFIERS
      */
-    modifier onlyWhitelister {
+    modifier onlyWhitelister() {
         require(isWhitelister(msg.sender));
         _;
     }

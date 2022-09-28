@@ -33,7 +33,7 @@ contract AuthorityCore is Owned, IAuthorityCore {
     mapping(address => Permission) private permission;
     mapping(Role => address[]) private roleToList;
 
-    modifier onlyWhitelister {
+    modifier onlyWhitelister() {
         require(isWhitelister(msg.sender), "AUTHORITY_SENDER_NOT_WHITELISTER_ERROR");
         _;
     }
