@@ -65,6 +65,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     /// @inheritdoc IRigoblockPoolProxyFactory
     function setImplementation(address _newImplementation) external override onlyRigoblockDao {
+        require(_newImplementation != implementation, "FACTORY_SAME_INPUT_ADDRESS_ERROR");
         require(_isContract(_newImplementation), "FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR");
         implementation = _newImplementation;
         emit Upgraded(_newImplementation);
@@ -72,6 +73,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     /// @inheritdoc IRigoblockPoolProxyFactory
     function setRegistry(address _newRegistry) external override onlyRigoblockDao {
+        require(_newRegistry != registryAddress, "FACTORY_SAME_INPUT_ADDRESS_ERROR");
         require(_isContract(_newRegistry), "FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR");
         registryAddress = _newRegistry;
         emit RegistryUpgraded(_newRegistry);
