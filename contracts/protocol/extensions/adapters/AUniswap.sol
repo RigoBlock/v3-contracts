@@ -300,7 +300,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _assertTokenWhitelisted(address _token) private view {
         require(
-            EWhitelist(address(this)).isWhitelisted(_token),
+            EWhitelist(address(this)).isWhitelistedToken(_token),
             "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR"
         );
     }
