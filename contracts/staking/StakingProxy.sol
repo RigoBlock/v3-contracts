@@ -56,12 +56,12 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         // Revert on failure or return on success.
         assembly {
             switch success
-                case 0 {
-                    revert(add(0x20, returnData), mload(returnData))
-                }
-                default {
-                    return(add(0x20, returnData), mload(returnData))
-                }
+            case 0 {
+                revert(add(0x20, returnData), mload(returnData))
+            }
+            default {
+                return(add(0x20, returnData), mload(returnData))
+            }
         }
     }
 
@@ -147,8 +147,9 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         emit StakingContractAttachedToProxy(_stakingContract);
 
         // Call `init()` on the staking contract to initialize storage.
-        (bool didInitSucceed, bytes memory initReturnData) =
-            stakingContract.delegatecall(abi.encodeWithSelector(IStorageInit.init.selector));
+        (bool didInitSucceed, bytes memory initReturnData) = stakingContract.delegatecall(
+            abi.encodeWithSelector(IStorageInit.init.selector)
+        );
 
         if (!didInitSucceed) {
             assembly {

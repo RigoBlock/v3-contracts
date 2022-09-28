@@ -105,7 +105,9 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     function _allocateMintTokens(address _recipient, uint256 _mintedAmount) private returns (uint256 recipientAmount) {
         /// @notice Each mint on same recipient resets prior activation.
         /// @notice Lock recipient tokens, max lockup 30 days cannot overflow.
-        unchecked {userAccount[_recipient].activation = uint32(block.timestamp) + _getMinPeriod();}
+        unchecked {
+            userAccount[_recipient].activation = uint32(block.timestamp) + _getMinPeriod();
+        }
 
         if (poolData.transactionFee != uint256(0)) {
             address feeCollector = _getFeeCollector();
@@ -116,7 +118,9 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                 emit Transfer(address(0), feeCollector, recipientAmount);
             } else {
                 /// @notice Lock fee tokens as well.
-                unchecked {userAccount[feeCollector].activation = (uint32(block.timestamp) + _getMinPeriod());}
+                unchecked {
+                    userAccount[feeCollector].activation = (uint32(block.timestamp) + _getMinPeriod());
+                }
                 uint256 feePool = (_mintedAmount * poolData.transactionFee) / FEE_BASE;
                 recipientAmount = _mintedAmount - feePool;
                 userAccount[feeCollector].balance += feePool;
@@ -168,8 +172,9 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
 
     function _safeTransfer(address _to, uint256 _amount) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) =
-            admin.baseToken.call(abi.encodeWithSelector(TRANSFER_SELECTOR, _to, _amount));
+        (bool success, bytes memory data) = admin.baseToken.call(
+            abi.encodeWithSelector(TRANSFER_SELECTOR, _to, _amount)
+        );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FAILED_ERROR");
     }
 
@@ -179,8 +184,9 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         uint256 _amount
     ) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) =
-            admin.baseToken.call(abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, _from, _to, _amount));
+        (bool success, bytes memory data) = admin.baseToken.call(
+            abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, _from, _to, _amount)
+        );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FROM_FAILED_ERROR");
     }
 }

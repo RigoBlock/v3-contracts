@@ -46,7 +46,12 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
     /// Note that a staking pal must be payable.
     /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
     /// @return poolId The unique pool id generated for this pool.
-    function createStakingPool(address rigoblockPoolAddress) external override onlyDelegateCall returns (bytes32 poolId) {
+    function createStakingPool(address rigoblockPoolAddress)
+        external
+        override
+        onlyDelegateCall
+        returns (bytes32 poolId)
+    {
         bytes32 rbPoolId = getPoolRegistry().getPoolIdFromAddress(rigoblockPoolAddress);
         require(rbPoolId != bytes32(0), "NON_REGISTERED_RB_POOL_ERROR");
         // note that an operator must be payable
@@ -68,13 +73,12 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         // @notice _assertNewOperatorShare if operatorShare, stakingPalShare are inputs after an upgrade
 
         // create and store pool
-        IStructs.Pool memory pool =
-            IStructs.Pool({
-                operator: operator,
-                stakingPal: stakingPal,
-                operatorShare: operatorShare,
-                stakingPalShare: stakingPalShare
-            });
+        IStructs.Pool memory pool = IStructs.Pool({
+            operator: operator,
+            stakingPal: stakingPal,
+            operatorShare: operatorShare,
+            stakingPalShare: stakingPalShare
+        });
         _poolById[poolId] = pool;
 
         // Staking pool has been created

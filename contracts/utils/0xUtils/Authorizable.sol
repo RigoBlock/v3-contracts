@@ -26,7 +26,7 @@ import "./Ownable.sol";
 // TODO: check if should use OwnedUninitialized and remove duplicate contract
 abstract contract Authorizable is Ownable, IAuthorizable {
     /// @dev Only authorized addresses can invoke functions with this modifier.
-    modifier onlyAuthorized {
+    modifier onlyAuthorized() {
         _assertSenderIsAuthorized();
         _;
     }

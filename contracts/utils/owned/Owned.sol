@@ -6,7 +6,7 @@ abstract contract Owned {
 
     event NewOwner(address indexed old, address indexed current);
 
-    modifier onlyOwner {
+    modifier onlyOwner() {
         require(msg.sender == owner, "OWNED_CALLER_IS_NOT_OWNER_ERROR");
         _;
     }

@@ -62,7 +62,10 @@ interface IStructs {
     /// @dev Statuses that stake can exist in.
     ///      Any stake can be (re)delegated effective at the next epoch
     ///      Undelegated stake can be withdrawn if it is available in both the current and next epoch
-    enum StakeStatus {UNDELEGATED, DELEGATED}
+    enum StakeStatus {
+        UNDELEGATED,
+        DELEGATED
+    }
 
     /// @dev Info used to describe a status.
     /// @param status Status of the stake.

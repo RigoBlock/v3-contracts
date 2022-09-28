@@ -62,8 +62,10 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
         uint256 feesCollectedByPool = poolStatsPtr.feesCollected;
         if (feesCollectedByPool == 0) {
             // Compute member and total weighted stake.
-            (uint256 membersStakeInPool, uint256 weightedStakeInPool) =
-                _computeMembersAndWeightedStake(poolId, poolStake);
+            (uint256 membersStakeInPool, uint256 weightedStakeInPool) = _computeMembersAndWeightedStake(
+                poolId,
+                poolStake
+            );
             poolStatsPtr.membersStake = membersStakeInPool;
             poolStatsPtr.weightedStake = weightedStakeInPool;
 
