@@ -20,10 +20,10 @@
 // solhint-disable-next-line
 pragma solidity =0.8.17;
 
-import "./adapters/interfaces/IAStaking.sol";
-import "../../staking/interfaces/IStaking.sol";
-import "../../staking/interfaces/IStorage.sol";
-import {IRigoToken as GRG} from "../../rigoToken/interfaces/IRigoToken.sol";
+import "./interfaces/IAStaking.sol";
+import "../../../staking/interfaces/IStaking.sol";
+import "../../../staking/interfaces/IStorage.sol";
+import {IRigoToken as GRG} from "../../../rigoToken/interfaces/IRigoToken.sol";
 
 /// @title Self Custody adapter - A helper contract for self custody.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
