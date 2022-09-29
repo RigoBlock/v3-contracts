@@ -1,24 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0;
 
-interface Authority {
-    function getExchangesAuthority() external view returns (address);
-}
+import "../protocol/interfaces/IAuthority.sol";
+import { IERC20 as Token } from "../tokens/ERC20/IERC20.sol";
 
-interface ExchangesAuthority {
+interface MockProxyWhitelist {
     function isWhitelistedProxy(address proxy) external view returns (bool);
-}
-
-interface Pool {
-    function owner() external view returns (address);
-}
-
-interface Token {
-    function approve(address _spender, uint256 _value) external returns (bool success);
-
-    function allowance(address _owner, address _spender) external view returns (uint256);
-
-    function balanceOf(address _who) external view returns (uint256);
 }
 
 /// @notice moved from pool to this non-implemented contract to benchmark gas cost.
@@ -60,17 +47,12 @@ abstract contract AToken {
     }
 
     function _assertApprovedProxy(address _proxy) internal view {
-        require(_getExchangesAuthorityInstance().isWhitelistedProxy(_proxy), "ATOKEN_NOT_APPROVED_PROXY_ERROR");
-    }
-
-    /// @dev Finds the exchanges authority.
-    /// @return Address of the exchanges authority.
-    function _getExchangesAuthorityInstance() internal view returns (ExchangesAuthority) {
-        return ExchangesAuthority(Authority(AUTHORITY).getExchangesAuthority());
+        require(MockProxyWhitelist(address(this)).isWhitelistedProxy(_proxy), "ATOKEN_NOT_APPROVED_PROXY_ERROR");
     }
 
     function _assertCallerIsPoolOwner() internal view {
-        (bool success, bytes memory data) = address(this).staticcall(abi.encodeWithSelector(Pool.owner.selector));
+        // 0x8da5cb5b = bytes4(keccak256(bytes("owner()")))
+        (bool success, bytes memory data) = address(this).staticcall(abi.encodeWithSelector(0x8da5cb5b));
         require(success && msg.sender == abi.decode(data, (address)), "CALLER_NOT_POOL_OWNER_ERROR");
     }
 
