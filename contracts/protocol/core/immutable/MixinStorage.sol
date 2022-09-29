@@ -29,8 +29,15 @@ abstract contract MixinStorage is IStructs, Owned, ReentrancyGuard {
     // slot(0) declared in Owned contract
     //address public override owner;
 
+    // slot(1) declared in ReentrancyGuard contract
+    //bool private locked = false;
+
+    // mappings are storage at a different storage location
     mapping(address => Account) internal userAccount;
 
+    // slot(2)
     Admin internal admin;
+
+    // slot(3)
     PoolData internal poolData;
 }
