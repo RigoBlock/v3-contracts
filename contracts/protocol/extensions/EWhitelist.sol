@@ -5,13 +5,17 @@ pragma solidity 0.8.17;
 import "./adapters/interfaces/IEWhitelist.sol";
 import "../interfaces/IAuthorityCore.sol";
 
+/// @title EWhitelist - Allows whitelisting of tokens.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
+/// @notice This contract has its own storage, which could potentially clash with pool storage if its methods were accessible by pool, which are not.
+/// Warning: careful with upgrades as pool only accesses isWhitelistedToken view method. Other methods are locked and should never be approved by governance.
 contract EWhitelist is IEWhitelist {
-    address immutable private AUTHORITY;
+    address private immutable AUTHORITY;
 
     mapping(address => bool) private isWhitelisted;
 
     modifier onlyAuthorized() {
-        assertCallerIsAuthorized();
+        _assertCallerIsAuthorized();
         _;
     }
 
@@ -51,7 +55,7 @@ contract EWhitelist is IEWhitelist {
         return AUTHORITY;
     }
 
-    function assertCallerIsAuthorized() private view {
+    function _assertCallerIsAuthorized() private view {
         require(
             IAuthorityCore(getAuthority()).isWhitelister(msg.sender),
             "EWHITELIST_CALLER_NOT_WHITELISTER_ERROR"
