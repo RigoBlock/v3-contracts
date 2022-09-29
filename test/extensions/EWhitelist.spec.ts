@@ -8,9 +8,9 @@ describe("AUniswap", async () => {
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
-        const AuthorityCoreInstance = await deployments.get("AuthorityCore")
-        const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
-        const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
+        const AuthorityInstance = await deployments.get("Authority")
+        const Authority = await hre.ethers.getContractFactory("Authority")
+        const authority = Authority.attach(AuthorityInstance.address)
         const EWhitelist = await hre.ethers.getContractFactory("EWhitelist")
         const eWhitelist = await EWhitelist.deploy(authority.address)
         return {

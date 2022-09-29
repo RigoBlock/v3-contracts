@@ -16,8 +16,8 @@ describe("PoolRegistry", async () => {
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const ResitryInstance = await deployments.get("PoolRegistry")
         const Registry = await hre.ethers.getContractFactory("PoolRegistry")
-        const AuthorityInstance = await deployments.get("AuthorityCore")
-        const Authority = await hre.ethers.getContractFactory("AuthorityCore")
+        const AuthorityInstance = await deployments.get("Authority")
+        const Authority = await hre.ethers.getContractFactory("Authority")
         return {
             factory: Factory.attach(RigoblockPoolProxyFactory.address),
             registry: Registry.attach(ResitryInstance.address),

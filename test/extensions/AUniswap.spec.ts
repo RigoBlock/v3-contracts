@@ -18,9 +18,9 @@ describe("AUniswap", async () => {
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const GrgTokenInstance = await deployments.get("RigoToken")
         const GrgToken = await hre.ethers.getContractFactory("RigoToken")
-        const AuthorityCoreInstance = await deployments.get("AuthorityCore")
-        const AuthorityCore = await hre.ethers.getContractFactory("AuthorityCore")
-        const authority = AuthorityCore.attach(AuthorityCoreInstance.address)
+        const AuthorityInstance = await deployments.get("Authority")
+        const Authority = await hre.ethers.getContractFactory("Authority")
+        const authority = Authority.attach(AuthorityInstance.address)
         const AUniswapInstance = await deployments.get("AUniswap")
         await authority.setAdapter(AUniswapInstance.address, true)
         // "88316456": "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
