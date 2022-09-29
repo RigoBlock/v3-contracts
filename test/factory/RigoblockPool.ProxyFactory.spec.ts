@@ -70,6 +70,24 @@ describe("ProxyFactory", async () => {
             expect(
                 await registry.getPoolIdFromAddress(newPoolAddress)
             ).to.be.eq(poolId)
+            await expect(factory.createPool('testpool','TEST', AddressZero))
+                .to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
+        })
+
+        // following test used to assert try/catch return bytes error.
+        // Careful with upgrades as upgrading an address could result in revert in another contract.
+        it('should be reverted in registry without error', async () => {
+            const { factory, registry } = await setupTests()
+            await registry.setAuthority(factory.address)
+            // will be reverted without error as registry modifier calls non-implemented Authority.isWhitelistedFactory method
+            await expect(factory.createPool('testpool','TEST', AddressZero))
+                .to.be.revertedWith("VM Exception while processing transaction: revert")
+            const authority = await deployments.get("AuthorityCore")
+            await registry.setAuthority(authority.address)
+            await factory.setRegistry(factory.address)
+            // will be reverted without error as factory does not implement Registry.register method
+            await expect(factory.createPool('testpool','TEST', AddressZero))
+                .to.be.revertedWith("VM Exception while processing transaction: revert")
         })
 
         it('should create pool with space not first or last character', async () => {
