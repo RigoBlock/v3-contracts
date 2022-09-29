@@ -90,7 +90,7 @@ contract AuthorityCore is Owned, IAuthorityCore {
     }
 
     /*
-     * INTERNAL FUNCTIONS
+     * PRIVATE METHODS
      */
     function _changePermission(
         address _target,
