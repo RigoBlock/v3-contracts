@@ -22,17 +22,33 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title IStructs - Pool struct variables.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IStructs {
+    /// @notice Pool holder data.
+    /// @param balance Number of pool units held.
+    /// @param activation Number of seconds until tokens can be burnt.
     struct Account {
         uint256 balance;
         uint32 activation;
     }
 
+    /// @notice Pool admin storage.
+    /// @param feeCollector Address of the fee receiver.
+    /// @param kycProvider Address of the kyc provider.
+    /// @param baseToken Address of the base token (0 for base currency).
     struct Admin {
         address feeCollector;
         address kycProvider;
         address baseToken; // TODO: check where best to store
     }
 
+    /// @notice Pool storage.
+    /// @param name String of the pool name (max 32 characters).
+    /// @param symbol String of the pool symbol (from 3 to 5 characters).
+    /// @param unitaryValue Value of the pool in base currency.
+    /// @param spread Number of spread in basis points (from 0 to +-10%).
+    /// @param totalSupply Number of total issued pool tokens.
+    /// @param transactionFee Number of transaction fee in basis points (from 0 to 1%).
+    /// @param minPeriod Uint32 minimum holding period.
+    /// @param decimals Uint8 decimals.
     struct PoolData {
         string name;
         string symbol;

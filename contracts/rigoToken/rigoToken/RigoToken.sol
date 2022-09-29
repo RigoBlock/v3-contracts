@@ -30,13 +30,11 @@ contract RigoToken is IRigoToken, UnlimitedAllowanceToken {
     string public constant symbol = "GRG";
     uint8 public constant decimals = 18;
 
+    /// @inheritdoc IRigoToken
     address public override minter;
-    address public override rigoblock;
 
-    /*
-     * EVENTS
-     */
-    event TokenMinted(address indexed recipient, uint256 amount);
+    /// @inheritdoc IRigoToken
+    address public override rigoblock;
 
     /*
      * MODIFIERS
@@ -65,23 +63,19 @@ contract RigoToken is IRigoToken, UnlimitedAllowanceToken {
     /*
      * CORE FUNCTIONS
      */
-    /// @dev Allows minter to create new tokens
-    /// @param _recipient Address of who receives new tokens
-    /// @param _amount Number of new tokens
+    /// @inheritdoc IRigoToken
     function mintToken(address _recipient, uint256 _amount) external override onlyMinter {
         balances[_recipient] += _amount;
         totalSupply += _amount;
         emit TokenMinted(_recipient, _amount);
     }
 
-    /// @dev Allows rigoblock dao to change minter
-    /// @param _newAddress Address of the new minter
+    /// @inheritdoc IRigoToken
     function changeMintingAddress(address _newAddress) external override onlyRigoblock {
         minter = _newAddress;
     }
 
-    /// @dev Allows rigoblock dao to upgrade dao
-    /// @param _newAddress Address of the new rigoblock dao
+    /// @inheritdoc IRigoToken
     function changeRigoblockAddress(address _newAddress) external override onlyRigoblock {
         rigoblock = _newAddress;
     }

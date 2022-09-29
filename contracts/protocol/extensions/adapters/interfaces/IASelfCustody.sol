@@ -21,11 +21,18 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 interface IASelfCustody {
+    /// @notice Emitted when tokens are transferred to self custody.
+    /// @dev Requires minimum GRG active stake. Minimum set by the Rigoblock Dao.
+    /// @param from Address of the pool.
+    /// @param to Address of the wallet tokens are sent to.
+    /// @param token Address of the sent token.
+    /// @param amount Number of units of sent token.
     event SelfCustodyTransfer(address indexed from, address indexed to, address indexed token, uint256 amount);
 
+    /// @notice Returns the address of the GRG vault contract.
     function GRG_VAULT_ADDRESS() external view returns (address);
 
-    /// @dev transfers ETH or tokens to self custody.
+    /// @notice transfers ETH or tokens to self custody.
     /// @param selfCustodyAccount Address of the target account.
     /// @param token Address of the target token.
     /// @param amount Number of tokens.
@@ -36,7 +43,7 @@ interface IASelfCustody {
         uint256 amount
     ) external returns (uint256 shortfall);
 
-    /// @dev external check if minimum pool GRG amount requirement satisfied.
+    /// @notice external check if minimum pool GRG amount requirement satisfied.
     /// @return shortfall Number of GRG pool operator shortfall.
     function poolGrgShortfall(address _poolAddress) external view returns (uint256);
 }

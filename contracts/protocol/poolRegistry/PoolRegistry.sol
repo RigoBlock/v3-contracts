@@ -39,10 +39,6 @@ contract PoolRegistry is IPoolRegistry {
 
     mapping(address => PoolMeta) private poolMetaByAddress;
 
-    struct PoolMeta {
-        mapping(bytes32 => bytes32) meta;
-    }
-
     /*
      * MODIFIERS
      */

@@ -23,12 +23,32 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IAuthorityCore {
+    /// @notice Adds a permission for a role.
+    /// @dev Possible roles are Role.ADAPTER, Role.FACTORY, Role.WHITELISTER
+    /// @param from Address of the method caller.
+    /// @param target Address of the approved wallet.
+    /// @param permissionType Enum type of permission.
     event PermissionAdded(address indexed from, address indexed target, uint8 indexed permissionType);
 
+    /// @notice Removes a permission for a role.
+    /// @dev Possible roles are Role.ADAPTER, Role.FACTORY, Role.WHITELISTER
+    /// @param from Address of the  method caller.
+    /// @param target Address of the approved wallet.
+    /// @param permissionType Enum type of permission.
     event PermissionRemoved(address indexed from, address indexed target, uint8 indexed permissionType);
 
+    /// @notice Removes an approved method.
+    /// @dev Removes a mapping of method selector to adapter according to eip1967.
+    /// @param from Address of the  method caller.
+    /// @param adapter Address of the adapter.
+    /// @param selector Bytes4 of the method signature.
     event RemovedMethod(address indexed from, address indexed adapter, bytes4 indexed selector);
 
+    /// @notice Approves a new method.
+    /// @dev Adds a mapping of method selector to adapter according to eip1967.
+    /// @param from Address of the  method caller.
+    /// @param adapter  Address of the adapter.
+    /// @param selector Bytes4 of the method signature.
     event WhitelistedMethod(address indexed from, address indexed adapter, bytes4 indexed selector);
 
     enum Role {
@@ -37,48 +57,50 @@ interface IAuthorityCore {
         WHITELISTER
     }
 
+    /// @notice Mapping of permission type to bool.
+    /// @param Mapping of type of permission to bool is authorized.
     struct Permission {
         mapping(Role => bool) authorized;
     }
 
-    /// @dev Allows a whitelister to whitelist a method.
+    /// @notice Allows a whitelister to whitelist a method.
     /// @param _selector Bytes4 hex of the method selector.
     /// @param _adapter Address of the adapter implementing the method.
     /// @notice We do not save list of approved as better queried by events.
     function addMethod(bytes4 _selector, address _adapter) external;
 
-    /// @dev Allows a whitelister to remove a method.
+    /// @notice Allows a whitelister to remove a method.
     /// @param _selector Bytes4 hex of the method selector.
     /// @param _adapter Address of the adapter implementing the method.
     function removeMethod(bytes4 _selector, address _adapter) external;
 
-    /// @dev Allows owner to set extension adapter address.
+    /// @notice Allows owner to set extension adapter address.
     /// @param _adapter Address of the target adapter.
     /// @param _isWhitelisted Bool whitelisted.
     function setAdapter(address _adapter, bool _isWhitelisted) external;
 
-    /// @dev Allows an admin to set factory permission.
+    /// @notice Allows an admin to set factory permission.
     /// @param _factory Address of the target factory.
     /// @param _isWhitelisted Bool whitelisted.
     function setFactory(address _factory, bool _isWhitelisted) external;
 
-    /// @dev Allows the owner to set whitelister permission.
+    /// @notice Allows the owner to set whitelister permission.
     /// @param _whitelister Address of the whitelister.
     /// @param _isWhitelisted Bool whitelisted.
     /// @notice Whitelister permission is required to approve methods in extensions adapter.
     function setWhitelister(address _whitelister, bool _isWhitelisted) external;
 
-    /// @dev Returns the address of the adapter associated to the signature.
+    /// @notice Returns the address of the adapter associated to the signature.
     /// @param _selector Hex of the method signature.
     /// @return Address of the adapter.
     function getApplicationAdapter(bytes4 _selector) external view returns (address);
 
-    /// @dev Provides whether a factory is whitelisted.
+    /// @notice Provides whether a factory is whitelisted.
     /// @param _target Address of the target factory.
     /// @return Bool is whitelisted.
     function isWhitelistedFactory(address _target) external view returns (bool);
 
-    /// @dev Provides whether an address is whitelister.
+    /// @notice Provides whether an address is whitelister.
     /// @param _target Address of the target whitelister.
     /// @return Bool is whitelisted.
     function isWhitelister(address _target) external view returns (bool);

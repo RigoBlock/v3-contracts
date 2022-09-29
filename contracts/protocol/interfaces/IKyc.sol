@@ -23,5 +23,8 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IKyc {
-    function isWhitelistedUser(address hodler) external view returns (bool);
+    /// @notice Returns whether an address has been whitelisted.
+    /// @param user The address to verify.
+    /// @return Bool the user is whitelisted.
+    function isWhitelistedUser(address user) external view returns (bool);
 }

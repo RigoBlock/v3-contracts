@@ -233,7 +233,7 @@ describe("AUniswap", async () => {
         })
     })
 
-    // TODO: check calldata vs memory in contract
+    // when we overwrite an input in adapter, bytes declaration must be memory, otherwise calldata if input passed to next function.
     describe("swapExactTokensForTokens", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
