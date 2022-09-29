@@ -10,8 +10,8 @@ describe("Authority", async () => {
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
-        const AuthorityInstance = await deployments.get("AuthorityCore")
-        const Authority = await hre.ethers.getContractFactory("AuthorityCore")
+        const AuthorityInstance = await deployments.get("Authority")
+        const Authority = await hre.ethers.getContractFactory("Authority")
         const authority = Authority.attach(AuthorityInstance.address)
         await authority.setWhitelister(user1.address, false);
         return {

@@ -20,12 +20,12 @@
 pragma solidity 0.8.17;
 
 import {OwnedUninitialized as Owned} from "../../utils/owned/OwnedUninitialized.sol";
-import {IAuthorityCore} from "../interfaces/IAuthorityCore.sol";
+import {IAuthority} from "../interfaces/IAuthority.sol";
 
-/// @title AuthorityCore - Allows to set up the base rules of the protocol.
+/// @title Authority - Allows to set up the base rules of the protocol.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract AuthorityCore is Owned, IAuthorityCore {
+contract Authority is Owned, IAuthority {
     mapping(bytes4 => address) private adapterBySelector;
     mapping(address => Permission) private permission;
     mapping(Role => address[]) private roleToList;
@@ -42,7 +42,7 @@ contract AuthorityCore is Owned, IAuthorityCore {
     /*
      * CORE FUNCTIONS
      */
-    /// @inheritdoc IAuthorityCore
+    /// @inheritdoc IAuthority
     function addMethod(bytes4 _selector, address _adapter) external override onlyWhitelister {
         require(permission[_adapter].authorized[Role.ADAPTER], "ADAPTER_NOT_WHITELISTED_ERROR");
         require(adapterBySelector[_selector] == address(0), "SELECTOR_EXISTS_ERROR");
@@ -50,24 +50,24 @@ contract AuthorityCore is Owned, IAuthorityCore {
         emit WhitelistedMethod(msg.sender, _adapter, _selector);
     }
 
-    /// @inheritdoc IAuthorityCore
+    /// @inheritdoc IAuthority
     function removeMethod(bytes4 _selector, address _adapter) external override onlyWhitelister {
         require(adapterBySelector[_selector] != address(0), "AUTHORITY_METHOD_NOT_APPROVED_ERROR");
         delete adapterBySelector[_selector];
         emit RemovedMethod(msg.sender, _adapter, _selector);
     }
 
-    /// @inheritdoc IAuthorityCore
+    /// @inheritdoc IAuthority
     function setWhitelister(address _whitelister, bool _isWhitelisted) external override onlyOwner {
         _changePermission(_whitelister, _isWhitelisted, Role.WHITELISTER);
     }
 
-    /// @inheritdoc IAuthorityCore
+    /// @inheritdoc IAuthority
     function setAdapter(address _adapter, bool _isWhitelisted) external override onlyOwner {
         _changePermission(_adapter, _isWhitelisted, Role.ADAPTER);
     }
 
-    /// @inheritdoc IAuthorityCore
+    /// @inheritdoc IAuthority
     function setFactory(address _factory, bool _isWhitelisted) external override onlyOwner {
         _changePermission(_factory, _isWhitelisted, Role.FACTORY);
     }
@@ -75,7 +75,7 @@ contract AuthorityCore is Owned, IAuthorityCore {
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @inheritdoc IAuthorityCore
+    /// @inheritdoc IAuthority
     function isWhitelistedFactory(address _target) external view override returns (bool) {
         return permission[_target].authorized[Role.FACTORY];
     }
@@ -84,7 +84,7 @@ contract AuthorityCore is Owned, IAuthorityCore {
         return adapterBySelector[_selector];
     }
 
-    /// @inheritdoc IAuthorityCore
+    /// @inheritdoc IAuthority
     function isWhitelister(address _target) public view override returns (bool) {
         return permission[_target].authorized[Role.WHITELISTER];
     }

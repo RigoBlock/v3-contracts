@@ -22,7 +22,7 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @title Authority Interface - Allows interaction with the Authority contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IAuthorityCore {
+interface IAuthority {
     /// @notice Adds a permission for a role.
     /// @dev Possible roles are Role.ADAPTER, Role.FACTORY, Role.WHITELISTER
     /// @param from Address of the method caller.
