@@ -12,6 +12,7 @@ import "../interfaces/IAuthorityCore.sol";
 contract EWhitelist is IEWhitelist {
     address private immutable AUTHORITY;
 
+    // slot(0) should clash with pool storage and revert if accidentally called by pool, which is prevented by modifier.
     mapping(address => bool) private isWhitelisted;
 
     modifier onlyAuthorized() {

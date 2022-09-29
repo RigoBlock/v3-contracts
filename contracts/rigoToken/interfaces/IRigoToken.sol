@@ -25,13 +25,30 @@ import "../../tokens/ERC20/IERC20.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoToken is IERC20 {
+    /// @notice Emitted when new tokens have been minted.
+    /// @param recipient Address receiving the new tokens.
+    /// @param amount Number of minted units.
+    event TokenMinted(address indexed recipient, uint256 amount);
+
+    /// @notice Returns the address of the minter.
+    /// @return Address of the minter.
     function minter() external view returns (address);
 
+    /// @notice Returns the address of the Rigoblock Dao.
+    /// @return Address of the Dao.
     function rigoblock() external view returns (address);
 
+    /// @notice Allows minter to create new tokens.
+    /// @dev Mint method is reserved for minter module.
+    /// @param _recipient Address receiving the new tokens.
+    /// @param _amount Number of minted tokens.
     function mintToken(address _recipient, uint256 _amount) external;
 
+    /// @notice Allows Rigoblock Dao to update minter.
+    /// @param _newAddress Address of the new minter.
     function changeMintingAddress(address _newAddress) external;
 
+    /// @notice Allows Rigoblock Dao to update its address.
+    /// @param _newAddress Address of the new Dao.
     function changeRigoblockAddress(address _newAddress) external;
 }

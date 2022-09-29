@@ -29,6 +29,7 @@ import "./interfaces/IASelfCustody.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract ASelfCustody is IASelfCustody {
+    /// @inheritdoc IASelfCustody
     address public immutable override GRG_VAULT_ADDRESS;
 
     // minimum 100k GRG to unlock self custody

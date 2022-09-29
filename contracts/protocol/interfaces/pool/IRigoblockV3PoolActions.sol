@@ -23,7 +23,7 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockV3PoolActions {
-    /// @dev Allows a user to mint pool tokens on behalf of an address.
+    /// @notice Allows a user to mint pool tokens on behalf of an address.
     /// @param _recipient Address receiving the tokens.
     /// @param _amountIn Amount of base tokens.
     /// @param _amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
@@ -34,7 +34,7 @@ interface IRigoblockV3PoolActions {
         uint256 _amountOutMin
     ) external payable returns (uint256);
 
-    /// @dev Allows a pool holder to burn pool tokens.
+    /// @notice Allows a pool holder to burn pool tokens.
     /// @param _amountIn Number of tokens to burn.
     /// @param _amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
     /// @return netRevenue Net amount of burnt pool tokens.

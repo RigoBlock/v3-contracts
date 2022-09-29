@@ -23,17 +23,23 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockPoolProxyFactory {
+    /// @notice Emitted when a new pool is created.
+    /// @param poolAddress Address of the new pool.
     event PoolCreated(address poolAddress);
 
+    /// @notice Emitted when a new implementation is set by the Rigoblock Dao.
+    /// @param implementation Address of the new implementation.
     event Upgraded(address indexed implementation);
 
+    /// @notice Emitted when registry address is upgraded by the Rigoblock Dao.
+    /// @param registry Address of the new registry.
     event RegistryUpgraded(address indexed registry);
 
-    /// @dev Returns the implementation address for the pool proxies.
+    /// @notice Returns the implementation address for the pool proxies.
     /// @return Address of the implementation.
     function implementation() external view returns (address);
 
-    /// @dev Creates a new Rigoblock pool.
+    /// @notice Creates a new Rigoblock pool.
     /// @param _name String of the name.
     /// @param _symbol String of the symbol.
     /// @param _baseToken Address of the base token.
@@ -45,15 +51,15 @@ interface IRigoblockPoolProxyFactory {
         address _baseToken
     ) external returns (address newPoolAddress, bytes32 poolId);
 
-    /// @dev Allows Rigoblock Dao to update factory pool implementation.
+    /// @notice Allows Rigoblock Dao to update factory pool implementation.
     /// @param _newImplementation Address of the new implementation contract.
     function setImplementation(address _newImplementation) external;
 
-    /// @dev Allows owner to update the registry.
+    /// @notice Allows owner to update the registry.
     /// @param _newRegistry Address of the new registry.
     function setRegistry(address _newRegistry) external;
 
-    /// @dev Returns the address of the pool registry.
+    /// @notice Returns the address of the pool registry.
     /// @return Address of the registry.
     function getRegistry() external view returns (address);
 }

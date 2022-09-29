@@ -23,10 +23,28 @@ pragma solidity >=0.7.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IPoolRegistry {
-    event AuthorityChanged(address indexed athority);
+    /// @notice Mapping of pool meta by pool key.
+    /// @param meta Mapping of bytes32 key to bytes32 meta.
+    struct PoolMeta {
+        mapping(bytes32 => bytes32) meta;
+    }
 
+    /// @notice Emitted when Rigoblock Dao updates authority address.
+    /// @param authority Address of the new authority contract.
+    event AuthorityChanged(address indexed authority);
+
+    /// @notice Emitted when pool owner updates meta data for its pool.
+    /// @param poolAddress Address of the pool.
+    /// @param key Bytes32 key for indexing.
+    /// @param value Value associated with the key.
     event MetaChanged(address indexed poolAddress, bytes32 indexed key, bytes32 value);
 
+    /// @notice Emitted when a new pool is registered in registry.
+    /// @param group Address of the pool factory.
+    /// @param poolAddress Address of the registered pool.
+    /// @param name String name of the pool.
+    /// @param symbol String name of the pool.
+    /// @param id Bytes32 id of the pool.
     event Registered(
         address indexed group,
         address poolAddress,
@@ -35,17 +53,19 @@ interface IPoolRegistry {
         bytes32 id
     );
 
+    /// @notice Emitted when rigoblock Dao address is updated.
+    /// @param rigoblockDaoAddress New Dao address.
     event RigoblockDaoChanged(address indexed rigoblockDaoAddress);
 
-    /// @dev Returns the address of the Rigoblock authority contract.
+    /// @notice Returns the address of the Rigoblock authority contract.
     /// @return Address of the authority contract.
     function authority() external view returns (address);
 
-    /// @dev Returns the address of the Rigoblock Dao.
+    /// @notice Returns the address of the Rigoblock Dao.
     /// @return Address of the Rigoblock Dao.
     function rigoblockDaoAddress() external view returns (address);
 
-    /// @dev Allows a factory which is an authority to register a pool.
+    /// @notice Allows a factory which is an authority to register a pool.
     /// @param _poolAddress Address of the pool.
     /// @param _name Name of the pool.
     /// @param _symbol Symbol of the pool.
@@ -56,11 +76,11 @@ interface IPoolRegistry {
         bytes32 poolId
     ) external;
 
-    /// @dev Allows Rigoblock governance to update authority.
+    /// @notice Allows Rigoblock governance to update authority.
     /// @param _authority Address of the authority contract.
     function setAuthority(address _authority) external;
 
-    /// @dev Allows pool owner to set metadata for a pool.
+    /// @notice Allows pool owner to set metadata for a pool.
     /// @param _poolAddress Address of the pool.
     /// @param _key Bytes32 of the key.
     /// @param _value Bytes32 of the value.
@@ -70,18 +90,18 @@ interface IPoolRegistry {
         bytes32 _value
     ) external;
 
-    /// @dev Allows Rigoblock Dao to update its address.
+    /// @notice Allows Rigoblock Dao to update its address.
     /// @dev Creates internal record.
     /// @param _newRigoblockDao Address of the Rigoblock Dao.
     function setRigoblockDao(address _newRigoblockDao) external;
 
-    /// @dev Returns metadata for a given pool.
+    /// @notice Returns metadata for a given pool.
     /// @param _poolAddress Address of the pool.
     /// @param _key Bytes32 key.
     /// @return poolMeta Meta by key.
     function getMeta(address _poolAddress, bytes32 _key) external view returns (bytes32 poolMeta);
 
-    /// @dev Returns the id of a pool from its address.
+    /// @notice Returns the id of a pool from its address.
     /// @param _poolAddress Address of the pool.
     /// @return poolId Id of the pool.
     function getPoolIdFromAddress(address _poolAddress) external view returns (bytes32 poolId);

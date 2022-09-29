@@ -15,10 +15,14 @@
 pragma solidity >=0.5.9 <0.9.0;
 
 abstract contract IAuthorizable {
-    // Event logged when a new address is authorized.
+    /// @dev Emitted when a new address is authorized.
+    /// @param target Address of the authorized address.
+    /// @param caller Address of the address that authorized the target.
     event AuthorizedAddressAdded(address indexed target, address indexed caller);
 
-    // Event logged when a currently authorized address is unauthorized.
+    /// @dev Emitted when a currently authorized address is unauthorized.
+    /// @param target Address of the authorized address.
+    /// @param caller Address of the address that authorized the target.
     event AuthorizedAddressRemoved(address indexed target, address indexed caller);
 
     /// @dev Authorizes an address.

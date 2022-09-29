@@ -22,9 +22,7 @@ pragma solidity 0.8.17;
 
 import "./AUniswapV3NPM.sol";
 import "./interfaces/IAUniswap.sol";
-// TODO: import extension interface
-//import "./interfaces/IEWhitelist.sol";
-import "../EWhitelist.sol";
+import "./interfaces/IEWhitelist.sol";
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "../../interfaces/IWETH9.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
@@ -37,11 +35,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     // storage must be immutable as needs to be rutime consistent
     // 0xE592427A0AEce92De3Edee1F18E0157C05861564 on public networks
+    /// @inheritdoc IAUniswap
     address public immutable override UNISWAP_SWAP_ROUTER_2_ADDRESS;
 
     // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
+    /// @inheritdoc IAUniswap
     address public immutable override UNISWAP_V3_NPM_ADDRESS;
 
+    /// @inheritdoc IAUniswap
     address public immutable override WETH_ADDRESS;
 
     constructor(address _uniswapRouter02) {
@@ -300,7 +301,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _assertTokenWhitelisted(address _token) private view {
         require(
-            EWhitelist(address(this)).isWhitelistedToken(_token),
+            IEWhitelist(address(this)).isWhitelistedToken(_token),
             "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR"
         );
     }
