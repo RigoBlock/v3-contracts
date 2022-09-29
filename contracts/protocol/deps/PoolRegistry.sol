@@ -21,7 +21,7 @@ pragma solidity 0.8.17;
 
 import {OwnedUninitialized as Owned} from "../../utils/owned/OwnedUninitialized.sol";
 import {LibSanitize} from "../../utils/libSanitize/LibSanitize.sol";
-import {IAuthorityCore as Authority} from "../interfaces/IAuthorityCore.sol";
+import {IAuthority as Authority} from "../interfaces/IAuthority.sol";
 
 import {IPoolRegistry} from "../interfaces/IPoolRegistry.sol";
 

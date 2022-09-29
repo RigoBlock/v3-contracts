@@ -4,7 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 //import "../actions/MixinActions.sol";
 import "../immutable/MixinImmutables.sol";
 import "../immutable/MixinStorage.sol";
-import "../../interfaces/IAuthorityCore.sol";
+import "../../interfaces/IAuthority.sol";
 
 abstract contract MixinFallback is MixinImmutables, MixinStorage {
     // reading immutable through internal method more gas efficient
@@ -54,6 +54,6 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     /// @param _selector Hash of the method signature.
     /// @return Address of the application adapter.
     function _getApplicationAdapter(bytes4 _selector) private view returns (address) {
-        return IAuthorityCore(authority).getApplicationAdapter(_selector);
+        return IAuthority(authority).getApplicationAdapter(_selector);
     }
 }

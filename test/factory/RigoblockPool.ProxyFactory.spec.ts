@@ -82,7 +82,7 @@ describe("ProxyFactory", async () => {
             // will be reverted without error as registry modifier calls non-implemented Authority.isWhitelistedFactory method
             await expect(factory.createPool('testpool','TEST', AddressZero))
                 .to.be.revertedWith("VM Exception while processing transaction: revert")
-            const authority = await deployments.get("AuthorityCore")
+            const authority = await deployments.get("Authority")
             await registry.setAuthority(authority.address)
             await factory.setRegistry(factory.address)
             // will be reverted without error as factory does not implement Registry.register method

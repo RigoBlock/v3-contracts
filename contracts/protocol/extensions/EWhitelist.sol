@@ -3,7 +3,7 @@
 pragma solidity 0.8.17;
 
 import "./adapters/interfaces/IEWhitelist.sol";
-import "../interfaces/IAuthorityCore.sol";
+import "../interfaces/IAuthority.sol";
 
 /// @title EWhitelist - Allows whitelisting of tokens.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -58,7 +58,7 @@ contract EWhitelist is IEWhitelist {
 
     function _assertCallerIsAuthorized() private view {
         require(
-            IAuthorityCore(getAuthority()).isWhitelister(msg.sender),
+            IAuthority(getAuthority()).isWhitelister(msg.sender),
             "EWHITELIST_CALLER_NOT_WHITELISTER_ERROR"
         );
     }

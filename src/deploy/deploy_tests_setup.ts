@@ -9,7 +9,7 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  const authority = await deploy("AuthorityCore", {
+  const authority = await deploy("Authority", {
     from: deployer,
     args: [deployer], // owner
     log: true,
@@ -17,7 +17,7 @@ const deploy: DeployFunction = async function (
   });
 
   const authorityInstance = await hre.ethers.getContractAt(
-    "AuthorityCore",
+    "Authority",
     authority.address
   );
 
