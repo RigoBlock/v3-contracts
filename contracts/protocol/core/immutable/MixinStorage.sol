@@ -29,15 +29,17 @@ abstract contract MixinStorage is IStructs, Owned, ReentrancyGuard {
     // slot(0) declared in Owned contract
     //address public override owner;
 
-    // slot(1) declared in ReentrancyGuard contract
+    // slot(0) declared in ReentrancyGuard contract
+    /// @dev Since address is only 20 bytes long, one-bit boolean "locked" is packed into slot 0
     //bool private locked = false;
 
-    // mappings are storage at a different storage location
+    // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(2))
+    // activation stored at locantion keccak256(address(msg.sender) . uint256(2)) + 1
     mapping(address => Account) internal userAccount;
 
     // slot(2)
     Admin internal admin;
 
-    // slot(3)
+    // slot(5)
     PoolData internal poolData;
 }
