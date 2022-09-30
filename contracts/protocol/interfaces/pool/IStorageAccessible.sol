@@ -9,4 +9,10 @@ interface IStorageAccessible {
     /// @param length - the number of words (32 bytes) of data to read.
     /// @return the bytes that were read.
     function getStorageAt(uint256 offset, uint256 length) external view returns (bytes memory);
+
+    /// @notice Reads bytes of storage at different storage locations.
+    /// @dev Returns a string with values regarless of where they are stored, i.e. variable, mapping or struct.
+    /// @param slots The storage slot to query into.
+    /// @return Bytes string composite of different storage locations' value.
+    function getStorageSlotsAt(uint256[] memory slots) external view returns (bytes memory);
 }
