@@ -67,12 +67,12 @@ describe("MixinStorageAccessible", async () => {
             expect(adminData).to.be.eq(encodedPack)
         })
 
-        // There might be a bug in the solidity compiler, as both name and symbol bytes32 hex last byte are not null
+        // a string shorter than 32 bytes is saved in location left-aligned and length is stored at the end.
         it('can read pool data', async () => {
             const { pool } = await setupTests()
             // next storage slot is 5 since slot 2 has 3 elements in it.
             const poolData = await pool.getStorageAt(5, 8)
-            // this is how the variable should be stored
+            // this is how the encoded package
             let name = utils.formatBytes32String("testpool")
             let symbol = utils.formatBytes32String("TEST")
             let encodedPack = utils.solidityPack(
@@ -80,7 +80,7 @@ describe("MixinStorageAccessible", async () => {
                 [name, symbol, 0, 0, 0, 0, 0, 0]
             )
             expect(poolData).to.be.not.eq(encodedPack)
-            // this is how the variable is actually stored, with last byte overwritte (probably overlap)
+            // this is how the variable is actually stored, with last byte overwritten (length) as it is a dynamic string
             name = await hre.ethers.provider.getStorageAt(pool.address, 5)
             symbol = await hre.ethers.provider.getStorageAt(pool.address, 6)
             encodedPack = hre.ethers.utils.AbiCoder.prototype.encode(
@@ -90,4 +90,77 @@ describe("MixinStorageAccessible", async () => {
             expect(poolData).to.be.eq(encodedPack)
         })
     })
+
+    describe("getStorageSlotsAt", async () => {
+        it('can read beacon slot', async () => {
+            const { factory, pool } = await setupTests()
+            const beaconSlot = '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50'
+            const beacon = await pool.getStorageSlotsAt([beaconSlot])
+            const encodedPack = utils.solidityPack(['uint256'], [factory.address])
+            expect(beacon).to.be.eq(encodedPack)
+        })
+
+        it('can read owner slot', async () => {
+            const { factory, pool } = await setupTests()
+            const owner = await pool.getStorageSlotsAt([0])
+            const encodedPack = utils.solidityPack(['uint256'], [await pool.owner()])
+            expect(owner).to.be.eq(encodedPack)
+        })
+
+        it('can read multiple data', async () => {
+            const { factory, pool } = await setupTests()
+            const returnString = await pool.getStorageSlotsAt([
+                '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50',
+                0
+            ])
+            const encodedPack = utils.solidityPack(['uint256', 'uint256'], [factory.address, await pool.owner()])
+            expect(returnString).to.be.eq(encodedPack)
+        })
+
+        it('returns name', async () => {
+            const { factory, pool } = await setupTests()
+            const name = await pool.getStorageSlotsAt([5])
+            // EVM stored string length at last byte if shorter than 31 bytes
+            const nameLength = utils.hexDataSlice(name, 31, 32)
+            const length = utils.arrayify(nameLength)[0] / 2
+            // each character is 2 bytes long
+            let nameHex = utils.hexDataSlice(name, 0, length)
+            nameHex = utils.toUtf8String(nameHex)
+            expect(await pool.name()).to.be.eq(nameHex)
+        })
+
+        it('returns symbol', async () => {
+            const { factory, pool } = await setupTests()
+            const symbol = await pool.getStorageSlotsAt([6])
+            // EVM stored string length at last byte if shorter than 31 bytes
+            const symbolLength = utils.hexDataSlice(symbol, 31, 32)
+            const length = utils.arrayify(symbolLength)[0] / 2
+            // each character is 2 bytes long
+            let symbolHex = utils.hexDataSlice(symbol, 0, length)
+            symbolHex = utils.toUtf8String(symbolHex)
+            expect(symbolHex).to.be.eq(await pool.symbol())
+        })
+
+        it('can read selected struct data', async () => {
+            const { factory, pool } = await setupTests()
+            const returnString = await pool.getStorageSlotsAt([0, 3, 5, 6])
+            const decodedData = hre.ethers.utils.AbiCoder.prototype.decode([ "address", "address", "bytes32", "bytes32" ], returnString)
+            expect(decodedData[0]).to.be.eq(await pool.owner())
+            expect(decodedData[1]).to.be.eq(AddressZero)
+            const name = await pool.getStorageSlotsAt([5])
+            const nameLength = utils.hexDataSlice(name, 31, 32)
+            let length = utils.arrayify(nameLength)[0] / 2
+            let nameHex = utils.hexDataSlice(name, 0, length)
+            nameHex = utils.toUtf8String(nameHex)
+            expect(await pool.name()).to.be.eq(nameHex)
+            const symbol = await pool.getStorageSlotsAt([6])
+            const symbolLength = utils.hexDataSlice(symbol, 31, 32)
+            length = utils.arrayify(symbolLength)[0] / 2
+            let symbolHex = utils.hexDataSlice(symbol, 0, length)
+            symbolHex = utils.toUtf8String(symbolHex)
+            expect(symbolHex).to.be.eq(await pool.symbol())
+        })
+    })
 })
+
+// TODO: get storage at mapping location
