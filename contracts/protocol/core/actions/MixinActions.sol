@@ -55,7 +55,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         address _recipient,
         uint256 _amountIn,
         uint256 _amountOutMin
-    ) public payable override returns (uint256 recipientAmount) {
+    ) public payable override nonReentrant returns (uint256 recipientAmount) {
         // require whitelisted user if kyc is enforced
         if (_isKycEnforced()) {
             require(IKyc(admin.kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
