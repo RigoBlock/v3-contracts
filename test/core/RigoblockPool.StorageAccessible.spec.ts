@@ -162,5 +162,3 @@ describe("MixinStorageAccessible", async () => {
         })
     })
 })
-
-// TODO: get storage at mapping location
