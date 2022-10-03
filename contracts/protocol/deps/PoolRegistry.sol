@@ -138,8 +138,9 @@ contract PoolRegistry is IPoolRegistry {
      */
     function _assertValidNameAndSymbol(string memory _name, string memory _symbol) internal pure {
         uint256 nameLength = bytes(_name).length;
-        // we always want to keep name lenght below 32, for logging bytes32.
-        require(nameLength >= uint256(4) && nameLength <= uint256(32), "REGISTRY_NAME_LENGTH_ERROR");
+        // we always want to keep name lenght below 31, for logging bytes32 while making sure that the name toString
+        // is stored at slot location and not in the pseudorandom slot allocated to strings longer than 31 bytes.
+        require(nameLength >= uint256(4) && nameLength <= uint256(31), "REGISTRY_NAME_LENGTH_ERROR");
 
         uint256 symbolLength = bytes(_symbol).length;
         require(symbolLength >= uint256(3) && symbolLength <= uint256(5), "REGISTRY_SYMBOL_LENGTH_ERROR");

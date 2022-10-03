@@ -18,4 +18,18 @@ abstract contract MixinStorageAccessible is IStorageAccessible {
         }
         return result;
     }
+
+    /// @inheritdoc IStorageAccessible
+    function getStorageSlotsAt(uint256[] memory slots) public view override returns (bytes memory) {
+        bytes memory result = new bytes(slots.length * 32);
+        for (uint256 index = 0; index < slots.length; index++) {
+            uint256 slot = slots[index];
+            // solhint-disable-next-line no-inline-assembly
+            assembly {
+                let word := sload(slot)
+                mstore(add(add(result, 0x20), mul(index, 0x20)), word)
+            }
+        }
+        return result;
+    }
 }
