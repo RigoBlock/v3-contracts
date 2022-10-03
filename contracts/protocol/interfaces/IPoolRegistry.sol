@@ -67,8 +67,8 @@ interface IPoolRegistry {
 
     /// @notice Allows a factory which is an authority to register a pool.
     /// @param _poolAddress Address of the pool.
-    /// @param _name Name of the pool.
-    /// @param _symbol Symbol of the pool.
+    /// @param _name String name of the pool (31 characters/bytes or less).
+    /// @param _symbol String symbol of the pool (3 to 5 characters/bytes).
     function register(
         address _poolAddress,
         string calldata _name,
