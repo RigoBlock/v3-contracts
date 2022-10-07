@@ -17,7 +17,8 @@ abstract contract Owned {
 
     function setOwner(address _new) public onlyOwner {
         require(_new != address(0));
+        address old = owner;
         owner = _new;
-        emit NewOwner(owner, _new);
+        emit NewOwner(old, _new);
     }
 }

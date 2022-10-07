@@ -13,7 +13,8 @@ abstract contract OwnedUninitialized is IOwnedUninitialized {
 
     function setOwner(address _new) public override onlyOwner {
         require(_new != address(0));
+        address old = owner;
         owner = _new;
-        emit NewOwner(owner, _new);
+        emit NewOwner(old, _new);
     }
 }
