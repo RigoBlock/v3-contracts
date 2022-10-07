@@ -4,16 +4,20 @@ pragma solidity 0.8.17;
 
 import "./adapters/interfaces/IEWhitelist.sol";
 import "../interfaces/IAuthority.sol";
+import "../../utils/storageSlot/StorageSlot.sol";
 
 /// @title EWhitelist - Allows whitelisting of tokens.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice This contract has its own storage, which could potentially clash with pool storage if its methods were accessible by pool, which are not.
 /// Warning: careful with upgrades as pool only accesses isWhitelistedToken view method. Other methods are locked and should never be approved by governance.
 contract EWhitelist is IEWhitelist {
+    bytes32 internal constant _EWHITELIST_TOKEN_WHITELIST_SLOT = 0x03de6a299bc35b64db5b38a8b5dbbc4bab6e4b5a493067f0fbe40d83350a610f;
     address private immutable AUTHORITY;
 
     // slot(0) should clash with pool storage and revert if accidentally called by pool, which is prevented by modifier.
-    mapping(address => bool) private isWhitelisted;
+    struct WhitelistSlot {
+        mapping(address => bool) isWhitelisted;
+    }
 
     modifier onlyAuthorized() {
         _assertCallerIsAuthorized();
@@ -21,6 +25,7 @@ contract EWhitelist is IEWhitelist {
     }
 
     constructor(address _authority) {
+        assert(_EWHITELIST_TOKEN_WHITELIST_SLOT == bytes32(uint256(keccak256("ewhitelist.token.whitelist")) - 1));
         AUTHORITY = _authority;
     }
 
@@ -28,15 +33,15 @@ contract EWhitelist is IEWhitelist {
     // TODO: check isContract as we are going to remove contract check in adapter for gas savings
     /// @inheritdoc IEWhitelist
     function whitelistToken(address _token) public override onlyAuthorized {
-        require(!isWhitelisted[_token], "EWHITELIST_TOKEN_ALREADY_WHITELISTED_ERROR");
-        isWhitelisted[_token] = true;
+        require(!getWhitelistSlot().isWhitelisted[_token], "EWHITELIST_TOKEN_ALREADY_WHITELISTED_ERROR");
+        getWhitelistSlot().isWhitelisted[_token] = true;
         emit Whitelisted(_token, true);
     }
 
     /// @inheritdoc IEWhitelist
     function removeToken(address _token) public override onlyAuthorized {
-        require(isWhitelisted[_token], "EWHITELIST_TOKEN_ALREADY_REMOVED_ERROR");
-        isWhitelisted[_token] = false;
+        require(getWhitelistSlot().isWhitelisted[_token], "EWHITELIST_TOKEN_ALREADY_REMOVED_ERROR");
+        getWhitelistSlot().isWhitelisted[_token] = false;
         emit Whitelisted(_token, false);
     }
 
@@ -50,7 +55,7 @@ contract EWhitelist is IEWhitelist {
 
     /// @inheritdoc IEWhitelist
     function isWhitelistedToken(address _token) external view override returns (bool) {
-        return isWhitelisted[_token];
+        return getWhitelistSlot().isWhitelisted[_token];
     }
 
     /// @inheritdoc IEWhitelist
@@ -63,5 +68,11 @@ contract EWhitelist is IEWhitelist {
             IAuthority(getAuthority()).isWhitelister(msg.sender),
             "EWHITELIST_CALLER_NOT_WHITELISTER_ERROR"
         );
+    }
+
+    function getWhitelistSlot() internal pure returns (WhitelistSlot storage s) {
+        assembly {
+            s.slot := _EWHITELIST_TOKEN_WHITELIST_SLOT
+        }
     }
 }
