@@ -33,6 +33,7 @@ contract EWhitelist is IEWhitelist {
     // TODO: check isContract as we are going to remove contract check in adapter for gas savings
     /// @inheritdoc IEWhitelist
     function whitelistToken(address _token) public override onlyAuthorized {
+        require(_isContract(_token), "EWHITELIST_INPUT_NOT_CONTRACT_ERROR");
         require(!getWhitelistSlot().isWhitelisted[_token], "EWHITELIST_TOKEN_ALREADY_WHITELISTED_ERROR");
         getWhitelistSlot().isWhitelisted[_token] = true;
         emit Whitelisted(_token, true);
@@ -63,6 +64,13 @@ contract EWhitelist is IEWhitelist {
         return AUTHORITY;
     }
 
+    // TODO: add _ for internal methods
+    function getWhitelistSlot() internal pure returns (WhitelistSlot storage s) {
+        assembly {
+            s.slot := _EWHITELIST_TOKEN_WHITELIST_SLOT
+        }
+    }
+
     function _assertCallerIsAuthorized() private view {
         require(
             IAuthority(getAuthority()).isWhitelister(msg.sender),
@@ -70,9 +78,11 @@ contract EWhitelist is IEWhitelist {
         );
     }
 
-    function getWhitelistSlot() internal pure returns (WhitelistSlot storage s) {
+    function _isContract(address _target) private view returns (bool) {
+        uint256 size;
         assembly {
-            s.slot := _EWHITELIST_TOKEN_WHITELIST_SLOT
+            size := extcodesize(_target)
         }
+        return size > 0;
     }
 }

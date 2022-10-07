@@ -27,11 +27,18 @@ describe("EWhitelist", async () => {
                 .to.be.revertedWith("EWHITELIST_CALLER_NOT_WHITELISTER_ERROR")
         })
 
-        it('should revert if token already whitelisted', async () => {
+        it('should revert if token not contract', async () => {
             const { eWhitelist } = await setupTests()
             await expect(eWhitelist.whitelistToken(AddressZero))
-                .to.emit(eWhitelist, "Whitelisted").withArgs(AddressZero, true)
-            await expect(eWhitelist.whitelistToken(AddressZero))
+                .to.be.revertedWith("EWHITELIST_INPUT_NOT_CONTRACT_ERROR")
+        })
+
+        it('should revert if token already whitelisted', async () => {
+            const { eWhitelist } = await setupTests()
+            const rigoToken = await deployments.get("RigoToken")
+            await expect(eWhitelist.whitelistToken(rigoToken.address))
+                .to.emit(eWhitelist, "Whitelisted").withArgs(rigoToken.address, true)
+            await expect(eWhitelist.whitelistToken(rigoToken.address))
                 .to.be.revertedWith("EWHITELIST_TOKEN_ALREADY_WHITELISTED_ERROR")
         })
 
@@ -109,12 +116,13 @@ describe("EWhitelist", async () => {
 
         it('should revert if token already whitelisted', async () => {
             const { eWhitelist } = await setupTests()
-            await expect(eWhitelist.removeToken(AddressZero))
+            const rigoToken = await deployments.get("RigoToken")
+            await expect(eWhitelist.removeToken(rigoToken.address))
                 .to.be.revertedWith("EWHITELIST_TOKEN_ALREADY_REMOVED_ERROR")
-            await eWhitelist.whitelistToken(AddressZero)
-            await expect(eWhitelist.removeToken(AddressZero))
-                .to.emit(eWhitelist, "Whitelisted").withArgs(AddressZero, false)
-            await expect(eWhitelist.removeToken(AddressZero))
+            await eWhitelist.whitelistToken(rigoToken.address)
+            await expect(eWhitelist.removeToken(rigoToken.address))
+                .to.emit(eWhitelist, "Whitelisted").withArgs(rigoToken.address, false)
+            await expect(eWhitelist.removeToken(rigoToken.address))
                 .to.be.revertedWith("EWHITELIST_TOKEN_ALREADY_REMOVED_ERROR")
         })
     })
@@ -126,22 +134,27 @@ describe("EWhitelist", async () => {
                 [AddressZero, AddressZero],
                 [true, true]
             )).to.be.revertedWith("EWHITELIST_CALLER_NOT_WHITELISTER_ERROR")
-            // will revert as we are trying to whitelist the same token twice
             await expect(eWhitelist.batchUpdateTokens(
                 [AddressZero, AddressZero],
+                [true, true]
+            )).to.be.revertedWith("EWHITELIST_INPUT_NOT_CONTRACT_ERROR")
+            const rigoToken = await deployments.get("RigoToken")
+            // will revert as we are trying to whitelist the same token twice
+            await expect(eWhitelist.batchUpdateTokens(
+                [rigoToken.address, rigoToken.address],
                 [true, true]
             )).to.be.revertedWith("EWHITELIST_TOKEN_ALREADY_WHITELISTED_ERROR")
             await expect(eWhitelist.batchUpdateTokens(
-                [AddressZero, AddressZero],
+                [rigoToken.address, rigoToken.address],
                 [true, false]
-            )).to.emit(eWhitelist, "Whitelisted").withArgs(AddressZero, true)
-            .to.emit(eWhitelist, "Whitelisted").withArgs(AddressZero, false)
+            )).to.emit(eWhitelist, "Whitelisted").withArgs(rigoToken.address, true)
+            .to.emit(eWhitelist, "Whitelisted").withArgs(rigoToken.address, false)
             const Weth = await hre.ethers.getContractFactory("WETH9")
             const weth = await Weth.deploy()
             await expect(eWhitelist.batchUpdateTokens(
-                [AddressZero, weth.address],
+                [rigoToken.address, weth.address],
                 [true, true]
-            )).to.emit(eWhitelist, "Whitelisted").withArgs(AddressZero, true)
+            )).to.emit(eWhitelist, "Whitelisted").withArgs(rigoToken.address, true)
             .to.emit(eWhitelist, "Whitelisted").withArgs(weth.address, true)
         })
     })
