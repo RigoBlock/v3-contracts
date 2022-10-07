@@ -28,14 +28,15 @@ import "./interfaces/pool/IRigoblockV3PoolInitializer.sol";
 import "./interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
 import "./interfaces/pool/IRigoblockV3PoolState.sol";
 import "./interfaces/pool/IStorageAccessible.sol";
-import "../utils/owned/IOwnedUninitialized.sol";
+// TODO: remove deprecated
+//import "../utils/owned/IOwnedUninitialized.sol";
 
 /// @title Rigoblock V3 Pool Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockV3Pool is
     IERC20,
-    IOwnedUninitialized,
+    //IOwnedUninitialized,
     IRigoblockV3PoolImmutable,
     IRigoblockV3PoolEvents,
     IRigoblockV3PoolFallback,

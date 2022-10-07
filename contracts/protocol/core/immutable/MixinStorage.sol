@@ -18,14 +18,14 @@
 */
 
 import "../../interfaces/pool/IStructs.sol";
-import "../../../utils/reentrancyGuard/ReentrancyGuard.sol";
-import {OwnedUninitialized as Owned} from "../../../utils/owned/OwnedUninitialized.sol";
+//import "../../../utils/reentrancyGuard/ReentrancyGuard.sol";
+//import {OwnedUninitialized as Owned} from "../../../utils/owned/OwnedUninitialized.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
 
 /// @notice Storage slots must be preserved to prevent storage clashing. Each new variable must be assigned
 /// a dedicated (randomly big enough) storage slot and queried from slot, or added at the end of existing storage.
-abstract contract MixinStorage is IStructs, Owned, ReentrancyGuard {
+abstract contract MixinStorage is IStructs/*, Owned, ReentrancyGuard*/ {
     // slot(0) declared in Owned contract
     //address public override owner;
 
@@ -35,11 +35,17 @@ abstract contract MixinStorage is IStructs, Owned, ReentrancyGuard {
 
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(2))
     // activation stored at locantion keccak256(address(msg.sender) . uint256(2)) + 1
-    mapping(address => Account) internal userAccount;
+    mapping(address => UserAccount) internal userAccounts;
 
     // slot(2)
-    Admin internal admin;
+    //Admin internal admin;
 
     // slot(5)
-    PoolData internal poolData;
+    //PoolData internal poolData;
+
+    Pool internal pool;
+
+    PoolParams internal poolParams;
+
+    PoolTokens internal poolTokens;
 }

@@ -25,9 +25,11 @@ interface IStructs {
     /// @notice Pool holder data.
     /// @param balance Number of pool units held.
     /// @param activation Number of seconds until tokens can be burnt.
-    struct Account {
+    /*struct Account {
+        // can be scaled down to i.e. 160
         uint256 balance;
-        uint32 activation;
+        // must be uint 48
+        uint48 activation;
     }
 
     /// @notice Pool admin storage.
@@ -59,5 +61,32 @@ interface IStructs {
         uint256 transactionFee; // in basis points 1 = 0.01%
         uint32 minPeriod;
         uint8 decimals;
+    }*/
+
+    struct Pool {
+        string name;
+        bytes8 symbol;
+        uint8 decimals;
+        address owner;
+        bool unlocked;
+        address baseToken;
+    }
+
+    struct PoolParams {
+        uint48 minPeriod;
+        uint16 spread;
+        uint16 transactionFee;
+        address feeCollector;
+        address kycProvider;
+    }
+
+    struct PoolTokens {
+        uint256 unitaryValue;
+        uint256 totalSupply;
+    }
+
+    struct UserAccount {
+        uint208 userBalance;
+        uint48 activation;
     }
 }
