@@ -29,20 +29,20 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
     uint256 internal constant FEE_BASE = 10000;
 
-    uint256 internal constant INITIAL_SPREAD = 500; // +-5%, in basis points
+    uint16 internal constant INITIAL_SPREAD = 500; // +-5%, in basis points
 
-    uint256 internal constant MAX_SPREAD = 1000; // +-10%, in basis points
+    uint16 internal constant MAX_SPREAD = 1000; // +-10%, in basis points
 
-    uint256 internal constant MAX_TRANSACTION_FEE = 100; // maximum 1%
+    uint16 internal constant MAX_TRANSACTION_FEE = 100; // maximum 1%
 
     // minimum order size 1/1000th of base to avoid dust clogging things up
     uint256 internal constant MINIMUM_ORDER_DIVISOR = 1e3;
 
-    uint256 internal constant SPREAD_BASE = 10000;
+    uint16 internal constant SPREAD_BASE = 10000;
 
-    uint32 internal constant MAX_LOCKUP = 30 days;
+    uint48 internal constant MAX_LOCKUP = 30 days;
 
-    uint32 internal constant MIN_LOCKUP = 2;
+    uint48 internal constant MIN_LOCKUP = 2;
 
     bytes4 internal constant TRANSFER_FROM_SELECTOR = bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
 
