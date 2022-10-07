@@ -20,7 +20,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
         require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
 
         // direct fallback to implementation will result in staticcall to extension as implementation owner is address(1)
-        address poolOwner = owner;
+        address poolOwner = pool.owner;
         assembly {
             calldatacopy(0, 0, calldatasize())
             let success

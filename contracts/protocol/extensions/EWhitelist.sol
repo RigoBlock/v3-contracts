@@ -24,6 +24,8 @@ contract EWhitelist is IEWhitelist {
         AUTHORITY = _authority;
     }
 
+    // TODO: check if should require target is contract
+    // TODO: check isContract as we are going to remove contract check in adapter for gas savings
     /// @inheritdoc IEWhitelist
     function whitelistToken(address _token) public override onlyAuthorized {
         require(!isWhitelisted[_token], "EWHITELIST_TOKEN_ALREADY_WHITELISTED_ERROR");
