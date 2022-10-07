@@ -40,7 +40,7 @@ describe("ReentrancyGuard", async () => {
                     balances[msg.sender] -= amount;
                     return true;
                 }
-                function transferFrom(address from,address to,uint256 amount) public returns (bool) {
+                function transferFrom(address from,address to,uint256 amount) public returns (bool success) {
                     balances[to] += amount;
                     balances[from] -= amount;
                     (, bytes memory data) = reentrancyAttack.call(abi.encodeWithSelector(0x1e832ae8));

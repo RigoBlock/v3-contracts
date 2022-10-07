@@ -44,50 +44,102 @@ describe("MixinStorageAccessible", async () => {
         })
 
         it('can read pool owner', async () => {
-            const { factory, pool } = await setupTests()
-            const owner = await pool.getStorageAt(0, 1)
-            const encodedPack = utils.solidityPack(['address'], [await pool.owner()])
-            expect(owner).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 32))
-        })
-
-        it('should read null locked boolean', async () => {
-            const { factory, pool } = await setupTests()
-            const locked = await pool.getStorageAt(1, 1)
-            const encodedPack = utils.solidityPack(['bool'], [false])
-            expect(locked).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 32))
-        })
-
-        it('can read admin data', async () => {
             const { pool } = await setupTests()
-            const adminData = await pool.getStorageAt(2, 3)
-            const encodedPack = utils.solidityPack(
-                ['uint256', 'uint256', 'uint256'],
-                [AddressZero, AddressZero, AddressZero]
-            )
-            expect(adminData).to.be.eq(encodedPack)
+            let owner = await pool.getStorageAt(2, 1)
+            owner = utils.hexDataSlice(owner, 3, 23)
+            expect(owner).to.be.eq((await pool.owner()).toLowerCase())
+        })
+
+        it('should read true unlocked boolean', async () => {
+            const { pool } = await setupTests()
+            let unlocked = await pool.getStorageAt(2, 1)
+            unlocked = utils.hexDataSlice(unlocked, 2, 3)
+            const encodedPack = utils.solidityPack(['bool'], [true])
+            expect(unlocked).to.be.eq(encodedPack)
         })
 
         // a string shorter than 32 bytes is saved in location left-aligned and length is stored at the end.
         it('can read pool data', async () => {
             const { pool } = await setupTests()
-            // next storage slot is 5 since slot 2 has 3 elements in it.
-            const poolData = await pool.getStorageAt(5, 8)
-            // this is how the encoded package
-            let name = utils.formatBytes32String("testpool")
+            const poolStruct = await pool.getStorageAt(1, 3)
+            // name stored in slot 1 with name length appended at last byte, se if we encode we also must append hex string length.
+            const name = utils.hexDataSlice(poolStruct, 0, 32)
+            // symbol is stored as bytes8 in order to be packed with other small units
             let symbol = utils.formatBytes32String("TEST")
+            symbol = utils.hexDataSlice(symbol, 0, 8)
+            const owner = await pool.owner()
+            // EVM tickly packs tickls symbol, decimals, owner, unlocked into one uint256 slot
+            const encodedPack = utils.solidityPack(
+                ['bytes32', 'uint24', 'address', 'uint8', 'bytes8', 'uint256'],
+                [name, 1, owner, 18, symbol, AddressZero]
+            )
+            expect(poolStruct).to.be.eq(encodedPack)
+        })
+
+        it('can read pool struct with different base token', async () => {
+            const { factory } = await setupTests()
+            const grgToken = (await deployments.get("RigoToken")).address
+            const { newPoolAddress } = await factory.callStatic.createPool('test pool GRG', 'PDPG', grgToken)
+            await factory.createPool('test pool GRG', 'PDPG', grgToken)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const poolStruct = await pool.getStorageAt(1, 3)
+            // name stored in slot 1 with name length appended at last byte, se if we encode we also must append hex string length.
+            const name = utils.hexDataSlice(poolStruct, 0, 32)
+            // symbol is stored as bytes8 in order to be packed with other small units
+            let symbol = utils.formatBytes32String("PDPG")
+            symbol = utils.hexDataSlice(symbol, 0, 8)
+            const owner = await pool.owner()
+            // EVM tickly packs tickls symbol, decimals, owner, unlocked into one uint256 slot
+            const encodedPack = utils.solidityPack(
+                ['bytes32', 'uint24', 'address', 'uint8', 'bytes8', 'uint256'],
+                [name, 1, owner, 18, symbol, grgToken]
+            )
+            expect(poolStruct).to.be.eq(encodedPack)
+        })
+
+        it('can read pool parameters', async () => {
+            const { pool } = await setupTests()
+            // next storage slot is 4 since Pool has 2 slots reserved in it.
+            let poolParams = await pool.getStorageAt(4, 2)
+            // we are packing 5 elements, but EVM adds null uint16 to compress 4 elements in first slot
             let encodedPack = utils.solidityPack(
-                ['uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256'],
-                [name, symbol, 0, 0, 0, 0, 0, 0]
+                ['uint16', 'uint48', 'uint16', 'uint16', 'uint160', 'uint256'],
+                [0, 0, 0, 0, AddressZero, AddressZero]
             )
-            expect(poolData).to.be.not.eq(encodedPack)
-            // this is how the variable is actually stored, with last byte overwritten (length) as it is a dynamic string
-            name = await hre.ethers.provider.getStorageAt(pool.address, 5)
-            symbol = await hre.ethers.provider.getStorageAt(pool.address, 6)
-            encodedPack = hre.ethers.utils.AbiCoder.prototype.encode(
-                ["tuple(bytes32 name, bytes32 symbol, uint256 unitaryValue, uint256 spread, uint256 totalSupply, uint256 transactionFee, uint32 minPeriod, uint8 decimals)"],
-                [{name: name, symbol: symbol, unitaryValue: 0, spread: 0, totalSupply: 0, transactionFee: 0, minPeriod: 0, decimals: 0}]
+            // we assert we are comparing same length null arrays first
+            expect(poolParams).to.be.eq(encodedPack)
+            await pool.changeMinPeriod(1234)
+            await pool.changeSpread(445)
+            await pool.setTransactionFee(67)
+            await pool.changeFeeCollector(user2.address)
+            await pool.setKycProvider(pool.address)
+            poolParams = await pool.getStorageAt(4, 2)
+            // EVM tightly encodes struct as following, adding 2 null bytes to fill first uint256 slot
+            encodedPack = utils.solidityPack(
+                ['uint16', 'uint160', 'uint16', 'uint16', 'uint48','uint256'],
+                [0, user2.address, 67, 445, 1234, pool.address]
             )
-            expect(poolData).to.be.eq(encodedPack)
+            expect(poolParams).to.be.eq(encodedPack)
+        })
+
+        it('can read pool tokens struct', async () => {
+            const { pool } = await setupTests()
+            // next storage slot is 6 since PoolParams has 2 slots reserved in it.
+            let poolParams = await pool.getStorageAt(6, 2)
+            // unitary value null in pool storage until set, total supply null until first mint
+            let encodedPack = utils.solidityPack(
+                ['uint256', 'uint256'],
+                [0, 0]
+            )
+            expect(poolParams).to.be.eq(encodedPack)
+            await pool.mint(user2.address, parseEther("10"), 1, { value: parseEther("10") })
+            await pool.setUnitaryValue(parseEther("1.1"))
+            poolParams = await pool.getStorageAt(6, 2)
+            encodedPack = utils.solidityPack(
+                ['uint256', 'uint256'],
+                [parseEther("1.1"), parseEther("9.5")]
+            )
+            expect(poolParams).to.be.eq(encodedPack)
         })
     })
 
@@ -100,26 +152,34 @@ describe("MixinStorageAccessible", async () => {
             expect(beacon).to.be.eq(encodedPack)
         })
 
-        it('can read owner slot', async () => {
-            const { factory, pool } = await setupTests()
-            const owner = await pool.getStorageSlotsAt([0])
-            const encodedPack = utils.solidityPack(['uint256'], [await pool.owner()])
+        it('can read owner', async () => {
+            const { pool } = await setupTests()
+            let owner = await pool.getStorageSlotsAt([2])
+            owner = utils.hexDataSlice(owner, 3, 23)
+            const encodedPack = utils.solidityPack(['address'], [await pool.owner()])
             expect(owner).to.be.eq(encodedPack)
         })
 
-        it('can read multiple data', async () => {
-            const { factory, pool } = await setupTests()
+        it('can read slots from different structs', async () => {
+            const { factory } = await setupTests()
+            const grgToken = (await deployments.get("RigoToken")).address
+            const { newPoolAddress } = await factory.callStatic.createPool('test pool GRG', 'PDPG', grgToken)
+            await factory.createPool('test pool GRG', 'PDPG', grgToken)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             const returnString = await pool.getStorageSlotsAt([
                 '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50',
-                0
+                3
             ])
-            const encodedPack = utils.solidityPack(['uint256', 'uint256'], [factory.address, await pool.owner()])
+            const encodedPack = utils.solidityPack(
+                ['uint256', 'uint256'],
+                [factory.address, (await pool.getData()).baseToken]
+            )
             expect(returnString).to.be.eq(encodedPack)
         })
 
         it('returns name', async () => {
-            const { factory, pool } = await setupTests()
-            const name = await pool.getStorageSlotsAt([5])
+            const { pool } = await setupTests()
+            const name = await pool.getStorageSlotsAt([1])
             // EVM stored string length at last byte if shorter than 31 bytes
             const nameLength = utils.hexDataSlice(name, 31, 32)
             const length = utils.arrayify(nameLength)[0] / 2
@@ -131,34 +191,52 @@ describe("MixinStorageAccessible", async () => {
 
         it('returns symbol', async () => {
             const { factory, pool } = await setupTests()
-            const symbol = await pool.getStorageSlotsAt([6])
-            // EVM stored string length at last byte if shorter than 31 bytes
-            const symbolLength = utils.hexDataSlice(symbol, 31, 32)
-            const length = utils.arrayify(symbolLength)[0] / 2
-            // each character is 2 bytes long
-            let symbolHex = utils.hexDataSlice(symbol, 0, length)
-            symbolHex = utils.toUtf8String(symbolHex)
-            expect(symbolHex).to.be.eq(await pool.symbol())
+            // EVM packs symbol with unlocked, owner, decimals
+            const symbolSlot = await pool.getStorageSlotsAt([2])
+            // symbol is bytes8, we only take the first 4 to eliminate padding.
+            let symbol = utils.hexDataSlice(symbolSlot, 24, 32)
+            symbol = utils.toUtf8String(symbol)
+            expect(symbol).to.be.eq('TEST\u0000\u0000\u0000\u0000')
+            // in order to comparing storage symbol, we must get rid of padding
+            let poolSymbol = await pool.symbol()
+            poolSymbol = utils.toUtf8Bytes(poolSymbol)
+            poolSymbol = utils.hexlify(poolSymbol)
+            // symbol is bytes8, poolSymbol must have same length for comparing
+            poolSymbol = utils.hexDataSlice(poolSymbol, 0, 8)
+            poolSymbol = utils.toUtf8String(poolSymbol)
+            expect(symbol).to.be.eq(poolSymbol)
         })
 
         it('can read selected struct data', async () => {
-            const { factory, pool } = await setupTests()
-            const returnString = await pool.getStorageSlotsAt([0, 3, 5, 6])
-            const decodedData = hre.ethers.utils.AbiCoder.prototype.decode([ "address", "address", "bytes32", "bytes32" ], returnString)
-            expect(decodedData[0]).to.be.eq(await pool.owner())
-            expect(decodedData[1]).to.be.eq(AddressZero)
-            const name = await pool.getStorageSlotsAt([5])
+            const { factory } = await setupTests()
+            // we later want to check symbol length for 3-char symbol, creating new pool
+            const { newPoolAddress } = await factory.callStatic.createPool('my new pool', 'PAL', AddressZero)
+            await factory.createPool('my new pool', 'PAL', AddressZero)
+            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const returnString = await pool.getStorageSlotsAt([1, 2, 3, 5, 7])
+            const decodedData = hre.ethers.utils.AbiCoder.prototype.decode(
+                [ "bytes32", "bytes32", "address", "address", "uint256" ],
+                returnString
+            )
+            // TODO: following values are both null in current pool, must test with non-null values
+            expect(decodedData[3]).to.be.eq((await pool.getData()).baseToken)
+            expect(decodedData[4]).to.be.eq(await pool.totalSupply())
+            let name = decodedData[0]
             const nameLength = utils.hexDataSlice(name, 31, 32)
-            let length = utils.arrayify(nameLength)[0] / 2
-            let nameHex = utils.hexDataSlice(name, 0, length)
-            nameHex = utils.toUtf8String(nameHex)
-            expect(await pool.name()).to.be.eq(nameHex)
-            const symbol = await pool.getStorageSlotsAt([6])
-            const symbolLength = utils.hexDataSlice(symbol, 31, 32)
-            length = utils.arrayify(symbolLength)[0] / 2
-            let symbolHex = utils.hexDataSlice(symbol, 0, length)
-            symbolHex = utils.toUtf8String(symbolHex)
-            expect(symbolHex).to.be.eq(await pool.symbol())
+            const length = utils.arrayify(nameLength)[0] / 2
+            name = utils.hexDataSlice(name, 0, length)
+            name = utils.toUtf8String(name)
+            expect(name).to.be.eq('my new pool')
+            expect(name).to.be.eq(await pool.name())
+            const symbolSlot = decodedData[1]
+            let symbol = utils.hexDataSlice(symbolSlot, 24, 32)
+            // symbol is an 8-bytes element
+            let poolSymbol = utils.solidityPack(['string'], [await pool.symbol()])
+            // we want to compare returned symbol, must be same length
+            poolSymbol = utils.hexDataSlice(poolSymbol, 0, 8)
+            expect(poolSymbol).to.be.eq(symbol)
+            // must add padding to string
+            expect(utils.toUtf8String(symbol)).to.be.eq("PAL\u0000\u0000\u0000\u0000\u0000")
         })
     })
 })

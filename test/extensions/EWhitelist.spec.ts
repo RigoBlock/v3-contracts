@@ -45,9 +45,11 @@ describe("EWhitelist", async () => {
             const { newPoolAddress } = await factory.callStatic.createPool('testpool', 'TEST', AddressZero)
             await factory.createPool('testpool', 'TEST', AddressZero)
             let pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
-            expect(await pool.owner()).to.be.eq(user1.address)
-            let poolOwner = hre.ethers.utils.solidityPack(['uint256'], [await pool.owner()])
-            expect(await pool.getStorageAt(0, 1)).to.be.eq(poolOwner)
+            // slot0 = mapping(address => UserAccount) userAccounts
+            // TODO: because first slot is a mapping, it could overwrite the UserAccounts storage if pool address = token address
+            // this will happen if whitelisted token = pool, which should never happen unless pools can buy other pools
+            let slot0 = hre.ethers.utils.solidityPack(['uint256'], [AddressZero])
+            expect(await pool.getStorageAt(0, 1)).to.be.eq(slot0)
             // we define a boolean as an array of zeroes ending with a 1
             const isWhitelisted = hre.ethers.utils.solidityPack(['uint256'], [1])
             const rigoToken = await deployments.get("RigoToken")
@@ -60,8 +62,12 @@ describe("EWhitelist", async () => {
             // an attack would entail successful governance takeover, i.e. control of majority of GRG active voting power,
             // setting attacker address as whitelist, then setting a pool as whitelister, setting the "whitelistToken" selector
             // and finally overwriting storage. Because EWhitelist.slot(0) is a mapping, the new token would not be approved
-            // in the whitelist contract, but at location n in the pool storage, which is not otherwise accessible as slot(0)
-            // is reserved for the owner. While this is a possible attack, it is extremely expensive and would not have side effects.
+            // in the whitelist contract, but at location n in the pool storage, which would overwrite UserAccount only if pool address
+            // same as whitelisted token address, i.e. pool would be able to attribute itself an infinitly small amount of pool tokens.
+            // While this is a possible attack, it is extremely expensive and has no impact unless implementation is upgraded, since
+            // the tokens allocated to the pool cannot be burnt. There would, however, be a mismatch between all tokens held by users
+            // and the total supply. In order to prevent this, we could allocate randomly big slots to each pool storage slot.
+            // TODO: check as particularly relevant for those init params which should never be changed.
             await authority.setAdapter(eWhitelist.address, true)
             await authority.setWhitelister(newPoolAddress, true)
             // "6247f6f2": "whitelistToken(uint256)"
@@ -70,8 +76,7 @@ describe("EWhitelist", async () => {
             expect(await eWhitelist.isWhitelistedToken(rigoToken.address)).to.be.not.eq(true)
             pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
             expect(await pool.owner()).to.be.eq(user1.address)
-            poolOwner = hre.ethers.utils.solidityPack(['uint256'], [await pool.owner()])
-            expect(await pool.getStorageAt(0, 1)).to.be.eq(poolOwner)
+            expect(await pool.getStorageAt(0, 1)).to.be.eq(slot0)
             expect(await pool.getStorageAt(whitelistTokenSlot, 1)).to.be.eq(isWhitelisted)
         })
     })
