@@ -16,7 +16,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     // TODO: remove owner import
     modifier onlyOwner() {
-        require(msg.sender == pool.owner, "OWNED_CALLER_IS_NOT_OWNER_ERROR");
+        require(msg.sender == pool.owner, "POOL_CALLER_IS_NOT_OWNER_ERROR");
         _;
     }
 
@@ -81,9 +81,10 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     function setOwner(address _newOwner) public override onlyOwner {
-        require(_newOwner != address(0), "MIXIN_OWNER_ACTIONS_NULL_OWNER_ERROR");
+        require(_newOwner != address(0), "POOL_NULL_OWNER_INPUT_ERROR");
+        address oldOwner = pool.owner;
         pool.owner = _newOwner;
-        emit NewOwner(pool.owner, _newOwner);
+        emit NewOwner(oldOwner, _newOwner);
     }
 
     function totalSupply() public view virtual override returns (uint256) {}
