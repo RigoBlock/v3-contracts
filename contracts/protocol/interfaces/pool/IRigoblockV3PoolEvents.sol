@@ -19,6 +19,9 @@ interface IRigoblockV3PoolEvents {
         string symbol
     );
 
+    // TODO: add natspec docs
+    event NewOwner(address indexed old, address indexed current);
+
     /// @notice Emitted when pool operator updates NAV.
     /// @param poolOperator Address of the pool owner.
     /// @param poolAddress Address of the pool.
@@ -29,7 +32,7 @@ interface IRigoblockV3PoolEvents {
     /// @param poolAddress Address of the pool.
     /// @param who Address that is sending the transaction.
     /// @param transactionFee Number of the new fee in wei.
-    event NewFee(address indexed poolAddress, address indexed who, uint256 transactionFee);
+    event NewFee(address indexed poolAddress, address indexed who, uint16 transactionFee);
 
     /// @notice Emitted when pool operator updates fee collector address.
     /// @param poolAddress Address of the pool.
@@ -40,12 +43,12 @@ interface IRigoblockV3PoolEvents {
     /// @notice Emitted when pool operator updates minimum holding period.
     /// @param poolAddress Address of the pool.
     /// @param minimumPeriod Number of seconds.
-    event MinimumPeriodChanged(address indexed poolAddress, uint32 minimumPeriod);
+    event MinimumPeriodChanged(address indexed poolAddress, uint48 minimumPeriod);
 
     /// @notice Emitted when pool operator updates the mint/burn spread.
     /// @param poolAddress Address of the pool.
     /// @param spread Number of the spread in basis points.
-    event SpreadChanged(address indexed poolAddress, uint256 spread);
+    event SpreadChanged(address indexed poolAddress, uint16 spread);
 
     /// @notice Emitted when pool operator sets a kyc provider.
     /// @param poolAddress Address of the pool.

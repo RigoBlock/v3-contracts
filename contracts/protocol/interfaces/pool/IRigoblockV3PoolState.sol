@@ -5,7 +5,7 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolState {
     /// @notice Finds the administrative data of the pool.
-    /// @return Address of the owner.
+    /// @return owner Address of the owner.
     /// @return feeCollector Address of the account where a user collects fees.
     /// @return transactionFee Value of the transaction fee in basis points.
     /// @return minPeriod Number of the minimum holding period for tokens.
@@ -13,10 +13,10 @@ interface IRigoblockV3PoolState {
         external
         view
         returns (
-            address,
+            address owner,
             address feeCollector,
-            uint256 transactionFee,
-            uint32 minPeriod
+            uint16 transactionFee,
+            uint48 minPeriod
         );
 
     /// @notice Finds details of this pool.
@@ -33,12 +33,15 @@ interface IRigoblockV3PoolState {
             string memory poolSymbol,
             address baseToken,
             uint256 unitaryValue,
-            uint256 spread
+            uint16 spread
         );
 
     /// @notice Returns the address of the pools whitelists.
     /// @return Address of the provider contract.
     function getKycProvider() external view returns (address);
+
+    // TODO: add natspec docs
+    function owner() external view returns (address);
 
     /// @notice Returns the total amount of issued tokens for this pool.
     /// @return Number of tokens.
