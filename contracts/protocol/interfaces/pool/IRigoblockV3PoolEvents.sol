@@ -19,7 +19,9 @@ interface IRigoblockV3PoolEvents {
         string symbol
     );
 
-    // TODO: add natspec docs
+    /// @notice Emitted when new owner is set.
+    /// @param old Address of the previous owner.
+    /// @param current Address of the new owner.
     event NewOwner(address indexed old, address indexed current);
 
     /// @notice Emitted when pool operator updates NAV.

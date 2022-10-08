@@ -40,7 +40,8 @@ interface IRigoblockV3PoolState {
     /// @return Address of the provider contract.
     function getKycProvider() external view returns (address);
 
-    // TODO: add natspec docs
+    /// @notice Returns the address of the owner.
+    /// @return Address of the owner.
     function owner() external view returns (address);
 
     /// @notice Returns the total amount of issued tokens for this pool.
