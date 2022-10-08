@@ -1,3 +1,41 @@
+# [0.10.0](https://github.com/rigoblock/v3-contracts/compare/v0.9.1...v0.10.0) (2022-10-08)
+
+
+### Bug Fixes
+
+* added (commented) missing imported storage slot(1) ([82aabf2](https://github.com/rigoblock/v3-contracts/commit/82aabf27943e529a5608ca3672b3683ae020292b))
+* added missing events in pool owner actions and interface ([2bfb79f](https://github.com/rigoblock/v3-contracts/commit/2bfb79f3d84d7af104cd9508ac5be764e26aa62d))
+* assert pool decimals > 6 to prevent underflow ([b92ad0b](https://github.com/rigoblock/v3-contracts/commit/b92ad0bfc1aa1a33fcfabb0798c5255f9ec61330))
+* do not assert in proxy constructor after init call ([c38e331](https://github.com/rigoblock/v3-contracts/commit/c38e3315084232a0084c71bf39a6e3596f15519e))
+* fix GRG token overrides ([05c4f2e](https://github.com/rigoblock/v3-contracts/commit/05c4f2ed5427092728a82bbbfd3279aaccf050af))
+* initialize owner to null in staking to prevent direct calls ([4fdd46d](https://github.com/rigoblock/v3-contracts/commit/4fdd46d8bf85c35e2a023e89afd8b62270653ffb))
+* prevent direct staking pool creation in staking ([ba3101f](https://github.com/rigoblock/v3-contracts/commit/ba3101ff7ce9495050140092f4fea0216c752075))
+* proxy inherits from own interface for consistency ([dd91970](https://github.com/rigoblock/v3-contracts/commit/dd919706b65bd794f3401e39cf2038f99af12aa0))
+* remove deprecated authority extensions contract ([2f9dd55](https://github.com/rigoblock/v3-contracts/commit/2f9dd559841c37da1bed17b696b6675cf5bdccbf))
+* remove requirement base token decimals < 18 ([b439d9a](https://github.com/rigoblock/v3-contracts/commit/b439d9a15c587793bf53c38cfbe147b4ab7764a1))
+* remove some TODO comments in contracts and improved comments ([e7f5e3f](https://github.com/rigoblock/v3-contracts/commit/e7f5e3f2d35dcdbbe46dc150d2d6307b767fe131))
+* removed unused import in storage ([c940ed8](https://github.com/rigoblock/v3-contracts/commit/c940ed8d69b019cce343dac96b9d739f4b49cf78))
+* rename AuthorityCore to Authority and update deploy pipeline ([1e39529](https://github.com/rigoblock/v3-contracts/commit/1e39529e8e9040b4a4f8c917195c3ea0d7e8c3d2))
+* require address not same when upgrading in factory ([7a43c69](https://github.com/rigoblock/v3-contracts/commit/7a43c695cee843e545c15b87f92ba38d91b6a2a1))
+* require approve target is contract in uniswap adapter ([552224a](https://github.com/rigoblock/v3-contracts/commit/552224ab3a25d8dda96155e897abcc134ed62fc2))
+* require name shorter than 32 characters ([d70df78](https://github.com/rigoblock/v3-contracts/commit/d70df783bab65a0db4a780cd7e66669e31290b94))
+* restrict mint method as non reentrant ([405901c](https://github.com/rigoblock/v3-contracts/commit/405901cac9569801accd5f399389c364f32ba9ef))
+* restrict uniswap adapter swap methods to whitelisted tokens ([e72d110](https://github.com/rigoblock/v3-contracts/commit/e72d110b87f23ffd63fcac6dc34f439c462ed05c))
+* revert if pool init unsuccessful ([db63fd2](https://github.com/rigoblock/v3-contracts/commit/db63fd255130b1e3cac9f75a4085112de458dc41))
+* upgrade contracts to solc v0.8.17 from .0.8.14 ([08062ec](https://github.com/rigoblock/v3-contracts/commit/08062ecb69300c5b660cb40eaa0faf956545c9c5))
+* upgrade staking to solc 0.8.17 ([b8cef8a](https://github.com/rigoblock/v3-contracts/commit/b8cef8a229136e134b1d551d8dc50d9a17d78572))
+
+
+### Features
+
+* add agnostic storage view method in mixin storage accessible ([209cbff](https://github.com/rigoblock/v3-contracts/commit/209cbff46886d6540df88fee9347cf259d2eda65))
+* add storage accessible ([3915283](https://github.com/rigoblock/v3-contracts/commit/3915283d31fd50c7d94710a1fa0150ef8ed2165d))
+* added whitelist extension ([e752487](https://github.com/rigoblock/v3-contracts/commit/e752487a287749079028493398aba5302c1f1d0b))
+* catch error string in proxy factory ([553c56b](https://github.com/rigoblock/v3-contracts/commit/553c56b43864a1e018eae9a719b8d669fac4b0c9))
+* token-whitelist ([a6fa264](https://github.com/rigoblock/v3-contracts/commit/a6fa26482394f19760b5a862e1da00c7108a829b))
+
+
+
 ## [0.9.1](https://github.com/rigoblock/v3-contracts/compare/v0.9.0...v0.9.1) (2022-09-20)
 
 
@@ -113,33 +151,6 @@
 * simplify authority contract ([e53c111](https://github.com/rigoblock/v3-contracts/commit/e53c111f2b9fe43ae53b991b6e6a49b23f181b74))
 * simplify authority core storage ([37e0226](https://github.com/rigoblock/v3-contracts/commit/37e022642dcdfedeb696eb550c2dd4cf72f1591f))
 * simplify authority extensions storage ([bc07a2c](https://github.com/rigoblock/v3-contracts/commit/bc07a2c58953089f6137a6a7de5879654b72eab5))
-
-
-
-# [0.6.0](https://github.com/rigoblock/v3-contracts/compare/v0.5.0...v0.6.0) (2022-07-22)
-
-
-### Bug Fixes
-
-* add ERC20 proxy contract and deps ([be00be7](https://github.com/rigoblock/v3-contracts/commit/be00be709b2dd93193801ac2e9105e2d83c79205))
-* add event to factory ([c1ed72d](https://github.com/rigoblock/v3-contracts/commit/c1ed72dae136bf29dbf0bb56c0b212232d71ddab))
-* add revert reason to stake method ([e7bbe1f](https://github.com/rigoblock/v3-contracts/commit/e7bbe1f4420e898b7921e3345d4f3ebebeb26b3f))
-* initialize owner in constructor for staking, proxy, vault ([f17aa09](https://github.com/rigoblock/v3-contracts/commit/f17aa09f2cf7af0e13cf23b9b975e7ebd1adf78f))
-* initialize staking deployment immutables in constructor ([303807f](https://github.com/rigoblock/v3-contracts/commit/303807f487b8b0b57707b17d12274fc8d9be768e))
-* move modifier from pop mgr o pop rewards contract ([1991a77](https://github.com/rigoblock/v3-contracts/commit/1991a773df607c2e7cef8fd970c3e09857bd039d))
-* remove LibStakingRichErrors and imports ([1953cac](https://github.com/rigoblock/v3-contracts/commit/1953cac3bd4cf597e351ab9fb28306f4d2112cd6))
-* simplify mixin staking pool rich return errors ([1fb2482](https://github.com/rigoblock/v3-contracts/commit/1fb2482c0c2f1e6109e378862850c42980ed4f1a))
-* simplify pop manager rich returned errors ([5fec6c5](https://github.com/rigoblock/v3-contracts/commit/5fec6c5070d12fea5659f4eb11433e015e5d1715))
-* update staking deployment pipeline to staking updates ([e429dcf](https://github.com/rigoblock/v3-contracts/commit/e429dcfede0920d5e524f34762b81b8404d14403))
-
-
-### Features
-
-* add staking adapter to tests deploy pipeline ([6b62784](https://github.com/rigoblock/v3-contracts/commit/6b62784e115f4cbf6a399ccb7e2e2b79b77246e2))
-* create staking adapter ([021c24a](https://github.com/rigoblock/v3-contracts/commit/021c24aabfabfa2b016cc83982b410db9a8aa561))
-* create staking pool from rigoblock pool if doesn't exist ([c38845a](https://github.com/rigoblock/v3-contracts/commit/c38845a68d0ecb363266ea2b70e7a3d3688bf8cb))
-* remove use of encoded rich error for return rich errors in staking ([5a6b85d](https://github.com/rigoblock/v3-contracts/commit/5a6b85db370fdb2afa93e4c008006d9a9bd1ea82))
-* whitelist adapter in extensions authority ([34974db](https://github.com/rigoblock/v3-contracts/commit/34974db6038ecd406caccef35cf2f9f63784b3ce))
 
 
 
