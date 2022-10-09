@@ -58,6 +58,26 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return kycProviderAddress = poolParams.kycProvider;
     }
 
+    function getPoolStorage()
+        external
+        view
+        returns (
+            ReturnedPool memory poolInitParams,
+            PoolParams memory poolVariables,
+            PoolTokens memory poolTokensInfo
+        )
+    {
+        return(
+            getPool(),
+            getPoolParams(),
+            getPoolTokens()
+        );
+    }
+
+    function getUserAccount(address _who) external view returns (UserAccount memory) {
+        return userAccounts[_who];
+    }
+
     /// @inheritdoc IRigoblockV3PoolState
     function owner() external view override returns (address) {
         return pool.owner;
@@ -79,6 +99,37 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return pool.decimals != 0 ? pool.decimals : _coinbaseDecimals;
     }
 
+    // we return symbol as string
+    struct ReturnedPool {
+        string name;
+        string symbol;
+        uint8 decimals;
+        address owner;
+        bool unlocked;
+        address baseToken;
+    }
+
+
+    function getPool() public view returns (ReturnedPool memory poolReturnedInitParams) {
+        poolReturnedInitParams.name = pool.name;
+        poolReturnedInitParams.symbol = symbol();
+        poolReturnedInitParams.decimals = pool.decimals;
+        poolReturnedInitParams.owner = pool.owner;
+        poolReturnedInitParams.unlocked = pool.unlocked;
+        poolReturnedInitParams.baseToken = pool.baseToken;
+    }
+
+    function getPoolParams() public view returns (PoolParams memory poolReturnedParams) {
+        poolReturnedParams = poolParams;
+        poolReturnedParams.minPeriod = _getMinPeriod();
+        poolReturnedParams.spread = _getSpread();
+    }
+
+    function getPoolTokens() public view returns (PoolTokens memory poolReturnedTokens) {
+        poolReturnedTokens = poolTokens;
+        poolReturnedTokens.unitaryValue = _getUnitaryValue();
+    }
+
     /// @inheritdoc IRigoblockV3PoolImmutable
     function name() public view override returns (string memory) {
         return pool.name;
@@ -86,7 +137,16 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolImmutable
     function symbol() public view override returns (string memory) {
-        return string(abi.encode(pool.symbol));
+        bytes8 _symbol = pool.symbol;
+        uint8 i = 0;
+        while(i < 8 && _symbol[i] != 0) {
+            i++;
+        }
+        bytes memory bytesArray = new bytes(i);
+        for (i = 0; i < 8 && _symbol[i] != 0; i++) {
+            bytesArray[i] = _symbol[i];
+        }
+        return string(bytesArray);
     }
 
     /*
