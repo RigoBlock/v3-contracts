@@ -196,15 +196,17 @@ describe("MixinStorageAccessible", async () => {
             // symbol is bytes8, we only take the first 4 to eliminate padding.
             let symbol = utils.hexDataSlice(symbolSlot, 24, 32)
             symbol = utils.toUtf8String(symbol)
+            // slot stores symbol as bytes8, which is returned with padding
             expect(symbol).to.be.eq('TEST\u0000\u0000\u0000\u0000')
             // in order to comparing storage symbol, we must get rid of padding
             let poolSymbol = await pool.symbol()
-            poolSymbol = utils.toUtf8Bytes(poolSymbol)
-            poolSymbol = utils.hexlify(poolSymbol)
+            expect(poolSymbol).to.be.eq('TEST')
+            //poolSymbol = utils.toUtf8Bytes(poolSymbol)
+            //poolSymbol = utils.hexlify(poolSymbol)
             // symbol is bytes8, poolSymbol must have same length for comparing
-            poolSymbol = utils.hexDataSlice(poolSymbol, 0, 8)
-            poolSymbol = utils.toUtf8String(poolSymbol)
-            expect(symbol).to.be.eq(poolSymbol)
+            //poolSymbol = utils.hexDataSlice(poolSymbol, 0, 8)
+            //poolSymbol = utils.toUtf8String(poolSymbol)
+            //expect(symbol).to.be.eq(poolSymbol)
         })
 
         it('can read selected struct data', async () => {
@@ -231,10 +233,8 @@ describe("MixinStorageAccessible", async () => {
             const symbolSlot = decodedData[1]
             let symbol = utils.hexDataSlice(symbolSlot, 24, 32)
             // symbol is an 8-bytes element
-            let poolSymbol = utils.solidityPack(['string'], [await pool.symbol()])
-            // we want to compare returned symbol, must be same length
-            poolSymbol = utils.hexDataSlice(poolSymbol, 0, 8)
-            expect(poolSymbol).to.be.eq(symbol)
+            let poolSymbol = await pool.symbol()
+            expect(poolSymbol).to.be.eq('PAL')
             // must add padding to string
             expect(utils.toUtf8String(symbol)).to.be.eq("PAL\u0000\u0000\u0000\u0000\u0000")
         })

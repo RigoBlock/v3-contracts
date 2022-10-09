@@ -64,6 +64,46 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
+    describe("poolStructStorage", async () => {
+        it('should return pool struct', async () => {
+            const { pool, grgToken } = await setupTests()
+            const poolData = await pool.getPool()
+            console.log(poolData, "pool")
+            expect(poolData.name).to.be.eq('testpool')
+            // TODO: we want symbol to be returned as text string
+            expect(poolData.baseToken).to.be.eq(grgToken.address)
+        })
+
+        it('should return pool params struct', async () => {
+            const { pool, grgToken } = await setupTests()
+            const poolData = await pool.getPoolParams()
+            console.log(poolData, "poolData")
+            expect(poolData.spread).to.be.eq(500)
+        })
+
+        it('should return pool tokens struct', async () => {
+            // this test should always return 18 with any token but special tokens (i.e. 6 decimals tokens)
+            const { pool, grgToken } = await setupTests()
+            const poolData = await pool.getPoolTokens()
+            console.log(poolData, "poolTokens")
+        })
+
+        it('should return pool, poolParams, poolTokens struct at once', async () => {
+            const { pool, grgToken } = await setupTests()
+            const poolData = await pool.getPoolStorage()
+            console.log(poolData, "poolStorage")
+        })
+    })
+
+    describe("getUserAccount", async () => {
+        it('should return UserAccount struct', async () => {
+            const { pool, grgToken } = await setupTests()
+            const poolData = await pool.getUserAccount(user1.address)
+            console.log(poolData, "userAccount")
+            // TODO: should mint to get some user balance
+        })
+    })
+
     describe("mint", async () => {
         it('should create new tokens with input tokens', async () => {
             const { pool, grgToken } = await setupTests()
