@@ -20,7 +20,6 @@ abstract contract MixinOwnerActions is MixinActions {
         _;
     }
 
-    // TODO: consider updating all struct values in one call. Also consider initializing unitialized params at first mint
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeFeeCollector(address _feeCollector) external override onlyOwner {
         poolParams.feeCollector = _feeCollector;
@@ -91,7 +90,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     function decimals() public view virtual override returns (uint8) {}
 
-    function _getUnitaryValue() internal view virtual override returns (uint256);
+    function _getUnitaryValue() internal view virtual override returns (uint256) {}
 
     function _isContract(address _target) private view returns (bool) {
         uint256 size;
