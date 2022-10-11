@@ -14,57 +14,15 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return userAccounts[_who].userBalance;
     }
 
-    // TODO: update view methods after pool storage restructuring
     /// @inheritdoc IRigoblockV3PoolState
-    function getAdminData()
-        external
-        view
-        override
-        returns (
-            address poolOwner,
-            address feeCollector,
-            uint16 transactionFee,
-            uint48 minPeriod
-        )
-    {
-        return (pool.owner, _getFeeCollector(), poolParams.transactionFee, _getMinPeriod());
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function getData()
-        public
-        view
-        override
-        returns (
-            string memory poolName,
-            string memory poolSymbol,
-            address baseToken,
-            uint256 unitaryValue,
-            uint16 spread
-        )
-    {
-        // TODO: check if we should reorg return data for client efficiency
-        return (
-            poolName = name(),
-            poolSymbol = symbol(),
-            baseToken = pool.baseToken,
-            _getUnitaryValue(),
-            _getSpread()
-        );
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function getKycProvider() external view override returns (address kycProviderAddress) {
-        return kycProviderAddress = poolParams.kycProvider;
-    }
-
     function getPoolStorage()
         external
         view
+        override
         returns (
-            ReturnedPool memory poolInitParams,
-            PoolParams memory poolVariables,
-            PoolTokens memory poolTokensInfo
+            IPoolStructs.ReturnedPool memory poolInitParams,
+            IPoolStructs.PoolParams memory poolVariables,
+            IPoolStructs.PoolTokens memory poolTokensInfo
         )
     {
         return(
@@ -74,7 +32,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
         );
     }
 
-    function getUserAccount(address _who) external view returns (UserAccount memory) {
+    function getUserAccount(address _who) external view override returns (IPoolStructs.UserAccount memory) {
         return userAccounts[_who];
     }
 
@@ -83,59 +41,53 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return pool.owner;
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
-    function totalSupply() public view override returns (uint256) {
-        return poolTokens.totalSupply;
-    }
-
     /*
      * PUBLIC VIEW METHODS
      */
-    /// @dev Decimals are initialized at proxy creation only if base token not null.
+    /// @notice Decimals are initialized at proxy creation.
     /// @return Number of decimals.
-    /// @notice We use this method to save gas on base currency pools.
-    // TODO: we initialize decimals now
     function decimals() public view override returns (uint8) {
-        return pool.decimals != 0 ? pool.decimals : _coinbaseDecimals;
+        return pool.decimals;
     }
 
-    // we return symbol as string
-    struct ReturnedPool {
-        string name;
-        string symbol;
-        uint8 decimals;
-        address owner;
-        bool unlocked;
-        address baseToken;
+    /// @inheritdoc IRigoblockV3PoolState
+    function getPool() public view override returns (IPoolStructs.ReturnedPool memory) {
+        // we return symbol as string, omit unlocked as always true
+        return IPoolStructs.ReturnedPool({
+            name: pool.name,
+            symbol: symbol(),
+            decimals: pool.decimals,
+            owner: pool.owner,
+            baseToken: pool.baseToken
+        });
     }
 
-
-    function getPool() public view returns (ReturnedPool memory poolReturnedInitParams) {
-        poolReturnedInitParams.name = pool.name;
-        poolReturnedInitParams.symbol = symbol();
-        poolReturnedInitParams.decimals = pool.decimals;
-        poolReturnedInitParams.owner = pool.owner;
-        poolReturnedInitParams.unlocked = pool.unlocked;
-        poolReturnedInitParams.baseToken = pool.baseToken;
+    /// @inheritdoc IRigoblockV3PoolState
+    function getPoolParams() public view override returns (IPoolStructs.PoolParams memory) {
+        return IPoolStructs.PoolParams({
+            minPeriod: _getMinPeriod(),
+            spread: _getSpread(),
+            transactionFee: poolParams.transactionFee,
+            feeCollector: _getFeeCollector(),
+            kycProvider: poolParams.kycProvider
+        });
     }
 
-    function getPoolParams() public view returns (PoolParams memory poolReturnedParams) {
-        poolReturnedParams = poolParams;
-        poolReturnedParams.minPeriod = _getMinPeriod();
-        poolReturnedParams.spread = _getSpread();
+    /// @inheritdoc IRigoblockV3PoolState
+    function getPoolTokens() public view override returns (IPoolStructs.PoolTokens memory) {
+        return IPoolStructs.PoolTokens({
+            unitaryValue: _getUnitaryValue(),
+            totalSupply: poolTokens.totalSupply
+        });
     }
 
-    function getPoolTokens() public view returns (PoolTokens memory poolReturnedTokens) {
-        poolReturnedTokens = poolTokens;
-        poolReturnedTokens.unitaryValue = _getUnitaryValue();
-    }
-
-    /// @inheritdoc IRigoblockV3PoolImmutable
+    /// @inheritdoc IRigoblockV3PoolState
     function name() public view override returns (string memory) {
         return pool.name;
     }
 
-    /// @inheritdoc IRigoblockV3PoolImmutable
+    /// @inheritdoc IRigoblockV3PoolState
+    // TODO: check if should move logic to LibBytes.sol and return LibBytes.bytes8ToString(bytes8 arg)
     function symbol() public view override returns (string memory) {
         bytes8 _symbol = pool.symbol;
         uint8 i = 0;
@@ -147,6 +99,11 @@ abstract contract MixinPoolState is MixinOwnerActions {
             bytesArray[i] = _symbol[i];
         }
         return string(bytesArray);
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function totalSupply() public view override returns (uint256) {
+        return poolTokens.totalSupply;
     }
 
     /*
@@ -164,8 +121,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return poolParams.spread != 0 ? poolParams.spread : INITIAL_SPREAD;
     }
 
-    // TODO: we can add return here, so we reduce initialize method
-    function _getUnitaryValue() internal view override returns (uint256) {
-        return poolTokens.unitaryValue != 0 ? poolTokens.unitaryValue : _coinbaseUnitaryValue;
+    function _getUnitaryValue() internal view override returns (uint256 unitaryValue) {
+        return poolTokens.unitaryValue != 0 ? poolTokens.unitaryValue : 10**pool.decimals;
     }
 }

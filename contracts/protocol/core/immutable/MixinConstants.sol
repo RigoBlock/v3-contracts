@@ -26,8 +26,7 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     /// @inheritdoc IRigoblockV3PoolImmutable
     string public constant override VERSION = "HF 3.1.0";
 
-    // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
-    uint256 internal constant FEE_BASE = 10000;
+    uint16 internal constant FEE_BASE = 10000;
 
     uint16 internal constant INITIAL_SPREAD = 500; // +-5%, in basis points
 
@@ -36,7 +35,7 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     uint16 internal constant MAX_TRANSACTION_FEE = 100; // maximum 1%
 
     // minimum order size 1/1000th of base to avoid dust clogging things up
-    uint256 internal constant MINIMUM_ORDER_DIVISOR = 1e3;
+    uint16 internal constant MINIMUM_ORDER_DIVISOR = 1e3;
 
     uint16 internal constant SPREAD_BASE = 10000;
 

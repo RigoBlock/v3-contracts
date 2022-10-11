@@ -17,35 +17,25 @@
 
 */
 
-import "../../interfaces/pool/IStructs.sol";
-//import "../../../utils/reentrancyGuard/ReentrancyGuard.sol";
-//import {OwnedUninitialized as Owned} from "../../../utils/owned/OwnedUninitialized.sol";
+import "../../interfaces/pool/IPoolStructs.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
 
 /// @notice Storage slots must be preserved to prevent storage clashing. Each new variable must be assigned
 /// a dedicated (randomly big enough) storage slot and queried from slot, or added at the end of existing storage.
-abstract contract MixinStorage is IStructs/*, Owned, ReentrancyGuard*/ {
-    // slot(0) declared in Owned contract
-    //address public override owner;
-
-    // slot(0) declared in ReentrancyGuard contract
-    /// @dev Since address is only 20 bytes long, one-bit boolean "locked" is packed into slot 0
-    //bool private locked = false;
-
+abstract contract MixinStorage /*is IPoolStructs*/ {
+    // TODO: check if prev. inheritance was creating issues with staking
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(2))
     // activation stored at locantion keccak256(address(msg.sender) . uint256(2)) + 1
-    mapping(address => UserAccount) internal userAccounts;
+    // slot(0)
+    mapping(address => IPoolStructs.UserAccount) internal userAccounts;
+
+    // slot(1)
+    IPoolStructs.Pool internal pool;
 
     // slot(2)
-    //Admin internal admin;
+    IPoolStructs.PoolParams internal poolParams;
 
-    // slot(5)
-    //PoolData internal poolData;
-
-    Pool internal pool;
-
-    PoolParams internal poolParams;
-
-    PoolTokens internal poolTokens;
+    // slot(3)
+    IPoolStructs.PoolTokens internal poolTokens;
 }
