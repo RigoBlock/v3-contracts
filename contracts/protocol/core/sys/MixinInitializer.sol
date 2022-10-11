@@ -29,18 +29,18 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
 
         if (_baseToken != address(0)) {
             tokenDecimals = IERC20(_baseToken).decimals();
-            // a pool with small decimals could easily underflow.
-            assert(tokenDecimals >= 6);
         }
 
-        pool = IPoolStructs.Pool({
-            name: _poolName,
-            symbol: bytes8(bytes(_poolSymbol)),
-            decimals: tokenDecimals,
-            owner: _owner,
-            unlocked: true,
-            baseToken: _baseToken
-        });
+        // a pool with small decimals could easily underflow.
+        assert(tokenDecimals >= 6);
+
+        IPoolStructs.Pool storage pool = pool();
+        pool.name = _poolName;
+        pool.symbol = bytes8(bytes(_poolSymbol));
+        pool.decimals = tokenDecimals;
+        pool.owner = _owner;
+        pool.unlocked = true;
+        pool.baseToken = _baseToken;
 
         emit PoolInitialized(msg.sender, _owner, _baseToken, _poolName, _poolSymbol);
     }

@@ -11,7 +11,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
     /// @param _who Address of the target account.
     /// @return Number of pool.
     function balanceOf(address _who) external view override returns (uint256) {
-        return userAccounts[_who].userBalance;
+        return accounts().userAccounts[_who].userBalance;
     }
 
     /// @inheritdoc IRigoblockV3PoolState
@@ -33,12 +33,12 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     function getUserAccount(address _who) external view override returns (IPoolStructs.UserAccount memory) {
-        return userAccounts[_who];
+        return accounts().userAccounts[_who];
     }
 
     /// @inheritdoc IRigoblockV3PoolState
     function owner() external view override returns (address) {
-        return pool.owner;
+        return pool().owner;
     }
 
     /*
@@ -47,11 +47,12 @@ abstract contract MixinPoolState is MixinOwnerActions {
     /// @notice Decimals are initialized at proxy creation.
     /// @return Number of decimals.
     function decimals() public view override returns (uint8) {
-        return pool.decimals;
+        return pool().decimals;
     }
 
     /// @inheritdoc IRigoblockV3PoolState
     function getPool() public view override returns (IPoolStructs.ReturnedPool memory) {
+        IPoolStructs.Pool storage pool = pool();
         // we return symbol as string, omit unlocked as always true
         return IPoolStructs.ReturnedPool({
             name: pool.name,
@@ -67,9 +68,9 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return IPoolStructs.PoolParams({
             minPeriod: _getMinPeriod(),
             spread: _getSpread(),
-            transactionFee: poolParams.transactionFee,
+            transactionFee: poolParams().transactionFee,
             feeCollector: _getFeeCollector(),
-            kycProvider: poolParams.kycProvider
+            kycProvider: poolParams().kycProvider
         });
     }
 
@@ -77,19 +78,19 @@ abstract contract MixinPoolState is MixinOwnerActions {
     function getPoolTokens() public view override returns (IPoolStructs.PoolTokens memory) {
         return IPoolStructs.PoolTokens({
             unitaryValue: _getUnitaryValue(),
-            totalSupply: poolTokens.totalSupply
+            totalSupply: poolTokens().totalSupply
         });
     }
 
     /// @inheritdoc IRigoblockV3PoolState
     function name() public view override returns (string memory) {
-        return pool.name;
+        return pool().name;
     }
 
     /// @inheritdoc IRigoblockV3PoolState
     // TODO: check if should move logic to LibBytes.sol and return LibBytes.bytes8ToString(bytes8 arg)
     function symbol() public view override returns (string memory) {
-        bytes8 _symbol = pool.symbol;
+        bytes8 _symbol = pool().symbol;
         uint8 i = 0;
         while(i < 8 && _symbol[i] != 0) {
             i++;
@@ -103,25 +104,25 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolState
     function totalSupply() public view override returns (uint256) {
-        return poolTokens.totalSupply;
+        return poolTokens().totalSupply;
     }
 
     /*
      * INTERNAL VIEW METHODS
      */
     function _getFeeCollector() internal view override returns (address) {
-        return poolParams.feeCollector != address(0) ? poolParams.feeCollector : pool.owner;
+        return poolParams().feeCollector != address(0) ? poolParams().feeCollector : pool().owner;
     }
 
     function _getMinPeriod() internal view override returns (uint48) {
-        return poolParams.minPeriod != 0 ? poolParams.minPeriod : MIN_LOCKUP;
+        return poolParams().minPeriod != 0 ? poolParams().minPeriod : MIN_LOCKUP;
     }
 
     function _getSpread() internal view override returns (uint16) {
-        return poolParams.spread != 0 ? poolParams.spread : INITIAL_SPREAD;
+        return poolParams().spread != 0 ? poolParams().spread : INITIAL_SPREAD;
     }
 
     function _getUnitaryValue() internal view override returns (uint256 unitaryValue) {
-        return poolTokens.unitaryValue != 0 ? poolTokens.unitaryValue : 10**pool.decimals;
+        return poolTokens().unitaryValue != 0 ? poolTokens().unitaryValue : 10**pool().decimals;
     }
 }

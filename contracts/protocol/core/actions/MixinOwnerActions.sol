@@ -16,13 +16,13 @@ abstract contract MixinOwnerActions is MixinActions {
 
     // TODO: remove owner import
     modifier onlyOwner() {
-        require(msg.sender == pool.owner, "POOL_CALLER_IS_NOT_OWNER_ERROR");
+        require(msg.sender == pool().owner, "POOL_CALLER_IS_NOT_OWNER_ERROR");
         _;
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeFeeCollector(address _feeCollector) external override onlyOwner {
-        poolParams.feeCollector = _feeCollector;
+        poolParams().feeCollector = _feeCollector;
         emit NewCollector(msg.sender, address(this), _feeCollector);
     }
 
@@ -30,7 +30,7 @@ abstract contract MixinOwnerActions is MixinActions {
     function changeMinPeriod(uint48 _minPeriod) external override onlyOwner {
         /// @notice minimum period is always at least 1 to prevent flash txs.
         require(_minPeriod >= MIN_LOCKUP && _minPeriod <= MAX_LOCKUP, "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR");
-        poolParams.minPeriod = _minPeriod;
+        poolParams().minPeriod = _minPeriod;
         emit MinimumPeriodChanged(address(this), _minPeriod);
     }
 
@@ -39,21 +39,21 @@ abstract contract MixinOwnerActions is MixinActions {
         // new spread must always be != 0, otherwise default spread from immutable storage will be returned
         require(_newSpread > 0, "POOL_SPREAD_NULL_ERROR");
         require(_newSpread <= MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
-        poolParams.spread = _newSpread;
+        poolParams().spread = _newSpread;
         emit SpreadChanged(address(this), _newSpread);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setKycProvider(address _kycProvider) external override onlyOwner {
         require(_isContract(_kycProvider), "POOL_INPUT_NOT_CONTRACT_ERROR");
-        poolParams.kycProvider = _kycProvider;
+        poolParams().kycProvider = _kycProvider;
         emit KycProviderSet(address(this), _kycProvider);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setTransactionFee(uint16 _transactionFee) external override onlyOwner {
         require(_transactionFee <= MAX_TRANSACTION_FEE, "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"); //fee cannot be higher than 1%
-        poolParams.transactionFee = _transactionFee;
+        poolParams().transactionFee = _transactionFee;
         emit NewFee(msg.sender, address(this), _transactionFee);
     }
 
@@ -61,28 +61,28 @@ abstract contract MixinOwnerActions is MixinActions {
     function setUnitaryValue(uint256 _unitaryValue) external override onlyOwner notPriceError(_unitaryValue) {
         // unitary value can be updated only after first mint. we require positive value as would
         //  return to default value if storage cleared
-        require(poolTokens.totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
+        require(poolTokens().totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
 
         // This will underflow with small decimals tokens at some point, which is ok
         uint256 minimumLiquidity = ((_unitaryValue * totalSupply()) / 10**decimals() / 100) * 3;
 
-        if (pool.baseToken == address(0)) {
+        if (pool().baseToken == address(0)) {
             require(address(this).balance >= minimumLiquidity, "POOL_CURRENCY_BALANCE_TOO_LOW_ERROR");
         } else {
             require(
-                IERC20(pool.baseToken).balanceOf(address(this)) >= minimumLiquidity,
+                IERC20(pool().baseToken).balanceOf(address(this)) >= minimumLiquidity,
                 "POOL_TOKEN_BALANCE_TOO_LOW_ERROR"
             );
         }
 
-        poolTokens.unitaryValue = _unitaryValue;
+        poolTokens().unitaryValue = _unitaryValue;
         emit NewNav(msg.sender, address(this), _unitaryValue);
     }
 
     function setOwner(address _newOwner) public override onlyOwner {
         require(_newOwner != address(0), "POOL_NULL_OWNER_INPUT_ERROR");
-        address oldOwner = pool.owner;
-        pool.owner = _newOwner;
+        address oldOwner = pool().owner;
+        pool().owner = _newOwner;
         emit NewOwner(oldOwner, _newOwner);
     }
 

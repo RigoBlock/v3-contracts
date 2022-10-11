@@ -83,4 +83,12 @@ interface IPoolStructs {
         uint208 userBalance;
         uint48 activation;
     }
+
+    // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(2))
+    // activation stored at locantion keccak256(address(msg.sender) . uint256(2)) + 1
+    // slot(0)
+    //mapping(address => IPoolStructs.UserAccount) internal userAccounts;
+    struct Accounts {
+        mapping(address => UserAccount) userAccounts;
+    }
 }

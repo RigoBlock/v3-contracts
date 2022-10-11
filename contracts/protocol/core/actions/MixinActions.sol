@@ -11,12 +11,12 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
      * MODIFIERS
      */
     modifier hasEnough(uint256 _amount) {
-        require(userAccounts[msg.sender].userBalance >= _amount, "POOL_BURN_NOT_ENOUGH_ERROR");
+        require(accounts().userAccounts[msg.sender].userBalance >= _amount, "POOL_BURN_NOT_ENOUGH_ERROR");
         _;
     }
 
     modifier minimumPeriodPast() {
-        require(block.timestamp >= userAccounts[msg.sender].activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
+        require(block.timestamp >= accounts().userAccounts[msg.sender].activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
         _;
     }
 
@@ -24,6 +24,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     /// before function execution and unlocked after.
     modifier nonReentrant() {
         // Ensure mutex is unlocked
+        IPoolStructs.Pool storage pool = pool();
         require(pool.unlocked, "REENTRANCY_ILLEGAL");
 
         // Lock mutex before function call
@@ -47,12 +48,12 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
         // require whitelisted user if kyc is enforced
         if (_isKycEnforced()) {
-            require(IKyc(poolParams.kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
+            require(IKyc(poolParams().kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
         }
 
         _assertBiggerThanMinimum(_amountIn);
 
-        if (pool.baseToken == address(0)) {
+        if (pool().baseToken == address(0)) {
             require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
         } else {
             _safeTransferFrom(msg.sender, address(this), _amountIn);
@@ -62,7 +63,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         _amountIn -= markup;
         uint256 mintedAmount = (_amountIn * 10**decimals()) / _getUnitaryValue();
         require(mintedAmount > _amountOutMin, "POOL_MINT_OUTPUT_AMOUNT_ERROR");
-        poolTokens.totalSupply += mintedAmount;
+        poolTokens().totalSupply += mintedAmount;
 
         /// @notice allocate pool token transfers and log events.
         recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
@@ -81,14 +82,14 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
 
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(_amountIn);
-        poolTokens.totalSupply -= burntAmount;
+        poolTokens().totalSupply -= burntAmount;
 
         uint256 markup = (burntAmount * _getSpread()) / SPREAD_BASE;
         burntAmount -= markup;
         netRevenue = (burntAmount * _getUnitaryValue()) / 10**decimals();
         require(netRevenue >= _amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
 
-        if (pool.baseToken == address(0)) {
+        if (pool().baseToken == address(0)) {
             payable(msg.sender).transfer(netRevenue);
         } else {
             _safeTransfer(msg.sender, netRevenue);
@@ -121,14 +122,15 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     /// @return recipientAmount Number of new tokens issued to recipient.
     function _allocateMintTokens(address _recipient, uint256 _mintedAmount) private returns (uint256) {
         uint256 recipientAmount = _mintedAmount;
-        uint208 recipientBalance = userAccounts[_recipient].userBalance;
+        IPoolStructs.Accounts storage accounts = accounts();
+        uint208 recipientBalance = accounts.userAccounts[_recipient].userBalance;
         uint48 activation;
         // it is safe to use unckecked as max min period is 30 days
         unchecked {
             activation = uint48(block.timestamp) + _getMinPeriod();
         }
 
-        if (poolParams.transactionFee != uint256(0)) {
+        if (poolParams().transactionFee != uint256(0)) {
             address feeCollector = _getFeeCollector();
 
             if (feeCollector == _recipient) {
@@ -136,26 +138,26 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                 unchecked {
                     recipientBalance += uint208(recipientAmount);
                 }
-                userAccounts[_recipient] = IPoolStructs.UserAccount({
+                accounts.userAccounts[_recipient] = IPoolStructs.UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
                 emit Transfer(address(0), feeCollector, recipientAmount);
                 return recipientAmount;
             } else {
-                uint208 feeCollectorBalance = userAccounts[feeCollector].userBalance;
-                uint256 feePool = (_mintedAmount * poolParams.transactionFee) / FEE_BASE;
+                uint208 feeCollectorBalance = accounts.userAccounts[feeCollector].userBalance;
+                uint256 feePool = (_mintedAmount * poolParams().transactionFee) / FEE_BASE;
                 recipientAmount -= feePool;
                 unchecked {
                     feeCollectorBalance += uint208(feePool);
                     recipientBalance += uint208(recipientAmount);
                 }
-                userAccounts[_recipient] = IPoolStructs.UserAccount({
+                accounts.userAccounts[_recipient] = IPoolStructs.UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
                 //fee tokens are locked as well
-                userAccounts[feeCollector] = IPoolStructs.UserAccount({
+                accounts.userAccounts[feeCollector] = IPoolStructs.UserAccount({
                     userBalance: feeCollectorBalance,
                     activation: activation
                 });
@@ -166,7 +168,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         } else {
             unchecked {
                 recipientBalance += uint208(recipientAmount);
-                userAccounts[_recipient] = IPoolStructs.UserAccount({
+                accounts.userAccounts[_recipient] = IPoolStructs.UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
@@ -183,26 +185,27 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     // TODO: check if we want to remove the tx fee on burn calls
     function _allocateBurnTokens(uint256 _amountIn) private returns (uint256 burntAmount) {
         burntAmount = _amountIn;
-        uint208 holderBalance = userAccounts[msg.sender].userBalance;
+        IPoolStructs.Accounts storage accounts = accounts();
+        uint208 holderBalance = accounts.userAccounts[msg.sender].userBalance;
 
-        if (poolParams.transactionFee != uint256(0)) {
+        if (poolParams().transactionFee != uint256(0)) {
             address feeCollector = _getFeeCollector();
 
             if (msg.sender == feeCollector) {
                 holderBalance -= uint208(burntAmount);
             } else {
-                uint256 feePool = (_amountIn * poolParams.transactionFee) / FEE_BASE;
+                uint256 feePool = (_amountIn * poolParams().transactionFee) / FEE_BASE;
                 burntAmount -= feePool;
                 holderBalance -= uint208(burntAmount);
 
                 // allocate fee tokens to fee collector
-                uint208 feeCollectorBalance = userAccounts[feeCollector].userBalance;
+                uint208 feeCollectorBalance = accounts.userAccounts[feeCollector].userBalance;
                 uint48 activation;
                 unchecked {
                     feeCollectorBalance += uint208(feePool);
                     activation = uint48(block.timestamp + 1);
                 }
-                userAccounts[feeCollector] = IPoolStructs.UserAccount({
+                accounts.userAccounts[feeCollector] = IPoolStructs.UserAccount({
                     userBalance: feeCollectorBalance,
                     activation: uint48(block.timestamp + 1)
                 });
@@ -215,9 +218,9 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
 
         // clear storage is user account has sold all held tokens
         if (holderBalance == 0) {
-            delete userAccounts[msg.sender];
+            delete accounts.userAccounts[msg.sender];
         } else {
-            userAccounts[msg.sender].userBalance = holderBalance;
+            accounts.userAccounts[msg.sender].userBalance = holderBalance;
         }
 
         emit Transfer(msg.sender, address(0), burntAmount);
@@ -228,12 +231,12 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     }
 
     function _isKycEnforced() private view returns (bool) {
-        return poolParams.kycProvider != address(0);
+        return poolParams().kycProvider != address(0);
     }
 
     function _safeTransfer(address _to, uint256 _amount) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = pool.baseToken.call(
+        (bool success, bytes memory data) = pool().baseToken.call(
             abi.encodeWithSelector(TRANSFER_SELECTOR, _to, _amount)
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FAILED_ERROR");
@@ -245,7 +248,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         uint256 _amount
     ) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = pool.baseToken.call(
+        (bool success, bytes memory data) = pool().baseToken.call(
             abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, _from, _to, _amount)
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FROM_FAILED_ERROR");
