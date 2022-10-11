@@ -45,14 +45,21 @@ describe("MixinStorageAccessible", async () => {
 
         it('can read pool owner', async () => {
             const { pool } = await setupTests()
-            let owner = await pool.getStorageAt(2, 1)
+            // owner is stored in same slot as symbol
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const ownerSlot = BigInt(poolInitSlot) + BigInt(1)
+            let owner = await pool.getStorageAt(ownerSlot, 1)
             owner = utils.hexDataSlice(owner, 3, 23)
             expect(owner).to.be.eq((await pool.owner()).toLowerCase())
+            expect(user1.address).to.be.eq(await pool.owner())
         })
 
         it('should read true unlocked boolean', async () => {
             const { pool } = await setupTests()
-            let unlocked = await pool.getStorageAt(2, 1)
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            // unlocked is compressed together with owner and symbol
+            const poolUnlockedSlot = BigInt(poolInitSlot) + BigInt(1)
+            let unlocked = await pool.getStorageAt(poolUnlockedSlot, 1)
             unlocked = utils.hexDataSlice(unlocked, 2, 3)
             const encodedPack = utils.solidityPack(['bool'], [true])
             expect(unlocked).to.be.eq(encodedPack)
@@ -61,7 +68,8 @@ describe("MixinStorageAccessible", async () => {
         // a string shorter than 32 bytes is saved in location left-aligned and length is stored at the end.
         it('can read pool data', async () => {
             const { pool } = await setupTests()
-            const poolStruct = await pool.getStorageAt(1, 3)
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const poolStruct = await pool.getStorageAt(poolInitSlot, 3)
             // name stored in slot 1 with name length appended at last byte, se if we encode we also must append hex string length.
             const name = utils.hexDataSlice(poolStruct, 0, 32)
             // symbol is stored as bytes8 in order to be packed with other small units
@@ -82,8 +90,9 @@ describe("MixinStorageAccessible", async () => {
             const { newPoolAddress } = await factory.callStatic.createPool('test pool GRG', 'PDPG', grgToken)
             await factory.createPool('test pool GRG', 'PDPG', grgToken)
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
-            const poolStruct = await pool.getStorageAt(1, 3)
-            // name stored in slot 1 with name length appended at last byte, se if we encode we also must append hex string length.
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const poolStruct = await pool.getStorageAt(poolInitSlot, 3)
+            // name stored in first struct slot with name length appended at last byte, when encoding we also must append length.
             const name = utils.hexDataSlice(poolStruct, 0, 32)
             // symbol is stored as bytes8 in order to be packed with other small units
             let symbol = utils.formatBytes32String("PDPG")
@@ -99,8 +108,8 @@ describe("MixinStorageAccessible", async () => {
 
         it('can read pool parameters', async () => {
             const { pool } = await setupTests()
-            // next storage slot is 4 since Pool has 2 slots reserved in it.
-            let poolParams = await pool.getStorageAt(4, 2)
+            const poolParamsSlot = BigInt('0xe3ed9e7d534645c345f2d15f0c405f8de0227b60eb37bbeb25b26db462415dec')
+            let poolParams = await pool.getStorageAt(poolParamsSlot, 2)
             // we are packing 5 elements, but EVM adds null uint16 to compress 4 elements in first slot
             let encodedPack = utils.solidityPack(
                 ['uint16', 'uint48', 'uint16', 'uint16', 'uint160', 'uint256'],
@@ -113,7 +122,7 @@ describe("MixinStorageAccessible", async () => {
             await pool.setTransactionFee(67)
             await pool.changeFeeCollector(user2.address)
             await pool.setKycProvider(pool.address)
-            poolParams = await pool.getStorageAt(4, 2)
+            poolParams = await pool.getStorageAt(poolParamsSlot, 2)
             // EVM tightly encodes struct as following, adding 2 null bytes to fill first uint256 slot
             encodedPack = utils.solidityPack(
                 ['uint16', 'uint160', 'uint16', 'uint16', 'uint48','uint256'],
@@ -124,8 +133,8 @@ describe("MixinStorageAccessible", async () => {
 
         it('can read pool tokens struct', async () => {
             const { pool } = await setupTests()
-            // next storage slot is 6 since PoolParams has 2 slots reserved in it.
-            let poolParams = await pool.getStorageAt(6, 2)
+            const poolTokensSlot = BigInt('0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6')
+            let poolParams = await pool.getStorageAt(poolTokensSlot, 2)
             // unitary value null in pool storage until set, total supply null until first mint
             let encodedPack = utils.solidityPack(
                 ['uint256', 'uint256'],
@@ -134,7 +143,7 @@ describe("MixinStorageAccessible", async () => {
             expect(poolParams).to.be.eq(encodedPack)
             await pool.mint(user2.address, parseEther("10"), 1, { value: parseEther("10") })
             await pool.setUnitaryValue(parseEther("1.1"))
-            poolParams = await pool.getStorageAt(6, 2)
+            poolParams = await pool.getStorageAt(poolTokensSlot, 2)
             encodedPack = utils.solidityPack(
                 ['uint256', 'uint256'],
                 [parseEther("1.1"), parseEther("9.5")]
@@ -154,7 +163,9 @@ describe("MixinStorageAccessible", async () => {
 
         it('can read owner', async () => {
             const { pool } = await setupTests()
-            let owner = await pool.getStorageSlotsAt([2])
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const ownerSlot = BigInt(poolInitSlot) + BigInt(1)
+            let owner = await pool.getStorageSlotsAt([ownerSlot])
             owner = utils.hexDataSlice(owner, 3, 23)
             const encodedPack = utils.solidityPack(['address'], [await pool.owner()])
             expect(owner).to.be.eq(encodedPack)
@@ -166,10 +177,10 @@ describe("MixinStorageAccessible", async () => {
             const { newPoolAddress } = await factory.callStatic.createPool('test pool GRG', 'PDPG', grgToken)
             await factory.createPool('test pool GRG', 'PDPG', grgToken)
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
-            const returnString = await pool.getStorageSlotsAt([
-                '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50',
-                3
-            ])
+            const beaconSlot = '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50'
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const baseTokenSlot = BigInt(poolInitSlot) + BigInt(2)
+            const returnString = await pool.getStorageSlotsAt([beaconSlot, baseTokenSlot])
             const encodedPack = utils.solidityPack(
                 ['uint256', 'uint256'],
                 [factory.address, (await pool.getPool()).baseToken]
@@ -179,7 +190,9 @@ describe("MixinStorageAccessible", async () => {
 
         it('returns name', async () => {
             const { pool } = await setupTests()
-            const name = await pool.getStorageSlotsAt([1])
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const nameSlot = BigInt(poolInitSlot) + BigInt(0)
+            const name = await pool.getStorageSlotsAt([nameSlot])
             // EVM stored string length at last byte if shorter than 31 bytes
             const nameLength = utils.hexDataSlice(name, 31, 32)
             const length = utils.arrayify(nameLength)[0] / 2
@@ -192,9 +205,11 @@ describe("MixinStorageAccessible", async () => {
         it('returns symbol', async () => {
             const { factory, pool } = await setupTests()
             // EVM packs symbol with unlocked, owner, decimals
-            const symbolSlot = await pool.getStorageSlotsAt([2])
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const symbolSlot = BigInt(poolInitSlot) + BigInt(1)
+            let symbol = await pool.getStorageSlotsAt([symbolSlot])
             // symbol is bytes8, we only take the first 4 to eliminate padding.
-            let symbol = utils.hexDataSlice(symbolSlot, 24, 32)
+            symbol = utils.hexDataSlice(symbol, 24, 32)
             symbol = utils.toUtf8String(symbol)
             // slot stores symbol as bytes8, which is returned with padding
             expect(symbol).to.be.eq('TEST\u0000\u0000\u0000\u0000')
@@ -215,7 +230,17 @@ describe("MixinStorageAccessible", async () => {
             const { newPoolAddress } = await factory.callStatic.createPool('my new pool', 'PAL', AddressZero)
             await factory.createPool('my new pool', 'PAL', AddressZero)
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
-            const returnString = await pool.getStorageSlotsAt([1, 2, 3, 5, 7])
+            const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
+            const nameSlot = BigInt(poolInitSlot) + BigInt(0)
+            const symbolSlot = BigInt(poolInitSlot) + BigInt(1)
+            const baseTokenSlot = BigInt(poolInitSlot) + BigInt(2)
+            const poolParamsSlot = '0xe3ed9e7d534645c345f2d15f0c405f8de0227b60eb37bbeb25b26db462415dec'
+            const kycProviderSlot = BigInt(poolParamsSlot) + BigInt(1)
+            const poolTokensSlot = '0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6'
+            const totalSupplySlot = BigInt(poolTokensSlot) + BigInt(1)
+            const returnString = await pool.getStorageSlotsAt(
+                [nameSlot, symbolSlot, baseTokenSlot, kycProviderSlot, totalSupplySlot]
+            )
             const decodedData = hre.ethers.utils.AbiCoder.prototype.decode(
                 [ "bytes32", "bytes32", "address", "address", "uint256" ],
                 returnString
@@ -230,8 +255,8 @@ describe("MixinStorageAccessible", async () => {
             name = utils.toUtf8String(name)
             expect(name).to.be.eq('my new pool')
             expect(name).to.be.eq(await pool.name())
-            const symbolSlot = decodedData[1]
-            let symbol = utils.hexDataSlice(symbolSlot, 24, 32)
+            let symbol = decodedData[1]
+            symbol = utils.hexDataSlice(symbol, 24, 32)
             // symbol is an 8-bytes element
             let poolSymbol = await pool.symbol()
             expect(poolSymbol).to.be.eq('PAL')
