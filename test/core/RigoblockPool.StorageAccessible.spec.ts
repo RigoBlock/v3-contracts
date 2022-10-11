@@ -172,7 +172,7 @@ describe("MixinStorageAccessible", async () => {
             ])
             const encodedPack = utils.solidityPack(
                 ['uint256', 'uint256'],
-                [factory.address, (await pool.getData()).baseToken]
+                [factory.address, (await pool.getPool()).baseToken]
             )
             expect(returnString).to.be.eq(encodedPack)
         })
@@ -221,7 +221,7 @@ describe("MixinStorageAccessible", async () => {
                 returnString
             )
             // TODO: following values are both null in current pool, must test with non-null values
-            expect(decodedData[3]).to.be.eq((await pool.getData()).baseToken)
+            expect(decodedData[3]).to.be.eq((await pool.getPool()).baseToken)
             expect(decodedData[4]).to.be.eq(await pool.totalSupply())
             let name = decodedData[0]
             const nameLength = utils.hexDataSlice(name, 31, 32)
