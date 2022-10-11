@@ -7,12 +7,6 @@ interface IRigoblockV3PoolImmutable {
     /// @notice Returns the address of the authority contract.
     function authority() external view returns (address);
 
-    /// @notice Returns a string of the pool name.
-    function name() external view returns (string memory);
-
-    /// @notice Returns a string of the pool symbol.
-    function symbol() external view returns (string memory);
-
     /// @notice Returns a string of the pool version.
     function VERSION() external view returns (string memory);
 }
