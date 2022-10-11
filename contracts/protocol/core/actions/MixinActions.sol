@@ -40,33 +40,6 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
      * EXTERNAL METHODS
      */
     /// @inheritdoc IRigoblockV3PoolActions
-    function burn(uint256 _amountIn, uint256 _amountOutMin)
-        external
-        override
-        nonReentrant
-        minimumPeriodPast
-        hasEnough(_amountIn)
-        returns (uint256 netRevenue)
-    {
-        require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
-
-        /// @notice allocate pool token transfers and log events.
-        uint256 burntAmount = _allocateBurnTokens(_amountIn);
-        poolTokens.totalSupply -= burntAmount;
-
-        uint256 markup = (burntAmount * _getSpread()) / SPREAD_BASE;
-        burntAmount -= markup;
-        netRevenue = (burntAmount * _getUnitaryValue()) / 10**decimals();
-        require(netRevenue >= _amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
-
-        if (pool.baseToken == address(0)) {
-            payable(msg.sender).transfer(netRevenue);
-        } else {
-            _safeTransfer(msg.sender, netRevenue);
-        }
-    }
-
-    /// @inheritdoc IRigoblockV3PoolActions
     function mint(
         address _recipient,
         uint256 _amountIn,
@@ -95,21 +68,48 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
     }
 
+    /// @inheritdoc IRigoblockV3PoolActions
+    function burn(uint256 _amountIn, uint256 _amountOutMin)
+        external
+        override
+        nonReentrant
+        minimumPeriodPast
+        hasEnough(_amountIn)
+        returns (uint256 netRevenue)
+    {
+        require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
+
+        /// @notice allocate pool token transfers and log events.
+        uint256 burntAmount = _allocateBurnTokens(_amountIn);
+        poolTokens.totalSupply -= burntAmount;
+
+        uint256 markup = (burntAmount * _getSpread()) / SPREAD_BASE;
+        burntAmount -= markup;
+        netRevenue = (burntAmount * _getUnitaryValue()) / 10**decimals();
+        require(netRevenue >= _amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
+
+        if (pool.baseToken == address(0)) {
+            payable(msg.sender).transfer(netRevenue);
+        } else {
+            _safeTransfer(msg.sender, netRevenue);
+        }
+    }
+
     /*
      * PUBLIC METHODS
      */
-    function decimals() public view virtual override returns (uint8);
+    function decimals() public view virtual override returns (uint8) {}
 
     /*
      * INTERNAL METHODS
      */
-    function _getFeeCollector() internal view virtual returns (address);
+    function _getFeeCollector() internal view virtual returns (address) {}
 
-    function _getMinPeriod() internal view virtual returns (uint48);
+    function _getMinPeriod() internal view virtual returns (uint48) {}
 
-    function _getSpread() internal view virtual returns (uint16);
+    function _getSpread() internal view virtual returns (uint16) {}
 
-    function _getUnitaryValue() internal view virtual returns (uint256);
+    function _getUnitaryValue() internal view virtual returns (uint256) {}
 
     /*
      * PRIVATE METHODS
@@ -136,7 +136,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                 unchecked {
                     recipientBalance += uint208(recipientAmount);
                 }
-                userAccounts[_recipient] = UserAccount({
+                userAccounts[_recipient] = IPoolStructs.UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
@@ -150,12 +150,12 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                     feeCollectorBalance += uint208(feePool);
                     recipientBalance += uint208(recipientAmount);
                 }
-                userAccounts[_recipient] = UserAccount({
+                userAccounts[_recipient] = IPoolStructs.UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
                 //fee tokens are locked as well
-                userAccounts[feeCollector] = UserAccount({
+                userAccounts[feeCollector] = IPoolStructs.UserAccount({
                     userBalance: feeCollectorBalance,
                     activation: activation
                 });
@@ -166,7 +166,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         } else {
             unchecked {
                 recipientBalance += uint208(recipientAmount);
-                userAccounts[_recipient] = UserAccount({
+                userAccounts[_recipient] = IPoolStructs.UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
@@ -202,7 +202,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                     feeCollectorBalance += uint208(feePool);
                     activation = uint48(block.timestamp + 1);
                 }
-                userAccounts[feeCollector] = UserAccount({
+                userAccounts[feeCollector] = IPoolStructs.UserAccount({
                     userBalance: feeCollectorBalance,
                     activation: uint48(block.timestamp + 1)
                 });
