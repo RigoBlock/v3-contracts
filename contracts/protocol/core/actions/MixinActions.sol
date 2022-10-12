@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../immutable/MixinConstants.sol";
-import "../immutable/MixinImmutables.sol";
 import "../immutable/MixinStorage.sol";
 import "../../interfaces/IKyc.sol";
 
-abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage {
+abstract contract MixinActions is MixinStorage {
     /*
      * MODIFIERS
      */
@@ -20,11 +18,10 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         _;
     }
 
-    /// @notice Functions with this modifer cannot be reentered. The mutex will be locked
-    /// before function execution and unlocked after.
+    /// @notice Functions with this modifer cannot be reentered. The mutex will be locked before function execution and unlocked after.
     modifier nonReentrant() {
         // Ensure mutex is unlocked
-        IPoolStructs.Pool storage pool = pool();
+        Pool storage pool = pool();
         require(pool.unlocked, "REENTRANCY_ILLEGAL");
 
         // Lock mutex before function call
@@ -99,18 +96,18 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     /*
      * PUBLIC METHODS
      */
-    function decimals() public view virtual override returns (uint8) {}
+    function decimals() public view virtual override returns (uint8);
 
     /*
      * INTERNAL METHODS
      */
-    function _getFeeCollector() internal view virtual returns (address) {}
+    function _getFeeCollector() internal view virtual returns (address);
 
-    function _getMinPeriod() internal view virtual returns (uint48) {}
+    function _getMinPeriod() internal view virtual returns (uint48);
 
-    function _getSpread() internal view virtual returns (uint16) {}
+    function _getSpread() internal view virtual returns (uint16);
 
-    function _getUnitaryValue() internal view virtual returns (uint256) {}
+    function _getUnitaryValue() internal view virtual returns (uint256);
 
     /*
      * PRIVATE METHODS
@@ -122,7 +119,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     /// @return recipientAmount Number of new tokens issued to recipient.
     function _allocateMintTokens(address _recipient, uint256 _mintedAmount) private returns (uint256) {
         uint256 recipientAmount = _mintedAmount;
-        IPoolStructs.Accounts storage accounts = accounts();
+        Accounts storage accounts = accounts();
         uint208 recipientBalance = accounts.userAccounts[_recipient].userBalance;
         uint48 activation;
         // it is safe to use unckecked as max min period is 30 days
@@ -138,7 +135,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                 unchecked {
                     recipientBalance += uint208(recipientAmount);
                 }
-                accounts.userAccounts[_recipient] = IPoolStructs.UserAccount({
+                accounts.userAccounts[_recipient] = UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
@@ -152,12 +149,12 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                     feeCollectorBalance += uint208(feePool);
                     recipientBalance += uint208(recipientAmount);
                 }
-                accounts.userAccounts[_recipient] = IPoolStructs.UserAccount({
+                accounts.userAccounts[_recipient] = UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
                 //fee tokens are locked as well
-                accounts.userAccounts[feeCollector] = IPoolStructs.UserAccount({
+                accounts.userAccounts[feeCollector] = UserAccount({
                     userBalance: feeCollectorBalance,
                     activation: activation
                 });
@@ -168,7 +165,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
         } else {
             unchecked {
                 recipientBalance += uint208(recipientAmount);
-                accounts.userAccounts[_recipient] = IPoolStructs.UserAccount({
+                accounts.userAccounts[_recipient] = UserAccount({
                     userBalance: recipientBalance,
                     activation: activation
                 });
@@ -185,7 +182,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
     // TODO: check if we want to remove the tx fee on burn calls
     function _allocateBurnTokens(uint256 _amountIn) private returns (uint256 burntAmount) {
         burntAmount = _amountIn;
-        IPoolStructs.Accounts storage accounts = accounts();
+        Accounts storage accounts = accounts();
         uint208 holderBalance = accounts.userAccounts[msg.sender].userBalance;
 
         if (poolParams().transactionFee != uint256(0)) {
@@ -205,7 +202,7 @@ abstract contract MixinActions is MixinConstants, MixinImmutables, MixinStorage 
                     feeCollectorBalance += uint208(feePool);
                     activation = uint48(block.timestamp + 1);
                 }
-                accounts.userAccounts[feeCollector] = IPoolStructs.UserAccount({
+                accounts.userAccounts[feeCollector] = UserAccount({
                     userBalance: feeCollectorBalance,
                     activation: uint48(block.timestamp + 1)
                 });
