@@ -108,7 +108,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         );
         salt = keccak256(abi.encode(_name, msg.sender));
 
-        try new RigoblockPoolProxy{salt: salt}(address(this), encodedInitialization) returns (
+        try new RigoblockPoolProxy{salt: salt}(implementation, encodedInitialization) returns (
             RigoblockPoolProxy proxy
         ) {
             newProxy = proxy;
