@@ -8,13 +8,10 @@ abstract contract MixinActions is MixinStorage {
     /*
      * MODIFIERS
      */
-    modifier hasEnough(uint256 _amount) {
-        require(accounts().userAccounts[msg.sender].userBalance >= _amount, "POOL_BURN_NOT_ENOUGH_ERROR");
-        _;
-    }
-
-    modifier minimumPeriodPast() {
-        require(block.timestamp >= accounts().userAccounts[msg.sender].activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
+    modifier burnPre(uint256 _amount) {
+        UserAccount memory userAccount = accounts().userAccounts[msg.sender];
+        require(userAccount.userBalance >= _amount, "POOL_BURN_NOT_ENOUGH_ERROR");
+        require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
         _;
     }
 
@@ -43,9 +40,11 @@ abstract contract MixinActions is MixinStorage {
         uint256 _amountIn,
         uint256 _amountOutMin
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
+        address kycProvider = poolParams().kycProvider;
+
         // require whitelisted user if kyc is enforced
-        if (_isKycEnforced()) {
-            require(IKyc(poolParams().kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
+        if (kycProvider != address(0)) {
+            require(IKyc(kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
         }
 
         _assertBiggerThanMinimum(_amountIn);
@@ -71,8 +70,7 @@ abstract contract MixinActions is MixinStorage {
         external
         override
         nonReentrant
-        minimumPeriodPast
-        hasEnough(_amountIn)
+        burnPre(_amountIn)
         returns (uint256 netRevenue)
     {
         require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
@@ -126,60 +124,45 @@ abstract contract MixinActions is MixinStorage {
         unchecked {
             activation = uint48(block.timestamp) + _getMinPeriod();
         }
+        uint16 transactionFee = poolParams().transactionFee;
 
-        if (poolParams().transactionFee != uint256(0)) {
+        if (transactionFee != 0) {
             address feeCollector = _getFeeCollector();
 
             if (feeCollector == _recipient) {
                 // it is safe to use unckecked as recipientAmount requires user holding enough base tokens.
-                unchecked {
-                    recipientBalance += uint208(recipientAmount);
-                }
-                accounts.userAccounts[_recipient] = UserAccount({
-                    userBalance: recipientBalance,
-                    activation: activation
-                });
-                emit Transfer(address(0), feeCollector, recipientAmount);
-                return recipientAmount;
+                unchecked { recipientBalance += uint208(recipientAmount); }
             } else {
                 uint208 feeCollectorBalance = accounts.userAccounts[feeCollector].userBalance;
-                uint256 feePool = (_mintedAmount * poolParams().transactionFee) / FEE_BASE;
+                uint256 feePool = (_mintedAmount * transactionFee) / FEE_BASE;
                 recipientAmount -= feePool;
                 unchecked {
                     feeCollectorBalance += uint208(feePool);
                     recipientBalance += uint208(recipientAmount);
                 }
-                accounts.userAccounts[_recipient] = UserAccount({
-                    userBalance: recipientBalance,
-                    activation: activation
-                });
                 //fee tokens are locked as well
                 accounts.userAccounts[feeCollector] = UserAccount({
                     userBalance: feeCollectorBalance,
                     activation: activation
                 });
                 emit Transfer(address(0), feeCollector, feePool);
-                emit Transfer(address(0), _recipient, recipientAmount);
-                return recipientAmount;
             }
         } else {
-            unchecked {
-                recipientBalance += uint208(recipientAmount);
-                accounts.userAccounts[_recipient] = UserAccount({
-                    userBalance: recipientBalance,
-                    activation: activation
-                });
-            }
-            emit Transfer(address(0), _recipient, recipientAmount);
-            return recipientAmount;
+            unchecked { recipientBalance += uint208(recipientAmount); }
         }
+
+        accounts.userAccounts[_recipient] = UserAccount({
+            userBalance: recipientBalance,
+            activation: activation
+        });
+        emit Transfer(address(0), _recipient, recipientAmount);
+        return recipientAmount;
     }
 
     /// @notice Destroys tokens of holder.
     /// @dev Fee is paid in pool tokens.
     /// @param _amountIn Value of tokens to be burnt.
     /// @return burntAmount Number of net burnt tokens.
-    // TODO: check if we want to remove the tx fee on burn calls
     function _allocateBurnTokens(uint256 _amountIn) private returns (uint256 burntAmount) {
         burntAmount = _amountIn;
         Accounts storage accounts = accounts();
@@ -225,10 +208,6 @@ abstract contract MixinActions is MixinStorage {
 
     function _assertBiggerThanMinimum(uint256 _amount) private view {
         require(_amount >= 10**decimals() / MINIMUM_ORDER_DIVISOR, "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR");
-    }
-
-    function _isKycEnforced() private view returns (bool) {
-        return poolParams().kycProvider != address(0);
     }
 
     function _safeTransfer(address _to, uint256 _amount) private {
