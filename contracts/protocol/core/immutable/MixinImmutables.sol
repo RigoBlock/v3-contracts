@@ -19,10 +19,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../IRigoblockV3Pool.sol";
+import "./MixinConstants.sol";
 
 /// @notice Immutables are not assigned a storage slot, can be safely added to this contract.
-abstract contract MixinImmutables is IRigoblockV3Pool {
+abstract contract MixinImmutables is MixinConstants {
+    /// @inheritdoc IRigoblockV3PoolImmutable
     address public immutable override authority;
 
     // EIP1967 standard, must be immutable to be compile-time constant.

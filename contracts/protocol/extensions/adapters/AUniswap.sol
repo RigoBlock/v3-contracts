@@ -62,6 +62,12 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address to
     ) external override returns (uint256 amountOut) {
         _assertTokenWhitelisted(path[1]);
+        
+        // we require target to being contract to prevent call being executed to EOA
+        require(isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+
+        // we set the allowance to the uniswap router
+        _safeApprove(path[0], _getUniswapRouter2(), type(uint256).max);
 
         amountOut = ISwapRouter02(_getUniswapRouter2()).swapExactTokensForTokens(
             amountIn,
@@ -69,6 +75,9 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
             path,
             to != address(this) ? address(this) : to
         );
+
+        // we make sure we do not clear storage
+        _safeApprove(path[0], _getUniswapRouter2(), uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -79,6 +88,12 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address to
     ) external override returns (uint256 amountIn) {
         _assertTokenWhitelisted(path[1]);
+        
+        // we require target to being contract to prevent call being executed to EOA
+        require(isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+
+        // we set the allowance to the uniswap router
+        _safeApprove(path[0], _getUniswapRouter2(), type(uint256).max);
 
         amountIn = ISwapRouter02(_getUniswapRouter2()).swapTokensForExactTokens(
             amountOut,
@@ -86,6 +101,9 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
             path,
             to != address(this) ? address(this) : to
         );
+
+        // we make sure we do not clear storage
+        _safeApprove(path[0], _getUniswapRouter2(), uint256(1));
     }
 
     /*
@@ -99,10 +117,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     {
         _assertTokenWhitelisted(params.tokenOut);
 
-        // we first set the allowance to the uniswap router
+        // we require target to being contract to prevent call being executed to EOA
+        require(isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+
+        // we set the allowance to the uniswap router
         _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
 
-        // finally, we swap the tokens
+        // we swap the tokens
         amountOut = ISwapRouter02(_getUniswapRouter2()).exactInputSingle(
             IV3SwapRouter.ExactInputSingleParams({
                 tokenIn: params.tokenIn,
@@ -124,10 +145,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
         _assertTokenWhitelisted(tokenOut);
 
-        // we first set the allowance to the uniswap router
+        // we require target to being contract to prevent call being executed to EOA
+        require(isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+
+        // we set the allowance to the uniswap router
         _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
 
-        // finally, we swap the tokens
+        // we swap the tokens
         amountOut = ISwapRouter02(_getUniswapRouter2()).exactInput(
             IV3SwapRouter.ExactInputParams({
                 path: params.path,
@@ -149,10 +173,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     {
         _assertTokenWhitelisted(params.tokenOut);
 
-        // we first set the allowance to the uniswap router
+        // we require target to being contract to prevent call being executed to EOA
+        require(isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+
+        // we set the allowance to the uniswap router
         _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
 
-        // finally, we swap the tokens
+        // we swap the tokens
         amountIn = ISwapRouter02(_getUniswapRouter2()).exactOutputSingle(
             IV3SwapRouter.ExactOutputSingleParams({
                 tokenIn: params.tokenIn,
@@ -174,10 +201,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
         _assertTokenWhitelisted(tokenOut);
 
-        // we first set the allowance to the uniswap router
+        // we require target to being contract to prevent call being executed to EOA
+        require(isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+
+        // we set the allowance to the uniswap router
         _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
 
-        // finally, we swap the tokens
+        // we swap the tokens
         amountIn = ISwapRouter02(_getUniswapRouter2()).exactOutput(
             IV3SwapRouter.ExactOutputParams({
                 path: params.path,
@@ -282,13 +312,18 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address spender,
         uint256 value
     ) internal override {
-        // requiring target to being contract can be levied when token whitelist implemented
-        require(isContract(token), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
         // 0x095ea7b3 = bytes4(keccak256(bytes("approve(address,uint256)")))
         // solhint-disable-next-line avoid-low-level-calls
         (, bytes memory data) = token.call(abi.encodeWithSelector(0x095ea7b3, spender, value));
         // approval never fails unless rogue token
         assert(data.length == 0 || abi.decode(data, (bool)));
+    }
+
+    function _assertTokenWhitelisted(address _token) internal view override {
+        require(
+            IEWhitelist(address(this)).isWhitelistedToken(_token),
+            "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR"
+        );
     }
 
     function _getUniswapNpmAddress() internal view override returns (address) {
@@ -297,13 +332,6 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function isContract(address target) internal view returns (bool) {
         return target.code.length > 0;
-    }
-
-    function _assertTokenWhitelisted(address _token) private view {
-        require(
-            IEWhitelist(address(this)).isWhitelistedToken(_token),
-            "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR"
-        );
     }
 
     function _getUniswapRouter2() private view returns (address) {

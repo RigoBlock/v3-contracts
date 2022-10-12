@@ -20,9 +20,9 @@ abstract contract MixinPoolState is MixinOwnerActions {
         view
         override
         returns (
-            IPoolStructs.ReturnedPool memory poolInitParams,
-            IPoolStructs.PoolParams memory poolVariables,
-            IPoolStructs.PoolTokens memory poolTokensInfo
+            ReturnedPool memory poolInitParams,
+            PoolParams memory poolVariables,
+            PoolTokens memory poolTokensInfo
         )
     {
         return(
@@ -32,7 +32,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
         );
     }
 
-    function getUserAccount(address _who) external view override returns (IPoolStructs.UserAccount memory) {
+    function getUserAccount(address _who) external view override returns (UserAccount memory) {
         return accounts().userAccounts[_who];
     }
 
@@ -51,10 +51,10 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    function getPool() public view override returns (IPoolStructs.ReturnedPool memory) {
-        IPoolStructs.Pool storage pool = pool();
+    function getPool() public view override returns (ReturnedPool memory) {
+        Pool storage pool = pool();
         // we return symbol as string, omit unlocked as always true
-        return IPoolStructs.ReturnedPool({
+        return ReturnedPool({
             name: pool.name,
             symbol: symbol(),
             decimals: pool.decimals,
@@ -64,8 +64,8 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    function getPoolParams() public view override returns (IPoolStructs.PoolParams memory) {
-        return IPoolStructs.PoolParams({
+    function getPoolParams() public view override returns (PoolParams memory) {
+        return PoolParams({
             minPeriod: _getMinPeriod(),
             spread: _getSpread(),
             transactionFee: poolParams().transactionFee,
@@ -75,8 +75,8 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    function getPoolTokens() public view override returns (IPoolStructs.PoolTokens memory) {
-        return IPoolStructs.PoolTokens({
+    function getPoolTokens() public view override returns (PoolTokens memory) {
+        return PoolTokens({
             unitaryValue: _getUnitaryValue(),
             totalSupply: poolTokens().totalSupply
         });

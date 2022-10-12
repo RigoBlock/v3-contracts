@@ -17,60 +17,66 @@
 
 */
 
-import "../../interfaces/pool/IPoolStructs.sol";
+import "./MixinImmutables.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
 
 /// @notice Storage slots must be preserved to prevent storage clashing.
 /// @dev Pool storage is not sequential: each variable is wrapped into a struct which is assigned a storage slot.
-// TODO: check if prev. IPoolStructs inheritance was creating issues with staking
-abstract contract MixinStorage /*is IPoolStructs*/ {
-    bytes32 private constant _POOL_INITIALIZATION_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 private constant _POOL_VARIABLES_SLOT = 0xe3ed9e7d534645c345f2d15f0c405f8de0227b60eb37bbeb25b26db462415dec;
-    bytes32 private constant _POOL_TOKENS_SLOT = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;
-    bytes32 private constant _POOL_USER_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
+abstract contract MixinStorage is MixinImmutables {
 
     constructor() {
+        // governance must always check that pool extensions are not using these storage slots (reserved for proxy storage)
         assert(_POOL_INITIALIZATION_SLOT == bytes32(uint256(keccak256("pool.proxy.initialization")) - 1));
         assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
         assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
         assert(_POOL_USER_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
     }
 
-    function pool() internal pure returns(IPoolStructs.Pool storage s) {
+    // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
+    // activation stored at locantion keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT)) + 1
+    struct Accounts {
+        mapping(address => UserAccount) userAccounts;
+    }
+
+    function accounts() internal pure returns (Accounts storage s) {
+        assembly {
+            s.slot := _POOL_USER_ACCOUNTS_SLOT
+        }
+    }
+
+    /// @notice Pool initialization parameters.
+    /// @dev This struct is not visible externally and used to store/read pool init params.
+    /// @param name String of the pool name (max 32 characters).
+    /// @param symbol Bytes8 of the pool symbol (from 3 to 5 characters).
+    /// @param decimals Uint8 decimals.
+    /// @param owner Address of the pool operator.
+    /// @param unlocked Boolean the pool is locked for reentrancy check.
+    /// @param baseToken Address of the base token of the pool (0 for base currency).
+    struct Pool {
+        string name;
+        bytes8 symbol;
+        uint8 decimals;
+        address owner;
+        bool unlocked;
+        address baseToken;
+    }
+
+    function pool() internal pure returns(Pool storage s) {
         assembly {
             s.slot := _POOL_INITIALIZATION_SLOT
         }
     }
 
-    /// @notice All new extensions/adapter should assert any storage slot they use is free.
-    /// @dev Should be checked in the extension/adapter constructor.
-    /// @param slot The storage slot declared by the extension.
-    // TODO: modify adapters to assert slot is free
-    function assertSlotNotReserved(bytes32 slot) external pure {
-        assert(slot != _POOL_INITIALIZATION_SLOT & _POOL_VARIABLES_SLOT & _POOL_TOKENS_SLOT & _POOL_USER_ACCOUNTS_SLOT);
-    } 
-
-    //IPoolStructs.PoolParams internal poolParams;
-    //IPoolStructs.PoolTokens internal poolTokens;
-    //IPoolStructs.UserAccount internal userAccounts;
-    //mapping(address => IPoolStructs.UserAccount) internal userAccounts;
-
-    function poolParams() internal pure returns(IPoolStructs.PoolParams storage s) {
+    function poolParams() internal pure returns(PoolParams storage s) {
         assembly {
             s.slot := _POOL_VARIABLES_SLOT
         }
     }
 
-    function poolTokens() internal pure returns(IPoolStructs.PoolTokens storage s) {
+    function poolTokens() internal pure returns(PoolTokens storage s) {
         assembly {
             s.slot := _POOL_TOKENS_SLOT
-        }
-    }
-
-    function accounts() internal pure returns (IPoolStructs.Accounts storage s) {
-        assembly {
-            s.slot := _POOL_USER_ACCOUNTS_SLOT
         }
     }
 }

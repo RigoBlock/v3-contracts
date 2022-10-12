@@ -34,7 +34,7 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         // a pool with small decimals could easily underflow.
         assert(tokenDecimals >= 6);
 
-        IPoolStructs.Pool storage pool = pool();
+        Pool storage pool = pool();
         pool.name = _poolName;
         pool.symbol = bytes8(bytes(_poolSymbol));
         pool.decimals = tokenDecimals;

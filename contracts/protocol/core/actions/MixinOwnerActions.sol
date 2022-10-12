@@ -14,7 +14,6 @@ abstract contract MixinOwnerActions is MixinActions {
         _;
     }
 
-    // TODO: remove owner import
     modifier onlyOwner() {
         require(msg.sender == pool().owner, "POOL_CALLER_IS_NOT_OWNER_ERROR");
         _;
@@ -79,6 +78,7 @@ abstract contract MixinOwnerActions is MixinActions {
         emit NewNav(msg.sender, address(this), _unitaryValue);
     }
 
+    /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setOwner(address _newOwner) public override onlyOwner {
         require(_newOwner != address(0), "POOL_NULL_OWNER_INPUT_ERROR");
         address oldOwner = pool().owner;
@@ -86,11 +86,11 @@ abstract contract MixinOwnerActions is MixinActions {
         emit NewOwner(oldOwner, _newOwner);
     }
 
-    function totalSupply() public view virtual override returns (uint256) {}
+    function totalSupply() public view virtual override returns (uint256);
 
-    function decimals() public view virtual override returns (uint8) {}
+    function decimals() public view virtual override returns (uint8);
 
-    function _getUnitaryValue() internal view virtual override returns (uint256) {}
+    function _getUnitaryValue() internal view virtual override returns (uint256);
 
     function _isContract(address _target) private view returns (bool) {
         uint256 size;
