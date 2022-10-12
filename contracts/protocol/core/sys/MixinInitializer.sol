@@ -25,22 +25,22 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         address _baseToken,
         address _owner
     ) external override onlyUninitialized {
-        poolData.name = _poolName;
-        poolData.symbol = _poolSymbol;
-        owner = _owner;
+        uint8 tokenDecimals = 18;
 
-        // we do not initialize unless values different from default ones
-        // DANGER! Careful with new releases as default values must be returned unless poolData overwritten
         if (_baseToken != address(0)) {
-            admin.baseToken = _baseToken;
-            uint8 tokenDecimals = IERC20(_baseToken).decimals();
-            // a pool with small decimals could easily underflow.
-            assert(tokenDecimals >= 6);
-            if (tokenDecimals != _coinbaseDecimals) {
-                poolData.decimals = tokenDecimals;
-                poolData.unitaryValue = 1 * 10**tokenDecimals; // initial value is 1
-            }
+            tokenDecimals = IERC20(_baseToken).decimals();
         }
+
+        // a pool with small decimals could easily underflow.
+        assert(tokenDecimals >= 6);
+
+        Pool storage pool = pool();
+        pool.name = _poolName;
+        pool.symbol = bytes8(bytes(_poolSymbol));
+        pool.decimals = tokenDecimals;
+        pool.owner = _owner;
+        pool.unlocked = true;
+        pool.baseToken = _baseToken;
 
         emit PoolInitialized(msg.sender, _owner, _baseToken, _poolName, _poolSymbol);
     }

@@ -17,29 +17,65 @@
 
 */
 
-import "../../interfaces/pool/IStructs.sol";
-import "../../../utils/reentrancyGuard/ReentrancyGuard.sol";
-import {OwnedUninitialized as Owned} from "../../../utils/owned/OwnedUninitialized.sol";
+import "./MixinImmutables.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
 
-/// @notice Storage slots must be preserved to prevent storage clashing. Each new variable must be assigned
-/// a dedicated (randomly big enough) storage slot and queried from slot, or added at the end of existing storage.
-abstract contract MixinStorage is IStructs, Owned, ReentrancyGuard {
-    // slot(0) declared in Owned contract
-    //address public override owner;
+/// @notice Storage slots must be preserved to prevent storage clashing.
+/// @dev Pool storage is not sequential: each variable is wrapped into a struct which is assigned a storage slot.
+abstract contract MixinStorage is MixinImmutables {
+    constructor() {
+        // governance must always check that pool extensions are not using these storage slots (reserved for proxy storage)
+        assert(_POOL_INIT_SLOT == bytes32(uint256(keccak256("pool.proxy.initialization")) - 1));
+        assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
+        assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
+        assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
+    }
 
-    // slot(0) declared in ReentrancyGuard contract
-    /// @dev Since address is only 20 bytes long, one-bit boolean "locked" is packed into slot 0
-    //bool private locked = false;
+    // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
+    // activation stored at locantion keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT)) + 1
+    struct Accounts {
+        mapping(address => UserAccount) userAccounts;
+    }
 
-    // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(2))
-    // activation stored at locantion keccak256(address(msg.sender) . uint256(2)) + 1
-    mapping(address => Account) internal userAccount;
+    function accounts() internal pure returns (Accounts storage s) {
+        assembly {
+            s.slot := _POOL_ACCOUNTS_SLOT
+        }
+    }
 
-    // slot(2)
-    Admin internal admin;
+    /// @notice Pool initialization parameters.
+    /// @dev This struct is not visible externally and used to store/read pool init params.
+    /// @param name String of the pool name (max 32 characters).
+    /// @param symbol Bytes8 of the pool symbol (from 3 to 5 characters).
+    /// @param decimals Uint8 decimals.
+    /// @param owner Address of the pool operator.
+    /// @param unlocked Boolean the pool is locked for reentrancy check.
+    /// @param baseToken Address of the base token of the pool (0 for base currency).
+    struct Pool {
+        string name;
+        bytes8 symbol;
+        uint8 decimals;
+        address owner;
+        bool unlocked;
+        address baseToken;
+    }
 
-    // slot(5)
-    PoolData internal poolData;
+    function pool() internal pure returns (Pool storage s) {
+        assembly {
+            s.slot := _POOL_INIT_SLOT
+        }
+    }
+
+    function poolParams() internal pure returns (PoolParams storage s) {
+        assembly {
+            s.slot := _POOL_VARIABLES_SLOT
+        }
+    }
+
+    function poolTokens() internal pure returns (PoolTokens storage s) {
+        assembly {
+            s.slot := _POOL_TOKENS_SLOT
+        }
+    }
 }

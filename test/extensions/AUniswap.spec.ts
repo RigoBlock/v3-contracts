@@ -20,11 +20,12 @@ describe("AUniswap", async () => {
         const AuthorityInstance = await deployments.get("Authority")
         const Authority = await hre.ethers.getContractFactory("Authority")
         const authority = Authority.attach(AuthorityInstance.address)
+        // we never call uniswap adapter directly, therefore do not attach to ABI
         const AUniswapInstance = await deployments.get("AUniswap")
         await authority.setAdapter(AUniswapInstance.address, true)
         // "88316456": "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
         // "c20ec580": "UNISWAP_V3_NPM_ADDRESS()",
-        // "a785a3d8": "WethAddress()",
+        // "040141e5": "WETH_ADDRESS()",
         // "42966c68": "burn(uint256)",
         // "fc6f7865": "collect((uint256,address,uint128,uint128))",
         // "13ead562": "createAndInitializePoolIfNecessary(address,address,uint24,uint160)",
@@ -36,7 +37,7 @@ describe("AUniswap", async () => {
         // "1c58db4f": "wrapETH(uint256)"
         await authority.addMethod("0x88316456", AUniswapInstance.address)
         await authority.addMethod("0xc20ec580", AUniswapInstance.address)
-        await authority.addMethod("0xa785a3d8", AUniswapInstance.address)
+        await authority.addMethod("0x040141e5", AUniswapInstance.address)
         await authority.addMethod("0x42966c68", AUniswapInstance.address)
         await authority.addMethod("0xfc6f7865", AUniswapInstance.address)
         await authority.addMethod("0x13ead562", AUniswapInstance.address)
@@ -75,7 +76,7 @@ describe("AUniswap", async () => {
 
     describe("mint", async () => {
         it('should mint an NFT', async () => {
-            const { grgToken, newPoolAddress, poolId } = await setupTests()
+            const { grgToken, newPoolAddress, poolId, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             const amount = parseEther("100")
@@ -100,7 +101,23 @@ describe("AUniswap", async () => {
                     deadline: 1
                 }]
             )
+            await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData}))
+                .to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(grgToken.address)
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            await eWhitelist.removeToken(grgToken.address)
+            await expect(
+                pool.increaseLiquidity({
+                    tokenId: 5,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    deadline: 1
+                })
+            ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            const wethAddress = await pool.WETH_ADDRESS()
+            await eWhitelist.whitelistToken(wethAddress)
             // the following transaction sets approval to WETH9 in TestUniswapNpm.sol as it reads positions(tokenId) but won't revert.
             await pool.increaseLiquidity({
                 tokenId: 5,
@@ -162,7 +179,7 @@ describe("AUniswap", async () => {
             )
             await expect(
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
-            ).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
         })
     })
 
@@ -248,6 +265,12 @@ describe("AUniswap", async () => {
                 newPoolAddress
             )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(weth.address)
+            await expect(pool.swapExactTokensForTokens(
+                100,
+                100,
+                [user1.address, weth.address],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.swapExactTokensForTokens(
                 100,
                 100,
@@ -272,6 +295,12 @@ describe("AUniswap", async () => {
                 newPoolAddress
             )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.swapTokensForExactTokens(
+                100,
+                100,
+                [user1.address, grgToken.address],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.swapTokensForExactTokens(
                 100,
                 100,
@@ -299,6 +328,15 @@ describe("AUniswap", async () => {
                 sqrtPriceLimitX96: 4
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(weth.address)
+            await expect(pool.exactInputSingle({
+                tokenIn: user1.address,
+                tokenOut: weth.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1,
+                sqrtPriceLimitX96: 4
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.exactInputSingle({
                 tokenIn: grgToken.address,
                 tokenOut: weth.address,
@@ -326,6 +364,12 @@ describe("AUniswap", async () => {
                 amountOutMinimum: 1
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.exactInput({
+                path: encodePath([user1.address, grgToken.address], [FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             // fee amount is irrelevant as long as we test on the mock router and do not query for the actual pool
             await pool.exactInput({
                 path: encodePath([weth.address, grgToken.address], [FeeAmount.MEDIUM]),
@@ -355,6 +399,15 @@ describe("AUniswap", async () => {
                 sqrtPriceLimitX96: 4
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.exactOutputSingle({
+                tokenIn: user1.address,
+                tokenOut: grgToken.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 1,
+                sqrtPriceLimitX96: 4
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.exactOutputSingle({
                 tokenIn: weth.address,
                 tokenOut: grgToken.address,
@@ -382,6 +435,12 @@ describe("AUniswap", async () => {
                 amountInMaximum: 10
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(weth.address)
+            await expect(pool.exactOutput({
+                path: encodePath([user1.address, weth.address], [FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.exactOutput({
                 path: encodePath([grgToken.address, weth.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,

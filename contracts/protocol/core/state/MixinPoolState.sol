@@ -11,94 +11,116 @@ abstract contract MixinPoolState is MixinOwnerActions {
     /// @param _who Address of the target account.
     /// @return Number of pool.
     function balanceOf(address _who) external view override returns (uint256) {
-        return userAccount[_who].balance;
+        return accounts().userAccounts[_who].userBalance;
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    function getAdminData()
+    function getPoolStorage()
         external
         view
         override
         returns (
-            // TODO: check if should name returned poolOwner
-            address, //owner
-            address feeCollector,
-            uint256 transactionFee,
-            uint32 minPeriod
+            ReturnedPool memory poolInitParams,
+            PoolParams memory poolVariables,
+            PoolTokens memory poolTokensInfo
         )
     {
-        return (owner, _getFeeCollector(), poolData.transactionFee, _getMinPeriod());
+        return (getPool(), getPoolParams(), getPoolTokens());
+    }
+
+    function getUserAccount(address _who) external view override returns (UserAccount memory) {
+        return accounts().userAccounts[_who];
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    function getData()
-        public
-        view
-        override
-        returns (
-            string memory poolName,
-            string memory poolSymbol,
-            address baseToken,
-            uint256 unitaryValue,
-            uint256 spread
-        )
-    {
-        // TODO: check if we should reorg return data for client efficiency
-        return (
-            poolName = name(),
-            poolSymbol = symbol(),
-            baseToken = admin.baseToken,
-            _getUnitaryValue(),
-            _getSpread()
-        );
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function getKycProvider() external view override returns (address kycProviderAddress) {
-        return kycProviderAddress = admin.kycProvider;
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function totalSupply() public view override returns (uint256) {
-        return poolData.totalSupply;
+    function owner() external view override returns (address) {
+        return pool().owner;
     }
 
     /*
      * PUBLIC VIEW METHODS
      */
-    /// @dev Decimals are initialized at proxy creation only if base token not null.
+    /// @notice Decimals are initialized at proxy creation.
     /// @return Number of decimals.
-    /// @notice We use this method to save gas on base currency pools.
     function decimals() public view override returns (uint8) {
-        return poolData.decimals != 0 ? poolData.decimals : _coinbaseDecimals;
+        return pool().decimals;
     }
 
-    /// @inheritdoc IRigoblockV3PoolImmutable
+    /// @inheritdoc IRigoblockV3PoolState
+    function getPool() public view override returns (ReturnedPool memory) {
+        Pool memory pool = pool();
+        // we return symbol as string, omit unlocked as always true
+        return
+            ReturnedPool({
+                name: pool.name,
+                symbol: symbol(),
+                decimals: pool.decimals,
+                owner: pool.owner,
+                baseToken: pool.baseToken
+            });
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function getPoolParams() public view override returns (PoolParams memory) {
+        return
+            PoolParams({
+                minPeriod: _getMinPeriod(),
+                spread: _getSpread(),
+                transactionFee: poolParams().transactionFee,
+                feeCollector: _getFeeCollector(),
+                kycProvider: poolParams().kycProvider
+            });
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function getPoolTokens() public view override returns (PoolTokens memory) {
+        return PoolTokens({unitaryValue: _getUnitaryValue(), totalSupply: poolTokens().totalSupply});
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
     function name() public view override returns (string memory) {
-        return poolData.name;
+        return pool().name;
     }
 
-    /// @inheritdoc IRigoblockV3PoolImmutable
+    /// @inheritdoc IRigoblockV3PoolState
     function symbol() public view override returns (string memory) {
-        return poolData.symbol;
+        bytes8 _symbol = pool().symbol;
+        uint8 i = 0;
+        while (i < 8 && _symbol[i] != 0) {
+            i++;
+        }
+        bytes memory bytesArray = new bytes(i);
+        for (i = 0; i < 8 && _symbol[i] != 0; i++) {
+            bytesArray[i] = _symbol[i];
+        }
+        return string(bytesArray);
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function totalSupply() public view override returns (uint256) {
+        return poolTokens().totalSupply;
     }
 
     /*
      * INTERNAL VIEW METHODS
      */
     function _getFeeCollector() internal view override returns (address) {
-        return admin.feeCollector != address(0) ? admin.feeCollector : owner;
+        address feeCollector = poolParams().feeCollector;
+        return feeCollector != address(0) ? feeCollector : pool().owner;
     }
 
-    function _getMinPeriod() internal view override returns (uint32) {
-        return poolData.minPeriod != 0 ? poolData.minPeriod : MIN_LOCKUP;
+    function _getMinPeriod() internal view override returns (uint48) {
+        uint48 minPeriod = poolParams().minPeriod;
+        return minPeriod != 0 ? minPeriod : MIN_LOCKUP;
     }
 
-    function _getSpread() internal view override returns (uint256) {
-        return poolData.spread != 0 ? poolData.spread : INITIAL_SPREAD;
+    function _getSpread() internal view override returns (uint16) {
+        uint16 spread = poolParams().spread;
+        return spread != 0 ? spread : INITIAL_SPREAD;
     }
 
     function _getUnitaryValue() internal view override returns (uint256) {
-        return poolData.unitaryValue != 0 ? poolData.unitaryValue : _coinbaseUnitaryValue;
+        uint256 unitaryValue = poolTokens().unitaryValue;
+        return unitaryValue != 0 ? unitaryValue : 10**pool().decimals;
     }
 }

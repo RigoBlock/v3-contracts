@@ -10,18 +10,25 @@ interface IRigoblockV3PoolOwnerActions {
 
     /// @notice Allows pool owner to change the minimum holding period.
     /// @param _minPeriod Time in seconds.
-    function changeMinPeriod(uint32 _minPeriod) external;
+    function changeMinPeriod(uint48 _minPeriod) external;
 
     /// @notice Allows pool owner to change the mint/burn spread.
     /// @param _newSpread Number between 0 and 1000, in basis points.
-    function changeSpread(uint256 _newSpread) external;
+    function changeSpread(uint16 _newSpread) external;
 
-    /// @notice Kyc provider can be set to null, removing user whitelist requirement.
+    /// @notice Allows pool owner to set/update the user whitelist contract.
+    /// @dev Kyc provider can be set to null, removing user whitelist requirement.
+    /// @param _kycProvider Address if the kyc provider.
     function setKycProvider(address _kycProvider) external;
+
+    /// @notice Allows pool owner to set a new owner address.
+    /// @dev Method restricted to owner.
+    /// @param _newOwner Address of the new owner.
+    function setOwner(address _newOwner) external;
 
     /// @notice Allows pool owner to set the transaction fee.
     /// @param _transactionFee Value of the transaction fee in basis points.
-    function setTransactionFee(uint256 _transactionFee) external;
+    function setTransactionFee(uint16 _transactionFee) external;
 
     /// @notice Allows pool owner to set the pool price.
     /// @param _unitaryValue Value of 1 token in wei units.

@@ -43,7 +43,7 @@ contract RigoblockV3Pool is
     /// @notice Kyc provider set as will effectively lock direct mint/burn actions.
     constructor(address _authority) MixinImmutables(_authority) {
         // must lock implementation after initializing _implementation
-        owner = address(0);
-        admin.kycProvider == address(1);
+        pool().owner = address(0);
+        poolParams().kycProvider == address(1);
     }
 }

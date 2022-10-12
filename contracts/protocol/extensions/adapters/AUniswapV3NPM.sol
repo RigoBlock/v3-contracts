@@ -36,7 +36,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 amount1
         )
     {
-        // we first set the allowance to the uniswap position manager
+        // we require both token being whitelisted
+        _assertTokenWhitelisted(params.token0);
+        _assertTokenWhitelisted(params.token1);
+
+        // we set the allowance to the uniswap position manager
         _safeApprove(params.token0, _getUniswapNpmAddress(), type(uint256).max);
         _safeApprove(params.token1, _getUniswapNpmAddress(), type(uint256).max);
 
@@ -74,6 +78,10 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     {
         (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(_getUniswapNpmAddress())
             .positions(params.tokenId);
+
+        // we require both tokens being whitelisted
+        _assertTokenWhitelisted(token0);
+        _assertTokenWhitelisted(token1);
 
         // we first set the allowance to the uniswap position manager
         _safeApprove(token0, _getUniswapNpmAddress(), type(uint256).max);
@@ -148,6 +156,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             sqrtPriceX96
         );
     }
+
+    function _assertTokenWhitelisted(address _token) internal view virtual {}
 
     function _safeApprove(
         address token,

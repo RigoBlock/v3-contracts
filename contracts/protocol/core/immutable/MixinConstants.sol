@@ -21,28 +21,36 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../../IRigoblockV3Pool.sol";
 
-/// @notice Constants are not assigned a storage slot, can be safely added to this contract.
+/// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
+/// @dev Inheriting from interface is required as we override public variables.
 abstract contract MixinConstants is IRigoblockV3Pool {
     /// @inheritdoc IRigoblockV3PoolImmutable
     string public constant override VERSION = "HF 3.1.0";
 
-    // TODO: we could probably reduce deploy size by declaring smaller constants as uint32
-    uint256 internal constant FEE_BASE = 10000;
+    bytes32 internal constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
 
-    uint256 internal constant INITIAL_SPREAD = 500; // +-5%, in basis points
+    bytes32 internal constant _POOL_VARIABLES_SLOT = 0xe3ed9e7d534645c345f2d15f0c405f8de0227b60eb37bbeb25b26db462415dec;
 
-    uint256 internal constant MAX_SPREAD = 1000; // +-10%, in basis points
+    bytes32 internal constant _POOL_TOKENS_SLOT = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;
 
-    uint256 internal constant MAX_TRANSACTION_FEE = 100; // maximum 1%
+    bytes32 internal constant _POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
+
+    uint16 internal constant FEE_BASE = 10000;
+
+    uint16 internal constant INITIAL_SPREAD = 500; // +-5%, in basis points
+
+    uint16 internal constant MAX_SPREAD = 1000; // +-10%, in basis points
+
+    uint16 internal constant MAX_TRANSACTION_FEE = 100; // maximum 1%
 
     // minimum order size 1/1000th of base to avoid dust clogging things up
-    uint256 internal constant MINIMUM_ORDER_DIVISOR = 1e3;
+    uint16 internal constant MINIMUM_ORDER_DIVISOR = 1e3;
 
-    uint256 internal constant SPREAD_BASE = 10000;
+    uint16 internal constant SPREAD_BASE = 10000;
 
-    uint32 internal constant MAX_LOCKUP = 30 days;
+    uint48 internal constant MAX_LOCKUP = 30 days;
 
-    uint32 internal constant MIN_LOCKUP = 2;
+    uint48 internal constant MIN_LOCKUP = 2;
 
     bytes4 internal constant TRANSFER_FROM_SELECTOR = bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
 
