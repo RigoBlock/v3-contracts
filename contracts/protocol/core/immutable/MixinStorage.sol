@@ -44,19 +44,19 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    /// @notice Pool initialization parameters.
+    /// @notice Pool initialization parameters, compiler-compressed-slots.
     /// @dev This struct is not visible externally and used to store/read pool init params.
     /// @param name String of the pool name (max 32 characters).
+    /// @param owner Address of the pool operator.
     /// @param symbol Bytes8 of the pool symbol (from 3 to 5 characters).
     /// @param decimals Uint8 decimals.
-    /// @param owner Address of the pool operator.
     /// @param unlocked Boolean the pool is locked for reentrancy check.
     /// @param baseToken Address of the base token of the pool (0 for base currency).
     struct Pool {
         string name;
+        address owner;
         bytes8 symbol;
         uint8 decimals;
-        address owner;
         bool unlocked;
         address baseToken;
     }
