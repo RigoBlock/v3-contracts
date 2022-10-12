@@ -265,6 +265,12 @@ describe("AUniswap", async () => {
                 newPoolAddress
             )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(weth.address)
+            await expect(pool.swapExactTokensForTokens(
+                100,
+                100,
+                [user1.address, weth.address],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.swapExactTokensForTokens(
                 100,
                 100,
@@ -289,6 +295,12 @@ describe("AUniswap", async () => {
                 newPoolAddress
             )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.swapTokensForExactTokens(
+                100,
+                100,
+                [user1.address, grgToken.address],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.swapTokensForExactTokens(
                 100,
                 100,
@@ -316,6 +328,15 @@ describe("AUniswap", async () => {
                 sqrtPriceLimitX96: 4
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(weth.address)
+            await expect(pool.exactInputSingle({
+                tokenIn: user1.address,
+                tokenOut: weth.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1,
+                sqrtPriceLimitX96: 4
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.exactInputSingle({
                 tokenIn: grgToken.address,
                 tokenOut: weth.address,
@@ -343,6 +364,12 @@ describe("AUniswap", async () => {
                 amountOutMinimum: 1
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.exactInput({
+                path: encodePath([user1.address, grgToken.address], [FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             // fee amount is irrelevant as long as we test on the mock router and do not query for the actual pool
             await pool.exactInput({
                 path: encodePath([weth.address, grgToken.address], [FeeAmount.MEDIUM]),
@@ -372,6 +399,15 @@ describe("AUniswap", async () => {
                 sqrtPriceLimitX96: 4
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.exactOutputSingle({
+                tokenIn: user1.address,
+                tokenOut: grgToken.address,
+                fee: 0,
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 1,
+                sqrtPriceLimitX96: 4
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.exactOutputSingle({
                 tokenIn: weth.address,
                 tokenOut: grgToken.address,
@@ -399,6 +435,12 @@ describe("AUniswap", async () => {
                 amountInMaximum: 10
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await eWhitelist.whitelistToken(weth.address)
+            await expect(pool.exactOutput({
+                path: encodePath([user1.address, weth.address], [FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.exactOutput({
                 path: encodePath([grgToken.address, weth.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
