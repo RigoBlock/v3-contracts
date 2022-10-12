@@ -52,7 +52,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolState
     function getPool() public view override returns (ReturnedPool memory) {
-        Pool storage pool = pool();
+        Pool memory pool = pool();
         // we return symbol as string, omit unlocked as always true
         return ReturnedPool({
             name: pool.name,
@@ -111,18 +111,22 @@ abstract contract MixinPoolState is MixinOwnerActions {
      * INTERNAL VIEW METHODS
      */
     function _getFeeCollector() internal view override returns (address) {
-        return poolParams().feeCollector != address(0) ? poolParams().feeCollector : pool().owner;
+        address feeCollector = poolParams().feeCollector;
+        return feeCollector != address(0) ? feeCollector : pool().owner;
     }
 
     function _getMinPeriod() internal view override returns (uint48) {
-        return poolParams().minPeriod != 0 ? poolParams().minPeriod : MIN_LOCKUP;
+        uint48 minPeriod = poolParams().minPeriod;
+        return minPeriod != 0 ? minPeriod : MIN_LOCKUP;
     }
 
     function _getSpread() internal view override returns (uint16) {
-        return poolParams().spread != 0 ? poolParams().spread : INITIAL_SPREAD;
+        uint16 spread = poolParams().spread;
+        return spread != 0 ? spread : INITIAL_SPREAD;
     }
 
-    function _getUnitaryValue() internal view override returns (uint256 unitaryValue) {
-        return poolTokens().unitaryValue != 0 ? poolTokens().unitaryValue : 10**pool().decimals;
+    function _getUnitaryValue() internal view override returns (uint256) {
+        uint256 unitaryValue = poolTokens().unitaryValue;
+        return unitaryValue != 0 ? unitaryValue : 10**pool().decimals;
     }
 }
