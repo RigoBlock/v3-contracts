@@ -126,7 +126,9 @@ abstract contract MixinActions is MixinStorage {
 
             if (feeCollector == _recipient) {
                 // it is safe to use unckecked as recipientAmount requires user holding enough base tokens.
-                unchecked { recipientBalance += uint208(recipientAmount); }
+                unchecked {
+                    recipientBalance += uint208(recipientAmount);
+                }
             } else {
                 uint208 feeCollectorBalance = accounts.userAccounts[feeCollector].userBalance;
                 uint256 feePool = (_mintedAmount * transactionFee) / FEE_BASE;
@@ -143,13 +145,12 @@ abstract contract MixinActions is MixinStorage {
                 emit Transfer(address(0), feeCollector, feePool);
             }
         } else {
-            unchecked { recipientBalance += uint208(recipientAmount); }
+            unchecked {
+                recipientBalance += uint208(recipientAmount);
+            }
         }
 
-        accounts.userAccounts[_recipient] = UserAccount({
-            userBalance: recipientBalance,
-            activation: activation
-        });
+        accounts.userAccounts[_recipient] = UserAccount({userBalance: recipientBalance, activation: activation});
         emit Transfer(address(0), _recipient, recipientAmount);
     }
 
@@ -185,7 +186,6 @@ abstract contract MixinActions is MixinStorage {
                 });
                 emit Transfer(msg.sender, feeCollector, feePool);
             }
-
         } else {
             holderBalance -= uint208(burntAmount);
         }

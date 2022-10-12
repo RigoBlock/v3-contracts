@@ -24,13 +24,12 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @notice Storage slots must be preserved to prevent storage clashing.
 /// @dev Pool storage is not sequential: each variable is wrapped into a struct which is assigned a storage slot.
 abstract contract MixinStorage is MixinImmutables {
-
     constructor() {
         // governance must always check that pool extensions are not using these storage slots (reserved for proxy storage)
-        assert(_POOL_INITIALIZATION_SLOT == bytes32(uint256(keccak256("pool.proxy.initialization")) - 1));
+        assert(_POOL_INIT_SLOT == bytes32(uint256(keccak256("pool.proxy.initialization")) - 1));
         assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
         assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
-        assert(_POOL_USER_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
+        assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
     }
 
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
@@ -41,7 +40,7 @@ abstract contract MixinStorage is MixinImmutables {
 
     function accounts() internal pure returns (Accounts storage s) {
         assembly {
-            s.slot := _POOL_USER_ACCOUNTS_SLOT
+            s.slot := _POOL_ACCOUNTS_SLOT
         }
     }
 
@@ -62,19 +61,19 @@ abstract contract MixinStorage is MixinImmutables {
         address baseToken;
     }
 
-    function pool() internal pure returns(Pool storage s) {
+    function pool() internal pure returns (Pool storage s) {
         assembly {
-            s.slot := _POOL_INITIALIZATION_SLOT
+            s.slot := _POOL_INIT_SLOT
         }
     }
 
-    function poolParams() internal pure returns(PoolParams storage s) {
+    function poolParams() internal pure returns (PoolParams storage s) {
         assembly {
             s.slot := _POOL_VARIABLES_SLOT
         }
     }
 
-    function poolTokens() internal pure returns(PoolTokens storage s) {
+    function poolTokens() internal pure returns (PoolTokens storage s) {
         assembly {
             s.slot := _POOL_TOKENS_SLOT
         }

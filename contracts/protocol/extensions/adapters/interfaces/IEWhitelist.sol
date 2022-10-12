@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 
 /// @title EWhitelist Interface - Allows interaction with the whitelist extension contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-interface IEWhitelist  {
+interface IEWhitelist {
     /// @notice Emitted when a token is whitelisted or removed.
     /// @param token Address pf the target token.
     /// @param isWhitelisted Boolean the token is added or removed.

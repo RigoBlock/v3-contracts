@@ -62,7 +62,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address to
     ) external override returns (uint256 amountOut) {
         _assertTokenWhitelisted(path[1]);
-        
+
         // we require target to being contract to prevent call being executed to EOA
         require(isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
 
@@ -88,7 +88,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address to
     ) external override returns (uint256 amountIn) {
         _assertTokenWhitelisted(path[1]);
-        
+
         // we require target to being contract to prevent call being executed to EOA
         require(isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
 
@@ -320,10 +320,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     function _assertTokenWhitelisted(address _token) internal view override {
-        require(
-            IEWhitelist(address(this)).isWhitelistedToken(_token),
-            "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR"
-        );
+        require(IEWhitelist(address(this)).isWhitelistedToken(_token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
     }
 
     function _getUniswapNpmAddress() internal view override returns (address) {

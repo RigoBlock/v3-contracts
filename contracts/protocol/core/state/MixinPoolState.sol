@@ -25,11 +25,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
             PoolTokens memory poolTokensInfo
         )
     {
-        return(
-            getPool(),
-            getPoolParams(),
-            getPoolTokens()
-        );
+        return (getPool(), getPoolParams(), getPoolTokens());
     }
 
     function getUserAccount(address _who) external view override returns (UserAccount memory) {
@@ -54,32 +50,31 @@ abstract contract MixinPoolState is MixinOwnerActions {
     function getPool() public view override returns (ReturnedPool memory) {
         Pool memory pool = pool();
         // we return symbol as string, omit unlocked as always true
-        return ReturnedPool({
-            name: pool.name,
-            symbol: symbol(),
-            decimals: pool.decimals,
-            owner: pool.owner,
-            baseToken: pool.baseToken
-        });
+        return
+            ReturnedPool({
+                name: pool.name,
+                symbol: symbol(),
+                decimals: pool.decimals,
+                owner: pool.owner,
+                baseToken: pool.baseToken
+            });
     }
 
     /// @inheritdoc IRigoblockV3PoolState
     function getPoolParams() public view override returns (PoolParams memory) {
-        return PoolParams({
-            minPeriod: _getMinPeriod(),
-            spread: _getSpread(),
-            transactionFee: poolParams().transactionFee,
-            feeCollector: _getFeeCollector(),
-            kycProvider: poolParams().kycProvider
-        });
+        return
+            PoolParams({
+                minPeriod: _getMinPeriod(),
+                spread: _getSpread(),
+                transactionFee: poolParams().transactionFee,
+                feeCollector: _getFeeCollector(),
+                kycProvider: poolParams().kycProvider
+            });
     }
 
     /// @inheritdoc IRigoblockV3PoolState
     function getPoolTokens() public view override returns (PoolTokens memory) {
-        return PoolTokens({
-            unitaryValue: _getUnitaryValue(),
-            totalSupply: poolTokens().totalSupply
-        });
+        return PoolTokens({unitaryValue: _getUnitaryValue(), totalSupply: poolTokens().totalSupply});
     }
 
     /// @inheritdoc IRigoblockV3PoolState
@@ -92,7 +87,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
     function symbol() public view override returns (string memory) {
         bytes8 _symbol = pool().symbol;
         uint8 i = 0;
-        while(i < 8 && _symbol[i] != 0) {
+        while (i < 8 && _symbol[i] != 0) {
             i++;
         }
         bytes memory bytesArray = new bytes(i);

@@ -4,7 +4,6 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolState {
-
     /// @notice Returned pool initialization parameters.
     /// @dev Symbol is stored as bytes8 but returned as string to facilitating client view.
     /// @param name String of the pool name (max 32 characters).

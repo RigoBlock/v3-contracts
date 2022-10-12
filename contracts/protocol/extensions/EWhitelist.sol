@@ -11,7 +11,8 @@ import "../../utils/storageSlot/StorageSlot.sol";
 /// @notice This contract has its own storage, which could potentially clash with pool storage if the allocated slot were already used by the implementation.
 /// Warning: careful with upgrades as pool only accesses isWhitelistedToken view method. Other methods are locked and should never be approved by governance.
 contract EWhitelist is IEWhitelist {
-    bytes32 internal constant _EWHITELIST_TOKEN_WHITELIST_SLOT = 0x03de6a299bc35b64db5b38a8b5dbbc4bab6e4b5a493067f0fbe40d83350a610f;
+    bytes32 internal constant _EWHITELIST_TOKEN_WHITELIST_SLOT =
+        0x03de6a299bc35b64db5b38a8b5dbbc4bab6e4b5a493067f0fbe40d83350a610f;
 
     address private immutable AUTHORITY;
 
@@ -40,7 +41,7 @@ contract EWhitelist is IEWhitelist {
     /// @inheritdoc IEWhitelist
     function removeToken(address _token) public override onlyAuthorized {
         require(_getWhitelistSlot().isWhitelisted[_token], "EWHITELIST_TOKEN_ALREADY_REMOVED_ERROR");
-        delete(_getWhitelistSlot().isWhitelisted[_token]);
+        delete (_getWhitelistSlot().isWhitelisted[_token]);
         emit Whitelisted(_token, false);
     }
 
@@ -69,10 +70,7 @@ contract EWhitelist is IEWhitelist {
     }
 
     function _assertCallerIsAuthorized() private view {
-        require(
-            IAuthority(getAuthority()).isWhitelister(msg.sender),
-            "EWHITELIST_CALLER_NOT_WHITELISTER_ERROR"
-        );
+        require(IAuthority(getAuthority()).isWhitelister(msg.sender), "EWHITELIST_CALLER_NOT_WHITELISTER_ERROR");
     }
 
     function _isContract(address _target) private view returns (bool) {

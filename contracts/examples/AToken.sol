@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 import "../protocol/interfaces/IAuthority.sol";
-import { IERC20 as Token } from "../tokens/ERC20/IERC20.sol";
+import {IERC20 as Token} from "../tokens/ERC20/IERC20.sol";
 
 interface MockProxyWhitelist {
     function isWhitelistedProxy(address proxy) external view returns (bool);

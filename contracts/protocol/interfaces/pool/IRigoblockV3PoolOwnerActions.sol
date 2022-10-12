@@ -16,7 +16,7 @@ interface IRigoblockV3PoolOwnerActions {
     /// @param _newSpread Number between 0 and 1000, in basis points.
     function changeSpread(uint16 _newSpread) external;
 
-    /// @notice Allows pool owner to set/update the user whitelist contract. 
+    /// @notice Allows pool owner to set/update the user whitelist contract.
     /// @dev Kyc provider can be set to null, removing user whitelist requirement.
     /// @param _kycProvider Address if the kyc provider.
     function setKycProvider(address _kycProvider) external;
