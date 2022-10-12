@@ -49,7 +49,7 @@ describe("MixinStorageAccessible", async () => {
             const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
             const ownerSlot = BigInt(poolInitSlot) + BigInt(1)
             let owner = await pool.getStorageAt(ownerSlot, 1)
-            owner = utils.hexDataSlice(owner, 12, 32)
+            owner = utils.hexDataSlice(owner, 3, 23)
             expect(owner).to.be.eq((await pool.owner()).toLowerCase())
             expect(user1.address).to.be.eq(await pool.owner())
         })
@@ -78,8 +78,8 @@ describe("MixinStorageAccessible", async () => {
             const owner = await pool.owner()
             // EVM tickly packs tickls symbol, decimals, owner, unlocked into one uint256 slot
             const encodedPack = utils.solidityPack(
-                ['bytes32', 'uint24', 'uint8', 'bytes8', 'address', 'uint256'],
-                [name, 1, 18, symbol, owner, AddressZero]
+                ['bytes32', 'uint24', 'address', 'uint8', 'bytes8', 'uint256'],
+                [name, 1, owner, 18, symbol, AddressZero]
             )
             expect(poolStruct).to.be.eq(encodedPack)
         })
@@ -100,8 +100,8 @@ describe("MixinStorageAccessible", async () => {
             const owner = await pool.owner()
             // EVM tickly packs tickls symbol, decimals, owner, unlocked into one uint256 slot
             const encodedPack = utils.solidityPack(
-                ['bytes32', 'uint24', 'uint8', 'bytes8', 'address', 'uint256'],
-                [name, 1, 18, symbol, owner, grgToken]
+                ['bytes32', 'uint24', 'address', 'uint8', 'bytes8', 'uint256'],
+                [name, 1, owner, 18, symbol, grgToken]
             )
             expect(poolStruct).to.be.eq(encodedPack)
         })
@@ -166,7 +166,7 @@ describe("MixinStorageAccessible", async () => {
             const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
             const ownerSlot = BigInt(poolInitSlot) + BigInt(1)
             let owner = await pool.getStorageSlotsAt([ownerSlot])
-            owner = utils.hexDataSlice(owner, 12, 32)
+            owner = utils.hexDataSlice(owner, 3, 23)
             const encodedPack = utils.solidityPack(['address'], [await pool.owner()])
             expect(owner).to.be.eq(encodedPack)
         })
@@ -209,7 +209,7 @@ describe("MixinStorageAccessible", async () => {
             const symbolSlot = BigInt(poolInitSlot) + BigInt(1)
             let symbol = await pool.getStorageSlotsAt([symbolSlot])
             // symbol is bytes8, we only take the first 4 to eliminate padding.
-            symbol = utils.hexDataSlice(symbol, 4, 12)
+            symbol = utils.hexDataSlice(symbol, 24, 32)
             symbol = utils.toUtf8String(symbol)
             // slot stores symbol as bytes8, which is returned with padding
             expect(symbol).to.be.eq('TEST\u0000\u0000\u0000\u0000')
@@ -256,7 +256,7 @@ describe("MixinStorageAccessible", async () => {
             expect(name).to.be.eq('my new pool')
             expect(name).to.be.eq(await pool.name())
             let symbol = decodedData[1]
-            symbol = utils.hexDataSlice(symbol, 4, 12)
+            symbol = utils.hexDataSlice(symbol, 24, 32)
             // symbol is an 8-bytes element
             let poolSymbol = await pool.symbol()
             expect(poolSymbol).to.be.eq('PAL')
