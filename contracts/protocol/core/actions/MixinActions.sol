@@ -8,13 +8,6 @@ abstract contract MixinActions is MixinStorage {
     /*
      * MODIFIERS
      */
-    modifier burnPre(uint256 _amount) {
-        UserAccount memory userAccount = accounts().userAccounts[msg.sender];
-        require(userAccount.userBalance >= _amount, "POOL_BURN_NOT_ENOUGH_ERROR");
-        require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
-        _;
-    }
-
     /// @notice Functions with this modifer cannot be reentered. The mutex will be locked before function execution and unlocked after.
     modifier nonReentrant() {
         // Ensure mutex is unlocked
@@ -70,10 +63,12 @@ abstract contract MixinActions is MixinStorage {
         external
         override
         nonReentrant
-        burnPre(_amountIn)
         returns (uint256 netRevenue)
     {
         require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
+        UserAccount memory userAccount = accounts().userAccounts[msg.sender];
+        require(userAccount.userBalance >= _amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
+        require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
 
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(_amountIn);
@@ -115,8 +110,8 @@ abstract contract MixinActions is MixinStorage {
     /// @param _recipient Address of the recipient.
     /// @param _mintedAmount Value of issued tokens.
     /// @return recipientAmount Number of new tokens issued to recipient.
-    function _allocateMintTokens(address _recipient, uint256 _mintedAmount) private returns (uint256) {
-        uint256 recipientAmount = _mintedAmount;
+    function _allocateMintTokens(address _recipient, uint256 _mintedAmount) private returns (uint256 recipientAmount) {
+        recipientAmount = _mintedAmount;
         Accounts storage accounts = accounts();
         uint208 recipientBalance = accounts.userAccounts[_recipient].userBalance;
         uint48 activation;
@@ -156,7 +151,6 @@ abstract contract MixinActions is MixinStorage {
             activation: activation
         });
         emit Transfer(address(0), _recipient, recipientAmount);
-        return recipientAmount;
     }
 
     /// @notice Destroys tokens of holder.
