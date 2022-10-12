@@ -83,7 +83,6 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    // TODO: check if should move logic to LibBytes.sol and return LibBytes.bytes8ToString(bytes8 arg)
     function symbol() public view override returns (string memory) {
         bytes8 _symbol = pool().symbol;
         uint8 i = 0;
