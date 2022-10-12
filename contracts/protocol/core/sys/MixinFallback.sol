@@ -13,6 +13,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
         _;
     }
 
+    /* solhint-disable no-complex-fallback */
     /// @inheritdoc IRigoblockV3PoolFallback
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
@@ -42,6 +43,8 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
             return(0, returndatasize())
         }
     }
+
+    /* solhint-enable no-complex-fallback */
 
     /// @inheritdoc IRigoblockV3PoolFallback
     receive() external payable onlyDelegateCall {}

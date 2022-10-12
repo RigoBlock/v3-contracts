@@ -44,6 +44,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         _removeAuthorizedAddressAtIndex(msg.sender, 0);
     }
 
+    /* solhint-disable payable-fallback, no-complex-fallback */
     /// @dev Delegates calls to the staking contract, if it is set.
     fallback() external {
         // Sanity check that we have a staking contract to call
@@ -64,6 +65,8 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
             }
         }
     }
+
+    /* solhint-enable payable-fallback, no-complex-fallback */
 
     /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
     /// Note that this is callable only by an authorized address.

@@ -25,6 +25,7 @@ import {IPoolRegistry} from "../../protocol/interfaces/IPoolRegistry.sol";
 /// @title Network - Returns data of active pools and network value.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract Network {
+    // solhint-disable-next-line var-name-mixedcase
     address public POOLREGISTRYADDRESS;
 
     constructor(address poolRegistryAddress) {

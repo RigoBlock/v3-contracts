@@ -15,6 +15,9 @@
         "not-rely-on-time": "off",
         "reason-string": "off",
         "no-empty-blocks": "off",
-        "avoid-low-level-calls": "off"
+        "avoid-low-level-calls": "off",
+        "no-inline-assembly": "off",
+        "var-name-mixedcase": "off",
+        "func-name-mixedcase": "off"
     }
 }

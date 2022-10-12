@@ -10,8 +10,11 @@ interface MockProxyWhitelist {
 
 /// @notice moved from pool to this non-implemented contract to benchmark gas cost.
 abstract contract AToken {
+    /* solhint-disable var-name-mixedcase */
     address private immutable AUTHORITY;
     bytes4 private immutable APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
+
+    /* solhint-enable var-name-mixedcase */
 
     constructor(address _authority) {
         AUTHORITY = _authority;

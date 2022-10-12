@@ -26,9 +26,12 @@ import "../interfaces/IRigoToken.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice UnlimitedAllowanceToken is ERC20
 contract RigoToken is IRigoToken, UnlimitedAllowanceToken {
+    /* solhint-disable const-name-snakecase */
     string public constant name = "Rigo Token";
     string public constant symbol = "GRG";
     uint8 public constant decimals = 18;
+
+    /* solhint-enable const-name-snakecase */
 
     /// @inheritdoc IRigoToken
     address public override minter;
