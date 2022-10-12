@@ -28,6 +28,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
         require(returnData.length == 0, "POOL_INITIALIZATION_FAILED_ERROR");
     }
 
+    /* solhint-disable no-complex-fallback */
     /// @dev Fallback function forwards all transactions and returns all received return data.
     fallback() external payable override {
         address _implementation = Beacon(StorageSlot.getAddressSlot(_BEACON_SLOT).value).implementation();
@@ -42,4 +43,5 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
             return(0, returndatasize())
         }
     }
+    /* solhint-enable no-complex-fallback */
 }
