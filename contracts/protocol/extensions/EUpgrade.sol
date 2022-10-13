@@ -61,8 +61,4 @@ contract EUpgrade is IEUpgrade {
     function getBeacon() public view returns (address) {
         return _factory;
     }
-
-    function _isContract(address _target) private view returns (bool) {
-        return _target.code.length > 0;
-    }
 }
