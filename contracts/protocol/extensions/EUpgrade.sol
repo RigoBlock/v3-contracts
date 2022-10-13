@@ -40,10 +40,8 @@ contract EUpgrade is IEUpgrade {
         require(_eUpgrade != address(this), "EUPGRADE_DIRECT_CALL_ERROR");
 
         // read implementation address from factory. Different factories may have different implementations.
+        // implementation will always be a contract as factory asserts that.
         address newImplementation = Beacon(getBeacon()).implementation();
-
-        // sanity check that the new implementation is a contract
-        require(_isContract(newImplementation), "EUPGRADE_IMPLEMENTATION_NOT_CONTRACT_ERROR");
 
         // we define the storage area where we will write new implementation as the eip1967 implementation slot
         bytes32 implementationSlot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
