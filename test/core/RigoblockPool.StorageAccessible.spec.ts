@@ -43,6 +43,15 @@ describe("MixinStorageAccessible", async () => {
             //expect(beacon).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 32))
         })
 
+        it('can read implementation', async () => {
+            const { factory, pool } = await setupTests()
+            const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+            const implementation = await pool.getStorageAt(implementationSlot, 1)
+            const poolImplementation = await deployments.get("RigoblockV3Pool")
+            const encodedPack = utils.solidityPack(['uint256'], [poolImplementation.address])
+            expect(beacon).to.be.eq(encodedPack)
+        })
+
         it('can read pool owner', async () => {
             const { pool } = await setupTests()
             // owner is stored in same slot as symbol
