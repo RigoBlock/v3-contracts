@@ -11,6 +11,9 @@ describe("MixinStorageAccessible", async () => {
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
+        const AuthorityInstance = await deployments.get("Authority")
+        const Authority = await hre.ethers.getContractFactory("Authority")
+        const authority = Authority.attach(AuthorityInstance.address)
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
@@ -25,6 +28,7 @@ describe("MixinStorageAccessible", async () => {
             newPoolAddress
         )
         return {
+            authority: Authority.attach(AuthorityInstance.address),
             factory,
             pool
         }
@@ -34,13 +38,34 @@ describe("MixinStorageAccessible", async () => {
     //  i.e. 'unitaryValue', 'spread', 'minPeriod', 'decimals'
     describe("getStorageAt", async () => {
         it('can read beacon', async () => {
+            const { factory, pool, authority } = await setupTests()
+            const EPool = await hre.ethers.getContractFactory("EUpgrade")
+            const extension = await EPool.deploy(factory.address)
+            const ePool = EPool.attach(pool.address)
+            await expect(ePool.getBeacon()).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            await authority.setAdapter(extension.address, true)
+            // "2d6b3a6b": "getBeacon()"
+            authority.addMethod("0x2d6b3a6b", extension.address)
+            const beacon = await ePool.callStatic.getBeacon()
+            expect(beacon).to.be.eq(factory.address)
+            const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+            const implementation = await pool.getStorageAt(implementationSlot, 1)
+            const encodedPack = utils.solidityPack(['uint160'], [implementation])
+            expect(encodedPack).to.be.eq((await factory.implementation()).toLowerCase())
+            await factory.setImplementation(factory.address)
+            expect(await factory.implementation()).to.be.eq(factory.address)
+            // "466f3dc3": "upgradeImplementation()"
+            await authority.addMethod("0x466f3dc3", extension.address)
+            await expect(ePool.upgradeImplementation()).to.emit(ePool, "Upgraded").withArgs(factory.address)
+        })
+
+        it('can read implementation', async () => {
             const { factory, pool } = await setupTests()
-            const beaconSlot = '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50'
-            const beacon = await pool.getStorageAt(beaconSlot, 1)
-            const encodedPack = utils.solidityPack(['uint256'], [factory.address])
-            expect(beacon).to.be.eq(encodedPack)
-            // encoding as uint256 is same as later encoding as hexZeroPad
-            //expect(beacon).to.be.eq(hre.ethers.utils.hexZeroPad(encodedPack, 32))
+            const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+            const implementation = await pool.getStorageAt(implementationSlot, 1)
+            const poolImplementation = await deployments.get("RigoblockV3Pool")
+            const encodedPack = utils.solidityPack(['uint256'], [poolImplementation.address])
+            expect(implementation).to.be.eq(encodedPack)
         })
 
         it('can read pool owner', async () => {
@@ -154,11 +179,23 @@ describe("MixinStorageAccessible", async () => {
 
     describe("getStorageSlotsAt", async () => {
         it('can read beacon slot', async () => {
-            const { factory, pool } = await setupTests()
-            const beaconSlot = '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50'
-            const beacon = await pool.getStorageSlotsAt([beaconSlot])
-            const encodedPack = utils.solidityPack(['uint256'], [factory.address])
-            expect(beacon).to.be.eq(encodedPack)
+            const { factory, pool, authority } = await setupTests()
+            const EPool = await hre.ethers.getContractFactory("EUpgrade")
+            const extension = await EPool.deploy(factory.address)
+            const ePool = EPool.attach(pool.address)
+            await authority.setAdapter(extension.address, true)
+            // "2d6b3a6b": "getBeacon()"
+            authority.addMethod("0x2d6b3a6b", extension.address)
+            const beacon = await ePool.callStatic.getBeacon()
+            expect(beacon).to.be.eq(factory.address)
+            // ""466f3dc3": "upgradeImplementation()"
+            await authority.addMethod("0x466f3dc3", extension.address)
+            await factory.setImplementation(factory.address)
+            await ePool.upgradeImplementation()
+            const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+            const implementation = await ethers.provider.getStorageAt(pool.address, implementationSlot)
+            const encodedPack = utils.solidityPack(['uint160'], [implementation])
+            expect(encodedPack).to.be.eq((factory.address).toLowerCase())
         })
 
         it('can read owner', async () => {
@@ -177,13 +214,14 @@ describe("MixinStorageAccessible", async () => {
             const { newPoolAddress } = await factory.callStatic.createPool('test pool GRG', 'PDPG', grgToken)
             await factory.createPool('test pool GRG', 'PDPG', grgToken)
             const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
-            const beaconSlot = '0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50'
+            const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+            const implementationInstance = await deployments.get("RigoblockV3Pool")
             const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
             const baseTokenSlot = BigInt(poolInitSlot) + BigInt(2)
-            const returnString = await pool.getStorageSlotsAt([beaconSlot, baseTokenSlot])
+            const returnString = await pool.getStorageSlotsAt([implementationSlot, baseTokenSlot])
             const encodedPack = utils.solidityPack(
                 ['uint256', 'uint256'],
-                [factory.address, (await pool.getPool()).baseToken]
+                [implementationInstance.address, (await pool.getPool()).baseToken]
             )
             expect(returnString).to.be.eq(encodedPack)
         })

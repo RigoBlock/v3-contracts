@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
- Copyright 2021 Rigo Intl.
+ Copyright 2021-2022 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@ import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.s
 import "../../interfaces/IWETH9.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 
+/// @title AUniswap - Allows interactions with the Uniswap contracts.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
 // @notice We implement sweep token methods routed to uniswap router even though could be defined as virtual and not implemented,
 //  because we always wrap/unwrap ETH within the pool and never accidentally send tokens to uniswap router or npm contracts.
 //  This allows to avoid clasing signatures and correctly reach target address for payment methods.

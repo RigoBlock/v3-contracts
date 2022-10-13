@@ -93,10 +93,6 @@ abstract contract MixinOwnerActions is MixinActions {
     function _getUnitaryValue() internal view virtual override returns (uint256);
 
     function _isContract(address _target) private view returns (bool) {
-        uint256 size;
-        assembly {
-            size := extcodesize(_target)
-        }
-        return size > 0;
+        return _target.code.length > 0;
     }
 }

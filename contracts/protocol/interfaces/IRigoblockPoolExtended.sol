@@ -19,7 +19,12 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-interface IAMulticall {
-    /// @notice Enables calling multiple methods in a single call to the contract
-    function multicall(bytes[] calldata data) external returns (bytes[] memory results);
+import "../IRigoblockV3Pool.sol";
+import "../extensions/adapters/interfaces/IRigoblockExtensions.sol";
+
+/// @title Rigoblock Pool Extended Interface - Allows interaction with all the pool's supported methods.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
+// solhint-disable-next-line
+interface IRigoblockPoolExtended is IRigoblockV3Pool, IRigoblockExtensions {
+
 }

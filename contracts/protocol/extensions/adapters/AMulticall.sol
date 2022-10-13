@@ -5,6 +5,8 @@ pragma solidity 0.8.17;
 
 import "./interfaces/IAMulticall.sol";
 
+/// @title AMulticall - Allows sending mulple transactions to the pool.
+/// @notice As per https://github.com/Uniswap/v3-periphery/blob/main/contracts/base/Multicall.sol
 contract AMulticall is IAMulticall {
     /// @inheritdoc IAMulticall
     function multicall(bytes[] calldata data) external override returns (bytes[] memory results) {

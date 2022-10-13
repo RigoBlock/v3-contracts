@@ -107,8 +107,8 @@ describe("ProxyFactory", async () => {
                 newPoolAddress
             )
             const result = await txReceipt.wait()
-            // 3 logs are emitted at pool creation, could expect exact event.withArgs
-            expect(result.events[2].args.poolAddress).to.be.eq(newPoolAddress)
+            // 4 logs are emitted at pool creation, could expect exact event.withArgs
+            expect(result.events[3].args.poolAddress).to.be.eq(newPoolAddress)
         })
 
         it('should create pool with uppercase character in name', async () => {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
- Copyright 2021 Rigo Intl.
+ Copyright 2021-2022 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import "./interfaces/IAUniswapV3NPM.sol";
 import "../../interfaces/IWETH9.sol";
 import "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 
+/// @title AUniswapV3NPM - Allows interactions with the Uniswap NPM contract.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
 abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     /// @inheritdoc IAUniswapV3NPM
     function mint(INonfungiblePositionManager.MintParams memory params)

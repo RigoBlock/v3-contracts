@@ -1,28 +1,46 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
+/*
+
+ Copyright 2022 Rigo Intl.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+*/
+
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/storageSlot/StorageSlot.sol";
-import {IRigoblockPoolProxyFactory as Beacon} from "../interfaces/IRigoblockPoolProxyFactory.sol";
 import "../interfaces/IRigoblockPoolProxy.sol";
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract RigoblockPoolProxy is IRigoblockPoolProxy {
-    // beacon slot is used to store beacon address, a contract that returns the address of the implementation contract.
+    // implementation slot is used to store implementation address, a contract which implements the pool logic.
     // Reduced deployment cost by using internal variable.
-    bytes32 internal constant _BEACON_SLOT = 0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
+    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
-    /// @dev Sets address of beacon contract.
-    /// @param _beacon Beacon address.
+    /// @dev Sets address of implementation contract.
+    /// @param _implementation Implementation address.
     /// @param _data Initialization parameters.
-    constructor(address _beacon, bytes memory _data) payable {
-        // store beacon address in beacon slot value
-        assert(_BEACON_SLOT == bytes32(uint256(keccak256("eip1967.proxy.beacon")) - 1));
-        StorageSlot.getAddressSlot(_BEACON_SLOT).value = _beacon;
+    constructor(address _implementation, bytes memory _data) payable {
+        // store implementation address in implementation slot value
+        assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
+        StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = _implementation;
+        emit Upgraded(_implementation);
 
         // initialize pool
         // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, baseToken, owner)
-        (, bytes memory returnData) = Beacon(_beacon).implementation().delegatecall(_data);
+        (, bytes memory returnData) = _implementation.delegatecall(_data);
 
         // we must assert initialization didn't fail, otherwise it could fail silently and still deploy the pool.
         require(returnData.length == 0, "POOL_INITIALIZATION_FAILED_ERROR");
@@ -30,12 +48,12 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
 
     /* solhint-disable no-complex-fallback */
     /// @dev Fallback function forwards all transactions and returns all received return data.
-    fallback() external payable override {
-        address _implementation = Beacon(StorageSlot.getAddressSlot(_BEACON_SLOT).value).implementation();
+    fallback() external payable {
+        address implementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             calldatacopy(0, 0, calldatasize())
-            let success := delegatecall(gas(), _implementation, 0, calldatasize(), 0, 0)
+            let success := delegatecall(gas(), implementation, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
             if eq(success, 0) {
                 revert(0, returndatasize())
