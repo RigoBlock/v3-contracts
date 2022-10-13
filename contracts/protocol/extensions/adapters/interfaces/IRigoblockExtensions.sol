@@ -19,7 +19,25 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-interface IAMulticall {
-    /// @notice Enables calling multiple methods in a single call to the contract
-    function multicall(bytes[] calldata data) external returns (bytes[] memory results);
+import "./IAMulticall.sol";
+import "./IASelfCustody.sol";
+import "./IAStaking.sol";
+import "./IAUniswap.sol";
+import "./IAUniswapV3NPM.sol";
+import "./IEUpgrade.sol";
+import "./IEWhitelist.sol";
+
+/// @title Rigoblock Extensions Interface - Groups together the extensions' methods.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
+// solhint-disable-next-line
+interface IRigoblockExtensions is
+    IAMulticall,
+    IASelfCustody,
+    IAStaking,
+    IAUniswap,
+    IAUniswapV3NPM,
+    IEUpgrade,
+    IEWhitelist
+{
+
 }
