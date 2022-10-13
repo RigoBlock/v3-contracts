@@ -18,6 +18,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
         // store implementation address in implementation slot value
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
         StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = _implementation;
+        emit Upgraded(_implementation);
 
         // initialize pool
         // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, baseToken, owner)
@@ -29,7 +30,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
 
     /* solhint-disable no-complex-fallback */
     /// @dev Fallback function forwards all transactions and returns all received return data.
-    fallback() external payable override {
+    fallback() external payable {
         address implementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
         // solhint-disable-next-line no-inline-assembly
         assembly {

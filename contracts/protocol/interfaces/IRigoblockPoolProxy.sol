@@ -2,5 +2,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 interface IRigoblockPoolProxy {
-    fallback() external payable;
+    /// @notice Emitted when 
+    event Upgraded(address indexed newImplementation);
 }
