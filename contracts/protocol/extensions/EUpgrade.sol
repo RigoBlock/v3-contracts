@@ -7,22 +7,21 @@ import {IRigoblockPoolProxyFactory as Beacon} from "../interfaces/IRigoblockPool
 import "../../utils/storageSlot/StorageSlot.sol";
 
 contract EUpgrade is IEUpgrade {
-    address private immutable eUpgrade;
-    // TODO: check if should move beacon to implementation
-    address private immutable factory;
+    address private immutable _eUpgrade;
+    address private immutable _factory;
 
-    constructor(address _factory) {
-        eUpgrade = address(this);
-        factory = _factory;
+    constructor(address factory) {
+        _eUpgrade = address(this);
+        _factory = factory;
     }
 
     /// @inheritdoc IEUpgrade
     function upgradeImplementation() external override {
         // prevent direct calls to this contract
-        require(eUpgrade != address(this), "EUPGRADE_DIRECT_CALL_ERROR");
+        require(_eUpgrade != address(this), "EUPGRADE_DIRECT_CALL_ERROR");
 
-        // read implementation address from factory
-        address newImplementation = Beacon(factory).implementation();
+        // read implementation address from factory. Different factories may have different implementations.
+        address newImplementation = Beacon(getBeacon()).implementation();
 
         // sanity check that the new implementation is a contract
         require(_isContract(newImplementation), "EUPGRADE_IMPLEMENTATION_NOT_CONTRACT_ERROR");
@@ -40,6 +39,10 @@ contract EUpgrade is IEUpgrade {
         // we write new address to storage at implementation slot location and emit eip1967 log
         StorageSlot.getAddressSlot(implementationSlot).value = newImplementation;
         emit Upgraded(newImplementation);
+    }
+
+    function getBeacon() public view returns (address) {
+        return _factory;
     }
 
     function _isContract(address _target) private view returns (bool) {
