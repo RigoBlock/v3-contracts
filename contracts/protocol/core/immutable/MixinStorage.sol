@@ -67,6 +67,19 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
+    /// @notice Pool initialization struct wrapper.
+    /// @dev Allows initializing pool as struct for better readability.
+    /// @param pool The pool struct.
+    struct PoolWrapper {
+        Pool pool;
+    }
+
+    function poolWrapper() internal pure returns (PoolWrapper storage s) {
+        assembly {
+            s.slot := _POOL_INIT_SLOT
+        }
+    }
+
     function poolParams() internal pure returns (PoolParams storage s) {
         assembly {
             s.slot := _POOL_VARIABLES_SLOT
