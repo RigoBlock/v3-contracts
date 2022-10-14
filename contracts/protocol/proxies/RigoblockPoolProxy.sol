@@ -19,7 +19,6 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../utils/storageSlot/StorageSlot.sol";
 import "../interfaces/IRigoblockPoolProxy.sol";
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
@@ -35,7 +34,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
     constructor(address implementation, bytes memory data) payable {
         // store implementation address in implementation slot value
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
-        StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = implementation;
+        getImplementation().implementation = implementation;
         emit Upgraded(implementation);
 
         // initialize pool
@@ -49,7 +48,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
     /* solhint-disable no-complex-fallback */
     /// @notice Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
-        address implementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
+        address implementation = getImplementation().implementation;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             calldatacopy(0, 0, calldatasize())
@@ -62,4 +61,14 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
         }
     }
     /* solhint-enable no-complex-fallback */
+
+    struct ImplementationSlot {
+        address implementation;
+    }
+
+    function getImplementation() private pure returns (ImplementationSlot storage s) {
+        assembly {
+            s.slot := _IMPLEMENTATION_SLOT
+        }
+    }
 }
