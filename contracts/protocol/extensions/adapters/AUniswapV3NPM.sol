@@ -78,8 +78,9 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 amount1
         )
     {
-        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(_getUniswapNpm())
-            .positions(params.tokenId);
+        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(_getUniswapNpm()).positions(
+            params.tokenId
+        );
 
         // we require both tokens being whitelisted
         _assertTokenWhitelisted(token0);

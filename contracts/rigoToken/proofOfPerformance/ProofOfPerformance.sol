@@ -50,7 +50,10 @@ contract ProofOfPerformance is IProofOfPerformance {
 
     /// @inheritdoc IProofOfPerformance
     function proofOfPerformance(address targetPool) external view override returns (uint256) {
-        return IStaking(_getStakingProxy()).getOwnerStakeByStatus(targetPool, IStructs.StakeStatus.DELEGATED).currentEpochBalance;
+        return
+            IStaking(_getStakingProxy())
+                .getOwnerStakeByStatus(targetPool, IStructs.StakeStatus.DELEGATED)
+                .currentEpochBalance;
     }
 
     function _getStakingProxy() private view returns (address) {

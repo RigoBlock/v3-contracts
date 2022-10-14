@@ -59,12 +59,7 @@ abstract contract MixinActions is MixinStorage {
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
-    function burn(uint256 amountIn, uint256 amountOutMin)
-        external
-        override
-        nonReentrant
-        returns (uint256 netRevenue)
-    {
+    function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant returns (uint256 netRevenue) {
         require(amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
         UserAccount memory userAccount = accounts().userAccounts[msg.sender];
         require(userAccount.userBalance >= amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");

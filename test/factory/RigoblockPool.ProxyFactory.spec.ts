@@ -71,7 +71,7 @@ describe("ProxyFactory", async () => {
                 await registry.getPoolIdFromAddress(newPoolAddress)
             ).to.be.eq(poolId)
             await expect(factory.createPool('testpool','TEST', AddressZero))
-                .to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
+                .to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
         })
 
         // following test used to assert try/catch return bytes error.
@@ -123,7 +123,7 @@ describe("ProxyFactory", async () => {
             await factory.createPool('duplicateName', 'TEST', AddressZero)
             await expect(
                 factory.createPool('duplicateName', 'TEST', AddressZero)
-            ).to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
         })
 
         it('should create pool with duplicate name', async () => {
@@ -132,7 +132,11 @@ describe("ProxyFactory", async () => {
                 factory.createPool('duplicateName', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
             await expect(
-                factory.createPool('duplicateName', 'TEST2', AddressZero)
+                factory.createPool('duplicateName', 'TEST', AddressZero)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            const [ user1, user2 ] = waffle.provider.getWallets()
+            await expect(
+                factory.connect(user2).createPool('duplicateName', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
         })
 

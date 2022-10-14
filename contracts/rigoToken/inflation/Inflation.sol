@@ -71,10 +71,7 @@ contract Inflation is IInflation {
 
         // sanity check for epoch length queried from staking
         if (epochLength != epochDuration) {
-            require(
-                epochDuration >= 5 days && epochDuration <= 90 days,
-                "INFLATION_TIME_ANOMALY_ERROR"
-            );
+            require(epochDuration >= 5 days && epochDuration <= 90 days, "INFLATION_TIME_ANOMALY_ERROR");
             epochLength = epochDuration;
         }
 

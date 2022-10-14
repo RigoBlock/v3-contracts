@@ -60,6 +60,7 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
             return(0, returndatasize())
         }
     }
+
     /* solhint-enable no-complex-fallback */
 
     /// @notice Implementation slot is accessed directly.

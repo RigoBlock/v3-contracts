@@ -19,9 +19,10 @@
 
 pragma solidity 0.8.17;
 
+import "../interfaces/pool/IRigoblockV3PoolInitializer.sol";
+import "./RigoblockPoolProxy.sol";
 import {IPoolRegistry as PoolRegistry} from "../interfaces/IPoolRegistry.sol";
-import {IRigoblockPoolProxyFactory} from "../interfaces/IRigoblockPoolProxyFactory.sol";
-import {RigoblockPoolProxy} from "./RigoblockPoolProxy.sol";
+import "../interfaces/IRigoblockPoolProxyFactory.sol";
 
 /// @title Rigoblock Pool Proxy Factory contract - allows creation of new Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -92,19 +93,21 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
      */
     /// @dev Creates a pool and routes to eventful.
     /// @param name String of the name.
-    /// @param symbol String of the symbol.
-    /// @param baseToken Address of the base token.
+    /// @param  symbol String of the symbol.
+    /// @param  baseToken Address of the base token.
     function _createPool(
         string calldata name,
         string calldata symbol,
         address baseToken
     ) internal returns (bytes32 salt, RigoblockPoolProxy newProxy) {
         bytes memory encodedInitialization = abi.encodeWithSelector(
-            0xc281a1bd, // RigoblockPool.initializePool.selector
-            name,
-            symbol,
-            baseToken,
-            msg.sender
+            0xa8f5ebe2, // "a8f5ebe2": "initializePool((string,bytes8,address,address))"
+            IRigoblockV3PoolInitializer.Parameters({
+                name: name,
+                symbol: bytes8(bytes(symbol)),
+                owner: msg.sender,
+                baseToken: baseToken
+            })
         );
         salt = keccak256(abi.encode(name, msg.sender));
 
@@ -115,17 +118,13 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         } catch Error(string memory revertReason) {
             revert(revertReason);
         } catch (bytes memory) {
-            revert("FACTORY_LIBRARY_CREATE2_FAILED_ERROR");
+            revert("FACTORY_CREATE2_FAILED_ERROR");
         }
     }
 
     /// @dev Returns whether an address is a contract.
     /// @return Bool target address has code.
     function _isContract(address target) private view returns (bool) {
-        uint256 size;
-        assembly {
-            size := extcodesize(target)
-        }
-        return size > 0;
+        return target.code.length > 0;
     }
 }

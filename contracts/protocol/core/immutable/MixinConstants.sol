@@ -52,7 +52,8 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     uint48 internal constant _MIN_LOCKUP = 2;
 
-    bytes4 internal constant _TRANSFER_FROM_SELECTOR = bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
+    bytes4 internal constant _TRANSFER_FROM_SELECTOR =
+        bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
 
     bytes4 internal constant _TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
 }

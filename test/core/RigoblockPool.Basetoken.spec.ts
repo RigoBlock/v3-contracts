@@ -3,7 +3,7 @@ import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
-import { BigNumber, Contract } from "ethers";
+import { BigNumber, Contract, utils } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { deployContract, timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
@@ -309,16 +309,18 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
-    describe("_initializePool", async () => {
+    describe("initializePool", async () => {
         it('should revert when already initialized', async () => {
             const { pool, grgToken } = await setupTests()
+            let symbol = utils.formatBytes32String("TEST")
+            symbol = utils.hexDataSlice(symbol, 0, 8)
             await expect(
-                pool.initializePool(
-                    'testpool',
-                    'TEST',
-                    grgToken.address,
-                    user1.address
-                )
+                pool.initializePool({
+                    name: 'testpool',
+                    symbol: symbol,
+                    owner: user1.address,
+                    baseToken: grgToken.address
+                })
             ).to.be.revertedWith("POOL_ALREADY_INITIALIZED_ERROR")
         })
     })

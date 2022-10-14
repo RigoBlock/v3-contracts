@@ -16,7 +16,7 @@ interface IRigoblockV3PoolEvents {
         address indexed owner,
         address indexed baseToken,
         string name,
-        string symbol
+        bytes8 symbol
     );
 
     /// @notice Emitted when new owner is set.
