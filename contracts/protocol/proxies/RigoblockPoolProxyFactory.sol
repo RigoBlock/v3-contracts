@@ -118,7 +118,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         });
 
         // TODO: should remove implementation from constructor as it is a variable, meaning pool address could change
-        try new RigoblockPoolProxy{salt: salt}(implementation) returns (
+        try new RigoblockPoolProxy{salt: salt}() returns (
             RigoblockPoolProxy proxy
         ) {
             newProxy = proxy;

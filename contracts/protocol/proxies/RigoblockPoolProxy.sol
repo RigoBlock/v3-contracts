@@ -20,6 +20,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../interfaces/IRigoblockPoolProxy.sol";
+import "../interfaces/IRigoblockPoolProxyFactory.sol";
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -29,10 +30,10 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     /// @notice Sets address of implementation contract.
-    /// @param implementation Implementation address.
-    constructor(address implementation) payable {
+    constructor() payable {
         // store implementation address in implementation slot value
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
+        address implementation = IRigoblockPoolProxyFactory(msg.sender).implementation();
         getImplementation().implementation = implementation;
         emit Upgraded(implementation);
 

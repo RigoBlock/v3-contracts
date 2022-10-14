@@ -143,6 +143,23 @@ describe("ProxyFactory", async () => {
             ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
         })
 
+        it('should revert when contract exists with different implementation', async () => {
+            const { factory } = await setupTests()
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await factory.createPool('duplicateName', 'TEST', weth.address)
+            const source = 'contract Impl { function initializePool() external {} }'
+            const [ user1, user2 ] = waffle.provider.getWallets()
+            const impl = await deployContract(user1, source)
+            await factory.setImplementation(impl.address)
+            await expect(
+                factory.createPool('duplicateName', 'TEST', weth.address)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            await expect(
+                factory.createPool('duplicateName', 'TEST2', weth.address)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+        })
+
         it('should create pool with duplicate name', async () => {
             const { factory } = await setupTests()
             await expect(
