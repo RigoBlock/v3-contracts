@@ -111,17 +111,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         salt = keccak256(abi.encode(name, msg.sender));
 
         // we write to storage to allow proxy to read initialization parameters
-        _parameters = Parameters({
-            name: name,
-            symbol: bytes8(bytes(symbol)),
-            owner: msg.sender,
-            baseToken: baseToken
-        });
+        _parameters = Parameters({name: name, symbol: bytes8(bytes(symbol)), owner: msg.sender, baseToken: baseToken});
 
         // TODO: should remove implementation from constructor as it is a variable, meaning pool address could change
-        try new RigoblockPoolProxy{salt: salt}() returns (
-            RigoblockPoolProxy proxy
-        ) {
+        try new RigoblockPoolProxy{salt: salt}() returns (RigoblockPoolProxy proxy) {
             newProxy = proxy;
         } catch Error(string memory revertReason) {
             revert(revertReason);
