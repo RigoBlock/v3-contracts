@@ -34,8 +34,8 @@ describe("ASelfCustody", async () => {
         await authority.addMethod("0x318698a7", ASelfCustodyInstance.address)
         //"6d6b09e9": "poolGrgShortfall(address)"
         await authority.addMethod("0x6d6b09e9", ASelfCustodyInstance.address)
-        //"6ac91666": "GRG_VAULT_ADDRESS()"
-        await authority.addMethod("0x6ac91666", ASelfCustodyInstance.address)
+        // "4f8554da": "grgVault()"
+        await authority.addMethod("0x4f8554da", ASelfCustodyInstance.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
@@ -78,7 +78,7 @@ describe("ASelfCustody", async () => {
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             expect(await scPool.poolGrgShortfall(newPoolAddress)).to.be.eq(0)
-            const grgVaultAddress = await scPool.GRG_VAULT_ADDRESS()
+            const grgVaultAddress = await scPool.grgVault()
             expect(await stakingProxy.getGrgVault()).to.be.eq(grgVaultAddress)
             const delegatedBalance = await stakingProxy.getTotalStakeDelegatedToPool(poolId)
             expect(await grgVault.balanceOf(newPoolAddress)).to.be.eq(delegatedBalance.currentEpochBalance)

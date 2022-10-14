@@ -43,11 +43,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         _assertTokenWhitelisted(params.token1);
 
         // we set the allowance to the uniswap position manager
-        _safeApprove(params.token0, _getUniswapNpmAddress(), type(uint256).max);
-        _safeApprove(params.token1, _getUniswapNpmAddress(), type(uint256).max);
+        _safeApprove(params.token0, _getUniswapNpm(), type(uint256).max);
+        _safeApprove(params.token1, _getUniswapNpm(), type(uint256).max);
 
         // only then do we mint the liquidity token
-        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(_getUniswapNpmAddress()).mint(
+        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).mint(
             INonfungiblePositionManager.MintParams({
                 token0: params.token0,
                 token1: params.token1,
@@ -64,8 +64,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.token0, _getUniswapNpmAddress(), uint256(1));
-        _safeApprove(params.token1, _getUniswapNpmAddress(), uint256(1));
+        _safeApprove(params.token0, _getUniswapNpm(), uint256(1));
+        _safeApprove(params.token1, _getUniswapNpm(), uint256(1));
     }
 
     /// @inheritdoc IAUniswapV3NPM
@@ -78,7 +78,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 amount1
         )
     {
-        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(_getUniswapNpmAddress())
+        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(_getUniswapNpm())
             .positions(params.tokenId);
 
         // we require both tokens being whitelisted
@@ -86,11 +86,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         _assertTokenWhitelisted(token1);
 
         // we first set the allowance to the uniswap position manager
-        _safeApprove(token0, _getUniswapNpmAddress(), type(uint256).max);
-        _safeApprove(token1, _getUniswapNpmAddress(), type(uint256).max);
+        _safeApprove(token0, _getUniswapNpm(), type(uint256).max);
+        _safeApprove(token1, _getUniswapNpm(), type(uint256).max);
 
         // finally, we add to the liquidity token
-        (liquidity, amount0, amount1) = INonfungiblePositionManager(_getUniswapNpmAddress()).increaseLiquidity(
+        (liquidity, amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).increaseLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
                 tokenId: params.tokenId,
                 amount0Desired: params.amount0Desired,
@@ -102,8 +102,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(token0, _getUniswapNpmAddress(), uint256(1));
-        _safeApprove(token1, _getUniswapNpmAddress(), uint256(1));
+        _safeApprove(token0, _getUniswapNpm(), uint256(1));
+        _safeApprove(token1, _getUniswapNpm(), uint256(1));
     }
 
     /// @inheritdoc IAUniswapV3NPM
@@ -112,7 +112,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         override
         returns (uint256 amount0, uint256 amount1)
     {
-        (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpmAddress()).decreaseLiquidity(
+        (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).decreaseLiquidity(
             INonfungiblePositionManager.DecreaseLiquidityParams({
                 tokenId: params.tokenId,
                 liquidity: params.liquidity,
@@ -129,7 +129,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         override
         returns (uint256 amount0, uint256 amount1)
     {
-        (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpmAddress()).collect(
+        (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: params.tokenId,
                 recipient: address(this), // this pool is always the recipient
@@ -141,7 +141,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
 
     /// @inheritdoc IAUniswapV3NPM
     function burn(uint256 tokenId) external override {
-        INonfungiblePositionManager(_getUniswapNpmAddress()).burn(tokenId);
+        INonfungiblePositionManager(_getUniswapNpm()).burn(tokenId);
     }
 
     /// @inheritdoc IAUniswapV3NPM
@@ -151,7 +151,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         uint24 fee,
         uint160 sqrtPriceX96
     ) external override returns (address pool) {
-        pool = INonfungiblePositionManager(_getUniswapNpmAddress()).createAndInitializePoolIfNecessary(
+        pool = INonfungiblePositionManager(_getUniswapNpm()).createAndInitializePoolIfNecessary(
             token0,
             token1,
             fee,
@@ -159,7 +159,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
     }
 
-    function _assertTokenWhitelisted(address _token) internal view virtual {}
+    function _assertTokenWhitelisted(address token) internal view virtual {}
 
     function _safeApprove(
         address token,
@@ -167,5 +167,5 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         uint256 value
     ) internal virtual {}
 
-    function _getUniswapNpmAddress() internal view virtual returns (address) {}
+    function _getUniswapNpm() internal view virtual returns (address) {}
 }

@@ -35,24 +35,24 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     bytes32 internal constant _POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
 
-    uint16 internal constant FEE_BASE = 10000;
+    uint16 internal constant _FEE_BASE = 10000;
 
-    uint16 internal constant INITIAL_SPREAD = 500; // +-5%, in basis points
+    uint16 internal constant _INITIAL_SPREAD = 500; // +-5%, in basis points
 
-    uint16 internal constant MAX_SPREAD = 1000; // +-10%, in basis points
+    uint16 internal constant _MAX_SPREAD = 1000; // +-10%, in basis points
 
-    uint16 internal constant MAX_TRANSACTION_FEE = 100; // maximum 1%
+    uint16 internal constant _MAX_TRANSACTION_FEE = 100; // maximum 1%
 
     // minimum order size 1/1000th of base to avoid dust clogging things up
-    uint16 internal constant MINIMUM_ORDER_DIVISOR = 1e3;
+    uint16 internal constant _MINIMUM_ORDER_DIVISOR = 1e3;
 
-    uint16 internal constant SPREAD_BASE = 10000;
+    uint16 internal constant _SPREAD_BASE = 10000;
 
-    uint48 internal constant MAX_LOCKUP = 30 days;
+    uint48 internal constant _MAX_LOCKUP = 30 days;
 
-    uint48 internal constant MIN_LOCKUP = 2;
+    uint48 internal constant _MIN_LOCKUP = 2;
 
-    bytes4 internal constant TRANSFER_FROM_SELECTOR = bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
+    bytes4 internal constant _TRANSFER_FROM_SELECTOR = bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
 
-    bytes4 internal constant TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
+    bytes4 internal constant _TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
 }

@@ -19,30 +19,30 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     }
 
     /// @inheritdoc IRigoblockV3PoolInitializer
-    function _initializePool(
-        string calldata _poolName,
-        string calldata _poolSymbol,
-        address _baseToken,
-        address _owner
+    function initializePool(
+        string calldata poolName,
+        string calldata poolSymbol,
+        address baseToken,
+        address owner
     ) external override onlyUninitialized {
         uint8 tokenDecimals = 18;
 
-        if (_baseToken != address(0)) {
-            tokenDecimals = IERC20(_baseToken).decimals();
+        if (baseToken != address(0)) {
+            tokenDecimals = IERC20(baseToken).decimals();
         }
 
         // a pool with small decimals could easily underflow.
         assert(tokenDecimals >= 6);
 
         poolWrapper().pool = Pool({
-            name: _poolName,
-            symbol: bytes8(bytes(_poolSymbol)),
+            name: poolName,
+            symbol: bytes8(bytes(poolSymbol)),
             decimals: tokenDecimals,
-            owner: _owner,
+            owner: owner,
             unlocked: true,
-            baseToken: _baseToken
+            baseToken: baseToken
         });
 
-        emit PoolInitialized(msg.sender, _owner, _baseToken, _poolName, _poolSymbol);
+        emit PoolInitialized(msg.sender, owner, baseToken, poolName, poolSymbol);
     }
 }

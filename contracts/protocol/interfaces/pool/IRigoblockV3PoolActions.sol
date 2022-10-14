@@ -24,19 +24,19 @@ pragma solidity >=0.8.0 <0.9.0;
 // solhint-disable-next-line
 interface IRigoblockV3PoolActions {
     /// @notice Allows a user to mint pool tokens on behalf of an address.
-    /// @param _recipient Address receiving the tokens.
-    /// @param _amountIn Amount of base tokens.
-    /// @param _amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
+    /// @param recipient Address receiving the tokens.
+    /// @param amountIn Amount of base tokens.
+    /// @param amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
     /// @return recipientAmount Number of tokens minted to recipient.
     function mint(
-        address _recipient,
-        uint256 _amountIn,
-        uint256 _amountOutMin
-    ) external payable returns (uint256);
+        address recipient,
+        uint256 amountIn,
+        uint256 amountOutMin
+    ) external payable returns (uint256 recipientAmount);
 
     /// @notice Allows a pool holder to burn pool tokens.
-    /// @param _amountIn Number of tokens to burn.
-    /// @param _amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
+    /// @param amountIn Number of tokens to burn.
+    /// @param amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
     /// @return netRevenue Net amount of burnt pool tokens.
-    function burn(uint256 _amountIn, uint256 _amountOutMin) external returns (uint256); // netRevenue
+    function burn(uint256 amountIn, uint256 amountOutMin) external returns (uint256 netRevenue);
 }

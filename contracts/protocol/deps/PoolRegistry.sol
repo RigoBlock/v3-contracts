@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.17;
 
-import {OwnedUninitialized as Owned} from "../../utils/owned/OwnedUninitialized.sol";
+import "../IRigoblockV3Pool.sol";
 import {LibSanitize} from "../../utils/libSanitize/LibSanitize.sol";
 import {IAuthority as Authority} from "../interfaces/IAuthority.sol";
 
@@ -33,11 +33,11 @@ contract PoolRegistry is IPoolRegistry {
     address public override authority;
 
     /// @inheritdoc IPoolRegistry
-    address public override rigoblockDaoAddress;
+    address public override rigoblockDao;
 
-    mapping(address => bytes32) private mapIdByAddress;
+    mapping(address => bytes32) private _mapIdByAddress;
 
-    mapping(address => PoolMeta) private poolMetaByAddress;
+    mapping(address => PoolMeta) private _poolMetaByAddress;
 
     /*
      * MODIFIERS
@@ -47,29 +47,29 @@ contract PoolRegistry is IPoolRegistry {
         _;
     }
 
-    modifier onlyPoolOwner(address _poolAddress) {
-        require(Owned(_poolAddress).owner() == msg.sender, "REGISTRY_CALLER_IS_NOT_POOL_OWNER_ERROR");
+    modifier onlyPoolOperator(address pool) {
+        require(IRigoblockV3Pool(payable(pool)).owner() == msg.sender, "REGISTRY_CALLER_IS_NOT_POOL_OWNER_ERROR");
         _;
     }
 
     modifier onlyRigoblockDao() {
-        require(msg.sender == rigoblockDaoAddress, "REGISTRY_CALLER_NOT_DAO_ERROR");
+        require(msg.sender == rigoblockDao, "REGISTRY_CALLER_NOT_DAO_ERROR");
         _;
     }
 
-    modifier whenAddressFree(address _poolAddress) {
-        require(mapIdByAddress[_poolAddress] == bytes32(0), "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR");
+    modifier whenAddressFree(address pool) {
+        require(_mapIdByAddress[pool] == bytes32(0), "REGISTRY_ADDRESS_ALREADY_TAKEN_ERROR");
         _;
     }
 
-    modifier whenPoolRegistered(address _poolAddress) {
-        require(mapIdByAddress[_poolAddress] != bytes32(0), "REGISTRY_ADDRESS_NOT_REGISTERED_ERROR");
+    modifier whenPoolRegistered(address pool) {
+        require(_mapIdByAddress[pool] != bytes32(0), "REGISTRY_ADDRESS_NOT_REGISTERED_ERROR");
         _;
     }
 
-    constructor(address _authority, address _rigoblockDao) {
-        authority = _authority;
-        rigoblockDaoAddress = _rigoblockDao;
+    constructor(address newAuthority, address newRigoblockDao) {
+        authority = newAuthority;
+        rigoblockDao = newRigoblockDao;
     }
 
     /*
@@ -77,85 +77,81 @@ contract PoolRegistry is IPoolRegistry {
      */
     /// @inheritdoc IPoolRegistry
     function register(
-        address _poolAddress,
-        string calldata _name,
-        string calldata _symbol,
+        address pool,
+        string calldata name,
+        string calldata symbol,
         bytes32 poolId
-    ) external override onlyWhitelistedFactory whenAddressFree(_poolAddress) {
-        _assertValidNameAndSymbol(_name, _symbol);
-        mapIdByAddress[_poolAddress] = poolId;
+    ) external override onlyWhitelistedFactory whenAddressFree(pool) {
+        _assertValidNameAndSymbol(name, symbol);
+        _mapIdByAddress[pool] = poolId;
 
         emit Registered(
             msg.sender, // proxy factory
-            _poolAddress,
-            bytes32(bytes(_name)),
-            bytes32(bytes(_symbol)),
+            pool,
+            bytes32(bytes(name)),
+            bytes32(bytes(symbol)),
             poolId
         );
     }
 
     /// @inheritdoc IPoolRegistry
-    function setAuthority(address _authority) external override onlyRigoblockDao {
-        require(_authority != authority, "REGISTRY_SAME_INPUT_ADDRESS_ERROR");
-        require(_isContract(_authority), "REGISTRY_NEW_AUTHORITY_NOT_CONTRACT_ERROR");
-        authority = _authority;
-        emit AuthorityChanged(_authority);
+    function setAuthority(address newAuthority) external override onlyRigoblockDao {
+        require(newAuthority != authority, "REGISTRY_SAME_INPUT_ADDRESS_ERROR");
+        require(_isContract(newAuthority), "REGISTRY_NEW_AUTHORITY_NOT_CONTRACT_ERROR");
+        authority = newAuthority;
+        emit AuthorityChanged(newAuthority);
     }
 
     /// @inheritdoc IPoolRegistry
     function setMeta(
-        address _poolAddress,
-        bytes32 _key,
-        bytes32 _value
-    ) external override onlyPoolOwner(_poolAddress) whenPoolRegistered(_poolAddress) {
-        poolMetaByAddress[_poolAddress].meta[_key] = _value;
-        emit MetaChanged(_poolAddress, _key, _value);
+        address pool,
+        bytes32 key,
+        bytes32 value
+    ) external override onlyPoolOperator(pool) whenPoolRegistered(pool) {
+        _poolMetaByAddress[pool].meta[key] = value;
+        emit MetaChanged(pool, key, value);
     }
 
     /// @inheritdoc IPoolRegistry
-    function setRigoblockDao(address _newRigoblockDao) external override onlyRigoblockDao {
-        require(_newRigoblockDao != rigoblockDaoAddress, "REGISTRY_SAME_INPUT_ADDRESS_ERROR");
-        require(_isContract(_newRigoblockDao), "REGISTRY_NEW_DAO_NOT_CONTRACT_ERROR");
-        rigoblockDaoAddress = _newRigoblockDao;
-        emit RigoblockDaoChanged(_newRigoblockDao);
+    function setRigoblockDao(address newRigoblockDao) external override onlyRigoblockDao {
+        require(newRigoblockDao != rigoblockDao, "REGISTRY_SAME_INPUT_ADDRESS_ERROR");
+        require(_isContract(newRigoblockDao), "REGISTRY_NEW_DAO_NOT_CONTRACT_ERROR");
+        rigoblockDao = newRigoblockDao;
+        emit RigoblockDaoChanged(newRigoblockDao);
     }
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @inheritdoc IPoolRegistry
-    function getPoolIdFromAddress(address _poolAddress) external view override returns (bytes32 poolId) {
-        poolId = mapIdByAddress[_poolAddress];
+    function getPoolIdFromAddress(address pool) external view override returns (bytes32 poolId) {
+        poolId = _mapIdByAddress[pool];
     }
 
     /// @inheritdoc IPoolRegistry
-    function getMeta(address _poolAddress, bytes32 _key) external view override returns (bytes32 poolMeta) {
-        return poolMetaByAddress[_poolAddress].meta[_key];
+    function getMeta(address pool, bytes32 key) external view override returns (bytes32 poolMeta) {
+        return _poolMetaByAddress[pool].meta[key];
     }
 
     /*
      * INTERNAL FUNCTIONS
      */
-    function _assertValidNameAndSymbol(string memory _name, string memory _symbol) internal pure {
-        uint256 nameLength = bytes(_name).length;
+    function _assertValidNameAndSymbol(string memory name, string memory symbol) internal pure {
+        uint256 nameLength = bytes(name).length;
         // we always want to keep name lenght below 31, for logging bytes32 while making sure that the name toString
         // is stored at slot location and not in the pseudorandom slot allocated to strings longer than 31 bytes.
         require(nameLength >= uint256(4) && nameLength <= uint256(31), "REGISTRY_NAME_LENGTH_ERROR");
 
-        uint256 symbolLength = bytes(_symbol).length;
+        uint256 symbolLength = bytes(symbol).length;
         require(symbolLength >= uint256(3) && symbolLength <= uint256(5), "REGISTRY_SYMBOL_LENGTH_ERROR");
 
         // check valid characters in name and symbol
-        LibSanitize.assertIsValidCheck(_name);
-        LibSanitize.assertIsValidCheck(_symbol);
-        LibSanitize.assertIsUppercase(_symbol);
+        LibSanitize.assertIsValidCheck(name);
+        LibSanitize.assertIsValidCheck(symbol);
+        LibSanitize.assertIsUppercase(symbol);
     }
 
-    function _isContract(address _target) private view returns (bool) {
-        uint256 size;
-        assembly {
-            size := extcodesize(_target)
-        }
-        return size > 0;
+    function _isContract(address target) private view returns (bool) {
+        return target.code.length > 0;
     }
 }

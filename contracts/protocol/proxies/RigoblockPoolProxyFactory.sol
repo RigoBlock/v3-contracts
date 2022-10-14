@@ -30,16 +30,16 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /// @inheritdoc IRigoblockPoolProxyFactory
     address public override implementation;
 
-    address private registryAddress;
+    address private _registry;
 
     modifier onlyRigoblockDao() {
-        require(PoolRegistry(registryAddress).rigoblockDaoAddress() == msg.sender, "FACTORY_CALLER_NOT_DAO_ERROR");
+        require(PoolRegistry(getRegistry()).rigoblockDao() == msg.sender, "FACTORY_CALLER_NOT_DAO_ERROR");
         _;
     }
 
-    constructor(address _implementation, address _registry) {
-        implementation = _implementation;
-        registryAddress = _registry;
+    constructor(address newImplementation, address registry) {
+        implementation = newImplementation;
+        _registry = registry;
     }
 
     /*
@@ -47,14 +47,14 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
      */
     /// @inheritdoc IRigoblockPoolProxyFactory
     function createPool(
-        string calldata _name,
-        string calldata _symbol,
-        address _baseToken
+        string calldata name,
+        string calldata symbol,
+        address baseToken
     ) external override returns (address newPoolAddress, bytes32 poolId) {
-        (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPool(_name, _symbol, _baseToken);
+        (bytes32 newPoolId, RigoblockPoolProxy proxy) = _createPool(name, symbol, baseToken);
         newPoolAddress = address(proxy);
         poolId = newPoolId;
-        try PoolRegistry(registryAddress).register(newPoolAddress, _name, _symbol, poolId) {
+        try PoolRegistry(getRegistry()).register(newPoolAddress, name, symbol, poolId) {
             emit PoolCreated(newPoolAddress);
         } catch Error(string memory reason) {
             revert(reason);
@@ -64,49 +64,49 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     }
 
     /// @inheritdoc IRigoblockPoolProxyFactory
-    function setImplementation(address _newImplementation) external override onlyRigoblockDao {
-        require(_newImplementation != implementation, "FACTORY_SAME_INPUT_ADDRESS_ERROR");
-        require(_isContract(_newImplementation), "FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR");
-        implementation = _newImplementation;
-        emit Upgraded(_newImplementation);
+    function setImplementation(address newImplementation) external override onlyRigoblockDao {
+        require(newImplementation != implementation, "FACTORY_SAME_INPUT_ADDRESS_ERROR");
+        require(_isContract(newImplementation), "FACTORY_NEW_IMPLEMENTATION_NOT_CONTRACT_ERROR");
+        implementation = newImplementation;
+        emit Upgraded(newImplementation);
     }
 
     /// @inheritdoc IRigoblockPoolProxyFactory
-    function setRegistry(address _newRegistry) external override onlyRigoblockDao {
-        require(_newRegistry != registryAddress, "FACTORY_SAME_INPUT_ADDRESS_ERROR");
-        require(_isContract(_newRegistry), "FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR");
-        registryAddress = _newRegistry;
-        emit RegistryUpgraded(_newRegistry);
+    function setRegistry(address newRegistry) external override onlyRigoblockDao {
+        require(newRegistry != getRegistry(), "FACTORY_SAME_INPUT_ADDRESS_ERROR");
+        require(_isContract(newRegistry), "FACTORY_NEW_REGISTRY_NOT_CONTRACT_ERROR");
+        _registry = newRegistry;
+        emit RegistryUpgraded(newRegistry);
     }
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @inheritdoc IRigoblockPoolProxyFactory
-    function getRegistry() external view override returns (address) {
-        return registryAddress;
+    function getRegistry() public view override returns (address) {
+        return _registry;
     }
 
     /*
      * INTERNAL FUNCTIONS
      */
     /// @dev Creates a pool and routes to eventful.
-    /// @param _name String of the name.
-    /// @param _symbol String of the symbol.
-    /// @param _baseToken Address of the base token.
+    /// @param name String of the name.
+    /// @param symbol String of the symbol.
+    /// @param baseToken Address of the base token.
     function _createPool(
-        string calldata _name,
-        string calldata _symbol,
-        address _baseToken
+        string calldata name,
+        string calldata symbol,
+        address baseToken
     ) internal returns (bytes32 salt, RigoblockPoolProxy newProxy) {
         bytes memory encodedInitialization = abi.encodeWithSelector(
-            0x95d317f0, // RigoblockPool._initializePool.selector
-            _name,
-            _symbol,
-            _baseToken,
+            0xc281a1bd, // RigoblockPool.initializePool.selector
+            name,
+            symbol,
+            baseToken,
             msg.sender
         );
-        salt = keccak256(abi.encode(_name, msg.sender));
+        salt = keccak256(abi.encode(name, msg.sender));
 
         try new RigoblockPoolProxy{salt: salt}(implementation, encodedInitialization) returns (
             RigoblockPoolProxy proxy
@@ -121,10 +121,10 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     /// @dev Returns whether an address is a contract.
     /// @return Bool target address has code.
-    function _isContract(address _target) private view returns (bool) {
+    function _isContract(address target) private view returns (bool) {
         uint256 size;
         assembly {
-            size := extcodesize(_target)
+            size := extcodesize(target)
         }
         return size > 0;
     }

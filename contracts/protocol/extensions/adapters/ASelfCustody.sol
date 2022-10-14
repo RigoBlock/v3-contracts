@@ -30,19 +30,19 @@ import "./interfaces/IASelfCustody.sol";
 // solhint-disable-next-line
 contract ASelfCustody is IASelfCustody {
     /// @inheritdoc IASelfCustody
-    address public immutable override GRG_VAULT_ADDRESS;
+    address public immutable override grgVault;
 
     // minimum 100k GRG to unlock self custody
-    uint256 private constant MINIMUM_GRG_STAKE = 1e23;
-    bytes4 private constant SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
+    uint256 private constant _MINIMUM_GRG_STAKE = 1e23;
+    bytes4 private constant _TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
 
-    address private immutable STAKING_PROXY_ADDRESS;
-    address private immutable aSelfCustody;
+    address private immutable _stakingProxy;
+    address private immutable _aSelfCustody;
 
-    constructor(address _grgVaultAddress, address _stakingProxyAddress) {
-        GRG_VAULT_ADDRESS = _grgVaultAddress;
-        STAKING_PROXY_ADDRESS = _stakingProxyAddress;
-        aSelfCustody = address(this);
+    constructor(address grgVaultAddress, address stakingProxyAddress) {
+        grgVault = grgVaultAddress;
+        _stakingProxy = stakingProxyAddress;
+        _aSelfCustody = address(this);
     }
 
     /// @inheritdoc IASelfCustody
@@ -52,7 +52,7 @@ contract ASelfCustody is IASelfCustody {
         uint256 amount
     ) external override returns (uint256 shortfall) {
         // we prevent direct calls to this extension
-        assert(aSelfCustody != address(this));
+        assert(_aSelfCustody != address(this));
         require(amount != 0, "ASELFCUSTODY_NULL_AMOUNT_ERROR");
         shortfall = poolGrgShortfall(address(this));
 
@@ -68,21 +68,24 @@ contract ASelfCustody is IASelfCustody {
     }
 
     /// @inheritdoc IASelfCustody
-    function poolGrgShortfall(address _poolAddress) public view override returns (uint256) {
-        bytes32 poolId = IStorage(STAKING_PROXY_ADDRESS).poolIdByRbPoolAccount(_poolAddress);
-        uint256 poolStake = IStaking(STAKING_PROXY_ADDRESS).getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
+    function poolGrgShortfall(address targetPool) public view override returns (uint256) {
+        bytes32 poolId = IStorage(_stakingProxy).poolIdByRbPoolAccount(targetPool);
+        uint256 poolStake = IStaking(_stakingProxy).getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
 
         // we assert the staking implementation has not been compromised by requiring all staked GRG to be delegated to self.
         require(
-            poolStake == IGrgVault(GRG_VAULT_ADDRESS).balanceOf(_poolAddress),
+            poolStake == IGrgVault(grgVault).balanceOf(targetPool),
             "ASELFCUSTODY_GRG_BALANCE_MISMATCH_ERROR"
         );
+        uint256 minimumStake = _getMinimumGrgStake();
 
-        if (poolStake >= MINIMUM_GRG_STAKE) {
+        if (poolStake >= minimumStake) {
             return 0;
         } else {
-            return MINIMUM_GRG_STAKE - poolStake;
-        } // unchecked
+            unchecked{
+                return minimumStake - poolStake;
+            }
+        }
     }
 
     /// @dev executes a safe transfer to any ERC20 token
@@ -95,7 +98,11 @@ contract ASelfCustody is IASelfCustody {
         uint256 value
     ) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(_TRANSFER_SELECTOR, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "ASELFCUSTODY_TRANSFER_FAILED_ERROR");
+    }
+
+    function _getMinimumGrgStake() private pure returns (uint256) {
+        return _MINIMUM_GRG_STAKE;
     }
 }

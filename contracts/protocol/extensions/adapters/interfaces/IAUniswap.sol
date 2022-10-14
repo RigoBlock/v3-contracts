@@ -24,15 +24,15 @@ import "../../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 interface IAUniswap {
     /// @notice Returns the address of the Uniswap swap router contract.
     /// @return Address of the uniswap router.
-    function UNISWAP_SWAP_ROUTER_2_ADDRESS() external view returns (address);
+    function uniswapRouter02() external view returns (address);
 
     /// @notice Returns the address of the Uniswap NPM contract.
     /// @return Address of the Uniswap NPM contract.
-    function UNISWAP_V3_NPM_ADDRESS() external view returns (address);
+    function uniswapv3Npm() external view returns (address);
 
     /// @notice Returns the address of the Weth contract.
     /// @return Address of the Weth contract.
-    function WETH_ADDRESS() external view returns (address);
+    function weth() external view returns (address);
 
     /*
      * UNISWAP V2 METHODS

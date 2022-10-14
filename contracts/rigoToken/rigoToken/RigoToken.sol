@@ -53,33 +53,33 @@ contract RigoToken is IRigoToken, UnlimitedAllowanceToken {
     }
 
     constructor(
-        address _setMinter,
-        address _setRigoblock,
-        address _grgHolder
+        address setMinter,
+        address setRigoblock,
+        address grgHolder
     ) {
-        minter = _setMinter;
-        rigoblock = _setRigoblock;
+        minter = setMinter;
+        rigoblock = setRigoblock;
         totalSupply = 1e25; // 10 million tokens, 18 decimals
-        balances[_grgHolder] = totalSupply;
+        _balances[grgHolder] = totalSupply;
     }
 
     /*
      * CORE FUNCTIONS
      */
     /// @inheritdoc IRigoToken
-    function mintToken(address _recipient, uint256 _amount) external override onlyMinter {
-        balances[_recipient] += _amount;
-        totalSupply += _amount;
-        emit TokenMinted(_recipient, _amount);
+    function mintToken(address recipient, uint256 amount) external override onlyMinter {
+        _balances[recipient] += amount;
+        totalSupply += amount;
+        emit TokenMinted(recipient, amount);
     }
 
     /// @inheritdoc IRigoToken
-    function changeMintingAddress(address _newAddress) external override onlyRigoblock {
-        minter = _newAddress;
+    function changeMintingAddress(address newAddress) external override onlyRigoblock {
+        minter = newAddress;
     }
 
     /// @inheritdoc IRigoToken
-    function changeRigoblockAddress(address _newAddress) external override onlyRigoblock {
-        rigoblock = _newAddress;
+    function changeRigoblockAddress(address newAddress) external override onlyRigoblock {
+        rigoblock = newAddress;
     }
 }

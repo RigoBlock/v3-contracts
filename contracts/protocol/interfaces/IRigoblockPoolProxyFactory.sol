@@ -40,24 +40,24 @@ interface IRigoblockPoolProxyFactory {
     function implementation() external view returns (address);
 
     /// @notice Creates a new Rigoblock pool.
-    /// @param _name String of the name.
-    /// @param _symbol String of the symbol.
-    /// @param _baseToken Address of the base token.
+    /// @param name String of the name.
+    /// @param symbol String of the symbol.
+    /// @param baseToken Address of the base token.
     /// @return newPoolAddress Address of the new pool.
     /// @return poolId Id of the new pool.
     function createPool(
-        string calldata _name,
-        string calldata _symbol,
-        address _baseToken
+        string calldata name,
+        string calldata symbol,
+        address baseToken
     ) external returns (address newPoolAddress, bytes32 poolId);
 
     /// @notice Allows Rigoblock Dao to update factory pool implementation.
-    /// @param _newImplementation Address of the new implementation contract.
-    function setImplementation(address _newImplementation) external;
+    /// @param newImplementation Address of the new implementation contract.
+    function setImplementation(address newImplementation) external;
 
     /// @notice Allows owner to update the registry.
-    /// @param _newRegistry Address of the new registry.
-    function setRegistry(address _newRegistry) external;
+    /// @param newRegistry Address of the new registry.
+    function setRegistry(address newRegistry) external;
 
     /// @notice Returns the address of the pool registry.
     /// @return Address of the registry.

@@ -313,7 +313,7 @@ describe("BaseTokenProxy", async () => {
         it('should revert when already initialized', async () => {
             const { pool, grgToken } = await setupTests()
             await expect(
-                pool._initializePool(
+                pool.initializePool(
                     'testpool',
                     'TEST',
                     grgToken.address,

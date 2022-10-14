@@ -8,10 +8,10 @@ abstract contract MixinPoolState is MixinOwnerActions {
      * EXTERNAL VIEW METHODS
      */
     /// @dev Returns how many pool tokens a user holds.
-    /// @param _who Address of the target account.
+    /// @param who Address of the target account.
     /// @return Number of pool.
-    function balanceOf(address _who) external view override returns (uint256) {
-        return accounts().userAccounts[_who].userBalance;
+    function balanceOf(address who) external view override returns (uint256) {
+        return accounts().userAccounts[who].userBalance;
     }
 
     /// @inheritdoc IRigoblockV3PoolState
@@ -28,8 +28,8 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
 
-    function getUserAccount(address _who) external view override returns (UserAccount memory) {
-        return accounts().userAccounts[_who];
+    function getUserAccount(address who) external view override returns (UserAccount memory) {
+        return accounts().userAccounts[who];
     }
 
     /// @inheritdoc IRigoblockV3PoolState
@@ -111,12 +111,12 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     function _getMinPeriod() internal view override returns (uint48) {
         uint48 minPeriod = poolParams().minPeriod;
-        return minPeriod != 0 ? minPeriod : MIN_LOCKUP;
+        return minPeriod != 0 ? minPeriod : _MIN_LOCKUP;
     }
 
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
-        return spread != 0 ? spread : INITIAL_SPREAD;
+        return spread != 0 ? spread : _INITIAL_SPREAD;
     }
 
     function _getUnitaryValue() internal view override returns (uint256) {

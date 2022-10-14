@@ -30,7 +30,7 @@ interface IASelfCustody {
     event SelfCustodyTransfer(address indexed from, address indexed to, address indexed token, uint256 amount);
 
     /// @notice Returns the address of the GRG vault contract.
-    function GRG_VAULT_ADDRESS() external view returns (address);
+    function grgVault() external view returns (address);
 
     /// @notice transfers ETH or tokens to self custody.
     /// @param selfCustodyAccount Address of the target account.
@@ -44,6 +44,7 @@ interface IASelfCustody {
     ) external returns (uint256 shortfall);
 
     /// @notice external check if minimum pool GRG amount requirement satisfied.
+    /// @param poolAddress Address of the pool to assert shortfall for.
     /// @return shortfall Number of GRG pool operator shortfall.
-    function poolGrgShortfall(address _poolAddress) external view returns (uint256);
+    function poolGrgShortfall(address poolAddress) external view returns (uint256);
 }

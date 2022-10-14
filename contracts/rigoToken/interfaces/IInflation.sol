@@ -28,20 +28,20 @@ interface IInflation {
      */
     /// @dev Returns the address of the GRG token.
     /// @return Address of the Rigo token contract.
-    function RIGO_TOKEN_ADDRESS() external view returns (address);
+    function rigoToken() external view returns (address);
 
     /// @dev Returns the address of the GRG staking proxy.
     /// @return Address of the proxy contract.
-    function STAKING_PROXY_ADDRESS() external view returns (address);
+    function stakingProxy() external view returns (address);
 
     /// @dev Allows staking proxy to mint rewards.
     /// @return mintedInflation Number of allocated tokens.
-    function epochLength() external view returns (uint256);
+    function epochLength() external view returns (uint48);
 
     /// @dev Returns epoch slot.
     /// @return Number of latest epoch slot.
     /// @notice Increases by one every new epoch.
-    function slot() external view returns (uint256);
+    function slot() external view returns (uint32);
 
     /*
      * CORE FUNCTIONS
@@ -63,5 +63,5 @@ interface IInflation {
 
     /// @dev Returns how long until next claim.
     /// @return Number in seconds.
-    function timeUntilNextClaim() external view returns (uint256);
+    function timeUntilNextClaim() external view returns (uint48);
 }

@@ -30,8 +30,8 @@ interface IOwnedUninitialized {
 
     /// @notice Allows current owner to set a new owner address.
     /// @dev Method restricted to owner.
-    /// @param _new Address of the new owner.
-    function setOwner(address _new) external;
+    /// @param newOwner Address of the new owner.
+    function setOwner(address newOwner) external;
 
     /// @notice Returns the address of the owner.
     /// @return Address of the owner.

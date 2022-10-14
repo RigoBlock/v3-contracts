@@ -29,32 +29,31 @@ import {IStructs} from "../../staking/interfaces/IStructs.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract ProofOfPerformance is IProofOfPerformance {
-    IStaking private immutable STAKING;
+    address private immutable _stakingProxy;
 
-    constructor(address _stakingProxyAddress) {
-        STAKING = IStaking(_stakingProxyAddress);
+    constructor(address stakingProxy) {
+        _stakingProxy = stakingProxy;
     }
 
-    /*
-     * EXTERNAL FUNCTIONS
-     */
     /// @inheritdoc IProofOfPerformance
-    function creditPopRewardToStakingProxy(address _poolAddress) external override {
-        uint256 poolLockedBalances = STAKING
-            .getOwnerStakeByStatus(_poolAddress, IStructs.StakeStatus.DELEGATED)
+    function creditPopRewardToStakingProxy(address targetPool) external override {
+        address stakingProxy = _getStakingProxy();
+        uint256 poolLockedBalances = IStaking(stakingProxy)
+            .getOwnerStakeByStatus(targetPool, IStructs.StakeStatus.DELEGATED)
             .currentEpochBalance;
 
         // if address has locked balances, staking pool exists.
         require(poolLockedBalances != uint256(0), "POP_STAKING_POOL_BALANCES_NULL_ERROR");
 
-        STAKING.creditPopReward(_poolAddress, poolLockedBalances);
+        IStaking(stakingProxy).creditPopReward(targetPool, poolLockedBalances);
     }
 
-    /*
-     * CONSTANT PUBLIC FUNCTIONS
-     */
     /// @inheritdoc IProofOfPerformance
-    function proofOfPerformance(address _poolAddress) external view override returns (uint256) {
-        return STAKING.getOwnerStakeByStatus(_poolAddress, IStructs.StakeStatus.DELEGATED).currentEpochBalance;
+    function proofOfPerformance(address targetPool) external view override returns (uint256) {
+        return IStaking(_getStakingProxy()).getOwnerStakeByStatus(targetPool, IStructs.StakeStatus.DELEGATED).currentEpochBalance;
+    }
+
+    function _getStakingProxy() private view returns (address) {
+        return _stakingProxy;
     }
 }

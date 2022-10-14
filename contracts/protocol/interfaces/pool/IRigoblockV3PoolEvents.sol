@@ -26,34 +26,34 @@ interface IRigoblockV3PoolEvents {
 
     /// @notice Emitted when pool operator updates NAV.
     /// @param poolOperator Address of the pool owner.
-    /// @param poolAddress Address of the pool.
+    /// @param pool Address of the pool.
     /// @param unitaryValue Value of 1 token in wei units.
-    event NewNav(address indexed poolOperator, address indexed poolAddress, uint256 unitaryValue);
+    event NewNav(address indexed poolOperator, address indexed pool, uint256 unitaryValue);
 
     /// @notice Emitted when pool operator sets new mint fee.
-    /// @param poolAddress Address of the pool.
+    /// @param pool Address of the pool.
     /// @param who Address that is sending the transaction.
     /// @param transactionFee Number of the new fee in wei.
-    event NewFee(address indexed poolAddress, address indexed who, uint16 transactionFee);
+    event NewFee(address indexed pool, address indexed who, uint16 transactionFee);
 
     /// @notice Emitted when pool operator updates fee collector address.
-    /// @param poolAddress Address of the pool.
+    /// @param pool Address of the pool.
     /// @param who Address that is sending the transaction.
     /// @param feeCollector Address of the new fee collector.
-    event NewCollector(address indexed poolAddress, address indexed who, address feeCollector);
+    event NewCollector(address indexed pool, address indexed who, address feeCollector);
 
     /// @notice Emitted when pool operator updates minimum holding period.
-    /// @param poolAddress Address of the pool.
+    /// @param pool Address of the pool.
     /// @param minimumPeriod Number of seconds.
-    event MinimumPeriodChanged(address indexed poolAddress, uint48 minimumPeriod);
+    event MinimumPeriodChanged(address indexed pool, uint48 minimumPeriod);
 
     /// @notice Emitted when pool operator updates the mint/burn spread.
-    /// @param poolAddress Address of the pool.
+    /// @param pool Address of the pool.
     /// @param spread Number of the spread in basis points.
-    event SpreadChanged(address indexed poolAddress, uint16 spread);
+    event SpreadChanged(address indexed pool, uint16 spread);
 
     /// @notice Emitted when pool operator sets a kyc provider.
-    /// @param poolAddress Address of the pool.
+    /// @param pool Address of the pool.
     /// @param kycProvider Address of the kyc provider.
-    event KycProviderSet(address indexed poolAddress, address indexed kycProvider);
+    event KycProviderSet(address indexed pool, address indexed kycProvider);
 }

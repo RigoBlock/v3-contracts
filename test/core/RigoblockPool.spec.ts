@@ -243,7 +243,7 @@ describe("Proxy", async () => {
         it('should revert when already initialized', async () => {
             const { pool } = await setupTests()
             await expect(
-                pool._initializePool(
+                pool.initializePool(
                     'testpool',
                     'TEST',
                     AddressZero,
