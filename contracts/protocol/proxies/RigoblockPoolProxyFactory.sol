@@ -19,7 +19,6 @@
 
 pragma solidity 0.8.17;
 
-import "../interfaces/pool/IRigoblockV3PoolInitializer.sol";
 import "./RigoblockPoolProxy.sol";
 import {IPoolRegistry as PoolRegistry} from "../interfaces/IPoolRegistry.sol";
 import "../interfaces/IRigoblockPoolProxyFactory.sol";
@@ -91,6 +90,13 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * INTERNAL FUNCTIONS
      */
+
+    Parameters private _parameters;
+
+    function parameters() external view override returns (Parameters memory) {
+        return _parameters;
+    }
+
     /// @dev Creates a pool and routes to eventful.
     /// @param name String of the name.
     /// @param  symbol String of the symbol.
@@ -100,18 +106,19 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         string calldata symbol,
         address baseToken
     ) internal returns (bytes32 salt, RigoblockPoolProxy newProxy) {
-        bytes memory encodedInitialization = abi.encodeWithSelector(
-            0xa8f5ebe2, // "a8f5ebe2": "initializePool((string,bytes8,address,address))"
-            IRigoblockV3PoolInitializer.Parameters({
-                name: name,
-                symbol: bytes8(bytes(symbol)),
-                owner: msg.sender,
-                baseToken: baseToken
-            })
-        );
+        // we omit the encoding params in the constructor in order to guarantee same address for name and owner
         salt = keccak256(abi.encode(name, msg.sender));
 
-        try new RigoblockPoolProxy{salt: salt}(implementation, encodedInitialization) returns (
+        // we write to storage to allow proxy to read initialization parameters
+        _parameters = Parameters({
+            name: name,
+            symbol: bytes8(bytes(symbol)),
+            owner: msg.sender,
+            baseToken: baseToken
+        });
+
+        // TODO: should remove implementation from constructor as it is a variable, meaning pool address could change
+        try new RigoblockPoolProxy{salt: salt}(implementation) returns (
             RigoblockPoolProxy proxy
         ) {
             newProxy = proxy;
@@ -120,6 +127,8 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         } catch (bytes memory) {
             revert("FACTORY_CREATE2_FAILED_ERROR");
         }
+
+        delete _parameters;
     }
 
     /// @dev Returns whether an address is a contract.

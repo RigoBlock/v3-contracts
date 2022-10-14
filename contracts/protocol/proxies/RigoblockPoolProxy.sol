@@ -30,16 +30,15 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
 
     /// @notice Sets address of implementation contract.
     /// @param implementation Implementation address.
-    /// @param data Initialization parameters.
-    constructor(address implementation, bytes memory data) payable {
+    constructor(address implementation) payable {
         // store implementation address in implementation slot value
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
         getImplementation().implementation = implementation;
         emit Upgraded(implementation);
 
         // initialize pool
-        // _data = abi.encodeWithSelector(IRigoblockPool.initializePool.selector, name, symbol, baseToken, owner)
-        (, bytes memory returnData) = implementation.delegatecall(data);
+        // abi.encodeWithSelector(IRigoblockPool.initializePool.selector)
+        (, bytes memory returnData) = implementation.delegatecall(abi.encodeWithSelector(0x250e6de0));
 
         // we must assert initialization didn't fail, otherwise it could fail silently and still deploy the pool.
         require(returnData.length == 0, "POOL_INITIALIZATION_FAILED_ERROR");

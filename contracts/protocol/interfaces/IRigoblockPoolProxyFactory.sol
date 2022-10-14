@@ -39,6 +39,21 @@ interface IRigoblockPoolProxyFactory {
     /// @return Address of the implementation.
     function implementation() external view returns (address);
 
+    /// @notice Pool initialization parameters.
+    /// @params name String of the name (max 31 characters).
+    /// @params symbol bytes8 symbol.
+    /// @params owner Address of the owner.
+    /// @params baseToken Address of the base token.
+    struct Parameters {
+        string name;
+        bytes8 symbol;
+        address owner;
+        address baseToken;
+    }
+
+    // TODO: lint
+    function parameters() external view returns (Parameters memory);
+
     /// @notice Creates a new Rigoblock pool.
     /// @param name String of the name.
     /// @param symbol String of the symbol.

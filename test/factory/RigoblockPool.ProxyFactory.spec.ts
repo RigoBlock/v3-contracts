@@ -118,11 +118,28 @@ describe("ProxyFactory", async () => {
             ).to.emit(factory, "PoolCreated")
         })
 
+        // a pool with same owner and name should have unique address
         it('should revert when contract exists already', async () => {
             const { factory } = await setupTests()
-            await factory.createPool('duplicateName', 'TEST', AddressZero)
+            let pippo = await factory.createPool('duplicateName', 'TEST', AddressZero)
             await expect(
                 factory.createPool('duplicateName', 'TEST', AddressZero)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            await expect(
+                factory.createPool('duplicateName', 'TEST2', AddressZero)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+        })
+
+        it('should revert when contract exists with base token', async () => {
+            const { factory } = await setupTests()
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await factory.createPool('duplicateName', 'TEST', weth.address)
+            await expect(
+                factory.createPool('duplicateName', 'TEST', weth.address)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            await expect(
+                factory.createPool('duplicateName', 'TEST2', weth.address)
             ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
         })
 

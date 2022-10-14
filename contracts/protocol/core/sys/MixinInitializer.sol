@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import "../immutable/MixinImmutables.sol";
 import "../immutable/MixinStorage.sol";
 import "../../interfaces/IERC20.sol";
+import "../../interfaces/IRigoblockPoolProxyFactory.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     modifier onlyUninitialized() {
@@ -19,8 +20,9 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     }
 
     /// @inheritdoc IRigoblockV3PoolInitializer
-    function initializePool(Parameters calldata initParams) external override onlyUninitialized {
+    function initializePool() external override onlyUninitialized {
         uint8 tokenDecimals = 18;
+        IRigoblockPoolProxyFactory.Parameters memory initParams = IRigoblockPoolProxyFactory(msg.sender).parameters();
 
         if (initParams.baseToken != address(0)) {
             tokenDecimals = IERC20(initParams.baseToken).decimals();

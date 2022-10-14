@@ -23,20 +23,7 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockV3PoolInitializer {
-    /// @notice Pool initialization parameters.
-    /// @params name String of the name (max 31 characters).
-    /// @params symbol bytes8 symbol.
-    /// @params owner Address of the owner.
-    /// @params baseToken Address of the base token.
-    struct Parameters {
-        string name;
-        bytes8 symbol;
-        address owner;
-        address baseToken;
-    }
-
     /// @notice Initializes to pool storage.
     /// @dev Pool can only be initialized at creation, meaning this method cannot be called directly to implementation.
-    /// @param initParams Initialization parameters tuple.
-    function initializePool(Parameters calldata initParams) external;
+    function initializePool() external;
 }

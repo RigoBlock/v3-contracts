@@ -314,14 +314,8 @@ describe("BaseTokenProxy", async () => {
             const { pool, grgToken } = await setupTests()
             let symbol = utils.formatBytes32String("TEST")
             symbol = utils.hexDataSlice(symbol, 0, 8)
-            await expect(
-                pool.initializePool({
-                    name: 'testpool',
-                    symbol: symbol,
-                    owner: user1.address,
-                    baseToken: grgToken.address
-                })
-            ).to.be.revertedWith("POOL_ALREADY_INITIALIZED_ERROR")
+            await expect(pool.initializePool())
+                .to.be.revertedWith("POOL_ALREADY_INITIALIZED_ERROR")
         })
     })
 })
