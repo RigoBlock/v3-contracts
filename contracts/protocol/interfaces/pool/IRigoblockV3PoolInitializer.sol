@@ -38,7 +38,5 @@ interface IRigoblockV3PoolInitializer {
     /// @notice Initializes to pool storage.
     /// @dev Pool can only be initialized at creation, meaning this method cannot be called directly to implementation.
     /// @param initParams Initialization parameters tuple.
-    function initializePool(
-        Parameters calldata initParams
-    ) external;
+    function initializePool(Parameters calldata initParams) external;
 }
