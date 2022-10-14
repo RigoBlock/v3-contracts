@@ -62,10 +62,15 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
     }
     /* solhint-enable no-complex-fallback */
 
+    /// @notice Implementation slot is accessed directly.
+    /// @dev Saves gas compared to using storage slot library.
+    /// @param implementation Address of the implementation.
     struct ImplementationSlot {
         address implementation;
     }
 
+    /// @notice Method to read/write from/to implementation slot.
+    /// @return s Storage slot of the pool implementation.
     function getImplementation() private pure returns (ImplementationSlot storage s) {
         assembly {
             s.slot := _IMPLEMENTATION_SLOT
