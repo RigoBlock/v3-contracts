@@ -32,6 +32,8 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
 
     address private _registry;
 
+    Parameters private _parameters;
+
     modifier onlyRigoblockDao() {
         require(PoolRegistry(getRegistry()).rigoblockDao() == msg.sender, "FACTORY_CALLER_NOT_DAO_ERROR");
         _;
@@ -79,6 +81,12 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         emit RegistryUpgraded(newRegistry);
     }
 
+    /// @notice Returns the pool initialization parameters at proxy deploy.
+    /// @return Tuple of the pool parameters.
+    function parameters() external view override returns (Parameters memory) {
+        return _parameters;
+    }
+
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
@@ -90,13 +98,6 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
     /*
      * INTERNAL FUNCTIONS
      */
-
-    Parameters private _parameters;
-
-    function parameters() external view override returns (Parameters memory) {
-        return _parameters;
-    }
-
     /// @dev Creates a pool and routes to eventful.
     /// @param name String of the name.
     /// @param  symbol String of the symbol.
