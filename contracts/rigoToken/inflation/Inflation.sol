@@ -52,9 +52,9 @@ contract Inflation is IInflation {
         _;
     }
 
-    constructor(address rigoTokenAddress, address stakingProxyAddress) {
-        rigoToken = rigoTokenAddress;
-        stakingProxy = stakingProxyAddress;
+    constructor(address newRigoToken, address newStakingProxy) {
+        rigoToken = newRigoToken;
+        stakingProxy = newStakingProxy;
         epochLength = 0;
         slot = 0;
     }
@@ -65,24 +65,26 @@ contract Inflation is IInflation {
     /// @inheritdoc IInflation
     function mintInflation() external override onlyStakingProxy returns (uint256 mintedInflation) {
         // solhint-disable-next-line not-rely-on-time
-        require(block.timestamp >= _epochEndTime, "INFLATION_EPOCH_END_ERROR");
-        (uint256 epochDurationInSeconds, , , , ) = IStaking(_getStakingProxy()).getParams();
-        uint48 epochDuration = uint48(epochDurationInSeconds);
+        require(block.timestamp >= _getEpochEndTime(), "INFLATION_EPOCH_END_ERROR");
+        (uint256 epochDuration, , , , ) = IStaking(_getStakingProxy()).getParams();
 
         // sanity check for epoch length queried from staking
-        if (epochLength != epochDuration) {
+        if (_getEpochLength() != epochDuration) {
             require(epochDuration >= 5 days && epochDuration <= 90 days, "INFLATION_TIME_ANOMALY_ERROR");
-            epochLength = epochDuration;
+
+            // we update epoch length in storage
+            epochLength = uint48(epochDuration);
         }
 
         uint256 epochInflation = getEpochInflation();
 
+        // we update epoch end time in storage
         // solhint-disable-next-line not-rely-on-time
-        _epochEndTime = uint48(block.timestamp) + epochLength;
+        _epochEndTime = uint48(block.timestamp + _getEpochLength());
         slot += 1;
 
         // mint rewards
-        IRigoToken(rigoToken).mintToken(_getStakingProxy(), epochInflation);
+        IRigoToken(_getRigoToken()).mintToken(_getStakingProxy(), epochInflation);
         return (mintedInflation = epochInflation);
     }
 
@@ -92,25 +94,23 @@ contract Inflation is IInflation {
     /// @inheritdoc IInflation
     function epochEnded() external view override returns (bool) {
         // solhint-disable-next-line not-rely-on-time
-        if (block.timestamp >= _epochEndTime) {
-            return true;
-        } else return false;
+        return block.timestamp >= _getEpochEndTime();
     }
 
     /// @inheritdoc IInflation
     function getEpochInflation() public view override returns (uint256) {
         // 2% of GRG total supply
         // total supply * annual percentage inflation * time period (1 epoch)
-        return ((_ANNUAL_INFLATION_RATE * epochLength * _getGRGTotalSupply()) / _PPM_DENOMINATOR / 365 days);
+        uint256 grgSupply = IRigoToken(_getRigoToken()).totalSupply();
+        return ((_ANNUAL_INFLATION_RATE * _getEpochLength() * grgSupply) / _PPM_DENOMINATOR / 365 days);
     }
 
     /// @inheritdoc IInflation
-    function timeUntilNextClaim() external view override returns (uint48) {
-        /* solhint-disable not-rely-on-time */
-        if (block.timestamp < _epochEndTime) {
-            return (_epochEndTime - uint48(block.timestamp));
-        } else return (0);
-        /* solhint-disable not-rely-on-time */
+    function timeUntilNextClaim() external view override returns (uint256) {
+        uint256 epochEndTime = _getEpochEndTime();
+
+        // solhint-disable-next-line not-rely-on-time
+        return block.timestamp < epochEndTime ? epochEndTime - block.timestamp : 0;
     }
 
     /*
@@ -121,8 +121,16 @@ contract Inflation is IInflation {
         require(msg.sender == _getStakingProxy(), "CALLER_NOT_STAKING_PROXY_ERROR");
     }
 
-    function _getGRGTotalSupply() private view returns (uint256) {
-        return IRigoToken(rigoToken).totalSupply();
+    function _getEpochEndTime() private view returns (uint256) {
+        return uint256(_epochEndTime);
+    }
+
+    function _getEpochLength() private view returns (uint256) {
+        return uint256(epochLength);
+    }
+
+    function _getRigoToken() private view returns (address) {
+        return rigoToken;
     }
 
     function _getStakingProxy() private view returns (address) {

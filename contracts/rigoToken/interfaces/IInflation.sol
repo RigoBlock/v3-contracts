@@ -35,7 +35,7 @@ interface IInflation {
     function stakingProxy() external view returns (address);
 
     /// @notice Returns the epoch length in seconds.
-    /// @return Uint48 number of seconds.
+    /// @return Number of seconds.
     function epochLength() external view returns (uint48);
 
     /// @notice Returns epoch slot.
@@ -63,5 +63,5 @@ interface IInflation {
 
     /// @notice Returns how long until next claim.
     /// @return Number in seconds.
-    function timeUntilNextClaim() external view returns (uint48);
+    function timeUntilNextClaim() external view returns (uint256);
 }
