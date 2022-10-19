@@ -1,3 +1,44 @@
+# [0.11.0](https://github.com/rigoblock/v3-contracts/compare/v0.10.0...v0.11.0) (2022-10-19)
+
+
+### Bug Fixes
+
+* assert whitelisted token is contract in whitelist extension ([edbab72](https://github.com/rigoblock/v3-contracts/commit/edbab7258f930a08410432e848c40b34c78d4b08))
+* assign token whitelist mapping to struct at defined location ([9abeadd](https://github.com/rigoblock/v3-contracts/commit/9abeadda6670573aef9a0915b3ae012fb940a63a))
+* auniswap improvements ([cfb3fe9](https://github.com/rigoblock/v3-contracts/commit/cfb3fe9d5b4fa2552de759654bd455b8963a3790))
+* batch deploy used slots in self custody adapter ([8fc4a66](https://github.com/rigoblock/v3-contracts/commit/8fc4a661283dc955713988e87051785036a54334))
+* check is contract without using assembly in owner actions ([055aeae](https://github.com/rigoblock/v3-contracts/commit/055aeaecf522c9f249861f1ceb207de323411e44))
+* deprecated modifier in mixin pool actions ([86c9a3d](https://github.com/rigoblock/v3-contracts/commit/86c9a3da0ddd4664096d15c020eca6953ab17336))
+* minor style fixes ([643020f](https://github.com/rigoblock/v3-contracts/commit/643020fb14042f49a188854f30abeab4689d35a5))
+* minor whitelist extension improvements ([f082c43](https://github.com/rigoblock/v3-contracts/commit/f082c43749a78cddaab83dbf397541668bf7605a))
+* mixin actions improvements ([5494378](https://github.com/rigoblock/v3-contracts/commit/549437870f6f243a3c85751fb679bf1f7200b2b3))
+* owned event log old owner and new owner ([c96e794](https://github.com/rigoblock/v3-contracts/commit/c96e79499b8cbd4f6f7dd9c907a26ad4d3fe29b9))
+* owner returned errors renaming, fix log return old, new ([e90fe32](https://github.com/rigoblock/v3-contracts/commit/e90fe320f6d08f592eafdc4660fb0d78bfd756c2))
+* proxy deploy gas optimization by directly reading from slot ([21e3ed6](https://github.com/rigoblock/v3-contracts/commit/21e3ed66227ebbcba9511e5cf770170d4098285b))
+* reduced uniswap adapter methods execution cost ([506e72b](https://github.com/rigoblock/v3-contracts/commit/506e72b344c92463e5d3dee0098c86584d8c5c90))
+* remove sol-hint warnings after check ([84e05b4](https://github.com/rigoblock/v3-contracts/commit/84e05b4114e30a3fb1b20db0219007adf7e986ab))
+* require tokens whitelisted for uniswap mint/increase liquidity ([e9ee604](https://github.com/rigoblock/v3-contracts/commit/e9ee604370126e1b66c4461cf14a98028b69751b))
+* same address for said owner and name ([ae6fa8a](https://github.com/rigoblock/v3-contracts/commit/ae6fa8a20b19d63aac9fe312f2b498fc4f1cb34e))
+* same pool address with upgraded implementation ([62338d4](https://github.com/rigoblock/v3-contracts/commit/62338d45906d9feb2905cb35c1ca471c75e35a59))
+* several variables renaming ([95f0323](https://github.com/rigoblock/v3-contracts/commit/95f0323f42833cc492aafe52ea989b16284b8f03))
+* simplify mixin initializer by defining decimals before writing Pool ([64aa4fd](https://github.com/rigoblock/v3-contracts/commit/64aa4fd0b561fe0c22a6fcf3566480002b681f3f))
+* updated pool interfaces ([32520f3](https://github.com/rigoblock/v3-contracts/commit/32520f3de37747e3a11fac68510f6e4943207e1c))
+
+
+### Features
+
+* add eip1967 event Upgraded at pool creation ([65d3629](https://github.com/rigoblock/v3-contracts/commit/65d36297ea9bca509fc62949367164987616811b))
+* add view methods to return structs ([b4b4c57](https://github.com/rigoblock/v3-contracts/commit/b4b4c574fb12c950957e34a2893a5a8c9d21a2dd))
+* deprecate IPoolStructs ([da82e9e](https://github.com/rigoblock/v3-contracts/commit/da82e9eb0e7f04008cc973eae0ac8b0842d44571))
+* upgrades at discretion of pool operatos ([e5c8fbb](https://github.com/rigoblock/v3-contracts/commit/e5c8fbb26ab131603e2feb850b3be624e5c11608))
+
+
+### Reverts
+
+* Revert "minor pool struct gas optimization" ([bfd997f](https://github.com/rigoblock/v3-contracts/commit/bfd997fb71c89129a9917d4cb40369854f16de91))
+
+
+
 # [0.10.0](https://github.com/rigoblock/v3-contracts/compare/v0.9.1...v0.10.0) (2022-10-08)
 
 
@@ -121,36 +162,6 @@
 * move storage and init constants to subcontracts ([8fdf8bf](https://github.com/rigoblock/v3-contracts/commit/8fdf8bfd7f4f749b9adac6050ff2eb4ceedd798e))
 * move user actions to abstract subcontract ([8df8451](https://github.com/rigoblock/v3-contracts/commit/8df845111a07e85721de5b3e7f1de36b776d8c76))
 * simplify self custody and require minimum delegated GRG stake ([0746a27](https://github.com/rigoblock/v3-contracts/commit/0746a27dc1f7ea676356e87347d1f4e782995c3d))
-
-
-
-# [0.7.0](https://github.com/rigoblock/v3-contracts/compare/v0.6.0...v0.7.0) (2022-07-27)
-
-
-### Bug Fixes
-
-* assert instead of revert with reason in inflation ([ca1add6](https://github.com/rigoblock/v3-contracts/commit/ca1add6419cecbaf9184a61a9063849c6dd355de))
-* correctly delete from storage when removing in authority ([11099ad](https://github.com/rigoblock/v3-contracts/commit/11099ad0bafea6892d37a3753424283b71090dda))
-* declare isValidNav as pure instead of view ([b9562db](https://github.com/rigoblock/v3-contracts/commit/b9562dbba7886b5dff148d7de3e2f74d9f5a9144))
-* further authority linting ([c78416f](https://github.com/rigoblock/v3-contracts/commit/c78416ff9fefcd7625fa75727be716b053b53e49))
-* further simplify authority core ([92fedd8](https://github.com/rigoblock/v3-contracts/commit/92fedd8f670523c1c056faca291343bb5e2a1c06))
-* just assert without return error in staking adapter ([8cc2272](https://github.com/rigoblock/v3-contracts/commit/8cc22724f36be68b2d6a50c65ea274bfb643d666))
-* minimum amount as base / 1e3 instead of value / 1e3 ([0a89c3b](https://github.com/rigoblock/v3-contracts/commit/0a89c3ba755590e31e74ac5a0c0bfb977c4dc127))
-* pool registry linting ([a8cebd9](https://github.com/rigoblock/v3-contracts/commit/a8cebd990979664a6bee525cc630830af6c7bbc7))
-* remove authority exchanges use in weth adapter  ([36395f6](https://github.com/rigoblock/v3-contracts/commit/36395f68079403cd61fc1ab77804e027b02ed1d9))
-* remove concept of authority group ([1ff95a5](https://github.com/rigoblock/v3-contracts/commit/1ff95a543fd3fd3c7d4cc79eb14d2c07d3a75e0d))
-* remove use of authority extensions in pool ([5245c39](https://github.com/rigoblock/v3-contracts/commit/5245c3930d0f6b62f42c3fd2609e4fd68c27f041))
-* rename internal to private in inflation and rename internal method ([ffe0261](https://github.com/rigoblock/v3-contracts/commit/ffe026192a289ca9d22b63cafc387ec3f96407fa))
-* revert with error in inflation time anomaly instead of assert ([752d186](https://github.com/rigoblock/v3-contracts/commit/752d186cacd266622416504a63bee477b32acc0a))
-* upgrade solc  dep to 0.8.15 from 0.7.4 ([653365e](https://github.com/rigoblock/v3-contracts/commit/653365e69d712a3b895a218f8a7377cb9924973b))
-
-
-### Features
-
-* better naming convensions in authority and registry modifier ([71e52af](https://github.com/rigoblock/v3-contracts/commit/71e52af937840eeda61d0e475d41e67c605d5874))
-* simplify authority contract ([e53c111](https://github.com/rigoblock/v3-contracts/commit/e53c111f2b9fe43ae53b991b6e6a49b23f181b74))
-* simplify authority core storage ([37e0226](https://github.com/rigoblock/v3-contracts/commit/37e022642dcdfedeb696eb550c2dd4cf72f1591f))
-* simplify authority extensions storage ([bc07a2c](https://github.com/rigoblock/v3-contracts/commit/bc07a2c58953089f6137a6a7de5879654b72eab5))
 
 
 
