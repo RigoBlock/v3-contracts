@@ -33,7 +33,9 @@ contract ASelfCustody is IASelfCustody {
     address public immutable override grgVault;
 
     // minimum 100k GRG to unlock self custody
-    uint256 private constant _MINIMUM_GRG_STAKE = 1e23;
+    uint128 private constant _MINIMUM_GRG_STAKE = 1e23;
+
+    // bytes4 hash of the transfer selector
     bytes4 private constant _TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
 
     address private immutable _stakingProxy;
@@ -100,6 +102,6 @@ contract ASelfCustody is IASelfCustody {
     }
 
     function _getMinimumGrgStake() private pure returns (uint256) {
-        return _MINIMUM_GRG_STAKE;
+        return uint256(_MINIMUM_GRG_STAKE);
     }
 }
