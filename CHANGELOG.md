@@ -1,3 +1,14 @@
+## [0.11.1](https://github.com/rigoblock/v3-contracts/compare/v0.11.0...v0.11.1) (2022-10-19)
+
+
+### Bug Fixes
+
+* upgrade action-semantic-pull-request to v5.0.2 ([14170ed](https://github.com/rigoblock/v3-contracts/commit/14170ed23462e48f3b65e947f825223174e0c993))
+* upgrade actions/checkout in release action ([cdcd1bc](https://github.com/rigoblock/v3-contracts/commit/cdcd1bcd18f1932225c47033b2d6fd5045c9ceb5))
+* upgrade ci v3-contracts ([d80e9eb](https://github.com/rigoblock/v3-contracts/commit/d80e9ebcd11d30e65411c6589cb630b405f1dfa9))
+
+
+
 # [0.11.0](https://github.com/rigoblock/v3-contracts/compare/v0.10.0...v0.11.0) (2022-10-19)
 
 
@@ -126,42 +137,6 @@
 * added mock uniswap npm contract ([d6f0a57](https://github.com/rigoblock/v3-contracts/commit/d6f0a578e2351bea74ca6531e59f51e934342e68))
 * require at least 3% liquidity when updating pool price ([d2e8965](https://github.com/rigoblock/v3-contracts/commit/d2e8965944d54af83caedc1e767a469a1d5c2734))
 * update uniswap adapter ([0e698fb](https://github.com/rigoblock/v3-contracts/commit/0e698fb302d0bebd801a1a9594cc288bfa1e695b))
-
-
-
-# [0.8.0](https://github.com/rigoblock/v3-contracts/compare/v0.7.0...v0.8.0) (2022-08-22)
-
-
-### Bug Fixes
-
-* add log indexed base token at pool initialization ([53afe47](https://github.com/rigoblock/v3-contracts/commit/53afe47b7d21f10cd8d92fe761d437d05dc38b5c))
-* add pool initializer interface to pool interface ([0cd5c68](https://github.com/rigoblock/v3-contracts/commit/0cd5c68d2a83a910d2c11b3408c278a07d5dc133))
-* add receive to interface and do nothing when eth received ([f0e2656](https://github.com/rigoblock/v3-contracts/commit/f0e26565ad5bd5c2203faf18b0e5dd5677cf1849))
-* allow spread up to 10% instead of < 10% ([e345a45](https://github.com/rigoblock/v3-contracts/commit/e345a45121ef9763dd481e845212ee49d4063b52))
-* fix typo in burn method plus get fee collector from internal method ([1454005](https://github.com/rigoblock/v3-contracts/commit/14540052e17c2dc2b57db6b937e3fa5cc006fd88))
-* fixed returned error message when failed transfer from pool ([f378fb7](https://github.com/rigoblock/v3-contracts/commit/f378fb76df8f176a9119f3433a5563e3a0c4d880))
-* hash name and owner address to produce salt ([7553ccc](https://github.com/rigoblock/v3-contracts/commit/7553cccbde8b7814a5907d2697d91f0322e7dc7d))
-* implement overrides in mixin pool state and virtual elsewhere ([e8dae35](https://github.com/rigoblock/v3-contracts/commit/e8dae35ab4c303df236f5845de607b9c157139e3))
-* make public 2 methods in pool (prev external) and remove TODO ([f9171c8](https://github.com/rigoblock/v3-contracts/commit/f9171c8d63145398671c46db6d912d3c2df3b1e6))
-* moved unused Atoken and AWeth to examples folder ([2486b46](https://github.com/rigoblock/v3-contracts/commit/2486b46a7e0de50b0bfe52e8b1dc5a010954d3b0))
-* renamed factory internal method _createPoolInternal to _createPool ([8332f9f](https://github.com/rigoblock/v3-contracts/commit/8332f9f5aade330e0be5e1030a7f6bf369cf4d56))
-* require kyc provider is contract ([6238e6f](https://github.com/rigoblock/v3-contracts/commit/6238e6f7eb771ca8879f30b7ef41ca0f252c4e4d))
-* require target not contract in self custody adapter ([c5322f9](https://github.com/rigoblock/v3-contracts/commit/c5322f9c49143f7bdcaebcb0d20c3cadb3706429))
-* return fee collector from internal method ([136c62f](https://github.com/rigoblock/v3-contracts/commit/136c62f1819fe6dba4981ecf792abd47f5c0b1d0))
-* returned variable naming ([4e1058a](https://github.com/rigoblock/v3-contracts/commit/4e1058ad5bc46750a82ff7116208cb8162e31c9f))
-* revert if spread set to 0 ([97ae7f3](https://github.com/rigoblock/v3-contracts/commit/97ae7f3d19e538f788002a6cde64d7949e7c3e59))
-* update order of subcontracts import and declare storage import ([8a647b3](https://github.com/rigoblock/v3-contracts/commit/8a647b3430cddbdde9c48b8e647f5f5d1a113617))
-* update pool subcontracts interfaces correctly ([6410220](https://github.com/rigoblock/v3-contracts/commit/6410220ddad288851289fe693ab72ef96347e438))
-
-
-### Features
-
-* added self custody adapter interface ([463b293](https://github.com/rigoblock/v3-contracts/commit/463b29339487320e2cd8969c469ce9dc5096009f))
-* complete migration of pool methods to subcontracts ([cb9294d](https://github.com/rigoblock/v3-contracts/commit/cb9294d0ee957c244d04437d0edd32c84fce6fcb))
-* move owner actions to dedicated subcontract ([4c12833](https://github.com/rigoblock/v3-contracts/commit/4c12833a6d6af318d155ccafbe728a9277d3bc0a))
-* move storage and init constants to subcontracts ([8fdf8bf](https://github.com/rigoblock/v3-contracts/commit/8fdf8bfd7f4f749b9adac6050ff2eb4ceedd798e))
-* move user actions to abstract subcontract ([8df8451](https://github.com/rigoblock/v3-contracts/commit/8df845111a07e85721de5b3e7f1de36b776d8c76))
-* simplify self custody and require minimum delegated GRG stake ([0746a27](https://github.com/rigoblock/v3-contracts/commit/0746a27dc1f7ea676356e87347d1f4e782995c3d))
 
 
 
