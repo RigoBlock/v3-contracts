@@ -5,8 +5,10 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolImmutable {
     /// @notice Returns a string of the pool version.
+    /// @return String of the pool implementation version.
     function VERSION() external view returns (string memory);
 
     /// @notice Returns the address of the authority contract.
+    /// @return Address of the authority contract.
     function authority() external view returns (address);
 }

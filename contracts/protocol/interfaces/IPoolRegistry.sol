@@ -36,7 +36,7 @@ interface IPoolRegistry {
     /// @notice Emitted when pool owner updates meta data for its pool.
     /// @param pool Address of the pool.
     /// @param key Bytes32 key for indexing.
-    /// @param value Value associated with the key.
+    /// @param value Bytes32 of the value associated with the key.
     event MetaChanged(address indexed pool, bytes32 indexed key, bytes32 value);
 
     /// @notice Emitted when a new pool is registered in registry.
@@ -48,7 +48,7 @@ interface IPoolRegistry {
     event Registered(
         address indexed group,
         address pool,
-        bytes32 indexed name, // client can prune sibyl pools
+        bytes32 indexed name, // client can prune sybil pools
         bytes32 indexed symbol,
         bytes32 id
     );
@@ -69,6 +69,7 @@ interface IPoolRegistry {
     /// @param pool Address of the pool.
     /// @param name String name of the pool (31 characters/bytes or less).
     /// @param symbol String symbol of the pool (3 to 5 characters/bytes).
+    /// @param poolId Bytes32 of the pool id.
     function register(
         address pool,
         string calldata name,
@@ -103,6 +104,6 @@ interface IPoolRegistry {
 
     /// @notice Returns the id of a pool from its address.
     /// @param pool Address of the pool.
-    /// @return poolId Id of the pool.
+    /// @return poolId bytes32 id of the pool.
     function getPoolIdFromAddress(address pool) external view returns (bytes32 poolId);
 }

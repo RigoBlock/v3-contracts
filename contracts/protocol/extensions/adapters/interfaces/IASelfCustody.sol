@@ -30,6 +30,7 @@ interface IASelfCustody {
     event SelfCustodyTransfer(address indexed from, address indexed to, address indexed token, uint256 amount);
 
     /// @notice Returns the address of the GRG vault contract.
+    /// @return Address of the GRG vault contract.
     function grgVault() external view returns (address);
 
     /// @notice transfers ETH or tokens to self custody.

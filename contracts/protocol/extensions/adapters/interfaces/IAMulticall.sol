@@ -21,5 +21,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 interface IAMulticall {
     /// @notice Enables calling multiple methods in a single call to the contract
+    /// @param data Array of encoded calls.
+    /// @return results Array of call responses.
     function multicall(bytes[] calldata data) external returns (bytes[] memory results);
 }

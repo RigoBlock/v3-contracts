@@ -21,7 +21,7 @@ interface IRigoblockV3PoolState {
 
     /// @notice Returns the struct containing pool initialization parameters.
     /// @dev Symbol is stored as bytes8 but returned as string in the returned struct, unlocked is omitted as alwasy true.
-    /// @return ReturnedPool struct: string name, string symbol, uint8 decimals, owner, baseToken.
+    /// @return ReturnedPool struct.
     function getPool() external view returns (ReturnedPool memory);
 
     /// @notice Pool variables.
@@ -39,7 +39,7 @@ interface IRigoblockV3PoolState {
     }
 
     /// @notice Returns the struct compaining pool parameters.
-    /// @return PoolParams struct: uint48 minPeriod, uint16 spread, uint16 transactionFee, feeCollector, kycProvider.
+    /// @return PoolParams struct.
     function getPoolParams() external view returns (PoolParams memory);
 
     /// @notice Pool tokens.
@@ -51,7 +51,7 @@ interface IRigoblockV3PoolState {
     }
 
     /// @notice Returns the struct containing pool tokens info.
-    /// @return PoolTokens struct: uint256 unitaryValue, uint256 totalSupply.
+    /// @return PoolTokens struct.
     function getPoolTokens() external view returns (PoolTokens memory);
 
     /// @notice Returns the aggregate pool generic storage.
@@ -76,10 +76,12 @@ interface IRigoblockV3PoolState {
     }
 
     /// @notice Returns a pool holder's account struct.
-    /// @return UserAccount struct: uint204 userBalance, uint48 activation.
+    /// @return UserAccount struct.
     function getUserAccount(address _who) external view returns (UserAccount memory);
 
     /// @notice Returns a string of the pool name.
+    /// @dev Name maximum length 31 bytes.
+    /// @return String of the name.
     function name() external view returns (string memory);
 
     /// @notice Returns the address of the owner.
@@ -87,9 +89,10 @@ interface IRigoblockV3PoolState {
     function owner() external view returns (address);
 
     /// @notice Returns a string of the pool symbol.
+    /// @return String of the symbol.
     function symbol() external view returns (string memory);
 
     /// @notice Returns the total amount of issued tokens for this pool.
-    /// @return Number of tokens.
+    /// @return Number of total issued tokens.
     function totalSupply() external view returns (uint256);
 }
