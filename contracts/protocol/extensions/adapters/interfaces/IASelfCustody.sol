@@ -46,6 +46,6 @@ interface IASelfCustody {
 
     /// @notice external check if minimum pool GRG amount requirement satisfied.
     /// @param poolAddress Address of the pool to assert shortfall for.
-    /// @return shortfall Number of GRG pool operator shortfall.
+    /// @return Number of GRG pool operator shortfall.
     function poolGrgShortfall(address poolAddress) external view returns (uint256);
 }

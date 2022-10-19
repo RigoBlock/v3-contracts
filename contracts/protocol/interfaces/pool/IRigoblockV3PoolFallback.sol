@@ -5,7 +5,7 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolFallback {
     /// @notice Delegate calls to pool extension.
-    /// @dev Delegatecall locked to owner, staticcall accessible by everyone.
+    /// @dev Delegatecall restricted to owner, staticcall accessible by everyone.
     /// @dev Restricting delegatecall to owner effectively locks direct calls.
     fallback() external payable;
 

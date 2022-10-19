@@ -47,8 +47,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     address public immutable override weth;
 
-    constructor(address uniswapRouter02Address) {
-        uniswapRouter02 = uniswapRouter02Address;
+    constructor(address newUniswapRouter02) {
+        uniswapRouter02 = newUniswapRouter02;
         uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
         weth = payable(INonfungiblePositionManager(uniswapv3Npm).WETH9());
     }

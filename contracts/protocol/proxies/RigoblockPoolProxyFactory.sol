@@ -113,7 +113,7 @@ contract RigoblockPoolProxyFactory is IRigoblockPoolProxyFactory {
         // we write to storage to allow proxy to read initialization parameters
         _parameters = Parameters({name: name, symbol: bytes8(bytes(symbol)), owner: msg.sender, baseToken: baseToken});
 
-        // TODO: should remove implementation from constructor as it is a variable, meaning pool address could change
+        // constructor is null to guarantee same create2 deployed address
         try new RigoblockPoolProxy{salt: salt}() returns (RigoblockPoolProxy proxy) {
             newProxy = proxy;
         } catch Error(string memory revertReason) {

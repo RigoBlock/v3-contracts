@@ -41,9 +41,9 @@ contract ASelfCustody is IASelfCustody {
     address private immutable _stakingProxy;
     address private immutable _aSelfCustody;
 
-    constructor(address grgVaultAddress, address stakingProxyAddress) {
-        grgVault = grgVaultAddress;
-        _stakingProxy = stakingProxyAddress;
+    constructor(address newGrgVault, address newStakingProxy) {
+        grgVault = newGrgVault;
+        _stakingProxy = newStakingProxy;
         _aSelfCustody = address(this);
     }
 
@@ -71,8 +71,9 @@ contract ASelfCustody is IASelfCustody {
 
     /// @inheritdoc IASelfCustody
     function poolGrgShortfall(address targetPool) public view override returns (uint256) {
-        bytes32 poolId = IStorage(_stakingProxy).poolIdByRbPoolAccount(targetPool);
-        uint256 poolStake = IStaking(_stakingProxy).getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
+        address stakingProxy = _getGrgStakingProxy();
+        bytes32 poolId = IStorage(stakingProxy).poolIdByRbPoolAccount(targetPool);
+        uint256 poolStake = IStaking(stakingProxy).getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
 
         // we assert the staking implementation has not been compromised by requiring all staked GRG to be delegated to self.
         require(poolStake == IGrgVault(grgVault).balanceOf(targetPool), "ASELFCUSTODY_GRG_BALANCE_MISMATCH_ERROR");
@@ -99,6 +100,10 @@ contract ASelfCustody is IASelfCustody {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(_TRANSFER_SELECTOR, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "ASELFCUSTODY_TRANSFER_FAILED_ERROR");
+    }
+
+    function _getGrgStakingProxy() private view returns (address) {
+        return _stakingProxy;
     }
 
     function _getMinimumGrgStake() private pure returns (uint256) {

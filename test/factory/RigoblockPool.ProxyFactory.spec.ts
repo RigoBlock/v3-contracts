@@ -121,7 +121,7 @@ describe("ProxyFactory", async () => {
         // a pool with same owner and name should have unique address
         it('should revert when contract exists already', async () => {
             const { factory } = await setupTests()
-            let pippo = await factory.createPool('duplicateName', 'TEST', AddressZero)
+            await factory.createPool('duplicateName', 'TEST', AddressZero)
             await expect(
                 factory.createPool('duplicateName', 'TEST', AddressZero)
             ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
@@ -256,10 +256,11 @@ describe("ProxyFactory", async () => {
             await expect(
                 factory.setRegistry(factory.address)
             ).to.emit(factory, "RegistryUpgraded").withArgs(factory.address)
-            //expect(await factory.getRegistry()).to.be.eq(factory.address)
+            expect(await factory.getRegistry()).to.be.eq(factory.address)
             // the following transaction will be reverted as rigoblock dao assertion queries dao from registry and in this context
             // factory does not implement same interface. Factory used as mock address to test that address gets updated.
-            //await expect(factory.setRegistry(factory.address)).to.be.reverted
+            await expect(factory.setRegistry(factory.address))
+                .to.be.revertedWith("function selector was not recognized and there's no fallback function")
         })
     })
 })

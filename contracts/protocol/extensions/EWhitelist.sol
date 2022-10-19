@@ -42,9 +42,9 @@ contract EWhitelist is IEWhitelist {
         _;
     }
 
-    constructor(address authorityAddress) {
+    constructor(address newAuthority) {
         assert(_EWHITELIST_TOKEN_WHITELIST_SLOT == bytes32(uint256(keccak256("ewhitelist.token.whitelist")) - 1));
-        authority = authorityAddress;
+        authority = newAuthority;
     }
 
     /// @inheritdoc IEWhitelist
