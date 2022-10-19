@@ -25,7 +25,7 @@ import "../../IRigoblockV3Pool.sol";
 /// @dev Inheriting from interface is required as we override public variables.
 abstract contract MixinConstants is IRigoblockV3Pool {
     /// @inheritdoc IRigoblockV3PoolImmutable
-    string public constant override VERSION = "HF 3.1.0";
+    string public constant override VERSION = "HF 3.1.1";
 
     bytes32 internal constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
 

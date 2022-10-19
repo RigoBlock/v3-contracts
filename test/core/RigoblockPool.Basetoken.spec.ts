@@ -40,7 +40,7 @@ describe("BaseTokenProxy", async () => {
             const { pool } = await setupTests()
             const authority = await deployments.get("Authority")
             expect(await pool.authority()).to.be.eq(authority.address)
-            expect(await pool.VERSION()).to.be.eq('HF 3.1.0')
+            expect(await pool.VERSION()).to.be.eq('HF 3.1.1')
         })
     })
 
