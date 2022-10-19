@@ -28,9 +28,9 @@ New storage variables in the implementation must be added to a dedicated storage
 ### Commit format:
 PR must follow "Conventional Commits spec". PR title is checked upon opening. Examples for valid PR titles:
 
-- ```fix```: Correct typo. (patch)
-- ```feat```: Add support for ... (minor)
-- ```refactor!```: Drop support for ... (major)
+- ```fix:``` Correct typo. (patch)
+- ```feat:``` Add support for ... (minor)
+- ```feat!:``` Drop support for ... (major)
 
  Other PR titles are also valid:
 
