@@ -26,42 +26,42 @@ interface IInflation {
     /*
      * STORAGE
      */
-    /// @dev Returns the address of the GRG token.
+    /// @notice Returns the address of the GRG token.
     /// @return Address of the Rigo token contract.
-    function RIGO_TOKEN_ADDRESS() external view returns (address);
+    function rigoToken() external view returns (address);
 
-    /// @dev Returns the address of the GRG staking proxy.
+    /// @notice Returns the address of the GRG staking proxy.
     /// @return Address of the proxy contract.
-    function STAKING_PROXY_ADDRESS() external view returns (address);
+    function stakingProxy() external view returns (address);
 
-    /// @dev Allows staking proxy to mint rewards.
-    /// @return mintedInflation Number of allocated tokens.
-    function epochLength() external view returns (uint256);
+    /// @notice Returns the epoch length in seconds.
+    /// @return Number of seconds.
+    function epochLength() external view returns (uint48);
 
-    /// @dev Returns epoch slot.
+    /// @notice Returns epoch slot.
+    /// @dev Increases by one every new epoch.
     /// @return Number of latest epoch slot.
-    /// @notice Increases by one every new epoch.
-    function slot() external view returns (uint256);
+    function slot() external view returns (uint32);
 
     /*
      * CORE FUNCTIONS
      */
-    /// @dev Allows staking proxy to mint rewards.
+    /// @notice Allows staking proxy to mint rewards.
     /// @return mintedInflation Number of allocated tokens.
     function mintInflation() external returns (uint256 mintedInflation);
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
-    /// @dev Returns whether an epoch has ended.
+    /// @notice Returns whether an epoch has ended.
     /// @return Bool the epoch has ended.
     function epochEnded() external view returns (bool);
 
-    /// @dev Returns the epoch inflation.
+    /// @notice Returns the epoch inflation.
     /// @return Value of units of GRG minted in an epoch.
     function getEpochInflation() external view returns (uint256);
 
-    /// @dev Returns how long until next claim.
+    /// @notice Returns how long until next claim.
     /// @return Number in seconds.
     function timeUntilNextClaim() external view returns (uint256);
 }

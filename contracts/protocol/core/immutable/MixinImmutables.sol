@@ -29,8 +29,8 @@ abstract contract MixinImmutables is MixinConstants {
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
 
-    constructor(address _authority) {
-        authority = _authority;
+    constructor(address newAuthority) {
+        authority = newAuthority;
         _implementation = address(this);
     }
 }

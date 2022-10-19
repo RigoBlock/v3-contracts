@@ -38,19 +38,19 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     // storage must be immutable as needs to be rutime consistent
     // 0xE592427A0AEce92De3Edee1F18E0157C05861564 on public networks
     /// @inheritdoc IAUniswap
-    address public immutable override UNISWAP_SWAP_ROUTER_2_ADDRESS;
+    address public immutable override uniswapRouter02;
 
     // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
     /// @inheritdoc IAUniswap
-    address public immutable override UNISWAP_V3_NPM_ADDRESS;
+    address public immutable override uniswapv3Npm;
 
     /// @inheritdoc IAUniswap
-    address public immutable override WETH_ADDRESS;
+    address public immutable override weth;
 
-    constructor(address _uniswapRouter02) {
-        UNISWAP_SWAP_ROUTER_2_ADDRESS = _uniswapRouter02;
-        UNISWAP_V3_NPM_ADDRESS = payable(ISwapRouter02(UNISWAP_SWAP_ROUTER_2_ADDRESS).positionManager());
-        WETH_ADDRESS = payable(INonfungiblePositionManager(UNISWAP_V3_NPM_ADDRESS).WETH9());
+    constructor(address newUniswapRouter02) {
+        uniswapRouter02 = newUniswapRouter02;
+        uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
+        weth = payable(INonfungiblePositionManager(uniswapv3Npm).WETH9());
     }
 
     /*
@@ -66,12 +66,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         _assertTokenWhitelisted(path[1]);
 
         // we require target to being contract to prevent call being executed to EOA
-        require(isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        require(_isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        address uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
-        _safeApprove(path[0], _getUniswapRouter2(), type(uint256).max);
+        _safeApprove(path[0], uniswapRouter, type(uint256).max);
 
-        amountOut = ISwapRouter02(_getUniswapRouter2()).swapExactTokensForTokens(
+        amountOut = ISwapRouter02(uniswapRouter).swapExactTokensForTokens(
             amountIn,
             amountOutMin,
             path,
@@ -79,7 +80,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(path[0], _getUniswapRouter2(), uint256(1));
+        _safeApprove(path[0], uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -92,12 +93,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         _assertTokenWhitelisted(path[1]);
 
         // we require target to being contract to prevent call being executed to EOA
-        require(isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        require(_isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        address uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
-        _safeApprove(path[0], _getUniswapRouter2(), type(uint256).max);
+        _safeApprove(path[0], uniswapRouter, type(uint256).max);
 
-        amountIn = ISwapRouter02(_getUniswapRouter2()).swapTokensForExactTokens(
+        amountIn = ISwapRouter02(uniswapRouter).swapTokensForExactTokens(
             amountOut,
             amountInMax,
             path,
@@ -105,7 +107,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(path[0], _getUniswapRouter2(), uint256(1));
+        _safeApprove(path[0], uniswapRouter, uint256(1));
     }
 
     /*
@@ -120,13 +122,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         _assertTokenWhitelisted(params.tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
-        require(isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        require(_isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        address uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
-        _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
+        _safeApprove(params.tokenIn, uniswapRouter, type(uint256).max);
 
         // we swap the tokens
-        amountOut = ISwapRouter02(_getUniswapRouter2()).exactInputSingle(
+        amountOut = ISwapRouter02(uniswapRouter).exactInputSingle(
             IV3SwapRouter.ExactInputSingleParams({
                 tokenIn: params.tokenIn,
                 tokenOut: params.tokenOut,
@@ -139,7 +142,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.tokenIn, _getUniswapRouter2(), uint256(1));
+        _safeApprove(params.tokenIn, uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -148,13 +151,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         _assertTokenWhitelisted(tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
-        require(isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        require(_isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        address uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
-        _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
+        _safeApprove(tokenIn, uniswapRouter, type(uint256).max);
 
         // we swap the tokens
-        amountOut = ISwapRouter02(_getUniswapRouter2()).exactInput(
+        amountOut = ISwapRouter02(uniswapRouter).exactInput(
             IV3SwapRouter.ExactInputParams({
                 path: params.path,
                 recipient: address(this), // this pool is always the recipient
@@ -164,7 +168,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(tokenIn, _getUniswapRouter2(), uint256(1));
+        _safeApprove(tokenIn, uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -176,13 +180,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         _assertTokenWhitelisted(params.tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
-        require(isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        require(_isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        address uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
-        _safeApprove(params.tokenIn, _getUniswapRouter2(), type(uint256).max);
+        _safeApprove(params.tokenIn, uniswapRouter, type(uint256).max);
 
         // we swap the tokens
-        amountIn = ISwapRouter02(_getUniswapRouter2()).exactOutputSingle(
+        amountIn = ISwapRouter02(uniswapRouter).exactOutputSingle(
             IV3SwapRouter.ExactOutputSingleParams({
                 tokenIn: params.tokenIn,
                 tokenOut: params.tokenOut,
@@ -195,7 +200,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.tokenIn, _getUniswapRouter2(), uint256(1));
+        _safeApprove(params.tokenIn, uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -204,13 +209,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         _assertTokenWhitelisted(tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
-        require(isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        require(_isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        address uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
-        _safeApprove(tokenIn, _getUniswapRouter2(), type(uint256).max);
+        _safeApprove(tokenIn, uniswapRouter, type(uint256).max);
 
         // we swap the tokens
-        amountIn = ISwapRouter02(_getUniswapRouter2()).exactOutput(
+        amountIn = ISwapRouter02(uniswapRouter).exactOutput(
             IV3SwapRouter.ExactOutputParams({
                 path: params.path,
                 recipient: address(this), // this pool is always the recipient
@@ -220,7 +226,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(tokenIn, _getUniswapRouter2(), uint256(1));
+        _safeApprove(tokenIn, uniswapRouter, uint256(1));
     }
 
     /*
@@ -273,7 +279,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external override {
-        IWETH9(_getWethAddress()).withdraw(amountMinimum);
+        IWETH9(_getWeth()).withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
@@ -281,7 +287,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         if (recipient != address(this)) {
             recipient = address(this);
         }
-        IWETH9(_getWethAddress()).withdraw(amountMinimum);
+        IWETH9(_getWeth()).withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
@@ -302,7 +308,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external {
         if (value > uint256(0)) {
-            IWETH9(_getWethAddress()).deposit{value: value}();
+            IWETH9(_getWeth()).deposit{value: value}();
         }
     }
 
@@ -321,23 +327,23 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         assert(data.length == 0 || abi.decode(data, (bool)));
     }
 
-    function _assertTokenWhitelisted(address _token) internal view override {
-        require(IEWhitelist(address(this)).isWhitelistedToken(_token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
+    function _assertTokenWhitelisted(address token) internal view override {
+        require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
     }
 
-    function _getUniswapNpmAddress() internal view override returns (address) {
-        return UNISWAP_V3_NPM_ADDRESS;
+    function _getUniswapNpm() internal view override returns (address) {
+        return uniswapv3Npm;
     }
 
-    function isContract(address target) internal view returns (bool) {
+    function _isContract(address target) internal view returns (bool) {
         return target.code.length > 0;
     }
 
     function _getUniswapRouter2() private view returns (address) {
-        return UNISWAP_SWAP_ROUTER_2_ADDRESS;
+        return uniswapRouter02;
     }
 
-    function _getWethAddress() private view returns (address) {
-        return WETH_ADDRESS;
+    function _getWeth() private view returns (address) {
+        return weth;
     }
 }

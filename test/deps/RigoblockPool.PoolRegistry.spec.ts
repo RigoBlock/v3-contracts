@@ -130,7 +130,7 @@ describe("PoolRegistry", async () => {
             await expect(
                 registry.connect(user2).setRigoblockDao(AddressZero)
             ).to.be.revertedWith("REGISTRY_CALLER_NOT_DAO_ERROR")
-            const daoAddress = await registry.rigoblockDaoAddress()
+            const daoAddress = await registry.rigoblockDao()
             await expect(
                 registry.setRigoblockDao(daoAddress)
             ).to.be.revertedWith("REGISTRY_SAME_INPUT_ADDRESS_ERROR")
@@ -143,7 +143,7 @@ describe("PoolRegistry", async () => {
             await expect(
                 registry.setRigoblockDao(factory.address)
             ).to.emit(registry, "RigoblockDaoChanged").withArgs(factory.address)
-            expect(await registry.rigoblockDaoAddress()).to.be.eq(factory.address)
+            expect(await registry.rigoblockDao()).to.be.eq(factory.address)
         })
     })
 })

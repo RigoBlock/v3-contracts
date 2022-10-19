@@ -71,7 +71,7 @@ describe("ProxyFactory", async () => {
                 await registry.getPoolIdFromAddress(newPoolAddress)
             ).to.be.eq(poolId)
             await expect(factory.createPool('testpool','TEST', AddressZero))
-                .to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
+                .to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
         })
 
         // following test used to assert try/catch return bytes error.
@@ -118,12 +118,46 @@ describe("ProxyFactory", async () => {
             ).to.emit(factory, "PoolCreated")
         })
 
+        // a pool with same owner and name should have unique address
         it('should revert when contract exists already', async () => {
             const { factory } = await setupTests()
             await factory.createPool('duplicateName', 'TEST', AddressZero)
             await expect(
                 factory.createPool('duplicateName', 'TEST', AddressZero)
-            ).to.be.revertedWith("FACTORY_LIBRARY_CREATE2_FAILED_ERROR")
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            await expect(
+                factory.createPool('duplicateName', 'TEST2', AddressZero)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+        })
+
+        it('should revert when contract exists with base token', async () => {
+            const { factory } = await setupTests()
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await factory.createPool('duplicateName', 'TEST', weth.address)
+            await expect(
+                factory.createPool('duplicateName', 'TEST', weth.address)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            await expect(
+                factory.createPool('duplicateName', 'TEST2', weth.address)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+        })
+
+        it('should revert when contract exists with different implementation', async () => {
+            const { factory } = await setupTests()
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await factory.createPool('duplicateName', 'TEST', weth.address)
+            const source = 'contract Impl { function initializePool() external {} }'
+            const [ user1, user2 ] = waffle.provider.getWallets()
+            const impl = await deployContract(user1, source)
+            await factory.setImplementation(impl.address)
+            await expect(
+                factory.createPool('duplicateName', 'TEST', weth.address)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            await expect(
+                factory.createPool('duplicateName', 'TEST2', weth.address)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
         })
 
         it('should create pool with duplicate name', async () => {
@@ -132,7 +166,11 @@ describe("ProxyFactory", async () => {
                 factory.createPool('duplicateName', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
             await expect(
-                factory.createPool('duplicateName', 'TEST2', AddressZero)
+                factory.createPool('duplicateName', 'TEST', AddressZero)
+            ).to.be.revertedWith("FACTORY_CREATE2_FAILED_ERROR")
+            const [ user1, user2 ] = waffle.provider.getWallets()
+            await expect(
+                factory.connect(user2).createPool('duplicateName', 'TEST', AddressZero)
             ).to.emit(factory, "PoolCreated")
         })
 
@@ -199,7 +237,7 @@ describe("ProxyFactory", async () => {
         })
     })
 
-    describe("updateRegistry", async () => {
+    describe("setRegistry", async () => {
         it('should revert if caller not dao address', async () => {
             const { factory, registry } = await setupTests()
             const [ user1, user2 ] = waffle.provider.getWallets()
@@ -221,7 +259,8 @@ describe("ProxyFactory", async () => {
             expect(await factory.getRegistry()).to.be.eq(factory.address)
             // the following transaction will be reverted as rigoblock dao assertion queries dao from registry and in this context
             // factory does not implement same interface. Factory used as mock address to test that address gets updated.
-            await expect(factory.setRegistry(factory.address)).to.be.reverted
+            await expect(factory.setRegistry(factory.address))
+                .to.be.revertedWith("function selector was not recognized and there's no fallback function")
         })
     })
 })

@@ -19,8 +19,8 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../utils/storageSlot/StorageSlot.sol";
 import "../interfaces/IRigoblockPoolProxy.sol";
+import "../interfaces/IRigoblockPoolProxyFactory.sol";
 
 /// @title RigoblockPoolProxy - Proxy contract forwards calls to the implementation address returned by the admin.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -29,27 +29,26 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
     // Reduced deployment cost by using internal variable.
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
-    /// @dev Sets address of implementation contract.
-    /// @param _implementation Implementation address.
-    /// @param _data Initialization parameters.
-    constructor(address _implementation, bytes memory _data) payable {
+    /// @notice Sets address of implementation contract.
+    constructor() payable {
         // store implementation address in implementation slot value
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
-        StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = _implementation;
-        emit Upgraded(_implementation);
+        address implementation = IRigoblockPoolProxyFactory(msg.sender).implementation();
+        getImplementation().implementation = implementation;
+        emit Upgraded(implementation);
 
         // initialize pool
-        // _data = abi.encodeWithSelector(IRigoblockPool._initializePool.selector, name, symbol, baseToken, owner)
-        (, bytes memory returnData) = _implementation.delegatecall(_data);
+        // abi.encodeWithSelector(IRigoblockPool.initializePool.selector)
+        (, bytes memory returnData) = implementation.delegatecall(abi.encodeWithSelector(0x250e6de0));
 
         // we must assert initialization didn't fail, otherwise it could fail silently and still deploy the pool.
         require(returnData.length == 0, "POOL_INITIALIZATION_FAILED_ERROR");
     }
 
     /* solhint-disable no-complex-fallback */
-    /// @dev Fallback function forwards all transactions and returns all received return data.
+    /// @notice Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
-        address implementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
+        address implementation = getImplementation().implementation;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             calldatacopy(0, 0, calldatasize())
@@ -61,5 +60,21 @@ contract RigoblockPoolProxy is IRigoblockPoolProxy {
             return(0, returndatasize())
         }
     }
+
     /* solhint-enable no-complex-fallback */
+
+    /// @notice Implementation slot is accessed directly.
+    /// @dev Saves gas compared to using storage slot library.
+    /// @param implementation Address of the implementation.
+    struct ImplementationSlot {
+        address implementation;
+    }
+
+    /// @notice Method to read/write from/to implementation slot.
+    /// @return s Storage slot of the pool implementation.
+    function getImplementation() private pure returns (ImplementationSlot storage s) {
+        assembly {
+            s.slot := _IMPLEMENTATION_SLOT
+        }
+    }
 }

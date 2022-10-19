@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import "../immutable/MixinImmutables.sol";
 import "../immutable/MixinStorage.sol";
 import "../../interfaces/IERC20.sol";
+import "../../interfaces/IRigoblockPoolProxyFactory.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     modifier onlyUninitialized() {
@@ -19,30 +20,26 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     }
 
     /// @inheritdoc IRigoblockV3PoolInitializer
-    function _initializePool(
-        string calldata _poolName,
-        string calldata _poolSymbol,
-        address _baseToken,
-        address _owner
-    ) external override onlyUninitialized {
+    function initializePool() external override onlyUninitialized {
         uint8 tokenDecimals = 18;
+        IRigoblockPoolProxyFactory.Parameters memory initParams = IRigoblockPoolProxyFactory(msg.sender).parameters();
 
-        if (_baseToken != address(0)) {
-            tokenDecimals = IERC20(_baseToken).decimals();
+        if (initParams.baseToken != address(0)) {
+            tokenDecimals = IERC20(initParams.baseToken).decimals();
         }
 
         // a pool with small decimals could easily underflow.
         assert(tokenDecimals >= 6);
 
         poolWrapper().pool = Pool({
-            name: _poolName,
-            symbol: bytes8(bytes(_poolSymbol)),
+            name: initParams.name,
+            symbol: initParams.symbol,
             decimals: tokenDecimals,
-            owner: _owner,
+            owner: initParams.owner,
             unlocked: true,
-            baseToken: _baseToken
+            baseToken: initParams.baseToken
         });
 
-        emit PoolInitialized(msg.sender, _owner, _baseToken, _poolName, _poolSymbol);
+        emit PoolInitialized(msg.sender, initParams.owner, initParams.baseToken, initParams.name, initParams.symbol);
     }
 }

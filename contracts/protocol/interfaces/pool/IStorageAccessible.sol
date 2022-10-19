@@ -7,12 +7,12 @@ interface IStorageAccessible {
     /// @notice Reads `length` bytes of storage in the currents contract.
     /// @param offset - the offset in the current contract's storage in words to start reading from.
     /// @param length - the number of words (32 bytes) of data to read.
-    /// @return the bytes that were read.
+    /// @return Bytes string of the bytes that were read.
     function getStorageAt(uint256 offset, uint256 length) external view returns (bytes memory);
 
     /// @notice Reads bytes of storage at different storage locations.
     /// @dev Returns a string with values regarless of where they are stored, i.e. variable, mapping or struct.
-    /// @param slots The storage slot to query into.
+    /// @param slots The array of storage slots to query into.
     /// @return Bytes string composite of different storage locations' value.
     function getStorageSlotsAt(uint256[] memory slots) external view returns (bytes memory);
 }

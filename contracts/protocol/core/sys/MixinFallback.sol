@@ -54,9 +54,9 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     }
 
     /// @dev Returns the address of the application adapter.
-    /// @param _selector Hash of the method signature.
+    /// @param selector Hash of the method signature.
     /// @return Address of the application adapter.
-    function _getApplicationAdapter(bytes4 _selector) private view returns (address) {
-        return IAuthority(authority).getApplicationAdapter(_selector);
+    function _getApplicationAdapter(bytes4 selector) private view returns (address) {
+        return IAuthority(authority).getApplicationAdapter(selector);
     }
 }

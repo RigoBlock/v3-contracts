@@ -64,44 +64,44 @@ interface IAuthority {
     }
 
     /// @notice Allows a whitelister to whitelist a method.
-    /// @param _selector Bytes4 hex of the method selector.
-    /// @param _adapter Address of the adapter implementing the method.
+    /// @param selector Bytes4 hex of the method selector.
+    /// @param adapter Address of the adapter implementing the method.
     /// @notice We do not save list of approved as better queried by events.
-    function addMethod(bytes4 _selector, address _adapter) external;
+    function addMethod(bytes4 selector, address adapter) external;
 
     /// @notice Allows a whitelister to remove a method.
-    /// @param _selector Bytes4 hex of the method selector.
-    /// @param _adapter Address of the adapter implementing the method.
-    function removeMethod(bytes4 _selector, address _adapter) external;
+    /// @param selector Bytes4 hex of the method selector.
+    /// @param adapter Address of the adapter implementing the method.
+    function removeMethod(bytes4 selector, address adapter) external;
 
     /// @notice Allows owner to set extension adapter address.
-    /// @param _adapter Address of the target adapter.
-    /// @param _isWhitelisted Bool whitelisted.
-    function setAdapter(address _adapter, bool _isWhitelisted) external;
+    /// @param adapter Address of the target adapter.
+    /// @param isWhitelisted Bool whitelisted.
+    function setAdapter(address adapter, bool isWhitelisted) external;
 
     /// @notice Allows an admin to set factory permission.
-    /// @param _factory Address of the target factory.
-    /// @param _isWhitelisted Bool whitelisted.
-    function setFactory(address _factory, bool _isWhitelisted) external;
+    /// @param factory Address of the target factory.
+    /// @param isWhitelisted Bool whitelisted.
+    function setFactory(address factory, bool isWhitelisted) external;
 
     /// @notice Allows the owner to set whitelister permission.
-    /// @param _whitelister Address of the whitelister.
-    /// @param _isWhitelisted Bool whitelisted.
+    /// @param whitelister Address of the whitelister.
+    /// @param isWhitelisted Bool whitelisted.
     /// @notice Whitelister permission is required to approve methods in extensions adapter.
-    function setWhitelister(address _whitelister, bool _isWhitelisted) external;
+    function setWhitelister(address whitelister, bool isWhitelisted) external;
 
     /// @notice Returns the address of the adapter associated to the signature.
-    /// @param _selector Hex of the method signature.
+    /// @param selector Hex of the method signature.
     /// @return Address of the adapter.
-    function getApplicationAdapter(bytes4 _selector) external view returns (address);
+    function getApplicationAdapter(bytes4 selector) external view returns (address);
 
     /// @notice Provides whether a factory is whitelisted.
-    /// @param _target Address of the target factory.
+    /// @param target Address of the target factory.
     /// @return Bool is whitelisted.
-    function isWhitelistedFactory(address _target) external view returns (bool);
+    function isWhitelistedFactory(address target) external view returns (bool);
 
     /// @notice Provides whether an address is whitelister.
-    /// @param _target Address of the target whitelister.
+    /// @param target Address of the target whitelister.
     /// @return Bool is whitelisted.
-    function isWhitelister(address _target) external view returns (bool);
+    function isWhitelister(address target) external view returns (bool);
 }

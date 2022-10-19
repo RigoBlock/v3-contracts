@@ -24,8 +24,8 @@ describe("AUniswap", async () => {
         const AUniswapInstance = await deployments.get("AUniswap")
         await authority.setAdapter(AUniswapInstance.address, true)
         // "88316456": "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
-        // "c20ec580": "UNISWAP_V3_NPM_ADDRESS()",
-        // "040141e5": "WETH_ADDRESS()",
+        // "c391b77c": "uniswapv3Npm()",
+        // "3fc8cef3": "weth()"
         // "42966c68": "burn(uint256)",
         // "fc6f7865": "collect((uint256,address,uint128,uint128))",
         // "13ead562": "createAndInitializePoolIfNecessary(address,address,uint24,uint160)",
@@ -36,8 +36,8 @@ describe("AUniswap", async () => {
         // "49404b7c": "unwrapWETH9(uint256,address)",
         // "1c58db4f": "wrapETH(uint256)"
         await authority.addMethod("0x88316456", AUniswapInstance.address)
-        await authority.addMethod("0xc20ec580", AUniswapInstance.address)
-        await authority.addMethod("0x040141e5", AUniswapInstance.address)
+        await authority.addMethod("0xc391b77c", AUniswapInstance.address)
+        await authority.addMethod("0x3fc8cef3", AUniswapInstance.address)
         await authority.addMethod("0x42966c68", AUniswapInstance.address)
         await authority.addMethod("0xfc6f7865", AUniswapInstance.address)
         await authority.addMethod("0x13ead562", AUniswapInstance.address)
@@ -116,7 +116,7 @@ describe("AUniswap", async () => {
                     deadline: 1
                 })
             ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            const wethAddress = await pool.WETH_ADDRESS()
+            const wethAddress = await pool.weth()
             await eWhitelist.whitelistToken(wethAddress)
             // the following transaction sets approval to WETH9 in TestUniswapNpm.sol as it reads positions(tokenId) but won't revert.
             await pool.increaseLiquidity({

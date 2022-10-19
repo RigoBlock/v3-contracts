@@ -28,22 +28,22 @@ interface IEWhitelist {
     event Whitelisted(address indexed token, bool isWhitelisted);
 
     /// @notice Allows a whitelister to whitelist a token.
-    /// @param _token Address of the target token.
-    function whitelistToken(address _token) external;
+    /// @param token Address of the target token.
+    function whitelistToken(address token) external;
 
     /// @notice Allows a whitelister to remove a token.
-    /// @param _token Address of the target token.
-    function removeToken(address _token) external;
+    /// @param token Address of the target token.
+    function removeToken(address token) external;
 
     /// @notice Allows a whitelister to whitelist/remove a list of tokens.
-    /// @param _tokens Address array to tokens.
-    /// @param _whitelisted Bollean array the token is to be whitelisted or removed.
-    function batchUpdateTokens(address[] calldata _tokens, bool[] memory _whitelisted) external;
+    /// @param tokens Address array to tokens.
+    /// @param whitelisted Bollean array the token is to be whitelisted or removed.
+    function batchUpdateTokens(address[] calldata tokens, bool[] memory whitelisted) external;
 
     /// @notice Returns whether a token has been whitelisted.
-    /// @param _token Address of the target token.
+    /// @param token Address of the target token.
     /// @return Boolean the token is whitelisted.
-    function isWhitelistedToken(address _token) external view returns (bool);
+    function isWhitelistedToken(address token) external view returns (bool);
 
     /// @notice Returns the address of the authority contract.
     /// @return Address of the authority contract.

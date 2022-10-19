@@ -29,55 +29,50 @@ abstract contract MixinActions is MixinStorage {
      */
     /// @inheritdoc IRigoblockV3PoolActions
     function mint(
-        address _recipient,
-        uint256 _amountIn,
-        uint256 _amountOutMin
+        address recipient,
+        uint256 amountIn,
+        uint256 amountOutMin
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
         address kycProvider = poolParams().kycProvider;
 
         // require whitelisted user if kyc is enforced
         if (kycProvider != address(0)) {
-            require(IKyc(kycProvider).isWhitelistedUser(_recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
+            require(IKyc(kycProvider).isWhitelistedUser(recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
         }
 
-        _assertBiggerThanMinimum(_amountIn);
+        _assertBiggerThanMinimum(amountIn);
 
         if (pool().baseToken == address(0)) {
-            require(msg.value == _amountIn, "POOL_MINT_AMOUNTIN_ERROR");
+            require(msg.value == amountIn, "POOL_MINT_AMOUNTIN_ERROR,");
         } else {
-            _safeTransferFrom(msg.sender, address(this), _amountIn);
+            _safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
-        uint256 markup = (_amountIn * _getSpread()) / SPREAD_BASE;
-        _amountIn -= markup;
-        uint256 mintedAmount = (_amountIn * 10**decimals()) / _getUnitaryValue();
-        require(mintedAmount > _amountOutMin, "POOL_MINT_OUTPUT_AMOUNT_ERROR");
+        uint256 markup = (amountIn * _getSpread()) / _SPREAD_BASE;
+        amountIn -= markup;
+        uint256 mintedAmount = (amountIn * 10**decimals()) / _getUnitaryValue();
+        require(mintedAmount > amountOutMin, "POOL_MINT_OUTPUT_AMOUNT_ERROR");
         poolTokens().totalSupply += mintedAmount;
 
         /// @notice allocate pool token transfers and log events.
-        recipientAmount = _allocateMintTokens(_recipient, mintedAmount);
+        recipientAmount = _allocateMintTokens(recipient, mintedAmount);
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
-    function burn(uint256 _amountIn, uint256 _amountOutMin)
-        external
-        override
-        nonReentrant
-        returns (uint256 netRevenue)
-    {
-        require(_amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
+    function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant returns (uint256 netRevenue) {
+        require(amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
         UserAccount memory userAccount = accounts().userAccounts[msg.sender];
-        require(userAccount.userBalance >= _amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
+        require(userAccount.userBalance >= amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
         require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
 
         /// @notice allocate pool token transfers and log events.
-        uint256 burntAmount = _allocateBurnTokens(_amountIn);
+        uint256 burntAmount = _allocateBurnTokens(amountIn);
         poolTokens().totalSupply -= burntAmount;
 
-        uint256 markup = (burntAmount * _getSpread()) / SPREAD_BASE;
+        uint256 markup = (burntAmount * _getSpread()) / _SPREAD_BASE;
         burntAmount -= markup;
         netRevenue = (burntAmount * _getUnitaryValue()) / 10**decimals();
-        require(netRevenue >= _amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
+        require(netRevenue >= amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
 
         if (pool().baseToken == address(0)) {
             payable(msg.sender).transfer(netRevenue);
@@ -107,13 +102,13 @@ abstract contract MixinActions is MixinStorage {
      */
     /// @notice Allocates tokens to recipient. Fee tokens are locked too.
     /// @dev Each new mint on same recipient sets new activation on all owned tokens.
-    /// @param _recipient Address of the recipient.
-    /// @param _mintedAmount Value of issued tokens.
+    /// @param recipient Address of the recipient.
+    /// @param mintedAmount Value of issued tokens.
     /// @return recipientAmount Number of new tokens issued to recipient.
-    function _allocateMintTokens(address _recipient, uint256 _mintedAmount) private returns (uint256 recipientAmount) {
-        recipientAmount = _mintedAmount;
+    function _allocateMintTokens(address recipient, uint256 mintedAmount) private returns (uint256 recipientAmount) {
+        recipientAmount = mintedAmount;
         Accounts storage accounts = accounts();
-        uint208 recipientBalance = accounts.userAccounts[_recipient].userBalance;
+        uint208 recipientBalance = accounts.userAccounts[recipient].userBalance;
         uint48 activation;
         // it is safe to use unckecked as max min period is 30 days
         unchecked {
@@ -124,14 +119,14 @@ abstract contract MixinActions is MixinStorage {
         if (transactionFee != 0) {
             address feeCollector = _getFeeCollector();
 
-            if (feeCollector == _recipient) {
+            if (feeCollector == recipient) {
                 // it is safe to use unckecked as recipientAmount requires user holding enough base tokens.
                 unchecked {
                     recipientBalance += uint208(recipientAmount);
                 }
             } else {
                 uint208 feeCollectorBalance = accounts.userAccounts[feeCollector].userBalance;
-                uint256 feePool = (_mintedAmount * transactionFee) / FEE_BASE;
+                uint256 feePool = (mintedAmount * transactionFee) / _FEE_BASE;
                 recipientAmount -= feePool;
                 unchecked {
                     feeCollectorBalance += uint208(feePool);
@@ -150,16 +145,16 @@ abstract contract MixinActions is MixinStorage {
             }
         }
 
-        accounts.userAccounts[_recipient] = UserAccount({userBalance: recipientBalance, activation: activation});
-        emit Transfer(address(0), _recipient, recipientAmount);
+        accounts.userAccounts[recipient] = UserAccount({userBalance: recipientBalance, activation: activation});
+        emit Transfer(address(0), recipient, recipientAmount);
     }
 
     /// @notice Destroys tokens of holder.
     /// @dev Fee is paid in pool tokens.
-    /// @param _amountIn Value of tokens to be burnt.
+    /// @param amountIn Value of tokens to be burnt.
     /// @return burntAmount Number of net burnt tokens.
-    function _allocateBurnTokens(uint256 _amountIn) private returns (uint256 burntAmount) {
-        burntAmount = _amountIn;
+    function _allocateBurnTokens(uint256 amountIn) private returns (uint256 burntAmount) {
+        burntAmount = amountIn;
         Accounts storage accounts = accounts();
         uint208 holderBalance = accounts.userAccounts[msg.sender].userBalance;
 
@@ -169,7 +164,7 @@ abstract contract MixinActions is MixinStorage {
             if (msg.sender == feeCollector) {
                 holderBalance -= uint208(burntAmount);
             } else {
-                uint256 feePool = (_amountIn * poolParams().transactionFee) / FEE_BASE;
+                uint256 feePool = (amountIn * poolParams().transactionFee) / _FEE_BASE;
                 burntAmount -= feePool;
                 holderBalance -= uint208(burntAmount);
 
@@ -200,26 +195,26 @@ abstract contract MixinActions is MixinStorage {
         emit Transfer(msg.sender, address(0), burntAmount);
     }
 
-    function _assertBiggerThanMinimum(uint256 _amount) private view {
-        require(_amount >= 10**decimals() / MINIMUM_ORDER_DIVISOR, "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR");
+    function _assertBiggerThanMinimum(uint256 amount) private view {
+        require(amount >= 10**decimals() / _MINIMUM_ORDER_DIVISOR, "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR");
     }
 
-    function _safeTransfer(address _to, uint256 _amount) private {
+    function _safeTransfer(address to, uint256 amount) private {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = pool().baseToken.call(
-            abi.encodeWithSelector(TRANSFER_SELECTOR, _to, _amount)
+            abi.encodeWithSelector(_TRANSFER_SELECTOR, to, amount)
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FAILED_ERROR");
     }
 
     function _safeTransferFrom(
-        address _from,
-        address _to,
-        uint256 _amount
+        address from,
+        address to,
+        uint256 amount
     ) private {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = pool().baseToken.call(
-            abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, _from, _to, _amount)
+            abi.encodeWithSelector(_TRANSFER_FROM_SELECTOR, from, to, amount)
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FROM_FAILED_ERROR");
     }

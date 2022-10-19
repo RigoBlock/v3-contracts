@@ -40,15 +40,15 @@ interface IRigoToken is IERC20 {
 
     /// @notice Allows minter to create new tokens.
     /// @dev Mint method is reserved for minter module.
-    /// @param _recipient Address receiving the new tokens.
-    /// @param _amount Number of minted tokens.
-    function mintToken(address _recipient, uint256 _amount) external;
+    /// @param recipient Address receiving the new tokens.
+    /// @param amount Number of minted tokens.
+    function mintToken(address recipient, uint256 amount) external;
 
     /// @notice Allows Rigoblock Dao to update minter.
-    /// @param _newAddress Address of the new minter.
-    function changeMintingAddress(address _newAddress) external;
+    /// @param newAddress Address of the new minter.
+    function changeMintingAddress(address newAddress) external;
 
     /// @notice Allows Rigoblock Dao to update its address.
-    /// @param _newAddress Address of the new Dao.
-    function changeRigoblockAddress(address _newAddress) external;
+    /// @param newAddress Address of the new Dao.
+    function changeRigoblockAddress(address newAddress) external;
 }

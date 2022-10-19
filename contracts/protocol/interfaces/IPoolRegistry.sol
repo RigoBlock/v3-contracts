@@ -34,28 +34,28 @@ interface IPoolRegistry {
     event AuthorityChanged(address indexed authority);
 
     /// @notice Emitted when pool owner updates meta data for its pool.
-    /// @param poolAddress Address of the pool.
+    /// @param pool Address of the pool.
     /// @param key Bytes32 key for indexing.
-    /// @param value Value associated with the key.
-    event MetaChanged(address indexed poolAddress, bytes32 indexed key, bytes32 value);
+    /// @param value Bytes32 of the value associated with the key.
+    event MetaChanged(address indexed pool, bytes32 indexed key, bytes32 value);
 
     /// @notice Emitted when a new pool is registered in registry.
     /// @param group Address of the pool factory.
-    /// @param poolAddress Address of the registered pool.
+    /// @param pool Address of the registered pool.
     /// @param name String name of the pool.
     /// @param symbol String name of the pool.
     /// @param id Bytes32 id of the pool.
     event Registered(
         address indexed group,
-        address poolAddress,
-        bytes32 indexed name, // client can prune sibyl pools
+        address pool,
+        bytes32 indexed name, // client can prune sybil pools
         bytes32 indexed symbol,
         bytes32 id
     );
 
     /// @notice Emitted when rigoblock Dao address is updated.
-    /// @param rigoblockDaoAddress New Dao address.
-    event RigoblockDaoChanged(address indexed rigoblockDaoAddress);
+    /// @param rigoblockDao New Dao address.
+    event RigoblockDaoChanged(address indexed rigoblockDao);
 
     /// @notice Returns the address of the Rigoblock authority contract.
     /// @return Address of the authority contract.
@@ -63,46 +63,47 @@ interface IPoolRegistry {
 
     /// @notice Returns the address of the Rigoblock Dao.
     /// @return Address of the Rigoblock Dao.
-    function rigoblockDaoAddress() external view returns (address);
+    function rigoblockDao() external view returns (address);
 
     /// @notice Allows a factory which is an authority to register a pool.
-    /// @param _poolAddress Address of the pool.
-    /// @param _name String name of the pool (31 characters/bytes or less).
-    /// @param _symbol String symbol of the pool (3 to 5 characters/bytes).
+    /// @param pool Address of the pool.
+    /// @param name String name of the pool (31 characters/bytes or less).
+    /// @param symbol String symbol of the pool (3 to 5 characters/bytes).
+    /// @param poolId Bytes32 of the pool id.
     function register(
-        address _poolAddress,
-        string calldata _name,
-        string calldata _symbol,
+        address pool,
+        string calldata name,
+        string calldata symbol,
         bytes32 poolId
     ) external;
 
     /// @notice Allows Rigoblock governance to update authority.
-    /// @param _authority Address of the authority contract.
-    function setAuthority(address _authority) external;
+    /// @param authority Address of the authority contract.
+    function setAuthority(address authority) external;
 
     /// @notice Allows pool owner to set metadata for a pool.
-    /// @param _poolAddress Address of the pool.
-    /// @param _key Bytes32 of the key.
-    /// @param _value Bytes32 of the value.
+    /// @param pool Address of the pool.
+    /// @param key Bytes32 of the key.
+    /// @param value Bytes32 of the value.
     function setMeta(
-        address _poolAddress,
-        bytes32 _key,
-        bytes32 _value
+        address pool,
+        bytes32 key,
+        bytes32 value
     ) external;
 
     /// @notice Allows Rigoblock Dao to update its address.
     /// @dev Creates internal record.
-    /// @param _newRigoblockDao Address of the Rigoblock Dao.
-    function setRigoblockDao(address _newRigoblockDao) external;
+    /// @param newRigoblockDao Address of the Rigoblock Dao.
+    function setRigoblockDao(address newRigoblockDao) external;
 
     /// @notice Returns metadata for a given pool.
-    /// @param _poolAddress Address of the pool.
-    /// @param _key Bytes32 key.
+    /// @param pool Address of the pool.
+    /// @param key Bytes32 key.
     /// @return poolMeta Meta by key.
-    function getMeta(address _poolAddress, bytes32 _key) external view returns (bytes32 poolMeta);
+    function getMeta(address pool, bytes32 key) external view returns (bytes32 poolMeta);
 
     /// @notice Returns the id of a pool from its address.
-    /// @param _poolAddress Address of the pool.
-    /// @return poolId Id of the pool.
-    function getPoolIdFromAddress(address _poolAddress) external view returns (bytes32 poolId);
+    /// @param pool Address of the pool.
+    /// @return poolId bytes32 id of the pool.
+    function getPoolIdFromAddress(address pool) external view returns (bytes32 poolId);
 }

@@ -4,44 +4,44 @@ pragma solidity >=0.8.0 <0.9.0;
 import {IERC20} from "./IERC20.sol";
 
 abstract contract ERC20 is IERC20 {
-    function transfer(address _to, uint256 _value) external override returns (bool success) {
-        require(balances[msg.sender] >= _value && balances[_to] + _value > balances[_to]);
-        balances[msg.sender] -= _value;
-        balances[_to] += _value;
-        emit Transfer(msg.sender, _to, _value);
+    function transfer(address to, uint256 value) external override returns (bool success) {
+        require(_balances[msg.sender] >= value && _balances[to] + value > _balances[to]);
+        _balances[msg.sender] -= value;
+        _balances[to] += value;
+        emit Transfer(msg.sender, to, value);
         return true;
     }
 
     function transferFrom(
-        address _from,
-        address _to,
-        uint256 _value
+        address from,
+        address to,
+        uint256 value
     ) external virtual override returns (bool success) {
         require(
-            balances[_from] >= _value && allowed[_from][msg.sender] >= _value && balances[_to] + _value > balances[_to]
+            _balances[from] >= value && _allowed[from][msg.sender] >= value && _balances[to] + value > _balances[to]
         );
-        balances[_to] += _value;
-        balances[_from] -= _value;
-        allowed[_from][msg.sender] -= _value;
-        emit Transfer(_from, _to, _value);
+        _balances[to] += value;
+        _balances[from] -= value;
+        _allowed[from][msg.sender] -= value;
+        emit Transfer(from, to, value);
         return true;
     }
 
-    function approve(address _spender, uint256 _value) external override returns (bool success) {
-        allowed[msg.sender][_spender] = _value;
-        emit Approval(msg.sender, _spender, _value);
+    function approve(address spender, uint256 value) external override returns (bool success) {
+        _allowed[msg.sender][spender] = value;
+        emit Approval(msg.sender, spender, value);
         return true;
     }
 
-    function balanceOf(address _owner) external view override returns (uint256) {
-        return balances[_owner];
+    function balanceOf(address owner) external view override returns (uint256) {
+        return _balances[owner];
     }
 
-    function allowance(address _owner, address _spender) external view override returns (uint256) {
-        return allowed[_owner][_spender];
+    function allowance(address owner, address spender) external view override returns (uint256) {
+        return _allowed[owner][spender];
     }
 
     uint256 public override totalSupply;
-    mapping(address => uint256) internal balances;
-    mapping(address => mapping(address => uint256)) internal allowed;
+    mapping(address => uint256) internal _balances;
+    mapping(address => mapping(address => uint256)) internal _allowed;
 }

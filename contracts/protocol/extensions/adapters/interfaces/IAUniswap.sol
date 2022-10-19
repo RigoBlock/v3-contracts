@@ -24,15 +24,15 @@ import "../../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 interface IAUniswap {
     /// @notice Returns the address of the Uniswap swap router contract.
     /// @return Address of the uniswap router.
-    function UNISWAP_SWAP_ROUTER_2_ADDRESS() external view returns (address);
+    function uniswapRouter02() external view returns (address);
 
     /// @notice Returns the address of the Uniswap NPM contract.
     /// @return Address of the Uniswap NPM contract.
-    function UNISWAP_V3_NPM_ADDRESS() external view returns (address);
+    function uniswapv3Npm() external view returns (address);
 
     /// @notice Returns the address of the Weth contract.
     /// @return Address of the Weth contract.
-    function WETH_ADDRESS() external view returns (address);
+    function weth() external view returns (address);
 
     /*
      * UNISWAP V2 METHODS
@@ -115,6 +115,10 @@ interface IAUniswap {
     /// @notice Transfers the full amount of a token held by this contract to recipient, with a percentage between
     /// 0 (exclusive) and 1 (inclusive) going to feeRecipient.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users.
+    /// @param token The contract address of the token which will be transferred to `recipient`.
+    /// @param amountMinimum The minimum amount of token required for a transfer.
+    /// @param feeBips The amount of fee in basis points.
+    /// @param feeRecipient The destination address of the token.
     function sweepTokenWithFee(
         address token,
         uint256 amountMinimum,
@@ -122,6 +126,14 @@ interface IAUniswap {
         address feeRecipient
     ) external;
 
+    /// @notice Transfers the full amount of a token held by this contract to recipient, with a percentage between
+    /// 0 (exclusive) and 1 (inclusive) going to feeRecipient.
+    /// @dev The amountMinimum parameter prevents malicious contracts from stealing the token from users.
+    /// @param token The contract address of the token which will be transferred to `recipient`.
+    /// @param amountMinimum The minimum amount of token required for a transfer.
+    /// @param recipient The destination address of the token.
+    /// @param feeBips The amount of fee in basis points.
+    /// @param feeRecipient The destination address of the token.
     function sweepTokenWithFee(
         address token,
         uint256 amountMinimum,
@@ -143,6 +155,9 @@ interface IAUniswap {
     /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH, with a percentage between
     /// 0 (exclusive), and 1 (inclusive) going to feeRecipient.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
+    /// @param amountMinimum The minimum amount of token required for a transfer.
+    /// @param feeBips The amount of fee in basis points.
+    /// @param feeRecipient The destination address of the token.
     function unwrapWETH9WithFee(
         uint256 amountMinimum,
         uint256 feeBips,
@@ -152,6 +167,10 @@ interface IAUniswap {
     /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH, with a percentage between
     /// 0 (exclusive), and 1 (inclusive) going to feeRecipient.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
+    /// @param amountMinimum The minimum amount of token required for a transfer.
+    /// @param recipient The destination address of the token.
+    /// @param feeBips The amount of fee in basis points.
+    /// @param feeRecipient The destination address of the token.
     function unwrapWETH9WithFee(
         uint256 amountMinimum,
         address recipient,
@@ -159,8 +178,8 @@ interface IAUniswap {
         address feeRecipient
     ) external;
 
-    /// @dev Wraps ETH.
-    /// @notice Client must wrap if input is native currency.
+    /// @notice Wraps ETH.
+    /// @dev Client must wrap if input is native currency.
     /// @param value The ETH amount to be wrapped.
     function wrapETH(uint256 value) external;
 

@@ -21,11 +21,11 @@ abstract contract Owned {
 
     /// @notice Allows current owner to set a new owner address.
     /// @dev Method restricted to owner.
-    /// @param _new Address of the new owner.
-    function setOwner(address _new) public onlyOwner {
-        require(_new != address(0));
+    /// @param newOwner Address of the new owner.
+    function setOwner(address newOwner) public onlyOwner {
+        require(newOwner != address(0));
         address old = owner;
-        owner = _new;
-        emit NewOwner(old, _new);
+        owner = newOwner;
+        emit NewOwner(old, newOwner);
     }
 }

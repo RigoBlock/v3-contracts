@@ -26,92 +26,92 @@ import {IAuthority} from "../interfaces/IAuthority.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 contract Authority is Owned, IAuthority {
-    mapping(bytes4 => address) private adapterBySelector;
-    mapping(address => Permission) private permission;
-    mapping(Role => address[]) private roleToList;
+    mapping(bytes4 => address) private _adapterBySelector;
+    mapping(address => Permission) private _permission;
+    mapping(Role => address[]) private _roleToList;
 
     modifier onlyWhitelister() {
         require(isWhitelister(msg.sender), "AUTHORITY_SENDER_NOT_WHITELISTER_ERROR");
         _;
     }
 
-    constructor(address _owner) {
-        owner = _owner;
+    constructor(address newOwner) {
+        owner = newOwner;
     }
 
     /*
      * CORE FUNCTIONS
      */
     /// @inheritdoc IAuthority
-    function addMethod(bytes4 _selector, address _adapter) external override onlyWhitelister {
-        require(permission[_adapter].authorized[Role.ADAPTER], "ADAPTER_NOT_WHITELISTED_ERROR");
-        require(adapterBySelector[_selector] == address(0), "SELECTOR_EXISTS_ERROR");
-        adapterBySelector[_selector] = _adapter;
-        emit WhitelistedMethod(msg.sender, _adapter, _selector);
+    function addMethod(bytes4 selector, address adapter) external override onlyWhitelister {
+        require(_permission[adapter].authorized[Role.ADAPTER], "ADAPTER_NOT_WHITELISTED_ERROR");
+        require(_adapterBySelector[selector] == address(0), "SELECTOR_EXISTS_ERROR");
+        _adapterBySelector[selector] = adapter;
+        emit WhitelistedMethod(msg.sender, adapter, selector);
     }
 
     /// @inheritdoc IAuthority
-    function removeMethod(bytes4 _selector, address _adapter) external override onlyWhitelister {
-        require(adapterBySelector[_selector] != address(0), "AUTHORITY_METHOD_NOT_APPROVED_ERROR");
-        delete adapterBySelector[_selector];
-        emit RemovedMethod(msg.sender, _adapter, _selector);
+    function removeMethod(bytes4 selector, address adapter) external override onlyWhitelister {
+        require(_adapterBySelector[selector] != address(0), "AUTHORITY_METHOD_NOT_APPROVED_ERROR");
+        delete _adapterBySelector[selector];
+        emit RemovedMethod(msg.sender, adapter, selector);
     }
 
     /// @inheritdoc IAuthority
-    function setWhitelister(address _whitelister, bool _isWhitelisted) external override onlyOwner {
-        _changePermission(_whitelister, _isWhitelisted, Role.WHITELISTER);
+    function setWhitelister(address whitelister, bool isWhitelisted) external override onlyOwner {
+        _changePermission(whitelister, isWhitelisted, Role.WHITELISTER);
     }
 
     /// @inheritdoc IAuthority
-    function setAdapter(address _adapter, bool _isWhitelisted) external override onlyOwner {
-        _changePermission(_adapter, _isWhitelisted, Role.ADAPTER);
+    function setAdapter(address adapter, bool isWhitelisted) external override onlyOwner {
+        _changePermission(adapter, isWhitelisted, Role.ADAPTER);
     }
 
     /// @inheritdoc IAuthority
-    function setFactory(address _factory, bool _isWhitelisted) external override onlyOwner {
-        _changePermission(_factory, _isWhitelisted, Role.FACTORY);
+    function setFactory(address factory, bool isWhitelisted) external override onlyOwner {
+        _changePermission(factory, isWhitelisted, Role.FACTORY);
     }
 
     /*
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @inheritdoc IAuthority
-    function isWhitelistedFactory(address _target) external view override returns (bool) {
-        return permission[_target].authorized[Role.FACTORY];
+    function isWhitelistedFactory(address target) external view override returns (bool) {
+        return _permission[target].authorized[Role.FACTORY];
     }
 
-    function getApplicationAdapter(bytes4 _selector) external view override returns (address) {
-        return adapterBySelector[_selector];
+    function getApplicationAdapter(bytes4 selector) external view override returns (address) {
+        return _adapterBySelector[selector];
     }
 
     /// @inheritdoc IAuthority
-    function isWhitelister(address _target) public view override returns (bool) {
-        return permission[_target].authorized[Role.WHITELISTER];
+    function isWhitelister(address target) public view override returns (bool) {
+        return _permission[target].authorized[Role.WHITELISTER];
     }
 
     /*
      * PRIVATE METHODS
      */
     function _changePermission(
-        address _target,
-        bool _isWhitelisted,
-        Role _role
+        address target,
+        bool isWhitelisted,
+        Role role
     ) private {
-        require(_target != address(0), "AUTHORITY_TARGET_NULL_ADDRESS_ERROR");
-        if (_isWhitelisted) {
-            require(!permission[_target].authorized[_role], "ALREADY_WHITELISTED_ERROR");
-            permission[_target].authorized[_role] = _isWhitelisted;
-            roleToList[_role].push(_target);
-            emit PermissionAdded(msg.sender, _target, uint8(_role));
+        require(target != address(0), "AUTHORITY_TARGET_NULL_ADDRESS_ERROR");
+        if (isWhitelisted) {
+            require(!_permission[target].authorized[role], "ALREADY_WHITELISTED_ERROR");
+            _permission[target].authorized[role] = isWhitelisted;
+            _roleToList[role].push(target);
+            emit PermissionAdded(msg.sender, target, uint8(role));
         } else {
-            require(permission[_target].authorized[_role], "NOT_ALREADY_WHITELISTED");
-            delete permission[_target].authorized[_role];
-            uint256 length = roleToList[_role].length;
+            require(_permission[target].authorized[role], "NOT_ALREADY_WHITELISTED");
+            delete _permission[target].authorized[role];
+            uint256 length = _roleToList[role].length;
             for (uint256 i = 0; i < length; i++) {
-                if (roleToList[_role][i] == _target) {
-                    roleToList[_role][i] = roleToList[_role][length - 1];
-                    roleToList[_role].pop();
-                    emit PermissionRemoved(msg.sender, _target, uint8(_role));
+                if (_roleToList[role][i] == target) {
+                    _roleToList[role][i] = _roleToList[role][length - 1];
+                    _roleToList[role].pop();
+                    emit PermissionRemoved(msg.sender, target, uint8(role));
 
                     break;
                 }

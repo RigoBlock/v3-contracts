@@ -15,38 +15,38 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
     /// @notice Transfers token from holder to another address.
-    /// @param _to Address to send tokens to.
-    /// @param _value Number of token units to send.
+    /// @param to Address to send tokens to.
+    /// @param value Number of token units to send.
     /// @return success Bool the transaction was successful.
-    function transfer(address _to, uint256 _value) external returns (bool success);
+    function transfer(address to, uint256 value) external returns (bool success);
 
     /// @notice Allows spender to transfer tokens from the holder.
-    /// @param _from Address of the token holder.
-    /// @param _to Address to send tokens to.
-    /// @param _value Number of units to transfer.
+    /// @param from Address of the token holder.
+    /// @param to Address to send tokens to.
+    /// @param value Number of units to transfer.
     /// @return success Bool the transaction was successful.
     function transferFrom(
-        address _from,
-        address _to,
-        uint256 _value
+        address from,
+        address to,
+        uint256 value
     ) external returns (bool success);
 
     /// @notice Allows a holder to approve a spender.
-    /// @param _spender Address of the token spender.
-    /// @param _value Number of units to be approved.
+    /// @param spender Address of the token spender.
+    /// @param value Number of units to be approved.
     /// @return success Bool the transaction was successful.
-    function approve(address _spender, uint256 _value) external returns (bool success);
+    function approve(address spender, uint256 value) external returns (bool success);
 
     /// @notice Returns token balance for an address.
-    /// @param _who Address to query balance for.
+    /// @param who Address to query balance for.
     /// @return Number of units held.
-    function balanceOf(address _who) external view returns (uint256);
+    function balanceOf(address who) external view returns (uint256);
 
     /// @notice Returns token allowance of an address to another address.
-    /// @param _owner Address of token hodler.
-    /// @param _spender Address of the token spender.
+    /// @param owner Address of token hodler.
+    /// @param spender Address of the token spender.
     /// @return Number of allowed units.
-    function allowance(address _owner, address _spender) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 
     /// @notice Returns the total supply of the token.
     /// @return Number of issued units.
