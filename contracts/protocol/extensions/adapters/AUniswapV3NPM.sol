@@ -41,13 +41,14 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         // we require both token being whitelisted
         _assertTokenWhitelisted(params.token0);
         _assertTokenWhitelisted(params.token1);
+        address uniswapNpm = _getUniswapNpm();
 
         // we set the allowance to the uniswap position manager
-        _safeApprove(params.token0, _getUniswapNpm(), type(uint256).max);
-        _safeApprove(params.token1, _getUniswapNpm(), type(uint256).max);
+        _safeApprove(params.token0, uniswapNpm, type(uint256).max);
+        _safeApprove(params.token1, uniswapNpm, type(uint256).max);
 
         // only then do we mint the liquidity token
-        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).mint(
+        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapNpm).mint(
             INonfungiblePositionManager.MintParams({
                 token0: params.token0,
                 token1: params.token1,
@@ -64,8 +65,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.token0, _getUniswapNpm(), uint256(1));
-        _safeApprove(params.token1, _getUniswapNpm(), uint256(1));
+        _safeApprove(params.token0, uniswapNpm, uint256(1));
+        _safeApprove(params.token1, uniswapNpm, uint256(1));
     }
 
     /// @inheritdoc IAUniswapV3NPM
@@ -78,7 +79,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 amount1
         )
     {
-        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(_getUniswapNpm()).positions(
+        address uniswapNpm = _getUniswapNpm();
+        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(uniswapNpm).positions(
             params.tokenId
         );
 
@@ -87,11 +89,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         _assertTokenWhitelisted(token1);
 
         // we first set the allowance to the uniswap position manager
-        _safeApprove(token0, _getUniswapNpm(), type(uint256).max);
-        _safeApprove(token1, _getUniswapNpm(), type(uint256).max);
+        _safeApprove(token0, uniswapNpm, type(uint256).max);
+        _safeApprove(token1, uniswapNpm, type(uint256).max);
 
         // finally, we add to the liquidity token
-        (liquidity, amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).increaseLiquidity(
+        (liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapNpm).increaseLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
                 tokenId: params.tokenId,
                 amount0Desired: params.amount0Desired,
@@ -103,8 +105,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(token0, _getUniswapNpm(), uint256(1));
-        _safeApprove(token1, _getUniswapNpm(), uint256(1));
+        _safeApprove(token0, uniswapNpm, uint256(1));
+        _safeApprove(token1, uniswapNpm, uint256(1));
     }
 
     /// @inheritdoc IAUniswapV3NPM
