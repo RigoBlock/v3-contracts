@@ -29,41 +29,35 @@ import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
     constructor(
-        address _grgVault,
-        address _poolRegistry,
-        address _rigoToken
+        address grgVault,
+        address poolRegistry,
+        address rigoToken
     ) {
-        GRG_VAULT_ADDRESS = _grgVault;
-        POOL_REGISTRY_ADDRESS = _poolRegistry;
-        GRG_ADDRESS = _rigoToken;
-        IMPLEMENTATION = address(this);
+        _grgVault = grgVault;
+        _poolRegistry = poolRegistry;
+        _rigoToken = rigoToken;
+        _implementation = address(this);
     }
 
     // we store this address in the bytecode to being able to prevent direct calls to the implementation.
-    address internal immutable IMPLEMENTATION;
+    address internal immutable _implementation;
 
-    address private immutable GRG_VAULT_ADDRESS;
-    address private immutable POOL_REGISTRY_ADDRESS;
-    address private immutable GRG_ADDRESS;
+    address private immutable _rigoToken;
+    address private immutable _grgVault;
+    address private immutable _poolRegistry;
 
-    /// @dev An overridable way to access the deployed grgVault.
-    ///      Must be view to allow overrides to access state.
-    /// @return grgVault The grgVault contract.
-    function getGrgVault() public view virtual override returns (GrgVault) {
-        return GrgVault(GRG_VAULT_ADDRESS);
-    }
-
-    /// @dev An overridable way to access the deployed rigoblock pool registry.
-    ///      Must be view to allow overrides to access state.
-    /// @return poolRegistry The pool registry contract.
-    function getPoolRegistry() public view virtual override returns (PoolRegistry) {
-        return PoolRegistry(POOL_REGISTRY_ADDRESS);
-    }
-
-    /// @dev An overridable way to access the deployed GRG contract.
-    ///      Must be view to allow overrides to access state.
-    /// @return grgContract The GRG contract instance.
+    /// @inheritdoc IStaking
     function getGrgContract() public view virtual override returns (RigoToken) {
-        return RigoToken(GRG_ADDRESS);
+        return RigoToken(_rigoToken);
+    }
+
+    /// @inheritdoc IStaking
+    function getGrgVault() public view virtual override returns (GrgVault) {
+        return GrgVault(_grgVault);
+    }
+
+    /// @inheritdoc IStaking
+    function getPoolRegistry() public view virtual override returns (PoolRegistry) {
+        return PoolRegistry(_poolRegistry);
     }
 }
