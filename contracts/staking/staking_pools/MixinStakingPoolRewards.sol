@@ -18,17 +18,14 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/0xUtils/LibMath.sol";
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStaking.sol";
 import "./MixinCumulativeRewards.sol";
 import "../sys/MixinAbstract.sol";
 
 abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumulativeRewards {
-    using LibSafeMath for uint256;
-
     /// @inheritdoc IStaking
     function withdrawDelegatorRewards(bytes32 poolId) external override {
         _withdrawAndSyncDelegatorRewards(poolId, msg.sender);
@@ -135,9 +132,9 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
             } else {
                 // Transfer staking pal share of operator's reward to staking pal
                 // Transfer the reamining operator's grg reward to the operator
-                uint256 stakingPalReward = operatorReward.safeMul(pool.stakingPalShare).safeDiv(_PPM_DENOMINATOR);
+                uint256 stakingPalReward = operatorReward * pool.stakingPalShare / _PPM_DENOMINATOR;
                 getGrgContract().transfer(pool.stakingPal, stakingPalReward);
-                getGrgContract().transfer(pool.operator, operatorReward.safeSub(stakingPalReward));
+                getGrgContract().transfer(pool.operator, operatorReward - stakingPalReward);
             }
         }
 
@@ -169,7 +166,7 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
             operatorReward = totalReward;
         } else {
             operatorReward = LibMath.getPartialAmountCeil(uint256(operatorShare), _PPM_DENOMINATOR, totalReward);
-            membersReward = totalReward.safeSub(operatorReward);
+            membersReward = totalReward - operatorReward;
         }
         return (operatorReward, membersReward);
     }
@@ -207,24 +204,20 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         );
 
         // 2/3 Finalized rewards earned in epochs [`delegatedStake.currentEpoch + 1` .. `currentEpoch - 1`]
-        uint256 delegatedStakeNextEpoch = uint256(delegatedStake.currentEpoch).safeAdd(1);
-        reward = reward.safeAdd(
-            _computeMemberRewardOverInterval(
-                poolId,
-                delegatedStake.currentEpochBalance,
-                delegatedStake.currentEpoch,
-                delegatedStakeNextEpoch
-            )
+        uint256 delegatedStakeNextEpoch = uint256(delegatedStake.currentEpoch) + 1;
+        reward += _computeMemberRewardOverInterval(
+            poolId,
+            delegatedStake.currentEpochBalance,
+            delegatedStake.currentEpoch,
+            delegatedStakeNextEpoch
         );
 
         // 3/3 Finalized rewards earned in epoch `delegatedStake.currentEpoch`.
-        reward = reward.safeAdd(
-            _computeMemberRewardOverInterval(
-                poolId,
-                delegatedStake.nextEpochBalance,
-                delegatedStakeNextEpoch,
-                currentEpoch_
-            )
+        reward += _computeMemberRewardOverInterval(
+            poolId,
+            delegatedStake.nextEpochBalance,
+            delegatedStakeNextEpoch,
+            currentEpoch_
         );
 
         return reward;
@@ -250,7 +243,7 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
 
         // Unfinalized rewards are always earned from stake in
         // the prior epoch so we want the stake at `currentEpoch_-1`.
-        uint256 unfinalizedStakeBalance = delegatedStake.currentEpoch >= currentEpoch_.safeSub(1)
+        uint256 unfinalizedStakeBalance = delegatedStake.currentEpoch >= currentEpoch_ - 1
             ? delegatedStake.currentEpochBalance
             : delegatedStake.nextEpochBalance;
 
@@ -268,15 +261,15 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
     /// @param poolId Unique id of pool.
     /// @param amount Amount to increment rewards by.
     function _increasePoolRewards(bytes32 poolId, uint256 amount) private {
-        rewardsByPoolId[poolId] = rewardsByPoolId[poolId].safeAdd(amount);
-        grgReservedForPoolRewards = grgReservedForPoolRewards.safeAdd(amount);
+        rewardsByPoolId[poolId] += amount;
+        grgReservedForPoolRewards += amount;
     }
 
     /// @dev Decreases rewards for a pool.
     /// @param poolId Unique id of pool.
     /// @param amount Amount to decrement rewards by.
     function _decreasePoolRewards(bytes32 poolId, uint256 amount) private {
-        rewardsByPoolId[poolId] = rewardsByPoolId[poolId].safeSub(amount);
-        grgReservedForPoolRewards = grgReservedForPoolRewards.safeSub(amount);
+        rewardsByPoolId[poolId] -= amount;
+        grgReservedForPoolRewards -= amount;
     }
 }

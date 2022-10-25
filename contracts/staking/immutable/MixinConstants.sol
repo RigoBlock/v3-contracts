@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 abstract contract MixinConstants {
     // 100% in parts-per-million.

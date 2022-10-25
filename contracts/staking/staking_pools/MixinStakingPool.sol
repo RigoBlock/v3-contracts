@@ -18,15 +18,13 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../../protocol/IRigoblockV3Pool.sol";
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
 import "./MixinStakingPoolRewards.sol";
 
 abstract contract MixinStakingPool is MixinStakingPoolRewards {
-    using LibSafeMath for uint256;
     using LibSafeDowncast for uint256;
 
     /// @dev Asserts that the sender is the operator of the input pool.

@@ -18,18 +18,15 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/0xUtils/LibMath.sol";
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
 import "../sys/MixinFinalizer.sol";
 import "../staking_pools/MixinStakingPool.sol";
 import "./MixinPopManager.sol";
 
 abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFinalizer {
-    using LibSafeMath for uint256;
-
     /// @dev Asserts that the call is coming from a valid pop.
     modifier onlyPop() {
         require(validPops[msg.sender], "STAKING_ONLY_CALLABLE_BY_POP_ERROR");
@@ -66,10 +63,10 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
             poolStatsPtr.weightedStake = weightedStakeInPool;
 
             // Increase the total weighted stake.
-            aggregatedStatsPtr.totalWeightedStake = aggregatedStatsPtr.totalWeightedStake.safeAdd(weightedStakeInPool);
+            aggregatedStatsPtr.totalWeightedStake += weightedStakeInPool;
 
             // Increase the number of pools to finalize.
-            aggregatedStatsPtr.numPoolsToFinalize = aggregatedStatsPtr.numPoolsToFinalize.safeAdd(1);
+            aggregatedStatsPtr.numPoolsToFinalize += 1;
 
             // Emit an event so keepers know what pools earned rewards this epoch.
             emit StakingPoolEarnedRewardsInEpoch(currentEpoch_, poolId);
@@ -80,9 +77,7 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
             poolStatsPtr.feesCollected = popReward;
 
             // Increase the total fees collected this epoch.
-            aggregatedStatsPtr.totalFeesCollected = aggregatedStatsPtr.totalFeesCollected.safeAdd(popReward).safeSub(
-                feesCollectedByPool
-            );
+            aggregatedStatsPtr.totalFeesCollected += popReward - feesCollectedByPool;
         }
     }
 
@@ -104,10 +99,9 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
     {
         uint256 operatorStake = getStakeDelegatedToPoolByOwner(_poolById[poolId].operator, poolId).currentEpochBalance;
 
-        membersStake = totalStake.safeSub(operatorStake);
-        weightedStake = operatorStake.safeAdd(
-            LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, _PPM_DENOMINATOR, membersStake)
-        );
+        membersStake = totalStake - operatorStake;
+        weightedStake = operatorStake + LibMath
+            .getPartialAmountFloor(rewardDelegatedStakeWeight, _PPM_DENOMINATOR, membersStake);
         return (membersStake, weightedStake);
     }
 }

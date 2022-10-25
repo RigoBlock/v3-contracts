@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 interface IGrgVault {
     /// @notice Emmitted whenever a StakingProxy is set in a vault.

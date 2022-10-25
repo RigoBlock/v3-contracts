@@ -18,7 +18,7 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import {IPoolRegistry as PoolRegistry} from "../../protocol/interfaces/IPoolRegistry.sol";
 import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol";

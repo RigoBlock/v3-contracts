@@ -50,9 +50,10 @@ describe("Staking", async () => {
         it('should revert with non registered pool', async () => {
             const { staking } = await setupTests()
             // will revert as not initilized
+            // following test will underflow epoch number subtraction
             await expect(
                 staking.endEpoch()
-            ).to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
+            ).to.be.revertedWith("Transaction reverted and Hardhat couldn't infer the reason. Please report this to help us improve Hardhat")
         })
     })
 

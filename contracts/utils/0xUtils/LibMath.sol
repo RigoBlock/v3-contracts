@@ -17,13 +17,9 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
-
-import "./LibSafeMath.sol";
+pragma solidity >=0.8.0 <0.9.0;
 
 library LibMath {
-    using LibSafeMath for uint256;
-
     /// @dev Calculates partial value given a numerator and denominator rounded down.
     ///      Reverts if rounding error is >= 0.1%
     /// @param numerator Numerator.
@@ -37,7 +33,7 @@ library LibMath {
     ) internal pure returns (uint256 partialAmount) {
         require(!isRoundingErrorFloor(numerator, denominator, target), "LIBMATH_ROUNDING_FLOOR_ERROR");
 
-        partialAmount = numerator.safeMul(target).safeDiv(denominator);
+        partialAmount = numerator * target / denominator;
         return partialAmount;
     }
 
@@ -57,7 +53,7 @@ library LibMath {
         // safeDiv computes `floor(a / b)`. We use the identity (a, b integer):
         //       ceil(a / b) = floor((a + b - 1) / b)
         // To implement `ceil(a / b)` using safeDiv.
-        partialAmount = numerator.safeMul(target).safeAdd(denominator.safeSub(1)).safeDiv(denominator);
+        partialAmount = (numerator * target + (denominator - 1)) / denominator;
 
         return partialAmount;
     }
@@ -72,7 +68,7 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (uint256 partialAmount) {
-        partialAmount = numerator.safeMul(target).safeDiv(denominator);
+        partialAmount = numerator * target / denominator;
         return partialAmount;
     }
 
@@ -89,7 +85,7 @@ library LibMath {
         // safeDiv computes `floor(a / b)`. We use the identity (a, b integer):
         //       ceil(a / b) = floor((a + b - 1) / b)
         // To implement `ceil(a / b)` using safeDiv.
-        partialAmount = numerator.safeMul(target).safeAdd(denominator.safeSub(1)).safeDiv(denominator);
+        partialAmount = (numerator * target + (denominator - 1)) / denominator;
 
         return partialAmount;
     }
@@ -133,7 +129,7 @@ library LibMath {
         // so we have a rounding error iff:
         //        1000 * remainder  >=  numerator * target
         uint256 remainder = mulmod(target, numerator, denominator);
-        isError = remainder.safeMul(1000) >= numerator.safeMul(target);
+        isError = remainder * 1000 >= numerator * target;
         return isError;
     }
 
@@ -158,8 +154,8 @@ library LibMath {
         }
         // Compute remainder as before
         uint256 remainder = mulmod(target, numerator, denominator);
-        remainder = denominator.safeSub(remainder) % denominator;
-        isError = remainder.safeMul(1000) >= numerator.safeMul(target);
+        remainder = (denominator - remainder) % denominator;
+        isError = remainder * 1000 >= numerator * target;
         return isError;
     }
 }

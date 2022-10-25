@@ -217,8 +217,9 @@ describe("StakingProxy-Stake", async () => {
             expect(undelegated.currentEpoch).to.be.eq(2)
             expect(undelegated.currentEpochBalance).to.be.eq(0)
             expect(undelegated.nextEpochBalance).to.be.eq(amount)
+            // following test will underflow math
             await expect(stakingProxy.moveStake(toInfo, fromInfo, amount))
-                .to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
+                .to.be.revertedWith("Transaction reverted and Hardhat couldn't infer the reason. Please report this to help us improve Hardhat")
             expect(delegated.currentEpoch).to.be.eq(2)
             expect(delegated.currentEpochBalance).to.be.eq(amount)
             expect(delegated.nextEpochBalance).to.be.eq(0)
@@ -243,9 +244,10 @@ describe("StakingProxy-Stake", async () => {
             const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
             await stakingProxy.moveStake(fromInfo, toInfo, amount)
             const tooBigAmount = parseEther("150")
+            // following test underflows balance
             await expect(
                 stakingProxy.moveStake(toInfo, fromInfo, tooBigAmount)
-            ).to.be.revertedWith("LIBSAFEMATH_SUBTRACTION_UNDERFLOW_ERROR")
+            ).to.be.reverted
             await stakingProxy.moveStake(toInfo, fromInfo, amount)
             await expect(
               stakingProxy.unstake(amount)

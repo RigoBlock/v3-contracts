@@ -18,16 +18,13 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/0xUtils/LibFractions.sol";
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../stake/MixinStakeBalances.sol";
 import "../immutable/MixinConstants.sol";
 
 abstract contract MixinCumulativeRewards is MixinStakeBalances, MixinConstants {
-    using LibSafeMath for uint256;
-
     /// @dev returns true iff Cumulative Rewards are set
     function _isCumulativeRewardSet(IStructs.Fraction memory cumulativeReward) internal pure returns (bool) {
         // We use the denominator as a proxy for whether the cumulative
@@ -149,7 +146,7 @@ abstract contract MixinCumulativeRewards is MixinStakeBalances, MixinConstants {
         }
 
         // Return CR at `epoch-1`, given it's set.
-        uint256 lastEpoch = epoch.safeSub(1);
+        uint256 lastEpoch = epoch - 1;
         cumulativeReward = _cumulativeRewardsByPool[poolId][lastEpoch];
         if (_isCumulativeRewardSet(cumulativeReward)) {
             return cumulativeReward;

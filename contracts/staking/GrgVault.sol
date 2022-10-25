@@ -22,15 +22,12 @@
 pragma solidity 0.8.17;
 
 import "../utils/0xUtils/Authorizable.sol";
-import "../utils/0xUtils/LibSafeMath.sol";
 import "../utils/0xUtils/IAssetProxy.sol";
 import "../utils/0xUtils/IAssetData.sol";
 import "../utils/0xUtils/IERC20Token.sol";
 import "./interfaces/IGrgVault.sol";
 
 contract GrgVault is Authorizable, IGrgVault {
-    using LibSafeMath for uint256;
-
     // Address of staking proxy contract
     address public stakingProxyAddress;
 
@@ -117,7 +114,7 @@ contract GrgVault is Authorizable, IGrgVault {
         onlyNotInCatastrophicFailure
     {
         // update balance
-        _balances[staker] = _balances[staker].safeAdd(amount);
+        _balances[staker] += amount;
 
         // notify
         emit Deposit(staker, amount);
@@ -170,7 +167,7 @@ contract GrgVault is Authorizable, IGrgVault {
         // update balance
         // note that this call will revert if trying to withdraw more
         // than the current balance
-        _balances[staker] = _balances[staker].safeSub(amount);
+        _balances[staker] -= amount;
 
         // notify
         emit Withdraw(staker, amount);

@@ -18,16 +18,14 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../libs/LibSafeDowncast.sol";
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
 import "../immutable/MixinDeploymentConstants.sol";
 import "./MixinStakeStorage.sol";
 
 abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConstants {
-    using LibSafeMath for uint256;
     using LibSafeDowncast for uint256;
 
     /// @inheritdoc IStaking
@@ -42,8 +40,8 @@ abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConsta
             // Undelegated stake is the difference between total stake and delegated stake
             // Note that any ZRX erroneously sent to the vault will be counted as undelegated stake
             uint256 totalStake = getGrgVault().balanceOfGrgVault();
-            balance.currentEpochBalance = totalStake.safeSub(balance.currentEpochBalance).downcastToUint96();
-            balance.nextEpochBalance = totalStake.safeSub(balance.nextEpochBalance).downcastToUint96();
+            balance.currentEpochBalance = (totalStake - balance.currentEpochBalance).downcastToUint96();
+            balance.nextEpochBalance = (totalStake - balance.nextEpochBalance).downcastToUint96();
         }
         return balance;
     }

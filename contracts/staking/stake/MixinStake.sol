@@ -18,14 +18,11 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../staking_pools/MixinStakingPool.sol";
 
 abstract contract MixinStake is MixinStakingPool {
-    using LibSafeMath for uint256;
-
     /// @inheritdoc IStaking
     function stake(uint256 amount) external override {
         address staker = msg.sender;
@@ -49,10 +46,8 @@ abstract contract MixinStake is MixinStakingPool {
         );
 
         // stake must be undelegated in current and next epoch to be withdrawn
-        uint256 currentWithdrawableStake = LibSafeMath.min256(
-            undelegatedBalance.currentEpochBalance,
-            undelegatedBalance.nextEpochBalance
-        );
+        uint256 currentWithdrawableStake = undelegatedBalance.currentEpochBalance < undelegatedBalance
+            .nextEpochBalance ? undelegatedBalance.currentEpochBalance : undelegatedBalance.nextEpochBalance;
 
         require(amount <= currentWithdrawableStake, "MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR");
 
