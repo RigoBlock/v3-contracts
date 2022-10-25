@@ -304,15 +304,14 @@ describe("AUniswap", async () => {
                 'wrapETH',
                 [parseEther("100")]
             )
-            const currentBlock = await ethers.provider.getBlockNumber()
-            let targetBlock = await ethers.provider.getBlock(currentBlock)
+            let targetBlock = await ethers.provider.getBlock('latest')
             let blockHash = targetBlock.hash
             let encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(bytes32,bytes[])',
                 [ blockHash, [encodedWrapData, encodedCreateData] ]
             )
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
-            targetBlock = await ethers.provider.getBlock(currentBlock - 1)
+            targetBlock = await ethers.provider.getBlock(targetBlock.number - 1)
             blockHash = targetBlock.hash
             encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(bytes32,bytes[])',
