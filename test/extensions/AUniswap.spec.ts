@@ -51,6 +51,10 @@ describe("AUniswap", async () => {
         await authority.setAdapter(AMulticallInstance.address, true)
         // "ac9650d8": "multicall(bytes[])"
         await authority.addMethod("0xac9650d8", AMulticallInstance.address)
+        // "5ae401dc": "multicall(uint256,bytes[])"
+        await authority.addMethod("0x5ae401dc", AMulticallInstance.address)
+        // "1f0464d1": "multicall(bytes32,bytes[])"
+        await authority.addMethod("0x1f0464d1", AMulticallInstance.address)
         // we also need to approve method in EWhitelist so that staticcall can be performed
         const EWhitelist = await hre.ethers.getContractFactory("EWhitelist")
         const eWhitelist = await EWhitelist.deploy(authority.address)
@@ -199,29 +203,33 @@ describe("AUniswap", async () => {
             )
             const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
             const multicallPool = MulticallPool.attach(newPoolAddress)
-            await multicallPool.multicall([encodedCreateData])
+            let encodedMulticallData = multicallPool.interface.encodeFunctionData(
+                'multicall(bytes[])',
+                [ [encodedCreateData] ]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
             // while original uniswap client sends value for ETH transactions, we wrap ETH within the pool first.
             const encodedWrapData = pool.interface.encodeFunctionData(
                 'wrapETH',
                 [parseEther("100")]
             )
-            await multicallPool.multicall(
-                [
-                    encodedWrapData,
-                    encodedCreateData
-                ]
+            encodedMulticallData = multicallPool.interface.encodeFunctionData(
+                'multicall(bytes[])',
+                [ [encodedWrapData, encodedCreateData] ]
             )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
             const encodedUnwrapData = pool.interface.encodeFunctionData(
                 'unwrapWETH9(uint256,address)',
                 [parseEther("70"), pool.address]
             )
-            multicallPool.multicall([encodedUnwrapData])
-            // will fail silently in Weth contract when not enough wrapped ETH
-            await expect(multicallPool.multicall([encodedUnwrapData])).to.be.revertedWith("Transaction reverted without a reason")
-            const encodedRefundData = pool.interface.encodeFunctionData(
-                'refundETH'
+            encodedMulticallData = multicallPool.interface.encodeFunctionData(
+                'multicall(bytes[])',
+                [ [encodedUnwrapData] ]
             )
-            await multicallPool.multicall([encodedRefundData])
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
+            // will fail silently in Weth contract when not enough wrapped ETH
+            await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData}))
+                .to.be.revertedWith("Transaction reverted without a reason")
             const encodedSweepData = pool.interface.encodeFunctionData(
                 'sweepToken(address,uint256,address)',
                 [
@@ -230,11 +238,86 @@ describe("AUniswap", async () => {
                     pool.address
                 ]
             )
-            await multicallPool.multicall([encodedSweepData])
+            encodedMulticallData = multicallPool.interface.encodeFunctionData(
+                'multicall(bytes[])',
+                [ [encodedSweepData] ]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
+            const encodedRefundData = pool.interface.encodeFunctionData(
+                'refundETH'
+            )
+            encodedMulticallData = multicallPool.interface.encodeFunctionData(
+                'multicall(bytes[])',
+                [ [encodedRefundData] ]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
+            // remove refundETH method
             await authority.removeMethod("0x12210e8a", aUniswap)
             await expect(
-                multicallPool.multicall([encodedRefundData])
+                user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
             ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+        })
+
+        it('should send multicall with deadline', async () => {
+            const { grgToken, aUniswap, authority, newPoolAddress, poolId } = await setupTests()
+            const pool = await hre.ethers.getContractAt("IRigoblockPoolExtended", newPoolAddress)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            const encodedCreateData = pool.interface.encodeFunctionData(
+                'createAndInitializePoolIfNecessary',
+                [grgToken.address, grgToken.address, 1, 1]
+            )
+            const encodedWrapData = pool.interface.encodeFunctionData(
+                'wrapETH',
+                [parseEther("100")]
+            )
+            const currentBlock = await hre.ethers.provider.getBlockNumber()
+            let timestamp = (await hre.ethers.provider.getBlock(currentBlock)).timestamp
+            let encodedMulticallData = pool.interface.encodeFunctionData(
+                'multicall(uint256,bytes[])',
+                [ timestamp, [encodedWrapData, encodedCreateData] ]
+            )
+            await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData}))
+                .to.be.revertedWith("AMULTICALL_DEADLINE_PAST_ERROR")
+            timestamp += 1
+            encodedMulticallData = pool.interface.encodeFunctionData(
+                'multicall(uint256,bytes[])',
+                [ timestamp, [encodedWrapData, encodedCreateData] ]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
+        })
+
+        it('should send multicall with previous blockhash', async () => {
+            const { grgToken, aUniswap, authority, newPoolAddress, poolId } = await setupTests()
+            const pool = await hre.ethers.getContractAt("IRigoblockPoolExtended", newPoolAddress)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            const encodedCreateData = pool.interface.encodeFunctionData(
+                'createAndInitializePoolIfNecessary',
+                [grgToken.address, grgToken.address, 1, 1]
+            )
+            const encodedWrapData = pool.interface.encodeFunctionData(
+                'wrapETH',
+                [parseEther("100")]
+            )
+            const currentBlock = await hre.ethers.provider.getBlockNumber()
+            let blockHash = (await hre.ethers.provider.getBlock(currentBlock)).hash
+            let encodedMulticallData = pool.interface.encodeFunctionData(
+                'multicall(bytes32,bytes[])',
+                [ blockHash, [encodedWrapData, encodedCreateData] ]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
+            blockHash = (await hre.ethers.provider.getBlock(currentBlock - 1)).hash
+            encodedMulticallData = pool.interface.encodeFunctionData(
+                'multicall(bytes32,bytes[])',
+                [ blockHash, [encodedWrapData, encodedCreateData] ]
+            )
+            await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData}))
+                .to.be.revertedWith("AMULTICALL_BLOCKHASH_ERROR")
         })
     })
 
