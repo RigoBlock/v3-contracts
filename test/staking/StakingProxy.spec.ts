@@ -73,9 +73,9 @@ describe("StakingProxy", async () => {
         // this test will not revert if we do not initialize staking pal if same as owner to save gas
         it('should revert if pal address is same', async () => {
             const { stakingProxy, newPoolAddress, poolId } = await setupTests()
-            await stakingProxy.createStakingPool(newPoolAddress)
+            await stakingProxy.connect(user2).createStakingPool(newPoolAddress)
             await expect(
-                stakingProxy.setStakingPalAddress(poolId, user1.address)
+                stakingProxy.setStakingPalAddress(poolId, user2.address)
             ).to.be.revertedWith("STAKING_PAL_NULL_OR_SAME_ERROR")
         })
 
