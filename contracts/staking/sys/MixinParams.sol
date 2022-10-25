@@ -27,12 +27,7 @@ import "../interfaces/IStakingProxy.sol";
 import "../interfaces/IStaking.sol";
 
 abstract contract MixinParams is IStaking, IStakingEvents, MixinStorage, MixinConstants {
-    /// @dev Set all configurable parameters at once.
-    /// @param _epochDurationInSeconds Minimum seconds between epochs.
-    /// @param _rewardDelegatedStakeWeight How much delegated stake is weighted vs operator stake, in ppm.
-    /// @param _minimumPoolStake Minimum amount of stake required in a pool to collect rewards.
-    /// @param _cobbDouglasAlphaNumerator Numerator for cobb douglas alpha factor.
-    /// @param _cobbDouglasAlphaDenominator Denominator for cobb douglas alpha factor.
+    /// @inheritdoc IStaking
     function setParams(
         uint256 _epochDurationInSeconds,
         uint32 _rewardDelegatedStakeWeight,
@@ -53,12 +48,7 @@ abstract contract MixinParams is IStaking, IStakingEvents, MixinStorage, MixinCo
         IStakingProxy(address(this)).assertValidStorageParams();
     }
 
-    /// @dev Retrieves all configurable parameter values.
-    /// @return _epochDurationInSeconds Minimum seconds between epochs.
-    /// @return _rewardDelegatedStakeWeight How much delegated stake is weighted vs operator stake, in ppm.
-    /// @return _minimumPoolStake Minimum amount of stake required in a pool to collect rewards.
-    /// @return _cobbDouglasAlphaNumerator Numerator for cobb douglas alpha factor.
-    /// @return _cobbDouglasAlphaDenominator Denominator for cobb douglas alpha factor.
+    /// @inheritdoc IStaking
     function getParams()
         external
         view

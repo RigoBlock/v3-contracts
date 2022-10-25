@@ -41,11 +41,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         _;
     }
 
-    /// @dev Create a new staking pool. The sender will be the staking pal of this pool.
-    /// @notice When governance updates registry address, pools must be migrated to new registry, or this contract must query from both.
-    /// Note that a staking pal must be payable.
-    /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
-    /// @return poolId The unique pool id generated for this pool.
+    /// @inheritdoc IStaking
     function createStakingPool(address rigoblockPoolAddress)
         external
         override
@@ -89,9 +85,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         return poolId;
     }
 
-    /// @dev Allows the operator to update the staking pal address.
-    /// @param poolId Unique id of pool.
-    /// @param newStakingPalAddress Address of the new staking pal.
+    /// @inheritdoc IStaking
     function setStakingPalAddress(bytes32 poolId, address newStakingPalAddress)
         external
         override
@@ -105,9 +99,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         pool.stakingPal = newStakingPalAddress;
     }
 
-    /// @dev Decreases the operator share for the given pool (i.e. increases pool rewards for members).
-    /// @param poolId Unique Id of pool.
-    /// @param newOperatorShare The newly decreased percentage of any rewards owned by the operator.
+    /// @inheritdoc IStaking
     function decreaseStakingPoolOperatorShare(bytes32 poolId, uint32 newOperatorShare)
         external
         override
@@ -122,8 +114,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         emit OperatorShareDecreased(poolId, currentOperatorShare, newOperatorShare);
     }
 
-    /// @dev Returns a staking pool
-    /// @param poolId Unique id of pool.
+    /// @inheritdoc IStaking
     function getStakingPool(bytes32 poolId) public view override returns (IStructs.Pool memory) {
         return _poolById[poolId];
     }
@@ -157,7 +148,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
 
     /// @dev Preventing direct calls to this contract where applied.
     function _assertDelegateCall() private view {
-        require(address(this) != IMPLEMENTATION, "STAKING_DIRECT_CALL_NOT_ALLOWED_ERROR");
+        require(address(this) != _implementation, "STAKING_DIRECT_CALL_NOT_ALLOWED_ERROR");
     }
 
     /// @dev Reverts iff the new operator share is invalid.

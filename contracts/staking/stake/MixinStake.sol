@@ -26,9 +26,7 @@ import "../staking_pools/MixinStakingPool.sol";
 abstract contract MixinStake is MixinStakingPool {
     using LibSafeMath for uint256;
 
-    /// @dev Stake GRG tokens. Tokens are deposited into the GRG Vault.
-    ///      Unstake to retrieve the GRG. Stake is in the 'Active' status.
-    /// @param amount Amount of GRG to stake.
+    /// @inheritdoc IStaking
     function stake(uint256 amount) external override {
         address staker = msg.sender;
 
@@ -42,10 +40,7 @@ abstract contract MixinStake is MixinStakingPool {
         emit Stake(staker, amount);
     }
 
-    /// @dev Unstake. Tokens are withdrawn from the GRG Vault and returned to
-    ///      the staker. Stake must be in the 'undelegated' status in both the
-    ///      current and next epoch in order to be unstaked.
-    /// @param amount Amount of GRG to unstake.
+    /// @inheritdoc IStaking
     function unstake(uint256 amount) external override {
         address staker = msg.sender;
 
@@ -71,12 +66,7 @@ abstract contract MixinStake is MixinStakingPool {
         emit Unstake(staker, amount);
     }
 
-    /// @dev Moves stake between statuses: 'undelegated' or 'delegated'.
-    ///      Delegated stake can also be moved between pools.
-    ///      This change comes into effect next epoch.
-    /// @param from Status to move stake out of.
-    /// @param to Status to move stake into.
-    /// @param amount Amount of stake to move.
+    /// @inheritdoc IStaking
     function moveStake(
         IStructs.StakeInfo calldata from,
         IStructs.StakeInfo calldata to,

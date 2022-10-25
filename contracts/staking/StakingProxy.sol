@@ -31,10 +31,11 @@ import "./interfaces/IStakingProxy.sol";
 contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     using LibSafeDowncast for uint256;
 
-    /// @dev Constructor.
+    /// @notice Constructor.
     /// @param _stakingContract Staking contract to delegate calls to.
     constructor(address _stakingContract, address _owner) Authorizable(_owner) MixinStorage() {
         // Deployer address must be authorized in order to call `init`
+        // in the context of deterministic deployment, the deployer factory must be authorized.
         _addAuthorizedAddress(msg.sender);
 
         // Attach the staking contract and initialize state
@@ -45,7 +46,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     }
 
     /* solhint-disable payable-fallback, no-complex-fallback */
-    /// @dev Delegates calls to the staking contract, if it is set.
+    /// @notice Delegates calls to the staking contract, if it is set.
     fallback() external {
         // Sanity check that we have a staking contract to call
         address stakingContract_ = stakingContract;
@@ -68,23 +69,18 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
 
     /* solhint-enable payable-fallback, no-complex-fallback */
 
-    /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
-    /// Note that this is callable only by an authorized address.
-    /// @param _stakingContract Address of staking contract.
+    /// @inheritdoc IStakingProxy
     function attachStakingContract(address _stakingContract) external override onlyAuthorized {
         _attachStakingContract(_stakingContract);
     }
 
-    /// @dev Detach the current staking contract.
-    /// Note that this is callable only by an authorized address.
+    /// @inheritdoc IStakingProxy
     function detachStakingContract() external override onlyAuthorized {
         stakingContract = NIL_ADDRESS;
         emit StakingContractDetachedFromProxy();
     }
 
-    /// @dev Batch executes a series of calls to the staking contract.
-    /// @param data An array of data that encodes a sequence of functions to
-    ///             call in the staking contracts.
+    /// @inheritdoc IStakingProxy
     function batchExecute(bytes[] calldata data) external returns (bytes[] memory batchReturnData) {
         // Initialize commonly used variables.
         bool success;
@@ -115,11 +111,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         return batchReturnData;
     }
 
-    /// @dev Asserts that an epoch is between 5 and 90 days long.
-    //       Asserts that 0 < cobb douglas alpha value <= 1.
-    //       Asserts that a stake weight is <= 100%.
-    //       Asserts that pools allow >= 1 maker.
-    //       Asserts that all addresses are initialized.
+    /// @inheritdoc IStakingProxy
     function assertValidStorageParams() public view override {
         // Epoch length must be between 5 and 90 days long
         uint256 _epochDurationInSeconds = epochDurationInSeconds;

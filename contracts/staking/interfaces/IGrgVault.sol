@@ -2,7 +2,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,65 +21,69 @@
 pragma solidity >=0.5.9 <0.9.0;
 
 interface IGrgVault {
-    /// @dev Emmitted whenever a StakingProxy is set in a vault.
+    /// @notice Emmitted whenever a StakingProxy is set in a vault.
+    /// @param stakingProxyAddress Address of the staking proxy contract.
     event StakingProxySet(address stakingProxyAddress);
 
-    /// @dev Emitted when the Staking contract is put into Catastrophic Failure Mode
+    /// @notice Emitted when the Staking contract is put into Catastrophic Failure Mode
     /// @param sender Address of sender (`msg.sender`)
     event InCatastrophicFailureMode(address sender);
 
-    /// @dev Emitted when Grg Tokens are deposited into the vault.
-    /// @param staker of Grg Tokens.
+    /// @notice Emitted when Grg Tokens are deposited into the vault.
+    /// @param staker Address of the Grg staker.
     /// @param amount of Grg Tokens deposited.
     event Deposit(address indexed staker, uint256 amount);
 
-    /// @dev Emitted when Grg Tokens are withdrawn from the vault.
-    /// @param staker of Grg Tokens.
+    /// @notice Emitted when Grg Tokens are withdrawn from the vault.
+    /// @param staker Address of the Grg staker.
     /// @param amount of Grg Tokens withdrawn.
     event Withdraw(address indexed staker, uint256 amount);
 
-    /// @dev Emitted whenever the GRG AssetProxy is set.
+    /// @notice Emitted whenever the Grg AssetProxy is set.
+    /// @param grgProxyAddress Address of the Grg transfer proxy.
     event GrgProxySet(address grgProxyAddress);
 
-    /// @dev Sets the address of the StakingProxy contract.
-    /// Note that only the contract staker can call this function.
-    /// @param _stakingProxyAddress Address of Staking proxy contract.
-    function setStakingProxy(address _stakingProxyAddress) external;
+    /// @notice Sets the address of the StakingProxy contract.
+    /// @dev Note that only the contract staker can call this function.
+    /// @param stakingProxyAddress Address of Staking proxy contract.
+    function setStakingProxy(address stakingProxyAddress) external;
 
-    /// @dev Vault enters into Catastrophic Failure Mode.
-    /// *** WARNING - ONCE IN CATOSTROPHIC FAILURE MODE, YOU CAN NEVER GO BACK! ***
-    /// Note that only the contract staker can call this function.
+    /// @notice Vault enters into Catastrophic Failure Mode.
+    /// @dev *** WARNING - ONCE IN CATOSTROPHIC FAILURE MODE, YOU CAN NEVER GO BACK! ***
+    /// @dev Note that only the contract staker can call this function.
     function enterCatastrophicFailure() external;
 
-    /// @dev Sets the Grg proxy.
-    /// Note that only the contract staker can call this.
-    /// Note that this can only be called when *not* in Catastrophic Failure mode.
+    /// @notice Sets the Grg proxy.
+    /// @dev Note that only the contract staker can call this.
+    /// @dev Note that this can only be called when *not* in Catastrophic Failure mode.
     /// @param grgProxyAddress Address of the RigoBlock Grg Proxy.
     function setGrgProxy(address grgProxyAddress) external;
 
-    /// @dev Deposit an `amount` of Grg Tokens from `staker` into the vault.
-    /// Note that only the Staking contract can call this.
-    /// Note that this can only be called when *not* in Catastrophic Failure mode.
-    /// @param staker of Grg Tokens.
+    /// @notice Deposit an `amount` of Grg Tokens from `staker` into the vault.
+    /// @dev Note that only the Staking contract can call this.
+    /// @dev Note that this can only be called when *not* in Catastrophic Failure mode.
+    /// @param staker Address of the Grg staker.
     /// @param amount of Grg Tokens to deposit.
     function depositFrom(address staker, uint256 amount) external;
 
-    /// @dev Withdraw an `amount` of Grg Tokens to `staker` from the vault.
-    /// Note that only the Staking contract can call this.
-    /// Note that this can only be called when *not* in Catastrophic Failure mode.
-    /// @param staker of Grg Tokens.
+    /// @notice Withdraw an `amount` of Grg Tokens to `staker` from the vault.
+    /// @dev Note that only the Staking contract can call this.
+    /// @dev Note that this can only be called when *not* in Catastrophic Failure mode.
+    /// @param staker Address of the Grg staker.
     /// @param amount of Grg Tokens to withdraw.
     function withdrawFrom(address staker, uint256 amount) external;
 
-    /// @dev Withdraw ALL Grg Tokens to `staker` from the vault.
-    /// Note that this can only be called when *in* Catastrophic Failure mode.
-    /// @param staker of Grg Tokens.
+    /// @notice Withdraw ALL Grg Tokens to `staker` from the vault.
+    /// @dev Note that this can only be called when *in* Catastrophic Failure mode.
+    /// @param staker Address of the Grg staker.
     function withdrawAllFrom(address staker) external returns (uint256);
 
-    /// @dev Returns the balance in Grg Tokens of the `staker`
+    /// @notice Returns the balance in Grg Tokens of the `staker`
+    /// @param staker Address of the Grg staker.
     /// @return Balance in Grg.
     function balanceOf(address staker) external view returns (uint256);
 
-    /// @dev Returns the entire balance of Grg tokens in the vault.
+    /// @notice Returns the entire balance of Grg tokens in the vault.
+    /// @return Balance in Grg.
     function balanceOfGrgVault() external view returns (uint256);
 }

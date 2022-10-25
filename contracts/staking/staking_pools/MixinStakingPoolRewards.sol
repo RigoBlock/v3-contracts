@@ -29,16 +29,12 @@ import "../sys/MixinAbstract.sol";
 abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumulativeRewards {
     using LibSafeMath for uint256;
 
-    /// @dev Withdraws the caller's WETH rewards that have accumulated
-    ///      until the last epoch.
-    /// @param poolId Unique id of pool.
+    /// @inheritdoc IStaking
     function withdrawDelegatorRewards(bytes32 poolId) external override {
         _withdrawAndSyncDelegatorRewards(poolId, msg.sender);
     }
 
-    /// @dev Computes the reward balance in ETH of the operator of a pool.
-    /// @param poolId Unique id of pool.
-    /// @return reward totalReward Balance in ETH.
+    /// @inheritdoc IStaking
     function computeRewardBalanceOfOperator(bytes32 poolId) external view override returns (uint256 reward) {
         // Because operator rewards are immediately withdrawn as WETH
         // on finalization, the only factor in this function are unfinalized
@@ -52,10 +48,7 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         return reward;
     }
 
-    /// @dev Computes the reward balance in ETH of a specific member of a pool.
-    /// @param poolId Unique id of pool.
-    /// @param member The member of the pool.
-    /// @return reward totalReward Balance in ETH.
+    /// @inheritdoc IStaking
     function computeRewardBalanceOfDelegator(bytes32 poolId, address member)
         external
         view

@@ -2,7 +2,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,27 +22,32 @@ pragma solidity >=0.5.9 <0.9.0;
 
 import "./IStructs.sol";
 
-abstract contract IStakingProxy {
-    /// @dev Emitted by StakingProxy when a staking contract is attached.
+interface IStakingProxy {
+    /// @notice Emitted by StakingProxy when a staking contract is attached.
     /// @param newStakingContractAddress Address of newly attached staking contract.
     event StakingContractAttachedToProxy(address newStakingContractAddress);
 
-    /// @dev Emitted by StakingProxy when a staking contract is detached.
+    /// @notice Emitted by StakingProxy when a staking contract is detached.
     event StakingContractDetachedFromProxy();
 
-    /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
-    /// Note that this is callable only by an authorized address.
-    /// @param _stakingContract Address of staking contract.
-    function attachStakingContract(address _stakingContract) external virtual;
+    /// @notice Attach a staking contract; future calls will be delegated to the staking contract.
+    /// @dev Note that this is callable only by an authorized address.
+    /// @param stakingContract Address of staking contract.
+    function attachStakingContract(address stakingContract) external;
 
-    /// @dev Detach the current staking contract.
-    /// Note that this is callable only by an authorized address.
-    function detachStakingContract() external virtual;
+    /// @notice Detach the current staking contract.
+    /// @dev Note that this is callable only by an authorized address.
+    function detachStakingContract() external;
 
+    /// @notice Batch executes a series of calls to the staking contract.
+    /// @param data An array of data that encodes a sequence of functions to call in the staking contracts.
+    function batchExecute(bytes[] calldata data) external returns (bytes[] memory batchReturnData);
+
+    /// @notice Asserts initialziation parameters are correct.
     /// @dev Asserts that an epoch is between 5 and 30 days long.
-    //       Asserts that 0 < cobb douglas alpha value <= 1.
-    //       Asserts that a stake weight is <= 100%.
-    //       Asserts that pools allow >= 1 maker.
-    //       Asserts that all addresses are initialized.
-    function assertValidStorageParams() external view virtual;
+    /// @dev Asserts that 0 < cobb douglas alpha value <= 1.
+    /// @dev Asserts that a stake weight is <= 100%.
+    /// @dev Asserts that pools allow >= 1 maker.
+    /// @dev Asserts that all addresses are initialized.
+    function assertValidStorageParams() external view;
 }

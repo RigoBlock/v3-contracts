@@ -29,11 +29,8 @@ import "../../rigoToken/interfaces/IInflation.sol";
 abstract contract MixinFinalizer is MixinStakingPoolRewards {
     using LibSafeMath for uint256;
 
-    /// @dev Begins a new epoch, preparing the prior one for finalization.
-    ///      Throws if not enough time has passed between epochs or if the
-    ///      previous epoch was not fully finalized.
-    /// @return numPoolsToFinalize The number of unfinalized pools.
-    function endEpoch() external override returns (uint256) {
+    /// @inheritdoc IStaking
+    function endEpoch() external override returns (uint256 numPoolsToFinalize) {
         uint256 currentEpoch_ = currentEpoch;
         uint256 prevEpoch = currentEpoch_.safeSub(1);
 
@@ -78,12 +75,7 @@ abstract contract MixinFinalizer is MixinStakingPoolRewards {
         return aggregatedStats.numPoolsToFinalize;
     }
 
-    /// @dev Instantly finalizes a single pool that earned rewards in the previous
-    ///      epoch, crediting it rewards for members and withdrawing operator's
-    ///      rewards as WETH. This can be called by internal functions that need
-    ///      to finalize a pool immediately. Does nothing if the pool is already
-    ///      finalized or did not earn rewards in the previous epoch.
-    /// @param poolId The pool ID to finalize.
+    /// @inheritdoc IStaking
     function finalizePool(bytes32 poolId) external override {
         // Compute relevant epochs
         uint256 currentEpoch_ = currentEpoch;

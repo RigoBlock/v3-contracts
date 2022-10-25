@@ -22,12 +22,13 @@ pragma solidity >=0.5.9 <0.9.0;
 
 import "../../utils/0xUtils/Authorizable.sol";
 import "../interfaces/IGrgVault.sol";
+import "../interfaces/IStorage.sol";
 import "../interfaces/IStructs.sol";
 
 // solhint-disable max-states-count, no-empty-blocks
-abstract contract MixinStorage is Authorizable {
-    // address of staking contract
-    address public stakingContract;
+abstract contract MixinStorage is IStorage, Authorizable {
+    /// @inheritdoc IStorage
+    address public override stakingContract;
 
     // mapping from StakeStatus to global stored balance
     // NOTE: only Status.DELEGATED is used to access this mapping, but this format
@@ -43,24 +44,20 @@ abstract contract MixinStorage is Authorizable {
     // Mapping from Pool Id to Amount Delegated
     mapping(bytes32 => IStructs.StoredBalance) internal _delegatedStakeByPoolId;
 
-    /// @dev Mapping from RigoBlock pool subaccount to pool Id of rigoblock pool
-    /// @dev 0 RigoBlock pool subaccount address.
-    /// @return 0 The pool ID.
-    mapping(address => bytes32) public poolIdByRbPoolAccount;
+    /// @inheritdoc IStorage
+    mapping(address => bytes32) public override poolIdByRbPoolAccount;
 
     // mapping from Pool Id to Pool
     mapping(bytes32 => IStructs.Pool) internal _poolById;
 
-    /// @dev mapping from pool ID to reward balance of members
-    /// @dev 0 Pool ID.
-    /// @return 0 The total reward balance of members in this pool.
-    mapping(bytes32 => uint256) public rewardsByPoolId;
+    /// @inheritdoc IStorage
+    mapping(bytes32 => uint256) public override rewardsByPoolId;
 
-    // The current epoch.
-    uint256 public currentEpoch;
+    /// @inheritdoc IStorage
+    uint256 public override currentEpoch;
 
-    // The current epoch start time.
-    uint256 public currentEpochStartTimeInSeconds;
+    /// @inheritdoc IStorage
+    uint256 public override currentEpochStartTimeInSeconds;
 
     // mapping from Pool Id to Epoch to Reward Ratio
     mapping(bytes32 => mapping(uint256 => IStructs.Fraction)) internal _cumulativeRewardsByPool;
@@ -68,43 +65,34 @@ abstract contract MixinStorage is Authorizable {
     // mapping from Pool Id to Epoch
     mapping(bytes32 => uint256) internal _cumulativeRewardsByPoolLastStored;
 
-    /// @dev Registered RigoBlock Proof_of_Performance contracts, capable of paying protocol fees.
-    /// @dev 0 The address to check.
-    /// @return 0 Whether the address is a registered proof_of_performance.
-    mapping(address => bool) public validPops;
+    /// @inheritdoc IStorage
+    mapping(address => bool) public override validPops;
 
     /* Tweakable parameters */
 
-    // Minimum seconds between epochs.
-    uint256 public epochDurationInSeconds;
+    /// @inheritdoc IStorage
+    uint256 public override epochDurationInSeconds;
 
-    // How much delegated stake is weighted vs operator stake, in ppm.
-    uint32 public rewardDelegatedStakeWeight;
+    /// @inheritdoc IStorage
+    uint32 public override rewardDelegatedStakeWeight;
 
-    // Minimum amount of stake required in a pool to collect rewards.
-    uint256 public minimumPoolStake;
+    /// @inheritdoc IStorage
+    uint256 public override minimumPoolStake;
 
-    // Numerator for cobb douglas alpha factor.
-    uint32 public cobbDouglasAlphaNumerator;
+    /// @inheritdoc IStorage
+    uint32 public override cobbDouglasAlphaNumerator;
 
-    // Denominator for cobb douglas alpha factor.
-    uint32 public cobbDouglasAlphaDenominator;
+    /// @inheritdoc IStorage
+    uint32 public override cobbDouglasAlphaDenominator;
 
     /* State for finalization */
 
-    /// @dev Stats for each pool that generated fees with sufficient stake to earn rewards.
-    ///      See `_minimumPoolStake` in `MixinParams`.
-    /// @dev 0 Pool ID.
-    /// @dev 1 Epoch number.
-    /// @notice Returns 0 Pool fee stats.
-    mapping(bytes32 => mapping(uint256 => IStructs.PoolStats)) public poolStatsByEpoch;
+    /// @inheritdoc IStorage
+    mapping(bytes32 => mapping(uint256 => IStructs.PoolStats)) public override poolStatsByEpoch;
 
-    /// @dev Aggregated stats across all pools that generated fees with sufficient stake to earn rewards.
-    ///      See `_minimumPoolStake` in MixinParams.
-    /// @dev 0 Epoch number.
-    /// @notice Returns 0 Reward computation stats.
+    /// @inheritdoc IStorage
     mapping(uint256 => IStructs.AggregatedStats) public aggregatedStatsByEpoch;
 
-    /// @dev The GRG balance of this contract that is reserved for pool reward payouts.
+    /// @inheritdoc IStorage
     uint256 public grgReservedForPoolRewards;
 }

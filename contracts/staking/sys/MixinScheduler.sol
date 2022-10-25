@@ -28,10 +28,7 @@ import "../interfaces/IStaking.sol";
 abstract contract MixinScheduler is IStaking, IStakingEvents, MixinStorage {
     using LibSafeMath for uint256;
 
-    /// @dev Returns the earliest end time in seconds of this epoch.
-    ///      The next epoch can begin once this time is reached.
-    ///      Epoch period = [startTimeInSeconds..endTimeInSeconds)
-    /// @return Time in seconds.
+    /// @inheritdoc IStaking
     function getCurrentEpochEarliestEndTimeInSeconds() public view override returns (uint256) {
         return currentEpochStartTimeInSeconds.safeAdd(epochDurationInSeconds);
     }

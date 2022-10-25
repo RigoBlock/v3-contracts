@@ -28,18 +28,18 @@ import "./stake/MixinStake.sol";
 import "./rewards/MixinPopRewards.sol";
 
 contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
-    // @notice Setting owner to null address prevents admin direct calls to implementation,
-    //  initializing immutable implementation address is used to allow delegatecalls only,
-    //  locking the implementation contract from direct calls.
+    /// @notice Setting owner to null address prevents admin direct calls to implementation.
+    /// @dev Initializing immutable implementation address is used to allow delegatecalls only.
+    /// @dev Direct calls to the  implementation contract are effectively locked.
     constructor(
         address _grgVault,
         address _poolRegistry,
         address _rigoToken
     ) Authorizable(address(0)) MixinDeploymentConstants(_grgVault, _poolRegistry, _rigoToken) {}
 
-    /// @dev Initialize storage owned by this contract.
-    ///      This function should not be called directly.
-    ///      The StakingProxy contract will call it in `attachStakingContract()`.
+    /// @notice Initialize storage owned by this contract.
+    /// @dev This function should not be called directly.
+    /// @dev The StakingProxy contract will call it in `attachStakingContract()`.
     function init() public override onlyAuthorized {
         // DANGER! When performing upgrades, take care to modify this logic
         // to prevent accidentally clearing prior state.

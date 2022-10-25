@@ -36,11 +36,7 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
         _;
     }
 
-    /// @dev Credits the value of a pool's pop reward.
-    ///      Only a known RigoBlock pop can call this method. See
-    ///      (MixinPopManager).
-    /// @param poolAccount The address of the rigoblock pool account.
-    /// @param popReward The pop reward.
+    /// @inheritdoc IStaking
     function creditPopReward(address poolAccount, uint256 popReward) external payable override onlyPop {
         // Get the pool id of the maker address.
         bytes32 poolId = poolIdByRbPoolAccount[poolAccount];
@@ -90,9 +86,7 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
         }
     }
 
-    /// @dev Get stats on a staking pool in this epoch.
-    /// @param poolId Pool Id to query.
-    /// @return PoolStats struct for pool id.
+    /// @inheritdoc IStaking
     function getStakingPoolStatsThisEpoch(bytes32 poolId) external view override returns (IStructs.PoolStats memory) {
         return poolStatsByEpoch[poolId][currentEpoch];
     }

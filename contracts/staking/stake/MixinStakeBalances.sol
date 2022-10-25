@@ -30,9 +30,7 @@ abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConsta
     using LibSafeMath for uint256;
     using LibSafeDowncast for uint256;
 
-    /// @dev Gets global stake for a given status.
-    /// @param stakeStatus UNDELEGATED or DELEGATED
-    /// @return balance Global stake for given status.
+    /// @inheritdoc IStaking
     function getGlobalStakeByStatus(IStructs.StakeStatus stakeStatus)
         external
         view
@@ -50,10 +48,7 @@ abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConsta
         return balance;
     }
 
-    /// @dev Gets an owner's stake balances by status.
-    /// @param staker Owner of stake.
-    /// @param stakeStatus UNDELEGATED or DELEGATED
-    /// @return balance Owner's stake balances for given status.
+    /// @inheritdoc IStaking
     function getOwnerStakeByStatus(address staker, IStructs.StakeStatus stakeStatus)
         external
         view
@@ -64,17 +59,12 @@ abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConsta
         return balance;
     }
 
-    /// @dev Returns the total stake for a given staker.
-    /// @param staker of stake.
-    /// @return Total GRG staked by `staker`.
+    /// @inheritdoc IStaking
     function getTotalStake(address staker) public view override returns (uint256) {
         return getGrgVault().balanceOf(staker);
     }
 
-    /// @dev Returns the stake delegated to a specific staking pool, by a given staker.
-    /// @param staker of stake.
-    /// @param poolId Unique Id of pool.
-    /// @return balance Stake delegated to pool by staker.
+    /// @inheritdoc IStaking
     function getStakeDelegatedToPoolByOwner(address staker, bytes32 poolId)
         public
         view
@@ -85,10 +75,7 @@ abstract contract MixinStakeBalances is MixinStakeStorage, MixinDeploymentConsta
         return balance;
     }
 
-    /// @dev Returns the total stake delegated to a specific staking pool,
-    ///      across all members.
-    /// @param poolId Unique Id of pool.
-    /// @return balance Total stake delegated to pool.
+    /// @inheritdoc IStaking
     function getTotalStakeDelegatedToPool(bytes32 poolId)
         public
         view
