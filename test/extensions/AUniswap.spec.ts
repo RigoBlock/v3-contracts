@@ -273,8 +273,8 @@ describe("AUniswap", async () => {
                 'wrapETH',
                 [parseEther("100")]
             )
-            const currentBlock = await hre.ethers.provider.getBlockNumber()
-            let timestamp = (await hre.ethers.provider.getBlock(currentBlock)).timestamp
+            const currentBlock = await ethers.provider.getBlock('latest');
+            let timestamp = currentBlock.timestamp
             let encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(uint256,bytes[])',
                 [ timestamp, [encodedWrapData, encodedCreateData] ]
