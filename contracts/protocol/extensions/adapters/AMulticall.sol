@@ -9,12 +9,12 @@ import "./interfaces/IAMulticall.sol";
 /// @notice As per https://github.com/Uniswap/swap-router-contracts/blob/main/contracts/base/MulticallExtended.sol
 contract AMulticall is IAMulticall {
     modifier checkDeadline(uint256 deadline) {
-        require(_blockTimestamp() <= deadline, 'AMULTICALL_DEADLINE_PAST_ERROR');
+        require(_blockTimestamp() <= deadline, "AMULTICALL_DEADLINE_PAST_ERROR");
         _;
     }
 
     modifier checkPreviousBlockhash(bytes32 previousBlockhash) {
-        require(blockhash(block.number - 1) == previousBlockhash, 'AMULTICALL_BLOCKHASH_ERROR');
+        require(blockhash(block.number - 1) == previousBlockhash, "AMULTICALL_BLOCKHASH_ERROR");
         _;
     }
 
