@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity >=0.5.4 <0.9.0;
-
-import "./LibSafeMath.sol";
+pragma solidity >=0.8.0 <0.9.0;
 
 library LibFractions {
-    using LibSafeMath for uint256;
-
     /// @dev Safely adds two fractions `n1/d1 + n2/d2`
     /// @param n1 numerator of `1`
     /// @param d1 denominator of `1`
@@ -25,8 +21,8 @@ library LibFractions {
         if (n2 == 0) {
             return (numerator = n1, denominator = d1);
         }
-        numerator = n1.safeMul(d2).safeAdd(n2.safeMul(d1));
-        denominator = d1.safeMul(d2);
+        numerator = n1 * d2 + (n2 * d1);
+        denominator = d1 * d2;
         return (numerator, denominator);
     }
 
@@ -47,9 +43,9 @@ library LibFractions {
         // re-scale them by `maxValue` to prevent overflows in future operations.
         if (numerator > maxValue || denominator > maxValue) {
             uint256 rescaleBase = numerator >= denominator ? numerator : denominator;
-            rescaleBase = rescaleBase.safeDiv(maxValue);
-            scaledNumerator = numerator.safeDiv(rescaleBase);
-            scaledDenominator = denominator.safeDiv(rescaleBase);
+            rescaleBase = rescaleBase / maxValue;
+            scaledNumerator = numerator / rescaleBase;
+            scaledDenominator = denominator / rescaleBase;
         } else {
             scaledNumerator = numerator;
             scaledDenominator = denominator;
@@ -89,10 +85,10 @@ library LibFractions {
             return 0;
         }
         if (n2 == 0) {
-            return result = s.safeMul(n1).safeDiv(d1);
+            return result = s * n1 / d1;
         }
-        uint256 numerator = n1.safeMul(d2).safeSub(n2.safeMul(d1));
-        uint256 tmp = numerator.safeDiv(d2);
-        return s.safeMul(tmp).safeDiv(d1);
+        uint256 numerator = n1 * d2 - (n2 * d1);
+        uint256 tmp = numerator / d2;
+        return s * tmp / d1;
     }
 }
