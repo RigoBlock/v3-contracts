@@ -135,7 +135,7 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
             } else {
                 // Transfer staking pal share of operator's reward to staking pal
                 // Transfer the reamining operator's grg reward to the operator
-                uint256 stakingPalReward = operatorReward.safeMul(pool.stakingPalShare).safeDiv(PPM_DENOMINATOR);
+                uint256 stakingPalReward = operatorReward.safeMul(pool.stakingPalShare).safeDiv(_PPM_DENOMINATOR);
                 getGrgContract().transfer(pool.stakingPal, stakingPalReward);
                 getGrgContract().transfer(pool.operator, operatorReward.safeSub(stakingPalReward));
             }
@@ -168,7 +168,7 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         if (membersStake == 0) {
             operatorReward = totalReward;
         } else {
-            operatorReward = LibMath.getPartialAmountCeil(uint256(operatorShare), PPM_DENOMINATOR, totalReward);
+            operatorReward = LibMath.getPartialAmountCeil(uint256(operatorShare), _PPM_DENOMINATOR, totalReward);
             membersReward = totalReward.safeSub(operatorReward);
         }
         return (operatorReward, membersReward);

@@ -50,7 +50,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     fallback() external {
         // Sanity check that we have a staking contract to call
         address stakingContract_ = stakingContract;
-        require(stakingContract_ != NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
+        require(stakingContract_ != _NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
 
         // Call the staking contract with the provided calldata.
         (bool success, bytes memory returnData) = stakingContract_.delegatecall(msg.data);
@@ -76,7 +76,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
 
     /// @inheritdoc IStakingProxy
     function detachStakingContract() external override onlyAuthorized {
-        stakingContract = NIL_ADDRESS;
+        stakingContract = _NIL_ADDRESS;
         emit StakingContractDetachedFromProxy();
     }
 
@@ -90,7 +90,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         address staking = stakingContract;
 
         // Ensure that a staking contract has been attached to the proxy.
-        require(staking != NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
+        require(staking != _NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
 
         // Execute all of the calls encoded in the provided calldata.
         for (uint256 i = 0; i != dataLength; i++) {
@@ -128,7 +128,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         );
 
         // Weight of delegated stake must be <= 100%
-        require(rewardDelegatedStakeWeight <= PPM_DENOMINATOR, "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR");
+        require(rewardDelegatedStakeWeight <= _PPM_DENOMINATOR, "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR");
 
         // Minimum stake must be > 1
         require(minimumPoolStake >= 2, "STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR");

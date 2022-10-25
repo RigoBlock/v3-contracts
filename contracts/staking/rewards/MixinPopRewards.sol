@@ -43,7 +43,7 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
 
         // Only attribute the pop reward to a pool if the pool account is
         // registered to a pool.
-        require(poolId != NIL_POOL_ID, "STAKING_NULL_POOL_ID_ERROR");
+        require(poolId != _NIL_POOL_ID, "STAKING_NULL_POOL_ID_ERROR");
 
         uint256 poolStake = getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
         // Ignore pools with dust stake.
@@ -106,7 +106,7 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
 
         membersStake = totalStake.safeSub(operatorStake);
         weightedStake = operatorStake.safeAdd(
-            LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, PPM_DENOMINATOR, membersStake)
+            LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, _PPM_DENOMINATOR, membersStake)
         );
         return (membersStake, weightedStake);
     }

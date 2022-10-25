@@ -75,8 +75,8 @@ abstract contract MixinParams is IStaking, IStakingEvents, MixinStorage, MixinCo
 
         // Set up defaults.
         uint256 _epochDurationInSeconds = 14 days;
-        uint32 _rewardDelegatedStakeWeight = (90 * PPM_DENOMINATOR) / 100;
-        uint256 _minimumPoolStake = 100 * MIN_TOKEN_VALUE;
+        uint32 _rewardDelegatedStakeWeight = (90 * _PPM_DENOMINATOR) / 100;
+        uint256 _minimumPoolStake = 100 * _MIN_TOKEN_VALUE;
         uint32 _cobbDouglasAlphaNumerator = 2;
         uint32 _cobbDouglasAlphaDenominator = 3;
 

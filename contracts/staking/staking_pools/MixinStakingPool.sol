@@ -130,13 +130,13 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
     /// @dev Reverts iff a staking pool does not exist.
     /// @param poolId Unique id of pool.
     function _assertStakingPoolExists(bytes32 poolId) internal view {
-        require(_poolById[poolId].operator != NIL_ADDRESS, "STAKING_POOL_DOES_NOT_EXIST_ERROR");
+        require(_poolById[poolId].operator != _NIL_ADDRESS, "STAKING_POOL_DOES_NOT_EXIST_ERROR");
     }
 
     /// @dev Reverts iff a staking pool does exist.
     /// @param poolId Unique id of pool.
     function _assertStakingPoolDoesNotExist(bytes32 poolId) internal view {
-        require(_poolById[poolId].operator == NIL_ADDRESS, "STAKING_POOL_ALREADY_EXISTS_ERROR");
+        require(_poolById[poolId].operator == _NIL_ADDRESS, "STAKING_POOL_ALREADY_EXISTS_ERROR");
     }
 
     /// @dev Asserts that the sender is the operator of the input pool.
@@ -156,7 +156,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
     /// @param newOperatorShare New operator share.
     function _assertNewOperatorShare(uint32 currentOperatorShare, uint32 newOperatorShare) private pure {
         // sanity checks
-        if (newOperatorShare > PPM_DENOMINATOR) {
+        if (newOperatorShare > _PPM_DENOMINATOR) {
             // operator share must be a valid fraction
             revert("OPERATOR_SHARE_BIGGER_THAN_MAX_ERROR");
         } else if (newOperatorShare > currentOperatorShare) {
