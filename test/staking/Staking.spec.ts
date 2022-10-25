@@ -53,7 +53,7 @@ describe("Staking", async () => {
             // following test will underflow epoch number subtraction
             await expect(
                 staking.endEpoch()
-            ).to.be.revertedWith("Transaction reverted and Hardhat couldn't infer the reason. Please report this to help us improve Hardhat")
+            ).to.be.reverted
         })
     })
 

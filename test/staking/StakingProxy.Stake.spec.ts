@@ -219,7 +219,7 @@ describe("StakingProxy-Stake", async () => {
             expect(undelegated.nextEpochBalance).to.be.eq(amount)
             // following test will underflow math
             await expect(stakingProxy.moveStake(toInfo, fromInfo, amount))
-                .to.be.revertedWith("Transaction reverted and Hardhat couldn't infer the reason. Please report this to help us improve Hardhat")
+                .to.be.reverted
             expect(delegated.currentEpoch).to.be.eq(2)
             expect(delegated.currentEpochBalance).to.be.eq(amount)
             expect(delegated.nextEpochBalance).to.be.eq(0)
