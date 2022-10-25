@@ -8,20 +8,47 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  await deploy("ERC20Proxy", {
+  const grgTransferProxy = await deploy("ERC20Proxy", {
     from: deployer,
     args: [deployer],  // Authorizable(_owner)
     log: true,
     deterministicDeployment: true,
   });
 
-  // TODO: define grg address, initialize staking
+  const rigoToken = await deploy("RigoToken", {
+    from: deployer,
+    args: [
+      deployer, // address _setMinter
+      deployer, // address _setRigoblock
+      deployer // address _grgHolder
+    ],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   const grgVault = await deploy("GrgVault", {
     from: deployer,
     args: [
-        deployer, // mock grg transfer proxy address
-        deployer, // mock grg token address
+        grgTransferProxy.address,
+        rigoToken.address,
         deployer  // Authorizable(_owner)
+    ],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const authority = await deploy("Authority", {
+    from: deployer,
+    args: [deployer],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const registry = await deploy("PoolRegistry", {
+    from: deployer,
+    args: [
+      authority.address,
+      deployer  // Rigoblock Dao
     ],
     log: true,
     deterministicDeployment: true,
@@ -31,19 +58,57 @@ const deploy: DeployFunction = async function (
     from: deployer,
     args: [
         grgVault.address,
-        deployer,  // MixinDeploymentConstants(_poolRegistry)
-        deployer,  // MixinDeploymentConstants(_rigoToken)
+        registry.address,
+        rigoToken.address,
     ],
     log: true,
     deterministicDeployment: true,
   });
 
-  await deploy("StakingProxy", {
+  const stakingProxy = await deploy("StakingProxy", {
     from: deployer,
     args: [
         staking.address,
         deployer  // Authorizable(_owner)
     ],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await deploy("AStaking", {
+    from: deployer,
+    args: [
+        stakingProxy.address,
+        rigoToken.address,
+        grgTransferProxy.address
+    ],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await deploy("ASelfCustody", {
+    from: deployer,
+    args: [
+        grgVault.address,
+        stakingProxy.address
+    ],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const inflation = await deploy("Inflation", {
+    from: deployer,
+    args: [
+      rigoToken.address,
+      stakingProxy.address
+    ],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await deploy("ProofOfPerformance", {
+    from: deployer,
+    args: [stakingProxy.address],
     log: true,
     deterministicDeployment: true,
   });
