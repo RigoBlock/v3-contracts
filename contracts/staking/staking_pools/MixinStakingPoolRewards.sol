@@ -126,7 +126,9 @@ abstract contract MixinStakingPoolRewards is IStaking, MixinAbstract, MixinCumul
         (operatorReward, membersReward) = _computePoolRewardsSplit(pool.operatorShare, reward, membersStake);
 
         if (operatorReward > 0) {
-            if (pool.operator == pool.stakingPal) {
+
+            // if staking pal is null, pool operator receives full reward
+            if (pool.stakingPal == address(0)) {
                 // Transfer the operator's grg reward to the operator
                 getGrgContract().transfer(pool.operator, operatorReward);
             } else {

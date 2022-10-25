@@ -52,7 +52,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         address operator = IRigoblockV3Pool(payable(rigoblockPoolAddress)).owner();
 
         // add stakingPal, which receives part of operator reward
-        address stakingPal = msg.sender;
+        address stakingPal = msg.sender != operator ? msg.sender : address(0);
 
         // operator initially shares 30% with stakers
         uint32 operatorShare = uint32(700000);
