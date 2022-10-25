@@ -80,6 +80,7 @@ const userConfig: HardhatUserConfig = {
     mainnet: {
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
+      gasPrice: 11000000000,
     },
     xdai: {
       ...sharedNetworkConfig,
@@ -96,6 +97,7 @@ const userConfig: HardhatUserConfig = {
     goerli: {
       ...sharedNetworkConfig,
       url: `https://goerli.infura.io/v3/${INFURA_KEY}`,
+      gasPrice: 7000000000,
     },
     ropsten: {
       ...sharedNetworkConfig,
@@ -111,7 +113,8 @@ const userConfig: HardhatUserConfig = {
     },
     polygon: {
       ...sharedNetworkConfig,
-      url: `https://polygon-mainnet.infura.io/v3/${INFURA_KEY}`,
+      url: `https://polygon-rpc.com/`,
+      gasPrice: 120000000000,
     },
     volta: {
       ...sharedNetworkConfig,
@@ -124,6 +127,10 @@ const userConfig: HardhatUserConfig = {
     arbitrum: {
       ...sharedNetworkConfig,
       url: `https://arb1.arbitrum.io/rpc`,
+    },
+    optimism: {
+      ...sharedNetworkConfig,
+      url: `https://mainnet.optimism.io`,
     },
     fantomTestnet: {
       ...sharedNetworkConfig,
@@ -142,7 +149,24 @@ const userConfig: HardhatUserConfig = {
     timeout: 2000000,
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+    apiKey: {
+      mainnet: ETHERSCAN_API_KEY ?? '',
+      goerli: ETHERSCAN_API_KEY ?? '',
+      optimisticEthereum: process.env.OPTIMISTIC_SCAN_API_KEY ?? '',
+      arbitrumOne: process.env.ARBISCAN_API_KEY ?? '',
+      bsc: process.env.BSCSCAN_API_KEY ?? '',
+      polygon: process.env.POLYGONSCAN_API_KEY ?? '',
+    },
+    customChains: [
+      {
+        network: "optimism",
+        chainId: 10,
+        urls: {
+          apiURL: "https://api-optimistic.etherscan.io/api",
+          browserURL: "https://optimistic.etherscan.io"
+        }
+      }
+    ]
   },
 };
 if (NODE_URL) {
