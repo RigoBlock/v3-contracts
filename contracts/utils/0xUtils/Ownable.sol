@@ -21,8 +21,8 @@ abstract contract Ownable is IOwnable {
     /// @return 0 The owner address.
     address public owner;
 
-    constructor(address _owner) {
-        owner = _owner;
+    constructor(address newOwner) {
+        owner = newOwner;
     }
 
     modifier onlyOwner() {

@@ -2,7 +2,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -18,15 +18,13 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../../protocol/IRigoblockV3Pool.sol";
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
 import "./MixinStakingPoolRewards.sol";
 
 abstract contract MixinStakingPool is MixinStakingPoolRewards {
-    using LibSafeMath for uint256;
     using LibSafeDowncast for uint256;
 
     /// @dev Asserts that the sender is the operator of the input pool.
@@ -41,11 +39,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         _;
     }
 
-    /// @dev Create a new staking pool. The sender will be the staking pal of this pool.
-    /// @notice When governance updates registry address, pools must be migrated to new registry, or this contract must query from both.
-    /// Note that a staking pal must be payable.
-    /// @param rigoblockPoolAddress Adds rigoblock pool to the created staking pool for convenience if non-null.
-    /// @return poolId The unique pool id generated for this pool.
+    /// @inheritdoc IStaking
     function createStakingPool(address rigoblockPoolAddress)
         external
         override
@@ -58,7 +52,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         address operator = IRigoblockV3Pool(payable(rigoblockPoolAddress)).owner();
 
         // add stakingPal, which receives part of operator reward
-        address stakingPal = msg.sender;
+        address stakingPal = msg.sender != operator ? msg.sender : address(0);
 
         // operator initially shares 30% with stakers
         uint32 operatorShare = uint32(700000);
@@ -89,9 +83,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         return poolId;
     }
 
-    /// @dev Allows the operator to update the staking pal address.
-    /// @param poolId Unique id of pool.
-    /// @param newStakingPalAddress Address of the new staking pal.
+    /// @inheritdoc IStaking
     function setStakingPalAddress(bytes32 poolId, address newStakingPalAddress)
         external
         override
@@ -105,9 +97,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         pool.stakingPal = newStakingPalAddress;
     }
 
-    /// @dev Decreases the operator share for the given pool (i.e. increases pool rewards for members).
-    /// @param poolId Unique Id of pool.
-    /// @param newOperatorShare The newly decreased percentage of any rewards owned by the operator.
+    /// @inheritdoc IStaking
     function decreaseStakingPoolOperatorShare(bytes32 poolId, uint32 newOperatorShare)
         external
         override
@@ -122,8 +112,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
         emit OperatorShareDecreased(poolId, currentOperatorShare, newOperatorShare);
     }
 
-    /// @dev Returns a staking pool
-    /// @param poolId Unique id of pool.
+    /// @inheritdoc IStaking
     function getStakingPool(bytes32 poolId) public view override returns (IStructs.Pool memory) {
         return _poolById[poolId];
     }
@@ -139,13 +128,13 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
     /// @dev Reverts iff a staking pool does not exist.
     /// @param poolId Unique id of pool.
     function _assertStakingPoolExists(bytes32 poolId) internal view {
-        require(_poolById[poolId].operator != NIL_ADDRESS, "STAKING_POOL_DOES_NOT_EXIST_ERROR");
+        require(_poolById[poolId].operator != _NIL_ADDRESS, "STAKING_POOL_DOES_NOT_EXIST_ERROR");
     }
 
     /// @dev Reverts iff a staking pool does exist.
     /// @param poolId Unique id of pool.
     function _assertStakingPoolDoesNotExist(bytes32 poolId) internal view {
-        require(_poolById[poolId].operator == NIL_ADDRESS, "STAKING_POOL_ALREADY_EXISTS_ERROR");
+        require(_poolById[poolId].operator == _NIL_ADDRESS, "STAKING_POOL_ALREADY_EXISTS_ERROR");
     }
 
     /// @dev Asserts that the sender is the operator of the input pool.
@@ -157,7 +146,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
 
     /// @dev Preventing direct calls to this contract where applied.
     function _assertDelegateCall() private view {
-        require(address(this) != IMPLEMENTATION, "STAKING_DIRECT_CALL_NOT_ALLOWED_ERROR");
+        require(address(this) != _implementation, "STAKING_DIRECT_CALL_NOT_ALLOWED_ERROR");
     }
 
     /// @dev Reverts iff the new operator share is invalid.
@@ -165,7 +154,7 @@ abstract contract MixinStakingPool is MixinStakingPoolRewards {
     /// @param newOperatorShare New operator share.
     function _assertNewOperatorShare(uint32 currentOperatorShare, uint32 newOperatorShare) private pure {
         // sanity checks
-        if (newOperatorShare > PPM_DENOMINATOR) {
+        if (newOperatorShare > _PPM_DENOMINATOR) {
             // operator share must be a valid fraction
             revert("OPERATOR_SHARE_BIGGER_THAN_MAX_ERROR");
         } else if (newOperatorShare > currentOperatorShare) {

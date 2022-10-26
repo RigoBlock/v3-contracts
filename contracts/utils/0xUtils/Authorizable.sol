@@ -41,7 +41,7 @@ abstract contract Authorizable is Ownable, IAuthorizable {
     address[] public authorities;
 
     /// @dev Initializes the `owner` address.
-    constructor(address _owner) Ownable(_owner) {}
+    constructor(address newOwner) Ownable(newOwner) {}
 
     /// @dev Authorizes an address.
     /// @param target Address to authorize.

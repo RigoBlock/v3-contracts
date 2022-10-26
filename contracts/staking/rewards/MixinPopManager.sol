@@ -2,7 +2,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -18,23 +18,21 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../interfaces/IStakingEvents.sol";
 import "../interfaces/IStaking.sol";
 import "../immutable/MixinStorage.sol";
 
 abstract contract MixinPopManager is IStaking, IStakingEvents, MixinStorage {
-    /// @dev Adds a new pop address.
-    /// @param addr Address of pop contract to add.
+    /// @inheritdoc IStaking
     function addPopAddress(address addr) external override onlyAuthorized {
         require(!validPops[addr], "STAKING_POP_ALREADY_REGISTERED_ERROR");
         validPops[addr] = true;
         emit PopAdded(addr);
     }
 
-    /// @dev Removes an existing proof_of_performance address.
-    /// @param addr Address of proof_of_performance contract to remove.
+    /// @inheritdoc IStaking
     function removePopAddress(address addr) external override onlyAuthorized {
         require(validPops[addr], "STAKING_POP_NOT_REGISTERED_ERROR");
         validPops[addr] = false;

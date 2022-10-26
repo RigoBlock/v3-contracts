@@ -2,7 +2,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -18,15 +18,15 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 abstract contract MixinConstants {
     // 100% in parts-per-million.
-    uint32 internal constant PPM_DENOMINATOR = 10**6;
+    uint32 internal constant _PPM_DENOMINATOR = 10**6;
 
-    bytes32 internal constant NIL_POOL_ID = 0x0000000000000000000000000000000000000000000000000000000000000000;
+    bytes32 internal constant _NIL_POOL_ID = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
-    address internal constant NIL_ADDRESS = 0x0000000000000000000000000000000000000000;
+    address internal constant _NIL_ADDRESS = 0x0000000000000000000000000000000000000000;
 
-    uint256 internal constant MIN_TOKEN_VALUE = 10**18;
+    uint256 internal constant _MIN_TOKEN_VALUE = 10**18;
 }

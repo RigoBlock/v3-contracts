@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Proof of Performance Interface - Allows interaction with the PoP contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

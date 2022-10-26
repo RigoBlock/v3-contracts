@@ -3,7 +3,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -31,25 +31,27 @@ import "./interfaces/IStakingProxy.sol";
 contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     using LibSafeDowncast for uint256;
 
-    /// @dev Constructor.
-    /// @param _stakingContract Staking contract to delegate calls to.
-    constructor(address _stakingContract, address _owner) Authorizable(_owner) MixinStorage() {
+    /// @notice Constructor.
+    /// @param stakingImplementation Address of the staking contract to delegate calls to.
+    /// @param newOwner Address of the staking proxy owner.
+    constructor(address stakingImplementation, address newOwner) Authorizable(newOwner) MixinStorage() {
         // Deployer address must be authorized in order to call `init`
+        // in the context of deterministic deployment, the deployer factory (msg.sender) must be authorized.
         _addAuthorizedAddress(msg.sender);
 
         // Attach the staking contract and initialize state
-        _attachStakingContract(_stakingContract);
+        _attachStakingContract(stakingImplementation);
 
         // Remove the sender as an authorized address
         _removeAuthorizedAddressAtIndex(msg.sender, 0);
     }
 
     /* solhint-disable payable-fallback, no-complex-fallback */
-    /// @dev Delegates calls to the staking contract, if it is set.
+    /// @notice Delegates calls to the staking contract, if it is set.
     fallback() external {
         // Sanity check that we have a staking contract to call
         address stakingContract_ = stakingContract;
-        require(stakingContract_ != NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
+        require(stakingContract_ != _NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
 
         // Call the staking contract with the provided calldata.
         (bool success, bytes memory returnData) = stakingContract_.delegatecall(msg.data);
@@ -68,23 +70,18 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
 
     /* solhint-enable payable-fallback, no-complex-fallback */
 
-    /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
-    /// Note that this is callable only by an authorized address.
-    /// @param _stakingContract Address of staking contract.
-    function attachStakingContract(address _stakingContract) external override onlyAuthorized {
-        _attachStakingContract(_stakingContract);
+    /// @inheritdoc IStakingProxy
+    function attachStakingContract(address stakingImplementation) external override onlyAuthorized {
+        _attachStakingContract(stakingImplementation);
     }
 
-    /// @dev Detach the current staking contract.
-    /// Note that this is callable only by an authorized address.
+    /// @inheritdoc IStakingProxy
     function detachStakingContract() external override onlyAuthorized {
-        stakingContract = NIL_ADDRESS;
+        stakingContract = _NIL_ADDRESS;
         emit StakingContractDetachedFromProxy();
     }
 
-    /// @dev Batch executes a series of calls to the staking contract.
-    /// @param data An array of data that encodes a sequence of functions to
-    ///             call in the staking contracts.
+    /// @inheritdoc IStakingProxy
     function batchExecute(bytes[] calldata data) external returns (bytes[] memory batchReturnData) {
         // Initialize commonly used variables.
         bool success;
@@ -94,7 +91,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         address staking = stakingContract;
 
         // Ensure that a staking contract has been attached to the proxy.
-        require(staking != NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
+        require(staking != _NIL_ADDRESS, "STAKING_ADDRESS_NULL_ERROR");
 
         // Execute all of the calls encoded in the provided calldata.
         for (uint256 i = 0; i != dataLength; i++) {
@@ -115,11 +112,7 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         return batchReturnData;
     }
 
-    /// @dev Asserts that an epoch is between 5 and 90 days long.
-    //       Asserts that 0 < cobb douglas alpha value <= 1.
-    //       Asserts that a stake weight is <= 100%.
-    //       Asserts that pools allow >= 1 maker.
-    //       Asserts that all addresses are initialized.
+    /// @inheritdoc IStakingProxy
     function assertValidStorageParams() public view override {
         // Epoch length must be between 5 and 90 days long
         uint256 _epochDurationInSeconds = epochDurationInSeconds;
@@ -136,18 +129,18 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
         );
 
         // Weight of delegated stake must be <= 100%
-        require(rewardDelegatedStakeWeight <= PPM_DENOMINATOR, "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR");
+        require(rewardDelegatedStakeWeight <= _PPM_DENOMINATOR, "STAKING_PROXY_INVALID_STAKE_WEIGHT_ERROR");
 
         // Minimum stake must be > 1
         require(minimumPoolStake >= 2, "STAKING_PROXY_INVALID_MINIMUM_STAKE_ERROR");
     }
 
     /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
-    /// @param _stakingContract Address of staking contract.
-    function _attachStakingContract(address _stakingContract) internal {
+    /// @param stakingImplementation Address of staking contract.
+    function _attachStakingContract(address stakingImplementation) internal {
         // Attach the staking contract
-        stakingContract = _stakingContract;
-        emit StakingContractAttachedToProxy(_stakingContract);
+        stakingContract = stakingImplementation;
+        emit StakingContractAttachedToProxy(stakingImplementation);
 
         // Call `init()` on the staking contract to initialize storage.
         (bool didInitSucceed, bytes memory initReturnData) = stakingContract.delegatecall(

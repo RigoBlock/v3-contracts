@@ -2,7 +2,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -18,36 +18,29 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/0xUtils/LibMath.sol";
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../interfaces/IStructs.sol";
 import "../sys/MixinFinalizer.sol";
 import "../staking_pools/MixinStakingPool.sol";
 import "./MixinPopManager.sol";
 
 abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFinalizer {
-    using LibSafeMath for uint256;
-
     /// @dev Asserts that the call is coming from a valid pop.
     modifier onlyPop() {
         require(validPops[msg.sender], "STAKING_ONLY_CALLABLE_BY_POP_ERROR");
         _;
     }
 
-    /// @dev Credits the value of a pool's pop reward.
-    ///      Only a known RigoBlock pop can call this method. See
-    ///      (MixinPopManager).
-    /// @param poolAccount The address of the rigoblock pool account.
-    /// @param popReward The pop reward.
+    /// @inheritdoc IStaking
     function creditPopReward(address poolAccount, uint256 popReward) external payable override onlyPop {
         // Get the pool id of the maker address.
         bytes32 poolId = poolIdByRbPoolAccount[poolAccount];
 
         // Only attribute the pop reward to a pool if the pool account is
         // registered to a pool.
-        require(poolId != NIL_POOL_ID, "STAKING_NULL_POOL_ID_ERROR");
+        require(poolId != _NIL_POOL_ID, "STAKING_NULL_POOL_ID_ERROR");
 
         uint256 poolStake = getTotalStakeDelegatedToPool(poolId).currentEpochBalance;
         // Ignore pools with dust stake.
@@ -70,10 +63,10 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
             poolStatsPtr.weightedStake = weightedStakeInPool;
 
             // Increase the total weighted stake.
-            aggregatedStatsPtr.totalWeightedStake = aggregatedStatsPtr.totalWeightedStake.safeAdd(weightedStakeInPool);
+            aggregatedStatsPtr.totalWeightedStake += weightedStakeInPool;
 
             // Increase the number of pools to finalize.
-            aggregatedStatsPtr.numPoolsToFinalize = aggregatedStatsPtr.numPoolsToFinalize.safeAdd(1);
+            aggregatedStatsPtr.numPoolsToFinalize += 1;
 
             // Emit an event so keepers know what pools earned rewards this epoch.
             emit StakingPoolEarnedRewardsInEpoch(currentEpoch_, poolId);
@@ -84,15 +77,11 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
             poolStatsPtr.feesCollected = popReward;
 
             // Increase the total fees collected this epoch.
-            aggregatedStatsPtr.totalFeesCollected = aggregatedStatsPtr.totalFeesCollected.safeAdd(popReward).safeSub(
-                feesCollectedByPool
-            );
+            aggregatedStatsPtr.totalFeesCollected += popReward - feesCollectedByPool;
         }
     }
 
-    /// @dev Get stats on a staking pool in this epoch.
-    /// @param poolId Pool Id to query.
-    /// @return PoolStats struct for pool id.
+    /// @inheritdoc IStaking
     function getStakingPoolStatsThisEpoch(bytes32 poolId) external view override returns (IStructs.PoolStats memory) {
         return poolStatsByEpoch[poolId][currentEpoch];
     }
@@ -110,10 +99,10 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
     {
         uint256 operatorStake = getStakeDelegatedToPoolByOwner(_poolById[poolId].operator, poolId).currentEpochBalance;
 
-        membersStake = totalStake.safeSub(operatorStake);
-        weightedStake = operatorStake.safeAdd(
-            LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, PPM_DENOMINATOR, membersStake)
-        );
+        membersStake = totalStake - operatorStake;
+        weightedStake =
+            operatorStake +
+            LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, _PPM_DENOMINATOR, membersStake);
         return (membersStake, weightedStake);
     }
 }

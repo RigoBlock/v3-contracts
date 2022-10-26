@@ -3,7 +3,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,18 +28,21 @@ import "./stake/MixinStake.sol";
 import "./rewards/MixinPopRewards.sol";
 
 contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
-    // @notice Setting owner to null address prevents admin direct calls to implementation,
-    //  initializing immutable implementation address is used to allow delegatecalls only,
-    //  locking the implementation contract from direct calls.
+    /// @notice Setting owner to null address prevents admin direct calls to implementation.
+    /// @dev Initializing immutable implementation address is used to allow delegatecalls only.
+    /// @dev Direct calls to the  implementation contract are effectively locked.
+    /// @param grgVault Address of the Grg vault.
+    /// @param poolRegistry Address of the RigoBlock pool registry.
+    /// @param rigoToken Address of the Grg token.
     constructor(
-        address _grgVault,
-        address _poolRegistry,
-        address _rigoToken
-    ) Authorizable(address(0)) MixinDeploymentConstants(_grgVault, _poolRegistry, _rigoToken) {}
+        address grgVault,
+        address poolRegistry,
+        address rigoToken
+    ) Authorizable(address(0)) MixinDeploymentConstants(grgVault, poolRegistry, rigoToken) {}
 
-    /// @dev Initialize storage owned by this contract.
-    ///      This function should not be called directly.
-    ///      The StakingProxy contract will call it in `attachStakingContract()`.
+    /// @notice Initialize storage owned by this contract.
+    /// @dev This function should not be called directly.
+    /// @dev The StakingProxy contract will call it in `attachStakingContract()`.
     function init() public override onlyAuthorized {
         // DANGER! When performing upgrades, take care to modify this logic
         // to prevent accidentally clearing prior state.

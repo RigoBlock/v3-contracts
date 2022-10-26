@@ -2,7 +2,7 @@
 /*
 
   Original work Copyright 2019 ZeroEx Intl.
-  Modified work Copyright 2020 Rigo Intl.
+  Modified work Copyright 2020-2022 Rigo Intl.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -18,22 +18,16 @@
 
 */
 
-pragma solidity >=0.5.9 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
-import "../../utils/0xUtils/LibSafeMath.sol";
 import "../immutable/MixinStorage.sol";
 import "../interfaces/IStakingEvents.sol";
 import "../interfaces/IStaking.sol";
 
 abstract contract MixinScheduler is IStaking, IStakingEvents, MixinStorage {
-    using LibSafeMath for uint256;
-
-    /// @dev Returns the earliest end time in seconds of this epoch.
-    ///      The next epoch can begin once this time is reached.
-    ///      Epoch period = [startTimeInSeconds..endTimeInSeconds)
-    /// @return Time in seconds.
+    /// @inheritdoc IStaking
     function getCurrentEpochEarliestEndTimeInSeconds() public view override returns (uint256) {
-        return currentEpochStartTimeInSeconds.safeAdd(epochDurationInSeconds);
+        return currentEpochStartTimeInSeconds + epochDurationInSeconds;
     }
 
     /// @dev Initializes state owned by this mixin.
@@ -60,7 +54,7 @@ abstract contract MixinScheduler is IStaking, IStakingEvents, MixinStorage {
         require(epochEndTime <= currentBlockTimestamp, "STAKING_TIMESTAMP_TOO_LOW_ERROR");
 
         // incremment epoch
-        uint256 nextEpoch = currentEpoch.safeAdd(1);
+        uint256 nextEpoch = currentEpoch + 1;
         currentEpoch = nextEpoch;
         currentEpochStartTimeInSeconds = currentBlockTimestamp;
     }
