@@ -46,8 +46,9 @@ abstract contract MixinStake is MixinStakingPool {
         );
 
         // stake must be undelegated in current and next epoch to be withdrawn
-        uint256 currentWithdrawableStake = undelegatedBalance.currentEpochBalance < undelegatedBalance
-            .nextEpochBalance ? undelegatedBalance.currentEpochBalance : undelegatedBalance.nextEpochBalance;
+        uint256 currentWithdrawableStake = undelegatedBalance.currentEpochBalance < undelegatedBalance.nextEpochBalance
+            ? undelegatedBalance.currentEpochBalance
+            : undelegatedBalance.nextEpochBalance;
 
         require(amount <= currentWithdrawableStake, "MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR");
 

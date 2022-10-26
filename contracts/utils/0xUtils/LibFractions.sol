@@ -85,10 +85,10 @@ library LibFractions {
             return 0;
         }
         if (n2 == 0) {
-            return result = s * n1 / d1;
+            return result = (s * n1) / d1;
         }
         uint256 numerator = n1 * d2 - (n2 * d1);
         uint256 tmp = numerator / d2;
-        return s * tmp / d1;
+        return (s * tmp) / d1;
     }
 }

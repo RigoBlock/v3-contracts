@@ -108,12 +108,14 @@ abstract contract MixinFinalizer is MixinStakingPoolRewards {
         uint256 totalReward = operatorReward + membersReward;
 
         // Increase `totalRewardsFinalized`.
-        aggregatedStatsByEpoch[prevEpoch].totalRewardsFinalized = aggregatedStats
-            .totalRewardsFinalized = aggregatedStats.totalRewardsFinalized + totalReward;
+        aggregatedStatsByEpoch[prevEpoch].totalRewardsFinalized = aggregatedStats.totalRewardsFinalized =
+            aggregatedStats.totalRewardsFinalized +
+            totalReward;
 
         // Decrease the number of unfinalized pools left.
-        aggregatedStatsByEpoch[prevEpoch].numPoolsToFinalize = aggregatedStats
-            .numPoolsToFinalize = aggregatedStats.numPoolsToFinalize - 1;
+        aggregatedStatsByEpoch[prevEpoch].numPoolsToFinalize = aggregatedStats.numPoolsToFinalize =
+            aggregatedStats.numPoolsToFinalize -
+            1;
 
         // If there are no more unfinalized pools remaining, the epoch is
         // finalized.

@@ -100,8 +100,9 @@ abstract contract MixinPopRewards is MixinPopManager, MixinStakingPool, MixinFin
         uint256 operatorStake = getStakeDelegatedToPoolByOwner(_poolById[poolId].operator, poolId).currentEpochBalance;
 
         membersStake = totalStake - operatorStake;
-        weightedStake = operatorStake + LibMath
-            .getPartialAmountFloor(rewardDelegatedStakeWeight, _PPM_DENOMINATOR, membersStake);
+        weightedStake =
+            operatorStake +
+            LibMath.getPartialAmountFloor(rewardDelegatedStakeWeight, _PPM_DENOMINATOR, membersStake);
         return (membersStake, weightedStake);
     }
 }

@@ -33,7 +33,7 @@ library LibMath {
     ) internal pure returns (uint256 partialAmount) {
         require(!isRoundingErrorFloor(numerator, denominator, target), "LIBMATH_ROUNDING_FLOOR_ERROR");
 
-        partialAmount = numerator * target / denominator;
+        partialAmount = (numerator * target) / denominator;
         return partialAmount;
     }
 
@@ -68,7 +68,7 @@ library LibMath {
         uint256 denominator,
         uint256 target
     ) internal pure returns (uint256 partialAmount) {
-        partialAmount = numerator * target / denominator;
+        partialAmount = (numerator * target) / denominator;
         return partialAmount;
     }
 
