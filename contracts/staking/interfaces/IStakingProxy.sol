@@ -32,8 +32,8 @@ interface IStakingProxy {
 
     /// @notice Attach a staking contract; future calls will be delegated to the staking contract.
     /// @dev Note that this is callable only by an authorized address.
-    /// @param stakingContract Address of staking contract.
-    function attachStakingContract(address stakingContract) external;
+    /// @param stakingImplementation Address of staking contract.
+    function attachStakingContract(address stakingImplementation) external;
 
     /// @notice Detach the current staking contract.
     /// @dev Note that this is callable only by an authorized address.
