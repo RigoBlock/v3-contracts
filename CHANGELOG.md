@@ -1,3 +1,22 @@
+## [1.1.1](https://github.com/rigoblock/v3-contracts/compare/v1.1.0...v1.1.1) (2022-10-26)
+
+
+### Bug Fixes
+
+* add uniswap extended uniswap methods ([64ef4a3](https://github.com/rigoblock/v3-contracts/commit/64ef4a3c3a22c537e975017732332af53f32740f))
+* deprecate LibSafeMath in staking ([d5fc4a9](https://github.com/rigoblock/v3-contracts/commit/d5fc4a9ba679bf990b96d79b3e94348416113bcc))
+* initialize staking pal to null address if is operator ([caeec6d](https://github.com/rigoblock/v3-contracts/commit/caeec6dffd977a346406bc6ac9305680eb888956))
+* internal constants renaming with _ ([b953767](https://github.com/rigoblock/v3-contracts/commit/b95376752c8f93bd5688a3e50cd51dc01514ef1e))
+* IStorage missing methods, removed non implemented plus docs ([f39cfc3](https://github.com/rigoblock/v3-contracts/commit/f39cfc3204b21639f9337220329e84b1e6948542))
+* minor staking variables renaming ([3ed91f5](https://github.com/rigoblock/v3-contracts/commit/3ed91f51e76f5e428220d04d8a58a94758b76f3e))
+* mixin deployment constants ([4d5014d](https://github.com/rigoblock/v3-contracts/commit/4d5014d3aed9691754059ab517ad50ddac12cc1c))
+* remove use of LibSafeMath in staking ([8216d2f](https://github.com/rigoblock/v3-contracts/commit/8216d2f66b17fd03580e424c4c51db5bad2e582a))
+* simplify math operationsin stake storage ([fa62f7b](https://github.com/rigoblock/v3-contracts/commit/fa62f7ba79fa963eb76ea0cc3216a6fc18831dcf))
+* update multicall interface with extended methods ([46eac10](https://github.com/rigoblock/v3-contracts/commit/46eac10706ce5462d0bb84551f414a40f17c7928))
+* upgrade minimum rigo token interfaces solc ([7ac33a1](https://github.com/rigoblock/v3-contracts/commit/7ac33a1394e8f3a5489743156df6318d237b8583))
+
+
+
 # [1.1.0](https://github.com/rigoblock/v3-contracts/compare/v0.11.1...v1.1.0) (2022-10-19)
 
 
@@ -94,20 +113,6 @@
 * added whitelist extension ([e752487](https://github.com/rigoblock/v3-contracts/commit/e752487a287749079028493398aba5302c1f1d0b))
 * catch error string in proxy factory ([553c56b](https://github.com/rigoblock/v3-contracts/commit/553c56b43864a1e018eae9a719b8d669fac4b0c9))
 * token-whitelist ([a6fa264](https://github.com/rigoblock/v3-contracts/commit/a6fa26482394f19760b5a862e1da00c7108a829b))
-
-
-
-## [0.9.1](https://github.com/rigoblock/v3-contracts/compare/v0.9.0...v0.9.1) (2022-09-20)
-
-
-### Bug Fixes
-
-* add return errors as string in LibMath, LibSafeMath utils ([3c3423b](https://github.com/rigoblock/v3-contracts/commit/3c3423be9d1b2ae66cde3f7aaed49a4177977728))
-* complete staking adapter ([90fb96d](https://github.com/rigoblock/v3-contracts/commit/90fb96d7523b9884cf885aba3efe8eba47ef83ec))
-* finalize before withdrawing rewards and read from private ([85df039](https://github.com/rigoblock/v3-contracts/commit/85df0396be1f24d0c3e7a1184baf77ca801711e1))
-* removed unused library methods ([0d41969](https://github.com/rigoblock/v3-contracts/commit/0d41969735218a8939c274229230a57d5cf96070))
-* removed unused private method in staking ([126fe36](https://github.com/rigoblock/v3-contracts/commit/126fe36d22952bb8b95f8311d41c075ef5cdb04e))
-* updated staking adapter interface with new methods ([d2991ce](https://github.com/rigoblock/v3-contracts/commit/d2991ce7941d78537736b51521f0639eff14a1f7))
 
 
 
