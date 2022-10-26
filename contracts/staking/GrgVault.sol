@@ -29,7 +29,7 @@ import "./interfaces/IGrgVault.sol";
 
 contract GrgVault is Authorizable, IGrgVault {
     // Address of staking proxy contract
-    address public stakingProxyAddress;
+    address public stakingProxy;
 
     // True iff vault has been set to Catastrophic Failure Mode
     bool public isInCatastrophicFailure;
@@ -65,24 +65,25 @@ contract GrgVault is Authorizable, IGrgVault {
     }
 
     /// @dev Constructor.
-    /// @param _grgProxyAddress Address of the RigoBlock Grg Proxy.
-    /// @param _grgTokenAddress Address of the Grg Token.
+    /// @param grgProxyAddress Address of the RigoBlock Grg Proxy.
+    /// @param grgTokenAddress Address of the Grg Token.
+    /// @param newOwner Address of the Grg vault owner.
     constructor(
-        address _grgProxyAddress,
-        address _grgTokenAddress,
-        address _owner
-    ) Authorizable(_owner) {
-        grgAssetProxy = IAssetProxy(_grgProxyAddress);
-        _grgToken = IERC20Token(_grgTokenAddress);
-        _grgAssetData = abi.encodeWithSelector(IAssetData(address(0)).ERC20Token.selector, _grgTokenAddress);
+        address grgProxyAddress,
+        address grgTokenAddress,
+        address newOwner
+    ) Authorizable(newOwner) {
+        grgAssetProxy = IAssetProxy(grgProxyAddress);
+        _grgToken = IERC20Token(grgTokenAddress);
+        _grgAssetData = abi.encodeWithSelector(IAssetData(address(0)).ERC20Token.selector, grgTokenAddress);
     }
 
     /// @dev Sets the address of the StakingProxy contract.
     /// Note that only the contract owner can call this function.
-    /// @param _stakingProxyAddress Address of Staking proxy contract.
-    function setStakingProxy(address _stakingProxyAddress) external override onlyAuthorized {
-        stakingProxyAddress = _stakingProxyAddress;
-        emit StakingProxySet(_stakingProxyAddress);
+    /// @param stakingProxyAddress Address of Staking proxy contract.
+    function setStakingProxy(address stakingProxyAddress) external override onlyAuthorized {
+        stakingProxy = stakingProxyAddress;
+        emit StakingProxySet(stakingProxyAddress);
     }
 
     /// @dev Vault enters into Catastrophic Failure Mode.
@@ -96,10 +97,10 @@ contract GrgVault is Authorizable, IGrgVault {
     /// @dev Sets the Grg proxy.
     /// Note that only an authorized address can call this function.
     /// Note that this can only be called when *not* in Catastrophic Failure mode.
-    /// @param _grgProxyAddress Address of the RigoBlock Grg Proxy.
-    function setGrgProxy(address _grgProxyAddress) external override onlyAuthorized onlyNotInCatastrophicFailure {
-        grgAssetProxy = IAssetProxy(_grgProxyAddress);
-        emit GrgProxySet(_grgProxyAddress);
+    /// @param grgProxyAddress Address of the RigoBlock Grg Proxy.
+    function setGrgProxy(address grgProxyAddress) external override onlyAuthorized onlyNotInCatastrophicFailure {
+        grgAssetProxy = IAssetProxy(grgProxyAddress);
+        emit GrgProxySet(grgProxyAddress);
     }
 
     /// @dev Deposit an `amount` of Grg Tokens from `staker` into the vault.
@@ -178,7 +179,7 @@ contract GrgVault is Authorizable, IGrgVault {
 
     /// @dev Asserts that sender is stakingProxy contract.
     function _assertSenderIsStakingProxy() private view {
-        require(msg.sender == stakingProxyAddress, "GRG_VAULT_ONLY_CALLABLE_BY_STAKING_PROXY_ERROR");
+        require(msg.sender == stakingProxy, "GRG_VAULT_ONLY_CALLABLE_BY_STAKING_PROXY_ERROR");
     }
 
     /// @dev Asserts that vault is in catastrophic failure mode.

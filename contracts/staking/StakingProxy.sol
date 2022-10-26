@@ -32,14 +32,15 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     using LibSafeDowncast for uint256;
 
     /// @notice Constructor.
-    /// @param _stakingContract Staking contract to delegate calls to.
-    constructor(address _stakingContract, address _owner) Authorizable(_owner) MixinStorage() {
+    /// @param stakingImplementation Address of the staking contract to delegate calls to.
+    /// @param newOwner Address of the staking proxy owner.
+    constructor(address stakingImplementation, address newOwner) Authorizable(newOwner) MixinStorage() {
         // Deployer address must be authorized in order to call `init`
-        // in the context of deterministic deployment, the deployer factory must be authorized.
+        // in the context of deterministic deployment, the deployer factory (msg.sender) must be authorized.
         _addAuthorizedAddress(msg.sender);
 
         // Attach the staking contract and initialize state
-        _attachStakingContract(_stakingContract);
+        _attachStakingContract(stakingImplementation);
 
         // Remove the sender as an authorized address
         _removeAuthorizedAddressAtIndex(msg.sender, 0);
@@ -70,8 +71,8 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     /* solhint-enable payable-fallback, no-complex-fallback */
 
     /// @inheritdoc IStakingProxy
-    function attachStakingContract(address _stakingContract) external override onlyAuthorized {
-        _attachStakingContract(_stakingContract);
+    function attachStakingContract(address stakingImplementation) external override onlyAuthorized {
+        _attachStakingContract(stakingImplementation);
     }
 
     /// @inheritdoc IStakingProxy
@@ -135,11 +136,11 @@ contract StakingProxy is IStakingProxy, MixinStorage, MixinConstants {
     }
 
     /// @dev Attach a staking contract; future calls will be delegated to the staking contract.
-    /// @param _stakingContract Address of staking contract.
-    function _attachStakingContract(address _stakingContract) internal {
+    /// @param stakingImplementation Address of staking contract.
+    function _attachStakingContract(address stakingImplementation) internal {
         // Attach the staking contract
-        stakingContract = _stakingContract;
-        emit StakingContractAttachedToProxy(_stakingContract);
+        stakingContract = stakingImplementation;
+        emit StakingContractAttachedToProxy(stakingImplementation);
 
         // Call `init()` on the staking contract to initialize storage.
         (bool didInitSucceed, bytes memory initReturnData) = stakingContract.delegatecall(

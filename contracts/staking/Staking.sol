@@ -31,6 +31,9 @@ contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
     /// @notice Setting owner to null address prevents admin direct calls to implementation.
     /// @dev Initializing immutable implementation address is used to allow delegatecalls only.
     /// @dev Direct calls to the  implementation contract are effectively locked.
+    /// @param grgVault Address of the Grg vault.
+    /// @param poolRegistry Address of the RigoBlock pool registry.
+    /// @param rigoToken Address of the Grg token.
     constructor(
         address grgVault,
         address poolRegistry,
