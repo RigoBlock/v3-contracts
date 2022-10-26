@@ -49,8 +49,8 @@ abstract contract MixinStakeStorage is MixinScheduler {
         require(amount <= from.nextEpochBalance, "STAKING_INSUFFICIENT_BALANCE_ERROR");
 
         // move stake for next epoch
-        from.nextEpochBalance = (uint256(from.nextEpochBalance) - amount).downcastToUint96();
-        to.nextEpochBalance = (uint256(to.nextEpochBalance) + amount).downcastToUint96();
+        from.nextEpochBalance -= amount.downcastToUint96();
+        to.nextEpochBalance += amount.downcastToUint96();
 
         // update state in storage
         _storeBalance(fromPtr, from);
@@ -80,8 +80,8 @@ abstract contract MixinStakeStorage is MixinScheduler {
     function _increaseCurrentAndNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Remove stake from balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
-        balance.nextEpochBalance = (uint256(balance.nextEpochBalance) + amount).downcastToUint96();
-        balance.currentEpochBalance = (uint256(balance.currentEpochBalance) + amount).downcastToUint96();
+        balance.nextEpochBalance += amount.downcastToUint96();
+        balance.currentEpochBalance += amount.downcastToUint96();
 
         // update state
         _storeBalance(balancePtr, balance);
@@ -93,8 +93,8 @@ abstract contract MixinStakeStorage is MixinScheduler {
     function _decreaseCurrentAndNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Remove stake from balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
-        balance.nextEpochBalance = (uint256(balance.nextEpochBalance) - amount).downcastToUint96();
-        balance.currentEpochBalance = (uint256(balance.currentEpochBalance) - amount).downcastToUint96();
+        balance.nextEpochBalance -= amount.downcastToUint96();
+        balance.currentEpochBalance -= amount.downcastToUint96();
 
         // update state
         _storeBalance(balancePtr, balance);
@@ -106,7 +106,7 @@ abstract contract MixinStakeStorage is MixinScheduler {
     function _increaseNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Add stake to balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
-        balance.nextEpochBalance = (uint256(balance.nextEpochBalance) + amount).downcastToUint96();
+        balance.nextEpochBalance += amount.downcastToUint96();
 
         // update state
         _storeBalance(balancePtr, balance);
@@ -118,7 +118,7 @@ abstract contract MixinStakeStorage is MixinScheduler {
     function _decreaseNextBalance(IStructs.StoredBalance storage balancePtr, uint256 amount) internal {
         // Remove stake from balance
         IStructs.StoredBalance memory balance = _loadCurrentBalance(balancePtr);
-        balance.nextEpochBalance = (uint256(balance.nextEpochBalance) - amount).downcastToUint96();
+        balance.nextEpochBalance -= amount.downcastToUint96();
 
         // update state
         _storeBalance(balancePtr, balance);
