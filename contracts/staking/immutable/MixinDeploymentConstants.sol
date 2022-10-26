@@ -20,10 +20,10 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../interfaces/IGrgVault.sol";
+import {IGrgVault as GrgVault} from "../interfaces/IGrgVault.sol";
 import "../interfaces/IStaking.sol";
-import "../../protocol/interfaces/IPoolRegistry.sol";
-import "../../rigoToken/interfaces/IRigoToken.sol";
+import {IPoolRegistry as PoolRegistry} from "../../protocol/interfaces/IPoolRegistry.sol";
+import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol";
 
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
@@ -46,17 +46,17 @@ abstract contract MixinDeploymentConstants is IStaking {
     address private immutable _poolRegistry;
 
     /// @inheritdoc IStaking
-    function getGrgContract() public view virtual override returns (IRigoToken) {
-        return IRigoToken(_rigoToken);
+    function getGrgContract() public view virtual override returns (RigoToken) {
+        return RigoToken(_rigoToken);
     }
 
     /// @inheritdoc IStaking
-    function getGrgVault() public view virtual override returns (IGrgVault) {
-        return IGrgVault(_grgVault);
+    function getGrgVault() public view virtual override returns (GrgVault) {
+        return GrgVault(_grgVault);
     }
 
     /// @inheritdoc IStaking
-    function getPoolRegistry() public view virtual override returns (IPoolRegistry) {
-        return IPoolRegistry(_poolRegistry);
+    function getPoolRegistry() public view virtual override returns (PoolRegistry) {
+        return PoolRegistry(_poolRegistry);
     }
 }
