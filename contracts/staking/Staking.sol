@@ -32,10 +32,10 @@ contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
     /// @dev Initializing immutable implementation address is used to allow delegatecalls only.
     /// @dev Direct calls to the  implementation contract are effectively locked.
     constructor(
-        address _grgVault,
-        address _poolRegistry,
-        address _rigoToken
-    ) Authorizable(address(0)) MixinDeploymentConstants(_grgVault, _poolRegistry, _rigoToken) {}
+        address grgVault,
+        address poolRegistry,
+        address rigoToken
+    ) Authorizable(address(0)) MixinDeploymentConstants(grgVault, poolRegistry, rigoToken) {}
 
     /// @notice Initialize storage owned by this contract.
     /// @dev This function should not be called directly.
