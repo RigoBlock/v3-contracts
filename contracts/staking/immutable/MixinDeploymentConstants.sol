@@ -59,4 +59,18 @@ abstract contract MixinDeploymentConstants is IStaking {
     function getPoolRegistry() public view virtual override returns (PoolRegistry) {
         return PoolRegistry(_poolRegistry);
     }
+
+    function _getInflation() internal view returns (address) {
+        uint256 chainId;
+        assembly {
+            chainId := chainid()
+        }
+
+        if (chainId == 1 || chainId == 5 || chainId == 31337) {
+            return getGrgContract().minter();
+        } else {
+            // hardcoded deterministic inflation address
+            return 0x724Bd8a04b9Fa280CC4F13C3789A0aE534CdEFa6;
+        }
+    }
 }
