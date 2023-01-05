@@ -208,7 +208,7 @@ describe("StakingProxy-Pop", async () => {
         })
 
         it('should credit null reward with rogue pop', async () => {
-            const { factory, authority, stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            const { authority, stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
             await stakingProxy.addAuthorizedAddress(user1.address)
             await stakingProxy.addPopAddress(user1.address)
             await authority.setFactory(user1.address, true)
@@ -240,6 +240,58 @@ describe("StakingProxy-Pop", async () => {
             // system won't be able to reduce num pools to finalize if reward credited is 0.
             // this condition is excluded by both pop contract which reverts if pool self stake below minimum
             await expect(stakingProxy.endEpoch()).to.be.revertedWith("STAKING_MISSING_POOLS_TO_BE_FINALIZED_ERROR")
+        })
+
+        it('should credit null reward on L2s with null token balance on inflation', async () => {
+            const { authority, stakingProxy, grgToken, pop, newPoolAddress, grgTransferProxyAddress, poolId } = await setupTests()
+            await stakingProxy.addAuthorizedAddress(user1.address)
+            await stakingProxy.addPopAddress(pop.address)
+            const InflationL2 = await hre.ethers.getContractFactory("InflationL2")
+            const inflation = await InflationL2.deploy(grgToken.address, stakingProxy.address)
+            await grgToken.changeMintingAddress(inflation.address)
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            const pool = Pool.attach(newPoolAddress)
+            await pool.stake(amount)
+            await timeTravel({ days: 14, mine:true })
+            await expect(stakingProxy.endEpoch())
+            .to.emit(stakingProxy, "EpochEnded").withArgs(1, 0, 0, 0, 0)
+            .to.emit(stakingProxy, "EpochFinalized").withArgs(1, 0, 0)
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
+            await timeTravel({ days: 14, mine:true })
+            // TODO: check args rewardsAvailable, totalFeesCollected, totalWeightedStake
+            await expect(stakingProxy.endEpoch())
+            .to.emit(stakingProxy, "EpochEnded").withArgs(2, 1, 0, amount, amount.mul(9).div(10))
+            .to.emit(stakingProxy, "GrgMintEvent").withArgs(0)
+            await expect(stakingProxy.finalizePool(poolId))
+            // currentEpoch_, poolId, operatorReward, membersReward
+            .to.emit(stakingProxy, "RewardsPaid").withArgs(3, poolId, 0, 0)
+            // prevEpoch, totalRewardsFinalized, reamining rewards
+            .to.emit(stakingProxy, "EpochFinalized").withArgs(2, 0, 0)
+            // system does not get stuck even in case of null token balance
+            // TODO: grg on L2 does not return minter, therefore must hardcode inflation in stakingproxy
+            await expect(
+                pop.creditPopRewardToStakingProxy(newPoolAddress)
+            ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(3, poolId)
+            await timeTravel({ days: 14, mine:true })
+            const tokenAmount = parseEther("50000")
+            await grgToken.transfer(inflation.address, tokenAmount)
+            const nextMintAmount = await inflation.getEpochInflation()
+            await expect(stakingProxy.endEpoch())
+            .to.emit(stakingProxy, "EpochEnded").withArgs(3, 1, nextMintAmount, amount, amount.mul(9).div(10))
+            .to.emit(stakingProxy, "GrgMintEvent").withArgs(nextMintAmount)
+            await expect(stakingProxy.finalizePool(poolId))
+            .to.emit(stakingProxy, "RewardsPaid").withArgs(4, poolId, nextMintAmount.mul(7000).div(10000).add(1), nextMintAmount.mul(3000).div(10000))
+            .to.emit(stakingProxy, "EpochFinalized").withArgs(3, nextMintAmount, 0)
+            const mintedAmount = await grgToken.balanceOf(stakingProxy.address)
+            expect(mintedAmount).to.be.not.eq(0)
+            await timeTravel({ days: 14, mine:true })
+            await expect(stakingProxy.endEpoch())
+            .to.emit(stakingProxy, "EpochEnded").withArgs(4, 0, nextMintAmount, 0, 0)
+            .to.emit(stakingProxy, "GrgMintEvent").withArgs(nextMintAmount)
         })
     })
 
