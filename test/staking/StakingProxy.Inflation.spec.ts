@@ -5,7 +5,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
-import { deployContract, timeTravel } from "../utils/utils";
+import { timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
 describe("Inflation", async () => {
