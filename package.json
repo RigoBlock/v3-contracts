@@ -27,7 +27,7 @@
     "lint:ts": "eslint --max-warnings 0 .",
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "prepack": "yarn build",
-    "prepare": "husky install",
+    "prepare": "chmod +x ./.husky/pre-commit && husky install",
     "prepublish": "yarn rimraf build && yarn build && yarn build:ts"
   },
   "repository": {
