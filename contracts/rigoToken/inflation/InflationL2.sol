@@ -87,7 +87,6 @@ contract InflationL2 is IInflation {
 
         uint256 tokenBalance = IRigoToken(_getRigoToken()).balanceOf(address(this));
 
-        // TODO: test what happens in the staking system when token balance is null
         // distribute rewards, we skip transfer if null amount
         if (tokenBalance == 0) {
             mintedInflation = 0;

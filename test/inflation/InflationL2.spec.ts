@@ -17,8 +17,6 @@ describe("InflationL2", async () => {
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const StakingProxyInstance = await deployments.get("StakingProxy")
         const Staking = await hre.ethers.getContractFactory("Staking")
-        //const InflationInstance = await deployments.get("Inflation")
-        //const Inflation = await hre.ethers.getContractFactory("Inflation")
         const RigoTokenInstance = await deployments.get("RigoToken")
         const RigoToken = await hre.ethers.getContractFactory("RigoToken")
         const InflationL2 = await hre.ethers.getContractFactory("InflationL2")
@@ -68,7 +66,6 @@ describe("InflationL2", async () => {
             ).to.be.revertedWith("STAKING_TIMESTAMP_TOO_LOW_ERROR")
         })
 
-        // TODO: test what happens when 0 tokens are transferred to staking proxy with positive locked stake
         it('should wait for epoch 2 before first mint', async () => {
             const { inflation, stakingProxy, rigoToken } = await setupTests()
             // _epochEndTime is initialized in storage only at first mint

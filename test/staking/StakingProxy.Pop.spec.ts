@@ -272,7 +272,6 @@ describe("StakingProxy-Pop", async () => {
             // prevEpoch, totalRewardsFinalized, reamining rewards
             .to.emit(stakingProxy, "EpochFinalized").withArgs(2, 0, 0)
             // system does not get stuck even in case of null token balance
-            // TODO: grg on L2 does not return minter, therefore must hardcode inflation in stakingproxy
             await expect(
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(3, poolId)
