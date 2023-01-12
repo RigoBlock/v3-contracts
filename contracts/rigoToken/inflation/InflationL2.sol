@@ -78,7 +78,7 @@ contract InflationL2 is IInflation {
     /// @notice We initialize parameters here instead of in the constructor.
     /// @dev On L2, inflation depends on staking proxy, which depends on inflation.
     /// @dev As deterministic deployment addresses are affected by the constructor, we save params in storage.
-    function initParams(address newRigoToken, address newStakingProxy) onlyInitializer external {
+    function initParams(address newRigoToken, address newStakingProxy) external onlyInitializer {
         require(rigoToken == address(0) || stakingProxy == address(0), "INFLATION_ALREADY_INIT_ERROR");
         require(newRigoToken != address(0) && newStakingProxy != address(0), "INFLATION_NULL_INPUTS_ERROR");
         rigoToken = newRigoToken;
