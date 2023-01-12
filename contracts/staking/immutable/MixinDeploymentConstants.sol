@@ -27,6 +27,14 @@ import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol
 
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
+    // we store this address in the bytecode to being able to prevent direct calls to the implementation.
+    address internal immutable _implementation;
+
+    address private immutable _inflationL2;
+    address private immutable _rigoToken;
+    address private immutable _grgVault;
+    address private immutable _poolRegistry;
+
     constructor(
         address grgVault,
         address poolRegistry,
@@ -36,14 +44,20 @@ abstract contract MixinDeploymentConstants is IStaking {
         _poolRegistry = poolRegistry;
         _rigoToken = rigoToken;
         _implementation = address(this);
+        uint256 chainId;
+
+        assembly {
+            chainId := chainid()
+        }
+
+        // we do not store in test environment as we want to separately handle inflationL2
+        address inflationL2 = address(0);
+
+        if (chainId != 1 && chainId != 5 && chainId != 31337) {
+            inflationL2 = 0xA5B59e04EA5bB02Abe86D17C80d0a63646b5c724;
+        }
+        _inflationL2 = inflationL2;
     }
-
-    // we store this address in the bytecode to being able to prevent direct calls to the implementation.
-    address internal immutable _implementation;
-
-    address private immutable _rigoToken;
-    address private immutable _grgVault;
-    address private immutable _poolRegistry;
 
     /// @inheritdoc IStaking
     function getGrgContract() public view virtual override returns (RigoToken) {
@@ -58,5 +72,9 @@ abstract contract MixinDeploymentConstants is IStaking {
     /// @inheritdoc IStaking
     function getPoolRegistry() public view virtual override returns (PoolRegistry) {
         return PoolRegistry(_poolRegistry);
+    }
+
+    function _getInflation() internal view returns (address) {
+        return (_inflationL2 != address(0) ? _inflationL2 : getGrgContract().minter());
     }
 }

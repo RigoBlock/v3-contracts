@@ -159,8 +159,8 @@ const userConfig: HardhatUserConfig = {
     },
     customChains: [
       {
-        network: "optimism",
-        chainId: 10,
+        network: "deprecated",
+        chainId: 2,
         urls: {
           apiURL: "https://api-optimistic.etherscan.io/api",
           browserURL: "https://optimistic.etherscan.io"
