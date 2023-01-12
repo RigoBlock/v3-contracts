@@ -44,7 +44,7 @@ describe("InflationL2", async () => {
     describe("deployedAddress", async () => {
         it('should deploy expected deterministic deployment address', async () => {
             const { inflation } = await setupTests()
-            expect(inflation.address).to.be.eq("0xbEc1CAbcd47599DED37315354a862D2E13b0bEed")
+            expect(inflation.address).to.be.eq("0xd4e05094C41164DE30Ba678493E31BbE746B33A7")
         })
     })
 

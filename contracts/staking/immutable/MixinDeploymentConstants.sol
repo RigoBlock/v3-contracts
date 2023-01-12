@@ -27,6 +27,14 @@ import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol
 
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
+    // we store this address in the bytecode to being able to prevent direct calls to the implementation.
+    address internal immutable _implementation;
+
+    address private immutable _inflationL2;
+    address private immutable _rigoToken;
+    address private immutable _grgVault;
+    address private immutable _poolRegistry;
+
     constructor(
         address grgVault,
         address poolRegistry,
@@ -36,14 +44,20 @@ abstract contract MixinDeploymentConstants is IStaking {
         _poolRegistry = poolRegistry;
         _rigoToken = rigoToken;
         _implementation = address(this);
+        uint256 chainId;
+
+        assembly {
+            chainId := chainid()
+        }
+
+        // we do not store in test environment as we want to separately handle inflationL2
+        address inflationL2 = address(0);
+
+        if (chainId != 1 && chainId != 5 && chainId != 31337) {
+            inflationL2 = 0xd4e05094C41164DE30Ba678493E31BbE746B33A7;
+        }
+        _inflationL2 = inflationL2;
     }
-
-    // we store this address in the bytecode to being able to prevent direct calls to the implementation.
-    address internal immutable _implementation;
-
-    address private immutable _rigoToken;
-    address private immutable _grgVault;
-    address private immutable _poolRegistry;
 
     /// @inheritdoc IStaking
     function getGrgContract() public view virtual override returns (RigoToken) {
@@ -60,20 +74,7 @@ abstract contract MixinDeploymentConstants is IStaking {
         return PoolRegistry(_poolRegistry);
     }
 
-    /// @notice Changing inflation address will result in different staking proxy address.
-    /// @dev Saving address in storage instead of immutable will require an input in the constructor
-    ///   which will change the staking proxy address deployed with deterministic deployment.
     function _getInflation() internal view returns (address) {
-        uint256 chainId;
-        assembly {
-            chainId := chainid()
-        }
-
-        if (chainId == 1 || chainId == 5 || chainId == 31337) {
-            return getGrgContract().minter();
-        } else {
-            // hardcoded deterministic inflation L2 address
-            return 0xbEc1CAbcd47599DED37315354a862D2E13b0bEed;
-        }
+        return (_inflationL2 != address(0) ? _inflationL2 : getGrgContract().minter());
     }
 }
