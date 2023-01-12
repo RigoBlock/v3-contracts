@@ -104,8 +104,9 @@ contract InflationL2 is IInflation {
         // we update epoch end time in storage
         // solhint-disable-next-line not-rely-on-time
         _epochEndTime = uint48(block.timestamp + epochLength);
-        // TODO: use ++slot
-        slot += 1;
+
+        // we increase slot by 1, should we upgrade inflation, we will have to start from latest slot.
+        ++slot;
 
         uint256 tokenBalance = IRigoToken(rigoToken).balanceOf(address(this));
 
@@ -124,7 +125,7 @@ contract InflationL2 is IInflation {
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @inheritdoc IInflation
-    function epochEnded() public view override returns (bool) {
+    function epochEnded() external view override returns (bool) {
         // solhint-disable-next-line not-rely-on-time
         return block.timestamp >= _epochEndTime;
     }

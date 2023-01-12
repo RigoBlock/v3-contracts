@@ -54,7 +54,7 @@ abstract contract MixinDeploymentConstants is IStaking {
         address inflationL2 = address(0);
 
         if (chainId != 1 && chainId != 5 && chainId != 31337) {
-            inflationL2 = 0xd4e05094C41164DE30Ba678493E31BbE746B33A7;
+            inflationL2 = 0xA5B59e04EA5bB02Abe86D17C80d0a63646b5c724;
         }
         _inflationL2 = inflationL2;
     }
