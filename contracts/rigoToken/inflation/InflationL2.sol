@@ -33,10 +33,10 @@ import {IStaking} from "../../staking/interfaces/IStaking.sol";
 // solhint-disable-next-line
 contract InflationL2 is IInflation {
     /// @inheritdoc IInflation
-    address public immutable override rigoToken;
+    address public override rigoToken;
 
     /// @inheritdoc IInflation
-    address public immutable override stakingProxy;
+    address public override stakingProxy;
 
     /// @inheritdoc IInflation
     uint48 public override epochLength;
@@ -49,14 +49,25 @@ contract InflationL2 is IInflation {
 
     uint48 private _epochEndTime;
 
+    address private _initializer;
+
+    modifier onlyInitializer() {
+        require(msg.sender == _initializer, "INFLATIONL2_CALLER_ERROR");
+        _;
+    }
+
     modifier onlyStakingProxy() {
         _assertCallerIsStakingProxy();
         _;
     }
 
-    constructor(address newRigoToken, address newStakingProxy) {
-        rigoToken = newRigoToken;
-        stakingProxy = newStakingProxy;
+    modifier alreadyInitialized() {
+        require(rigoToken != address(0) && stakingProxy != address(0), "INFLATIONL2_NOT_INIT_ERROR");
+        _;
+    }
+
+    constructor(address initializer) {
+        _initializer = initializer;
         epochLength = 0;
         slot = 0;
     }
@@ -64,14 +75,24 @@ contract InflationL2 is IInflation {
     /*
      * CORE FUNCTIONS
      */
+    /// @notice We initialize parameters here instead of in the constructor.
+    /// @dev On L2, inflation depends on staking proxy, which depends on inflation.
+    /// @dev As deterministic deployment addresses are affected by the constructor, we save params in storage.
+    function initParams(address newRigoToken, address newStakingProxy) onlyInitializer external {
+        require(rigoToken == address(0) || stakingProxy == address(0), "INFLATION_ALREADY_INIT_ERROR");
+        require(newRigoToken != address(0) && newStakingProxy != address(0), "INFLATION_NULL_INPUTS_ERROR");
+        rigoToken = newRigoToken;
+        stakingProxy = newStakingProxy;
+    }
+
     /// @inheritdoc IInflation
-    function mintInflation() external override onlyStakingProxy returns (uint256 mintedInflation) {
+    function mintInflation() external override alreadyInitialized onlyStakingProxy returns (uint256 mintedInflation) {
         // solhint-disable-next-line not-rely-on-time
-        require(block.timestamp >= _getEpochEndTime(), "INFLATION_EPOCH_END_ERROR");
-        (uint256 epochDuration, , , , ) = IStaking(_getStakingProxy()).getParams();
+        require(block.timestamp >= _epochEndTime, "INFLATION_EPOCH_END_ERROR");
+        (uint256 epochDuration, , , , ) = IStaking(stakingProxy).getParams();
 
         // sanity check for epoch length queried from staking
-        if (_getEpochLength() != epochDuration) {
+        if (epochLength != epochDuration) {
             require(epochDuration >= 5 days && epochDuration <= 90 days, "INFLATION_TIME_ANOMALY_ERROR");
 
             // we update epoch length in storage
@@ -82,17 +103,18 @@ contract InflationL2 is IInflation {
 
         // we update epoch end time in storage
         // solhint-disable-next-line not-rely-on-time
-        _epochEndTime = uint48(block.timestamp + _getEpochLength());
+        _epochEndTime = uint48(block.timestamp + epochLength);
+        // TODO: use ++slot
         slot += 1;
 
-        uint256 tokenBalance = IRigoToken(_getRigoToken()).balanceOf(address(this));
+        uint256 tokenBalance = IRigoToken(rigoToken).balanceOf(address(this));
 
         // distribute rewards, we skip transfer if null amount
         if (tokenBalance == 0) {
             mintedInflation = 0;
         } else {
-            mintedInflation = tokenBalance > epochInflation ? epochInflation : tokenBalance;
-            IRigoToken(_getRigoToken()).transfer(_getStakingProxy(), mintedInflation);
+            mintedInflation = tokenBalance >= epochInflation ? epochInflation : tokenBalance;
+            IRigoToken(rigoToken).transfer(stakingProxy, mintedInflation);
         }
 
         return mintedInflation;
@@ -102,25 +124,23 @@ contract InflationL2 is IInflation {
      * CONSTANT PUBLIC FUNCTIONS
      */
     /// @inheritdoc IInflation
-    function epochEnded() external view override returns (bool) {
+    function epochEnded() public view override returns (bool) {
         // solhint-disable-next-line not-rely-on-time
-        return block.timestamp >= _getEpochEndTime();
+        return block.timestamp >= _epochEndTime;
     }
 
     /// @inheritdoc IInflation
     function getEpochInflation() public view override returns (uint256) {
         // 2% of GRG total supply
         // total supply * annual percentage inflation * time period (1 epoch)
-        uint256 grgSupply = IRigoToken(_getRigoToken()).totalSupply();
-        return ((_ANNUAL_INFLATION_RATE * _getEpochLength() * grgSupply) / _PPM_DENOMINATOR / 365 days);
+        uint256 grgSupply = IRigoToken(rigoToken).totalSupply();
+        return ((_ANNUAL_INFLATION_RATE * epochLength * grgSupply) / _PPM_DENOMINATOR / 365 days);
     }
 
     /// @inheritdoc IInflation
     function timeUntilNextClaim() external view override returns (uint256) {
-        uint256 epochEndTime = _getEpochEndTime();
-
         // solhint-disable-next-line not-rely-on-time
-        return block.timestamp < epochEndTime ? epochEndTime - block.timestamp : 0;
+        return block.timestamp < _epochEndTime ? _epochEndTime - block.timestamp : 0;
     }
 
     /*
@@ -128,22 +148,6 @@ contract InflationL2 is IInflation {
      */
     /// @dev Asserts that the caller is the Staking Proxy.
     function _assertCallerIsStakingProxy() private view {
-        require(msg.sender == _getStakingProxy(), "CALLER_NOT_STAKING_PROXY_ERROR");
-    }
-
-    function _getEpochEndTime() private view returns (uint256) {
-        return uint256(_epochEndTime);
-    }
-
-    function _getEpochLength() private view returns (uint256) {
-        return uint256(epochLength);
-    }
-
-    function _getRigoToken() private view returns (address) {
-        return rigoToken;
-    }
-
-    function _getStakingProxy() private view returns (address) {
-        return stakingProxy;
+        require(msg.sender == stakingProxy, "CALLER_NOT_STAKING_PROXY_ERROR");
     }
 }

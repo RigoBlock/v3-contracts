@@ -19,10 +19,10 @@ describe("InflationL2", async () => {
         const Staking = await hre.ethers.getContractFactory("Staking")
         const RigoTokenInstance = await deployments.get("RigoToken")
         const RigoToken = await hre.ethers.getContractFactory("RigoToken")
+        const InflationL2Instance = await deployments.get("InflationL2")
         const InflationL2 = await hre.ethers.getContractFactory("InflationL2")
-        const inflation = await InflationL2.deploy(RigoTokenInstance.address, StakingProxyInstance.address)
         const rigoToken = RigoToken.attach(RigoTokenInstance.address)
-        await rigoToken.changeMintingAddress(inflation.address)
+        await rigoToken.changeMintingAddress(InflationL2Instance.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
@@ -31,7 +31,7 @@ describe("InflationL2", async () => {
         )
         await factory.createPool('testpool','TEST',AddressZero)
         return {
-            inflation, //: Inflation.attach(InflationInstance.address),
+            inflation: InflationL2.attach(InflationL2Instance.address),
             rigoToken, //: RigoToken.attach(RigoTokenInstance.address),
             stakingProxy: Staking.attach(StakingProxyInstance.address),
             newPoolAddress,
@@ -39,16 +39,69 @@ describe("InflationL2", async () => {
         }
     });
 
-    describe("mintInflation", async () => {
-        it('should revert if caller not staking proxy', async () => {
+    // inflation is hardcoded in staking proxy, whenever the inflationL2 address changes
+    //  it must be changed in the staking implementation as well.
+    describe("deployedAddress", async () => {
+        it('should deploy expected deterministic deployment address', async () => {
             const { inflation } = await setupTests()
+            expect(inflation.address).to.be.eq("0xbEc1CAbcd47599DED37315354a862D2E13b0bEed")
+        })
+    })
+
+    describe("initParams", async () => {
+        it('should revert if caller not initializer', async () => {
+            const { inflation } = await setupTests()
+            await expect(
+                inflation.connect(user2).initParams(AddressZero, AddressZero)
+            ).to.be.revertedWith("INFLATIONL2_CALLER_ERROR")
+        })
+
+        it('should revert with null inputs', async () => {
+            const { inflation } = await setupTests()
+            await expect(
+                inflation.initParams(AddressZero, AddressZero)
+            ).to.be.revertedWith("INFLATION_NULL_INPUTS_ERROR")
+        })
+
+        it('should initialize contract', async () => {
+            const { inflation, rigoToken, stakingProxy } = await setupTests()
+            expect(await inflation.rigoToken()).to.be.eq(AddressZero)
+            expect(await inflation.stakingProxy()).to.be.eq(AddressZero)
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
+            expect(await inflation.rigoToken()).to.be.eq(rigoToken.address)
+            expect(await inflation.stakingProxy()).to.be.eq(stakingProxy.address)
+        })
+
+        it('should revert if already initialized', async () => {
+            const { inflation, rigoToken, stakingProxy } = await setupTests()
+            expect(await inflation.rigoToken()).to.be.eq(AddressZero)
+            expect(await inflation.stakingProxy()).to.be.eq(AddressZero)
+            await inflation.initParams(user1.address, user1.address)
+            await expect(
+                inflation.initParams(rigoToken.address, stakingProxy.address)
+            ).to.be.revertedWith("INFLATION_ALREADY_INIT_ERROR")
+        })
+    })
+
+    describe("mintInflation", async () => {
+        it('should revert if InflationL2 not initialized', async () => {
+            const { inflation } = await setupTests()
+            await expect(
+                inflation.mintInflation()
+            ).to.be.revertedWith("INFLATIONL2_NOT_INIT_ERROR")
+        })
+
+        it('should revert if caller not staking proxy', async () => {
+            const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             await expect(
                 inflation.mintInflation()
             ).to.be.revertedWith("CALLER_NOT_STAKING_PROXY_ERROR")
         })
 
         it('should revert if epoch time shortened but time not enough', async () => {
-            const { inflation, stakingProxy } = await setupTests()
+            const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             const minimumPoolStake = parseEther("100") // 100 GRG
@@ -68,6 +121,7 @@ describe("InflationL2", async () => {
 
         it('should wait for epoch 2 before first mint', async () => {
             const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             // _epochEndTime is initialized in storage only at first mint
             expect(await inflation.epochEnded()).to.be.eq(true)
             await expect(
@@ -123,6 +177,7 @@ describe("InflationL2", async () => {
         // on altchains we use standard token, must set to 0 after setup in case we have mainnet clone.
         it('should not allow changing rigoblock address in rigo token contract after set to 0', async () => {
             const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             expect(await rigoToken.minter()).to.be.eq(inflation.address)
             await expect(rigoToken.mintToken(AddressZero, 5)).to.be.reverted
             await rigoToken.changeMintingAddress(user2.address)
@@ -138,7 +193,8 @@ describe("InflationL2", async () => {
 
     describe("timeUntilNextClaim", async () => {
         it('should return 0 before second epoch', async () => {
-            const { inflation, stakingProxy } = await setupTests()
+            const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             expect(await inflation.timeUntilNextClaim()).to.be.eq(0)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
@@ -146,7 +202,8 @@ describe("InflationL2", async () => {
         })
 
         it('should return positive amount after first claim, 0 after 14 days', async () => {
-            const { inflation, stakingProxy } = await setupTests()
+            const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             // after first epoch end will mint for the first time
@@ -160,7 +217,8 @@ describe("InflationL2", async () => {
 
     describe("getEpochInflation", async () => {
         it('should return 0 before second epoch', async () => {
-            const { inflation, stakingProxy } = await setupTests()
+            const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             // first epoch required to activate stake
             expect(await inflation.getEpochInflation()).to.be.eq(0)
             await timeTravel({ days: 14, mine:true })
@@ -170,6 +228,7 @@ describe("InflationL2", async () => {
 
         it('should return epoch inflation after first claim', async () => {
             const { inflation, stakingProxy, rigoToken } = await setupTests()
+            await inflation.initParams(rigoToken.address, stakingProxy.address)
             // first epoch finalization will not mint as no active stake would be possible
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()

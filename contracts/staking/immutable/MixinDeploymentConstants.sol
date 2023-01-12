@@ -60,6 +60,9 @@ abstract contract MixinDeploymentConstants is IStaking {
         return PoolRegistry(_poolRegistry);
     }
 
+    /// @notice Changing inflation address will result in different staking proxy address.
+    /// @dev Saving address in storage instead of immutable will require an input in the constructor
+    ///   which will change the staking proxy address deployed with deterministic deployment.
     function _getInflation() internal view returns (address) {
         uint256 chainId;
         assembly {
@@ -69,8 +72,8 @@ abstract contract MixinDeploymentConstants is IStaking {
         if (chainId == 1 || chainId == 5 || chainId == 31337) {
             return getGrgContract().minter();
         } else {
-            // hardcoded deterministic inflation address
-            return 0x724Bd8a04b9Fa280CC4F13C3789A0aE534CdEFa6;
+            // hardcoded deterministic inflation L2 address
+            return 0xbEc1CAbcd47599DED37315354a862D2E13b0bEed;
         }
     }
 }

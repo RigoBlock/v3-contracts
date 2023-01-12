@@ -98,10 +98,7 @@ const deploy: DeployFunction = async function (
 
   const inflation = await deploy("InflationL2", {
     from: deployer,
-    args: [
-      rigoToken.address,
-      stakingProxy.address
-    ],
+    args: [deployer],
     log: true,
     deterministicDeployment: true,
   });

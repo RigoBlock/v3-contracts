@@ -156,6 +156,13 @@ const deploy: DeployFunction = async function (
 
   await rigoTokenInstance.changeMintingAddress(inflation.address)
 
+  const inflationL2 = await deploy("InflationL2", {
+    from: deployer,
+    args: [deployer],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   // same on altchains but different from one deployed on Ethereum
   await deploy("ProofOfPerformance", {
     from: deployer,
