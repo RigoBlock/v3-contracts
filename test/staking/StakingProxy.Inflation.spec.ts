@@ -93,8 +93,8 @@ describe("Inflation", async () => {
             expect(await rigoToken.balanceOf(stakingProxy.address)).to.be.eq(rewardsAvailable)
         })
 
-        // when deploying on alt-chains we must set rigoblock dao to address 0 in Rigo token after setup
-        it('should not allow changing rigoblock address in grg after set to 0', async () => {
+        // on mainnet it is already set to 0, on altchains we use inflationL2 and standard token
+        it('should not allow changing rigoblock address in rigo token contract after set to 0', async () => {
             const { inflation, stakingProxy, rigoToken } = await setupTests()
             expect(await rigoToken.minter()).to.be.eq(inflation.address)
             await expect(rigoToken.mintToken(AddressZero, 5)).to.be.reverted
