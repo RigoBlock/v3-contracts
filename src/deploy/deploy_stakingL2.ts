@@ -15,16 +15,8 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const rigoToken = await deploy("RigoToken", {
-    from: deployer,
-    args: [
-      deployer, // address _setMinter
-      deployer, // address _setRigoblock
-      deployer // address _grgHolder
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+  // TODO: on each network add the correct rigoToken address
+  const rigoToken = {address: "0x0"};
 
   const grgVault = await deploy("GrgVault", {
     from: deployer,
@@ -37,22 +29,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const authority = await deploy("Authority", {
-    from: deployer,
-    args: [deployer],
-    log: true,
-    deterministicDeployment: true,
-  });
+  const authority = {address: "0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472"};
 
-  const registry = await deploy("PoolRegistry", {
-    from: deployer,
-    args: [
-      authority.address,
-      deployer  // Rigoblock Dao
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+  const registry = {address: "0x06767e8090bA5c4Eca89ED00C3A719909D503ED6"};
 
   const staking = await deploy("Staking", {
     from: deployer,
@@ -85,16 +64,6 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
-
-  await deploy("ASelfCustody", {
-    from: deployer,
-    args: [
-        grgVault.address,
-        stakingProxy.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  })
 
   const inflation = await deploy("InflationL2", {
     from: deployer,
