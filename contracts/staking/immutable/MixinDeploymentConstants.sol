@@ -44,11 +44,7 @@ abstract contract MixinDeploymentConstants is IStaking {
         _poolRegistry = poolRegistry;
         _rigoToken = rigoToken;
         _implementation = address(this);
-        uint256 chainId;
-
-        assembly {
-            chainId := chainid()
-        }
+        uint256 chainId = block.chainid;
 
         // we do not store in test environment as we want to separately handle inflationL2
         address inflationL2 = address(0);
