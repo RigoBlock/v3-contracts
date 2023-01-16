@@ -45,13 +45,13 @@ abstract contract MixinDeploymentConstants is IStaking {
         _rigoToken = rigoToken;
         _implementation = address(this);
         uint256 chainId = block.chainid;
-
-        // we do not store in test environment as we want to separately handle inflationL2
         address inflationL2 = address(0);
 
+        // we do not overwrite in test environment as we want to separately handle inflationL2 within the tests
         if (chainId != 1 && chainId != 5 && chainId != 31337) {
             inflationL2 = 0xA5B59e04EA5bB02Abe86D17C80d0a63646b5c724;
         }
+
         _inflationL2 = inflationL2;
     }
 
