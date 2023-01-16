@@ -16,7 +16,10 @@ const deploy: DeployFunction = async function (
   });
 
   // TODO: on each network add the correct rigoToken address
-  const rigoToken = {address: "0x7F4638A58C0615037deCc86f1daE60E55fE92874"};
+  // arbitrum: 0x7F4638A58C0615037deCc86f1daE60E55fE92874
+  // optimism: 0xEcF46257ed31c329F204Eb43E254C609dee143B3
+  // polygon: 0xBC0BEA8E634ec838a2a45F8A43E7E16Cd2a8BA99
+  const rigoToken = {address: "0xBC0BEA8E634ec838a2a45F8A43E7E16Cd2a8BA99"};
 
   const grgVault = await deploy("GrgVault", {
     from: deployer,
