@@ -45,7 +45,7 @@ describe("InflationL2", async () => {
         it('should deploy expected deterministic deployment address', async () => {
             if (process.env.PROD == "true" && process.env.CUSTOM_DETERMINISTIC_DEPLOYMENT == "true") {
                 const { inflation } = await setupTests()
-                expect(inflation.address).to.be.eq("0xA5B59e04EA5bB02Abe86D17C80d0a63646b5c724")
+                expect(inflation.address).to.be.eq("0x3A0C479A2715cc01bC3f744F74Efd45f40f8Dad6")
             }
         })
     })
