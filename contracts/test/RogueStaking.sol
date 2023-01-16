@@ -25,30 +25,80 @@ contract RogueStaking {
     uint32 public cobbDouglasAlphaNumerator; // 2
     uint32 public cobbDouglasAlphaDenominator; // 3
     address public inflation;
-    struct StoredBalance { uint64 currentEpoch; uint96 currentEpochBalance; uint96 nextEpochBalance; }
-    struct Pool { address operator; address stakingPal; uint32 operatorShare; uint32 stakingPalShare; }
-    struct Fraction { uint256 numerator; uint256 denominator; }
+    struct StoredBalance {
+        uint64 currentEpoch;
+        uint96 currentEpochBalance;
+        uint96 nextEpochBalance;
+    }
+    struct Pool {
+        address operator;
+        address stakingPal;
+        uint32 operatorShare;
+        uint32 stakingPalShare;
+    }
+    struct Fraction {
+        uint256 numerator;
+        uint256 denominator;
+    }
+
     function init() public {}
-    function setAlphaNum(uint32 value) public { cobbDouglasAlphaNumerator = value; }
-    function setAlphaDenom(uint32 value) public { cobbDouglasAlphaDenominator = value; }
-    function setMinimumStake(uint256 value) public { minimumPoolStake = value; }
-    function setStakeWeight(uint32 value) public { rewardDelegatedStakeWeight = value; }
-    function setDuration(uint256 _duration) public { epochDurationInSeconds = _duration; }
-    function setStaking(address _staking) public { stakingContract = _staking; }
-    function setInflation(address _inflation) public { inflation = _inflation; }
+
+    function setAlphaNum(uint32 value) public {
+        cobbDouglasAlphaNumerator = value;
+    }
+
+    function setAlphaDenom(uint32 value) public {
+        cobbDouglasAlphaDenominator = value;
+    }
+
+    function setMinimumStake(uint256 value) public {
+        minimumPoolStake = value;
+    }
+
+    function setStakeWeight(uint32 value) public {
+        rewardDelegatedStakeWeight = value;
+    }
+
+    function setDuration(uint256 _duration) public {
+        epochDurationInSeconds = _duration;
+    }
+
+    function setStaking(address _staking) public {
+        stakingContract = _staking;
+    }
+
+    function setInflation(address _inflation) public {
+        inflation = _inflation;
+    }
+
     function endEpoch() public returns (uint256) {
         bytes4 selector = bytes4(keccak256(bytes("mintInflation()")));
         bytes memory encodedCall = abi.encodeWithSelector(selector);
         (bool success, bytes memory data) = inflation.call(encodedCall);
-        if (!success) { revert(string(data)); } return uint256(bytes32(data));
+        if (!success) {
+            revert(string(data));
+        }
+        return uint256(bytes32(data));
     }
+
     function getInflation() public view returns (uint256) {
         bytes4 selector = bytes4(keccak256(bytes("getEpochInflation()")));
         bytes memory encodedCall = abi.encodeWithSelector(selector);
-        ( , bytes memory data) = inflation.staticcall(encodedCall);
+        (, bytes memory data) = inflation.staticcall(encodedCall);
         return uint256(bytes32(data));
     }
-    function getParams() external view returns (uint256, uint32, uint256, uint32, uint32) {
+
+    function getParams()
+        external
+        view
+        returns (
+            uint256,
+            uint32,
+            uint256,
+            uint32,
+            uint32
+        )
+    {
         return (epochDurationInSeconds, 1, 1, 1, 1);
     }
 }

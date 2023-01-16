@@ -44,8 +44,8 @@ contract InflationL2 is IInflation {
     /// @inheritdoc IInflation
     uint32 public override slot;
 
-    uint32 internal constant _ANNUAL_INFLATION_RATE = 2 * 10**4; // 2% annual inflation
-    uint32 internal constant _PPM_DENOMINATOR = 10**6; // 100% in parts-per-million
+    uint32 private constant _ANNUAL_INFLATION_RATE = 2 * 10e4; // 2% annual inflation
+    uint32 private constant _PPM_DENOMINATOR = 10e6; // 100% in parts-per-million
 
     uint48 private _epochEndTime;
 
