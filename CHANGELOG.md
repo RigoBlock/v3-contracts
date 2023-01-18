@@ -1,3 +1,15 @@
+## [1.1.2](https://github.com/rigoblock/v3-contracts/compare/v1.1.1...v1.1.2) (2023-01-18)
+
+
+### Bug Fixes
+
+* add InflationL2.sol contract ([97b12de](https://github.com/rigoblock/v3-contracts/commit/97b12de06b275f9f6863317895c2d1b096dd211d))
+* hardcode inflation address in staking on L2s ([bf7a8e6](https://github.com/rigoblock/v3-contracts/commit/bf7a8e6d23b8564f7b34f67dda73f0c45a2ea32b))
+* retrieve chainId in staking constructor without using assembly ([0e8ea5a](https://github.com/rigoblock/v3-contracts/commit/0e8ea5afc7fe0d94dbd0d42984fcd49213a2a8b3))
+* update husky script ([68f55eb](https://github.com/rigoblock/v3-contracts/commit/68f55eb991eef0fe7dfe0312d4e9199440ced2cf))
+
+
+
 ## [1.1.1](https://github.com/rigoblock/v3-contracts/compare/v1.1.0...v1.1.1) (2022-10-26)
 
 
@@ -75,44 +87,6 @@
 ### Reverts
 
 * Revert "minor pool struct gas optimization" ([bfd997f](https://github.com/rigoblock/v3-contracts/commit/bfd997fb71c89129a9917d4cb40369854f16de91))
-
-
-
-# [0.10.0](https://github.com/rigoblock/v3-contracts/compare/v0.9.1...v0.10.0) (2022-10-08)
-
-
-### Bug Fixes
-
-* added (commented) missing imported storage slot(1) ([82aabf2](https://github.com/rigoblock/v3-contracts/commit/82aabf27943e529a5608ca3672b3683ae020292b))
-* added missing events in pool owner actions and interface ([2bfb79f](https://github.com/rigoblock/v3-contracts/commit/2bfb79f3d84d7af104cd9508ac5be764e26aa62d))
-* assert pool decimals > 6 to prevent underflow ([b92ad0b](https://github.com/rigoblock/v3-contracts/commit/b92ad0bfc1aa1a33fcfabb0798c5255f9ec61330))
-* do not assert in proxy constructor after init call ([c38e331](https://github.com/rigoblock/v3-contracts/commit/c38e3315084232a0084c71bf39a6e3596f15519e))
-* fix GRG token overrides ([05c4f2e](https://github.com/rigoblock/v3-contracts/commit/05c4f2ed5427092728a82bbbfd3279aaccf050af))
-* initialize owner to null in staking to prevent direct calls ([4fdd46d](https://github.com/rigoblock/v3-contracts/commit/4fdd46d8bf85c35e2a023e89afd8b62270653ffb))
-* prevent direct staking pool creation in staking ([ba3101f](https://github.com/rigoblock/v3-contracts/commit/ba3101ff7ce9495050140092f4fea0216c752075))
-* proxy inherits from own interface for consistency ([dd91970](https://github.com/rigoblock/v3-contracts/commit/dd919706b65bd794f3401e39cf2038f99af12aa0))
-* remove deprecated authority extensions contract ([2f9dd55](https://github.com/rigoblock/v3-contracts/commit/2f9dd559841c37da1bed17b696b6675cf5bdccbf))
-* remove requirement base token decimals < 18 ([b439d9a](https://github.com/rigoblock/v3-contracts/commit/b439d9a15c587793bf53c38cfbe147b4ab7764a1))
-* remove some TODO comments in contracts and improved comments ([e7f5e3f](https://github.com/rigoblock/v3-contracts/commit/e7f5e3f2d35dcdbbe46dc150d2d6307b767fe131))
-* removed unused import in storage ([c940ed8](https://github.com/rigoblock/v3-contracts/commit/c940ed8d69b019cce343dac96b9d739f4b49cf78))
-* rename AuthorityCore to Authority and update deploy pipeline ([1e39529](https://github.com/rigoblock/v3-contracts/commit/1e39529e8e9040b4a4f8c917195c3ea0d7e8c3d2))
-* require address not same when upgrading in factory ([7a43c69](https://github.com/rigoblock/v3-contracts/commit/7a43c695cee843e545c15b87f92ba38d91b6a2a1))
-* require approve target is contract in uniswap adapter ([552224a](https://github.com/rigoblock/v3-contracts/commit/552224ab3a25d8dda96155e897abcc134ed62fc2))
-* require name shorter than 32 characters ([d70df78](https://github.com/rigoblock/v3-contracts/commit/d70df783bab65a0db4a780cd7e66669e31290b94))
-* restrict mint method as non reentrant ([405901c](https://github.com/rigoblock/v3-contracts/commit/405901cac9569801accd5f399389c364f32ba9ef))
-* restrict uniswap adapter swap methods to whitelisted tokens ([e72d110](https://github.com/rigoblock/v3-contracts/commit/e72d110b87f23ffd63fcac6dc34f439c462ed05c))
-* revert if pool init unsuccessful ([db63fd2](https://github.com/rigoblock/v3-contracts/commit/db63fd255130b1e3cac9f75a4085112de458dc41))
-* upgrade contracts to solc v0.8.17 from .0.8.14 ([08062ec](https://github.com/rigoblock/v3-contracts/commit/08062ecb69300c5b660cb40eaa0faf956545c9c5))
-* upgrade staking to solc 0.8.17 ([b8cef8a](https://github.com/rigoblock/v3-contracts/commit/b8cef8a229136e134b1d551d8dc50d9a17d78572))
-
-
-### Features
-
-* add agnostic storage view method in mixin storage accessible ([209cbff](https://github.com/rigoblock/v3-contracts/commit/209cbff46886d6540df88fee9347cf259d2eda65))
-* add storage accessible ([3915283](https://github.com/rigoblock/v3-contracts/commit/3915283d31fd50c7d94710a1fa0150ef8ed2165d))
-* added whitelist extension ([e752487](https://github.com/rigoblock/v3-contracts/commit/e752487a287749079028493398aba5302c1f1d0b))
-* catch error string in proxy factory ([553c56b](https://github.com/rigoblock/v3-contracts/commit/553c56b43864a1e018eae9a719b8d669fac4b0c9))
-* token-whitelist ([a6fa264](https://github.com/rigoblock/v3-contracts/commit/a6fa26482394f19760b5a862e1da00c7108a829b))
 
 
 
