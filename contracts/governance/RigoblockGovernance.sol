@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.17;
 
-import "../../utils/storageSlot/StorageSlot.sol";
+import "../utils/storageSlot/StorageSlot.sol";
 import "../staking/interfaces/IStaking.sol";
 import "../staking/interfaces/IStakingProxy.sol";
 import "../staking/interfaces/IStorage.sol";
