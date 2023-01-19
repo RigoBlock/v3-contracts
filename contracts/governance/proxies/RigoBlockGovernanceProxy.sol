@@ -40,6 +40,9 @@ contract RigoblockGovernanceProxy {
         emit Upgraded(implementation);
     }
 
+    // TODO: we might add init method, only method that could clash but executed just once,
+    // so that we can keep same address even with upgraded implementation on new chains
+
     /* solhint-disable no-complex-fallback */
     /// @notice Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
@@ -55,6 +58,9 @@ contract RigoblockGovernanceProxy {
             return(0, returndatasize())
         }
     }
+
+    /// @notice Allows this contract to receive ether.
+    receive() external payable {}
 
     /* solhint-enable no-complex-fallback */
 

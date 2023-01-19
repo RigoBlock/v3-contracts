@@ -66,13 +66,9 @@ interface IRigoblockGovernance {
 
     event ProposalExecuted(uint256 proposalId);
 
-    function stakingProxy() external view returns (address);
+    function getStakingProxy() external view returns (address);
 
-    function votingPeriod() external view returns (uint256);
-
-    function proposalThreshold() external view returns (uint256);
-
-    function quorumThreshold() external view returns (uint256);
+    function treasuryParameters() external view returns (TreasuryParameters memory);
 
     /// @notice Initializes the Rigoblock Governance.
     /// @param stakingProxy_ The Rigoblock staking proxy address.
