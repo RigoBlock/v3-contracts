@@ -49,7 +49,7 @@ abstract contract MixinDeploymentConstants is IStaking {
 
         // we do not overwrite in test environment as we want to separately handle inflationL2 within the tests
         if (chainId != 1 && chainId != 5 && chainId != 31337) {
-            inflationL2 = 0x3A0C479A2715cc01bC3f744F74Efd45f40f8Dad6;
+            inflationL2 = 0xA889E90d4F1BA125Df1B4C1f55c7fff9F4377C03;
         }
 
         _inflationL2 = inflationL2;
