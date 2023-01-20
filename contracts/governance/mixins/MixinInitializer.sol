@@ -32,11 +32,7 @@ abstract contract MixinInitializer is MixinStorage {
     }
 
     /// @inheritdoc IGovernanceInitializer
-    function initializeGovernance()
-        external
-        onlyUninitialized
-        override
-    {
+    function initializeGovernance() external override onlyUninitialized {
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory(msg.sender).parameters();
 
         require(params.votingPeriod < IStorage(params.stakingProxy).epochDurationInSeconds(), "VOTING_PERIOD_TOO_LONG");

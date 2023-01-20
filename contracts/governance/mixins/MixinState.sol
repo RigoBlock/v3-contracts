@@ -24,41 +24,21 @@ import "./MixinAbstract.sol";
 import "./MixinStorage.sol";
 
 abstract contract MixinState is MixinStorage, MixinAbstract {
-    function getStakingProxy()
-        public
-        view
-        override
-        returns (address)
-    {
+    function getStakingProxy() public view override returns (address) {
         return _getStakingProxy();
     }
 
     /// @inheritdoc IGovernanceState
-    function getVotingPower(address account)
-        public
-        view
-        override
-        returns (uint256)
-    {
+    function getVotingPower(address account) public view override returns (uint256) {
         return _getVotingPower(account);
     }
 
     /// @inheritdoc IGovernanceState
-    function proposalCount()
-        public
-        view
-        override
-        returns (uint256 count)
-    {
+    function proposalCount() public view override returns (uint256 count) {
         return _proposalCount();
     }
 
-    function treasuryParameters()
-        public
-        view
-        override
-        returns (TreasuryParameters memory)
-    {
+    function treasuryParameters() public view override returns (TreasuryParameters memory) {
         return _treasuryParameters();
     }
 
@@ -69,41 +49,22 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         }
     }
 
-    function _getStakingProxy()
-        internal
-        view
-        override
-        returns (address)
-    {
+    function _getStakingProxy() internal view override returns (address) {
         return stakingProxy().value;
     }
 
-    function _getVotingPower(address account)
-        internal
-        view
-        override
-        returns (uint256)
-    {
-        return IStaking(getStakingProxy())
-            .getOwnerStakeByStatus(account, IStructs.StakeStatus.DELEGATED)
-            .currentEpochBalance;
+    function _getVotingPower(address account) internal view override returns (uint256) {
+        return
+            IStaking(getStakingProxy())
+                .getOwnerStakeByStatus(account, IStructs.StakeStatus.DELEGATED)
+                .currentEpochBalance;
     }
 
-    function _proposalCount()
-        internal
-        view
-        override
-        returns (uint256 count)
-    {
+    function _proposalCount() internal view override returns (uint256 count) {
         return proposalsCount().value;
     }
 
-    function _treasuryParameters()
-        internal
-        view
-        override
-        returns (TreasuryParameters memory)
-    {
+    function _treasuryParameters() internal view override returns (TreasuryParameters memory) {
         return paramsWrapper().treasuryParameters;
     }
 }

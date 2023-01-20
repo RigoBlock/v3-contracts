@@ -20,15 +20,15 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 interface IGovernanceUpgrade {
-  // TODO: add docs
-  /// @dev Only callable after successful voting.
-  function upgradeImplementation(address newImplementation) external;
+    // TODO: add docs
+    /// @dev Only callable after successful voting.
+    function upgradeImplementation(address newImplementation) external;
 
-  /// @dev Updates the proposal and quorum thresholds to the given
-  ///      values. Note that this function is only callable by the
-  ///      treasury contract itself, so the threshold can only be
-  ///      updated via a successful treasury proposal.
-  /// @param newProposalThreshold The new value for the proposal threshold.
-  /// @param newQuorumThreshold The new value for the quorum threshold.
-  function updateThresholds(uint256 newProposalThreshold, uint256 newQuorumThreshold) external;
+    /// @dev Updates the proposal and quorum thresholds to the given
+    ///      values. Note that this function is only callable by the
+    ///      treasury contract itself, so the threshold can only be
+    ///      updated via a successful treasury proposal.
+    /// @param newProposalThreshold The new value for the proposal threshold.
+    /// @param newQuorumThreshold The new value for the quorum threshold.
+    function updateThresholds(uint256 newProposalThreshold, uint256 newQuorumThreshold) external;
 }

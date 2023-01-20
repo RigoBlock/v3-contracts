@@ -23,6 +23,7 @@ import "./IGovernanceInitializer.sol";
 
 interface IGovernanceState {
     function getStakingProxy() external view returns (address);
+
     function treasuryParameters() external view returns (IGovernanceInitializer.TreasuryParameters memory);
 
     /// @notice Returns the total number of proposals.
@@ -44,6 +45,6 @@ interface IGovernanceState {
         uint256 votesAbstain;
         bool executed;
     }
-    
+
     function getProposals() external view returns (Proposal[] memory proposalList);
 }

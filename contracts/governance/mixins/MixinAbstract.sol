@@ -23,7 +23,10 @@ import "../IRigoblockGovernance.sol";
 
 abstract contract MixinAbstract {
     function _proposalCount() internal view virtual returns (uint256 count);
+
     function _getVotingPower(address account) internal view virtual returns (uint256);
+
     function _getStakingProxy() internal view virtual returns (address);
+
     function _treasuryParameters() internal view virtual returns (IGovernanceInitializer.TreasuryParameters memory);
 }

@@ -31,6 +31,4 @@ interface IRigoblockGovernance is
     IGovernanceUpgrade,
     IGovernanceVoting,
     IGovernanceState
-{
-
-}
+{}

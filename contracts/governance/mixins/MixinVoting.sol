@@ -136,7 +136,8 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         }
         // voteEpoch == currentEpoch
         // Vote ends at currentEpochStartTime + votingPeriod
-        uint256 voteEndTime = IStorage(_getStakingProxy()).currentEpochStartTimeInSeconds() + _treasuryParameters().votingPeriod;
+        uint256 voteEndTime = IStorage(_getStakingProxy()).currentEpochStartTimeInSeconds() +
+            _treasuryParameters().votingPeriod;
         return block.timestamp > voteEndTime;
     }
 
@@ -166,7 +167,9 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             proposals().value[proposalId].votesAgainst += votingPower;
         } else if (voteType == VoteType.ABSTAIN) {
             proposals().value[proposalId].votesAbstain += votingPower;
-        } else { revert("UNKNOWN_SUPPORT_TYPE_ERROR"); }
+        } else {
+            revert("UNKNOWN_SUPPORT_TYPE_ERROR");
+        }
 
         hasVoted().value[proposalId][voter] = true;
 

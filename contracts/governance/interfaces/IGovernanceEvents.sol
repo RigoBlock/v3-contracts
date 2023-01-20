@@ -20,33 +20,33 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 interface IGovernanceEvents {
-  /// @notice Emitted when implementation written to proxy storage.
-  /// @dev Emitted also at first variable initialization.
-  /// @param newImplementation Address of the new implementation.
-  event Upgraded(address indexed newImplementation);
+    /// @notice Emitted when implementation written to proxy storage.
+    /// @dev Emitted also at first variable initialization.
+    /// @param newImplementation Address of the new implementation.
+    event Upgraded(address indexed newImplementation);
 
-  struct ProposedAction {
-    address target;
-    bytes data;
-    uint256 value;
-  }
+    struct ProposedAction {
+        address target;
+        bytes data;
+        uint256 value;
+    }
 
-  event ProposalCreated(
-    address proposer,
-    uint256 proposalId,
-    ProposedAction[] actions,
-    uint256 executionEpoch,
-    string description
-  );
+    event ProposalCreated(
+        address proposer,
+        uint256 proposalId,
+        ProposedAction[] actions,
+        uint256 executionEpoch,
+        string description
+    );
 
-  // TODO: add docs
-  enum VoteType {
-    FOR,
-    AGAINST,
-    ABSTAIN
-  }
+    // TODO: add docs
+    enum VoteType {
+        FOR,
+        AGAINST,
+        ABSTAIN
+    }
 
-  event VoteCast(address voter, uint256 proposalId, VoteType voteType, uint256 votingPower);
+    event VoteCast(address voter, uint256 proposalId, VoteType voteType, uint256 votingPower);
 
-  event ProposalExecuted(uint256 proposalId);
+    event ProposalExecuted(uint256 proposalId);
 }
