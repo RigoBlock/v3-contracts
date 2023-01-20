@@ -109,11 +109,21 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     function _hasProposalPassed(Proposal memory proposal) private view returns (bool hasPassed) {
         // Proposal is not passed until the vote is over.
         if (!_hasVoteEnded(proposal.voteEpoch)) {
-            // TODO: proposal immediately executable if supported by majority of active staked GRG (or staked GRG, which is even bigger)
-            return false;
+            // Proposal is immediately executable if votes in favor higher than two thirds of total delegated GRG
+            if (
+                3 * proposal.votesFor >
+                2 *
+                    IStaking(_getStakingProxy())
+                        .getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED)
+                        .currentEpochBalance
+            ) {
+                return true;
+            } else {
+                return false;
+            }
         }
-        // Must have >50% support.
-        if (proposal.votesFor <= proposal.votesAgainst) {
+        // Must have > 66.7% support.
+        if (2 * proposal.votesFor <= proposal.votesAgainst) {
             return false;
         }
         // Must reach quorum threshold.
