@@ -34,4 +34,16 @@ interface IGovernanceState {
     /// @param account The address of the account.
     /// @return votingPower The current voting power of the given account.
     function getVotingPower(address account) external view returns (uint256 votingPower);
+
+    struct Proposal {
+        bytes32 actionsHash;
+        uint256 executionEpoch;
+        uint256 voteEpoch;
+        uint256 votesFor;
+        uint256 votesAgainst;
+        uint256 votesAbstain;
+        bool executed;
+    }
+    
+    function getProposals() external view returns (Proposal[] memory proposalList);
 }

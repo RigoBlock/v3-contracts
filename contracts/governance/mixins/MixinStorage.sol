@@ -63,16 +63,6 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    struct Proposal {
-        bytes32 actionsHash;
-        uint256 executionEpoch;
-        uint256 voteEpoch;
-        uint256 votesFor;
-        uint256 votesAgainst;
-        uint256 votesAbstain;
-        bool executed;
-    }
-
     struct Proposals {
         mapping(uint256 => Proposal) value;
     }

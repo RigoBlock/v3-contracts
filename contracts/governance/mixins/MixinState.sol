@@ -62,6 +62,13 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         return _treasuryParameters();
     }
 
+    function getProposals() public view override returns (Proposal[] memory proposalList) {
+        // TODO: test as we are not producing a new array
+        for (uint i; i < _proposalCount(); ++i) {
+            proposalList[i] = proposals().value[i];
+        }
+    }
+
     function _getStakingProxy()
         internal
         view
