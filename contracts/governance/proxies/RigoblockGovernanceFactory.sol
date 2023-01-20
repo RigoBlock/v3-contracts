@@ -23,7 +23,7 @@ import "./RigoblockGovernanceProxy.sol";
 import "../interfaces/IRigoblockGovernanceFactory.sol";
 
 // solhint-disable-next-line
-contract RigoblockPoolProxyFactory is IRigoblockGovernanceFactory {
+contract RigoblockGovernanceFactory is IRigoblockGovernanceFactory {
     Parameters private _parameters;
 
     // @inheritdoc IRigoblockGovernanceFactory

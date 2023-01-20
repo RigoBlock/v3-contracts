@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.17;
 
-import "./RigoblockGovernanceFactory.sol";
+import "../interfaces/IRigoblockGovernanceFactory.sol";
 
 contract RigoblockGovernanceProxy {
     /// @notice Emitted when implementation written to proxy storage.
@@ -37,7 +37,7 @@ contract RigoblockGovernanceProxy {
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
 
         // we retrieve the set implementation from the factory storage
-        address implementation = RigoblockPoolProxyFactory(msg.sender).parameters().implementation;
+        address implementation = IRigoblockGovernanceFactory(msg.sender).parameters().implementation;
 
         // we store the implementation address
         getImplementation().implementation = implementation;
