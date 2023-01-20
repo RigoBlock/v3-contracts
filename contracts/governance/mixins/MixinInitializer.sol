@@ -24,7 +24,15 @@ import "./MixinAbstract.sol";
 import "./MixinStorage.sol";
 
 abstract contract MixinInitializer is MixinStorage, MixinAbstract {
-    modifier onlyDelegatecall() virtual;
+    // This modifier is not necessary as implementation initialization is prevented
+    //  by asserting staking proxy null inside the method, but we keep it for future
+    //  upgrades extra security to prevent accidental initialization.
+    modifier onlyDelegatecall() virtual {_;}
+
+    /// @notice We lock future calls to this implementation.
+    constructor(address stakingProxy_) {
+        stakingProxy().value = stakingProxy_;
+    }
 
     /// @inheritdoc IGovernanceInitializer
     function initializeGovernance(

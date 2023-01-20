@@ -42,9 +42,11 @@ contract RigoblockGovernance is
 
     /// @notice Constructor has no inputs to guarantee same deterministic address.
     /// @dev Different parameters on each would result in different implementation address.
-    /// @dev Setting staking proxy effectively locks direct calls to this contract.
-    constructor(address initializer) MixinImmutables(address(this), initializer) {
+    /// @dev Initializing to address(1) effectively locks direct calls to implementation.
+    constructor(address initializer)
+        MixinImmutables(address(this), initializer)
+        MixinInitializer(address(1))
+    {
         paramsWrapper().treasuryParameters.proposalThreshold = type(uint256).max;
-        stakingProxy().value = address(0);
     }
 }

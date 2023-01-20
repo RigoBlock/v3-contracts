@@ -23,7 +23,7 @@ import "../../utils/storageSlot/StorageSlot.sol";
 import "./MixinStorage.sol"; // storage inherits from interface which declares events
 
 abstract contract MixinUpgrade is MixinStorage {
-    modifier onlyDelegatecall() virtual;
+    modifier onlyDelegatecall() virtual {_;}
 
     /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external onlyDelegatecall override {
