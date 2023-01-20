@@ -20,6 +20,8 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 interface IGovernanceEvents {
+    event ThresholdsUpdated(uint256 proposalThreshold, uint256 quorumThreshold);
+
     /// @notice Emitted when implementation written to proxy storage.
     /// @dev Emitted also at first variable initialization.
     /// @param newImplementation Address of the new implementation.

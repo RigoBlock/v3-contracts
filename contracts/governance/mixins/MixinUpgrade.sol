@@ -30,7 +30,7 @@ abstract contract MixinUpgrade is MixinStorage {
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function upgradeImplementation(address newImplementation) external override onlyDelegatecall {
+    function upgradeImplementation(address newImplementation) external onlyDelegatecall override {
         // upgrade must go through voting
         require(msg.sender == address(this), "GOV_UPGRADE_APPROVAL_ERROR");
 
@@ -51,13 +51,15 @@ abstract contract MixinUpgrade is MixinStorage {
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function updateThresholds(
-        uint256 newProposalThreshold,
-        uint256 newQuorumThreshold
-    ) external override onlyDelegatecall {
+    function updateThresholds(uint256 newProposalThreshold, uint256 newQuorumThreshold)
+        external
+        onlyDelegatecall
+        override
+    {
         require(msg.sender == address(this), "GOV_UPGRADE_NOT_SELF_ERROR");
         paramsWrapper().treasuryParameters.proposalThreshold = newProposalThreshold;
         paramsWrapper().treasuryParameters.quorumThreshold = newQuorumThreshold;
+        emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
     }
 
     /// @dev Returns whether an address is a contract.
