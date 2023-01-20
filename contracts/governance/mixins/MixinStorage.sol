@@ -22,6 +22,16 @@ pragma solidity >=0.8.0 <0.9.0;
 import "./MixinImmutables.sol";
 
 abstract contract MixinStorage is MixinImmutables {
+    // we use the constructor to assert that we are not using occupied storage slots
+    constructor() {
+        assert(_DOMAIN_SEPARATOR_SLOT == bytes32(uint256(keccak256("governance.proxy.domainseparator")) - 1));
+        assert(_HAS_VOTED_SLOT == bytes32(uint256(keccak256("governance.proxy.user.hasvoted")) - 1));
+        assert(_PROPOSALS_SLOT == bytes32(uint256(keccak256("governance.proxy.proposals")) - 1));
+        assert(_PROPOSALS_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalscount")) - 1));
+        assert(_STAKING_PROXY_SLOT == bytes32(uint256(keccak256("governance.proxy.stakingproxy")) - 1));
+        assert(_TREASURY_PARAMS_SLOT == bytes32(uint256(keccak256("governance.proxy.treasuryparams")) - 1));
+    }
+
     struct DomainSeparator {
         bytes32 value;
     }

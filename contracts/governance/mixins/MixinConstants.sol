@@ -37,10 +37,15 @@ abstract contract MixinConstants is IRigoblockGovernance {
     bytes32 internal constant VOTE_TYPEHASH =
         keccak256("VoteEmitted(uint256 proposalId,bool support)");
 
-    bytes32 internal constant _DOMAIN_SEPARATOR_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 internal constant _STAKING_PROXY_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 internal constant _TREASURY_PARAMS_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 internal constant _HAS_VOTED_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 internal constant _PROPOSALS_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 internal constant _PROPOSALS_COUNT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
+    bytes32 internal constant _DOMAIN_SEPARATOR_SLOT = 0xdb618ced4dd9b748cfec0043e87e7f7708f67fafafb1c3d0bfb6dc0f9c8bf72f;
+
+    bytes32 internal constant _HAS_VOTED_SLOT = 0xc081ba77b34dd25ffc1c621425bbc52480b02e5d0249ce3831198d7e07603649;
+
+    bytes32 internal constant _PROPOSALS_SLOT = 0x4c9446a18423f4548e2228ea960b1a789061f2812cf50d305d4527fdc4987578;
+
+    bytes32 internal constant _PROPOSALS_COUNT_SLOT = 0xbdd2133fac45cf26a03e03e13d846596b9d7940bbd32aef60e912772d175bb1d;
+
+    bytes32 internal constant _STAKING_PROXY_SLOT = 0xb82110679558db63b50a5551160e4d145a353af4b644d63bd4bdc975681fd945;
+    
+    bytes32 internal constant _TREASURY_PARAMS_SLOT = 0x068519504cb4b072099e717e67e4cccbcc86c6938d6975f9e669e006bd04c567;
 }
