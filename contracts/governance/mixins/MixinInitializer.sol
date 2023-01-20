@@ -20,12 +20,13 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../../staking/interfaces/IStorage.sol";
+import "./MixinAbstract.sol";
 import "./MixinStorage.sol";
 
-abstract contract MixinInitializer is MixinStorage {
+abstract contract MixinInitializer is MixinStorage, MixinAbstract {
     modifier onlyDelegatecall() virtual;
 
-    /// @inheritdoc IRigoblockGovernance
+    /// @inheritdoc IGovernanceInitializer
     function initializeGovernance(
         address stakingProxy_,
         TreasuryParameters memory params
@@ -34,8 +35,11 @@ abstract contract MixinInitializer is MixinStorage {
         onlyDelegatecall
         override
     {
+        // only initializer can initialize the contract
+        require(msg.sender == _initializer);
+
         // assert uninitialized
-        require(getStakingProxy() == address(0), "GOV_ALREADY_INIT_ERROR");
+        require(_getStakingProxy() == address(0), "GOV_ALREADY_INIT_ERROR");
         require(params.votingPeriod < IStorage(stakingProxy_).epochDurationInSeconds(), "VOTING_PERIOD_TOO_LONG");
         stakingProxy().value = stakingProxy_;
         paramsWrapper().treasuryParameters = TreasuryParameters({

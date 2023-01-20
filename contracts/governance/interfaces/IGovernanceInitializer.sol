@@ -19,18 +19,15 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./interfaces/IGovernanceEvents.sol";
-import "./interfaces/IGovernanceInitializer.sol";
-import "./interfaces/IGovernanceState.sol";
-import "./interfaces/IGovernanceUpgrade.sol";
-import "./interfaces/IGovernanceVoting.sol";
+interface IGovernanceInitializer {
+  struct TreasuryParameters {
+    uint256 votingPeriod;
+    uint256 proposalThreshold;
+    uint256 quorumThreshold;
+  }
 
-interface IRigoblockGovernance is
-    IGovernanceEvents,
-    IGovernanceInitializer,
-    IGovernanceUpgrade,
-    IGovernanceVoting,
-    IGovernanceState
-{
-
+  /// @notice Initializes the Rigoblock Governance.
+  /// @param stakingProxy_ The Rigoblock staking proxy address.
+  /// @param params Immutable treasury parameters.
+  function initializeGovernance(address stakingProxy_, TreasuryParameters memory params) external;
 }

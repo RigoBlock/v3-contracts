@@ -21,22 +21,23 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../../staking/interfaces/IStaking.sol";
 import "../../staking/interfaces/IStorage.sol";
+import "./MixinAbstract.sol";
 import "./MixinStorage.sol";
 
-abstract contract MixinVoting is MixinStorage {
-    /// @inheritdoc IRigoblockGovernance
+abstract contract MixinVoting is MixinStorage, MixinAbstract {
+    /// @inheritdoc IGovernanceVoting
     function propose(
         ProposedAction[] memory actions,
         uint256 executionEpoch,
         string memory description
     ) external override returns (uint256 proposalId) {
-        require(getVotingPower(msg.sender) >= treasuryParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
+        require(_getVotingPower(msg.sender) >= _treasuryParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
         require(actions.length > 0, "GOV_NO_ACTIONS_ERROR");
-        uint256 currentEpoch = IStorage(getStakingProxy()).currentEpoch();
+        uint256 currentEpoch = IStorage(_getStakingProxy()).currentEpoch();
         require(executionEpoch >= currentEpoch + 2, "GOV_INVALID_EXECUTION_EPOCH");
 
         // TODO: fix style
-        proposalId = proposalCount();
+        proposalId = _proposalCount();
         proposals().value[proposalsCount().value] = Proposal({
             actionsHash: keccak256(abi.encode(actions)),
             executionEpoch: executionEpoch,
@@ -51,12 +52,12 @@ abstract contract MixinVoting is MixinStorage {
         emit ProposalCreated(msg.sender, proposalId, actions, executionEpoch, description);
     }
 
-    /// @inheritdoc IRigoblockGovernance
+    /// @inheritdoc IGovernanceVoting
     function castVote(uint256 proposalId, VoteType voteType) external override {
         return _castVote(msg.sender, proposalId, voteType);
     }
 
-    /// @inheritdoc IRigoblockGovernance
+    /// @inheritdoc IGovernanceVoting
     function castVoteBySignature(
         uint256 proposalId,
         VoteType voteType,
@@ -71,9 +72,9 @@ abstract contract MixinVoting is MixinStorage {
         return _castVote(signatory, proposalId, voteType);
     }
 
-    /// @inheritdoc IRigoblockGovernance
+    /// @inheritdoc IGovernanceVoting
     function execute(uint256 proposalId, ProposedAction[] memory actions) external payable override {
-        if (proposalId >= proposalCount()) {
+        if (proposalId >= _proposalCount()) {
             revert("execute/INVALID_PROPOSAL_ID");
         }
         Proposal memory proposal = proposals().value[proposalId];
@@ -90,28 +91,6 @@ abstract contract MixinVoting is MixinStorage {
         emit ProposalExecuted(proposalId);
     }
 
-    /// @inheritdoc IRigoblockGovernance
-    function proposalCount()
-        public
-        view
-        override
-        returns (uint256 count)
-    {
-        return proposalsCount().value;
-    }
-
-    /// @inheritdoc IRigoblockGovernance
-    function getVotingPower(address account)
-        public
-        view
-        override
-        returns (uint256)
-    {
-        return IStaking(getStakingProxy())
-            .getOwnerStakeByStatus(account, IStructs.StakeStatus.DELEGATED)
-            .currentEpochBalance;
-    }
-
     /// @notice Checks whether the given proposal is executable. Reverts if not.
     /// @param proposal The proposal to check.
     function _assertProposalExecutable(Proposal memory proposal, ProposedAction[] memory actions) private view {
@@ -119,7 +98,7 @@ abstract contract MixinVoting is MixinStorage {
         require(_hasProposalPassed(proposal), "_assertProposalExecutable/PROPOSAL_HAS_NOT_PASSED");
         require(!proposal.executed, "_assertProposalExecutable/PROPOSAL_ALREADY_EXECUTED");
         require(
-            IStorage(getStakingProxy()).currentEpoch() == proposal.executionEpoch,
+            IStorage(_getStakingProxy()).currentEpoch() == proposal.executionEpoch,
             "_assertProposalExecutable/CANNOT_EXECUTE_THIS_EPOCH"
         );
     }
@@ -138,7 +117,7 @@ abstract contract MixinVoting is MixinStorage {
             return false;
         }
         // Must reach quorum threshold.
-        if (proposal.votesFor < treasuryParameters().quorumThreshold) {
+        if (proposal.votesFor < _treasuryParameters().quorumThreshold) {
             return false;
         }
         return true;
@@ -148,7 +127,7 @@ abstract contract MixinVoting is MixinStorage {
     /// @param voteEpoch The epoch at which the vote started.
     /// @return Boolean the vote has ended.
     function _hasVoteEnded(uint256 voteEpoch) private view returns (bool) {
-        uint256 currentEpoch = IStorage(getStakingProxy()).currentEpoch();
+        uint256 currentEpoch = IStorage(_getStakingProxy()).currentEpoch();
         if (currentEpoch < voteEpoch) {
             return false;
         }
@@ -157,14 +136,14 @@ abstract contract MixinVoting is MixinStorage {
         }
         // voteEpoch == currentEpoch
         // Vote ends at currentEpochStartTime + votingPeriod
-        uint256 voteEndTime = IStorage(getStakingProxy()).currentEpochStartTimeInSeconds() + treasuryParameters().votingPeriod;
+        uint256 voteEndTime = IStorage(_getStakingProxy()).currentEpochStartTimeInSeconds() + _treasuryParameters().votingPeriod;
         return block.timestamp > voteEndTime;
     }
 
     /// @notice Casts a vote for the given proposal.
     /// @dev Only callable during the voting period for that proposa.
     function _castVote(address voter, uint256 proposalId, VoteType voteType) private {
-        if (proposalId >= proposalCount()) {
+        if (proposalId >= _proposalCount()) {
             revert("_castVote/INVALID_PROPOSAL_ID");
         }
         if (hasVoted().value[proposalId][voter]) {
@@ -172,11 +151,11 @@ abstract contract MixinVoting is MixinStorage {
         }
 
         Proposal memory proposal = proposals().value[proposalId];
-        if (proposal.voteEpoch != IStorage(getStakingProxy()).currentEpoch() || _hasVoteEnded(proposal.voteEpoch)) {
+        if (proposal.voteEpoch != IStorage(_getStakingProxy()).currentEpoch() || _hasVoteEnded(proposal.voteEpoch)) {
             revert("_castVote/VOTING_IS_CLOSED");
         }
 
-        uint256 votingPower = getVotingPower(voter);
+        uint256 votingPower = _getVotingPower(voter);
         if (votingPower == 0) {
             revert("_castVote/NO_VOTING_POWER");
         }

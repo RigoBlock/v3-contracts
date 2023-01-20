@@ -19,15 +19,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinConstants.sol";
+import "../IRigoblockGovernance.sol";
 
-/// @notice Immutables are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
-abstract contract MixinImmutables is MixinConstants {
-    address internal immutable _implementation;
-    address internal immutable _initializer;
-
-    constructor(address implementation, address initializer) {
-        _implementation = implementation;
-        _initializer = initializer;
-    }
+abstract contract MixinAbstract {
+    function _proposalCount() internal view virtual returns (uint256 count);
+    function _getVotingPower(address account) internal view virtual returns (uint256);
+    function _getStakingProxy() internal view virtual returns (address);
+    function _treasuryParameters() internal view virtual returns (IGovernanceInitializer.TreasuryParameters memory);
 }

@@ -42,10 +42,6 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    function getStakingProxy() public view returns (address) {
-        return stakingProxy().value;
-    }
-
     struct ParamsWrapper {
         TreasuryParameters treasuryParameters;
     }
@@ -54,10 +50,6 @@ abstract contract MixinStorage is MixinImmutables {
         assembly {
             s.slot := _TREASURY_PARAMS_SLOT
         }
-    }
-
-    function treasuryParameters() public view override returns (TreasuryParameters memory) {
-        return paramsWrapper().treasuryParameters;
     }
 
     // TODO: check where we can batch structs
@@ -69,6 +61,16 @@ abstract contract MixinStorage is MixinImmutables {
         assembly {
             s.slot := _PROPOSALS_COUNT_SLOT
         }
+    }
+
+    struct Proposal {
+        bytes32 actionsHash;
+        uint256 executionEpoch;
+        uint256 voteEpoch;
+        uint256 votesFor;
+        uint256 votesAgainst;
+        uint256 votesAbstain;
+        bool executed;
     }
 
     struct Proposals {

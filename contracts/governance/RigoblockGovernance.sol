@@ -20,6 +20,7 @@
 pragma solidity 0.8.17;
 
 import "./mixins/MixinInitializer.sol";
+import "./mixins/MixinState.sol";
 import "./mixins/MixinStorage.sol";
 import "./mixins/MixinUpgrade.sol";
 import "./mixins/MixinVoting.sol";
@@ -30,7 +31,8 @@ contract RigoblockGovernance is
     MixinStorage,
     MixinInitializer,
     MixinUpgrade,
-    MixinVoting
+    MixinVoting,
+    MixinState
 {
     // locks direct calls to this contract
     modifier onlyDelegatecall() override(MixinInitializer, MixinUpgrade) {
@@ -41,7 +43,7 @@ contract RigoblockGovernance is
     /// @notice Constructor has no inputs to guarantee same deterministic address.
     /// @dev Different parameters on each would result in different implementation address.
     /// @dev Setting staking proxy effectively locks direct calls to this contract.
-    constructor() MixinImmutables(address(this)) {
+    constructor(address initializer) MixinImmutables(address(this), initializer) {
         paramsWrapper().treasuryParameters.proposalThreshold = type(uint256).max;
         stakingProxy().value = address(0);
     }

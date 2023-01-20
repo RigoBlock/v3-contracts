@@ -25,7 +25,7 @@ import "./MixinStorage.sol"; // storage inherits from interface which declares e
 abstract contract MixinUpgrade is MixinStorage {
     modifier onlyDelegatecall() virtual;
 
-    /// @inheritdoc IRigoblockGovernance
+    /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external onlyDelegatecall override {
         // upgrade must go through voting
         require(msg.sender == address(this), "GOV_UPGRADE_APPROVAL_ERROR");
@@ -45,7 +45,7 @@ abstract contract MixinUpgrade is MixinStorage {
         emit Upgraded(newImplementation);
     }
 
-    /// @inheritdoc IRigoblockGovernance
+    /// @inheritdoc IGovernanceUpgrade
     function updateThresholds(uint256 newProposalThreshold, uint256 newQuorumThreshold)
         external
         onlyDelegatecall
