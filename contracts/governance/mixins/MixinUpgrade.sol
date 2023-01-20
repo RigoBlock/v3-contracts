@@ -29,7 +29,6 @@ abstract contract MixinUpgrade is MixinStorage {
         _;
     }
 
-    // TODO: move slot to constants, assertion to storage constructor
     /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external onlyDelegatecall override {
         // upgrade must go through voting
@@ -40,6 +39,9 @@ abstract contract MixinUpgrade is MixinStorage {
 
         // transaction reverted if implementation is same as current
         require(newImplementation != currentImplementation, "UPGRADE_SAME_AS_CURRENT_ERROR");
+
+        // prevent accidental setting implementation to EOA
+        require(_isContract(newImplementation), "UPGRADE_NOT_CONTRACT_ERROR");
 
         // TODO: check if should require newImplementation to be contract
 
@@ -57,5 +59,11 @@ abstract contract MixinUpgrade is MixinStorage {
         require(msg.sender == address(this), "GOV_UPGRADE_NOT_SELF_ERROR");
         paramsWrapper().treasuryParameters.proposalThreshold = newProposalThreshold;
         paramsWrapper().treasuryParameters.quorumThreshold = newQuorumThreshold;
+    }
+
+    /// @dev Returns whether an address is a contract.
+    /// @return Bool target address has code.
+    function _isContract(address target) private view returns (bool) {
+        return target.code.length > 0;
     }
 }
