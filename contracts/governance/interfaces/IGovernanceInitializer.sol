@@ -27,7 +27,6 @@ interface IGovernanceInitializer {
   }
 
   /// @notice Initializes the Rigoblock Governance.
-  /// @param stakingProxy_ The Rigoblock staking proxy address.
-  /// @param params Immutable treasury parameters.
-  function initializeGovernance(address stakingProxy_, TreasuryParameters memory params) external;
+  /// @dev Params are stored in factory and read from there.
+  function initializeGovernance() external;
 }

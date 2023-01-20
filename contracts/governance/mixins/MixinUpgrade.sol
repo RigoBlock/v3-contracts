@@ -23,13 +23,19 @@ import "../../utils/storageSlot/StorageSlot.sol";
 import "./MixinStorage.sol"; // storage inherits from interface which declares events
 
 abstract contract MixinUpgrade is MixinStorage {
-    modifier onlyDelegatecall() virtual {_;}
+    // locks direct calls to this contract
+    modifier onlyDelegatecall() {
+        assert(_implementation != address(this));
+        _;
+    }
 
+    // TODO: move slot to constants, assertion to storage constructor
     /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external onlyDelegatecall override {
         // upgrade must go through voting
         require(msg.sender == address(this), "GOV_UPGRADE_APPROVAL_ERROR");
 
+        // TODO: check if we want to simplify by moving parts to constants, storage constructor and state
         // we define the storage area where we will write new implementation as the eip1967 implementation slot
         bytes32 implementationSlot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
         assert(implementationSlot == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
@@ -51,7 +57,7 @@ abstract contract MixinUpgrade is MixinStorage {
         onlyDelegatecall
         override
     {
-        require(msg.sender == address(this), "GOV_UPGRADE_ONLY_SELF_ERROR");
+        require(msg.sender == address(this), "GOV_UPGRADE_NOT_SELF_ERROR");
         paramsWrapper().treasuryParameters.proposalThreshold = newProposalThreshold;
         paramsWrapper().treasuryParameters.quorumThreshold = newQuorumThreshold;
     }

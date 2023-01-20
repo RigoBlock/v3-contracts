@@ -20,36 +20,27 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../../staking/interfaces/IStorage.sol";
-import "./MixinAbstract.sol";
+import "../interfaces/IRigoblockGovernanceFactory.sol";
 import "./MixinStorage.sol";
 
-abstract contract MixinInitializer is MixinStorage, MixinAbstract {
-    // This modifier is not necessary as implementation initialization is prevented
-    //  by asserting staking proxy null inside the method, but we keep it for future
-    //  upgrades extra security to prevent accidental initialization.
-    modifier onlyDelegatecall() virtual {_;}
-
-    /// @notice We lock future calls to this implementation.
-    constructor(address stakingProxy_) {
-        stakingProxy().value = stakingProxy_;
+abstract contract MixinInitializer is MixinStorage {
+    modifier onlyUninitialized() {
+        // proxy is always initialized in the constructor, therefore
+        // empty extcodesize means the governance has not been initialized
+        require(address(this).code.length == 0, "POOL_ALREADY_INITIALIZED_ERROR");
+        _;
     }
 
     /// @inheritdoc IGovernanceInitializer
-    function initializeGovernance(
-        address stakingProxy_,
-        TreasuryParameters memory params
-    )
+    function initializeGovernance()
         external
-        onlyDelegatecall
+        onlyUninitialized
         override
     {
-        // only initializer can initialize the contract
-        require(msg.sender == _initializer);
+        IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory(msg.sender).parameters();
 
-        // assert uninitialized
-        require(_getStakingProxy() == address(0), "GOV_ALREADY_INIT_ERROR");
-        require(params.votingPeriod < IStorage(stakingProxy_).epochDurationInSeconds(), "VOTING_PERIOD_TOO_LONG");
-        stakingProxy().value = stakingProxy_;
+        require(params.votingPeriod < IStorage(params.stakingProxy).epochDurationInSeconds(), "VOTING_PERIOD_TOO_LONG");
+        stakingProxy().value = params.stakingProxy;
         paramsWrapper().treasuryParameters = TreasuryParameters({
             votingPeriod: params.votingPeriod,
             proposalThreshold: params.proposalThreshold,

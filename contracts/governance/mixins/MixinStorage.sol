@@ -62,7 +62,6 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    // TODO: check where we can batch structs
     struct ProposalsCount {
         uint256 value;
     }

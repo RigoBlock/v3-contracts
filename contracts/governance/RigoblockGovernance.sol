@@ -34,19 +34,9 @@ contract RigoblockGovernance is
     MixinVoting,
     MixinState
 {
-    // locks direct calls to this contract
-    modifier onlyDelegatecall() override(MixinInitializer, MixinUpgrade) {
-        assert(_implementation != address(this));
-        _;
-    }
-
-    /// @notice Constructor has no inputs to guarantee same deterministic address.
-    /// @dev Different parameters on each would result in different implementation address.
-    /// @dev Initializing to address(1) effectively locks direct calls to implementation.
-    constructor(address initializer)
-        MixinImmutables(address(this), initializer)
-        MixinInitializer(address(1))
-    {
+    /// @notice Constructor has no inputs to guarantee same deterministic address across chains.
+    /// @dev Setting high proposal threshold locks voting actions.
+    constructor() MixinImmutables() MixinStorage() {
         paramsWrapper().treasuryParameters.proposalThreshold = type(uint256).max;
     }
 }

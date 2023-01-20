@@ -19,6 +19,8 @@
 
 pragma solidity 0.8.17;
 
+import "./RigoblockGovernanceFactory.sol";
+
 contract RigoblockGovernanceProxy {
     /// @notice Emitted when implementation written to proxy storage.
     /// @dev Emitted also at first variable initialization.
@@ -30,18 +32,25 @@ contract RigoblockGovernanceProxy {
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     /// @notice Sets address of implementation contract.
-    /// @dev Implementation must be same on all chains to get same deterministic address.
-    constructor(address implementation) payable {
+    constructor() payable {
         // store implementation address in implementation slot value
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
+
+        // we retrieve the set implementation from the factory storage
+        address implementation = RigoblockPoolProxyFactory(msg.sender).parameters().implementation;
 
         // we store the implementation address
         getImplementation().implementation = implementation;
         emit Upgraded(implementation);
-    }
 
-    // TODO: we might add init method, only method that could clash but executed just once,
-    // so that we can keep same address even with upgraded implementation on new chains
+        // initialize pool
+        // abi.encodeWithSelector(IRigoblockGovernance.initializeGovernance.selector)
+        // TODO: update function hash
+        (, bytes memory returnData) = implementation.delegatecall(abi.encodeWithSelector(0xe9134903));
+
+        // we must assert initialization didn't fail, otherwise it could fail silently and still deploy the governance.
+        assert(returnData.length == 0);
+    }
 
     /* solhint-disable no-complex-fallback */
     /// @notice Fallback function forwards all transactions and returns all received return data.
