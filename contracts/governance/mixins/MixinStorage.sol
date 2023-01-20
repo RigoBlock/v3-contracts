@@ -24,6 +24,7 @@ import "./MixinImmutables.sol";
 abstract contract MixinStorage is MixinImmutables {
     // we use the constructor to assert that we are not using occupied storage slots
     constructor() {
+        assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
         assert(_DOMAIN_SEPARATOR_SLOT == bytes32(uint256(keccak256("governance.proxy.domainseparator")) - 1));
         assert(_HAS_VOTED_SLOT == bytes32(uint256(keccak256("governance.proxy.user.hasvoted")) - 1));
         assert(_PROPOSALS_SLOT == bytes32(uint256(keccak256("governance.proxy.proposals")) - 1));
