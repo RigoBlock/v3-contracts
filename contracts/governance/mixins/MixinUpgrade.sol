@@ -23,16 +23,21 @@ import "../../utils/storageSlot/StorageSlot.sol";
 import "./MixinStorage.sol"; // storage inherits from interface which declares events
 
 abstract contract MixinUpgrade is MixinStorage {
+    // TODO: check if should remove this modifier as these methods can only be invoked by other locked methods
     // locks direct calls to this contract
     modifier onlyDelegatecall() {
         assert(_implementation != address(this));
         _;
     }
 
-    /// @inheritdoc IGovernanceUpgrade
-    function upgradeImplementation(address newImplementation) external override onlyDelegatecall {
-        // upgrade must go through voting
+    // upgrades must go through voting
+    modifier onlyGovernance() {
         require(msg.sender == address(this), "GOV_UPGRADE_APPROVAL_ERROR");
+        _;
+    }
+
+    /// @inheritdoc IGovernanceUpgrade
+    function upgradeImplementation(address newImplementation) external override onlyDelegatecall onlyGovernance {
 
         // we read the current implementation address from the pool proxy storage
         address currentImplementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
@@ -43,8 +48,6 @@ abstract contract MixinUpgrade is MixinStorage {
         // prevent accidental setting implementation to EOA
         require(_isContract(newImplementation), "UPGRADE_NOT_CONTRACT_ERROR");
 
-        // TODO: check if should require newImplementation to be contract
-
         // we write new address to storage at implementation slot location and emit eip1967 log
         StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
         emit Upgraded(newImplementation);
@@ -54,10 +57,9 @@ abstract contract MixinUpgrade is MixinStorage {
     function updateThresholds(
         uint256 newProposalThreshold,
         uint256 newQuorumThreshold
-    ) external override onlyDelegatecall {
-        require(msg.sender == address(this), "GOV_UPGRADE_NOT_SELF_ERROR");
-        paramsWrapper().treasuryParameters.proposalThreshold = newProposalThreshold;
-        paramsWrapper().treasuryParameters.quorumThreshold = newQuorumThreshold;
+    ) external override onlyDelegatecall onlyGovernance {
+        _treasuryParameters().proposalThreshold = newProposalThreshold;
+        _treasuryParameters().quorumThreshold = newQuorumThreshold;
         emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
     }
 

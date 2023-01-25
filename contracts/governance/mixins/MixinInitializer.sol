@@ -36,18 +36,18 @@ abstract contract MixinInitializer is MixinStorage {
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory(msg.sender).parameters();
 
         require(params.votingPeriod < IStorage(params.stakingProxy).epochDurationInSeconds(), "VOTING_PERIOD_TOO_LONG");
-        stakingProxy().value = params.stakingProxy;
-        paramsWrapper().treasuryParameters = TreasuryParameters({
+        _stakingProxy().value = params.stakingProxy;
+        _paramsWrapper().treasuryParameters = TreasuryParameters({
             votingPeriod: params.votingPeriod,
             proposalThreshold: params.proposalThreshold,
             quorumThreshold: params.quorumThreshold
         });
-        domainSeparator().value = keccak256(
+        _domainSeparator().value = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
                 keccak256(bytes(CONTRACT_NAME)),
-                block.chainid,
                 keccak256(bytes(CONTRACT_VERSION)),
+                block.chainid,
                 address(this)
             )
         );

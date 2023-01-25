@@ -20,51 +20,119 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../../staking/interfaces/IStaking.sol";
+import "../../staking/interfaces/IStorage.sol";
 import "./MixinAbstract.sol";
 import "./MixinStorage.sol";
 
 abstract contract MixinState is MixinStorage, MixinAbstract {
-    function getStakingProxy() public view override returns (address) {
-        return _getStakingProxy();
+    /// @inheritdoc IGovernanceState
+    function getDeploymentConstants() external pure override returns (DeploymentConstants memory) {
+        return DeploymentConstants({
+            name: CONTRACT_NAME,
+            symbol: CONTRACT_VERSION,
+            proposalMaxOperations: PROPOSAL_MAX_OPERATIONS,
+            domainTypehash: DOMAIN_TYPEHASH,
+            voteTypehash: VOTE_TYPEHASH
+        });
     }
+
+    // TODO: check if we should name returned variables for docs
+    /// @inheritdoc IGovernanceState
+    function getProposalById(uint256 proposalId) public view override returns (Proposal memory, ProposedAction[] memory) {
+        Proposal memory proposal = _proposals().value[proposalId];
+        uint256 length = proposal.actionsLength;
+        ProposedAction[] memory proposedActions = new ProposedAction[](length);
+
+        for (uint i; i < length; i++) {
+            proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][length];
+        }
+
+        return (proposal, proposedActions);
+    }
+
+    /// @inheritdoc IGovernanceState
+    function getProposalState(uint256 proposalId) public view override returns (ProposalState) {
+        uint256 currentEpoch = IStorage(stakingProxy()).currentEpoch();
+        Proposal storage proposal = _proposals().value[proposalId];
+        if (currentEpoch < proposal.voteEpoch) {
+            return ProposalState.Pending;
+        } else if (currentEpoch == proposal.voteEpoch) {
+            return ProposalState.Active;
+        } else if (!_hasProposalPassed(proposal)) {
+            return ProposalState.Defeated;
+        } else if (proposal.executed) {
+            return ProposalState.Executed;
+        } else {
+            return ProposalState.Succeeded;
+        }
+    }
+
+    /// @inheritdoc IGovernanceState
+    function getReceipt(uint256 proposalId, address voter)
+        public
+        view
+        override
+        returns (Receipt memory)
+    {
+        return _getReceipt(proposalId, voter);
+    }
+
+    function _getReceipt(uint256 proposalId, address voter)
+        internal
+        view
+        override
+        returns (Receipt memory)
+    {
+        return _receipt().value[proposalId][voter];
+    }
+
 
     /// @inheritdoc IGovernanceState
     function getVotingPower(address account) public view override returns (uint256) {
         return _getVotingPower(account);
     }
 
-    /// @inheritdoc IGovernanceState
-    function proposalCount() public view override returns (uint256 count) {
-        return _proposalCount();
-    }
-
-    function treasuryParameters() public view override returns (TreasuryParameters memory) {
-        return _treasuryParameters();
-    }
-
-    function getProposals() public view override returns (Proposal[] memory proposalList) {
-        // TODO: test as we are not producing a new array
-        for (uint i; i < _proposalCount(); ++i) {
-            proposalList[i] = proposals().value[i];
-        }
-    }
-
-    function _getStakingProxy() internal view override returns (address) {
-        return stakingProxy().value;
-    }
-
     function _getVotingPower(address account) internal view override returns (uint256) {
         return
-            IStaking(getStakingProxy())
+            IStaking(stakingProxy())
                 .getOwnerStakeByStatus(account, IStructs.StakeStatus.DELEGATED)
                 .currentEpochBalance;
     }
 
-    function _proposalCount() internal view override returns (uint256 count) {
-        return proposalsCount().value;
+    /// @inheritdoc IGovernanceState
+    function proposalCount() public view override returns (uint256 count) {
+        return _getProposalCount();
     }
 
-    function _treasuryParameters() internal view override returns (TreasuryParameters memory) {
-        return paramsWrapper().treasuryParameters;
+    function _getProposalCount() internal view override returns (uint256 count) {
+        return _proposalCount().value;
+    }
+
+    /// @inheritdoc IGovernanceState
+    function proposals() public view override returns (Proposal[] memory) {
+        uint256 length = _getProposalCount();
+        Proposal[] memory proposalList = new Proposal[](length);
+        for (uint i; i < length; ++i) {
+            proposalList[i] = _proposals().value[i];
+        }
+        return proposalList;
+    }
+
+    /// @inheritdoc IGovernanceState
+    function stakingProxy() public view override returns (address) {
+        return _getStakingProxy();
+    }
+
+    /// @inheritdoc IGovernanceState
+    function treasuryParameters() public view override returns (TreasuryParameters memory) {
+        return _getTreasuryParameters();
+    }
+
+    function _getStakingProxy() internal view override returns (address) {
+        return _stakingProxy().value;
+    }
+
+    function _getTreasuryParameters() internal view override returns (TreasuryParameters memory) {
+        return _paramsWrapper().treasuryParameters;
     }
 }

@@ -26,9 +26,9 @@ abstract contract MixinStorage is MixinImmutables {
     constructor() {
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
         assert(_DOMAIN_SEPARATOR_SLOT == bytes32(uint256(keccak256("governance.proxy.domainseparator")) - 1));
-        assert(_HAS_VOTED_SLOT == bytes32(uint256(keccak256("governance.proxy.user.hasvoted")) - 1));
+        assert(_RECEIPT_SLOT == bytes32(uint256(keccak256("governance.proxy.user.receipt")) - 1));
         assert(_PROPOSALS_SLOT == bytes32(uint256(keccak256("governance.proxy.proposals")) - 1));
-        assert(_PROPOSALS_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalscount")) - 1));
+        assert(_PROPOSAL_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalscount")) - 1));
         assert(_STAKING_PROXY_SLOT == bytes32(uint256(keccak256("governance.proxy.stakingproxy")) - 1));
         assert(_TREASURY_PARAMS_SLOT == bytes32(uint256(keccak256("governance.proxy.treasuryparams")) - 1));
     }
@@ -37,7 +37,7 @@ abstract contract MixinStorage is MixinImmutables {
         bytes32 value;
     }
 
-    function domainSeparator() internal pure returns (DomainSeparator storage s) {
+    function _domainSeparator() internal pure returns (DomainSeparator storage s) {
         assembly {
             s.slot := _DOMAIN_SEPARATOR_SLOT
         }
@@ -47,7 +47,7 @@ abstract contract MixinStorage is MixinImmutables {
         address value;
     }
 
-    function stakingProxy() internal pure returns (StakingProxy storage s) {
+    function _stakingProxy() internal pure returns (StakingProxy storage s) {
         assembly {
             s.slot := _STAKING_PROXY_SLOT
         }
@@ -57,19 +57,19 @@ abstract contract MixinStorage is MixinImmutables {
         TreasuryParameters treasuryParameters;
     }
 
-    function paramsWrapper() internal pure returns (ParamsWrapper storage s) {
+    function _paramsWrapper() internal pure returns (ParamsWrapper storage s) {
         assembly {
             s.slot := _TREASURY_PARAMS_SLOT
         }
     }
 
-    struct ProposalsCount {
+    struct ProposalCount {
         uint256 value;
     }
 
-    function proposalsCount() internal pure returns (ProposalsCount storage s) {
+    function _proposalCount() internal pure returns (ProposalCount storage s) {
         assembly {
-            s.slot := _PROPOSALS_COUNT_SLOT
+            s.slot := _PROPOSAL_COUNT_SLOT
         }
     }
 
@@ -77,19 +77,36 @@ abstract contract MixinStorage is MixinImmutables {
         mapping(uint256 => Proposal) value;
     }
 
-    function proposals() internal pure returns (Proposals storage s) {
+    function _proposals() internal pure returns (Proposals storage s) {
         assembly {
             s.slot := _PROPOSALS_SLOT
         }
     }
 
-    struct HasVoted {
-        mapping(uint256 => mapping(address => bool)) value;
+    struct ActionByIndex {
+        mapping(uint256 => mapping(uint256 => ProposedAction)) proposedActionbyIndex;
     }
 
-    function hasVoted() internal pure returns (HasVoted storage s) {
+    function _proposedAction() internal pure returns (ActionByIndex storage s) {
         assembly {
-            s.slot := _HAS_VOTED_SLOT
+            // TODO: update slot name
+            s.slot := _PROPOSALS_SLOT
+        }
+    }
+
+    struct UserReceipt {
+        mapping(uint256 => mapping(address => Receipt)) value;
+    }
+
+    function _receipt() internal pure returns (UserReceipt storage s) {
+        assembly {
+            s.slot := _RECEIPT_SLOT
+        }
+    }
+
+    function _treasuryParameters() internal pure returns (TreasuryParameters storage s) {
+        assembly {
+            s.slot := _TREASURY_PARAMS_SLOT
         }
     }
 }

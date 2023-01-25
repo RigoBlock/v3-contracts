@@ -20,15 +20,42 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./IGovernanceInitializer.sol";
+import "./IGovernanceVoting.sol";
 
 interface IGovernanceState {
-    function getStakingProxy() external view returns (address);
+    enum ProposalState {
+        Pending,
+        Active,
+        Defeated,
+        Succeeded,
+        Executed
+    }
 
-    function treasuryParameters() external view returns (IGovernanceInitializer.TreasuryParameters memory);
+    struct DeploymentConstants {
+        string name;
+        string symbol;
+        uint256 proposalMaxOperations;
+        bytes32 domainTypehash;
+        bytes32 voteTypehash;
+    }
 
-    /// @notice Returns the total number of proposals.
-    /// @return count The number of proposals.
-    function proposalCount() external view returns (uint256 count);
+    /// @notice
+    function getDeploymentConstants() external pure returns (DeploymentConstants memory);
+
+    /// @notice
+    function getProposalById(uint256 proposalId) external view returns (IGovernanceVoting.Proposal memory, IGovernanceVoting.ProposedAction[] memory);
+
+    /// @notice
+    function getProposalState(uint256 proposalId) external view returns (ProposalState);
+
+    struct Receipt {
+        bool hasVoted;
+        bool support;
+        uint96 votes;
+    }
+
+    /// @notice
+    function getReceipt(uint256 proposalId, address voter) external view returns (Receipt memory);
 
     // @notice Computes the current voting power of the given account.
     /// @dev Voting power is equal to staked delegated GRG.
@@ -36,15 +63,16 @@ interface IGovernanceState {
     /// @return votingPower The current voting power of the given account.
     function getVotingPower(address account) external view returns (uint256 votingPower);
 
-    struct Proposal {
-        bytes32 actionsHash;
-        uint256 executionEpoch;
-        uint256 voteEpoch;
-        uint256 votesFor;
-        uint256 votesAgainst;
-        uint256 votesAbstain;
-        bool executed;
-    }
+    /// @notice Returns the total number of proposals.
+    /// @return count The number of proposals.
+    function proposalCount() external view returns (uint256 count);
 
-    function getProposals() external view returns (Proposal[] memory proposalList);
+    /// @notice
+    function proposals() external view returns (IGovernanceVoting.Proposal[] memory proposalList);
+
+    /// @notice
+    function stakingProxy() external view returns (address);
+
+    /// @notice
+    function treasuryParameters() external view returns (IGovernanceInitializer.TreasuryParameters memory);
 }

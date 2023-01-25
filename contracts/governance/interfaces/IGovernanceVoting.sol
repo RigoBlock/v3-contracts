@@ -22,6 +22,22 @@ pragma solidity >=0.8.0 <0.9.0;
 import "./IGovernanceEvents.sol";
 
 interface IGovernanceVoting {
+    struct ProposedAction {
+        address target;
+        bytes data;
+        uint256 value;
+    }
+
+    struct Proposal {
+        uint256 actionsLength;
+        uint256 executionEpoch;
+        uint256 voteEpoch;
+        uint256 votesFor;
+        uint256 votesAgainst;
+        uint256 votesAbstain;
+        bool executed;
+    }
+
     /// @notice Creates a proposal on the the given actions. Must have at least `proposalThreshold`.
     /// @dev Must have at least `proposalThreshold` of voting power to call this function.
     /// @dev If a proposal is successfully created, voting starts at the epoch after next (currentEpoch + 2).
@@ -32,7 +48,7 @@ interface IGovernanceVoting {
     /// @param description A text description for the proposal.
     /// @return proposalId The ID of the newly created proposal.
     function propose(
-        IGovernanceEvents.ProposedAction[] calldata actions,
+        ProposedAction[] calldata actions,
         uint256 executionEpoch,
         string calldata description
     ) external returns (uint256 proposalId);
@@ -62,9 +78,7 @@ interface IGovernanceVoting {
         bytes32 s
     ) external;
 
-    /// @dev Executes a proposal that has passed and is
-    ///      currently executable.
+    /// @notice Executes a proposal that has passed and is currently executable.
     /// @param proposalId The ID of the proposal to execute.
-    /// @param actions Actions associated with the proposal to execute.
-    function execute(uint256 proposalId, IGovernanceEvents.ProposedAction[] memory actions) external payable;
+    function execute(uint256 proposalId) external payable;
 }

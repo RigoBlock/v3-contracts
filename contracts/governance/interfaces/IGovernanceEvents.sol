@@ -19,6 +19,8 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import "./IGovernanceVoting.sol";
+
 interface IGovernanceEvents {
     event ThresholdsUpdated(uint256 proposalThreshold, uint256 quorumThreshold);
 
@@ -27,16 +29,10 @@ interface IGovernanceEvents {
     /// @param newImplementation Address of the new implementation.
     event Upgraded(address indexed newImplementation);
 
-    struct ProposedAction {
-        address target;
-        bytes data;
-        uint256 value;
-    }
-
     event ProposalCreated(
         address proposer,
         uint256 proposalId,
-        ProposedAction[] actions,
+        IGovernanceVoting.ProposedAction[] actions,
         uint256 executionEpoch,
         string description
     );

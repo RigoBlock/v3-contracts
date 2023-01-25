@@ -23,6 +23,7 @@ import "./MixinConstants.sol";
 
 /// @notice Immutables are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 abstract contract MixinImmutables is MixinConstants {
+    // TODO: check if we are using this one
     address internal immutable _implementation;
 
     constructor() {
