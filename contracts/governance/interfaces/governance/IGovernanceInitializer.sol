@@ -20,12 +20,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 interface IGovernanceInitializer {
-    struct TreasuryParameters {
-        uint256 votingPeriod;
-        uint256 proposalThreshold;
-        uint256 quorumThreshold;
-    }
-
     /// @notice Initializes the Rigoblock Governance.
     /// @dev Params are stored in factory and read from there.
     function initializeGovernance() external;
