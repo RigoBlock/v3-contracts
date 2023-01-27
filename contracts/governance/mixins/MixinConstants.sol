@@ -23,11 +23,8 @@ import "../IRigoblockGovernance.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 abstract contract MixinConstants is IRigoblockGovernance {
-    /// @notice Contract name
-    string internal constant CONTRACT_NAME = "Rigoblock Governance";
-
     /// @notice Contract version
-    string internal constant CONTRACT_VERSION = "1.0.0";
+    string internal constant VERSION = "1.0.0";
 
     /// @notice Maximum operations per proposal
     uint256 internal constant PROPOSAL_MAX_OPERATIONS = 10;
@@ -39,11 +36,14 @@ abstract contract MixinConstants is IRigoblockGovernance {
     /// @notice The EIP-712 typehash for the vote struct
     bytes32 internal constant VOTE_TYPEHASH = keccak256("VoteEmitted(uint256 proposalId,enum supportType)");
 
+    bytes32 internal constant _DOMAIN_SEPARATOR_SLOT =
+        0xdb618ced4dd9b748cfec0043e87e7f7708f67fafafb1c3d0bfb6dc0f9c8bf72f;
+
     // implementation slot is same as declared in proxy
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0xc081ba77b34dd25ffc1c621425bbc52480b02e5d0249ce3831198d7e07603649;
 
-    bytes32 internal constant _DOMAIN_SEPARATOR_SLOT =
-        0xdb618ced4dd9b748cfec0043e87e7f7708f67fafafb1c3d0bfb6dc0f9c8bf72f;
+    // TODO: update name slot
+    bytes32 internal constant _NAME_SLOT = 0xc081ba77b34dd25ffc1c621425bbc52480b02e5d0249ce3831198d7e07603649;
 
     // TODO: update hash as name changed
     bytes32 internal constant _RECEIPT_SLOT = 0xc081ba77b34dd25ffc1c621425bbc52480b02e5d0249ce3831198d7e07603649;
@@ -54,8 +54,9 @@ abstract contract MixinConstants is IRigoblockGovernance {
     bytes32 internal constant _PROPOSAL_COUNT_SLOT =
         0xbdd2133fac45cf26a03e03e13d846596b9d7940bbd32aef60e912772d175bb1d;
 
-    bytes32 internal constant _STAKING_PROXY_SLOT = 0xb82110679558db63b50a5551160e4d145a353af4b644d63bd4bdc975681fd945;
+    // TODO: update hash
+    bytes32 internal constant _STRATEGY_SLOT = 0xb82110679558db63b50a5551160e4d145a353af4b644d63bd4bdc975681fd945;
 
-    bytes32 internal constant _TREASURY_PARAMS_SLOT =
+    bytes32 internal constant _GOVERNANCE_PARAMS_SLOT =
         0x068519504cb4b072099e717e67e4cccbcc86c6938d6975f9e669e006bd04c567;
 }

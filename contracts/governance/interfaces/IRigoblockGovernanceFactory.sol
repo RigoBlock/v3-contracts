@@ -25,34 +25,35 @@ interface IRigoblockGovernanceFactory {
     /// @param governance Address of the governance proxy.
     event GovernanceCreated(address governance);
 
-    // TODO: complete docs
-    /// @notice Creates a new governance.
-    /// @param implementation .
-    /// @param stakingProxy .
-    /// @param votingPeriod .
-    /// @param proposalThreshold .
-    /// @param quorumThreshold .
+    /// @notice Creates a new governance proxy.
+    /// @param implementation Address of the governance implementation contract.
+    /// @param governanceStrategy Address of the voting strategy.
+    /// @param proposalThreshold Number of votes required for creating a new proposal.
+    /// @param quorumThreshold Number of votes required for execution.
+    /// @param name Human readable string of the name.
     function createGovernance(
         address implementation,
-        address stakingProxy,
-        uint256 votingPeriod,
+        address governanceStrategy,
         uint256 proposalThreshold,
-        uint256 quorumThreshold
+        uint256 quorumThreshold,
+        string calldata name
     ) external returns (address governance);
 
-    // TODO: fix docs
-    /// @notice Governance initialization parameters.
-    /// @param implementation .
-    /// @param stakingProxy .
-    /// @param votingPeriod .
-    /// @param proposalThreshold .
-    /// @param quorumThreshold .
     struct Parameters {
+        /// @notice Address of the governance implementation contract.
         address implementation;
-        address stakingProxy;
-        uint256 votingPeriod;
+
+        /// @notice Address of the voting strategy.
+        address governanceStrategy;
+
+        /// @notice Number of votes required for creating a new proposal.
         uint256 proposalThreshold;
+
+        /// @notice Number of votes required for execution.
         uint256 quorumThreshold;
+
+        /// @notice String of the name of the application.
+        string name;
     }
 
     /// @notice Returns the pool initialization parameters at proxy deploy.

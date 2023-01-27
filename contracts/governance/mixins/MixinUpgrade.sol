@@ -58,8 +58,8 @@ abstract contract MixinUpgrade is MixinStorage {
         uint256 newProposalThreshold,
         uint256 newQuorumThreshold
     ) external override onlyDelegatecall onlyGovernance {
-        _treasuryParameters().proposalThreshold = newProposalThreshold;
-        _treasuryParameters().quorumThreshold = newQuorumThreshold;
+        _governanceParameters().proposalThreshold = newProposalThreshold;
+        _governanceParameters().quorumThreshold = newQuorumThreshold;
         emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
     }
 

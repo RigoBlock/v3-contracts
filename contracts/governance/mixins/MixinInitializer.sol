@@ -19,7 +19,6 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../staking/interfaces/IStorage.sol";
 import "../interfaces/IRigoblockGovernanceFactory.sol";
 import "./MixinStorage.sol";
 
@@ -34,19 +33,17 @@ abstract contract MixinInitializer is MixinStorage {
     /// @inheritdoc IGovernanceInitializer
     function initializeGovernance() external override onlyUninitialized {
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory(msg.sender).parameters();
-
-        require(params.votingPeriod < IStorage(params.stakingProxy).epochDurationInSeconds(), "VOTING_PERIOD_TOO_LONG");
-        _stakingProxy().value = params.stakingProxy;
-        _paramsWrapper().treasuryParameters = TreasuryParameters({
-            votingPeriod: params.votingPeriod,
+        _name().value = params.name;
+        _governanceStrategy().value = params.governanceStrategy;
+        _paramsWrapper().governanceParameters = GovernanceParameters({
             proposalThreshold: params.proposalThreshold,
             quorumThreshold: params.quorumThreshold
         });
         _domainSeparator().value = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
-                keccak256(bytes(CONTRACT_NAME)),
-                keccak256(bytes(CONTRACT_VERSION)),
+                keccak256(bytes(params.name)),
+                keccak256(bytes(VERSION)),
                 block.chainid,
                 address(this)
             )

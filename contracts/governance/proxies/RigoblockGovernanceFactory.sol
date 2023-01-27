@@ -29,25 +29,25 @@ contract RigoblockGovernanceFactory is IRigoblockGovernanceFactory {
     // @inheritdoc IRigoblockGovernanceFactory
     function createGovernance(
         address implementation,
-        address stakingProxy,
-        uint256 votingPeriod,
+        address governanceStrategy,
         uint256 proposalThreshold,
-        uint256 quorumThreshold
+        uint256 quorumThreshold,
+        string calldata name
     ) external returns (address governance) {
         assert(_isContract(implementation));
-        assert(_isContract(stakingProxy));
+        assert(_isContract(governanceStrategy));
 
         // we write to storage to allow proxy to read initialization parameters
         _parameters = Parameters({
             implementation: implementation,
-            stakingProxy: stakingProxy,
-            votingPeriod: votingPeriod,
+            governanceStrategy: governanceStrategy,
             proposalThreshold: proposalThreshold,
-            quorumThreshold: quorumThreshold
+            quorumThreshold: quorumThreshold,
+            name: name
         });
 
         //RigoblockPoolProxy proxy = new RigoblockPoolProxy{salt: salt}();
-        governance = address(new RigoblockGovernanceProxy{salt: keccak256(abi.encode(msg.sender))}());
+        governance = address(new RigoblockGovernanceProxy{salt: keccak256(abi.encode(msg.sender, name))}());
 
         delete _parameters;
         emit GovernanceCreated(governance);

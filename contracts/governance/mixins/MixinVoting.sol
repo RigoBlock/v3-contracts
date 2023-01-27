@@ -19,45 +19,41 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../staking/interfaces/IStaking.sol";
-import "../../staking/interfaces/IStorage.sol";
 import "./MixinAbstract.sol";
 import "./MixinStorage.sol";
+import "../interfaces/IGovernanceStrategy.sol";
 
 abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceVoting
     function propose(
         ProposedAction[] memory actions,
-        uint256 executionEpoch,
         string memory description
     ) external override returns (uint256 proposalId) {
         uint256 length = actions.length;
-        require(_getVotingPower(msg.sender) >= _treasuryParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
+        require(_getVotingPower(msg.sender) >= _governanceParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
         require(length > 0, "GOV_NO_ACTIONS_ERROR");
         require(length <= PROPOSAL_MAX_OPERATIONS, "GOV_TOO_MANY_ACTIONS_ERROR");
-        uint256 currentEpoch = IStorage(_getStakingProxy()).currentEpoch();
-        require(executionEpoch >= currentEpoch + 2, "GOV_INVALID_EXECUTION_EPOCH");
+        (uint256 startTime, uint256 endTime) = IGovernanceStrategy(_governanceStrategy().value).votingTimestamps();
 
         proposalId = _getProposalCount();
-        //ProposedAction[] storage newActions = new ProposedAction[](2);
         Proposal memory newProposal = Proposal({
             actionsLength: length,
-            executionEpoch: executionEpoch,
-            voteEpoch: currentEpoch + 2,
+            startTime: startTime,
+            endTime: endTime,
             votesFor: 0,
             votesAgainst: 0,
             votesAbstain: 0,
             executed: false
         });
 
-        for (uint i; i < length; i++) {
+        for (uint i; i < length; ++i) {
             _proposedAction().proposedActionbyIndex[proposalId][i] = actions[i];
         }
 
-        _proposals().value[proposalId] = newProposal;
+        _proposals().proposalById[proposalId] = newProposal;
         ++_proposalCount().value;
 
-        emit ProposalCreated(msg.sender, proposalId, actions, executionEpoch, description);
+        emit ProposalCreated(msg.sender, proposalId, actions, startTime, endTime, description);
     }
 
     /// @inheritdoc IGovernanceVoting
@@ -83,115 +79,61 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceVoting
     function execute(uint256 proposalId) external payable override {
-        if (proposalId >= _getProposalCount()) {
-            revert("execute/INVALID_PROPOSAL_ID");
-        }
-        // TODO: read from state
-        Proposal memory proposal = _proposals().value[proposalId];
-        _assertProposalExecutable(proposal);
+        require(proposalId < _getProposalCount(), "VOTING_INVALID_PROPOSAL_ID");
+        require(_getProposalState(proposalId) == ProposalState.Succeeded, "VOTING_EXECUTION_STATE_ERROR");
+        Proposal storage proposal = _proposals().proposalById[proposalId];
+        require(!proposal.executed, "VOTING_EXECUTED_ERROR");
+        // TODO: check that prev proposal was executed.
+        proposal.executed = true;
 
-        _proposals().value[proposalId].executed = true;
-
-        for (uint256 i = 0; i != proposal.actionsLength; i++) {
+        for (uint256 i; i < proposal.actionsLength; ++i) {
             ProposedAction memory action = _proposedAction().proposedActionbyIndex[proposalId][i];
             (bool didSucceed, ) = action.target.call{value: action.value}(action.data);
-            require(didSucceed, "execute/ACTION_EXECUTION_FAILED");
+            require(didSucceed, "GOV_ACTION_EXECUTION_FAILED");
         }
 
         emit ProposalExecuted(proposalId);
     }
 
-    /// @notice Checks whether the given proposal has passed or not.
-    /// @param proposal The proposal to check.
-    /// @return hasPassed Whether the proposal has passed.
-    function _hasProposalPassed(Proposal memory proposal) internal view override returns (bool hasPassed) {
-        // Proposal is not passed until the vote is over.
-        if (!_hasVoteEnded(proposal.voteEpoch)) {
-            // Proposal is immediately executable if votes in favor higher than two thirds of total delegated GRG
-            if (
-                3 * proposal.votesFor >
-                2 *
-                    IStaking(_getStakingProxy())
-                        .getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED)
-                        .currentEpochBalance
-            ) {
-                return true;
-            } else {
-                return false;
-            }
-        }
-        // Must have > 66.7% support.
-        if (2 * proposal.votesFor <= proposal.votesAgainst) {
-            return false;
-        }
-        // Must reach quorum threshold.
-        if (proposal.votesFor < _treasuryParameters().quorumThreshold) {
-            return false;
-        }
-        return true;
-    }
-
-    /// @notice Checks whether the given proposal is executable. Reverts if not.
-    /// @param proposal The proposal to check.
-    function _assertProposalExecutable(Proposal memory proposal) private view {
-        require(_hasProposalPassed(proposal), "VOTING_NOT_PASSED_ERROR");
-        require(!proposal.executed, "VOTING_EXECUTED_ERROR");
-        require(
-            IStorage(_getStakingProxy()).currentEpoch() == proposal.executionEpoch,
-            "_VOTTING_EPOCH_ERROR"
-        );
-    }
-
-    /// @notice Checks whether a vote starting at the given epoch has ended or not.
-    /// @param voteEpoch The epoch at which the vote started.
-    /// @return Boolean the vote has ended.
-    function _hasVoteEnded(uint256 voteEpoch) private view returns (bool) {
-        uint256 currentEpoch = IStorage(_getStakingProxy()).currentEpoch();
-        if (currentEpoch < voteEpoch) {
-            return false;
-        }
-        if (currentEpoch > voteEpoch) {
-            return true;
-        }
-        // voteEpoch == currentEpoch
-        // Vote ends at currentEpochStartTime + votingPeriod
-        uint256 voteEndTime = IStorage(_getStakingProxy()).currentEpochStartTimeInSeconds() +
-            _treasuryParameters().votingPeriod;
-        return block.timestamp > voteEndTime;
-    }
-
     /// @notice Casts a vote for the given proposal.
-    /// @dev Only callable during the voting period for that proposa.
+    /// @dev Only callable during the voting period for that proposal.
     function _castVote(address voter, uint256 proposalId, VoteType voteType) private {
-        if (proposalId >= _getProposalCount()) {
-            revert("_castVote/INVALID_PROPOSAL_ID");
-        }
-        if (_getReceipt(proposalId, voter).hasVoted) {
-            revert("_castVote/ALREADY_VOTED");
-        }
+        // TODO: check if necessary
+        require(proposalId < _getProposalCount(), "VOTING_INVALID_ID_ERROR");
 
-        Proposal memory proposal = _proposals().value[proposalId];
-        if (proposal.voteEpoch != IStorage(_getStakingProxy()).currentEpoch() || _hasVoteEnded(proposal.voteEpoch)) {
-            revert("_castVote/VOTING_IS_CLOSED");
-        }
+        Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
+        require(!receipt.hasVoted, "VOTING_ALREADY_VOTED_ERROR");
 
+        // TODO: check if we use internal storage vs state methods
+        Proposal storage proposal = _proposals().proposalById[proposalId];
+        require(
+            _getProposalState(proposalId) == ProposalState.Active,
+            "VOTING_CLOSED_ERROR"
+        );
         uint256 votingPower = _getVotingPower(voter);
-        if (votingPower == 0) {
-            revert("_castVote/NO_VOTING_POWER");
-        }
+        require(votingPower != 0, "VOTING_NO_VOTES_ERROR");
 
         if (voteType == VoteType.FOR) {
-            _proposals().value[proposalId].votesFor += votingPower;
+            proposal.votesFor += votingPower;
         } else if (voteType == VoteType.AGAINST) {
-            _proposals().value[proposalId].votesAgainst += votingPower;
+            proposal.votesAgainst += votingPower;
         } else if (voteType == VoteType.ABSTAIN) {
-            _proposals().value[proposalId].votesAbstain += votingPower;
+            proposal.votesAbstain += votingPower;
         } else {
             revert("UNKNOWN_SUPPORT_TYPE_ERROR");
         }
 
-        _receipt().value[proposalId][voter].hasVoted = true;
+        _receipt().userReceiptByProposal[proposalId][voter] = Receipt({
+            hasVoted: true,
+            votes: uint96(votingPower),
+            voteType: voteType
+        });
 
         emit VoteCast(voter, proposalId, voteType, votingPower);
+    }
+
+    function _hasProposalPassed(Proposal memory proposal) internal view override returns (bool) {
+        return IGovernanceStrategy(_governanceStrategy().value)
+            .hasProposalPassed(proposal, _governanceParameters().quorumThreshold);
     }
 }
