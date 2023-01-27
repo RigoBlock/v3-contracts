@@ -19,11 +19,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./interfaces/IGovernanceEvents.sol";
-import "./interfaces/IGovernanceInitializer.sol";
-import "./interfaces/IGovernanceState.sol";
-import "./interfaces/IGovernanceUpgrade.sol";
-import "./interfaces/IGovernanceVoting.sol";
+import "./interfaces/governance/IGovernanceEvents.sol";
+import "./interfaces/governance/IGovernanceInitializer.sol";
+import "./interfaces/governance/IGovernanceState.sol";
+import "./interfaces/governance/IGovernanceUpgrade.sol";
+import "./interfaces/governance/IGovernanceVoting.sol";
 
 interface IRigoblockGovernance is
     IGovernanceEvents,
