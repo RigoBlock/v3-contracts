@@ -33,6 +33,15 @@ interface IGovernanceStrategy {
     /// @param quorumThreshold Number of votes required for a proposal to succeed.
     function assertValidThresholds(uint256 proposalThreshold, uint256 quorumThreshold) external view;
 
+    /// @notice Returns the state of a proposal for a required quorum.
+    /// @param proposal Tuple of the proposal.
+    /// @param minimumQuorum Number of votes required for a proposal to pass.
+    /// @return Tuple of the proposal state.
+    function getProposalState(IRigoblockGovernance.Proposal calldata proposal, uint256 minimumQuorum)
+        external
+        view
+        returns (IRigoblockGovernance.ProposalState);
+
     /// @notice Checks whether the given proposal has passed or not.
     /// @param proposal The proposal to be checked.
     /// @param minimumQuorum The minimum number of votes necessary for a proposal to pass.
@@ -43,9 +52,9 @@ interface IGovernanceStrategy {
     function votingPeriod() external view returns (uint256);
 
     /// @notice Returns the voting timestamps.
-    /// @return startTime Timestamp when proposal starts.
-    /// @return endTime Timestamp when voting ends.
-    function votingTimestamps() external view returns (uint256 startTime, uint256 endTime);
+    /// @return startBlockOrTime Timestamp when proposal starts.
+    /// @return endBlockOrTime Timestamp when voting ends.
+    function votingTimestamps() external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime);
 
     /// @notice Return a user's voting power.
     /// @param account Address to check votes for.

@@ -39,7 +39,8 @@ abstract contract MixinInitializer is MixinStorage {
         _governanceStrategy().value = params.governanceStrategy;
         _paramsWrapper().governanceParameters = GovernanceParameters({
             proposalThreshold: params.proposalThreshold,
-            quorumThreshold: params.quorumThreshold
+            quorumThreshold: params.quorumThreshold,
+            timeType: params.timeType
         });
         _domainSeparator().value = keccak256(
             abi.encode(

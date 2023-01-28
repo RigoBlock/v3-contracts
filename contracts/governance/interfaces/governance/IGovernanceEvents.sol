@@ -26,15 +26,15 @@ interface IGovernanceEvents {
     /// @param proposer Address of the proposer.
     /// @param proposalId Number of the proposal.
     /// @param actions Struct array of actions (targets, datas, values).
-    /// @param startTime Timestamp in seconds after which proposal can be voted on.
-    /// @param endTime Timestamp in seconds after which proposal can be executed.
+    /// @param startBlockOrTime Timestamp in seconds after which proposal can be voted on.
+    /// @param endBlockOrTime Timestamp in seconds after which proposal can be executed.
     /// @param description String description of proposal.
     event ProposalCreated(
         address proposer,
         uint256 proposalId,
         IGovernanceVoting.ProposedAction[] actions,
-        uint256 startTime,
-        uint256 endTime,
+        uint256 startBlockOrTime,
+        uint256 endBlockOrTime,
         string description
     );
 

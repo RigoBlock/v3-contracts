@@ -33,13 +33,13 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         require(_getVotingPower(msg.sender) >= _governanceParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
         require(length > 0, "GOV_NO_ACTIONS_ERROR");
         require(length <= PROPOSAL_MAX_OPERATIONS, "GOV_TOO_MANY_ACTIONS_ERROR");
-        (uint256 startTime, uint256 endTime) = IGovernanceStrategy(_governanceStrategy().value).votingTimestamps();
+        (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(_governanceStrategy().value).votingTimestamps();
 
         proposalId = _getProposalCount();
         Proposal memory newProposal = Proposal({
             actionsLength: length,
-            startTime: startTime,
-            endTime: endTime,
+            startBlockOrTime: startBlockOrTime,
+            endBlockOrTime: endBlockOrTime,
             votesFor: 0,
             votesAgainst: 0,
             votesAbstain: 0,
@@ -53,7 +53,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         _proposals().proposalById[proposalId] = newProposal;
         ++_proposalCount().value;
 
-        emit ProposalCreated(msg.sender, proposalId, actions, startTime, endTime, description);
+        emit ProposalCreated(msg.sender, proposalId, actions, startBlockOrTime, endBlockOrTime, description);
     }
 
     /// @inheritdoc IGovernanceVoting

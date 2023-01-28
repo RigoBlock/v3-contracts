@@ -52,7 +52,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceState
     function getProposalState(uint256 proposalId) public view override returns (ProposalState) {
-        return getProposalState(proposalId);
+        return _getProposalState(proposalId);
     }
 
     /// @inheritdoc IGovernanceState
@@ -111,17 +111,9 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     function _getProposalState(uint256 proposalId) internal view override returns (ProposalState) {
         require(_proposalCount().value >= proposalId, "VOTING_PROPOSAL_ID_ERROR");
         Proposal memory proposal = _proposals().proposalById[proposalId];
-        if (block.timestamp <= proposal.startTime) {
-            return ProposalState.Pending;
-        } else if (block.timestamp < proposal.endTime) {
-            return ProposalState.Active;
-        } else if (!_hasProposalPassed(proposal)) {
-            return ProposalState.Defeated;
-        } else if (proposal.executed) {
-            return ProposalState.Executed;
-        } else {
-            return ProposalState.Succeeded;
-        }
+        return
+            IGovernanceStrategy(_governanceStrategy().value)
+                .getProposalState(proposal, _governanceParameters().quorumThreshold);
     }
 
     function _getReceipt(uint256 proposalId, address voter)

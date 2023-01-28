@@ -34,15 +34,35 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view {
+    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
         assertValidThresholds(params.proposalThreshold, params.quorumThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function assertValidThresholds(uint256 proposalThreshold, uint256 quorumThreshold) public view {
+    function assertValidThresholds(uint256 proposalThreshold, uint256 quorumThreshold) public view override {
         _assertValidProposalThreshold(proposalThreshold);
         _assertValidQuorumThreshold(quorumThreshold);
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function getProposalState(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum)
+        external
+        view
+        override
+        returns (IRigoblockGovernance.ProposalState)
+    {
+        if (block.timestamp <= proposal.startBlockOrTime) {
+            return IGovernanceState.ProposalState.Pending;
+        } else if (block.timestamp < proposal.endBlockOrTime) {
+            return IGovernanceState.ProposalState.Active;
+        } else if (!hasProposalPassed(proposal, minimumQuorum)) {
+            return IGovernanceState.ProposalState.Defeated;
+        } else if (proposal.executed) {
+            return IGovernanceState.ProposalState.Executed;
+        } else {
+            return IGovernanceState.ProposalState.Succeeded;
+        }
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -54,8 +74,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function hasProposalPassed(IRigoblockGovernance.Proposal calldata proposal, uint256 minimumQuorum) public view override returns (bool) {
-        if (!_hasVoteEnded(proposal.endTime)) {
+    function hasProposalPassed(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum) public view override returns (bool) {
+        if (!_hasVoteEnded(proposal.endBlockOrTime)) {
             // Proposal is immediately executable if votes in favor higher than two thirds of total delegated GRG
             if (
                 3 * proposal.votesFor >
@@ -87,13 +107,13 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function votingTimestamps() public view override returns (uint256 startTime, uint256 endTime) {
-        startTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+    function votingTimestamps() public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
 
         // we require voting starts next block to prevent instant upgrade
-        startTime = block.timestamp > startTime ? block.timestamp + 1 : startTime;
+        startBlockOrTime = block.timestamp > startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
 
-        endTime = startTime + votingPeriod();
+        endBlockOrTime = startBlockOrTime + votingPeriod();
     }
 
     function _assertValidProposalThreshold(uint256 proposalThreshold) private view {
@@ -137,7 +157,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @notice Checks whether a vote starting at the given epoch has ended or not.
-    /// @dev Epoch start and end are stored as startTime and endTime at proposal creation.
+    /// @dev Epoch start and end are stored at proposal creation.
     /// @param endTime Time after which proposal can be executed.
     /// @return Boolean the vote has ended.
     function _hasVoteEnded(uint256 endTime) private view returns (bool) {

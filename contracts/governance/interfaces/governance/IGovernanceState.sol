@@ -25,9 +25,17 @@ interface IGovernanceState {
     enum ProposalState {
         Pending,
         Active,
+        Canceled,
         Defeated,
         Succeeded,
+        Queued,
+        Expired,
         Executed
+    }
+
+    enum TimeType {
+        BLOCKNUMBER,
+        TIMESTAMP
     }
 
     struct DeploymentConstants {
@@ -45,8 +53,8 @@ interface IGovernanceState {
 
     struct Proposal {
         uint256 actionsLength;
-        uint256 startTime;
-        uint256 endTime;
+        uint256 startBlockOrTime;
+        uint256 endBlockOrTime;
         uint256 votesFor;
         uint256 votesAgainst;
         uint256 votesAbstain;
@@ -90,6 +98,7 @@ interface IGovernanceState {
     struct GovernanceParameters {
         uint256 proposalThreshold;
         uint256 quorumThreshold;
+        TimeType timeType;
     }
 
     /// @notice Returns the name of the governace.

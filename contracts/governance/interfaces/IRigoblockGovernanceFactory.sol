@@ -19,6 +19,8 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import "../IRigoblockGovernance.sol";
+
 // solhint-disable-next-line
 interface IRigoblockGovernanceFactory {
     /// @notice Emitted when a governance is created.
@@ -30,12 +32,14 @@ interface IRigoblockGovernanceFactory {
     /// @param governanceStrategy Address of the voting strategy.
     /// @param proposalThreshold Number of votes required for creating a new proposal.
     /// @param quorumThreshold Number of votes required for execution.
+    /// @param timeType Enum of time type (block number or timestamp).
     /// @param name Human readable string of the name.
     function createGovernance(
         address implementation,
         address governanceStrategy,
         uint256 proposalThreshold,
         uint256 quorumThreshold,
+        IRigoblockGovernance.TimeType timeType,
         string calldata name
     ) external returns (address governance);
 
@@ -51,6 +55,9 @@ interface IRigoblockGovernanceFactory {
 
         /// @notice Number of votes required for execution.
         uint256 quorumThreshold;
+
+        /// @notice Type of time chosed, block number of timestamp.
+        IRigoblockGovernance.TimeType timeType;
 
         /// @notice String of the name of the application.
         string name;
