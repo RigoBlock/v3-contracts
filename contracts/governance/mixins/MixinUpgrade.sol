@@ -20,6 +20,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../../utils/storageSlot/StorageSlot.sol";
+import "../interfaces/IGovernanceStrategy.sol";
 import "./MixinStorage.sol"; // storage inherits from interface which declares events
 
 abstract contract MixinUpgrade is MixinStorage {
@@ -58,9 +59,19 @@ abstract contract MixinUpgrade is MixinStorage {
         uint256 newProposalThreshold,
         uint256 newQuorumThreshold
     ) external override onlyDelegatecall onlyGovernance {
+        IGovernanceStrategy(_governanceStrategy().value).assertValidThresholds(newProposalThreshold, newQuorumThreshold);
         _governanceParameters().proposalThreshold = newProposalThreshold;
         _governanceParameters().quorumThreshold = newQuorumThreshold;
         emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
+    }
+
+    /// @inheritdoc IGovernanceUpgrade
+    function updateGovernanceStrategy(address newStrategy) external override onlyDelegatecall onlyGovernance  {
+        address oldStrategy = _governanceStrategy().value;
+        assert(newStrategy != oldStrategy);
+        require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
+        _governanceStrategy().value = newStrategy;
+        emit StrategyUpdated(newStrategy);
     }
 
     /// @dev Returns whether an address is a contract.
