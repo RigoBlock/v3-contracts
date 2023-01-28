@@ -33,19 +33,19 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         _votingPeriod = 7 days;
     }
 
-    // TODO: check as in the context of rigoblock, a proposal could be made after the epoch expired and voted immediately
-    function votingTimestamps() public view override returns (uint256 startTime, uint256 endTime) {
-        startTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
-        // TODO: check if there should be delay to prevent instant upgrade
-        startTime = block.timestamp > startTime ? block.timestamp : startTime;
-        endTime = startTime + votingPeriod();
+    /// @inheritdoc IGovernanceStrategy
+    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view {
+        assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
+        assertValidThresholds(params.proposalThreshold, params.quorumThreshold);
     }
 
-    function votingPeriod() public view override returns (uint256) {
-        uint256 stakingEpochDuration = IStorage(_getStakingProxy()).epochDurationInSeconds();
-        return stakingEpochDuration < _votingPeriod ? stakingEpochDuration : _votingPeriod;
+    /// @inheritdoc IGovernanceStrategy
+    function assertValidThresholds(uint256 proposalThreshold, uint256 quorumThreshold) public view {
+        _assertValidProposalThreshold(proposalThreshold);
+        _assertValidQuorumThreshold(quorumThreshold);
     }
 
+    /// @inheritdoc IGovernanceStrategy
     function getVotingPower(address account) public view override returns (uint256) {
         return
             IStaking(_getStakingProxy())
@@ -69,17 +69,66 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
             } else {
                 return false;
             }
-        }
-        // TODO: check if we want to use else if
-        // Must have >= 2/3 support (≃66.7%).
-        if (2 * proposal.votesFor <= proposal.votesAgainst) {
+        // must have >= 2/3 support (≃66.7%)
+        } else if (2 * proposal.votesFor <= proposal.votesAgainst) {
             return false;
-        }
         // Must reach quorum threshold.
-        if (proposal.votesFor < minimumQuorum) {
+        } else if (proposal.votesFor < minimumQuorum) {
             return false;
+        } else {
+            return true;
         }
-        return true;
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function votingPeriod() public view override returns (uint256) {
+        uint256 stakingEpochDuration = IStorage(_getStakingProxy()).epochDurationInSeconds();
+        return stakingEpochDuration < _votingPeriod ? stakingEpochDuration : _votingPeriod;
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function votingTimestamps() public view override returns (uint256 startTime, uint256 endTime) {
+        startTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+
+        // we require voting starts next block to prevent instant upgrade
+        startTime = block.timestamp > startTime ? block.timestamp + 1 : startTime;
+
+        endTime = startTime + votingPeriod();
+    }
+
+    function _assertValidProposalThreshold(uint256 proposalThreshold) private view {
+        uint256 grgTotalSupply = IStaking(_getStakingProxy()).getGrgContract().totalSupply();
+        uint256 chainId = block.chainid;
+
+        // between 1 and 2% of total supply
+        uint256 floor = grgTotalSupply / 100;
+        uint256 cap = grgTotalSupply / 50;
+
+        // hard limits on altchains
+        if (chainId != 1) {
+            floor = floor < 20_000e18 ? 20_000e18 : floor;
+            cap = cap < 100_000e18 ? 100_000e18 : cap;
+        }
+
+        assert(proposalThreshold >= floor && proposalThreshold <= cap);
+    }
+
+    function _assertValidQuorumThreshold(uint256 quorumThreshold) private view {
+        uint256 grgTotalSupply = IStaking(_getStakingProxy()).getGrgContract().totalSupply();
+        uint256 chainId = block.chainid;
+
+        // between 4 and 10% of total supply
+        uint256 floor = grgTotalSupply / 25;
+        uint256 cap = grgTotalSupply / 10;
+
+        // hard limits on altchains
+        if (chainId != 1) {
+            floor = floor < 100_000e18 ? 100_000e18 : floor;
+            cap = cap < 400_000e18 ? 400_000e18 : cap;
+        }
+
+        assert(quorumThreshold >= floor && quorumThreshold <= cap);
+
     }
 
     /// @notice It is more gas efficient at deploy to reading immutable from internal method.
