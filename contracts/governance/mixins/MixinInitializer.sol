@@ -19,6 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import "../interfaces/IGovernanceStrategy.sol";
 import "../interfaces/IRigoblockGovernanceFactory.sol";
 import "./MixinStorage.sol";
 
@@ -33,6 +34,7 @@ abstract contract MixinInitializer is MixinStorage {
     /// @inheritdoc IGovernanceInitializer
     function initializeGovernance() external override onlyUninitialized {
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory(msg.sender).parameters();
+        IGovernanceStrategy(params.governanceStrategy).assertValidInitParams(params);
         _name().value = params.name;
         _governanceStrategy().value = params.governanceStrategy;
         _paramsWrapper().governanceParameters = GovernanceParameters({
