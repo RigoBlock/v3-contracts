@@ -46,19 +46,14 @@ interface IRigoblockGovernanceFactory {
     struct Parameters {
         /// @notice Address of the governance implementation contract.
         address implementation;
-
         /// @notice Address of the voting strategy.
         address governanceStrategy;
-
         /// @notice Number of votes required for creating a new proposal.
         uint256 proposalThreshold;
-
         /// @notice Number of votes required for execution.
         uint256 quorumThreshold;
-
         /// @notice Type of time chosed, block number of timestamp.
         IRigoblockGovernance.TimeType timeType;
-
         /// @notice String of the name of the application.
         string name;
     }

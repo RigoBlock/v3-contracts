@@ -51,8 +51,7 @@ abstract contract MixinConstants is IRigoblockGovernance {
     bytes32 internal constant _PROPOSALS_SLOT = 0x4c9446a18423f4548e2228ea960b1a789061f2812cf50d305d4527fdc4987578;
 
     // TODO: update hash as constant name changed
-    bytes32 internal constant _PROPOSAL_COUNT_SLOT =
-        0xbdd2133fac45cf26a03e03e13d846596b9d7940bbd32aef60e912772d175bb1d;
+    bytes32 internal constant _PROPOSAL_COUNT_SLOT = 0xbdd2133fac45cf26a03e03e13d846596b9d7940bbd32aef60e912772d175bb1d;
 
     // TODO: update hash
     bytes32 internal constant _STRATEGY_SLOT = 0xb82110679558db63b50a5551160e4d145a353af4b644d63bd4bdc975681fd945;

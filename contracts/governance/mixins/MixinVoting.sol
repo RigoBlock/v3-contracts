@@ -33,7 +33,8 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         require(_getVotingPower(msg.sender) >= _governanceParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
         require(length > 0, "GOV_NO_ACTIONS_ERROR");
         require(length <= PROPOSAL_MAX_OPERATIONS, "GOV_TOO_MANY_ACTIONS_ERROR");
-        (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(_governanceStrategy().value).votingTimestamps();
+        (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(_governanceStrategy().value)
+            .votingTimestamps();
 
         proposalId = _getProposalCount();
         Proposal memory newProposal = Proposal({
@@ -106,10 +107,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
         // TODO: check if we use internal storage vs state methods
         Proposal storage proposal = _proposals().proposalById[proposalId];
-        require(
-            _getProposalState(proposalId) == ProposalState.Active,
-            "VOTING_CLOSED_ERROR"
-        );
+        require(_getProposalState(proposalId) == ProposalState.Active, "VOTING_CLOSED_ERROR");
         uint256 votingPower = _getVotingPower(voter);
         require(votingPower != 0, "VOTING_NO_VOTES_ERROR");
 
@@ -133,7 +131,10 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     }
 
     function _hasProposalPassed(Proposal memory proposal) internal view override returns (bool) {
-        return IGovernanceStrategy(_governanceStrategy().value)
-            .hasProposalPassed(proposal, _governanceParameters().quorumThreshold);
+        return
+            IGovernanceStrategy(_governanceStrategy().value).hasProposalPassed(
+                proposal,
+                _governanceParameters().quorumThreshold
+            );
     }
 }

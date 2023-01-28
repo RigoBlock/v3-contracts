@@ -46,12 +46,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function getProposalState(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum)
-        external
-        view
-        override
-        returns (IRigoblockGovernance.ProposalState)
-    {
+    function getProposalState(
+        IRigoblockGovernance.Proposal memory proposal,
+        uint256 minimumQuorum
+    ) external view override returns (IRigoblockGovernance.ProposalState) {
         if (block.timestamp <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
         } else if (block.timestamp < proposal.endBlockOrTime) {
@@ -74,7 +72,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function hasProposalPassed(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum) public view override returns (bool) {
+    function hasProposalPassed(
+        IRigoblockGovernance.Proposal memory proposal,
+        uint256 minimumQuorum
+    ) public view override returns (bool) {
         if (!_hasVoteEnded(proposal.endBlockOrTime)) {
             // Proposal is immediately executable if votes in favor higher than two thirds of total delegated GRG
             if (
@@ -85,14 +86,14 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
                         .currentEpochBalance
             ) {
                 return true;
-            // Proposal is not passed until the vote is over.
+                // Proposal is not passed until the vote is over.
             } else {
                 return false;
             }
-        // must have >= 2/3 support (≃66.7%)
+            // must have >= 2/3 support (≃66.7%)
         } else if (2 * proposal.votesFor <= proposal.votesAgainst) {
             return false;
-        // Must reach quorum threshold.
+            // Must reach quorum threshold.
         } else if (proposal.votesFor < minimumQuorum) {
             return false;
         } else {
@@ -148,7 +149,6 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         }
 
         assert(quorumThreshold >= floor && quorumThreshold <= cap);
-
     }
 
     /// @notice It is more gas efficient at deploy to reading immutable from internal method.

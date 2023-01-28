@@ -64,10 +64,9 @@ interface IGovernanceState {
     /// @notice Returns a proposal for a given id.
     /// @param proposalId The number of the proposal.
     /// @return Tuple of proposal and tuple of proposal actions.
-    function getProposalById(uint256 proposalId)
-        external
-        view
-        returns (Proposal memory, IGovernanceVoting.ProposedAction[] memory);
+    function getProposalById(
+        uint256 proposalId
+    ) external view returns (Proposal memory, IGovernanceVoting.ProposedAction[] memory);
 
     /// @notice Returns the state of a proposal.
     /// @param proposalId Number of the proposal.

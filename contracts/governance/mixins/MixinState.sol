@@ -27,18 +27,21 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     // TODO: check where we are using this and whether it is correct naming.
     /// @inheritdoc IGovernanceState
     function getDeploymentConstants() external view override returns (DeploymentConstants memory) {
-        return DeploymentConstants({
-            name: name(),
-            version: VERSION,
-            proposalMaxOperations: PROPOSAL_MAX_OPERATIONS,
-            domainTypehash: DOMAIN_TYPEHASH,
-            voteTypehash: VOTE_TYPEHASH
-        });
+        return
+            DeploymentConstants({
+                name: name(),
+                version: VERSION,
+                proposalMaxOperations: PROPOSAL_MAX_OPERATIONS,
+                domainTypehash: DOMAIN_TYPEHASH,
+                voteTypehash: VOTE_TYPEHASH
+            });
     }
 
     // TODO: check if we should name returned variables for docs
     /// @inheritdoc IGovernanceState
-    function getProposalById(uint256 proposalId) public view override returns (Proposal memory, ProposedAction[] memory) {
+    function getProposalById(
+        uint256 proposalId
+    ) public view override returns (Proposal memory, ProposedAction[] memory) {
         Proposal memory proposal = _proposals().proposalById[proposalId];
         uint256 length = proposal.actionsLength;
         ProposedAction[] memory proposedActions = new ProposedAction[](length);
@@ -56,12 +59,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function getReceipt(uint256 proposalId, address voter)
-        public
-        view
-        override
-        returns (Receipt memory)
-    {
+    function getReceipt(uint256 proposalId, address voter) public view override returns (Receipt memory) {
         return _getReceipt(proposalId, voter);
     }
 
@@ -112,16 +110,13 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         require(_proposalCount().value >= proposalId, "VOTING_PROPOSAL_ID_ERROR");
         Proposal memory proposal = _proposals().proposalById[proposalId];
         return
-            IGovernanceStrategy(_governanceStrategy().value)
-                .getProposalState(proposal, _governanceParameters().quorumThreshold);
+            IGovernanceStrategy(_governanceStrategy().value).getProposalState(
+                proposal,
+                _governanceParameters().quorumThreshold
+            );
     }
 
-    function _getReceipt(uint256 proposalId, address voter)
-        internal
-        view
-        override
-        returns (Receipt memory)
-    {
+    function _getReceipt(uint256 proposalId, address voter) internal view override returns (Receipt memory) {
         return _receipt().userReceiptByProposal[proposalId][voter];
     }
 

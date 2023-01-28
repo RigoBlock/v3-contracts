@@ -39,7 +39,6 @@ abstract contract MixinUpgrade is MixinStorage {
 
     /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external override onlyDelegatecall onlyGovernance {
-
         // we read the current implementation address from the pool proxy storage
         address currentImplementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
 
@@ -59,14 +58,17 @@ abstract contract MixinUpgrade is MixinStorage {
         uint256 newProposalThreshold,
         uint256 newQuorumThreshold
     ) external override onlyDelegatecall onlyGovernance {
-        IGovernanceStrategy(_governanceStrategy().value).assertValidThresholds(newProposalThreshold, newQuorumThreshold);
+        IGovernanceStrategy(_governanceStrategy().value).assertValidThresholds(
+            newProposalThreshold,
+            newQuorumThreshold
+        );
         _governanceParameters().proposalThreshold = newProposalThreshold;
         _governanceParameters().quorumThreshold = newQuorumThreshold;
         emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function updateGovernanceStrategy(address newStrategy) external override onlyDelegatecall onlyGovernance  {
+    function updateGovernanceStrategy(address newStrategy) external override onlyDelegatecall onlyGovernance {
         address oldStrategy = _governanceStrategy().value;
         assert(newStrategy != oldStrategy);
         require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");

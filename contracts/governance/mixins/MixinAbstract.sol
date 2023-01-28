@@ -29,7 +29,10 @@ abstract contract MixinAbstract {
     function _getProposalState(uint256 proposalId) internal view virtual returns (IRigoblockGovernance.ProposalState);
 
     // TODO: not sure we are using this
-    function _getReceipt(uint256 proposalId, address voter) internal view virtual returns (IRigoblockGovernance.Receipt memory);
+    function _getReceipt(
+        uint256 proposalId,
+        address voter
+    ) internal view virtual returns (IRigoblockGovernance.Receipt memory);
 
     function _getVotingPower(address account) internal view virtual returns (uint256);
 
