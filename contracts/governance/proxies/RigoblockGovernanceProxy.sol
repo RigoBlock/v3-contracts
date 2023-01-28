@@ -40,7 +40,7 @@ contract RigoblockGovernanceProxy {
         address implementation = IRigoblockGovernanceFactory(msg.sender).parameters().implementation;
 
         // we store the implementation address
-        getImplementation().implementation = implementation;
+        _getImplementation().implementation = implementation;
         emit Upgraded(implementation);
 
         // initialize pool
@@ -55,7 +55,7 @@ contract RigoblockGovernanceProxy {
     /* solhint-disable no-complex-fallback */
     /// @notice Fallback function forwards all transactions and returns all received return data.
     fallback() external payable {
-        address implementation = getImplementation().implementation;
+        address implementation = _getImplementation().implementation;
         // solhint-disable-next-line no-inline-assembly
         assembly {
             calldatacopy(0, 0, calldatasize())
@@ -82,7 +82,7 @@ contract RigoblockGovernanceProxy {
 
     /// @notice Method to read/write from/to implementation slot.
     /// @return s Storage slot of the pool implementation.
-    function getImplementation() private pure returns (ImplementationSlot storage s) {
+    function _getImplementation() private pure returns (ImplementationSlot storage s) {
         assembly {
             s.slot := _IMPLEMENTATION_SLOT
         }
