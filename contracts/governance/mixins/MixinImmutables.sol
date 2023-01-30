@@ -21,12 +21,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "./MixinConstants.sol";
 
-/// @notice Immutables are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
+/// @notice Immutables are copied in the bytecode and not assigned a storage slot
+/// @dev New immutables can safely be added to this contract without ordering.
 abstract contract MixinImmutables is MixinConstants {
-    // TODO: check if we are using this one
-    address internal immutable _implementation;
-
-    constructor() {
-        _implementation = address(this);
-    }
+    constructor() {}
 }
