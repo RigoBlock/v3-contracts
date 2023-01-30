@@ -109,7 +109,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function votingTimestamps() public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+        startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
 
         // we require voting starts next block to prevent instant upgrade
         startBlockOrTime = block.timestamp > startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
