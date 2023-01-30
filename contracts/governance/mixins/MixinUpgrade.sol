@@ -41,6 +41,17 @@ abstract contract MixinUpgrade is MixinStorage {
         // prevent accidental setting implementation to EOA
         require(_isContract(newImplementation), "UPGRADE_NOT_CONTRACT_ERROR");
 
+        // we make sure to update the EIP-712 domain as the version has been upgraded
+        _domainSeparator().value = keccak256(
+            abi.encode(
+                DOMAIN_TYPEHASH,
+                keccak256(bytes(params.name)),
+                keccak256(bytes(VERSION)),
+                block.chainid,
+                address(this)
+            )
+        );
+
         // we write new address to storage at implementation slot location and emit eip1967 log
         StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
         emit Upgraded(newImplementation);
