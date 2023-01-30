@@ -24,21 +24,14 @@ import "../interfaces/IGovernanceStrategy.sol";
 import "./MixinStorage.sol"; // storage inherits from interface which declares events
 
 abstract contract MixinUpgrade is MixinStorage {
-    // TODO: check if should remove this modifier as these methods can only be invoked by other locked methods
-    // locks direct calls to this contract
-    modifier onlyDelegatecall() {
-        assert(_implementation != address(this));
-        _;
-    }
-
-    // upgrades must go through voting
+    // upgrades must go through voting, i.e. execute method, which cannot be invoked directly in the implementation
     modifier onlyGovernance() {
         require(msg.sender == address(this), "GOV_UPGRADE_APPROVAL_ERROR");
         _;
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function upgradeImplementation(address newImplementation) external override onlyDelegatecall onlyGovernance {
+    function upgradeImplementation(address newImplementation) external override onlyGovernance {
         // we read the current implementation address from the pool proxy storage
         address currentImplementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
 
@@ -57,7 +50,7 @@ abstract contract MixinUpgrade is MixinStorage {
     function updateThresholds(
         uint256 newProposalThreshold,
         uint256 newQuorumThreshold
-    ) external override onlyDelegatecall onlyGovernance {
+    ) external override onlyGovernance {
         IGovernanceStrategy(_governanceStrategy().value).assertValidThresholds(
             newProposalThreshold,
             newQuorumThreshold
@@ -68,7 +61,7 @@ abstract contract MixinUpgrade is MixinStorage {
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function updateGovernanceStrategy(address newStrategy) external override onlyDelegatecall onlyGovernance {
+    function updateGovernanceStrategy(address newStrategy) external override onlyGovernance {
         address oldStrategy = _governanceStrategy().value;
         assert(newStrategy != oldStrategy);
         require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
