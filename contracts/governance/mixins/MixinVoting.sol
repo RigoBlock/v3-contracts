@@ -51,7 +51,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             _proposedAction().proposedActionbyIndex[proposalId][i] = actions[i];
         }
 
-        _proposals().proposalById[proposalId] = newProposal;
+        _proposal().proposalById[proposalId] = newProposal;
         ++_proposalCount().value;
 
         emit ProposalCreated(msg.sender, proposalId, actions, startBlockOrTime, endBlockOrTime, description);
@@ -70,7 +70,6 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         bytes32 r,
         bytes32 s
     ) external override {
-        // TODO: read from public method
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposalId, voteType));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _domainSeparator().value, structHash));
         address signatory = ecrecover(digest, v, r, s);
@@ -82,7 +81,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     function execute(uint256 proposalId) external payable override {
         require(proposalId < _getProposalCount(), "VOTING_INVALID_PROPOSAL_ID");
         require(_getProposalState(proposalId) == ProposalState.Succeeded, "VOTING_EXECUTION_STATE_ERROR");
-        Proposal storage proposal = _proposals().proposalById[proposalId];
+        Proposal storage proposal = _proposal().proposalById[proposalId];
         require(!proposal.executed, "VOTING_EXECUTED_ERROR");
         // TODO: check that prev proposal was executed.
         proposal.executed = true;
@@ -99,14 +98,13 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @notice Casts a vote for the given proposal.
     /// @dev Only callable during the voting period for that proposal.
     function _castVote(address voter, uint256 proposalId, VoteType voteType) private {
-        // TODO: check if necessary
+        // TODO: check if necessary, as we require state active a few lines later
         require(proposalId < _getProposalCount(), "VOTING_INVALID_ID_ERROR");
 
         Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, "VOTING_ALREADY_VOTED_ERROR");
 
-        // TODO: check if we use internal storage vs state methods
-        Proposal storage proposal = _proposals().proposalById[proposalId];
+        Proposal storage proposal = _proposal().proposalById[proposalId];
         require(_getProposalState(proposalId) == ProposalState.Active, "VOTING_CLOSED_ERROR");
         uint256 votingPower = _getVotingPower(voter);
         require(votingPower != 0, "VOTING_NO_VOTES_ERROR");

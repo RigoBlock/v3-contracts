@@ -43,9 +43,8 @@ contract RigoblockGovernanceProxy {
         _getImplementation().implementation = implementation;
         emit Upgraded(implementation);
 
-        // initialize pool
+        // initialize governance
         // abi.encodeWithSelector(IRigoblockGovernance.initializeGovernance.selector)
-        // TODO: update function hash
         (, bytes memory returnData) = implementation.delegatecall(abi.encodeWithSelector(0xe9134903));
 
         // we must assert initialization didn't fail, otherwise it could fail silently and still deploy the governance.

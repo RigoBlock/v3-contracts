@@ -35,10 +35,9 @@ contract RigoblockGovernance is
     MixinState
 {
     /// @notice Constructor has no inputs to guarantee same deterministic address across chains.
-    /// @dev Setting high proposal threshold locks voting actions.
+    /// @dev Setting high proposal threshold locks propose action, which also lock vote actions.
     constructor() MixinImmutables() MixinStorage() {
         _governanceParameters().proposalThreshold = type(uint256).max;
-        // TODO: check if following statement is sufficient, can remove previous
         _governanceStrategy().value = address(0);
     }
 }
