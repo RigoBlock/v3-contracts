@@ -48,7 +48,8 @@ abstract contract MixinInitializer is MixinStorage {
                 keccak256(bytes(params.name)),
                 keccak256(bytes(VERSION)),
                 block.chainid,
-                address(this)
+                address(this),
+                keccak256(abi.encode(params.governanceStrategy))
             )
         );
     }

@@ -45,10 +45,11 @@ abstract contract MixinUpgrade is MixinStorage {
         _domainSeparator().value = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
-                keccak256(bytes(params.name)),
+                keccak256(bytes(_name().value)),
                 keccak256(bytes(VERSION)),
                 block.chainid,
-                address(this)
+                address(this),
+                keccak256(abi.encode(_governanceStrategy().value))
             )
         );
 
@@ -76,6 +77,19 @@ abstract contract MixinUpgrade is MixinStorage {
         address oldStrategy = _governanceStrategy().value;
         assert(newStrategy != oldStrategy);
         require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
+
+        // we make sure to update the EIP-712 domain as the version has been upgraded
+        _domainSeparator().value = keccak256(
+            abi.encode(
+                DOMAIN_TYPEHASH,
+                keccak256(bytes(_name().value)),
+                keccak256(bytes(VERSION)),
+                block.chainid,
+                address(this),
+                keccak256(abi.encode(_governanceStrategy().value))
+            )
+        );
+
         _governanceStrategy().value = newStrategy;
         emit StrategyUpdated(newStrategy);
     }
