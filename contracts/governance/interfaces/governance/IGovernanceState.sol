@@ -61,12 +61,17 @@ interface IGovernanceState {
         bool executed;
     }
 
+    struct ProposalWrapper {
+        Proposal proposal;
+        IGovernanceVoting.ProposedAction[] proposedAction;
+    }
+
     /// @notice Returns a proposal for a given id.
     /// @param proposalId The number of the proposal.
-    /// @return Tuple of proposal and tuple of proposal actions.
+    /// @return proposalWrapper Tuple wrapper of the proposal and proposed actions tuples.
     function getProposalById(
         uint256 proposalId
-    ) external view returns (Proposal memory, IGovernanceVoting.ProposedAction[] memory);
+    ) external view returns (ProposalWrapper memory proposalWrapper);
 
     /// @notice Returns the state of a proposal.
     /// @param proposalId Number of the proposal.
@@ -113,6 +118,6 @@ interface IGovernanceState {
     function proposalCount() external view returns (uint256 count);
 
     /// @notice Returns all proposals ever made to the governance.
-    /// @return proposalList Tuple array of all governance proposals.
-    function proposals() external view returns (Proposal[] memory proposalList);
+    /// @return proposalWrapper Tuple array of all governance proposals.
+    function proposals() external view returns (ProposalWrapper[] memory proposalWrapper);
 }
