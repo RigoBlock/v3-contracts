@@ -22,13 +22,9 @@ pragma solidity >=0.8.0 <0.9.0;
 import "../IRigoblockGovernance.sol";
 
 abstract contract MixinAbstract {
-    function _getGovernanceParameters() internal view virtual returns (IGovernanceState.GovernanceParameters memory);
-
     function _getProposalCount() internal view virtual returns (uint256);
 
     function _getProposalState(uint256 proposalId) internal view virtual returns (IRigoblockGovernance.ProposalState);
 
     function _getVotingPower(address account) internal view virtual returns (uint256);
-
-    function _hasProposalPassed(IRigoblockGovernance.Proposal memory proposal) internal view virtual returns (bool);
 }

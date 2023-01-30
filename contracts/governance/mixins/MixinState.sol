@@ -67,7 +67,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceState
     function governanceParameters() public view override returns (GovernanceParameters memory) {
-        return _getGovernanceParameters();
+        return _paramsWrapper().governanceParameters;
     }
 
     /// @inheritdoc IGovernanceState
@@ -92,10 +92,6 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         for (uint i = 0; i < length; i++) {
             proposalWrapper[i] = getProposalById(length);
         }
-    }
-
-    function _getGovernanceParameters() internal view override returns (GovernanceParameters memory) {
-        return _paramsWrapper().governanceParameters;
     }
 
     function _getProposalCount() internal view override returns (uint256 count) {

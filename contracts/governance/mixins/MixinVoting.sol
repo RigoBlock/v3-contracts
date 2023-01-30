@@ -127,12 +127,4 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
         emit VoteCast(voter, proposalId, voteType, votingPower);
     }
-
-    function _hasProposalPassed(Proposal memory proposal) internal view override returns (bool) {
-        return
-            IGovernanceStrategy(_governanceStrategy().value).hasProposalPassed(
-                proposal,
-                _governanceParameters().quorumThreshold
-            );
-    }
 }
