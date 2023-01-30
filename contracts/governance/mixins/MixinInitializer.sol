@@ -36,8 +36,8 @@ abstract contract MixinInitializer is MixinStorage {
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory(msg.sender).parameters();
         IGovernanceStrategy(params.governanceStrategy).assertValidInitParams(params);
         _name().value = params.name;
-        _governanceStrategy().value = params.governanceStrategy;
         _paramsWrapper().governanceParameters = GovernanceParameters({
+            strategy: params.governanceStrategy,
             proposalThreshold: params.proposalThreshold,
             quorumThreshold: params.quorumThreshold,
             timeType: params.timeType

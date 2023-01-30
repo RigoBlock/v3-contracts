@@ -24,19 +24,6 @@ import "./MixinStorage.sol";
 import "../interfaces/IGovernanceStrategy.sol";
 
 abstract contract MixinState is MixinStorage, MixinAbstract {
-    // TODO: check where we are using this and whether it is correct naming.
-    /// @inheritdoc IGovernanceState
-    function getDeploymentConstants() external view override returns (DeploymentConstants memory) {
-        return
-            DeploymentConstants({
-                name: name(),
-                version: VERSION,
-                proposalMaxOperations: PROPOSAL_MAX_OPERATIONS,
-                domainTypehash: DOMAIN_TYPEHASH,
-                voteTypehash: VOTE_TYPEHASH
-            });
-    }
-
     /// @inheritdoc IGovernanceState
     function getProposalById(
         uint256 proposalId
@@ -66,22 +53,21 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function governanceParameters() public view override returns (GovernanceParameters memory) {
-        return _paramsWrapper().governanceParameters;
+    function governanceParameters() external view override returns (EnhancedParams memory) {
+        return EnhancedParams({
+            params: _paramsWrapper().governanceParameters,
+            name: _name().value,
+            version: VERSION
+        });
     }
 
     /// @inheritdoc IGovernanceState
-    function governanceStrategy() public view override returns (address) {
-        return _governanceStrategy().value;
-    }
-
-    /// @inheritdoc IGovernanceState
-    function name() public view override returns (string memory) {
+    function name() external view override returns (string memory) {
         return _name().value;
     }
 
     /// @inheritdoc IGovernanceState
-    function proposalCount() public view override returns (uint256 count) {
+    function proposalCount() external view override returns (uint256 count) {
         return _getProposalCount();
     }
 
@@ -102,13 +88,13 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         require(_proposalCount().value >= proposalId, "VOTING_PROPOSAL_ID_ERROR");
         Proposal memory proposal = _proposal().proposalById[proposalId];
         return
-            IGovernanceStrategy(_governanceStrategy().value).getProposalState(
+            IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
                 proposal,
                 _governanceParameters().quorumThreshold
             );
     }
 
     function _getVotingPower(address account) internal view override returns (uint256) {
-        return IGovernanceStrategy(_governanceStrategy().value).getVotingPower(account);
+        return IGovernanceStrategy(_governanceParameters().strategy).getVotingPower(account);
     }
 }

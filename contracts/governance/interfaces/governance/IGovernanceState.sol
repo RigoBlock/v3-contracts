@@ -34,22 +34,9 @@ interface IGovernanceState {
     }
 
     enum TimeType {
-        BLOCKNUMBER,
-        TIMESTAMP
+        Blocknumber,
+        Timestamp
     }
-
-    struct DeploymentConstants {
-        string name;
-        string version;
-        uint256 proposalMaxOperations;
-        bytes32 domainTypehash;
-        bytes32 voteTypehash;
-    }
-
-    /// @notice Returns the implementation constant variables.
-    /// @dev Does not return allocated slots.
-    /// @return Tuple of the contract constants.
-    function getDeploymentConstants() external view returns (DeploymentConstants memory);
 
     struct Proposal {
         uint256 actionsLength;
@@ -95,23 +82,26 @@ interface IGovernanceState {
     /// @return votingPower The current voting power of the given account.
     function getVotingPower(address account) external view returns (uint256 votingPower);
 
-    /// @notice Returns the address of the governance strategy.
-    /// @return Address of the governance strategy contract.
-    function governanceStrategy() external view returns (address);
-
     struct GovernanceParameters {
+        address strategy;
         uint256 proposalThreshold;
         uint256 quorumThreshold;
         TimeType timeType;
     }
 
-    /// @notice Returns the name of the governace.
-    /// @return Human readable string of the name.
-    function name() external view returns (string memory);
+    struct EnhancedParams {
+        GovernanceParameters params;
+        string name;
+        string version;
+    }
 
     /// @notice Returns the governance parameters.
     /// @return Tuple of the governance parameters.
-    function governanceParameters() external view returns (GovernanceParameters memory);
+    function governanceParameters() external view returns (EnhancedParams memory);
+
+    /// @notice Returns the name of the governace.
+    /// @return Human readable string of the name.
+    function name() external view returns (string memory);
 
     /// @notice Returns the total number of proposals.
     /// @return count The number of proposals.

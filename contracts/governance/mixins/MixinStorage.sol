@@ -32,7 +32,6 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSAL_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal")) - 1));
         assert(_PROPOSAL_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalcount")) - 1));
         assert(_PROPOSED_ACTION_SLOT == bytes32(uint256(keccak256("governance.proxy.proposedaction")) - 1));
-        assert(_STRATEGY_SLOT == bytes32(uint256(keccak256("governance.proxy.strategy")) - 1));
     }
 
     struct Bytes32Slot {
@@ -48,16 +47,6 @@ abstract contract MixinStorage is MixinImmutables {
     function _governanceParameters() internal pure returns (GovernanceParameters storage s) {
         assembly {
             s.slot := _GOVERNANCE_PARAMS_SLOT
-        }
-    }
-
-    struct AddressSlot {
-        address value;
-    }
-
-    function _governanceStrategy() internal pure returns (AddressSlot storage s) {
-        assembly {
-            s.slot := _STRATEGY_SLOT
         }
     }
 

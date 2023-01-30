@@ -49,7 +49,7 @@ abstract contract MixinUpgrade is MixinStorage {
                 keccak256(bytes(VERSION)),
                 block.chainid,
                 address(this),
-                keccak256(abi.encode(_governanceStrategy().value))
+                keccak256(abi.encode(_governanceParameters().strategy))
             )
         );
 
@@ -63,7 +63,7 @@ abstract contract MixinUpgrade is MixinStorage {
         uint256 newProposalThreshold,
         uint256 newQuorumThreshold
     ) external override onlyGovernance {
-        IGovernanceStrategy(_governanceStrategy().value).assertValidThresholds(
+        IGovernanceStrategy(_governanceParameters().strategy).assertValidThresholds(
             newProposalThreshold,
             newQuorumThreshold
         );
@@ -74,11 +74,11 @@ abstract contract MixinUpgrade is MixinStorage {
 
     /// @inheritdoc IGovernanceUpgrade
     function updateGovernanceStrategy(address newStrategy) external override onlyGovernance {
-        address oldStrategy = _governanceStrategy().value;
+        address oldStrategy = _governanceParameters().strategy;
         assert(newStrategy != oldStrategy);
         require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
 
-        // we make sure to update the EIP-712 domain as the version has been upgraded
+        // we make sure to update the EIP-712 domain as the version is being upgraded
         _domainSeparator().value = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
@@ -86,11 +86,11 @@ abstract contract MixinUpgrade is MixinStorage {
                 keccak256(bytes(VERSION)),
                 block.chainid,
                 address(this),
-                keccak256(abi.encode(_governanceStrategy().value))
+                keccak256(abi.encode(newStrategy))
             )
         );
 
-        _governanceStrategy().value = newStrategy;
+        _governanceParameters().strategy = newStrategy;
         emit StrategyUpdated(newStrategy);
     }
 
