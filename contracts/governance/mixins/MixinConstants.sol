@@ -39,23 +39,21 @@ abstract contract MixinConstants is IRigoblockGovernance {
     bytes32 internal constant _DOMAIN_SEPARATOR_SLOT =
         0xdb618ced4dd9b748cfec0043e87e7f7708f67fafafb1c3d0bfb6dc0f9c8bf72f;
 
-    // implementation slot is same as declared in proxy
-    bytes32 internal constant _IMPLEMENTATION_SLOT = 0xc081ba77b34dd25ffc1c621425bbc52480b02e5d0249ce3831198d7e07603649;
-
-    // TODO: update name slot
-    bytes32 internal constant _NAME_SLOT = 0xc081ba77b34dd25ffc1c621425bbc52480b02e5d0249ce3831198d7e07603649;
-
-    // TODO: update hash as name changed
-    bytes32 internal constant _RECEIPT_SLOT = 0xc081ba77b34dd25ffc1c621425bbc52480b02e5d0249ce3831198d7e07603649;
-
-    bytes32 internal constant _PROPOSALS_SLOT = 0x4c9446a18423f4548e2228ea960b1a789061f2812cf50d305d4527fdc4987578;
-
-    // TODO: update hash as constant name changed
-    bytes32 internal constant _PROPOSAL_COUNT_SLOT = 0xbdd2133fac45cf26a03e03e13d846596b9d7940bbd32aef60e912772d175bb1d;
-
-    // TODO: update hash
-    bytes32 internal constant _STRATEGY_SLOT = 0xb82110679558db63b50a5551160e4d145a353af4b644d63bd4bdc975681fd945;
-
     bytes32 internal constant _GOVERNANCE_PARAMS_SLOT =
-        0x068519504cb4b072099e717e67e4cccbcc86c6938d6975f9e669e006bd04c567;
+        0x0116feaee435dceaf94f40403a5223724fba6d709cb4ce4aea5becab48feb141;
+
+    // implementation slot is same as declared in proxy
+    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
+    bytes32 internal constant _NAME_SLOT = 0x553222b140782d4f4112160b374e6b1dc38e2837c7dcbf3ef473031724ed3bd4;
+
+    bytes32 internal constant _PROPOSAL_SLOT = 0x52dbe777b6bf9bbaf43befe2c8e8af61027e6a0a8901def318a34b207514b5bc;
+
+    bytes32 internal constant _PROPOSAL_COUNT_SLOT = 0x7d19d505a441201fb38442238c5f65c45e6231c74b35aed1c92ad842019eab9f;
+
+    bytes32 internal constant _PROPOSED_ACTION_SLOT = 0xe4ff3d203d0a873fb9ffd3a1bbd07943574a73114c5affe6aa0217c743adeb06;
+
+    bytes32 internal constant _RECEIPT_SLOT = 0x5a7421539532aa5504e4251551519aa0a06f7c2a3b40bbade5235843e09ad5fe;
+
+    bytes32 internal constant _STRATEGY_SLOT = 0x0fa746c33ed425e52d4082eabc447331d690272f661b0f8132da49d11edc730c;
 }
