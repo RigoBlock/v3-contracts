@@ -93,7 +93,6 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         require(_getProposalState(proposalId) == ProposalState.Succeeded, "VOTING_EXECUTION_STATE_ERROR");
         Proposal storage proposal = _proposal().proposalById[proposalId];
         require(!proposal.executed, "VOTING_EXECUTED_ERROR");
-        // TODO: check that prev proposal was executed.
         proposal.executed = true;
 
         for (uint256 i; i < proposal.actionsLength; ++i) {

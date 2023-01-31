@@ -25,6 +25,16 @@ import "../interfaces/IGovernanceStrategy.sol";
 
 abstract contract MixinState is MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
+    function getActions(uint256 proposalId) external view override returns (ProposedAction[] memory proposedActions) {
+        Proposal memory proposal = _proposal().proposalById[proposalId];
+        uint256 actionsLength = proposal.actionsLength;
+        proposedActions = new ProposedAction[](actionsLength);
+        for (uint i = 0; i < actionsLength; i++) {
+            proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][actionsLength];
+        }
+    }
+
+    /// @inheritdoc IGovernanceState
     function getProposalById(
         uint256 proposalId
     ) public view override returns (ProposalWrapper memory proposalWrapper) {
