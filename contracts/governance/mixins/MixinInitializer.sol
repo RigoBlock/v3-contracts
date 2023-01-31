@@ -42,15 +42,5 @@ abstract contract MixinInitializer is MixinStorage {
             quorumThreshold: params.quorumThreshold,
             timeType: params.timeType
         });
-        _domainSeparator().value = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(params.name)),
-                keccak256(bytes(VERSION)),
-                block.chainid,
-                address(this),
-                keccak256(abi.encode(params.governanceStrategy))
-            )
-        );
     }
 }

@@ -25,7 +25,6 @@ abstract contract MixinStorage is MixinImmutables {
     // we use the constructor to assert that we are not using occupied storage slots
     constructor() {
         assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
-        assert(_DOMAIN_SEPARATOR_SLOT == bytes32(uint256(keccak256("governance.proxy.domainseparator")) - 1));
         assert(_GOVERNANCE_PARAMS_SLOT == bytes32(uint256(keccak256("governance.proxy.governanceparams")) - 1));
         assert(_NAME_SLOT == bytes32(uint256(keccak256("governance.proxy.name")) - 1));
         assert(_RECEIPT_SLOT == bytes32(uint256(keccak256("governance.proxy.user.receipt")) - 1));
@@ -34,19 +33,19 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSED_ACTION_SLOT == bytes32(uint256(keccak256("governance.proxy.proposedaction")) - 1));
     }
 
-    struct Bytes32Slot {
-        bytes32 value;
-    }
-
-    function _domainSeparator() internal pure returns (Bytes32Slot storage s) {
-        assembly {
-            s.slot := _DOMAIN_SEPARATOR_SLOT
-        }
-    }
-
     function _governanceParameters() internal pure returns (GovernanceParameters storage s) {
         assembly {
             s.slot := _GOVERNANCE_PARAMS_SLOT
+        }
+    }
+
+    struct AddressSlot {
+        address value;
+    }
+
+    function _implementation() internal pure returns (AddressSlot storage s) {
+        assembly {
+            s.slot := _IMPLEMENTATION_SLOT
         }
     }
 

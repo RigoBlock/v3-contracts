@@ -19,7 +19,6 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../utils/storageSlot/StorageSlot.sol";
 import "../interfaces/IGovernanceStrategy.sol";
 import "./MixinStorage.sol"; // storage inherits from interface which declares events
 
@@ -33,7 +32,7 @@ abstract contract MixinUpgrade is MixinStorage {
     /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external override onlyGovernance {
         // we read the current implementation address from the pool proxy storage
-        address currentImplementation = StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
+        address currentImplementation = _implementation().value;
 
         // transaction reverted if implementation is same as current
         require(newImplementation != currentImplementation, "UPGRADE_SAME_AS_CURRENT_ERROR");
@@ -41,20 +40,8 @@ abstract contract MixinUpgrade is MixinStorage {
         // prevent accidental setting implementation to EOA
         require(_isContract(newImplementation), "UPGRADE_NOT_CONTRACT_ERROR");
 
-        // we make sure to update the EIP-712 domain as the version has been upgraded
-        _domainSeparator().value = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(_name().value)),
-                keccak256(bytes(VERSION)),
-                block.chainid,
-                address(this),
-                keccak256(abi.encode(_governanceParameters().strategy))
-            )
-        );
-
         // we write new address to storage at implementation slot location and emit eip1967 log
-        StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
+        _implementation().value = newImplementation;
         emit Upgraded(newImplementation);
     }
 
@@ -78,18 +65,7 @@ abstract contract MixinUpgrade is MixinStorage {
         assert(newStrategy != oldStrategy);
         require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
 
-        // we make sure to update the EIP-712 domain as the version is being upgraded
-        _domainSeparator().value = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(_name().value)),
-                keccak256(bytes(VERSION)),
-                block.chainid,
-                address(this),
-                keccak256(abi.encode(newStrategy))
-            )
-        );
-
+        // we write the new address in the strategy storage slot
         _governanceParameters().strategy = newStrategy;
         emit StrategyUpdated(newStrategy);
     }

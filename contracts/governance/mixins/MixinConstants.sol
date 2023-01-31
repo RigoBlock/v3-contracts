@@ -36,9 +36,6 @@ abstract contract MixinConstants is IRigoblockGovernance {
     /// @notice The EIP-712 typehash for the vote struct
     bytes32 internal constant VOTE_TYPEHASH = keccak256("VoteEmitted(uint256 proposalId,enum supportType)");
 
-    bytes32 internal constant _DOMAIN_SEPARATOR_SLOT =
-        0xdb618ced4dd9b748cfec0043e87e7f7708f67fafafb1c3d0bfb6dc0f9c8bf72f;
-
     bytes32 internal constant _GOVERNANCE_PARAMS_SLOT =
         0x0116feaee435dceaf94f40403a5223724fba6d709cb4ce4aea5becab48feb141;
 

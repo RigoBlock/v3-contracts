@@ -70,10 +70,20 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         bytes32 r,
         bytes32 s
     ) external override {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                DOMAIN_TYPEHASH,
+                keccak256(bytes(_name().value)),
+                keccak256(bytes(VERSION)),
+                block.chainid,
+                address(this),
+                keccak256(abi.encode(_governanceParameters().strategy))
+            )
+        );
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposalId, voteType));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _domainSeparator().value, structHash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
-
+        require(signatory != address(0), "VOTING_INVALID_SIG_ERROR");
         return _castVote(signatory, proposalId, voteType);
     }
 
