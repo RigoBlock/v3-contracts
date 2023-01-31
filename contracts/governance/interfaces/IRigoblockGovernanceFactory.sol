@@ -34,6 +34,7 @@ interface IRigoblockGovernanceFactory {
     /// @param quorumThreshold Number of votes required for execution.
     /// @param timeType Enum of time type (block number or timestamp).
     /// @param name Human readable string of the name.
+    /// @return governance Address of the new governance.
     function createGovernance(
         address implementation,
         address governanceStrategy,
