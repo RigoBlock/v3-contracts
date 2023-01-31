@@ -36,6 +36,8 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(_governanceParameters().strategy)
             .votingTimestamps();
 
+        // proposals start from id = 1
+        _proposalCount().value++;
         proposalId = _getProposalCount();
         Proposal memory newProposal = Proposal({
             actionsLength: length,
@@ -47,12 +49,11 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             executed: false
         });
 
-        for (uint i; i < length; ++i) {
+        for (uint i = 0; i < length; i++) {
             _proposedAction().proposedActionbyIndex[proposalId][i] = actions[i];
         }
 
         _proposal().proposalById[proposalId] = newProposal;
-        ++_proposalCount().value;
 
         emit ProposalCreated(msg.sender, proposalId, actions, startBlockOrTime, endBlockOrTime, description);
     }
@@ -89,13 +90,11 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceVoting
     function execute(uint256 proposalId) external payable override {
-        require(proposalId < _getProposalCount(), "VOTING_INVALID_PROPOSAL_ID");
         require(_getProposalState(proposalId) == ProposalState.Succeeded, "VOTING_EXECUTION_STATE_ERROR");
         Proposal storage proposal = _proposal().proposalById[proposalId];
-        require(!proposal.executed, "VOTING_EXECUTED_ERROR");
         proposal.executed = true;
 
-        for (uint256 i; i < proposal.actionsLength; ++i) {
+        for (uint256 i = 0; i < proposal.actionsLength; i++) {
             ProposedAction memory action = _proposedAction().proposedActionbyIndex[proposalId][i];
             (bool didSucceed, ) = action.target.call{value: action.value}(action.data);
             require(didSucceed, "GOV_ACTION_EXECUTION_FAILED");
@@ -107,16 +106,12 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @notice Casts a vote for the given proposal.
     /// @dev Only callable during the voting period for that proposal.
     function _castVote(address voter, uint256 proposalId, VoteType voteType) private {
-        // TODO: check if necessary, as we require state active a few lines later
-        require(proposalId < _getProposalCount(), "VOTING_INVALID_ID_ERROR");
-
+        require(_getProposalState(proposalId) == ProposalState.Active, "VOTING_CLOSED_ERROR");
         Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, "VOTING_ALREADY_VOTED_ERROR");
-
-        Proposal storage proposal = _proposal().proposalById[proposalId];
-        require(_getProposalState(proposalId) == ProposalState.Active, "VOTING_CLOSED_ERROR");
         uint256 votingPower = _getVotingPower(voter);
         require(votingPower != 0, "VOTING_NO_VOTES_ERROR");
+        Proposal storage proposal = _proposal().proposalById[proposalId];
 
         if (voteType == VoteType.FOR) {
             proposal.votesFor += votingPower;

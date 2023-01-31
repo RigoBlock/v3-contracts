@@ -95,7 +95,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     function _getProposalState(uint256 proposalId) internal view override returns (ProposalState) {
-        require(_proposalCount().value >= proposalId, "VOTING_PROPOSAL_ID_ERROR");
+        require(_proposalCount().value >= proposalId && proposalId > 0, "VOTING_PROPOSAL_ID_ERROR");
         Proposal memory proposal = _proposal().proposalById[proposalId];
         return
             IGovernanceStrategy(_governanceParameters().strategy).getProposalState(

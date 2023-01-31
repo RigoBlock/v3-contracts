@@ -52,7 +52,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     ) external view override returns (IRigoblockGovernance.ProposalState) {
         if (block.timestamp <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
-        } else if (block.timestamp < proposal.endBlockOrTime) {
+        } else if (block.timestamp <= proposal.endBlockOrTime) {
             return IGovernanceState.ProposalState.Active;
         } else if (!hasProposalPassed(proposal, minimumQuorum)) {
             return IGovernanceState.ProposalState.Defeated;
