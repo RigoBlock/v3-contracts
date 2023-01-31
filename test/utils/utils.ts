@@ -82,3 +82,12 @@ export enum TimeType {
 export class ProposedAction {
     constructor(public target: any, public data: String, public value: Number) {}
 }
+
+export enum StakeStatus {
+    Undelegated,
+    Delegated,
+}
+
+export class StakeInfo {
+    constructor(public status: StakeStatus, public poolId: any) {}
+}
