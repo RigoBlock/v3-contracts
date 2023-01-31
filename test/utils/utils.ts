@@ -76,7 +76,7 @@ export const deployContract = async (deployer: Wallet, source: string): Promise<
 
 export enum TimeType {
     Blocknumber,
-    Timestamp,
+    Timestamp
 }
 
 export class ProposedAction {

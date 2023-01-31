@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
+import { parseEther } from "@ethersproject/units";
 import "@nomiclabs/hardhat-ethers";
 //import { AddressZero } from "@ethersproject/constants";
 //import { BigNumber, Contract } from "ethers";
@@ -24,16 +25,16 @@ describe("Governance Proxy", async () => {
         const { governance } = await governanceFactory.callStatic.createGovernance(
             ImplementationInstance.address,
             StrategyInstance.address,
-            BigInt(1e23), // 100k GRG
-            BigInt(1e24), // 1MM GRG
+            parseEther("100000"), // 100k GRG
+            parseEther("1000000"), // 1MM GRG
             TimeType.Timestamp,
             'Rigoblock Governance'
         )
         await governanceFactory.createGovernance(
             ImplementationInstance.address,
             StrategyInstance.address,
-            BigInt(1e23), // 100k GRG
-            BigInt(1e24), // 1MM GRG
+            parseEther("100000"), // 100k GRG
+            parseEther("1000000"), // 1MM GRG
             TimeType.Timestamp,
             'Rigoblock Governance')
         const Implementation = await hre.ethers.getContractFactory("RigoblockGovernance")
