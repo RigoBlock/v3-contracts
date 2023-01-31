@@ -27,7 +27,7 @@ abstract contract MixinInitializer is MixinStorage {
     modifier onlyUninitialized() {
         // proxy is always initialized in the constructor, therefore
         // empty extcodesize means the governance has not been initialized
-        require(address(this).code.length == 0, "POOL_ALREADY_INITIALIZED_ERROR");
+        require(address(this).code.length == 0, "ALREADY_INITIALIZED_ERROR");
         _;
     }
 

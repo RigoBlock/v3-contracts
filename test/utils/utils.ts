@@ -73,3 +73,12 @@ export const deployContract = async (deployer: Wallet, source: string): Promise<
     const receipt = await transaction.wait()
     return new Contract(receipt.contractAddress, output.interface, deployer)
 }
+
+export enum TimeType {
+    Blocknumber,
+    Timestamp,
+}
+
+export class ProposedAction {
+    constructor(public target: any, public data: String, public value: Number) {}
+}

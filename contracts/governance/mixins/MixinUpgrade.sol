@@ -31,7 +31,7 @@ abstract contract MixinUpgrade is MixinStorage {
 
     /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external override onlyGovernance {
-        // we read the current implementation address from the pool proxy storage
+        // we read the current implementation address from the governance proxy storage
         address currentImplementation = _implementation().value;
 
         // transaction reverted if implementation is same as current

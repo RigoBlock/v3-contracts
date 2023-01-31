@@ -48,8 +48,6 @@ contract RigoblockGovernanceFactory is IRigoblockGovernanceFactory {
             timeType: timeType,
             name: name
         });
-
-        //RigoblockPoolProxy proxy = new RigoblockPoolProxy{salt: salt}();
         governance = address(new RigoblockGovernanceProxy{salt: keccak256(abi.encode(msg.sender, name))}());
 
         delete _parameters;

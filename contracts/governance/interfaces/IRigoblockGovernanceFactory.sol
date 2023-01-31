@@ -58,7 +58,7 @@ interface IRigoblockGovernanceFactory {
         string name;
     }
 
-    /// @notice Returns the pool initialization parameters at proxy deploy.
-    /// @return Tuple of the pool parameters.
+    /// @notice Returns the governance initialization parameters at proxy deploy.
+    /// @return Tuple of the governance parameters.
     function parameters() external view returns (Parameters memory);
 }

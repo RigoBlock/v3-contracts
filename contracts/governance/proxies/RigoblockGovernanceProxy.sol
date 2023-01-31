@@ -80,7 +80,7 @@ contract RigoblockGovernanceProxy {
     }
 
     /// @notice Method to read/write from/to implementation slot.
-    /// @return s Storage slot of the pool implementation.
+    /// @return s Storage slot of the governance implementation.
     function _getImplementation() private pure returns (ImplementationSlot storage s) {
         assembly {
             s.slot := _IMPLEMENTATION_SLOT
