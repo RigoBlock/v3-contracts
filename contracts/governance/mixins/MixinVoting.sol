@@ -117,10 +117,8 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             proposal.votesFor += votingPower;
         } else if (voteType == VoteType.Against) {
             proposal.votesAgainst += votingPower;
-        } else if (voteType == VoteType.Abstain) {
-            proposal.votesAbstain += votingPower;
         } else {
-            revert("UNKNOWN_SUPPORT_TYPE_ERROR");
+            proposal.votesAbstain += votingPower;
         }
 
         _receipt().userReceiptByProposal[proposalId][voter] = Receipt({

@@ -294,6 +294,8 @@ describe("Governance Proxy", async () => {
             //expect(await governanceInstance.getActions(1)).to.be.eq([action])
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
+            // only 3 types of votes are supported, the 4th will revert
+            await expect(governanceInstance.castVote(1, 3)).to.be.reverted
             await governanceInstance.castVote(1, VoteType.For)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
