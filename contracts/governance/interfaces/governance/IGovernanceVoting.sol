@@ -23,9 +23,9 @@ import "./IGovernanceEvents.sol";
 
 interface IGovernanceVoting {
     enum VoteType {
-        FOR,
-        AGAINST,
-        ABSTAIN
+        For,
+        Against,
+        Abstain
     }
 
     /// @notice Casts a vote for the given proposal.

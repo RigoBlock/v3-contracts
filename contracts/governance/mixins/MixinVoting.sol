@@ -97,7 +97,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         for (uint256 i = 0; i < proposal.actionsLength; i++) {
             ProposedAction memory action = _proposedAction().proposedActionbyIndex[proposalId][i];
             (bool didSucceed, ) = action.target.call{value: action.value}(action.data);
-            require(didSucceed, "GOV_ACTION_EXECUTION_FAILED");
+            require(didSucceed, "GOV_ACTION_EXECUTION_ERROR");
         }
 
         emit ProposalExecuted(proposalId);
@@ -113,11 +113,11 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         require(votingPower != 0, "VOTING_NO_VOTES_ERROR");
         Proposal storage proposal = _proposal().proposalById[proposalId];
 
-        if (voteType == VoteType.FOR) {
+        if (voteType == VoteType.For) {
             proposal.votesFor += votingPower;
-        } else if (voteType == VoteType.AGAINST) {
+        } else if (voteType == VoteType.Against) {
             proposal.votesAgainst += votingPower;
-        } else if (voteType == VoteType.ABSTAIN) {
+        } else if (voteType == VoteType.Abstain) {
             proposal.votesAbstain += votingPower;
         } else {
             revert("UNKNOWN_SUPPORT_TYPE_ERROR");

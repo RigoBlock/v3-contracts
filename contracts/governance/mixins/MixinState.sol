@@ -90,6 +90,11 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         }
     }
 
+    /// @inheritdoc IGovernanceState
+    function votingPeriod() external view override returns (uint256) {
+        return IGovernanceStrategy(_governanceParameters().strategy).votingPeriod();
+    }
+
     function _getProposalCount() internal view override returns (uint256 count) {
         return _proposalCount().value;
     }

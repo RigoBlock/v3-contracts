@@ -60,7 +60,7 @@ interface IGovernanceEvents {
     /// @notice Emitted when a voter votes.
     /// @param voter Address of the voter.
     /// @param proposalId Number of the proposal.
-    /// @param voteType Number of vote type (FOR, AGAINST, ABSTAIN).
+    /// @param voteType Number of vote type.
     /// @param votingPower Number of votes.
     event VoteCast(address voter, uint256 proposalId, IGovernanceVoting.VoteType voteType, uint256 votingPower);
 }

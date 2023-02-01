@@ -115,4 +115,8 @@ interface IGovernanceState {
     /// @notice Returns all proposals ever made to the governance.
     /// @return proposalWrapper Tuple array of all governance proposals.
     function proposals() external view returns (ProposalWrapper[] memory proposalWrapper);
+
+    /// @notice Returns the voting period.
+    /// @return Number of blocks or seconds.
+    function votingPeriod() external view returns (uint256);
 }
