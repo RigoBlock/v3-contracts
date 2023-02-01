@@ -50,11 +50,13 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         IRigoblockGovernance.Proposal memory proposal,
         uint256 minimumQuorum
     ) external view override returns (IRigoblockGovernance.ProposalState) {
+        bool passed = hasProposalPassed(proposal, minimumQuorum);
+
         if (block.timestamp <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
-        } else if (block.timestamp <= proposal.endBlockOrTime) {
+        } else if (block.timestamp <= proposal.endBlockOrTime && !passed) {
             return IGovernanceState.ProposalState.Active;
-        } else if (!hasProposalPassed(proposal, minimumQuorum)) {
+        } else if (!passed) {
             return IGovernanceState.ProposalState.Defeated;
         } else if (proposal.executed) {
             return IGovernanceState.ProposalState.Executed;
@@ -77,13 +79,14 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         uint256 minimumQuorum
     ) public view override returns (bool) {
         if (!_hasVoteEnded(proposal.endBlockOrTime)) {
-            // Proposal is immediately executable if votes in favor higher than two thirds of total delegated GRG
+            // Proposal is immediately executable if votes for > than two thirds of total delegated GRG && quorum reached
             if (
                 3 * proposal.votesFor >
                 2 *
                     IStaking(_getStakingProxy())
                         .getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED)
                         .currentEpochBalance
+                && proposal.votesFor + proposal.votesAbstain >= minimumQuorum
             ) {
                 return true;
                 // Proposal is not passed until the vote is over.
@@ -94,7 +97,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         } else if (2 * proposal.votesFor <= proposal.votesAgainst) {
             return false;
             // Must reach quorum threshold.
-        } else if (proposal.votesFor < minimumQuorum) {
+        } else if (proposal.votesFor + proposal.votesAbstain < minimumQuorum) {
             return false;
         } else {
             return true;
