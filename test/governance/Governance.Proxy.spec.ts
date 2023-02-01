@@ -66,6 +66,7 @@ describe("Governance Proxy", async () => {
     describe("initializeGovernance", async () => {
         it('should always revert', async () => {
             const { governanceInstance } = await setupTests()
+            expect(await governanceInstance.name()).to.be.eq('Rigoblock Governance')
             await expect(
                 governanceInstance.initializeGovernance()
             ).to.be.revertedWith("ALREADY_INITIALIZED_ERROR")
@@ -126,6 +127,7 @@ describe("Governance Proxy", async () => {
             await expect(
                 governanceInstance.propose(actions, description)
             ).to.emit(governanceInstance, "ProposalCreated")
+            expect(await governanceInstance.proposalCount()).to.be.eq(1)
             // TODO: look into log as logged actions seem not equal to actions
             //.withArgs(user1.address, proposalId, actions, startTime, endTime, description)
         })
@@ -233,6 +235,8 @@ describe("Governance Proxy", async () => {
 
         it('should revert when below quorum', async () => {
             const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+            expect(await governanceInstance.proposalCount()).to.be.eq(0)
+            expect(await governanceInstance.getVotingPower(user1.address)).to.be.eq(0)
             const amount = parseEther("1000000")
             await grgToken.approve(grgTransferProxyAddress, amount)
             await staking.stake(amount)
@@ -242,9 +246,11 @@ describe("Governance Proxy", async () => {
             await staking.moveStake(fromInfo, toInfo, amount.div(10).mul(7))
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
+            expect(await governanceInstance.getVotingPower(user1.address)).to.be.eq(amount.div(10).mul(7))
             const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
             const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
             await governanceInstance.propose([action], description)
+            expect(await governanceInstance.proposalCount()).to.be.eq(1)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
             await governanceInstance.castVote(1, VoteType.For)
@@ -252,6 +258,7 @@ describe("Governance Proxy", async () => {
                 governanceInstance.execute(1)
             ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
             await governanceInstance.propose([action], description)
+            expect(await governanceInstance.proposalCount()).to.be.eq(2)
             await grgToken.transfer(user2.address, amount)
             await grgToken.connect(user2).approve(grgTransferProxyAddress, amount)
             await staking.connect(user2).stake(amount)
@@ -283,6 +290,8 @@ describe("Governance Proxy", async () => {
             const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
             const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
             await governanceInstance.propose([action], description)
+            // TODO: cannot compare actions correctly
+            //expect(await governanceInstance.getActions(1)).to.be.eq([action])
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
             await governanceInstance.castVote(1, VoteType.For)
