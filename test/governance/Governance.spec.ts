@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
+import { BigNumber } from "ethers";
 import "@nomiclabs/hardhat-ethers";
 import { ProposedAction, TimeType } from "../utils/utils";
 
@@ -19,7 +20,7 @@ describe("Governance Implementation", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
             const mockBytes = hre.ethers.utils.formatBytes32String('mock')
-            const action = new ProposedAction(user2.address, mockBytes, 0)
+            const action = new ProposedAction(user2.address, mockBytes, BigNumber.from('0'))
             await expect(implementation.propose([action],'this proposal should always fail'))
                 .to.be.reverted
         })
@@ -34,6 +35,7 @@ describe("Governance Implementation", async () => {
         })
     })
 
+    // TODO: encode EIP-712 signature
     describe.skip("castVoteBySignature", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()

@@ -1,18 +1,19 @@
 import { expect } from "chai";
+import { BigNumber } from "ethers";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import { parseEther } from "@ethersproject/units";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
-//import { BigNumber, Contract } from "ethers";
 //import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 //import { getAddress } from "ethers/lib/utils";
 import { timeTravel } from "../utils/utils";
-import { ProposedAction, StakeInfo, StakeStatus, TimeType } from "../utils/utils";
+import { ProposedAction, StakeInfo, StakeStatus, TimeType, VoteType } from "../utils/utils";
 
 describe("Governance Proxy", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
     const mockBytes = hre.ethers.utils.formatBytes32String('mock')
     const mockAddress = user2.address
+    const description = 'gov proposal one'
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('governance-tests')
@@ -65,11 +66,20 @@ describe("Governance Proxy", async () => {
         }
     });
 
+    describe("initializeGovernance", async () => {
+        it('should always revert', async () => {
+            const { governanceInstance } = await setupTests()
+            await expect(
+                governanceInstance.initializeGovernance()
+            ).to.be.revertedWith("ALREADY_INITIALIZED_ERROR")
+        })
+    })
+
     describe("propose", async () => {
         it('should revert with null stake', async () => {
             const { governanceInstance } = await setupTests()
             const mockBytes = hre.ethers.utils.formatBytes32String('mock')
-            const action = new ProposedAction(user2.address, mockBytes, 0)
+            const action = new ProposedAction(user2.address, mockBytes, BigNumber.from('0'))
             await expect(
                 governanceInstance.propose([action],'gov proposal one')
             ).to.be.revertedWith("GOV_LOW_VOTING_POWER")
@@ -86,25 +96,101 @@ describe("Governance Proxy", async () => {
             await staking.moveStake(fromInfo, toInfo, amount)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
-            const zeroBytes = hre.ethers.utils.formatBytes32String('')
-            const action = new ProposedAction(AddressZero, zeroBytes, 0)
-            console.log(zeroBytes)
-            // TODO: below does not revert
-            /*await expect(
-                governanceInstance.propose([action],'gov proposal one')
-            ).to.be.revertedWith("GOV_NO_ACTIONS_ERROR")*/
-        })
-    })
-
-    describe.skip("castVote", async () => {
-        it('should revert with direct call', async () => {
-            const { governanceInstance } = await setupTests()
             await expect(
-                governanceInstance.castVote(1)
-            ).to.be.revertedWith("reverted_without_a_reason")
+                governanceInstance.propose([],'gov proposal one')
+            ).to.be.revertedWith("GOV_NO_ACTIONS_ERROR")
+        })
+
+        it('can create invalid proposal', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+            const amount = parseEther("100000")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await staking.stake(amount)
+            await staking.createStakingPool(poolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const zeroBytes = hre.ethers.utils.formatBytes32String('')
+            const action = new ProposedAction(AddressZero, zeroBytes, BigNumber.from('0'))
+            let actions = [action, action, action, action, action, action, action, action, action, action, action]
+            await expect(
+                governanceInstance.propose(actions, description)
+            ).to.be.revertedWith("GOV_TOO_MANY_ACTIONS_ERROR")
+            const proposalId = await governanceInstance.callStatic.propose([action], description)
+            expect(proposalId).to.be.eq(1)
+            const startTime = await staking.callStatic.getCurrentEpochEarliestEndTimeInSeconds()
+            const votingPeriod = await governanceInstance.callStatic.votingPeriod()
+            // 7 days
+            expect(votingPeriod).to.be.eq(604800)
+            const endTime = startTime.add(votingPeriod)
+            actions = [action, action]
+            await expect(
+                governanceInstance.propose(actions, description)
+            ).to.emit(governanceInstance, "ProposalCreated")
+            // TODO: look into log as logged actions seem not equal to actions
+            //.withArgs(user1.address, proposalId, actions, startTime, endTime, description)
         })
     })
 
+    describe("castVote", async () => {
+        it('should revert with non active proposal', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+            // proposal does not exist
+            await expect(
+                governanceInstance.castVote(1, VoteType.For)
+            ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
+            const amount = parseEther("100000")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await staking.stake(amount)
+            await staking.createStakingPool(poolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const zeroBytes = hre.ethers.utils.formatBytes32String('')
+            const action = new ProposedAction(AddressZero, zeroBytes, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            await expect(
+                governanceInstance.castVote(1, VoteType.For)
+            ).to.be.revertedWith("VOTING_CLOSED_ERROR")
+        })
+
+        it('should revert without voting power', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+            const amount = parseEther("100000")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await staking.stake(amount)
+            await staking.createStakingPool(poolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const zeroBytes = hre.ethers.utils.formatBytes32String('')
+            const action = new ProposedAction(AddressZero, zeroBytes, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            await expect(
+                governanceInstance.connect(user2).castVote(1, VoteType.For)
+            ).to.be.revertedWith("VOTING_CLOSED_ERROR")
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await expect(
+                governanceInstance.connect(user2).castVote(1, VoteType.For)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
+            await expect(
+                governanceInstance.castVote(1, VoteType.For)
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, 1, VoteType.For, amount)
+            await expect(
+                governanceInstance.castVote(1, VoteType.For)
+            ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR")
+            // TODO: expect non-empty receipt
+        })
+    })
+
+    // TODO: encode EIP-712 signature
     describe.skip("castVoteBySignature", async () => {
         it('should revert with direct call', async () => {
             const { governanceInstance } = await setupTests()
@@ -114,58 +200,46 @@ describe("Governance Proxy", async () => {
         })
     })
 
-    describe.skip("execute", async () => {
-        it('should revert with direct call', async () => {
-            const { governanceInstance } = await setupTests()
+    describe("execute", async () => {
+        it('should revert with invalid state', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
             await expect(
                 governanceInstance.execute(1)
-            ).to.be.revertedWith("reverted_without_a_reason")
-        })
-    })
-
-    describe.skip("upgradeImplementation", async () => {
-        it('should revert with direct call', async () => {
-            const { governanceInstance } = await setupTests()
+            ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
+            const amount = parseEther("1000000")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await staking.stake(amount)
+            await staking.createStakingPool(poolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const zeroBytes = hre.ethers.utils.formatBytes32String('')
+            const action = new ProposedAction(AddressZero, zeroBytes, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
             await expect(
-                governanceInstance.upgradeImplementation(user2.address)
-            ).to.be.revertedWith("reverted_without_a_reason")
-        })
-    })
-
-    describe.skip("upgradeThresholds", async () => {
-        it('should revert with direct call', async () => {
-            const { governanceInstance } = await setupTests()
+                governanceInstance.execute(1)
+            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await governanceInstance.castVote(1, VoteType.For)
             await expect(
-                governanceInstance.upgradeThresholds(1, 1)
-            ).to.be.revertedWith("reverted_without_a_reason")
-        })
-    })
-
-    describe.skip("initialize", async () => {
-        it('should revert with direct call', async () => {
-            const { governanceInstance } = await setupTests()
+                governanceInstance.execute(1)
+            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            // TODO: following does not revert, but would if target is contract
+            /*await expect(
+                governanceInstance.execute(1)
+            ).to.be.revertedWith("GOV_ACTION_EXECUTION_ERROR")*/
             await expect(
-                governanceInstance.initialize()
-            ).to.be.revertedWith("reverted_without_a_reason")
-        })
-    })
-
-    describe.skip("updateGovernanceStrategy", async () => {
-        it('should revert with direct call', async () => {
-            const { governanceInstance } = await setupTests()
-            await expect(
-                governanceInstance.updateGovernanceStrategy(1)
-            ).to.be.revertedWith("reverted_without_a_reason")
+                governanceInstance.execute(1)
+            ).to.emit(governanceInstance, "ProposalExecuted").withArgs(1)
+            // TODO: test that proposal is immediately executable if votes for > 2/3 total staked grg
+            // TODO: test that it reverts if failed
+            // TODO: test that it reverts if does not reach quorum
+            // TODO: test that can pass with majority of votes Abstain
         })
     })
 })
-
-//TODO:
-//make a proposal
-//vote on a proposal
-//fail a proposal
-//pass a proposal
-//execute a proposal
-//upgrade implementation
-//upgrade thresholds
-// update strategy

@@ -1,5 +1,5 @@
 import hre, {network, ethers} from "hardhat"
-import { Wallet, Contract } from "ethers"
+import { BigNumber, Wallet, Contract } from "ethers"
 import solc from "solc"
 
 export interface TimeTravelOpts {
@@ -80,7 +80,7 @@ export enum TimeType {
 }
 
 export class ProposedAction {
-    constructor(public target: any, public data: String, public value: Number) {}
+    constructor(public target: any, public data: String, public value: BigNumber) {}
 }
 
 export enum StakeStatus {
@@ -90,4 +90,10 @@ export enum StakeStatus {
 
 export class StakeInfo {
     constructor(public status: StakeStatus, public poolId: any) {}
+}
+
+export enum VoteType {
+    For,
+    Against,
+    Abstain
 }
