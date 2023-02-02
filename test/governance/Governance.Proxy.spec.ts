@@ -124,12 +124,59 @@ describe("Governance Proxy", async () => {
             expect(votingPeriod).to.be.eq(604800)
             const endTime = startTime.add(votingPeriod)
             actions = [action, action]
-            await expect(
-                governanceInstance.propose(actions, description)
-            ).to.emit(governanceInstance, "ProposalCreated")
+            let outputActions = await governanceInstance.getActions(1)
+            expect(String(outputActions)).to.be.eq(String([]))
+            // notice: in the event the test suite does not return an error when comparing actions to an empty array
+            // further tests down below assert actions are correctly logged at event emission.
+            await expect(governanceInstance.propose(actions, description))
+                .to.emit(governanceInstance, "ProposalCreated")
+                .withArgs(user1.address, proposalId, outputActions, startTime, endTime, description)
             expect(await governanceInstance.proposalCount()).to.be.eq(1)
-            // TODO: look into log as logged actions seem not equal to actions
-            //.withArgs(user1.address, proposalId, actions, startTime, endTime, description)
+            outputActions = await governanceInstance.getActions(1)
+            const actionTuple = new ProposedAction(outputActions[0].target, outputActions[0].data, BigNumber.from(outputActions[0].value))
+            expect(String(actionTuple)).to.be.eq(String(action))
+        })
+
+        it('can create valid proposal', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+            const amount = parseEther("100000")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await staking.stake(amount)
+            await staking.createStakingPool(poolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, amount)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            const proposalId = await governanceInstance.callStatic.propose([action], description)
+            expect(proposalId).to.be.eq(1)
+            const startTime = await staking.callStatic.getCurrentEpochEarliestEndTimeInSeconds()
+            const votingPeriod = await governanceInstance.callStatic.votingPeriod()
+            const endTime = startTime.add(votingPeriod)
+            const actions = [action, action]
+            let outputActions = await governanceInstance.getActions(proposalId)
+            expect(String(outputActions)).to.be.eq(String([]))
+            // we cannot correctly compare struct arrays in events
+            await expect(governanceInstance.propose(actions, description))
+                .to.emit(governanceInstance, "ProposalCreated")
+                .withArgs(user1.address, proposalId, [], startTime, endTime, description)
+            // therefore, we first check that the actions storage has been updated
+            outputActions = await governanceInstance.getActions(proposalId)
+            expect(String(outputActions)).to.be.not.eq(String([]))
+            const actionTuple = new ProposedAction(outputActions[0].target, outputActions[0].data, BigNumber.from(outputActions[0].value))
+            expect(String(actionTuple)).to.be.eq(String(action))
+            // after that, we further investigate by creating a new identical proposal
+            const txReceipt = await governanceInstance.propose(actions, description)
+            const result = await txReceipt.wait()
+            outputActions = result.events[0].args.actions
+            // we define a new variable
+            const actionsTuple = [
+                  new ProposedAction(outputActions[0].target, outputActions[0].data, BigNumber.from(outputActions[0].value)),
+                  new ProposedAction(outputActions[1].target, outputActions[1].data, BigNumber.from(outputActions[1].value))
+            ]
+            expect(String(actionsTuple)).to.be.eq(String(actions))
         })
     })
 
@@ -290,8 +337,6 @@ describe("Governance Proxy", async () => {
             const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
             const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
             await governanceInstance.propose([action], description)
-            // TODO: cannot compare actions correctly
-            //expect(await governanceInstance.getActions(1)).to.be.eq([action])
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
             // only 3 types of votes are supported, the 4th will revert
@@ -299,6 +344,11 @@ describe("Governance Proxy", async () => {
             await governanceInstance.castVote(1, VoteType.For)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
+            // TODO: create test with 2 actions
+            const firstAction = (await governanceInstance.getActions(1))[0]
+            expect(firstAction.target).to.be.eq(grgToken.address)
+            expect(firstAction.value).to.be.eq(0)
+            expect(firstAction.data).to.be.eq(data)
             await expect(
                 governanceInstance.execute(1)
             ).to.emit(grgToken, "Approval").withArgs(governanceInstance.address, user2.address, amount)

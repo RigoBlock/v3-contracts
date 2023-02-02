@@ -30,30 +30,17 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         uint256 actionsLength = proposal.actionsLength;
         proposedActions = new ProposedAction[](actionsLength);
         for (uint i = 0; i < actionsLength; i++) {
-            proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][actionsLength];
+            proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
     }
 
     /// @inheritdoc IGovernanceState
-    function getProposalById(
-        uint256 proposalId
-    ) public view override returns (ProposalWrapper memory proposalWrapper) {
-        proposalWrapper.proposal = _proposal().proposalById[proposalId];
-        uint256 actionsLength = proposalWrapper.proposal.actionsLength;
-        ProposedAction[] memory proposedAction = new ProposedAction[](actionsLength);
-        for (uint i = 0; i < actionsLength; i++) {
-            proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][actionsLength];
-        }
-        proposalWrapper.proposedAction = proposedAction;
-    }
-
-    /// @inheritdoc IGovernanceState
-    function getProposalState(uint256 proposalId) public view override returns (ProposalState) {
+    function getProposalState(uint256 proposalId) external view override returns (ProposalState) {
         return _getProposalState(proposalId);
     }
 
     /// @inheritdoc IGovernanceState
-    function getReceipt(uint256 proposalId, address voter) public view override returns (Receipt memory) {
+    function getReceipt(uint256 proposalId, address voter) external view override returns (Receipt memory) {
         return _receipt().userReceiptByProposal[proposalId][voter];
     }
 
@@ -86,13 +73,26 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         uint256 length = _getProposalCount();
         proposalWrapper = new ProposalWrapper[](length);
         for (uint i = 0; i < length; i++) {
-            proposalWrapper[i] = getProposalById(length);
+            proposalWrapper[i] = getProposalById(i);
         }
     }
 
     /// @inheritdoc IGovernanceState
     function votingPeriod() external view override returns (uint256) {
         return IGovernanceStrategy(_governanceParameters().strategy).votingPeriod();
+    }
+
+    /// @inheritdoc IGovernanceState
+    function getProposalById(
+        uint256 proposalId
+    ) public view override returns (ProposalWrapper memory proposalWrapper) {
+        proposalWrapper.proposal = _proposal().proposalById[proposalId];
+        uint256 actionsLength = proposalWrapper.proposal.actionsLength;
+        ProposedAction[] memory proposedAction = new ProposedAction[](actionsLength);
+        for (uint i = 0; i < actionsLength; i++) {
+            proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
+        }
+        proposalWrapper.proposedAction = proposedAction;
     }
 
     function _getProposalCount() internal view override returns (uint256 count) {
