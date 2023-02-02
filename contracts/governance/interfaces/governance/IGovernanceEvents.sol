@@ -42,9 +42,9 @@ interface IGovernanceEvents {
     /// @param proposalId Number of the proposal.
     event ProposalExecuted(uint256 proposalId);
 
-    /// @notice Emmited when the governance strategy is updated.
+    /// @notice Emmited when the governance strategy is upgraded.
     /// @param newStrategy Address of the new strategy contract.
-    event StrategyUpdated(address newStrategy);
+    event StrategyUpgraded(address newStrategy);
 
     /// @notice Emitted when voting thresholds get updated.
     /// @dev Only governance can update thresholds.

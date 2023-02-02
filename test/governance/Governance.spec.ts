@@ -63,11 +63,11 @@ describe("Governance Implementation", async () => {
         })
     })
 
-    describe("upgradeThresholds", async () => {
+    describe("updateThresholds", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
             await expect(
-                implementation.upgradeThresholds(1, 1)
+                implementation.updateThresholds(1, 1)
             ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR")
         })
     })

@@ -30,6 +30,26 @@ abstract contract MixinUpgrade is MixinStorage {
     }
 
     /// @inheritdoc IGovernanceUpgrade
+    function updateThresholds(
+        uint256 newProposalThreshold,
+        uint256 newQuorumThreshold
+    ) external override onlyGovernance {
+        GovernanceParameters storage params = _governanceParameters();
+        require(
+            newProposalThreshold != params.proposalThreshold
+            && newQuorumThreshold != params.quorumThreshold,
+            "UPGRADE_SAME_AS_CURRENT_ERROR"
+        );
+        IGovernanceStrategy(params.strategy).assertValidThresholds(
+            newProposalThreshold,
+            newQuorumThreshold
+        );
+        params.proposalThreshold = newProposalThreshold;
+        params.quorumThreshold = newQuorumThreshold;
+        emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
+    }
+
+    /// @inheritdoc IGovernanceUpgrade
     function upgradeImplementation(address newImplementation) external override onlyGovernance {
         // we read the current implementation address from the governance proxy storage
         address currentImplementation = _implementation().value;
@@ -53,26 +73,7 @@ abstract contract MixinUpgrade is MixinStorage {
 
         // we write the new address in the strategy storage slot
         _governanceParameters().strategy = newStrategy;
-        emit StrategyUpdated(newStrategy);
-    }
-
-    /// @inheritdoc IGovernanceUpgrade
-    function upgradeThresholds(
-        uint256 newProposalThreshold,
-        uint256 newQuorumThreshold
-    ) external override onlyGovernance {
-        GovernanceParameters storage params = _governanceParameters();
-        require(
-            newProposalThreshold != params.proposalThreshold
-            && newQuorumThreshold != params.quorumThreshold
-        );
-        IGovernanceStrategy(params.strategy).assertValidThresholds(
-            newProposalThreshold,
-            newQuorumThreshold
-        );
-        params.proposalThreshold = newProposalThreshold;
-        params.quorumThreshold = newQuorumThreshold;
-        emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
+        emit StrategyUpgraded(newStrategy);
     }
 
     /// @dev Returns whether an address is a contract.
