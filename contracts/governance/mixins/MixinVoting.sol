@@ -96,8 +96,19 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
         for (uint256 i = 0; i < proposal.actionsLength; i++) {
             ProposedAction memory action = _proposedAction().proposedActionbyIndex[proposalId][i];
-            (bool didSucceed, ) = action.target.call{value: action.value}(action.data);
-            require(didSucceed, "GOV_ACTION_EXECUTION_ERROR");
+            address target = action.target;
+            uint256 value = action.value;
+            bytes memory data = action.data;
+
+            // we revert with error returned from the target
+            // solhint-disable-next-line no-inline-assembly
+            assembly {
+                let didSucceed := call(gas(), target, value, add(data, 0x20), mload(data), 0, 0)
+                returndatacopy(0, 0, returndatasize())
+                if eq(didSucceed, 0) {
+                    revert(0, returndatasize())
+                }
+            }
         }
 
         emit ProposalExecuted(proposalId);

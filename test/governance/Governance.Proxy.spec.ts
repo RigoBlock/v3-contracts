@@ -325,7 +325,7 @@ describe("Governance Proxy", async () => {
             await staking.endEpoch()
             await expect(
                 governanceInstance.execute(1)
-            ).to.be.revertedWith("GOV_ACTION_EXECUTION_ERROR")
+            ).to.be.revertedWith("Transaction reverted without a reason")
         })
 
         it('should execute immediately if support > 2/3 all staked delegated GRG', async () => {

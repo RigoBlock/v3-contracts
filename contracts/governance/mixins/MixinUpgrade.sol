@@ -48,7 +48,7 @@ abstract contract MixinUpgrade is MixinStorage {
     /// @inheritdoc IGovernanceUpgrade
     function upgradeStrategy(address newStrategy) external override onlyGovernance {
         address oldStrategy = _governanceParameters().strategy;
-        assert(newStrategy != oldStrategy);
+        require(newStrategy != oldStrategy, "UPGRADE_SAME_AS_CURRENT_ERROR");
         require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
 
         // we write the new address in the strategy storage slot
