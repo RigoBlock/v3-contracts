@@ -46,21 +46,7 @@ abstract contract MixinUpgrade is MixinStorage {
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function updateThresholds(
-        uint256 newProposalThreshold,
-        uint256 newQuorumThreshold
-    ) external override onlyGovernance {
-        IGovernanceStrategy(_governanceParameters().strategy).assertValidThresholds(
-            newProposalThreshold,
-            newQuorumThreshold
-        );
-        _governanceParameters().proposalThreshold = newProposalThreshold;
-        _governanceParameters().quorumThreshold = newQuorumThreshold;
-        emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
-    }
-
-    /// @inheritdoc IGovernanceUpgrade
-    function updateGovernanceStrategy(address newStrategy) external override onlyGovernance {
+    function upgradeStrategy(address newStrategy) external override onlyGovernance {
         address oldStrategy = _governanceParameters().strategy;
         assert(newStrategy != oldStrategy);
         require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
@@ -68,6 +54,25 @@ abstract contract MixinUpgrade is MixinStorage {
         // we write the new address in the strategy storage slot
         _governanceParameters().strategy = newStrategy;
         emit StrategyUpdated(newStrategy);
+    }
+
+    /// @inheritdoc IGovernanceUpgrade
+    function upgradeThresholds(
+        uint256 newProposalThreshold,
+        uint256 newQuorumThreshold
+    ) external override onlyGovernance {
+        GovernanceParameters storage params = _governanceParameters();
+        require(
+            newProposalThreshold != params.proposalThreshold
+            && newQuorumThreshold != params.quorumThreshold
+        );
+        IGovernanceStrategy(params.strategy).assertValidThresholds(
+            newProposalThreshold,
+            newQuorumThreshold
+        );
+        params.proposalThreshold = newProposalThreshold;
+        params.quorumThreshold = newQuorumThreshold;
+        emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
     }
 
     /// @dev Returns whether an address is a contract.

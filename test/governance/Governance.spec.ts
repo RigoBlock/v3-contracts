@@ -63,11 +63,11 @@ describe("Governance Implementation", async () => {
         })
     })
 
-    describe("updateThresholds", async () => {
+    describe("upgradeThresholds", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
             await expect(
-                implementation.updateThresholds(1, 1)
+                implementation.upgradeThresholds(1, 1)
             ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR")
         })
     })
@@ -81,11 +81,11 @@ describe("Governance Implementation", async () => {
         })
     })
 
-    describe("updateGovernanceStrategy", async () => {
+    describe("upgradeStrategy", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
             await expect(
-                implementation.updateGovernanceStrategy(user2.address)
+                implementation.upgradeStrategy(user2.address)
             ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR")
         })
     })
