@@ -52,6 +52,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     ) external view override returns (IRigoblockGovernance.ProposalState) {
         bool passed = hasProposalPassed(proposal, minimumQuorum);
 
+        // TODO: because in rigoblock staking we use epochs, we should probably assess that the timestamp matches the correct epoch
+        // therefore, we should store the epoch in this contract when a proposal is created
         if (block.timestamp <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
         } else if (block.timestamp <= proposal.endBlockOrTime && !passed) {

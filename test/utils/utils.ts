@@ -2,6 +2,26 @@ import hre, {network, ethers} from "hardhat"
 import { BigNumber, Wallet, Contract } from "ethers"
 import solc from "solc"
 
+export interface StakeOpts {
+    amount?: BigNumber;
+    grgToken?: any;
+    grgTransferProxyAddress?: string;
+    staking?: any;
+    poolAddress?: string;
+    poolId?: string;
+}
+
+export async function stakeProposalThreshold(opts: StakeOpts) {
+    await opts.grgToken.approve(opts.grgTransferProxyAddress, opts.amount)
+    await opts.staking.stake(opts.amount)
+    await opts.staking.createStakingPool(opts.poolAddress)
+    const fromInfo = new StakeInfo(StakeStatus.Undelegated, opts.poolId)
+    const toInfo = new StakeInfo(StakeStatus.Delegated, opts.poolId)
+    await opts.staking.moveStake(fromInfo, toInfo, opts.amount)
+    await timeTravel({ days: 14, mine:true })
+    await opts.staking.endEpoch()
+}
+
 export interface TimeTravelOpts {
     days?: number;
     hours?: number;

@@ -84,7 +84,10 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposalId, voteType));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
-        require(signatory != address(0), "VOTING_INVALID_SIG_ERROR");
+        // TODO: following assertion is always bypassed by producing an EIP712 signature
+        require(
+            signatory != address(0) && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0,
+            "VOTING_INVALID_SIG_ERROR");
         return _castVote(signatory, proposalId, voteType);
     }
 
