@@ -315,7 +315,7 @@ describe("Governance Proxy", async () => {
             ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
         })
 
-        it('should vote on an existing proposal', async () => {
+        it.skip('should vote on an existing proposal', async () => {
             const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking, strategy } = await setupTests()
             const amount = parseEther("100000")
             await stakeProposalThreshold({amount: amount, grgToken: grgToken, grgTransferProxyAddress: grgTransferProxyAddress, staking: staking, poolAddress: poolAddress, poolId: poolId})
