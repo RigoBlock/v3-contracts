@@ -304,13 +304,12 @@ describe("Governance Proxy", async () => {
             await staking.endEpoch()
             await governanceInstance.castVote(2, VoteType.For)
             await governanceInstance.connect(user2).castVote(2, VoteType.Abstain)
-            // proposal is closed assertion is checked before user has voted assertion
             await expect(governanceInstance.connect(user2).castVote(2, VoteType.Abstain))
-                .to.be.revertedWith("VOTING_CLOSED_ERROR")
+                .to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR")
+            // execution reverts as votes for below quorum
             await expect(
                 governanceInstance.execute(2)
-            ).to.emit(governanceInstance, "ProposalExecuted").withArgs(2)
-            // TODO: test that with quorum but less than 2/3 of votes proposal fails
+            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
         })
 
         it('should revert if quorum not reached)', async () => {
@@ -438,9 +437,10 @@ describe("Governance Proxy", async () => {
             ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
+            // reverts asqualified majority but quorum not reached
             await expect(
                 governanceInstance.execute(1)
-            ).to.emit(governanceInstance, "ProposalExecuted").withArgs(1)
+            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
         })
 
         it('should correctly execute an external contract call', async () => {
