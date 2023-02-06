@@ -29,6 +29,13 @@ abstract contract MixinConstants is IRigoblockGovernance {
     /// @notice Maximum operations per proposal
     uint256 internal constant PROPOSAL_MAX_OPERATIONS = 10;
 
+    /// @notice The EIP-712 typehash for the contract's domain
+    bytes32 internal constant DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
+    /// @notice The EIP-712 typehash for the vote struct
+    bytes32 internal constant VOTE_TYPEHASH = keccak256("Vote(uint256 proposalId,uint8 voteType)");
+
     bytes32 internal constant _GOVERNANCE_PARAMS_SLOT =
         0x0116feaee435dceaf94f40403a5223724fba6d709cb4ce4aea5becab48feb141;
 

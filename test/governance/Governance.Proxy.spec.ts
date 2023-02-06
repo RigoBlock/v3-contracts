@@ -4,6 +4,7 @@ import hre, { deployments, waffle, ethers } from "hardhat";
 import { parseEther } from "@ethersproject/units";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
+import { signEip712Message } from "../utils/eip712sig";
 import { timeTravel, stakeProposalThreshold, ProposalState, ProposedAction, StakeInfo, StakeStatus, TimeType, VoteType } from "../utils/utils";
 
 describe("Governance Proxy", async () => {
@@ -232,7 +233,120 @@ describe("Governance Proxy", async () => {
             await expect(
                 governanceInstance.castVote(1, VoteType.For)
             ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR")
-            // TODO: expect non-empty receipt
+        })
+    })
+
+    // TODO: method should fail regardless which epoch we are in until we enforce being in a new epoch
+    describe("castVoteBySignature", async () => {
+        it('should revert without proposal', async () => {
+            const { governanceInstance, strategy } = await setupTests()
+            const proposalId = 1
+            const voteType = VoteType.Abstain
+            const { signature, domain, types, value} = await signEip712Message({
+                governance: governanceInstance.address,
+                proposalId: proposalId,
+                voteType: voteType
+            })
+            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
+            // we use user2 as signed message should be relayable by anyone
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
+            ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
+        })
+
+        it('should vote on an existing proposal', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking, strategy } = await setupTests()
+            const amount = parseEther("100000")
+            await stakeProposalThreshold({amount: amount, grgToken: grgToken, grgTransferProxyAddress: grgTransferProxyAddress, staking: staking, poolAddress: poolAddress, poolId: poolId})
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            const proposalId = await governanceInstance.callStatic.propose([action], description)
+            await governanceInstance.propose([action], description)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const voteType = VoteType.For
+            const { signature, domain, types, value} = await signEip712Message({
+                governance: governanceInstance.address,
+                proposalId: proposalId,
+                voteType: voteType
+            })
+            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
+            const structDataHash = hre.ethers.utils._TypedDataEncoder.hash(domain, types, value)
+            const signerAddress = hre.ethers.utils.recoverAddress(structDataHash, signature)
+            expect(signerAddress).to.be.eq(user1.address)
+            const { currentEpochBalance } = await staking.getOwnerStakeByStatus(signerAddress, StakeStatus.Delegated)
+            const votingPower = await governanceInstance.getVotingPower(signerAddress)
+            expect(currentEpochBalance).to.be.eq(votingPower)
+            expect(votingPower).to.be.eq(amount)
+            // notice: contract only asserts signatory != address(0) as eip712 signatures on diff. domains always bypass the assertion
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, votingPower)
+        })
+
+        it('should revert on wrong proposal id or vote', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId, strategy } = await setupTests()
+            const amount = parseEther("100000")
+            await stakeProposalThreshold({amount, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId})
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            const proposalId = 1
+            const voteType = VoteType.Abstain
+            const { signature, domain, types, value} = await signEip712Message({
+                governance: governanceInstance.address,
+                proposalId: proposalId,
+                voteType: voteType
+            })
+            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
+            await governanceInstance.propose([action], description)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            // an invalid signature (we send signature for proposal 1, bypasses signature assertion)
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId + 1, voteType, v, r, s)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, VoteType.For, v, r, s)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, amount)
+        })
+
+        it('should be able to vote if has unstaked', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId, strategy } = await setupTests()
+            const amount = parseEther("100000")
+            await stakeProposalThreshold({amount, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId})
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            const proposalId = 1
+            const voteType = VoteType.Abstain
+            const { signature, domain, types, value} = await signEip712Message({
+                governance: governanceInstance.address,
+                proposalId: proposalId,
+                voteType: voteType
+            })
+            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const fromInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, amount)
+            await expect(staking.unstake(amount)).to.be.revertedWith("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, amount)
+            // we create a new proposal
+            await governanceInstance.propose([action], description)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await staking.unstake(amount)
+            // an invalid signature (we send signature for proposal 1, bypasses signature assertion)
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId + 1, voteType, v, r, s)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
         })
     })
 
