@@ -35,16 +35,6 @@ describe("Governance Implementation", async () => {
         })
     })
 
-    // TODO: encode EIP-712 signature
-    describe.skip("castVoteBySignature", async () => {
-        it('should revert with direct call', async () => {
-            const { implementation } = await setupTests()
-            await expect(
-                implementation.castVoteBySignature(1)
-            ).to.be.reverted
-        })
-    })
-
     describe("execute", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
