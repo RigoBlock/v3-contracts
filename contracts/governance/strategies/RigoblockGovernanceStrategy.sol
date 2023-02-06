@@ -88,7 +88,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
                     IStaking(_getStakingProxy())
                         .getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED)
                         .currentEpochBalance
-                && proposal.votesFor + proposal.votesAbstain >= minimumQuorum
+                && proposal.votesFor >= minimumQuorum
             ) {
                 return true;
                 // Proposal is not passed until the vote is over.
@@ -96,10 +96,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
                 return false;
             }
             // must have >= 2/3 support (≃66.7%)
-        } else if (2 * proposal.votesFor <= proposal.votesAgainst) {
+        } else if (proposal.votesFor <= 2 * proposal.votesAgainst) {
             return false;
             // Must reach quorum threshold.
-        } else if (proposal.votesFor + proposal.votesAbstain < minimumQuorum) {
+        } else if (proposal.votesFor < minimumQuorum) {
             return false;
         } else {
             return true;
