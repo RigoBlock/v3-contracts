@@ -174,34 +174,54 @@ describe("Governance Upgrades", async () => {
             ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR")
         })
 
-        // TODO: assert either
         it('should revert if either of new thresholds same as current', async () => {
             const { governanceInstance, staking } = await setupTests()
             const { proposalThreshold, quorumThreshold } = (await governanceInstance.governanceParameters()).params
-            const data = governanceInstance.interface.encodeFunctionData('updateThresholds(uint,uint)', [proposalThreshold, quorumThreshold])
-            const action = new ProposedAction(governanceInstance.address, data, BigNumber.from('0'))
+            let data = governanceInstance.interface.encodeFunctionData('updateThresholds(uint,uint)', [proposalThreshold, quorumThreshold])
+            let action = new ProposedAction(governanceInstance.address, data, BigNumber.from('0'))
             await governanceInstance.propose([action], description)
             expect(await governanceInstance.proposalCount()).to.be.eq(1)
+            const newQuorumThreshold = parseEther("600000")
+            expect(newQuorumThreshold).to.be.not.eq(quorumThreshold)
+            data = governanceInstance.interface.encodeFunctionData('updateThresholds(uint,uint)', [proposalThreshold, newQuorumThreshold])
+            action = new ProposedAction(governanceInstance.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            expect(await governanceInstance.proposalCount()).to.be.eq(2)
+            const newProposalThreshold = parseEther("150000")
+            expect(newProposalThreshold).to.be.not.eq(proposalThreshold)
+            data = governanceInstance.interface.encodeFunctionData('updateThresholds(uint,uint)', [newProposalThreshold, newQuorumThreshold])
+            action = new ProposedAction(governanceInstance.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            expect(await governanceInstance.proposalCount()).to.be.eq(3)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
             await governanceInstance.castVote(1, VoteType.For)
             await expect(governanceInstance.execute(1)).to.be.revertedWith("UPGRADE_SAME_AS_CURRENT_ERROR")
+            await governanceInstance.castVote(2, VoteType.For)
+            await expect(governanceInstance.execute(2)).to.be.revertedWith("UPGRADE_SAME_AS_CURRENT_ERROR")
+            await governanceInstance.castVote(3, VoteType.For)
+            await expect(governanceInstance.execute(3)).to.emit(governanceInstance, "ThresholdsUpdated")
         })
 
-        // TODO: assert either
         it('should revert if either is invalid paramter', async () => {
             const { governanceInstance, staking } = await setupTests()
-            const newProposalThreshold = BigNumber.from("100")
-            const newQuorumThreshold = BigNumber.from("200")
-            const data = governanceInstance.interface.encodeFunctionData('updateThresholds(uint,uint)', [newProposalThreshold, newQuorumThreshold])
-            const action = new ProposedAction(governanceInstance.address, data, BigNumber.from('0'))
+            let newProposalThreshold = BigNumber.from("100")
+            const newQuorumThreshold = parseEther("500000")
+            let data = governanceInstance.interface.encodeFunctionData('updateThresholds(uint,uint)', [newProposalThreshold, newQuorumThreshold])
+            let action = new ProposedAction(governanceInstance.address, data, BigNumber.from('0'))
             await governanceInstance.propose([action], description)
             expect(await governanceInstance.proposalCount()).to.be.eq(1)
+            newProposalThreshold = parseEther("150000")
+            data = governanceInstance.interface.encodeFunctionData('updateThresholds(uint,uint)', [newProposalThreshold, newQuorumThreshold])
+            action = new ProposedAction(governanceInstance.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
             await governanceInstance.castVote(1, VoteType.For)
             // governance strategy reverts without error in case of rogue params as proposer should be aware of params
-            await expect(governanceInstance.execute(1)).to.be.reverted
+            await expect(governanceInstance.execute(1)).to.be.revertedWith("VM Exception while processing transaction: revert")
+            await governanceInstance.castVote(2, VoteType.For)
+            await expect(governanceInstance.execute(2)).to.emit(governanceInstance, "ThresholdsUpdated")
         })
 
         it('should update thresholds', async () => {

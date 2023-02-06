@@ -379,9 +379,6 @@ describe("Governance Proxy", async () => {
             await expect(
                 governanceInstance.execute(1)
             ).to.emit(governanceInstance, "ProposalExecuted").withArgs(1)
-            // TODO: test that execution reverts during voting period and executed only after
-            // TODO: test that can pass with majority of votes Abstain
-            // TODO: test voting already voted error
         })
 
         it('should revert during voting period when below quorum', async () => {
@@ -574,7 +571,10 @@ describe("Governance Proxy", async () => {
             await staking.endEpoch()
             const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
             const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
-            await governanceInstance.propose([action], description)
+            // finalizePool can be called at any time and will have no impact on state but will emit log
+            const data2 = staking.interface.encodeFunctionData('finalizePool(bytes32)', [poolId])
+            const action2 = new ProposedAction(staking.address, data2, BigNumber.from('0'))
+            await governanceInstance.propose([action, action2], description)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
             // only 3 types of votes are supported, the 4th will revert
@@ -582,7 +582,6 @@ describe("Governance Proxy", async () => {
             await governanceInstance.castVote(1, VoteType.For)
             await timeTravel({ days: 14, mine:true })
             await staking.endEpoch()
-            // TODO: create test with 2 actions
             const firstAction = (await governanceInstance.getActions(1))[0]
             expect(firstAction.target).to.be.eq(grgToken.address)
             expect(firstAction.value).to.be.eq(0)

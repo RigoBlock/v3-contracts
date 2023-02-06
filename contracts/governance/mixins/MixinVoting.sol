@@ -60,7 +60,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceVoting
     function castVote(uint256 proposalId, VoteType voteType) external override {
-        return _castVote(msg.sender, proposalId, voteType);
+        _castVote(msg.sender, proposalId, voteType);
     }
 
     /// @inheritdoc IGovernanceVoting
