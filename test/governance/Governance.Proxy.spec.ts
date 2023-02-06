@@ -238,6 +238,7 @@ describe("Governance Proxy", async () => {
     })
 
     // TODO: encode EIP-712 signature
+    // TODO: test modify cast vote inputs to (uint256 id, uint8 support)
     describe("castVoteBySignature", async () => {
         // TODO: this test should be removed if we deprecate salt in the EIP712 domain
         it.skip('should revert with signature with wrong salt', async () => {
