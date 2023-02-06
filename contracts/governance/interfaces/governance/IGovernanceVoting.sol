@@ -38,10 +38,11 @@ interface IGovernanceVoting {
     /// @dev Only callable during the voting period for that proposal. One voter can only vote once.
     /// @param proposalId The ID of the proposal to vote on.
     /// @param voteType Whether to support, not support or abstain.
-    /// @param v the v field of the signature
-    /// @param r the r field of the signature
-    /// @param s the s field of the signature
-    function castVoteBySignature(uint256 proposalId, VoteType voteType, uint8 v, bytes32 r, bytes32 s) external;
+    /// @param v the v field of the signature.
+    /// @param r the r field of the signature.
+    /// @param s the s field of the signature.
+    /// @return signatory Addressed Eip-712 recovered.
+    function castVoteBySignature(uint256 proposalId, VoteType voteType, uint8 v, bytes32 r, bytes32 s) external returns (address signatory);
 
     /// @notice Executes a proposal that has passed and is currently executable.
     /// @param proposalId The ID of the proposal to execute.

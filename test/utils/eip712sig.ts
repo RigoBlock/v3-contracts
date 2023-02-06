@@ -1,24 +1,35 @@
+import ethSigUtil from "@metamask/eth-sig-util"
 import hre, {network, waffle, ethers} from "hardhat"
 import { VoteType } from "./utils"
 
 export interface SigOpts {
-    strategy?: string|any;
     governance?: string;
     proposalId?: number;
     voteType?: VoteType;
 }
 
-export async function signTypedData(opts: SigOpts) {
-    const salt = hre.ethers.utils.keccak256(opts.strategy)
+const EIP712Domain = [
+    { name: 'name', type: 'string' },
+    { name: 'version', type: 'string' },
+    { name: 'chainId', type: 'uint256' },
+    { name: 'verifyingContract', type: 'address' }
+]
+
+enum SignTypedDataVersion {
+    V1 = 'V1',
+    V3 = 'V3',
+    V4 = 'V4'
+}
+
+export async function signEip712Message(opts: SigOpts) {
     const domain = {
         name: 'Rigoblock Governance',
         version: '1.0.0',
         chainId: 31337,
-        verifyingContract: opts.governance,
-        salt: salt
+        verifyingContract: opts.governance
     }
     const types = {
-        VoteEmitted: [
+        Vote: [
             { name: 'proposalId', type: 'uint256' },
             { name: 'voteType', type: 'uint8' }
         ]
@@ -28,13 +39,34 @@ export async function signTypedData(opts: SigOpts) {
         voteType: opts.voteType
     }
     const signer = waffle.provider.getSigner()
-    const sig = await signer._signTypedData(domain, types, value)
-    const r = '0x' + sig.substring(2).substring(0, 64)
-    const s = '0x' + sig.substring(2).substring(64, 128)
-    const v = parseInt(sig.substring(2).substring(128,130), 16)
+    let mnemonic = process.env.MNEMONIC
+    if (mnemonic == undefined) {
+        mnemonic = "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"
+    }
+    const wallet = hre.ethers.Wallet.fromMnemonic(mnemonic)
+    const privateKey = Buffer.from(wallet.privateKey)
+    const signature = await signer._signTypedData(domain, types, value)
+    /*const altSig = await ethSigUtil.signTypedData({
+        privateKey: privateKey,
+        data: {
+            types: {
+                EIP712Domain,
+                Vote: [
+                    { name: 'proposalId', type: 'uint256' },
+                    { name: 'voteType', type: 'uint8' }
+                ],
+            },
+            domain: domain,
+            primaryType: 'Vote',
+            message: value
+        },
+        version: SignTypedDataVersion.V4
+    })
+    console.log(signature, altSig)*/
     return {
-        "v": v,
-        "r": r,
-        "s": s
+      "signature": signature,
+      "domain": domain,
+      "types": types,
+      "value": value
     }
 }

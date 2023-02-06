@@ -70,25 +70,24 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external override {
+    ) external override returns (address signatory) {
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
                 keccak256(bytes(_name().value)),
                 keccak256(bytes(VERSION)),
                 block.chainid,
-                address(this),
-                keccak256(abi.encode(_governanceParameters().strategy))
+                address(this)
             )
         );
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposalId, voteType));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
-        address signatory = ecrecover(digest, v, r, s);
+        signatory = ecrecover(digest, v, r, s);
         // TODO: following assertion is always bypassed by producing an EIP712 signature
         require(
             signatory != address(0) && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0,
             "VOTING_INVALID_SIG_ERROR");
-        return _castVote(signatory, proposalId, voteType);
+        _castVote(signatory, proposalId, voteType);
     }
 
     /// @inheritdoc IGovernanceVoting
