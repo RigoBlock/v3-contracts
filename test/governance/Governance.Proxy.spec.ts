@@ -313,6 +313,53 @@ describe("Governance Proxy", async () => {
             // TODO: test that with quorum but less than 2/3 of votes proposal fails
         })
 
+        it('should revert if quorum reached but not enough support', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+            expect(await governanceInstance.proposalCount()).to.be.eq(0)
+            expect(await governanceInstance.getVotingPower(user1.address)).to.be.eq(0)
+            const amount = parseEther("1000000")
+            // stake 1MM GRG from user1
+            await stakeProposalThreshold({ amount, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId })
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            // stake 100k GRG from user2
+            const transferAmount = amount.div(10)
+            await grgToken.transfer(user2.address, transferAmount)
+            await grgToken.connect(user2).approve(grgTransferProxyAddress, transferAmount)
+            await staking.connect(user2).stake(transferAmount)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await staking.connect(user2).moveStake(fromInfo, toInfo, transferAmount)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await governanceInstance.castVote(1, VoteType.Abstain)
+            await governanceInstance.connect(user2).castVote(1, VoteType.Against)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await expect(
+                governanceInstance.execute(1)
+            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
+            // add another voter
+            await grgToken.transfer(user3.address, transferAmount.add(1))
+            await grgToken.connect(user3).approve(grgTransferProxyAddress, transferAmount.add(1))
+            await staking.connect(user3).stake(transferAmount.add(1))
+            await staking.connect(user3).moveStake(fromInfo, toInfo, transferAmount.add(1))
+            await governanceInstance.propose([action], description)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await governanceInstance.castVote(2, VoteType.Abstain)
+            await governanceInstance.connect(user2).castVote(2, VoteType.Against)
+            await governanceInstance.connect(user3).castVote(2, VoteType.For)
+            await expect(governanceInstance.connect(user3).castVote(2, VoteType.Abstain))
+                .to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR")
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await expect(
+                governanceInstance.execute(2)
+            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
+        })
+
         it('should correctly execute an external contract call', async () => {
             const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
             const amount = parseEther("1000000")

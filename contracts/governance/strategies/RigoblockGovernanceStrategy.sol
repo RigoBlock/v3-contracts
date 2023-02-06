@@ -96,7 +96,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
                 return false;
             }
             // must have >= 2/3 support (≃66.7%)
-        } else if (2 * proposal.votesFor <= proposal.votesAgainst) {
+        } else if (proposal.votesFor <= 2 * proposal.votesAgainst) {
             return false;
             // Must reach quorum threshold.
         } else if (proposal.votesFor + proposal.votesAbstain < minimumQuorum) {
