@@ -239,6 +239,7 @@ describe("Governance Proxy", async () => {
 
     // TODO: encode EIP-712 signature
     describe("castVoteBySignature", async () => {
+        // TODO: this test should be removed if we deprecate salt in the EIP712 domain
         it.skip('should revert with signature with wrong salt', async () => {
             const { governanceInstance, strategy, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId } = await setupTests()
             const proposalId = 1
@@ -313,7 +314,7 @@ describe("Governance Proxy", async () => {
             ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
         })
 
-        it.skip('should vote on an existing proposal', async () => {
+        it('should vote on an existing proposal', async () => {
             const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking, strategy } = await setupTests()
             const amount = parseEther("100000")
             await stakeProposalThreshold({amount: amount, grgToken: grgToken, grgTransferProxyAddress: grgTransferProxyAddress, staking: staking, poolAddress: poolAddress, poolId: poolId})
