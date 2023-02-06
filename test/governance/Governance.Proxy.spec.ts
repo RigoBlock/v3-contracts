@@ -310,6 +310,10 @@ describe("Governance Proxy", async () => {
             await expect(
                 governanceInstance.execute(2)
             ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
+            const proposals = await governanceInstance.proposals()
+            expect(proposals[0].proposal.actionsLength).to.be.eq(1)
+            expect(proposals[0].proposal.votesFor).to.be.eq(amount.div(10).mul(7))
+            expect(proposals[1].proposal.votesAbstain).to.be.eq(amount.div(10).mul(3))
         })
 
         it('should revert if quorum not reached)', async () => {

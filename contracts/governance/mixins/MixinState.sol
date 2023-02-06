@@ -73,7 +73,8 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         uint256 length = _getProposalCount();
         proposalWrapper = new ProposalWrapper[](length);
         for (uint i = 0; i < length; i++) {
-            proposalWrapper[i] = getProposalById(i);
+            // proposal count starts at proposalId = 1
+            proposalWrapper[i] = getProposalById(i + 1);
         }
     }
 
