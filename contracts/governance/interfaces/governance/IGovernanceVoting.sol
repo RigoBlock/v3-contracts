@@ -41,8 +41,7 @@ interface IGovernanceVoting {
     /// @param v the v field of the signature.
     /// @param r the r field of the signature.
     /// @param s the s field of the signature.
-    /// @return signatory Addressed Eip-712 recovered.
-    function castVoteBySignature(uint256 proposalId, VoteType voteType, uint8 v, bytes32 r, bytes32 s) external returns (address signatory);
+    function castVoteBySignature(uint256 proposalId, VoteType voteType, uint8 v, bytes32 r, bytes32 s) external;
 
     /// @notice Executes a proposal that has passed and is currently executable.
     /// @param proposalId The ID of the proposal to execute.

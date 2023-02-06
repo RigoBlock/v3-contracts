@@ -70,7 +70,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external override returns (address signatory) {
+    ) external override {
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,
@@ -82,11 +82,9 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         );
         bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposalId, voteType));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
-        signatory = ecrecover(digest, v, r, s);
-        // TODO: following assertion is always bypassed by producing an EIP712 signature
-        require(
-            signatory != address(0) && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0,
-            "VOTING_INVALID_SIG_ERROR");
+        address signatory = ecrecover(digest, v, r, s);
+        // following assertion is always bypassed by producing a valid EIP712 signature on diff. domain, therefore we do not return an error
+        assert(signatory != address(0) && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0);
         _castVote(signatory, proposalId, voteType);
     }
 

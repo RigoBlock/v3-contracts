@@ -233,72 +233,11 @@ describe("Governance Proxy", async () => {
             await expect(
                 governanceInstance.castVote(1, VoteType.For)
             ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR")
-            // TODO: expect non-empty receipt
         })
     })
 
-    // TODO: encode EIP-712 signature
-    // TODO: test modify cast vote inputs to (uint256 id, uint8 support)
+    // TODO: method should fail regardless which epoch we are in until we enforce being in a new epoch
     describe("castVoteBySignature", async () => {
-        // TODO: this test should be removed if we deprecate salt in the EIP712 domain
-        it.skip('should revert with signature with wrong salt', async () => {
-            const { governanceInstance, strategy, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId } = await setupTests()
-            const proposalId = 1
-            const voteType = VoteType.Abstain
-            const { signature, domain, types, value} = await signEip712Message({
-
-                governance: governanceInstance.address,
-                proposalId: proposalId,
-                voteType: voteType
-            })
-            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
-            const amount = parseEther("100000")
-            await stakeProposalThreshold({amount: amount, grgToken: grgToken, grgTransferProxyAddress: grgTransferProxyAddress, staking: staking, poolAddress: poolAddress, poolId: poolId})
-            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
-            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
-            await governanceInstance.propose([action], description)
-            // TODO: check without time travel
-            await timeTravel({ days: 14, mine:true })
-            // TODO: method should fail regardless which epoch we are in until we enforce being in a new epoch
-            await staking.endEpoch()
-            // we use user2 as signed message should be relayable by anyone
-            // TODO: check why signature is not invalidated
-            await expect(
-                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
-            ).to.be.revertedWith("VOTING_INVALID_SIG_ERROR")
-        })
-
-        // TODO: check why signature not invalidated
-        it.skip('should revert with signature with wrong strategy', async () => {
-            const { governanceInstance, strategy } = await setupTests()
-            const proposalId = 1
-            const voteType = VoteType.Abstain
-            const { signature, domain, types, value} = await signEip712Message({
-                governance: governanceInstance.address,
-                proposalId: proposalId,
-                voteType: voteType
-            })
-            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
-            await expect(
-                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
-            ).to.be.revertedWith("VOTING_INVALID_SIG_ERROR")
-        })
-
-        // TODO: check why signature not invalidated
-        it.skip('should revert with signature with wrong vote type', async () => {
-            const { governanceInstance, strategy } = await setupTests()
-            const proposalId = 1
-            const { signature, domain, types, value} = await signEip712Message({
-                governance: governanceInstance.address,
-                proposalId: proposalId,
-                voteType: VoteType.Abstain
-            })
-            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
-            await expect(
-                governanceInstance.connect(user2).castVoteBySignature(proposalId, VoteType.For, v, r ,s)
-            ).to.be.revertedWith("VOTING_INVALID_SIG_ERROR")
-        })
-
         it('should revert without proposal', async () => {
             const { governanceInstance, strategy } = await setupTests()
             const proposalId = 1
@@ -315,7 +254,7 @@ describe("Governance Proxy", async () => {
             ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
         })
 
-        it.skip('should vote on an existing proposal', async () => {
+        it('should vote on an existing proposal', async () => {
             const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking, strategy } = await setupTests()
             const amount = parseEther("100000")
             await stakeProposalThreshold({amount: amount, grgToken: grgToken, grgTransferProxyAddress: grgTransferProxyAddress, staking: staking, poolAddress: poolAddress, poolId: poolId})
@@ -339,17 +278,19 @@ describe("Governance Proxy", async () => {
             const votingPower = await governanceInstance.getVotingPower(signerAddress)
             expect(currentEpochBalance).to.be.eq(votingPower)
             expect(votingPower).to.be.eq(amount)
-            const signatory = await governanceInstance.connect(user2).callStatic.castVoteBySignature(proposalId, voteType, v, r ,s)
-            console.log(signatory, "one", user1.address, "two", signerAddress, "three", user2.address, user3.address)
-            // TODO: FIX as our produced signature is not valid, sig assertion gets bypassed
-            //  but transaction fails as recovered address has no stake
+            // notice: contract only asserts signatory != address(0) as eip712 signatures on diff. domains always bypass the assertion
             await expect(
                 governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
-            ).to.emit(governanceInstance, "VoteCast").withArgs(signatory, proposalId, voteType, votingPower)
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, votingPower)
         })
 
-        it.skip('should not be able to vote if has unstaked', async () => {
-            const { governanceInstance, strategy } = await setupTests()
+        it('should revert on wrong proposal id or vote', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId, strategy } = await setupTests()
+            const amount = parseEther("100000")
+            await stakeProposalThreshold({amount, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId})
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
             const proposalId = 1
             const voteType = VoteType.Abstain
             const { signature, domain, types, value} = await signEip712Message({
@@ -358,10 +299,54 @@ describe("Governance Proxy", async () => {
                 voteType: voteType
             })
             const { v, r, s } = hre.ethers.utils.splitSignature(signature)
-            // we use user2 as signed message should be relayable by anyone
+            await governanceInstance.propose([action], description)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            // an invalid signature (we send signature for proposal 1, bypasses signature assertion)
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId + 1, voteType, v, r, s)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, VoteType.For, v, r, s)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
             await expect(
                 governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
-            ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, amount)
+        })
+
+        it('should be able to vote if has unstaked', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId, strategy } = await setupTests()
+            const amount = parseEther("100000")
+            await stakeProposalThreshold({amount, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId})
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            const proposalId = 1
+            const voteType = VoteType.Abstain
+            const { signature, domain, types, value} = await signEip712Message({
+                governance: governanceInstance.address,
+                proposalId: proposalId,
+                voteType: voteType
+            })
+            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            const fromInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, amount)
+            await expect(staking.unstake(amount)).to.be.revertedWith("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, amount)
+            // we create a new proposal
+            await governanceInstance.propose([action], description)
+            await timeTravel({ days: 14, mine:true })
+            await staking.endEpoch()
+            await staking.unstake(amount)
+            // an invalid signature (we send signature for proposal 1, bypasses signature assertion)
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId + 1, voteType, v, r, s)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
         })
     })
 

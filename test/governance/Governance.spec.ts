@@ -2,7 +2,8 @@ import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import { BigNumber } from "ethers";
 import "@nomiclabs/hardhat-ethers";
-import { ProposedAction, TimeType } from "../utils/utils";
+import { signEip712Message } from "../utils/eip712sig";
+import { ProposedAction, TimeType, VoteType } from "../utils/utils";
 
 describe("Governance Implementation", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
@@ -21,36 +22,50 @@ describe("Governance Implementation", async () => {
             const { implementation } = await setupTests()
             const mockBytes = hre.ethers.utils.formatBytes32String('mock')
             const action = new ProposedAction(user2.address, mockBytes, BigNumber.from('0'))
+            // will revert as strategy is set to address 0, therefore is not able to return voting power
             await expect(implementation.propose([action],'this proposal should always fail'))
-                .to.be.reverted
+                .to.be.revertedWith("Transaction reverted: function returned an unexpected amount of data")
         })
     })
 
     describe("castVote", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
+            const proposalId = 1
+            const voteType = VoteType.Abstain
+            // we won't be able to vote as no proposal can exist on the implementation
             await expect(
-                implementation.castVote(1, 1)
-            ).to.be.reverted
+                implementation.castVote(proposalId, voteType)
+            ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
         })
     })
 
-    // TODO: encode EIP-712 signature
-    describe.skip("castVoteBySignature", async () => {
+    describe("castVoteBySignature", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
+            const proposalId = 1
+            const voteType = VoteType.Abstain
+            const { signature, domain, types, value} = await signEip712Message({
+                governance: implementation.address,
+                proposalId: proposalId,
+                voteType: voteType
+            })
+            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
+            // we won't be able to vote as no proposal can exist on the implementation
             await expect(
-                implementation.castVoteBySignature(1)
-            ).to.be.reverted
+                implementation.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
+            ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
         })
     })
 
     describe("execute", async () => {
         it('should revert with direct call', async () => {
             const { implementation } = await setupTests()
+            // we will never be able to execute a proposal that does not exist
+            const proposalId = 1
             await expect(
-                implementation.execute(0)
-            ).to.be.reverted
+                implementation.execute(proposalId)
+            ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR")
         })
     })
 
