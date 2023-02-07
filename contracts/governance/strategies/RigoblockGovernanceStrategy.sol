@@ -46,10 +46,12 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function getProposalState(
-        IRigoblockGovernance.Proposal memory proposal,
-        uint256 minimumQuorum
-    ) external view override returns (IRigoblockGovernance.ProposalState) {
+    function getProposalState(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum)
+        external
+        view
+        override
+        returns (IRigoblockGovernance.ProposalState)
+    {
         // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
         // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
         if (block.timestamp <= proposal.startBlockOrTime) {

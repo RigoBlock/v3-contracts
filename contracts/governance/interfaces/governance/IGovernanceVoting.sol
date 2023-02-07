@@ -41,7 +41,13 @@ interface IGovernanceVoting {
     /// @param v the v field of the signature.
     /// @param r the r field of the signature.
     /// @param s the s field of the signature.
-    function castVoteBySignature(uint256 proposalId, VoteType voteType, uint8 v, bytes32 r, bytes32 s) external;
+    function castVoteBySignature(
+        uint256 proposalId,
+        VoteType voteType,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 
     /// @notice Executes a proposal that has passed and is currently executable.
     /// @param proposalId The ID of the proposal to execute.
@@ -58,8 +64,7 @@ interface IGovernanceVoting {
     /// @param actions The proposed actions. An action specifies a contract call.
     /// @param description A text description for the proposal.
     /// @return proposalId The ID of the newly created proposal.
-    function propose(
-        ProposedAction[] calldata actions,
-        string calldata description
-    ) external returns (uint256 proposalId);
+    function propose(ProposedAction[] calldata actions, string calldata description)
+        external
+        returns (uint256 proposalId);
 }
