@@ -42,14 +42,6 @@ interface IGovernanceStrategy {
         uint256 minimumQuorum
     ) external view returns (IRigoblockGovernance.ProposalState);
 
-    /// @notice Checks whether the given proposal has passed or not.
-    /// @param proposal The proposal to be checked.
-    /// @param minimumQuorum The minimum number of votes necessary for a proposal to pass.
-    function hasProposalPassed(
-        IRigoblockGovernance.Proposal calldata proposal,
-        uint256 minimumQuorum
-    ) external view returns (bool);
-
     /// @notice Return the voting period.
     /// @return Number of seconds of period duration.
     function votingPeriod() external view returns (uint256);

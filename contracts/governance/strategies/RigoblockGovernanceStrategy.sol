@@ -50,15 +50,13 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         IRigoblockGovernance.Proposal memory proposal,
         uint256 minimumQuorum
     ) external view override returns (IRigoblockGovernance.ProposalState) {
-        bool passed = hasProposalPassed(proposal, minimumQuorum);
-
-        // TODO: because in rigoblock staking we use epochs, we should probably assess that the timestamp matches the correct epoch
-        // therefore, we should store the epoch in this contract when a proposal is created
+        // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
+        // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
         if (block.timestamp <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
-        } else if (block.timestamp <= proposal.endBlockOrTime && !passed) {
+        } else if (block.timestamp <= proposal.endBlockOrTime) {
             return IGovernanceState.ProposalState.Active;
-        } else if (!passed) {
+        } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
             return IGovernanceState.ProposalState.Defeated;
         } else if (proposal.executed) {
             return IGovernanceState.ProposalState.Executed;
@@ -76,37 +74,6 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function hasProposalPassed(
-        IRigoblockGovernance.Proposal memory proposal,
-        uint256 minimumQuorum
-    ) public view override returns (bool) {
-        if (!_hasVoteEnded(proposal.endBlockOrTime)) {
-            // Proposal is immediately executable if votes for > than two thirds of total delegated GRG && quorum reached
-            if (
-                3 * proposal.votesFor >
-                2 *
-                    IStaking(_getStakingProxy())
-                        .getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED)
-                        .currentEpochBalance
-                && proposal.votesFor >= minimumQuorum
-            ) {
-                return true;
-                // Proposal is not passed until the vote is over.
-            } else {
-                return false;
-            }
-            // must have >= 2/3 support (≃66.7%)
-        } else if (proposal.votesFor <= 2 * proposal.votesAgainst) {
-            return false;
-            // Must reach quorum threshold.
-        } else if (proposal.votesFor < minimumQuorum) {
-            return false;
-        } else {
-            return true;
-        }
-    }
-
-    /// @inheritdoc IGovernanceStrategy
     function votingPeriod() public view override returns (uint256) {
         uint256 stakingEpochDuration = IStorage(_getStakingProxy()).epochDurationInSeconds();
         return stakingEpochDuration < _votingPeriod ? stakingEpochDuration : _votingPeriod;
@@ -117,7 +84,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
 
         // we require voting starts next block to prevent instant upgrade
-        startBlockOrTime = block.timestamp > startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
+        startBlockOrTime = block.timestamp >= startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
 
         endBlockOrTime = startBlockOrTime + votingPeriod();
     }
@@ -159,13 +126,5 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice It is more gas efficient at deploy to reading immutable from internal method.
     function _getStakingProxy() private view returns (address) {
         return _stakingProxy;
-    }
-
-    /// @notice Checks whether a vote starting at the given epoch has ended or not.
-    /// @dev Epoch start and end are stored at proposal creation.
-    /// @param endTime Time after which proposal can be executed.
-    /// @return Boolean the vote has ended.
-    function _hasVoteEnded(uint256 endTime) private view returns (bool) {
-        return block.timestamp > endTime;
     }
 }
