@@ -29,7 +29,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         Proposal memory proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposal.actionsLength;
         proposedActions = new ProposedAction[](actionsLength);
-        for (uint i = 0; i < actionsLength; i++) {
+        for (uint256 i = 0; i < actionsLength; i++) {
             proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
     }
@@ -51,11 +51,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceState
     function governanceParameters() external view override returns (EnhancedParams memory) {
-        return EnhancedParams({
-            params: _paramsWrapper().governanceParameters,
-            name: _name().value,
-            version: VERSION
-        });
+        return EnhancedParams({params: _paramsWrapper().governanceParameters, name: _name().value, version: VERSION});
     }
 
     /// @inheritdoc IGovernanceState
@@ -72,7 +68,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     function proposals() external view override returns (ProposalWrapper[] memory proposalWrapper) {
         uint256 length = _getProposalCount();
         proposalWrapper = new ProposalWrapper[](length);
-        for (uint i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             // proposal count starts at proposalId = 1
             proposalWrapper[i] = getProposalById(i + 1);
         }
@@ -84,13 +80,11 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function getProposalById(
-        uint256 proposalId
-    ) public view override returns (ProposalWrapper memory proposalWrapper) {
+    function getProposalById(uint256 proposalId) public view override returns (ProposalWrapper memory proposalWrapper) {
         proposalWrapper.proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposalWrapper.proposal.actionsLength;
         ProposedAction[] memory proposedAction = new ProposedAction[](actionsLength);
-        for (uint i = 0; i < actionsLength; i++) {
+        for (uint256 i = 0; i < actionsLength; i++) {
             proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
         proposalWrapper.proposedAction = proposedAction;

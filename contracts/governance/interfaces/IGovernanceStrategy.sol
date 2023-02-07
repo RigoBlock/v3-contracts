@@ -37,10 +37,10 @@ interface IGovernanceStrategy {
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
     /// @return Tuple of the proposal state.
-    function getProposalState(
-        IRigoblockGovernance.Proposal calldata proposal,
-        uint256 minimumQuorum
-    ) external view returns (IRigoblockGovernance.ProposalState);
+    function getProposalState(IRigoblockGovernance.Proposal calldata proposal, uint256 minimumQuorum)
+        external
+        view
+        returns (IRigoblockGovernance.ProposalState);
 
     /// @notice Return the voting period.
     /// @return Number of seconds of period duration.

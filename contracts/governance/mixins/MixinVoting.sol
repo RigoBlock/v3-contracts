@@ -25,10 +25,11 @@ import "../interfaces/IGovernanceStrategy.sol";
 
 abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceVoting
-    function propose(
-        ProposedAction[] memory actions,
-        string memory description
-    ) external override returns (uint256 proposalId) {
+    function propose(ProposedAction[] memory actions, string memory description)
+        external
+        override
+        returns (uint256 proposalId)
+    {
         uint256 length = actions.length;
         require(_getVotingPower(msg.sender) >= _governanceParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
         require(length > 0, "GOV_NO_ACTIONS_ERROR");
@@ -49,7 +50,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             executed: false
         });
 
-        for (uint i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             _proposedAction().proposedActionbyIndex[proposalId][i] = actions[i];
         }
 
@@ -84,7 +85,9 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
         // following assertion is always bypassed by producing a valid EIP712 signature on diff. domain, therefore we do not return an error
-        assert(signatory != address(0) && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0);
+        assert(
+            signatory != address(0) && uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+        );
         _castVote(signatory, proposalId, voteType);
     }
 
@@ -116,7 +119,11 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
     /// @notice Casts a vote for the given proposal.
     /// @dev Only callable during the voting period for that proposal.
-    function _castVote(address voter, uint256 proposalId, VoteType voteType) private {
+    function _castVote(
+        address voter,
+        uint256 proposalId,
+        VoteType voteType
+    ) private {
         require(_getProposalState(proposalId) == ProposalState.Active, "VOTING_CLOSED_ERROR");
         Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, "VOTING_ALREADY_VOTED_ERROR");
