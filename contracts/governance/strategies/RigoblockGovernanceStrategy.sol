@@ -69,15 +69,17 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         }
     }
 
-    function _qualifiedConsensus(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum) private view returns (bool) {
-        return (
-            3 * proposal.votesFor >
+    function _qualifiedConsensus(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum)
+        private
+        view
+        returns (bool)
+    {
+        return (3 * proposal.votesFor >
             2 *
                 IStaking(_getStakingProxy())
                     .getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED)
-                    .currentEpochBalance
-            && proposal.votesFor >= minimumQuorum
-        );
+                    .currentEpochBalance &&
+            proposal.votesFor >= minimumQuorum);
     }
 
     /// @inheritdoc IGovernanceStrategy
