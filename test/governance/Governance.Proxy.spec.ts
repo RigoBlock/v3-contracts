@@ -650,6 +650,8 @@ describe("Governance Proxy", async () => {
             await expect(
                 governanceInstance.execute(1)
             ).to.emit(grgToken, "Approval").withArgs(governanceInstance.address, user2.address, amount)
+            // after execution state will find its final state
+            expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Executed)
         })
     })
 })
