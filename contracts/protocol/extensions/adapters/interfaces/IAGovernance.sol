@@ -30,7 +30,7 @@ interface IAGovernance {
     /// @notice Allows a pool to vote on a proposal.
     /// @param proposalId Number of the proposal.
     /// @param voteType Enum of the vote type.
-    function castVote(uint256 proposalId, IRigoblockGovernance.VoteType voteType) external ;
+    function castVote(uint256 proposalId, IRigoblockGovernance.VoteType voteType) external;
 
     /// @notice Allows a pool to execute a proposal.
     /// @param proposalId Number of the proposal.

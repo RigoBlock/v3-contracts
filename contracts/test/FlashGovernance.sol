@@ -60,12 +60,9 @@ contract FlashGovernance {
             emit CatchStringEvent(revertReason);
         }
         // should not be able to return borrowed GRG as null balance in this contract
-        try IERC20(IStaking(_stakingProxy).getGrgContract()).transfer(msg.sender, stakeAmount) {} catch Error(
-            string memory revertReason
+        try IERC20(IStaking(_stakingProxy).getGrgContract()).transfer(msg.sender, stakeAmount) {} catch (
+            bytes memory returnData
         ) {
-            emit CatchStringEvent(revertReason);
-            // will revert without error
-        } catch (bytes memory returnData) {
             emit ReturnDataEvent(returnData);
         }
     }

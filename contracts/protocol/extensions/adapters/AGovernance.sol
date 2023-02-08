@@ -33,7 +33,10 @@ contract AGovernance is IAGovernance {
     }
 
     /// @inheritdoc IAGovernance
-    function propose(IRigoblockGovernance.ProposedAction[] memory actions, string memory description) external override {
+    function propose(IRigoblockGovernance.ProposedAction[] memory actions, string memory description)
+        external
+        override
+    {
         IRigoblockGovernance(_getGovernance()).propose(actions, description);
     }
 
