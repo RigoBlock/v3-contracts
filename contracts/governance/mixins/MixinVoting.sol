@@ -145,6 +145,11 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             voteType: voteType
         });
 
+        // if vote reaches qualified majority we prepare execution at next block
+        if(_getProposalState(proposalId) == ProposalState.Qualified) {
+            proposal.endBlockOrTime = _paramsWrapper().governanceParameters.timeType == TimeType.Timestamp ? block.timestamp : block.number;
+        }
+
         emit VoteCast(voter, proposalId, voteType, votingPower);
     }
 }

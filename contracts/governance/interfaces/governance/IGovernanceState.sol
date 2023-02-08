@@ -26,6 +26,7 @@ interface IGovernanceState {
         Pending,
         Active,
         Canceled,
+        Qualified,
         Defeated,
         Succeeded,
         Queued,
