@@ -123,12 +123,15 @@ describe("Governance Flash Attack", async () => {
             amount = parseEther("400000")
             const FlashGovernance = await hre.ethers.getContractFactory("FlashGovernance")
             const flashGovernance = await FlashGovernance.deploy(staking.address, governanceInstance.address, grgTransferProxyAddress)
-            await grgToken.transfer(flashGovernance.address, amount)
+            // we allow the flash governance to move GRG
+            await grgToken.approve(flashGovernance.address, amount)
             await expect(flashGovernance.flashAttack(poolId, amount))
                 .to.emit(governanceInstance, "VoteCast").withArgs(flashGovernance.address, 1, VoteType.For, amount)
                 .to.emit(flashGovernance, "CatchStringEvent").withArgs("VOTING_CLOSED_ERROR")
                 .to.emit(flashGovernance, "CatchStringEvent").withArgs("VOTING_EXECUTION_STATE_ERROR")
-            //await timeTravel({ seconds: 1, mine:true })
+                .to.emit(flashGovernance, "CatchStringEvent").withArgs("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
+                // will revert without reason in old ERC20
+                .to.emit(flashGovernance, "ReturnDataEvent").withArgs("0x")
             // during the next block, transaction will be executed
             await expect(
                 governanceInstance.connect(user2).execute(1)
