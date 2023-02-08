@@ -56,6 +56,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
         if (block.timestamp <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
+        } else if (block.timestamp <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum)) {
+            return IGovernanceState.ProposalState.Qualified;
         } else if (block.timestamp <= proposal.endBlockOrTime) {
             return IGovernanceState.ProposalState.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
@@ -65,6 +67,19 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         } else {
             return IGovernanceState.ProposalState.Succeeded;
         }
+    }
+
+    function _qualifiedConsensus(IRigoblockGovernance.Proposal memory proposal, uint256 minimumQuorum)
+        private
+        view
+        returns (bool)
+    {
+        return (3 * proposal.votesFor >
+            2 *
+                IStaking(_getStakingProxy())
+                    .getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED)
+                    .currentEpochBalance &&
+            proposal.votesFor >= minimumQuorum);
     }
 
     /// @inheritdoc IGovernanceStrategy

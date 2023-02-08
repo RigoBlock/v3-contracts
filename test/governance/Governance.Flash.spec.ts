@@ -92,14 +92,47 @@ describe("Governance Flash Attack", async () => {
             await staking.endEpoch()
             // voting is active since it has just started
             await governanceInstance.connect(user2).castVote(1, VoteType.For)
-            // voting is still active until end of voting period
+            // voting is closed as we have reached qualified consensus (proposal cannot fail under any circumstance)
             await expect(governanceInstance.connect(user2).castVote(1, VoteType.For))
-                .to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR")
-            // execution cannot be invoked until the end of the voting period
+                .to.be.revertedWith("VOTING_CLOSED_ERROR")
+            // transaction will be executed as it is in a new block. We keep this test as we want to catch an error should
+            //  future upgrades modify this logic. Relevant as moving the voting end 1 block forward instead of same block
+            //  as qualifying vote would create an attack vector with limited impact where voters keep postponing voting end.
             await expect(
                 governanceInstance.connect(user2).execute(1)
-            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
-            await timeTravel({ days: 7, mine:true })
+            ).to.emit(grgToken, "Approval")
+        })
+    })
+
+    describe("flash attack", async () => {
+        it('should not be able to execute during voting period', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+            // we stake the minimum amount to make a proposal
+            let amount = parseEther("100000")
+            // stake 100k GRG from user1
+            await stakeProposalThreshold({ amount, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId })
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            // at the beginning of the new epoch, we make a proposal which can be voted on in 14 days
+            // after the end of the new epoch, we make a proposal which can be voted from current block + 1
+            await timeTravel({ days: 14, mine:true })
+            await governanceInstance.propose([action], description)
+            // we move forward 2 seconds to make sure proposal can be voted on
+            await timeTravel({ seconds: 2, mine:true })
+            // after the end of the epoch, we  flash borrow and stake GRG in order to gain quorum and > 2/3 of all stake
+            amount = parseEther("400000")
+            const FlashGovernance = await hre.ethers.getContractFactory("FlashGovernance")
+            const flashGovernance = await FlashGovernance.deploy(staking.address, governanceInstance.address, grgTransferProxyAddress)
+            // we allow the flash governance to move GRG
+            await grgToken.approve(flashGovernance.address, amount)
+            await expect(flashGovernance.flashAttack(poolId, amount))
+                .to.emit(governanceInstance, "VoteCast").withArgs(flashGovernance.address, 1, VoteType.For, amount)
+                .to.emit(flashGovernance, "CatchStringEvent").withArgs("VOTING_CLOSED_ERROR")
+                .to.emit(flashGovernance, "CatchStringEvent").withArgs("VOTING_EXECUTION_STATE_ERROR")
+                .to.emit(flashGovernance, "CatchStringEvent").withArgs("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
+                // will revert without reason in old ERC20
+                .to.emit(flashGovernance, "ReturnDataEvent").withArgs("0x")
+            // during the next block, transaction will be executed
             await expect(
                 governanceInstance.connect(user2).execute(1)
             ).to.emit(grgToken, "Approval")
