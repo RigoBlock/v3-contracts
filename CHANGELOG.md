@@ -1,3 +1,18 @@
+# [1.3.0](https://github.com/rigoblock/v3-contracts/compare/v1.2.0...v1.3.0) (2023-02-09)
+
+
+### Bug Fixes
+
+* allow executing during voting period when qualified ([296cda7](https://github.com/rigoblock/v3-contracts/commit/296cda79c9dd418c4bd6b11cac594a58c66de874))
+
+
+### Features
+
+* add governance adapter ([99d193a](https://github.com/rigoblock/v3-contracts/commit/99d193a2cc77ff1783689eec8b16eaa59c261b9f))
+* add governance adapter interface to pool extended interface ([5c767ce](https://github.com/rigoblock/v3-contracts/commit/5c767ce567f05572a3257ebd5a65ce4e9cb694ce))
+
+
+
 # [1.2.0](https://github.com/rigoblock/v3-contracts/compare/v1.1.2...v1.2.0) (2023-02-07)
 
 
@@ -63,17 +78,6 @@
 ### Features
 
 * upgrade version to v3.0.1 ([999e9bf](https://github.com/rigoblock/v3-contracts/commit/999e9bf98d997f3cceb82db24b9cac0ca87b5268))
-
-
-
-## [0.11.1](https://github.com/rigoblock/v3-contracts/compare/v0.11.0...v0.11.1) (2022-10-19)
-
-
-### Bug Fixes
-
-* upgrade action-semantic-pull-request to v5.0.2 ([14170ed](https://github.com/rigoblock/v3-contracts/commit/14170ed23462e48f3b65e947f825223174e0c993))
-* upgrade actions/checkout in release action ([cdcd1bc](https://github.com/rigoblock/v3-contracts/commit/cdcd1bcd18f1932225c47033b2d6fd5045c9ceb5))
-* upgrade ci v3-contracts ([d80e9eb](https://github.com/rigoblock/v3-contracts/commit/d80e9ebcd11d30e65411c6589cb630b405f1dfa9))
 
 
 

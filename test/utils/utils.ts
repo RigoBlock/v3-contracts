@@ -122,6 +122,7 @@ export enum ProposalState {
     Pending,
     Active,
     Canceled,
+    Qualified,
     Defeated,
     Succeeded,
     Queued,

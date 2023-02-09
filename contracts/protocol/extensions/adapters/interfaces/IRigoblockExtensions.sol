@@ -19,6 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import "./IAGovernance.sol";
 import "./IAMulticall.sol";
 import "./IASelfCustody.sol";
 import "./IAStaking.sol";
@@ -31,6 +32,7 @@ import "./IEWhitelist.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface IRigoblockExtensions is
+    IAGovernance,
     IAMulticall,
     IASelfCustody,
     IAStaking,
