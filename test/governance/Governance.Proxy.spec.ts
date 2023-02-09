@@ -625,7 +625,8 @@ describe("Governance Proxy", async () => {
             ).to.be.revertedWith("Transaction reverted without a reason")
         })
 
-        it('should not be able to execute immediately if support > 2/3 all staked delegated GRG', async () => {
+        // executable immediately after support > 2/3 all staked delegated GRG
+        it('should be able to execute during voting period when qualified majority', async () => {
             const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
             const amount = parseEther("1000000")
             await grgToken.approve(grgTransferProxyAddress, amount)
@@ -643,18 +644,14 @@ describe("Governance Proxy", async () => {
             await timeTravel({ days: 14, mine:true })
             expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Active)
             await governanceInstance.castVote(1, VoteType.For)
-            expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Active)
-            await expect(
-                governanceInstance.execute(1)
-            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
-            await timeTravel({ days: 7, mine:true })
+            // qualified majority will change state to qualified, which can be executed at next block
+            expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Qualified)
+            // we do not need to time travel as a new transaction is included in a new block
             await expect(
                 governanceInstance.execute(1)
             ).to.emit(grgToken, "Approval").withArgs(governanceInstance.address, user2.address, amount)
+            // after execution state will find its final state
             expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Executed)
-            await expect(
-                governanceInstance.execute(1)
-            ).to.be.revertedWith("VOTING_EXECUTION_STATE_ERROR")
         })
     })
 })
