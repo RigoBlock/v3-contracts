@@ -1,6 +1,26 @@
 import hre, {network, ethers} from "hardhat"
-import { Wallet, Contract } from "ethers"
+import { BigNumber, Wallet, Contract } from "ethers"
 import solc from "solc"
+
+export interface StakeOpts {
+    amount?: BigNumber;
+    grgToken?: any;
+    grgTransferProxyAddress?: string;
+    staking?: any;
+    poolAddress?: string;
+    poolId?: string;
+}
+
+export async function stakeProposalThreshold(opts: StakeOpts) {
+    await opts.grgToken.approve(opts.grgTransferProxyAddress, opts.amount)
+    await opts.staking.stake(opts.amount)
+    await opts.staking.createStakingPool(opts.poolAddress)
+    const fromInfo = new StakeInfo(StakeStatus.Undelegated, opts.poolId)
+    const toInfo = new StakeInfo(StakeStatus.Delegated, opts.poolId)
+    await opts.staking.moveStake(fromInfo, toInfo, opts.amount)
+    await timeTravel({ days: 14, mine:true })
+    await opts.staking.endEpoch()
+}
 
 export interface TimeTravelOpts {
     days?: number;
@@ -72,4 +92,41 @@ export const deployContract = async (deployer: Wallet, source: string): Promise<
     const transaction = await deployer.sendTransaction({ data: output.data, gasLimit: 6000000 })
     const receipt = await transaction.wait()
     return new Contract(receipt.contractAddress, output.interface, deployer)
+}
+
+export enum TimeType {
+    Blocknumber,
+    Timestamp
+}
+
+export class ProposedAction {
+    constructor(public target: any, public data: String, public value: BigNumber) {}
+}
+
+export enum StakeStatus {
+    Undelegated,
+    Delegated,
+}
+
+export class StakeInfo {
+    constructor(public status: StakeStatus, public poolId: any) {}
+}
+
+export enum VoteType {
+    For,
+    Against,
+    Abstain
+}
+
+export enum ProposalState {
+    Pending,
+    Active,
+    Canceled,
+    Qualified,
+    Defeated,
+    Succeeded,
+    Queued,
+    Expired,
+    Executed
+
 }
