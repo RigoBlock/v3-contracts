@@ -2,6 +2,7 @@ import type { HardhatUserConfig, HttpNetworkUserConfig } from "hardhat/types";
 import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-waffle";
 import "solidity-coverage";
+import "solidity-docgen";
 import "hardhat-deploy";
 import dotenv from "dotenv";
 import yargs from "yargs";
@@ -167,6 +168,13 @@ const userConfig: HardhatUserConfig = {
         }
       }
     ]
+  },
+  docgen: {
+    path: './docs',
+    clear: true,
+    runOnCompile: true,
+    pages: 'single',
+    exclude: ['utils', 'test', 'tokens', 'examples', 'protocol', 'rigoToken', 'staking/GrgVault.sol', 'staking/StakingProxy.sol']
   },
 };
 if (NODE_URL) {

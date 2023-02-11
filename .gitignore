@@ -4,6 +4,7 @@ node_modules/
 .zos.session
 .openzeppelin/.session
 deployments/
+docs/
 env/
 dist/
 .env
