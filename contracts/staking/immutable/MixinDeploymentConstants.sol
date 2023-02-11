@@ -27,6 +27,14 @@ import {IRigoToken as RigoToken} from "../../rigoToken/interfaces/IRigoToken.sol
 
 // solhint-disable separate-by-one-line-in-contract
 abstract contract MixinDeploymentConstants is IStaking {
+    // we store this address in the bytecode to being able to prevent direct calls to the implementation.
+    address internal immutable _implementation;
+
+    address private immutable _inflationL2;
+    address private immutable _rigoToken;
+    address private immutable _grgVault;
+    address private immutable _poolRegistry;
+
     constructor(
         address grgVault,
         address poolRegistry,
@@ -36,14 +44,16 @@ abstract contract MixinDeploymentConstants is IStaking {
         _poolRegistry = poolRegistry;
         _rigoToken = rigoToken;
         _implementation = address(this);
+        uint256 chainId = block.chainid;
+        address inflationL2 = address(0);
+
+        // we do not overwrite in test environment as we want to separately handle inflationL2 within the tests
+        if (chainId != 1 && chainId != 5 && chainId != 31337) {
+            inflationL2 = 0x3A0C479A2715cc01bC3f744F74Efd45f40f8Dad6;
+        }
+
+        _inflationL2 = inflationL2;
     }
-
-    // we store this address in the bytecode to being able to prevent direct calls to the implementation.
-    address internal immutable _implementation;
-
-    address private immutable _rigoToken;
-    address private immutable _grgVault;
-    address private immutable _poolRegistry;
 
     /// @inheritdoc IStaking
     function getGrgContract() public view virtual override returns (RigoToken) {
@@ -58,5 +68,9 @@ abstract contract MixinDeploymentConstants is IStaking {
     /// @inheritdoc IStaking
     function getPoolRegistry() public view virtual override returns (PoolRegistry) {
         return PoolRegistry(_poolRegistry);
+    }
+
+    function _getInflation() internal view returns (address) {
+        return (_inflationL2 != address(0) ? _inflationL2 : getGrgContract().minter());
     }
 }

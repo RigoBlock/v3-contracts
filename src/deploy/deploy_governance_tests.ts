@@ -20,9 +20,9 @@ const deploy: DeployFunction = async function (
     "Authority",
     authority.address
   );
-
+/*
   await authorityInstance.setWhitelister(deployer, true);
-
+*/
   const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
@@ -32,27 +32,6 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
-
-  // as long as authority address is same on all chains, pool implementation will have same address
-  const poolImplementation = await deploy("RigoblockV3Pool", {
-    from: deployer,
-    args: [authority.address],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  // same as above
-  const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
-    from: deployer,
-    args: [
-      poolImplementation.address,
-      registry.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  await authorityInstance.setFactory(proxyFactory.address, true)
 
   // same on altchains but different from one deployed on Ethereum
   const rigoToken = await deploy("RigoToken", {
@@ -77,12 +56,12 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
-
+/*
   const grgTransferProxyInstance = await hre.ethers.getContractAt(
     "ERC20Proxy",
     grgTransferProxy.address
   );
-
+*/
   // same on altchains but different from one deployed on Ethereum
   const grgVault = await deploy("GrgVault", {
     from: deployer,
@@ -94,10 +73,10 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
-
+/*
   // TODO: test if following condition necessary
   await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
-
+*/
   const grgVaultInstance = await hre.ethers.getContractAt(
     "GrgVault",
     grgVault.address
@@ -125,84 +104,32 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
-
-  const aStaking = await deploy("AStaking", {
-    from: deployer,
-    args: [
-        stakingProxy.address,
-        rigoToken.address,
-        grgTransferProxy.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  await authorityInstance.setAdapter(aStaking.address, true)
-
+/*
   await grgVaultInstance.addAuthorizedAddress(deployer)
   await grgVaultInstance.setStakingProxy(stakingProxy.address)
   await grgVaultInstance.removeAuthorizedAddress(deployer)
-
-  // same on altchains but different from one deployed on Ethereum
-  const inflation = await deploy("Inflation", {
+*/
+  const governanceFactory = await deploy("RigoblockGovernanceFactory", {
     from: deployer,
-    args: [
-      rigoToken.address,
-      stakingProxy.address
-    ],
+    args: [],
     log: true,
     deterministicDeployment: true,
   });
 
-  await rigoTokenInstance.changeMintingAddress(inflation.address)
-
-  const inflationL2 = await deploy("InflationL2", {
+  const governanceImplementation = await deploy("RigoblockGovernance", {
     from: deployer,
-    args: [deployer],
+    args: [],
     log: true,
     deterministicDeployment: true,
   });
 
-  // same on altchains but different from one deployed on Ethereum
-  await deploy("ProofOfPerformance", {
+  const governanceStrategy = await deploy("RigoblockGovernanceStrategy", {
     from: deployer,
     args: [stakingProxy.address],
     log: true,
     deterministicDeployment: true,
   });
-
-  // TODO: check if we can move adapters deploy inside the tests
-  await deploy("ASelfCustody", {
-    from: deployer,
-    args: [
-        grgVault.address,
-        stakingProxy.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  })
-
-  const mockUniswapRouter = await deploy("MockUniswapRouter", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  })
-
-  await deploy("AUniswap", {
-    from: deployer,
-    args: [mockUniswapRouter.address],
-    log: true,
-    deterministicDeployment: true,
-  })
-
-  await deploy("AMulticall", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  })
 };
 
-deploy.tags = ['tests-setup', 'l2-suite', 'main-suite']
+deploy.tags = ['governance-tests', 'l2-suite', 'main-suite']
 export default deploy;

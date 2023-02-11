@@ -20,6 +20,7 @@ jobs:
     env:
       SOLIDITY_VERSION: ${{ matrix.solidity }}
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
+      PROD: ""
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3

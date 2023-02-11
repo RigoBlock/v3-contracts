@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2022 Rigo Intl.
+ Copyright 2023 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -19,27 +19,12 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./IAGovernance.sol";
-import "./IAMulticall.sol";
-import "./IASelfCustody.sol";
-import "./IAStaking.sol";
-import "./IAUniswap.sol";
-import "./IAUniswapV3NPM.sol";
-import "./IEUpgrade.sol";
-import "./IEWhitelist.sol";
+import "../IRigoblockGovernance.sol";
 
-/// @title Rigoblock Extensions Interface - Groups together the extensions' methods.
-/// @author Gabriele Rigo - <gab@rigoblock.com>
-// solhint-disable-next-line
-interface IRigoblockExtensions is
-    IAGovernance,
-    IAMulticall,
-    IASelfCustody,
-    IAStaking,
-    IAUniswap,
-    IAUniswapV3NPM,
-    IEUpgrade,
-    IEWhitelist
-{
+abstract contract MixinAbstract {
+    function _getProposalCount() internal view virtual returns (uint256);
 
+    function _getProposalState(uint256 proposalId) internal view virtual returns (IRigoblockGovernance.ProposalState);
+
+    function _getVotingPower(address account) internal view virtual returns (uint256);
 }

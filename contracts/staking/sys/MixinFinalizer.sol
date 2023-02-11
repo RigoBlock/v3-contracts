@@ -39,7 +39,7 @@ abstract contract MixinFinalizer is MixinStakingPoolRewards {
         //  mint happens before time has passed check, therefore tokens will be allocated even before expiry if method is called
         //  but will not be minted again until epoch time has passed. This could happen when epoch length is changed only.
         if (currentEpoch_ > uint256(1)) {
-            try IInflation(getGrgContract().minter()).mintInflation() returns (uint256 mintedInflation) {
+            try IInflation(_getInflation()).mintInflation() returns (uint256 mintedInflation) {
                 emit GrgMintEvent(mintedInflation);
             } catch Error(string memory revertReason) {
                 emit CatchStringEvent(revertReason);
