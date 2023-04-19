@@ -51,7 +51,7 @@
     "@nomiclabs/hardhat-waffle": "^2.0.0",
     "@openzeppelin/contracts": "^4.7.3",
     "@types/chai": "^4.2.14",
-    "@types/mocha": "^8.2.0",
+    "@types/mocha": "^10.0.1",
     "@types/node": "^18.7.23",
     "@types/yargs": "^15.0.10",
     "@typescript-eslint/eslint-plugin": "^4.7.0",
