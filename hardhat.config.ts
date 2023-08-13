@@ -5,7 +5,7 @@ import "solidity-coverage";
 import "hardhat-deploy";
 import dotenv from "dotenv";
 import yargs from "yargs";
-import { getSingletonFactoryInfo } from "@gnosis.pm/safe-singleton-factory";
+import { getSingletonFactoryInfo } from "@safe-global/safe-singleton-factory";
 
 const argv = yargs
   .option("network", {
@@ -140,6 +140,10 @@ const userConfig: HardhatUserConfig = {
       ...sharedNetworkConfig,
       url: `https://api.avax.network/ext/bc/C/rpc`,
     },
+    base: {
+      ...sharedNetworkConfig,
+      url: `https://mainnet.base.org`,
+    },
   },
   deterministicDeployment,
   namedAccounts: {
@@ -156,6 +160,7 @@ const userConfig: HardhatUserConfig = {
       arbitrumOne: process.env.ARBISCAN_API_KEY ?? '',
       bsc: process.env.BSCSCAN_API_KEY ?? '',
       polygon: process.env.POLYGONSCAN_API_KEY ?? '',
+      base: process.env.BASE_API_KEY ?? '',
     },
     customChains: [
       {

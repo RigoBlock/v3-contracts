@@ -9,14 +9,19 @@ module.exports = {
         invert: true               // Run the grep's inverse set.
     },
     configureYulOptimizer: true,
+    viaIR: true,
+    details: {
+      yulDetails: {
+        optimizerSteps:"u",
+      },
+    },
     solcOptimizerDetails: {
       peephole: false,
-      inliner: false,
       jumpdestRemover: false,
       orderLiterals: true,
       deduplicate: false,
       cse: false,
       constantOptimizer: false,
-      yul: false
+      yul: true
     }
 };
