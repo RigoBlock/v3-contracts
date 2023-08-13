@@ -140,6 +140,10 @@ const userConfig: HardhatUserConfig = {
       ...sharedNetworkConfig,
       url: `https://api.avax.network/ext/bc/C/rpc`,
     },
+    base: {
+      ...sharedNetworkConfig,
+      url: `https://mainnet.base.org`,
+    },
   },
   deterministicDeployment,
   namedAccounts: {
@@ -156,6 +160,7 @@ const userConfig: HardhatUserConfig = {
       arbitrumOne: process.env.ARBISCAN_API_KEY ?? '',
       bsc: process.env.BSCSCAN_API_KEY ?? '',
       polygon: process.env.POLYGONSCAN_API_KEY ?? '',
+      base: process.env.BASE_API_KEY ?? '',
     },
     customChains: [
       {
