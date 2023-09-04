@@ -62,6 +62,8 @@ describe("AUniswap", async () => {
         // "ab37f486": "isWhitelistedToken(address)"
         await authority.addMethod("0xab37f486", eWhitelist.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
+        // TODO: should deploy a pool in base token and write some tests, as want to check whitelist assertion
+        //  after allowing pools to swap for their own base token even if it has not been whitelisted.
         const { newPoolAddress, poolId } = await factory.callStatic.createPool(
             'testpool',
             'TEST',

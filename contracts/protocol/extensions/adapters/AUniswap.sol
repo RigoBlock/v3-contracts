@@ -23,8 +23,9 @@ pragma solidity 0.8.17;
 import "./AUniswapV3NPM.sol";
 import "./interfaces/IAUniswap.sol";
 import "./interfaces/IEWhitelist.sol";
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
+import "../../IRigoblockV3Pool.sol";
 import "../../interfaces/IWETH9.sol";
+import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 
 /// @title AUniswap - Allows interactions with the Uniswap contracts.
@@ -357,8 +358,13 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         assert(data.length == 0 || abi.decode(data, (bool)));
     }
 
+    // TODO: whitelist tests are not failing after modification as we use eth-based pools for swap tests
+    //  should write more tests with a ERC20-based pool
     function _assertTokenWhitelisted(address token) internal view override {
-        require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
+        // we allow swapping to base token even if not whitelisted token
+        if (token != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
+          require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
+        }
     }
 
     function _getUniswapNpm() internal view override returns (address) {
