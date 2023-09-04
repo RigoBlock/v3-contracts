@@ -462,6 +462,57 @@ describe("AUniswap", async () => {
                 amountOutMinimum: 1
             })
         })
+
+        it('should pass checks with multi-hop swap', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0xb858183f", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            // we can place any address between tokenIn and tokenOut as it should not affect checks
+            await expect(pool.exactInput({
+                path: encodePath([weth.address, user1.address, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(grgToken.address)
+            await pool.exactInput({
+                path: encodePath([weth.address, user1.address, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })
+        })
+
+        it('should revert multi-hop if tokenOut not whitelited but token1 is', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0xb858183f", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.exactInput({
+                path: encodePath([weth.address, grgToken.address, user1.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.exactInput({
+                path: encodePath([weth.address, grgToken.address, user1.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await pool.exactInput({
+                path: encodePath([weth.address, user1.address, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })
+        })
     })
 
     // hardhat does not recognize methods with same name but different signature/inputs
@@ -527,6 +578,57 @@ describe("AUniswap", async () => {
             })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
             await pool.exactOutput({
                 path: encodePath([grgToken.address, weth.address], [FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })
+        })
+
+        it('should succeed if multi-hop token1 not whitelisted', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x09b81346", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.exactOutput({
+                path: encodePath([grgToken.address, user1.address, weth.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await eWhitelist.whitelistToken(weth.address)
+            await pool.exactOutput({
+                path: encodePath([grgToken.address, user1.address, weth.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })
+        })
+
+        it('should revert multi-hop if tokenOut not whitelited but token1 is', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x09b81346", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await expect(pool.exactOutput({
+                path: encodePath([grgToken.address, weth.address, user1.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            // eWhitelist requires an address to be a contract
+            await eWhitelist.whitelistToken(newPoolAddress)
+            await expect(pool.exactOutput({
+                path: encodePath([grgToken.address, newPoolAddress, weth.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await pool.exactOutput({
+                path: encodePath([grgToken.address, weth.address, newPoolAddress], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
