@@ -332,7 +332,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     function _assertTokenWhitelisted(address token) internal view override {
         // we allow swapping to base token even if not whitelisted token
         if (token != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
-          require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
+            require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
         }
     }
 
@@ -351,7 +351,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         if (path.hasMultiplePools()) {
             // we skip all routes but last POP_OFFSET
             for (uint256 i = 0; i < path.numPools() - 1; i++) {
-              path = path.skipToken();
+                path = path.skipToken();
             }
         }
 
