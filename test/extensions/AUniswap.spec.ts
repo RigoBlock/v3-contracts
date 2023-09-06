@@ -62,8 +62,6 @@ describe("AUniswap", async () => {
         // "ab37f486": "isWhitelistedToken(address)"
         await authority.addMethod("0xab37f486", eWhitelist.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
-        // TODO: should deploy a pool in base token and write some tests, as want to check whitelist assertion
-        //  after allowing pools to swap for their own base token even if it has not been whitelisted.
         const { newPoolAddress } = await factory.callStatic.createPool(
             'testpool',
             'TEST',
@@ -118,9 +116,10 @@ describe("AUniswap", async () => {
             await eWhitelist.whitelistToken(grgToken.address)
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
             await eWhitelist.removeToken(grgToken.address)
+            // position must exist, the tokenId of the first position is 1
             await expect(
                 pool.increaseLiquidity({
-                    tokenId: 5,
+                    tokenId: 1,
                     amount0Desired: 100,
                     amount1Desired: 100,
                     amount0Min: 0,
@@ -132,31 +131,42 @@ describe("AUniswap", async () => {
             await eWhitelist.whitelistToken(wethAddress)
             // the following transaction sets approval to WETH9 in TestUniswapNpm.sol as it reads positions(tokenId) but won't revert.
             await pool.increaseLiquidity({
-                tokenId: 5,
+                tokenId: 1,
                 amount0Desired: 100,
                 amount1Desired: 100,
                 amount0Min: 0,
                 amount1Min: 0,
                 deadline: 1
             })
+            // will revert as position 5 does not exist
+            await expect(
+                pool.increaseLiquidity({
+                    tokenId: 5,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    deadline: 1
+                })
+            ).to.be.reverted
             await pool.decreaseLiquidity({
-                tokenId: 5,
+                tokenId: 1,
                 liquidity: 25,
                 amount0Min: 0,
                 amount1Min: 0,
                 deadline: 1
             })
             await pool.collect({
-                tokenId: 5,
+                tokenId: 1,
                 recipient: pool.address,
                 amount0Max: parseEther("10000"),
                 amount1Max: parseEther("10000")
             })
             // hardhat does not understand method is different from rigoblock pool burn, hence we encode it.
-            //await pool.burn(5)
+            //await pool.burn(1)
             const encodedBurnData = pool.interface.encodeFunctionData(
                 'burn(uint256)',
-                [5]
+                [1]
             )
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedBurnData})
             await pool.wrapETH(parseEther("100"))
@@ -225,8 +235,60 @@ describe("AUniswap", async () => {
             await expect(
                 user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
             ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            // only 1 token gets whitelisted, the other is the base token
             await eWhitelist.whitelistToken(wethAddress)
             await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
+            await pool.increaseLiquidity({
+                tokenId: 1,
+                amount0Desired: 100,
+                amount1Desired: 100,
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: 1
+            })
+        })
+
+        it('should not allow adding liquidity to non-owned position', async () => {
+            const { grgToken, newPoolAddress, baseTokenPool, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const etherPool = Pool.attach(newPoolAddress)
+            const tokenPool = Pool.attach(baseTokenPool)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the token-based pool
+            await user1.sendTransaction({ to: baseTokenPool, value: amount})
+            await grgToken.transfer(baseTokenPool, amount)
+            const wethAddress = await etherPool.weth()
+            await etherPool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
+            await eWhitelist.whitelistToken(grgToken.address)
+            await eWhitelist.whitelistToken(wethAddress)
+            // first pool mints position, second adds liquidity to same position
+            const encodedMintData = etherPool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: wethAddress,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: etherPool.address,
+                    deadline: 1
+                }]
+            )
+            await user1.sendTransaction({ to: etherPool.address, value: 0, data: encodedMintData})
+            await expect(
+                tokenPool.increaseLiquidity({
+                    tokenId: 1,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    deadline: 1
+              })
+            ).to.be.reverted
         })
     })
 

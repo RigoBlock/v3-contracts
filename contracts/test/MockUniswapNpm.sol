@@ -8,6 +8,10 @@ import "../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePosit
 contract MockUniswapNpm {
     address public immutable WETH9;
 
+    uint256 private numPools;
+
+    mapping(uint256 => address) private _ownerOf;
+
     constructor() {
         WETH9 = address(new WETH9Contract());
     }
@@ -20,7 +24,14 @@ contract MockUniswapNpm {
             uint256 amount0,
             uint256 amount1
         )
-    {}
+    {
+        abi.encode(params);
+        tokenId = ++numPools;
+        _ownerOf[tokenId] = msg.sender;
+        liquidity = 1;
+        amount0 = 2;
+        amount1 = 3;
+    }
 
     function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params)
         external
@@ -81,5 +92,9 @@ contract MockUniswapNpm {
         feeGrowthInside1LastX128 = 3;
         tokensOwed0 = 16;
         tokensOwed1 = 15;
+    }
+
+    function ownerOf(uint256 tokenId) external view returns (address) {
+        return _ownerOf[tokenId];
     }
 }
