@@ -80,6 +80,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         )
     {
         address uniswapNpm = _getUniswapNpm();
+        assert(INonfungiblePositionManager(uniswapNpm).ownerOf(params.tokenId) = address(this));
         (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(uniswapNpm).positions(
             params.tokenId
         );
