@@ -148,21 +148,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external override returns (uint256 amountOut) {
-        (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
-
-        // TODO: check if should define tokenOut without condition as exactOutput expects multiple hops
-        //  will save an if condition and a library read op
-        // we overwrite tokenOut in case the path includes multiple hops
-        if (params.path.hasMultiplePools()) {
-            bytes memory path = params.path;
-
-            // we skip all routes but last POP_OFFSET
-            for (uint256 i = 0; i < params.path.numPools() - 1; i++) {
-              path = path.skipToken();
-            }
-
-            (, tokenOut, ) = path.decodeFirstPool();
-        }
+        (address tokenIn, address tokenOut) = _decodePathTokens(params.path);
 
         _assertTokenWhitelisted(tokenOut);
 
@@ -221,22 +207,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external override returns (uint256 amountIn) {
-        (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
-
-        // TODO: check if should define tokenOut without condition as exactOutput expects multiple hops
-        //  will save an if condition and a library read op
-        // we overwrite tokenOut in case the path includes multiple hops
-        if (params.path.hasMultiplePools()) {
-            bytes memory path = params.path;
-
-            // we skip all routes but last POP_OFFSET
-            for (uint256 i = 0; i < params.path.numPools() - 1; i++) {
-              path = path.skipToken();
-            }
-
-            (, tokenOut, ) = path.decodeFirstPool();
-        }
-
+        (address tokenIn, address tokenOut) = _decodePathTokens(params.path);
         _assertTokenWhitelisted(tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
@@ -346,6 +317,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function refundETH() external virtual override {}
 
+    // TODO: check if should make all internal methods private
     function _safeApprove(
         address token,
         address spender,
@@ -373,6 +345,19 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _isContract(address target) internal view returns (bool) {
         return target.code.length > 0;
+    }
+
+    function _decodePathTokens(bytes memory path) private pure returns (address tokenIn, address tokenOut) {
+        (tokenIn, , ) = path.decodeFirstPool();
+
+        if (path.hasMultiplePools()) {
+            // we skip all routes but last POP_OFFSET
+            for (uint256 i = 0; i < path.numPools() - 1; i++) {
+              path = path.skipToken();
+            }
+        }
+
+        (, tokenOut, ) = path.decodeFirstPool();
     }
 
     function _getUniswapRouter2() private view returns (address) {
