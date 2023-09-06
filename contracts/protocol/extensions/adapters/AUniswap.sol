@@ -23,8 +23,8 @@ pragma solidity 0.8.17;
 import "./AUniswapV3NPM.sol";
 import "./interfaces/IAUniswap.sol";
 import "./interfaces/IEWhitelist.sol";
-import "../../IRigoblockV3Pool.sol";
 import "../../interfaces/IWETH9.sol";
+import "../../IRigoblockV3Pool.sol";
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 
