@@ -317,7 +317,6 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function refundETH() external virtual override {}
 
-    // TODO: check if should make all internal methods private
     function _safeApprove(
         address token,
         address spender,
@@ -330,8 +329,6 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         assert(data.length == 0 || abi.decode(data, (bool)));
     }
 
-    // TODO: whitelist tests are not failing after modification as we use eth-based pools for swap tests
-    //  should write more tests with a ERC20-based pool
     function _assertTokenWhitelisted(address token) internal view override {
         // we allow swapping to base token even if not whitelisted token
         if (token != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
@@ -343,6 +340,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         return uniswapv3Npm;
     }
 
+    // TODO: check if should visibility private
     function _isContract(address target) internal view returns (bool) {
         return target.code.length > 0;
     }
