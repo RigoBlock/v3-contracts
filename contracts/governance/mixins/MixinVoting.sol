@@ -50,7 +50,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             executed: false
         });
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i; i < length; i++) {
             _proposedAction().proposedActionbyIndex[proposalId][i] = actions[i];
         }
 
@@ -97,7 +97,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         Proposal storage proposal = _proposal().proposalById[proposalId];
         proposal.executed = true;
 
-        for (uint256 i = 0; i < proposal.actionsLength; i++) {
+        for (uint256 i; i < proposal.actionsLength; i++) {
             ProposedAction memory action = _proposedAction().proposedActionbyIndex[proposalId][i];
             address target = action.target;
             uint256 value = action.value;
