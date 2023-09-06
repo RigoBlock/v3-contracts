@@ -193,8 +193,9 @@ describe("AUniswap", async () => {
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
             ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
         })
+    })
 
-        // TODO: the following call should revert
+    describe("increaseLiquidity", async () => {
         it('should allow adding liquidity to non-whitelisted base token', async () => {
             const { grgToken, baseTokenPool, eWhitelist } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
