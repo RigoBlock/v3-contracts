@@ -235,22 +235,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
      * UNISWAP V3 PAYMENT METHODS
      */
     /// @inheritdoc IAUniswap
-    function sweepToken(address token, uint256 amountMinimum) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepToken(token, amountMinimum);
-    }
+    function sweepToken(address token, uint256 amountMinimum) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function sweepToken(
         address token,
         uint256 amountMinimum,
         address recipient
-    ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepToken(
-            token,
-            amountMinimum,
-            recipient != address(this) ? address(this) : address(this) // this pool is always the recipient
-        );
-    }
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function sweepTokenWithFee(
@@ -258,9 +250,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 amountMinimum,
         uint256 feeBips,
         address feeRecipient
-    ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(token, amountMinimum, feeBips, feeRecipient);
-    }
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function sweepTokenWithFee(
@@ -269,15 +259,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address recipient,
         uint256 feeBips,
         address feeRecipient
-    ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
-            token,
-            amountMinimum,
-            recipient != address(this) ? address(this) : address(this), // this pool is always the recipient
-            feeBips,
-            feeRecipient
-        );
-    }
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external override {
@@ -308,7 +290,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     ) external virtual override {}
 
     /// @inheritdoc IAUniswap
-    function wrapETH(uint256 value) external {
+    function wrapETH(uint256 value) external override {
         if (value > uint256(0)) {
             IWETH9(_getWeth()).deposit{value: value}();
         }
