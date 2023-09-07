@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
+import "../v3-periphery/contracts/interfaces/external/IERC721.sol";
 import "../v3-periphery/contracts/interfaces/IPeripheryImmutableState.sol";
 import "../v3-periphery/contracts/interfaces/IPoolInitializer.sol";
 
 /// @title Non-fungible token for positions
 /// @notice Wraps Uniswap V3 positions in a non-fungible token interface which allows for them to be transferred
 /// and authorized.
-interface INonfungiblePositionManager is IPeripheryImmutableState, IPoolInitializer {
+interface INonfungiblePositionManager is IERC721, IPeripheryImmutableState, IPoolInitializer {
     /// @notice Returns the position information associated with a given token ID.
     /// @dev Throws if the token ID is not valid.
     /// @param tokenId The ID of the token that represents the position
