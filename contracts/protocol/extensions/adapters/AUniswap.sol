@@ -23,8 +23,9 @@ pragma solidity 0.8.17;
 import "./AUniswapV3NPM.sol";
 import "./interfaces/IAUniswap.sol";
 import "./interfaces/IEWhitelist.sol";
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "../../interfaces/IWETH9.sol";
+import "../../IRigoblockV3Pool.sol";
+import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 
 /// @title AUniswap - Allows interactions with the Uniswap contracts.
@@ -147,7 +148,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external override returns (uint256 amountOut) {
-        (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
+        (address tokenIn, address tokenOut) = _decodePathTokens(params.path);
+
         _assertTokenWhitelisted(tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
@@ -205,7 +207,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external override returns (uint256 amountIn) {
-        (address tokenIn, address tokenOut, ) = params.path.decodeFirstPool();
+        (address tokenOut, address tokenIn) = _decodePathTokens(params.path);
         _assertTokenWhitelisted(tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
@@ -233,22 +235,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
      * UNISWAP V3 PAYMENT METHODS
      */
     /// @inheritdoc IAUniswap
-    function sweepToken(address token, uint256 amountMinimum) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepToken(token, amountMinimum);
-    }
+    function sweepToken(address token, uint256 amountMinimum) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function sweepToken(
         address token,
         uint256 amountMinimum,
         address recipient
-    ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepToken(
-            token,
-            amountMinimum,
-            recipient != address(this) ? address(this) : address(this) // this pool is always the recipient
-        );
-    }
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function sweepTokenWithFee(
@@ -256,9 +250,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uint256 amountMinimum,
         uint256 feeBips,
         address feeRecipient
-    ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(token, amountMinimum, feeBips, feeRecipient);
-    }
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function sweepTokenWithFee(
@@ -267,15 +259,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address recipient,
         uint256 feeBips,
         address feeRecipient
-    ) external override {
-        ISwapRouter02(_getUniswapRouter2()).sweepTokenWithFee(
-            token,
-            amountMinimum,
-            recipient != address(this) ? address(this) : address(this), // this pool is always the recipient
-            feeBips,
-            feeRecipient
-        );
-    }
+    ) external virtual override {}
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external override {
@@ -306,7 +290,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     ) external virtual override {}
 
     /// @inheritdoc IAUniswap
-    function wrapETH(uint256 value) external {
+    function wrapETH(uint256 value) external override {
         if (value > uint256(0)) {
             IWETH9(_getWeth()).deposit{value: value}();
         }
@@ -328,15 +312,26 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     }
 
     function _assertTokenWhitelisted(address token) internal view override {
-        require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
+        // we allow swapping to base token even if not whitelisted token
+        if (token != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
+            require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
+        }
     }
 
     function _getUniswapNpm() internal view override returns (address) {
         return uniswapv3Npm;
     }
 
-    function _isContract(address target) internal view returns (bool) {
-        return target.code.length > 0;
+    function _decodePathTokens(bytes memory path) private pure returns (address tokenA, address tokenB) {
+        (tokenA, tokenB, ) = path.decodeFirstPool();
+
+        if (path.hasMultiplePools()) {
+            // we skip all routes but last POP_OFFSET
+            for (uint256 i = 0; i < path.numPools() - 1; i++) {
+                path = path.skipToken();
+            }
+            (, tokenB, ) = path.decodeFirstPool();
+        }
     }
 
     function _getUniswapRouter2() private view returns (address) {
@@ -345,5 +340,9 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _getWeth() private view returns (address) {
         return weth;
+    }
+
+    function _isContract(address target) private view returns (bool) {
+        return target.code.length > 0;
     }
 }
