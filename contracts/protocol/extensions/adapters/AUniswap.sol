@@ -207,7 +207,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external override returns (uint256 amountIn) {
-        (address tokenIn, address tokenOut) = _decodePathTokens(params.path);
+        (address tokenOut, address tokenIn) = _decodePathTokens(params.path);
         _assertTokenWhitelisted(tokenOut);
 
         // we require target to being contract to prevent call being executed to EOA
@@ -345,17 +345,16 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         return target.code.length > 0;
     }
 
-    function _decodePathTokens(bytes memory path) private pure returns (address tokenIn, address tokenOut) {
-        (tokenIn, , ) = path.decodeFirstPool();
+    function _decodePathTokens(bytes memory path) private pure returns (address tokenA, address tokenB) {
+        (tokenA, tokenB, ) = path.decodeFirstPool();
 
         if (path.hasMultiplePools()) {
             // we skip all routes but last POP_OFFSET
             for (uint256 i = 0; i < path.numPools() - 1; i++) {
                 path = path.skipToken();
             }
+            (, tokenB, ) = path.decodeFirstPool();
         }
-
-        (, tokenOut, ) = path.decodeFirstPool();
     }
 
     function _getUniswapRouter2() private view returns (address) {

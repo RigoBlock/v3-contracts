@@ -521,6 +521,7 @@ describe("AUniswap", async () => {
         })
     })
 
+    // tokenIn is the token that goes into the swap router, tokenOut is the token that is received
     describe("exactInputSingle", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
@@ -682,6 +683,7 @@ describe("AUniswap", async () => {
         })
     })
 
+    // exactOutput (multi-hop) has route inverted to exactInput, i.e. first token in path is tokenOut, last is tokenIn
     describe("exactOutput", async () => {
         it('should call uniswap router', async () => {
             const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
@@ -696,9 +698,9 @@ describe("AUniswap", async () => {
                 amountOut: 20,
                 amountInMaximum: 10
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(weth.address)
+            await eWhitelist.whitelistToken(grgToken.address)
             await expect(pool.exactOutput({
-                path: encodePath([user1.address, weth.address], [FeeAmount.MEDIUM]),
+                path: encodePath([grgToken.address, user1.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
@@ -724,7 +726,7 @@ describe("AUniswap", async () => {
                 amountOut: 20,
                 amountInMaximum: 10
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(weth.address)
+            await eWhitelist.whitelistToken(grgToken.address)
             await pool.exactOutput({
                 path: encodePath([grgToken.address, user1.address, weth.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
@@ -755,7 +757,7 @@ describe("AUniswap", async () => {
                 amountInMaximum: 10
             })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
             await pool.exactOutput({
-                path: encodePath([grgToken.address, weth.address, newPoolAddress], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                path: encodePath([newPoolAddress, weth.address, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
