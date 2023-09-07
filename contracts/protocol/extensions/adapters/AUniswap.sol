@@ -340,11 +340,6 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         return uniswapv3Npm;
     }
 
-    // TODO: check if should visibility private
-    function _isContract(address target) internal view returns (bool) {
-        return target.code.length > 0;
-    }
-
     function _decodePathTokens(bytes memory path) private pure returns (address tokenA, address tokenB) {
         (tokenA, tokenB, ) = path.decodeFirstPool();
 
@@ -363,5 +358,9 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _getWeth() private view returns (address) {
         return weth;
+    }
+
+    function _isContract(address target) private view returns (bool) {
+        return target.code.length > 0;
     }
 }
