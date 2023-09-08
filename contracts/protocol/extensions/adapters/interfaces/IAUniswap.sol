@@ -69,26 +69,26 @@ interface IAUniswap {
      * UNISWAP V3 SWAP METHODS
      */
     /// @notice Swaps `amountIn` of one token for as much as possible of another token.
-    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in memory.
+    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata.
     /// @return amountOut The amount of the received token.
     function exactInputSingle(ISwapRouter02.ExactInputSingleParams calldata params)
         external
         returns (uint256 amountOut);
 
     /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path.
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in memory.
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata.
     /// @return amountOut The amount of the received token.
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external returns (uint256 amountOut);
 
     /// @notice Swaps as little as possible of one token for `amountOut` of another token.
-    /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in memory.
+    /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in calldata.
     /// @return amountIn The amount of the input token.
     function exactOutputSingle(ISwapRouter02.ExactOutputSingleParams calldata params)
         external
         returns (uint256 amountIn);
 
     /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed).
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in memory.
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata.
     /// @return amountIn The amount of the input token.
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external returns (uint256 amountIn);
 

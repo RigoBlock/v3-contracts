@@ -16,7 +16,7 @@ contract MockUniswapNpm {
         WETH9 = address(new WETH9Contract());
     }
 
-    function mint(INonfungiblePositionManager.MintParams memory params)
+    function mint(INonfungiblePositionManager.MintParams memory)
         external
         returns (
             uint256 tokenId,
@@ -25,7 +25,6 @@ contract MockUniswapNpm {
             uint256 amount1
         )
     {
-        abi.encode(params);
         tokenId = ++numPools;
         _ownerOf[tokenId] = msg.sender;
         liquidity = 1;
@@ -61,7 +60,7 @@ contract MockUniswapNpm {
         uint160 sqrtPriceX96
     ) external returns (address pool) {}
 
-    function positions(uint256 tokenId)
+    function positions(uint256)
         external
         view
         returns (
@@ -79,7 +78,6 @@ contract MockUniswapNpm {
             uint128 tokensOwed1
         )
     {
-        abi.encode(tokenId);
         nonce = 1;
         operator = address(1);
         token0 = WETH9;
