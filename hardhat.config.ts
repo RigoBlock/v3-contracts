@@ -97,7 +97,7 @@ const userConfig: HardhatUserConfig = {
     goerli: {
       ...sharedNetworkConfig,
       url: `https://goerli.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 90000000000,
+      gasPrice: 4000000000,
     },
     ropsten: {
       ...sharedNetworkConfig,
