@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
- Copyright 2021-2022 Rigo Intl.
+ Copyright 2021-2023 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -64,14 +64,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountOut) {
-        _assertTokenWhitelisted(path[1]);
-
-        // we require target to being contract to prevent call being executed to EOA
-        require(_isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
-        address uniswapRouter = _getUniswapRouter2();
-
-        // we set the allowance to the uniswap router
-        _safeApprove(path[0], uniswapRouter, type(uint256).max);
+        address uniswapRouter = _preSwap(path[0], path[path.length - 1]);
 
         amountOut = ISwapRouter02(uniswapRouter).swapExactTokensForTokens(
             amountIn,
@@ -91,14 +84,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountIn) {
-        _assertTokenWhitelisted(path[1]);
-
-        // we require target to being contract to prevent call being executed to EOA
-        require(_isContract(path[0]), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
-        address uniswapRouter = _getUniswapRouter2();
-
-        // we set the allowance to the uniswap router
-        _safeApprove(path[0], uniswapRouter, type(uint256).max);
+        address uniswapRouter = _preSwap(path[0], path[path.length - 1]);
 
         amountIn = ISwapRouter02(uniswapRouter).swapTokensForExactTokens(
             amountOut,
@@ -120,14 +106,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         override
         returns (uint256 amountOut)
     {
-        _assertTokenWhitelisted(params.tokenOut);
-
-        // we require target to being contract to prevent call being executed to EOA
-        require(_isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
-        address uniswapRouter = _getUniswapRouter2();
-
-        // we set the allowance to the uniswap router
-        _safeApprove(params.tokenIn, uniswapRouter, type(uint256).max);
+        address uniswapRouter = _preSwap(params.tokenIn, params.tokenOut);
 
         // we swap the tokens
         amountOut = ISwapRouter02(uniswapRouter).exactInputSingle(
@@ -149,15 +128,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external override returns (uint256 amountOut) {
         (address tokenIn, address tokenOut) = _decodePathTokens(params.path);
-
-        _assertTokenWhitelisted(tokenOut);
-
-        // we require target to being contract to prevent call being executed to EOA
-        require(_isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
-        address uniswapRouter = _getUniswapRouter2();
-
-        // we set the allowance to the uniswap router
-        _safeApprove(tokenIn, uniswapRouter, type(uint256).max);
+        address uniswapRouter = _preSwap(tokenIn, tokenOut);
 
         // we swap the tokens
         amountOut = ISwapRouter02(uniswapRouter).exactInput(
@@ -179,14 +150,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         override
         returns (uint256 amountIn)
     {
-        _assertTokenWhitelisted(params.tokenOut);
-
-        // we require target to being contract to prevent call being executed to EOA
-        require(_isContract(params.tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
-        address uniswapRouter = _getUniswapRouter2();
-
-        // we set the allowance to the uniswap router
-        _safeApprove(params.tokenIn, uniswapRouter, type(uint256).max);
+        address uniswapRouter = _preSwap(params.tokenIn, params.tokenOut);
 
         // we swap the tokens
         amountIn = ISwapRouter02(uniswapRouter).exactOutputSingle(
@@ -208,14 +172,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external override returns (uint256 amountIn) {
         (address tokenOut, address tokenIn) = _decodePathTokens(params.path);
-        _assertTokenWhitelisted(tokenOut);
-
-        // we require target to being contract to prevent call being executed to EOA
-        require(_isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
-        address uniswapRouter = _getUniswapRouter2();
-
-        // we set the allowance to the uniswap router
-        _safeApprove(tokenIn, uniswapRouter, type(uint256).max);
+        address uniswapRouter = _preSwap(tokenIn, tokenOut);
 
         // we swap the tokens
         amountIn = ISwapRouter02(uniswapRouter).exactOutput(
@@ -309,6 +266,17 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         (, bytes memory data) = token.call(abi.encodeWithSelector(0x095ea7b3, spender, value));
         // approval never fails unless rogue token
         assert(data.length == 0 || abi.decode(data, (bool)));
+    }
+
+    function _preSwap(address tokenIn, address tokenOut) private returns (address uniswapRouter) {
+        _assertTokenWhitelisted(tokenOut);
+
+        // we require target to being contract to prevent call being executed to EOA
+        require(_isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        uniswapRouter = _getUniswapRouter2();
+
+        // we set the allowance to the uniswap router
+        _safeApprove(tokenIn, uniswapRouter, type(uint256).max);
     }
 
     function _assertTokenWhitelisted(address token) internal view override {

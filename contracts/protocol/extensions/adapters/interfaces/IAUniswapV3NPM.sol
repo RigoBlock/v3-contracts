@@ -33,7 +33,7 @@ interface IAUniswapV3NPM {
     /// @return liquidity The amount of liquidity for this position.
     /// @return amount0 The amount of token0.
     /// @return amount1 The amount of token1.
-    function mint(INonfungiblePositionManager.MintParams memory params)
+    function mint(INonfungiblePositionManager.MintParams calldata params)
         external
         returns (
             uint256 tokenId,
@@ -52,7 +52,7 @@ interface IAUniswapV3NPM {
     /// @return liquidity The new liquidity amount as a result of the increase.
     /// @return amount0 The amount of token0 to acheive resulting liquidity.
     /// @return amount1 The amount of token1 to acheive resulting liquidity.
-    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params)
+    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
         external
         returns (
             uint128 liquidity,
@@ -79,7 +79,7 @@ interface IAUniswapV3NPM {
     /// amount1Max The maximum amount of token1 to collect.
     /// @return amount0 The amount of fees collected in token0.
     /// @return amount1 The amount of fees collected in token1.
-    function collect(INonfungiblePositionManager.CollectParams memory params)
+    function collect(INonfungiblePositionManager.CollectParams calldata params)
         external
         returns (uint256 amount0, uint256 amount1);
 
