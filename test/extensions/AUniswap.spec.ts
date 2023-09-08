@@ -555,6 +555,28 @@ describe("AUniswap", async () => {
                 baseTokenPool
             )
         })
+
+        it('should allow multi-hop swap', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x472b43f3", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await eWhitelist.whitelistToken(weth.address)
+            await expect(pool.swapExactTokensForTokens(
+                100,
+                100,
+                [grgToken.address, weth.address, newPoolAddress],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await pool.swapExactTokensForTokens(
+                100,
+                100,
+                [grgToken.address, user1.address, weth.address],
+                newPoolAddress
+            )
+        })
     })
 
     describe("swapTokensForExactTokens", async () => {
@@ -582,6 +604,28 @@ describe("AUniswap", async () => {
                 100,
                 100,
                 [weth.address, grgToken.address],
+                newPoolAddress
+            )
+        })
+
+        it('should allow multi-hop swap', async () => {
+            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await authority.addMethod("0x42712a67", aUniswap)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await eWhitelist.whitelistToken(grgToken.address)
+            await expect(pool.swapTokensForExactTokens(
+                100,
+                100,
+                [weth.address, grgToken.address, newPoolAddress],
+                newPoolAddress
+            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            await pool.swapTokensForExactTokens(
+                100,
+                100,
+                [weth.address, user1.address, grgToken.address],
                 newPoolAddress
             )
         })
