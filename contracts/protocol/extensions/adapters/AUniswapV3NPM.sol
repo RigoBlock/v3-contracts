@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
- Copyright 2021-2022 Rigo Intl.
+ Copyright 2021-2023 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -44,8 +44,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         address uniswapNpm = _getUniswapNpm();
 
         // we set the allowance to the uniswap position manager
-        _safeApprove(params.token0, uniswapNpm, type(uint256).max);
-        _safeApprove(params.token1, uniswapNpm, type(uint256).max);
+        if (params.amount0Desired > 0) _safeApprove(params.token0, uniswapNpm, type(uint256).max);
+        if (params.amount1Desired > 0) _safeApprove(params.token1, uniswapNpm, type(uint256).max);
 
         // only then do we mint the liquidity token
         (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapNpm).mint(
@@ -65,8 +65,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.token0, uniswapNpm, uint256(1));
-        _safeApprove(params.token1, uniswapNpm, uint256(1));
+        if (params.amount0Desired > 0) _safeApprove(params.token0, uniswapNpm, uint256(1));
+        if (params.amount1Desired > 0) _safeApprove(params.token1, uniswapNpm, uint256(1));
     }
 
     /// @inheritdoc IAUniswapV3NPM
@@ -90,8 +90,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         _assertTokenWhitelisted(token1);
 
         // we first set the allowance to the uniswap position manager
-        _safeApprove(token0, uniswapNpm, type(uint256).max);
-        _safeApprove(token1, uniswapNpm, type(uint256).max);
+        if (params.amount0Desired > 0) _safeApprove(token0, uniswapNpm, type(uint256).max);
+        if (params.amount1Desired > 0) _safeApprove(token1, uniswapNpm, type(uint256).max);
 
         // finally, we add to the liquidity token
         (liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapNpm).increaseLiquidity(
@@ -106,8 +106,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(token0, uniswapNpm, uint256(1));
-        _safeApprove(token1, uniswapNpm, uint256(1));
+        if (params.amount0Desired > 0) _safeApprove(token0, uniswapNpm, uint256(1));
+        if (params.amount1Desired > 0) _safeApprove(token1, uniswapNpm, uint256(1));
     }
 
     /// @inheritdoc IAUniswapV3NPM
