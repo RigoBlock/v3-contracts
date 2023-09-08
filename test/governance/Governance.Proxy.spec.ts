@@ -328,6 +328,35 @@ describe("Governance Proxy", async () => {
             ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, amount)
         })
 
+        it('should not be replayed', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId, strategy } = await setupTests()
+            const amount = parseEther("100000")
+            await stakeProposalThreshold({amount, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId})
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            const proposalId = 1
+            const voteType = VoteType.Abstain
+            const { signature, domain, types, value} = await signEip712Message({
+                governance: governanceInstance.address,
+                proposalId: proposalId,
+                voteType: voteType
+            })
+            const { v, r, s } = hre.ethers.utils.splitSignature(signature)
+            await governanceInstance.propose([action], description)
+            await timeTravel({ days: 14, mine:true })
+            await expect(
+                governanceInstance.connect(user2).castVoteBySignature(proposalId, voteType, v, r ,s)
+            ).to.emit(governanceInstance, "VoteCast").withArgs(user1.address, proposalId, voteType, amount)
+            // submitting a different vote type will return a different signer that probabilistically won't have votes.
+            await expect(
+                governanceInstance.connect(user3).castVoteBySignature(proposalId, VoteType.For, v, r, s)
+            ).to.be.revertedWith("VOTING_NO_VOTES_ERROR")
+            await expect(
+                governanceInstance.connect(user3).castVoteBySignature(proposalId, voteType, v, r, s)
+            ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR")
+        })
+
         it('should be able to vote if has unstaked', async () => {
             const { governanceInstance, grgToken, grgTransferProxyAddress, staking, poolAddress, poolId, strategy } = await setupTests()
             const amount = parseEther("100000")
