@@ -203,6 +203,72 @@ describe("AUniswap", async () => {
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
             ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
         })
+
+        it('should allow minting and adding 1-sided liquidity', async () => {
+            const { grgToken, newPoolAddress, eWhitelist } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            //const Weth = await hre.ethers.getContractFactory("WETH9")
+            //const weth = await Weth.deploy()
+            const wethAddress = await pool.weth()
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
+            await eWhitelist.whitelistToken(grgToken.address)
+            await eWhitelist.whitelistToken(wethAddress)
+            let encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: wethAddress,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 0,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            await pool.increaseLiquidity({
+                tokenId: 1,
+                amount0Desired: 0,
+                amount1Desired: 100,
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: 1
+            })
+            encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: wethAddress,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 100,
+                    amount1Desired: 0,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            await pool.increaseLiquidity({
+                tokenId: 2,
+                amount0Desired: 200,
+                amount1Desired: 0,
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: 1
+            })
+        })
     })
 
     describe("increaseLiquidity", async () => {
