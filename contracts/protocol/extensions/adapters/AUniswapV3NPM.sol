@@ -28,7 +28,7 @@ import "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungibl
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     /// @inheritdoc IAUniswapV3NPM
-    function mint(INonfungiblePositionManager.MintParams memory params)
+    function mint(INonfungiblePositionManager.MintParams calldata params)
         external
         override
         returns (
@@ -70,7 +70,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswapV3NPM
-    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params)
+    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
         external
         override
         returns (
@@ -128,7 +128,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     }
 
     /// @inheritdoc IAUniswapV3NPM
-    function collect(INonfungiblePositionManager.CollectParams memory params)
+    function collect(INonfungiblePositionManager.CollectParams calldata params)
         external
         override
         returns (uint256 amount0, uint256 amount1)
