@@ -279,7 +279,6 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         _safeApprove(tokenIn, uniswapRouter, type(uint256).max);
     }
 
-
     function _assertTokenWhitelisted(address token) internal view override {
         // we allow swapping to base token even if not whitelisted token
         if (token != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
