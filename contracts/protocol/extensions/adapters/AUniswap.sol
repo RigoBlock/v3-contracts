@@ -64,7 +64,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountOut) {
-        address uniswapRouter = _preSwap(path[0], path[1]);
+        address uniswapRouter = _preSwap(path[0], path[path.length - 1]);
 
         amountOut = ISwapRouter02(uniswapRouter).swapExactTokensForTokens(
             amountIn,
@@ -84,7 +84,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountIn) {
-        address uniswapRouter = _preSwap(path[0], path[1]);
+        address uniswapRouter = _preSwap(path[0], path[path.length - 1]);
 
         amountIn = ISwapRouter02(uniswapRouter).swapTokensForExactTokens(
             amountOut,
