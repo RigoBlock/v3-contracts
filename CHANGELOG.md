@@ -1,3 +1,12 @@
+## [1.4.1](https://github.com/rigoblock/v3-contracts/compare/v1.4.0...v1.4.1) (2023-09-09)
+
+
+### Bug Fixes
+
+* patch uniswap adapter ([96adeb9](https://github.com/rigoblock/v3-contracts/commit/96adeb99a06ccfd100416bfa381eee92d37f49d6))
+
+
+
 # [1.4.0](https://github.com/rigoblock/v3-contracts/compare/v1.3.0...v1.4.0) (2023-09-09)
 
 
@@ -71,25 +80,6 @@
 * hardcode inflation address in staking on L2s ([bf7a8e6](https://github.com/rigoblock/v3-contracts/commit/bf7a8e6d23b8564f7b34f67dda73f0c45a2ea32b))
 * retrieve chainId in staking constructor without using assembly ([0e8ea5a](https://github.com/rigoblock/v3-contracts/commit/0e8ea5afc7fe0d94dbd0d42984fcd49213a2a8b3))
 * update husky script ([68f55eb](https://github.com/rigoblock/v3-contracts/commit/68f55eb991eef0fe7dfe0312d4e9199440ced2cf))
-
-
-
-## [1.1.1](https://github.com/rigoblock/v3-contracts/compare/v1.1.0...v1.1.1) (2022-10-26)
-
-
-### Bug Fixes
-
-* add uniswap extended uniswap methods ([64ef4a3](https://github.com/rigoblock/v3-contracts/commit/64ef4a3c3a22c537e975017732332af53f32740f))
-* deprecate LibSafeMath in staking ([d5fc4a9](https://github.com/rigoblock/v3-contracts/commit/d5fc4a9ba679bf990b96d79b3e94348416113bcc))
-* initialize staking pal to null address if is operator ([caeec6d](https://github.com/rigoblock/v3-contracts/commit/caeec6dffd977a346406bc6ac9305680eb888956))
-* internal constants renaming with _ ([b953767](https://github.com/rigoblock/v3-contracts/commit/b95376752c8f93bd5688a3e50cd51dc01514ef1e))
-* IStorage missing methods, removed non implemented plus docs ([f39cfc3](https://github.com/rigoblock/v3-contracts/commit/f39cfc3204b21639f9337220329e84b1e6948542))
-* minor staking variables renaming ([3ed91f5](https://github.com/rigoblock/v3-contracts/commit/3ed91f51e76f5e428220d04d8a58a94758b76f3e))
-* mixin deployment constants ([4d5014d](https://github.com/rigoblock/v3-contracts/commit/4d5014d3aed9691754059ab517ad50ddac12cc1c))
-* remove use of LibSafeMath in staking ([8216d2f](https://github.com/rigoblock/v3-contracts/commit/8216d2f66b17fd03580e424c4c51db5bad2e582a))
-* simplify math operationsin stake storage ([fa62f7b](https://github.com/rigoblock/v3-contracts/commit/fa62f7ba79fa963eb76ea0cc3216a6fc18831dcf))
-* update multicall interface with extended methods ([46eac10](https://github.com/rigoblock/v3-contracts/commit/46eac10706ce5462d0bb84551f414a40f17c7928))
-* upgrade minimum rigo token interfaces solc ([7ac33a1](https://github.com/rigoblock/v3-contracts/commit/7ac33a1394e8f3a5489743156df6318d237b8583))
 
 
 
