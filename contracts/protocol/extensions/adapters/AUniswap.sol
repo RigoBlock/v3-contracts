@@ -34,7 +34,7 @@ import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 //  because we always wrap/unwrap ETH within the pool and never accidentally send tokens to uniswap router or npm contracts.
 //  This allows to avoid clasing signatures and correctly reach target address for payment methods.
 contract AUniswap is IAUniswap, AUniswapV3NPM {
-    using Path for bytes;
+    using BytesLib for bytes;
 
     // storage must be immutable as needs to be rutime consistent
     // 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks
@@ -127,7 +127,9 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external override returns (uint256 amountOut) {
-        (address tokenIn, address tokenOut) = _decodePathTokens(params.path);
+        // tokenIn is the first address in the path, tokenOut the last
+        address tokenIn = params.path.toAddress(0);
+        address tokenOut = params.path.toAddress(params.path.length - 20);
         address uniswapRouter = _preSwap(tokenIn, tokenOut);
 
         // we swap the tokens
@@ -171,7 +173,9 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external override returns (uint256 amountIn) {
-        (address tokenOut, address tokenIn) = _decodePathTokens(params.path);
+        // tokenIn is the last address in the path, tokenOut the first
+        address tokenOut = params.path.toAddress(0);
+        address tokenIn = params.path.toAddress(params.path.length - 20);
         address uniswapRouter = _preSwap(tokenIn, tokenOut);
 
         // we swap the tokens
@@ -288,18 +292,6 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _getUniswapNpm() internal view override returns (address) {
         return uniswapv3Npm;
-    }
-
-    function _decodePathTokens(bytes memory path) private pure returns (address tokenA, address tokenB) {
-        (tokenA, tokenB, ) = path.decodeFirstPool();
-
-        if (path.hasMultiplePools()) {
-            // we skip all routes but last POP_OFFSET
-            for (uint256 i = 0; i < path.numPools() - 1; i++) {
-                path = path.skipToken();
-            }
-            (, tokenB, ) = path.decodeFirstPool();
-        }
     }
 
     function _getUniswapRouter2() private view returns (address) {
