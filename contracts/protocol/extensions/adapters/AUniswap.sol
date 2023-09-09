@@ -25,7 +25,7 @@ import "./interfaces/IAUniswap.sol";
 import "./interfaces/IEWhitelist.sol";
 import "../../interfaces/IWETH9.sol";
 import "../../IRigoblockV3Pool.sol";
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/Path.sol";
+import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 
 /// @title AUniswap - Allows interactions with the Uniswap contracts.
