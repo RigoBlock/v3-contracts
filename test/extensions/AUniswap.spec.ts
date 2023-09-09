@@ -9,7 +9,7 @@ import { encodePath, FeeAmount } from "../utils/path";
 import { getAddress } from "ethers/lib/utils";
 
 describe("AUniswap", async () => {
-    const [ user1, user2 ] = waffle.provider.getWallets()
+    const [ user1, user2, user3 ] = waffle.provider.getWallets()
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -576,6 +576,12 @@ describe("AUniswap", async () => {
                 [grgToken.address, user1.address, weth.address],
                 newPoolAddress
             )
+            await pool.swapExactTokensForTokens(
+                100,
+                100,
+                [grgToken.address, user1.address, user2.address, weth.address],
+                newPoolAddress
+            )
         })
     })
 
@@ -626,6 +632,12 @@ describe("AUniswap", async () => {
                 100,
                 100,
                 [weth.address, user1.address, grgToken.address],
+                newPoolAddress
+            )
+            await pool.swapTokensForExactTokens(
+                100,
+                100,
+                [weth.address, user1.address, user2.address, grgToken.address],
                 newPoolAddress
             )
         })
@@ -739,22 +751,24 @@ describe("AUniswap", async () => {
                 amountIn: 20,
                 amountOutMinimum: 1
             })
-        })
-
-        it('should revert with rogue path', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
-            const Pool = await hre.ethers.getContractFactory("AUniswap")
-            const pool = Pool.attach(newPoolAddress)
-            await authority.addMethod("0xb858183f", aUniswap)
-            const wethAddress = await pool.weth()
-            await eWhitelist.whitelistToken(wethAddress)
-            // decoding rogue path will fail in Rigoblock adapter
-            await expect(pool.exactInput({
-                path: encodePath([wethAddress], []),
+            await pool.exactInput({
+                path: encodePath(
+                    [weth.address, user1.address, user2.address, grgToken.address],
+                    [FeeAmount.MEDIUM, FeeAmount.MEDIUM, FeeAmount.MEDIUM]
+                ),
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
-            })).to.be.revertedWith("toUint24_outOfBounds")
+            })
+            await pool.exactInput({
+                path: encodePath(
+                    [weth.address, user1.address, user2.address, user3.address, grgToken.address],
+                    [FeeAmount.MEDIUM, FeeAmount.MEDIUM, FeeAmount.MEDIUM, FeeAmount.HIGH]
+                ),
+                recipient: newPoolAddress,
+                amountIn: 20,
+                amountOutMinimum: 1
+            })
         })
 
         it('should revert multi-hop if tokenOut not whitelited but token1 is', async () => {
@@ -876,22 +890,24 @@ describe("AUniswap", async () => {
                 amountOut: 20,
                 amountInMaximum: 10
             })
-        })
-
-        it('should revert with rogue path', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
-            const Pool = await hre.ethers.getContractFactory("AUniswap")
-            const pool = Pool.attach(newPoolAddress)
-            await authority.addMethod("0x09b81346", aUniswap)
-            const wethAddress = await pool.weth()
-            await eWhitelist.whitelistToken(wethAddress)
-            // decoding rogue path will fail in Rigoblock adapter
-            await expect(pool.exactOutput({
-                path: encodePath([wethAddress], []),
+            await pool.exactOutput({
+                path: encodePath(
+                    [grgToken.address, user1.address, user2.address, weth.address],
+                    [FeeAmount.MEDIUM, FeeAmount.MEDIUM, FeeAmount.MEDIUM]
+                ),
                 recipient: newPoolAddress,
-                amountOut: 10,
-                amountInMaximum: 20
-            })).to.be.revertedWith("toUint24_outOfBounds")
+                amountOut: 20,
+                amountInMaximum: 10
+            })
+            await pool.exactOutput({
+                path: encodePath(
+                    [grgToken.address, user1.address, user2.address, user3.address, weth.address],
+                    [FeeAmount.MEDIUM, FeeAmount.MEDIUM, FeeAmount.MEDIUM, FeeAmount.HIGH]
+                ),
+                recipient: newPoolAddress,
+                amountOut: 20,
+                amountInMaximum: 10
+            })
         })
 
         it('should revert multi-hop if tokenOut not whitelited but token1 is', async () => {
