@@ -1,3 +1,24 @@
+# [1.4.0](https://github.com/rigoblock/v3-contracts/compare/v1.3.0...v1.4.0) (2023-09-09)
+
+
+### Bug Fixes
+
+* allow swapping for base token if not whitelisted ([8c77a25](https://github.com/rigoblock/v3-contracts/commit/8c77a257a91e6987c0858d73aa654323e2c7205d))
+* assert pool is owner of position it is adding liquidity to ([5e29af0](https://github.com/rigoblock/v3-contracts/commit/5e29af00ae875bf2a857adc488015a43668a7d79))
+* correctly retrieve tokenOut in uniswap adapter ([19bbbff](https://github.com/rigoblock/v3-contracts/commit/19bbbff856660f46f38bfe875ada13eee17ed35e))
+* correctly retrieve tokens from path in uniswap adapter ([2b804b2](https://github.com/rigoblock/v3-contracts/commit/2b804b2a3efe7c5accec3669aba04ca6277cc666))
+* modify visibility of internal method ([7dc1914](https://github.com/rigoblock/v3-contracts/commit/7dc19148ca3e23e5699f1abba3e24ef3d8c6aa44))
+* remove implementation of sweep methods ([9f00adb](https://github.com/rigoblock/v3-contracts/commit/9f00adb9b1c23d0f2ed45d3dedfe567379035a15))
+* support multi-hop uni v2 swaps ([c2f672b](https://github.com/rigoblock/v3-contracts/commit/c2f672b77f0467e67b394b745feabe1e078d8b64))
+
+
+### Features
+
+* do not store npm adapter 'params' in memory ([ddf84e3](https://github.com/rigoblock/v3-contracts/commit/ddf84e3c45aac763b841f314ef1f9f69fa2698d6))
+* update copy and set approval only if positive amount ([2115d2c](https://github.com/rigoblock/v3-contracts/commit/2115d2cea55d740426d4560aa3c970acf9c50a0e))
+
+
+
 # [1.3.0](https://github.com/rigoblock/v3-contracts/compare/v1.2.0...v1.3.0) (2023-02-09)
 
 
@@ -69,15 +90,6 @@
 * simplify math operationsin stake storage ([fa62f7b](https://github.com/rigoblock/v3-contracts/commit/fa62f7ba79fa963eb76ea0cc3216a6fc18831dcf))
 * update multicall interface with extended methods ([46eac10](https://github.com/rigoblock/v3-contracts/commit/46eac10706ce5462d0bb84551f414a40f17c7928))
 * upgrade minimum rigo token interfaces solc ([7ac33a1](https://github.com/rigoblock/v3-contracts/commit/7ac33a1394e8f3a5489743156df6318d237b8583))
-
-
-
-# [1.1.0](https://github.com/rigoblock/v3-contracts/compare/v0.11.1...v1.1.0) (2022-10-19)
-
-
-### Features
-
-* upgrade version to v3.0.1 ([999e9bf](https://github.com/rigoblock/v3-contracts/commit/999e9bf98d997f3cceb82db24b9cac0ca87b5268))
 
 
 
