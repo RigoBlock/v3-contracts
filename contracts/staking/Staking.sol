@@ -46,7 +46,7 @@ contract Staking is IStaking, MixinParams, MixinStake, MixinPopRewards {
     function init() public override onlyAuthorized {
         // DANGER! When performing upgrades, take care to modify this logic
         // to prevent accidentally clearing prior state.
-        _initMixinScheduler();
-        _initMixinParams();
+        //_initMixinScheduler();
+        //_initMixinParams();
     }
 }
