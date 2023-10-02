@@ -8,7 +8,7 @@ on:
       - synchronize
 
 jobs:
-  check-pr-title:
+  main:
     name: Check PR Title
     runs-on: ubuntu-latest
     steps:
