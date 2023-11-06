@@ -29,7 +29,9 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
             } catch (bytes memory returnData) {
                 revert(string(returnData));
             }
-        } else { tokenDecimals = 18; }
+        } else {
+            tokenDecimals = 18;
+        }
 
         poolWrapper().pool = Pool({
             name: initParams.name,
