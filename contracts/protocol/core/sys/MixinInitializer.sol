@@ -9,27 +9,27 @@ import "../../interfaces/IRigoblockPoolProxyFactory.sol";
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     modifier onlyUninitialized() {
         // pool proxy is always initialized in the constructor, therefore
-        // empty extcodesize means the pool has not been initialized
-        address self = address(this);
-        uint256 size;
-        assembly {
-            size := extcodesize(self)
-        }
-        require(size == 0, "POOL_ALREADY_INITIALIZED_ERROR");
+        // empty code means the pool has not been initialized
+        require(address(this).code.length == 0, "POOL_ALREADY_INITIALIZED_ERROR");
         _;
     }
 
     /// @inheritdoc IRigoblockV3PoolInitializer
     function initializePool() external override onlyUninitialized {
-        uint8 tokenDecimals = 18;
         IRigoblockPoolProxyFactory.Parameters memory initParams = IRigoblockPoolProxyFactory(msg.sender).parameters();
+        uint8 tokenDecimals;
 
         if (initParams.baseToken != address(0)) {
-            tokenDecimals = IERC20(initParams.baseToken).decimals();
-        }
-
-        // a pool with small decimals could easily underflow.
-        assert(tokenDecimals >= 6);
+            // revert in case the ERC20 read call fails silently
+            assert(initParams.baseToken.code.length > 0);
+            try IERC20(initParams.baseToken).decimals() returns (uint8 decimals) {
+                tokenDecimals = decimals;
+                // a pool with small decimals could easily underflow.
+                assert(tokenDecimals >= 6);
+            } catch (bytes memory returnData) {
+                revert(string(returnData));
+            }
+        } else { tokenDecimals = 18; }
 
         poolWrapper().pool = Pool({
             name: initParams.name,
