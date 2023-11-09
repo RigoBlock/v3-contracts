@@ -7,6 +7,8 @@ import "../../interfaces/IERC20.sol";
 import "../../interfaces/IRigoblockPoolProxyFactory.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
+    error BaseTokenDecimals();
+
     modifier onlyUninitialized() {
         // pool proxy is always initialized in the constructor, therefore
         // empty code means the pool has not been initialized
@@ -25,7 +27,7 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
             try IERC20(initParams.baseToken).decimals() returns (uint8 decimals) {
                 tokenDecimals = decimals;
             } catch {
-                revert("NO_DECIMALS_RETURNED_ERROR");
+                revert BaseTokenDecimals();
             }
             // a pool with small decimals could easily underflow.
             assert(tokenDecimals >= 6);
