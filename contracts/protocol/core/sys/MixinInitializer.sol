@@ -20,15 +20,15 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         uint8 tokenDecimals;
 
         if (initParams.baseToken != address(0)) {
-            // revert in case the ERC20 read call fails silently
             assert(initParams.baseToken.code.length > 0);
+            // revert in case the ERC20 read call fails silently
             try IERC20(initParams.baseToken).decimals() returns (uint8 decimals) {
                 tokenDecimals = decimals;
-                // a pool with small decimals could easily underflow.
-                assert(tokenDecimals >= 6);
-            } catch (bytes memory returnData) {
-                revert(string(returnData));
+            } catch {
+                revert("NO_DECIMALS_RETURNED_ERROR");
             }
+            // a pool with small decimals could easily underflow.
+            assert(tokenDecimals >= 6);
         } else {
             tokenDecimals = 18;
         }
