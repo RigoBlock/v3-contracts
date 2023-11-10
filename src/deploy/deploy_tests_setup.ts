@@ -33,6 +33,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   // as long as authority address is same on all chains, pool implementation will have same address
   const poolImplementation = await deploy("RigoblockV3Pool", {
     from: deployer,
@@ -45,12 +46,21 @@ const deploy: DeployFunction = async function (
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
-      poolImplementation.address,
+      originalImplementationAddress,
       registry.address
     ],
     log: true,
     deterministicDeployment: true,
   });
+
+  const proxyFactoryInstance = await hre.ethers.getContractAt(
+    "RigoblockPoolProxyFactory",
+    proxyFactory.address
+  );
+  const currentImplementation = await proxyFactoryInstance.implementation()
+  if (currentImplementation !== poolImplementation.address) {
+    await proxyFactoryInstance.setImplementation(poolImplementation.address)
+  }
 
   await authorityInstance.setFactory(proxyFactory.address, true)
 
