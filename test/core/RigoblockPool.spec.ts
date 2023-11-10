@@ -205,6 +205,11 @@ describe("Proxy", async () => {
             const userPoolBalance = await pool.balanceOf(user1.address)
             // TODO: should be able to burn after 1 second, requires 2
             await timeTravel({ seconds: 2, mine: true })
+            expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(etherAmount)
+            const preBalance = await hre.ethers.provider.getBalance(user1.address)
+            const netRevenue = await pool.callStatic.burn(userPoolBalance, 1)
+            const { unitaryValue } = await pool.getPoolTokens()
+            expect(netRevenue).to.be.eq(BigNumber.from(userPoolBalance).mul(95).div(100).mul(unitaryValue).div(etherAmount))
             // the following is true with fee set as 0
             await expect(
                 pool.burn(userPoolBalance, 1)
@@ -213,6 +218,10 @@ describe("Proxy", async () => {
                 AddressZero,
                 userPoolBalance
             )
+            const spreadAmount = BigNumber.from(etherAmount).sub(etherAmount.div(100).mul(95).div(100).mul(95))
+            expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(spreadAmount)
+            const postBalance = await hre.ethers.provider.getBalance(user1.address)
+            expect(postBalance).to.be.gt(preBalance)
         })
 
         it('should allocate fee tokens to fee recipient', async () => {
