@@ -25,6 +25,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const poolImplementation = await deploy("RigoblockV3Pool", {
     from: deployer,
     args: [authority.address],
@@ -32,15 +33,24 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const factory = await deploy("RigoblockPoolProxyFactory", {
+  const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
-      poolImplementation.address,
+      originalImplementationAddress,
       registry.address
     ],
     log: true,
     deterministicDeployment: true,
   });
+
+  const proxyFactoryInstance = await hre.ethers.getContractAt(
+    "RigoblockPoolProxyFactory",
+    proxyFactory.address
+  );
+  const currentImplementation = await proxyFactoryInstance.implementation()
+  if (currentImplementation !== poolImplementation.address) {
+    await proxyFactoryInstance.setImplementation(poolImplementation.address)
+  }
 
   await deploy("EWhitelist", {
     from: deployer,
@@ -51,7 +61,7 @@ const deploy: DeployFunction = async function (
 
   await deploy("EUpgrade", {
     from: deployer,
-    args: [factory.address],
+    args: [proxyFactory.address],
     log: true,
     deterministicDeployment: true,
   });
