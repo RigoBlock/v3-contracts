@@ -40,7 +40,9 @@ describe("BaseTokenProxy", async () => {
             const { pool } = await setupTests()
             const authority = await deployments.get("Authority")
             expect(await pool.authority()).to.be.eq(authority.address)
-            expect(await pool.VERSION()).to.be.eq('HF 3.1.1')
+            // TODO: we should have an assertion that the version is different if implementation has changed
+            //   so we are prompted to change the version in the deployment constants.
+            expect(await pool.VERSION()).to.be.eq('HF 3.1.2')
         })
     })
 
