@@ -212,6 +212,26 @@ describe("ProxyFactory", async () => {
                 factory.createPool('testpool', 'TEST', rogueToken.address)
             ).to.be.revertedWith("POOL_INITIALIZATION_FAILED_ERROR")
         })
+
+        it('should revert when base token does not implement decimals', async () => {
+            const { factory } = await setupTests()
+            const [ user1 ] = waffle.provider.getWallets()
+            const source = 'contract RogueToken { function rogue() external pure returns (uint8) { return 0; } }'
+            const rogueToken = await deployContract(user1, source)
+            await expect(
+                factory.createPool('testpool', 'TEST', rogueToken.address)
+            ).to.be.revertedWith("POOL_INITIALIZATION_FAILED_ERROR")
+        })
+
+        it('should revert when base token is not a contract', async () => {
+            const { factory } = await setupTests()
+            const [ user1 ] = waffle.provider.getWallets()
+            const source = 'contract RogueToken { function decimals() external pure returns (uint8) { return 5; } }'
+            const rogueToken = await deployContract(user1, source)
+            await expect(
+                factory.createPool('testpool', 'TEST', user1.address)
+            ).to.be.revertedWith("POOL_INITIALIZATION_FAILED_ERROR")
+        })
     })
 
     describe("setImplementation", async () => {
