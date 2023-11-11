@@ -1,3 +1,19 @@
+## [1.4.2](https://github.com/rigoblock/v3-contracts/compare/v1.4.1...v1.4.2) (2023-11-11)
+
+
+### Bug Fixes
+
+* gas optimization on initialization revert ([7a36acd](https://github.com/rigoblock/v3-contracts/commit/7a36acd151c75b6444dae6de0a3c4e348df236e7))
+* revert with wrong pool initialization ([5cb1cb8](https://github.com/rigoblock/v3-contracts/commit/5cb1cb84bbe46343d1dc42f00e1be45aeef265bd))
+* update version in implementation deployment constants ([f6beeb8](https://github.com/rigoblock/v3-contracts/commit/f6beeb889fd8c334ced6fd15eeed639c3c52edab))
+
+
+### Reverts
+
+* Revert "chore: fix check pr title workflow" ([911ad15](https://github.com/rigoblock/v3-contracts/commit/911ad158f96ede840cf7f2158e6a4fd6fed98908))
+
+
+
 ## [1.4.1](https://github.com/rigoblock/v3-contracts/compare/v1.4.0...v1.4.1) (2023-09-09)
 
 
@@ -68,18 +84,6 @@
 * update EIP-712 domain at implementation upgrade ([2849adb](https://github.com/rigoblock/v3-contracts/commit/2849adbe4b28d25652b88b6a6f22418eb56a21cc))
 * upgrade governance strategy ([939fecb](https://github.com/rigoblock/v3-contracts/commit/939fecb67436f359c6b55403cb914a77e346ddf2))
 * validate params in governance strategy ([4136a57](https://github.com/rigoblock/v3-contracts/commit/4136a576c9edf4334e65137e2b267e2315a68c87))
-
-
-
-## [1.1.2](https://github.com/rigoblock/v3-contracts/compare/v1.1.1...v1.1.2) (2023-01-18)
-
-
-### Bug Fixes
-
-* add InflationL2.sol contract ([97b12de](https://github.com/rigoblock/v3-contracts/commit/97b12de06b275f9f6863317895c2d1b096dd211d))
-* hardcode inflation address in staking on L2s ([bf7a8e6](https://github.com/rigoblock/v3-contracts/commit/bf7a8e6d23b8564f7b34f67dda73f0c45a2ea32b))
-* retrieve chainId in staking constructor without using assembly ([0e8ea5a](https://github.com/rigoblock/v3-contracts/commit/0e8ea5afc7fe0d94dbd0d42984fcd49213a2a8b3))
-* update husky script ([68f55eb](https://github.com/rigoblock/v3-contracts/commit/68f55eb991eef0fe7dfe0312d4e9199440ced2cf))
 
 
 
