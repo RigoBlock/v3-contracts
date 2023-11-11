@@ -48,9 +48,9 @@ const deploy: DeployFunction = async function (
     proxyFactory.address
   );
   const currentImplementation = await proxyFactoryInstance.implementation()
-  if (currentImplementation !== poolImplementation.address) {
-    await proxyFactoryInstance.setImplementation(poolImplementation.address)
-  }
+  //if (currentImplementation !== poolImplementation.address) {
+  //  await proxyFactoryInstance.setImplementation(poolImplementation.address)
+  //}
 
   await deploy("EWhitelist", {
     from: deployer,
