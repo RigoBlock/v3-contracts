@@ -1,3 +1,12 @@
+# [1.5.0](https://github.com/rigoblock/v3-contracts/compare/v1.4.2...v1.5.0) (2023-11-25)
+
+
+### Features
+
+* remove deprecated self custody code ([5cf93f9](https://github.com/rigoblock/v3-contracts/commit/5cf93f919ae8be69b35ae893caf4e62bfae3bc78))
+
+
+
 ## [1.4.2](https://github.com/rigoblock/v3-contracts/compare/v1.4.1...v1.4.2) (2023-11-11)
 
 
@@ -56,34 +65,6 @@
 
 * add governance adapter ([99d193a](https://github.com/rigoblock/v3-contracts/commit/99d193a2cc77ff1783689eec8b16eaa59c261b9f))
 * add governance adapter interface to pool extended interface ([5c767ce](https://github.com/rigoblock/v3-contracts/commit/5c767ce567f05572a3257ebd5a65ce4e9cb694ce))
-
-
-
-# [1.2.0](https://github.com/rigoblock/v3-contracts/compare/v1.1.2...v1.2.0) (2023-02-07)
-
-
-### Bug Fixes
-
-* first proposal id = 1 ([a747a55](https://github.com/rigoblock/v3-contracts/commit/a747a558e77260b2c3398f53f5db73cea8a0799c))
-
-
-### Features
-
-* add governance contracts ([36a4eda](https://github.com/rigoblock/v3-contracts/commit/36a4eda8b0440b6971c8de740390e1fd21d4a929))
-* add governance strategy ([47dc9f2](https://github.com/rigoblock/v3-contracts/commit/47dc9f20ec5032fd41983d2f2699af0a216d3dab))
-* add salt to EIP-712 domain, hash governance strategy ([82efffb](https://github.com/rigoblock/v3-contracts/commit/82efffbcd6ca971c3a5ba4e3487e23305d0606b8))
-* allow instant execution if > 2/3 of all active stake in support ([8057d5a](https://github.com/rigoblock/v3-contracts/commit/8057d5ae06fb7e06563b8df0b807a79b84f86ba2))
-* assert valid governance init params ([7d2fa59](https://github.com/rigoblock/v3-contracts/commit/7d2fa5984c1870b27ede72fc448bdb32e22024ee))
-* move proposal state verification to strategy ([d04f51c](https://github.com/rigoblock/v3-contracts/commit/d04f51c834017f5a60b305644bf49bef2960dc10))
-* return proposal list in proposal wrapper tuple ([13a26df](https://github.com/rigoblock/v3-contracts/commit/13a26df2a092382ad37dd7edfcef6cfec3c869e7))
-* revert with rich error when execution fails ([1b177af](https://github.com/rigoblock/v3-contracts/commit/1b177af2ad91c7af7eea880bbc1bb87394c1b4c5))
-* safer governance implementation initialization ([a06b0a5](https://github.com/rigoblock/v3-contracts/commit/a06b0a5efa4ef84ea2367f745ed0ddab69cd0ce9))
-* simplify domain separator computation ([3977e77](https://github.com/rigoblock/v3-contracts/commit/3977e77a291817523c06e3a7c3104e40ebb80d4e))
-* split governance in subcontracts and abstract storage ([c8dad0f](https://github.com/rigoblock/v3-contracts/commit/c8dad0fd43f6b7629973e838ee8361347c50cb47))
-* split governance interface in subcontracts and reorg code ([aceba44](https://github.com/rigoblock/v3-contracts/commit/aceba444e151ccba5d596cc43495ef7bc3d948f7))
-* update EIP-712 domain at implementation upgrade ([2849adb](https://github.com/rigoblock/v3-contracts/commit/2849adbe4b28d25652b88b6a6f22418eb56a21cc))
-* upgrade governance strategy ([939fecb](https://github.com/rigoblock/v3-contracts/commit/939fecb67436f359c6b55403cb914a77e346ddf2))
-* validate params in governance strategy ([4136a57](https://github.com/rigoblock/v3-contracts/commit/4136a576c9edf4334e65137e2b267e2315a68c87))
 
 
 
