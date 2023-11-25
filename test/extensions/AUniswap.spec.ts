@@ -526,6 +526,14 @@ describe("AUniswap", async () => {
                 [user1.address, weth.address],
                 newPoolAddress
             )).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            // safe approval will fail silently for gas savings as authority contract does not implement approve method
+            //  which is fine as it has no negative side effect on pool tokens.
+            await pool.swapExactTokensForTokens(
+                100,
+                100,
+                [authority.address, weth.address],
+                newPoolAddress
+            )
             await pool.swapExactTokensForTokens(
                 100,
                 100,
