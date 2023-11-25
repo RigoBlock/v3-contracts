@@ -181,17 +181,6 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: check if we can move adapters deploy inside the tests
-  await deploy("ASelfCustody", {
-    from: deployer,
-    args: [
-        grgVault.address,
-        stakingProxy.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  })
-
   const mockUniswapRouter = await deploy("MockUniswapRouter", {
     from: deployer,
     args: [],

@@ -21,7 +21,6 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "./IAGovernance.sol";
 import "./IAMulticall.sol";
-import "./IASelfCustody.sol";
 import "./IAStaking.sol";
 import "./IAUniswap.sol";
 import "./IAUniswapV3NPM.sol";
@@ -34,7 +33,6 @@ import "./IEWhitelist.sol";
 interface IRigoblockExtensions is
     IAGovernance,
     IAMulticall,
-    IASelfCustody,
     IAStaking,
     IAUniswap,
     IAUniswapV3NPM,

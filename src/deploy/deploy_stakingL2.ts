@@ -86,16 +86,6 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await deploy("ASelfCustody", {
-    from: deployer,
-    args: [
-        grgVault.address,
-        stakingProxy.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  })
-
   const inflation = await deploy("InflationL2", {
     from: deployer,
     args: [deployer],
