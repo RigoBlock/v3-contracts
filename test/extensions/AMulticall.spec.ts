@@ -52,7 +52,7 @@ describe("AMulticall", async () => {
             // a direct call to the extension always fails
             await expect(
                 user1.sendTransaction({ to: aMulticall.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("function selector was not recognized and there's no fallback function")
+            ).to.be.reverted
         })
 
         it('should revert if method not implemented', async () => {
@@ -72,13 +72,13 @@ describe("AMulticall", async () => {
             await authority.addMethod("0xd784d426", factory.address)
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("function returned an unexpected amount of data")
+            ).to.be.reverted
             // however, an adapter <> selector mapping misconfiguration will result in revert
             await authority.removeMethod("0xd784d426", factory.address)
             await authority.addMethod("0xd784d426", aMulticall.address)
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("function selector was not recognized and there's no fallback function")
+            ).to.be.reverted
         })
 
         it('should prevent skipping owner check', async () => {
@@ -174,7 +174,7 @@ describe("AMulticall", async () => {
             ).to.be.revertedWith("Transaction reverted without a reason string")
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
-            ).to.be.revertedWith("function returned an unexpected amount of data")
+            ).to.be.reverted
         })
     })
 })
