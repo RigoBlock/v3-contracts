@@ -52,7 +52,7 @@ jobs:
 
       - name: Bump version and push tag
         id: conventional_changelog_action
-        uses: TriPSs/conventional-changelog-action@v4
+        uses: TriPSs/conventional-changelog-action@v5
         with:
           github-token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
 
