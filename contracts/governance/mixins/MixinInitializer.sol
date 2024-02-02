@@ -24,6 +24,8 @@ import "../interfaces/IRigoblockGovernanceFactory.sol";
 import "./MixinStorage.sol";
 
 abstract contract MixinInitializer is MixinStorage {
+    error InitParamsVerification();
+
     modifier onlyUninitialized() {
         // proxy is always initialized in the constructor, therefore
         // empty extcodesize means the governance has not been initialized
@@ -34,7 +36,12 @@ abstract contract MixinInitializer is MixinStorage {
     /// @inheritdoc IGovernanceInitializer
     function initializeGovernance() external override onlyUninitialized {
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory(msg.sender).parameters();
-        IGovernanceStrategy(params.governanceStrategy).assertValidInitParams(params);
+
+        // we require the strategy contract to implement method assertValidInitParams and are not interested in the returned error.
+        try IGovernanceStrategy(params.governanceStrategy).assertValidInitParams(params) {} catch {
+            revert InitParamsVerification();
+        }
+
         _name().value = params.name;
         _paramsWrapper().governanceParameters = GovernanceParameters({
             strategy: params.governanceStrategy,
