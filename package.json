@@ -69,7 +69,7 @@
     "ethers": "^5.1.4",
     "hardhat": "^2.13.1",
     "hardhat-deploy": "0.11.45",
-    "husky": "^8.0.1",
+    "husky": "^9.0.10",
     "prettier": "^2.1.2",
     "prettier-plugin-solidity": "^1.0.0-alpha.60",
     "solc": "0.8.24",
