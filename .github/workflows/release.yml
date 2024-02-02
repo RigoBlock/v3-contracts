@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 16.7.0
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: "**/node_modules"
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
@@ -52,7 +52,7 @@ jobs:
 
       - name: Bump version and push tag
         id: conventional_changelog_action
-        uses: TriPSs/conventional-changelog-action@v4
+        uses: TriPSs/conventional-changelog-action@v5
         with:
           github-token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
 
@@ -129,7 +129,7 @@ jobs:
           registry-url: https://registry.npmjs.org/
           always-auth: true
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: "**/node_modules"
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
