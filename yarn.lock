@@ -8670,9 +8670,9 @@ solidity-comments-extractor@^0.0.7:
   integrity sha512-wciNMLg/Irp8OKGrh3S2tfvZiZ0NEyILfcRCXCD4mp7SgK/i9gzLfhY2hY7VMCQJ3kH9UB9BzNdibIVMchzyYw==
 
 solidity-coverage@^0.8.2:
-  version "0.8.8"
-  resolved "https://registry.yarnpkg.com/solidity-coverage/-/solidity-coverage-0.8.8.tgz#f856e13817efc75d963cd2a549590c3c54ea565d"
-  integrity sha512-7RN6/8YAFMQNeMdSulARtE0VC5JitBAUMwvkr10FkOK+nux5q+WykrgSZntkWrX/VHzRa096P4OOViO0T9Q9Cw==
+  version "0.8.9"
+  resolved "https://registry.yarnpkg.com/solidity-coverage/-/solidity-coverage-0.8.9.tgz#d885207df927faf6b4f729904fab8ce0943cfd14"
+  integrity sha512-ZhPsxlsLkYyzgwoVGh8RBN2ju7JVahvMkk+8RBVc0vP/3UNq88GzvL8kvbuY48lVIRL8eQjJ+0X8al2Bu9/2iQ==
   dependencies:
     "@ethersproject/abi" "^5.0.9"
     "@solidity-parser/parser" "^0.18.0"
