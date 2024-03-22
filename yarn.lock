@@ -830,9 +830,9 @@
     url "^0.11.0"
 
 "@safe-global/safe-singleton-factory@^1.0.14":
-  version "1.0.20"
-  resolved "https://registry.yarnpkg.com/@safe-global/safe-singleton-factory/-/safe-singleton-factory-1.0.20.tgz#e8935c96fabf5cc0add7ac06803582e451b114fe"
-  integrity sha512-4JU42KtpNwuSP6mr4UoNMdeW8Lv5vWiGoGpwpimQHW/jWcL5d9oOABclcwzLBVE4trgwPoSiqGZhq1mR82jx9Q==
+  version "1.0.21"
+  resolved "https://registry.yarnpkg.com/@safe-global/safe-singleton-factory/-/safe-singleton-factory-1.0.21.tgz#8e1a9bcfc1ec3358aaef1f50f820878fa45b9f8a"
+  integrity sha512-/fdfbaaqbBlQJDv59Cb0JY1N/AsoY6O092dW4bIty6S/EW2ivho3U/GRa9dj2d+qZxjLBeYs426pdoR+ZfDb/w==
 
 "@scure/base@~1.1.0":
   version "1.1.1"
