@@ -34,6 +34,7 @@
     "type": "git",
     "url": "git+https://github.com/rigoblock/v3-contracts.git"
   },
+  "type": "module",
   "keywords": [
     "Ethereum",
     "Wallet",
