@@ -96,7 +96,7 @@ describe("AMulticall", async () => {
             )
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("Transaction reverted without a reason string")
+            ).to.be.revertedWith("Transaction reverted without a reason")
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
             ).to.emit(pool, "Upgraded").withArgs(factory.address)
@@ -113,7 +113,7 @@ describe("AMulticall", async () => {
             )
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("Transaction reverted without a reason string")
+            ).to.be.revertedWith("Transaction reverted without a reason")
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
             ).to.emit(pool, "NewOwner").withArgs(user1.address, user2.address)
@@ -129,7 +129,7 @@ describe("AMulticall", async () => {
             )
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("Transaction reverted without a reason string")
+            ).to.be.revertedWith("Transaction reverted without a reason")
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
             ).to.emit(pool, "Upgraded").withArgs(factory.address)
@@ -149,7 +149,7 @@ describe("AMulticall", async () => {
             )
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
-            ).to.be.revertedWith("Transaction reverted without a reason string")
+            ).to.be.revertedWith("Transaction reverted without a reason")
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
             ).to.emit(pool, "NewOwner").withArgs(user1.address, user2.address)
@@ -171,7 +171,7 @@ describe("AMulticall", async () => {
             )
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
-            ).to.be.revertedWith("Transaction reverted without a reason string")
+            ).to.be.revertedWith("Transaction reverted without a reason")
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
             ).to.be.reverted
