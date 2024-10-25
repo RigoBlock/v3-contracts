@@ -5407,9 +5407,9 @@ hardhat-watcher@^2.1.1:
     chokidar "^3.5.3"
 
 hardhat@^2.13.1:
-  version "2.22.14"
-  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-2.22.14.tgz#389bb3789a52adc0b1a3b4bfc9b891239d5a2b42"
-  integrity sha512-sD8vHtS9l5QQVHzyPPe3auwZDJyZ0fG3Z9YENVa4oOqVEefCuHcPzdU736rei3zUKTqkX0zPIHkSMHpu02Fq1A==
+  version "2.22.15"
+  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-2.22.15.tgz#319b4948f875968fde3f0d09a7edfe74e16b1365"
+  integrity sha512-BpTGa9PE/sKAaHi4s/S1e9WGv63DR1m7Lzfd60C8gSEchDPfAJssVRSq0MZ2v2k76ig9m0kHAwVLf5teYwu/Mw==
   dependencies:
     "@ethersproject/abi" "^5.1.2"
     "@metamask/eth-sig-util" "^4.0.0"
