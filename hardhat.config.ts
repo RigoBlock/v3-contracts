@@ -1,4 +1,5 @@
 import type { HardhatUserConfig, HttpNetworkUserConfig } from "hardhat/types";
+import "@nomicfoundation/hardhat-foundry";
 import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-waffle";
 import "solidity-coverage";

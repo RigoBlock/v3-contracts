@@ -20,35 +20,45 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
+// TODO: check if can add remapping an declare as @uniswap/universal-router without messing with uniswap v3 imports
 import "@uniswap/universal-router/contracts/UniversalRouter.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
+import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
+import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
 import "./interfaces/IEWhitelist.sol";
-import {Actions} from "./lib/uni-v4/Actions.sol";
-import {Commands} from './lib/uni-v4/Commands.sol';
+import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 import "../../IRigoblockV3Pool.sol";
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 
 // TODO: check if should implement as a library instead
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
-    using CalldataDecoder for bytes;
     
     error InvalidCommandType(uint256 commandType);
 
-    struct Output {
+    struct RelevantInputs {
         address token0;
         address token1 ;
         address tokenOut;
+        address recipient;
+        bool isPayableInput;
     }
 
-    Output private _output = Output({
+    // initialize struct with nil addresses
+    RelevantInputs private _relevantInputs = RelevantInputs({
         token0: address(0),
         token1: address(0),
-        tokenOut: address(0)
+        tokenOut: address(0),
+        recipient: address(0),
+        isPayableInput: false
     });
 
     function _decodeInput(bytes1 commandType, bytes calldata inputs)
-        private
-        returns (address token0, address token1, address tokenOut, address recipient)
+        internal
+        returns (RelevantInputs memory relevantInputs)
     {
         uint256 command = uint8(commandType & Commands.COMMAND_TYPE_MASK);
 
@@ -73,9 +83,11 @@ abstract contract AUniswapDecoder {
                         }
                         bytes calldata path = inputs.toBytes(3);
                         assert(payerIsUser);
+                        // TODO: check if this is duplicate from main adapter contract
                         assert(recipient == address(this));
-                        _output.token0 = path.toAddress(0);
-                        _output.tokenOut = path.toAddress(params.path.length - 20);
+                        _relevantInputs.token0 = path.toAddress(0);
+                        _relevantInputs.tokenOut = path.toAddress(path.length - 20);
+                        _relevantInputs.recipient = recipient;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
                         // equivalent: abi.decode(inputs, (address, uint256, uint256, bytes, bool))
                         address recipient;
@@ -92,8 +104,9 @@ abstract contract AUniswapDecoder {
                         bytes calldata path = inputs.toBytes(3);
                         assert(payerIsUser);
                         assert(recipient == address(this));
-                        _output.tokenOut = params.path.toAddress(0);
-                        _output.token0 = params.path.toAddress(params.path.length - 20);
+                        _relevantInputs.tokenOut = path.toAddress(0);
+                        _relevantInputs.token0 = path.toAddress(path.length - 20);
+                        _relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
                         return;
                     } else if (command == Commands.PERMIT2_PERMIT_BATCH) {
@@ -110,8 +123,9 @@ abstract contract AUniswapDecoder {
                         }
                         assert(recipient == address(this));
                         // sweep is used when the router is used for transfers
-                        // TODO: check if should validate token
-                        Payments.sweep(token, address(this), amountMin);
+                        // TODO: check if should validate token, as should return recipient
+                        //Payments.sweep(token, address(this), amountMin);
+                        _relevantInputs.recipient = recipient;
                     } else if (command == Commands.TRANSFER) {
                         // equivalent:  abi.decode(inputs, (address, address, uint256))
                         address token;
@@ -136,6 +150,7 @@ abstract contract AUniswapDecoder {
                             bips := calldataload(add(inputs.offset, 0x40))
                         }
                         assert(recipient == address(this));
+                        _relevantInputs.recipient = recipient;
                         // TODO: check should validate token
                     } else {
                         // placeholder area for command 0x07
@@ -159,8 +174,9 @@ abstract contract AUniswapDecoder {
                         assert(recipient == address(this));
                         assert(payerIsUser);
                         address[] calldata path = inputs.toAddressArray(3);
-                        _output.token0 = path[0];
-                        _output.tokenOut = path[1];
+                        _relevantInputs.token0 = path[0];
+                        _relevantInputs.tokenOut = path[1];
+                        _relevantInputs.recipient = recipient;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
                         // equivalent: abi.decode(inputs, (address, uint256, uint256, bytes, bool))
                         address recipient;
@@ -178,8 +194,9 @@ abstract contract AUniswapDecoder {
                         assert(recipient == address(this));
                         assert(payerIsUser);
                         // TODO: check order in/out is correct
-                        _output.token0 = path[0];
-                        _output.tokenOut = path[1];
+                        _relevantInputs.token0 = path[0];
+                        _relevantInputs.tokenOut = path[1];
+                        _relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_PERMIT) {
                         return;
                     } else if (command == Commands.WRAP_ETH) {
@@ -193,7 +210,12 @@ abstract contract AUniswapDecoder {
                         assert(recipient == address(this));
                         // TODO: check how it works with value, we may have to add return `value`
                         // or we could directly wrap here, as in uniswap adapter
-                        Payments.wrapETH(map(recipient), amount);
+                        // TODO: check why we directly call, as the core adapter will try to execute
+                        //Payments.wrapETH(_mapRecipient(recipient), amount);
+                        // if we call directly the target contract, we should return to skip swap checks,
+                        // which would result in revert
+                        _relevantInputs.recipient = recipient;
+                        _relevantInputs.isPayableInput = true;
                     } else if (command == Commands.UNWRAP_WETH) {
                         // equivalent: abi.decode(inputs, (address, uint256))
                         address recipient;
@@ -203,6 +225,7 @@ abstract contract AUniswapDecoder {
                             //amountMin := calldataload(add(inputs.offset, 0x20))
                         }
                         assert(recipient == address(this));
+                        _relevantInputs.recipient = recipient;
                         // TODO: in auniswap we define but not use recipient, check if direct weth call
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
                         return;
@@ -229,125 +252,160 @@ abstract contract AUniswapDecoder {
             } else {
                 // 0x10 <= command < 0x21
                 // TODO: restrict conditions on NO_OP hook flag
+                // TODO: we can allow any hook, as frontrunning is always possible, but should retrieve recipient
+                //  and tokens
+                // should loop through actions as in https://github.com/Uniswap/v4-periphery/blob/d767807d357b18bb8d35876b52c0556f1c2b302f/src/base/BaseActionsRouter.sol#L38
                 if (command == Commands.V4_SWAP) {
                     (bytes calldata actions, bytes[] calldata params) = inputs.decodeActionsRouterParams();
 
-                    if (action < Actions.SETTLE) {
-                        if (action == Actions.SWAP_EXACT_IN) {
-                            IV4Router.ExactInputParams calldata swapParams = params.decodeSwapExactInParams();
-                            uint256 pathLength = params.path.length;
-                            Currency currencyIn = params.currencyIn;
-                            PathKey calldata pathKey;
-                            for (uint256 i = 0; i < pathLength; i++) {
-                                pathKey = params.path[i];
-                                (PoolKey memory poolKey, /*bool*/) = pathKey.getPoolAndSwapDirection(currencyIn);
-                                // just an example of requirements on uniswap hook
-                                // TODO: initially it would be appropriate to require hookData.length == 0
-                                require(!pathKey.hooks.getHookPermissions().afterSwap, HookPermissionError());
+                    uint256 numActions = actions.length;
+                    assert(numActions == params.length);
+
+                    // TODO: we need to store tokens and recipient in memory, and can override as 1 swap is intended,
+                    // i.e. if multiple swaps are sent most will fail, as multiple swaps should be sent as an array
+                    // of v4 swaps
+
+                    for (uint256 actionIndex = 0; actionIndex < numActions; actionIndex++) {
+                        uint256 action = uint8(actions[actionIndex]);
+
+                        if (action < Actions.SETTLE) {
+                            if (action == Actions.SWAP_EXACT_IN) {
+                                IV4Router.ExactInputParams calldata swapParams = params.decodeSwapExactInParams();
+                                uint256 pathLength = swapParams.path.length;
+                                Currency currencyIn = swapParams.currencyIn;
+                                PathKey calldata pathKey;
+
+                                for (uint256 i = 0; i < pathLength; i++) {
+                                    pathKey = swapParams.path[i];
+                                    (PoolKey memory poolKey, /*bool*/) = pathKey.getPoolAndSwapDirection(currencyIn);
+                                    // just an example of requirements on uniswap hook
+                                    // TODO: initially it would be appropriate to require hookData.length == 0
+                                    //require(!pathKey.hooks.getHookPermissions().afterSwap, HookPermissionError());
+                                }
+
+                                _relevantInputs.token0 = swapParams.currencyIn;
+                                _relevantInputs.tokenOut = swapParams.path[pathLength - 1].intermediateCurrency;
+                            } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
+                                IV4Router.ExactInputSingleParams calldata swapParams = params.decodeSwapExactInSingleParams();
+                                _relevantInputs.token0 = swapParams.poolKey.currency0;
+                                _relevantInputs.tokenOut = swapParams.poolKey.currency1;
+                            } else if (action == Actions.SWAP_EXACT_OUT) {
+                                IV4Router.ExactOutputParams calldata swapParams = params.decodeSwapExactOutParams();
+                                uint256 pathLength = swapParams.path.length;
+                                _relevantInputs.tokenOut = swapParams.currencyOut;
+                                _relevantInputs.token0 = swapParams.path[pathLength - 1].intermediateCurrency;
+                            } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
+                                IV4Router.ExactOutputSingleParams calldata swapParams = params.decodeSwapExactOutSingleParams();
+                                _relevantInputs.token0 = swapParams.poolKey.currency1;
+                                _relevantInputs.tokenOut = swapParams.poolKey.currency0;
                             }
-                            _output.token0 = params.currencyIn;
-                            // TODO: we should return output at the end
-                            return _output;
-                        } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
-                            IV4Router.ExactInputSingleParams calldata swapParams = params.decodeSwapExactInSingleParams();
-                            _swapExactInputSingle(swapParams);
-                            return;
-                        } else if (action == Actions.SWAP_EXACT_OUT) {
-                            IV4Router.ExactOutputParams calldata swapParams = params.decodeSwapExactOutParams();
-                            _swapExactOutput(swapParams);
-                            return;
-                        } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
-                            IV4Router.ExactOutputSingleParams calldata swapParams = params.decodeSwapExactOutSingleParams();
-                            _swapExactOutputSingle(swapParams);
-                            return;
-                        }
-                    } else {
-                        if (action == Actions.SETTLE_PAIR) {
-                            (Currency currency0, Currency currency1) = params.decodeCurrencyPair();
-                            _settlePair(currency0, currency1);
-                            return;
-                        } else if (action == Actions.TAKE_PAIR) {
-                            (Currency currency0, Currency currency1, address recipient) = params.decodeCurrencyPairAndAddress();
-                            _takePair(currency0, currency1, _mapRecipient(recipient));
-                            return;
-                        } else if (action == Actions.SETTLE) {
-                            (Currency currency, uint256 amount, bool payerIsUser) = params.decodeCurrencyUint256AndBool();
-                            _settle(currency, _mapPayer(payerIsUser), _mapSettleAmount(amount, currency));
-                            return;
-                        } else if (action == Actions.TAKE) {
-                            (Currency currency, address recipient, uint256 amount) = params.decodeCurrencyAddressAndUint256();
-                            _take(currency, _mapRecipient(recipient), _mapTakeAmount(amount, currency));
-                            return;
-                        } else if (action == Actions.CLOSE_CURRENCY) {
-                            Currency currency = params.decodeCurrency();
-                            _close(currency);
-                            return;
-                        } else if (action == Actions.CLEAR_OR_TAKE) {
-                            (Currency currency, uint256 amountMax) = params.decodeCurrencyAndUint256();
-                            _clearOrTake(currency, amountMax);
-                            return;
-                        } else if (action == Actions.SWEEP) {
-                            (Currency currency, address to) = params.decodeCurrencyAndAddress();
-                            _sweep(currency, _mapRecipient(to));
-                            return;
+                        } else {
+                            if (action == Actions.SETTLE_PAIR) {
+                                // TODO: verify we cannot decode recipient, i.e. not an input for settle
+                                (Currency currency0, Currency currency1) = params.decodeCurrencyPair();
+                                _relevantInputs.token0 = currency0;
+                                _relevantInputs.tokenOut = currency1;
+                            } else if (action == Actions.TAKE_PAIR) {
+                                (Currency currency0, Currency currency1, address recipient) = params.decodeCurrencyPairAndAddress();
+                                _relevantInputs.token0 = currency0;
+                                _relevantInputs.tokenOut = currency1;
+                                _relevantInputs.recipient = recipient;
+                            } else if (action == Actions.SETTLE) {
+                                (Currency currency, uint256 amount, bool payerIsUser) = params.decodeCurrencyUint256AndBool();
+                                //_settle(currency, _mapPayer(payerIsUser), _mapSettleAmount(amount, currency));
+                                _relevantInputs.token0 = currency;
+                            } else if (action == Actions.TAKE) {
+                                (Currency currency, address recipient, uint256 amount) = params.decodeCurrencyAddressAndUint256();
+                                //_take(currency, _mapRecipient(recipient), _mapTakeAmount(amount, currency));
+                                _relevantInputs.token0 = currency;
+                                _relevantInputs.recipient = recipient;
+                            } else if (action == Actions.CLOSE_CURRENCY) {
+                                // TODO: in these methods, we should check if simply return to skip checks if possible
+                                Currency currency = params.decodeCurrency();
+                                //_close(currency);
+                                _relevantInputs.token0 = currency;
+                                //return;
+                            } else if (action == Actions.CLEAR_OR_TAKE) {
+                                (Currency currency, uint256 amountMax) = params.decodeCurrencyAndUint256();
+                                _relevantInputs.token1 = currency;
+                                //_clearOrTake(currency, amountMax);
+                                //return;
+                            } else if (action == Actions.SWEEP) {
+                                (Currency currency, address to) = params.decodeCurrencyAndAddress();
+                                //_sweep(currency, _mapRecipient(to));
+                                _relevantInputs.token1 = currency;
+                                //return;
+                            }
                         }
                     }
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
-                    return _output;
+                    return;
                 } else if (command == Commands.V3_POSITION_MANAGER_CALL) {
                     bytes4 selector;
                     assembly {
                         selector := calldataload(inputs.offset)
                     }
-                    if (!isValidAction(selector)) {
-                        revert InvalidAction(selector);
-                    }
+
+                    // TODO: check why we introduced this assertion
+                    //if (!isValidAction(selector)) {
+                    //    revert InvalidAction(selector);
+                    //}
 
                     uint256 tokenId;
                     assembly {
                         // tokenId is always the first parameter in the valid actions
                         tokenId := calldataload(add(inputs.offset, 0x04))
                     }
+
                     // If any other address that is not the owner wants to call this function, it also needs to be approved (in addition to this contract)
                     // This can be done in 2 ways:
                     //    1. This contract is permitted for the specific token and the caller is approved for ALL of the owner's tokens
                     //    2. This contract is permitted for ALL of the owner's tokens and the caller is permitted for the specific token
-                    if (!isAuthorizedForToken(msgSender(), tokenId)) {
-                        revert NotAuthorizedForToken(tokenId);
-                    }
+                    // TODO: check why we introduced this selector
+                    //if (!isAuthorizedForToken(msgSender(), tokenId)) {
+                    //    revert NotAuthorizedForToken(tokenId);
+                    //}
 
-                    (success, output) = address(V3_POSITION_MANAGER).call(inputs);
+                    // TODO: remove direct call to target
+                    //(success, output) = address(V3_POSITION_MANAGER).call(inputs);
                 } else if (command == Commands.V4_POSITION_CALL) {
                     // should only call modifyLiquidities() to mint
                     // do not permit or approve this contract over a v4 position or someone could use this command to decrease, burn, or transfer your position
                     (bytes calldata actions, bytes[] calldata params) = inputs.decodeActionsRouterParams();
 
-                    if (action == Actions.INCREASE_LIQUIDITY) {
-                        (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
-                            params.decodeModifyLiquidityParams();
-                        (PoolKey memory poolKey, ) = getPoolAndPositionInfo(tokenId);
-                        _output.token0 = Currency.unwrap(poolKey.currency0);
-                        _output.token1 = Currency.unwrap(poolKey.currency1);
-                    } else if (action == Actions.DECREASE_LIQUIDITY) {
-                        (uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData) =
-                            params.decodeModifyLiquidityParams();
-                        return _output;
-                    } else if (action == Actions.MINT_POSITION) {
-                        (
-                            PoolKey calldata poolKey,
-                            /*int24 tickLower*/,
-                            /*int24 tickUpper*/,
-                            /*uint256 liquidity*/,
-                            /*uint128 amount0Max*/,
-                            /*uint128 amount1Max*/,
-                            address owner,
-                            bytes calldata hookData
-                        ) = params.decodeMintParams();
-                        assert(owner == address(this));
-                        _output.token0 = Currency.unwrap(poolKey.currency0);
-                        _output.token1 = Currency.unwrap(poolKey.currency1);
-                    } else if (action == Actions.BURN_POSITION) {
-                        return _output;
+                    uint256 numActions = actions.length;
+                    assert(numActions == params.length);
+
+                    for (uint256 actionIndex = 0; actionIndex < numActions; actionIndex++) {
+                        uint256 action = uint8(actions[actionIndex]);
+
+                        if (action == Actions.INCREASE_LIQUIDITY) {
+                            (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
+                                params.decodeModifyLiquidityParams();
+                            (PoolKey memory poolKey, ) = IPositionManager.getPoolAndPositionInfo(tokenId);
+                            _relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
+                            _relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                        } else if (action == Actions.DECREASE_LIQUIDITY) {
+                            (uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData) =
+                                params.decodeModifyLiquidityParams();
+                            return _relevantInputs;
+                        } else if (action == Actions.MINT_POSITION) {
+                            (
+                                PoolKey calldata poolKey,
+                                /*int24 tickLower*/,
+                                /*int24 tickUpper*/,
+                                /*uint256 liquidity*/,
+                                /*uint128 amount0Max*/,
+                                /*uint128 amount1Max*/,
+                                address owner,
+                                bytes calldata hookData
+                            ) = params.decodeMintParams();
+                            assert(owner == address(this));
+                            _relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
+                            _relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                        } else if (action == Actions.BURN_POSITION) {
+                            return _relevantInputs;
+                        }
                     }
                 } else {
                     // placeholder area for commands 0x13-0x20
@@ -363,6 +421,6 @@ abstract contract AUniswapDecoder {
             }
         }
 
-        return _output;
+        return _relevantInputs;
     }
 }

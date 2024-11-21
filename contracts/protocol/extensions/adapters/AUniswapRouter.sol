@@ -37,11 +37,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     error ApprovalFailed(address target);
     error ApprovalNotReset();
 
-    /// @inheritdoc IAUniswap
-    IUniversalRouter public immutable override uniswapRouter;
+    /// @inheritdoc IAUniswapRouter
+    IUniversalRouter private immutable _uniswapRouter;
 
-    constructor(IUniversalRouter _uniswapRouter) {
-        uniswapRouter = _uniswapRouter;
+    constructor(IUniversalRouter _universalRouter) {
+        _uniswapRouter = _universalRouter;
     }
 
     modifier checkDeadline(uint256 deadline) {
@@ -65,8 +65,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         override
         returns (bytes memory returnData)
     {
-        address[] tokensIn;
-        address[] tokensOut;
+        address[] memory tokensIn;
+        address[] memory tokensOut;
+        address[] memory recipients;
 
         // we want to keep this duplicate check from universal router
         uint256 numCommands = commands.length;
@@ -79,7 +80,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             bytes calldata input = inputs[commandIndex];
 
             // TODO: check if should move this block at a lower level (should use transient storage for that purpose)
-            (address token0, address token1, address tokenOut) = _decodeInput(command, input);
+            // TODO: move recipient assertion from decoder to here
+            (address token0, address token1, address tokenOut, address recipient) = _decodeInput(command, input);
 
             for (uint i = 0; i < tokensIn.length; i++) {
                 if (token0 != tokensIn[i] && token0 != address(0)) {
@@ -97,37 +99,47 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                     tokensOut.push(tokenOut);
                 }
             }
+
+            for (uint i = 0; i < recipients.length; i++) {
+                if (recipient != recipients[i] && recipient != address(0)) {
+                    recipients.push(recipient);
+                }
+            }
         }
 
         _assertTokensWhitelisted(tokensOut);
-        _assertRecipientIsThisAddress(recipient);
+        _assertRecipientIsThisAddress(recipients);
 
         // we approve all the tokens that are exiting the smart pool
-        _safeApproveTokensIn(tokensIn, address(uniswapRouter), type(uint256).max);
+        _safeApproveTokensIn(tokensIn, address(uniswapRouter()), type(uint256).max);
 
         // we forward the validate inputs to the Uniswap universal router
-        try uniswapRouter.execute(commands, inputs) {
+        try uniswapRouter().execute(commands, inputs) {
         } catch Error(string memory reason) {
             revert(reason);
-        } catch (bytes memory returnData) {
-            revert(string(returnData));
+        } catch (bytes memory returnDataPluto) {
+            revert(string(returnDataPluto));
         }
 
         // we remove allowance without clearing storage
-        _safeApproveTokensIn(tokensIn, address(uniswapRouter), 1);
+        _safeApproveTokensIn(tokensIn, address(uniswapRouter()), 1);
 
         // we clear the variables in memory
         delete tokensIn;
         delete tokensOut;
     }
 
+    function uniswapRouter() public view override returns (IUniversalRouter universalRouter) {
+        return _uniswapRouter;
+    }
+
     // TODO: should move method to /lib or similar to reuse for any other methot that requires approval
     function _safeApprove(
         address token,
         address spender,
-        uint256 value
+        uint256 amount
     ) private {
-        try IERC20(token).approve(spender, value) returns (bool success) {}
+        try IERC20(token).approve(spender, amount) returns (bool success) {}
         catch {
             try IERC20(token).approve(spender, amount) {}
             // USDT on mainnet requires approval to be set to 0 before being reset again
@@ -137,7 +149,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                 } catch {
                     // TODO: assert we end up here when `tokenIn` is an EOA
                     // it will end here in any other failure and if it is an EOA
-                    revert ApprovalFailed(tokenIn);
+                    revert ApprovalFailed(token);
                 }
             }
         }
@@ -149,24 +161,26 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         );
     }
 
-    function _safeApproveTokensIn (tokensIn, spender, value) private {
+    function _safeApproveTokensIn(address[] calldata tokensIn, address spender, uint256 value) private {
         for (uint i = 0; i < tokensIn.length; i++) {
             _safeApprove(tokensIn[i], spender, value);
         }
     }
 
     // instead of overriding the inputs recipient, we simply validate, so we do not need to re-encode the params.
-    function _assertRecipientIsThisAddress(recipient) private view {
-        require(recipient == address(this), RecipientIsNotSmartPool());
+    function _assertRecipientIsThisAddress(address[] calldata recipients) private view {
+        for (uint i = 0 ; i < recipients.length; i++) {
+            require(recipients[i] == address(this), RecipientIsNotSmartPool());
+        }
     }
 
     // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
     // we will have to store the list of owned tokens once done in order to calculate value.
-    function _assertTokensWhitelisted(address[] tokens) private view {
+    function _assertTokensWhitelisted(address[] calldata tokens) private view {
         for (uint i = 0; i < tokens.length; i++) {
             // we allow swapping to base token even if not whitelisted token
             if (tokens[i] != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
-                require(IEWhitelist(address(this)).isWhitelistedToken(tokens[i]), TokenNotWhitelisted(tokenOut));
+                require(IEWhitelist(address(this)).isWhitelistedToken(tokens[i]), TokenNotWhitelisted(tokens[i]));
             }
         }
     }
