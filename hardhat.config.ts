@@ -155,7 +155,7 @@ const userConfig: HardhatUserConfig = {
   etherscan: {
     apiKey: {
       mainnet: ETHERSCAN_API_KEY ?? '',
-      goerli: ETHERSCAN_API_KEY ?? '',
+      sepolia: ETHERSCAN_API_KEY ?? '',
       optimisticEthereum: process.env.OPTIMISTIC_SCAN_API_KEY ?? '',
       arbitrumOne: process.env.ARBISCAN_API_KEY ?? '',
       bsc: process.env.BSCSCAN_API_KEY ?? '',
