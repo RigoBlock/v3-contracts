@@ -31,7 +31,7 @@ if (PK) {
   };
 }
 
-if (["mainnet", "rinkeby", "kovan", "goerli", "ropsten", "mumbai", "polygon"].includes(argv.network) && INFURA_KEY === undefined) {
+if (["mainnet", "rinkeby", "kovan", "sepolia", "ropsten", "mumbai", "polygon"].includes(argv.network) && INFURA_KEY === undefined) {
   throw new Error(
     `Could not find Infura key in env, unable to connect to network ${argv.network}`,
   );
@@ -67,6 +67,7 @@ const userConfig: HardhatUserConfig = {
   solidity: {
     compilers: [
       { version: primarySolidityVersion, settings: soliditySettings },
+      { version: "0.8.28", settings: soliditySettings },
       { version: "0.8.17", settings: soliditySettings },
       { version: "0.7.4", settings: soliditySettings },
     ]
@@ -94,9 +95,9 @@ const userConfig: HardhatUserConfig = {
       ...sharedNetworkConfig,
       url: `https://rinkeby.infura.io/v3/${INFURA_KEY}`,
     },
-    goerli: {
+    sepolia: {
       ...sharedNetworkConfig,
-      url: `https://goerli.infura.io/v3/${INFURA_KEY}`,
+      url: `https://sepolia.infura.io/v3/${INFURA_KEY}`,
       gasPrice: 7000000000,
     },
     ropsten: {

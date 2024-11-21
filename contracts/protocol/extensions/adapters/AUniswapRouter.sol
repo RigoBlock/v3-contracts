@@ -18,14 +18,15 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.8.27;
+pragma solidity 0.8.28;
 
-import "./AUniswapValidator.sol";
+import "./AUniswapDecoder.sol";
 import "./interfaces/IAUniswapRouter.sol";
 
 /// @title AUniswapRouter - Allows interactions with the Uniswap universal router contracts.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract AUniswapRouter is IAUniswapRouter, AUniswapValidator {
+contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
+    // TODO: pass params to errors
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
 
@@ -35,6 +36,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapValidator {
     error RecipientIsNotSmartPool();
     error ApprovalFailed(address target);
     error ApprovalNotReset();
+
+    /// @inheritdoc IAUniswap
+    IUniversalRouter public immutable override uniswapRouter;
 
     constructor(IUniversalRouter _uniswapRouter) {
         uniswapRouter = _uniswapRouter;
@@ -117,6 +121,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapValidator {
         delete tokensOut;
     }
 
+    // TODO: should move method to /lib or similar to reuse for any other methot that requires approval
     function _safeApprove(
         address token,
         address spender,
@@ -128,7 +133,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapValidator {
             // USDT on mainnet requires approval to be set to 0 before being reset again
             catch {
                 try IERC20(token).approve(spender, 0) {
-                    IERC20(token).approve(spender, amount)
+                    IERC20(token).approve(spender, amount);
                 } catch {
                     // TODO: assert we end up here when `tokenIn` is an EOA
                     // it will end here in any other failure and if it is an EOA

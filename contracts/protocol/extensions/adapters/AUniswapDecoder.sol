@@ -18,12 +18,12 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.8.27;
+pragma solidity 0.8.28;
 
-import {Actions} from "@uniswap/v4-periphery/libraries/Actions.sol";
-import "https://github.com/Uniswap/universal-router/blob/dev/contracts/base/Dispatcher.sol";
-import "https://github.com/Uniswap/universal-router/blob/dev/contracts/libraries/Commands.sol";
+import "@uniswap/universal-router/contracts/UniversalRouter.sol";
 import "./interfaces/IEWhitelist.sol";
+import {Actions} from "./lib/uni-v4/Actions.sol";
+import {Commands} from './lib/uni-v4/Commands.sol';
 import "../../IRigoblockV3Pool.sol";
 import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 
@@ -41,12 +41,12 @@ abstract contract AUniswapDecoder {
     }
 
     Output private _output = Output({
-        token0 = address(0);
-        token1 = address(0);
-        tokenOut = address(0);
+        token0: address(0),
+        token1: address(0),
+        tokenOut: address(0)
     });
 
-    function _decodeInput(bytes1 command, bytes calldata inputs)
+    function _decodeInput(bytes1 commandType, bytes calldata inputs)
         private
         returns (address token0, address token1, address tokenOut, address recipient)
     {
@@ -205,7 +205,7 @@ abstract contract AUniswapDecoder {
                         assert(recipient == address(this));
                         // TODO: in auniswap we define but not use recipient, check if direct weth call
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
-                        return
+                        return;
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
                         // equivalent: abi.decode(inputs, (address, address, uint256))
                         address owner;
@@ -240,7 +240,7 @@ abstract contract AUniswapDecoder {
                             PathKey calldata pathKey;
                             for (uint256 i = 0; i < pathLength; i++) {
                                 pathKey = params.path[i];
-                                (PoolKey memory poolKey, bool) = pathKey.getPoolAndSwapDirection(currencyIn);
+                                (PoolKey memory poolKey, /*bool*/) = pathKey.getPoolAndSwapDirection(currencyIn);
                                 // just an example of requirements on uniswap hook
                                 // TODO: initially it would be appropriate to require hookData.length == 0
                                 require(!pathKey.hooks.getHookPermissions().afterSwap, HookPermissionError());
@@ -335,11 +335,11 @@ abstract contract AUniswapDecoder {
                     } else if (action == Actions.MINT_POSITION) {
                         (
                             PoolKey calldata poolKey,
-                            int24 /*tickLower*/,
-                            int24 /*tickUpper*/,
-                            uint256 /*liquidity*/,
-                            uint128 /*amount0Max*/,
-                            uint128 /*amount1Max*/,
+                            /*int24 tickLower*/,
+                            /*int24 tickUpper*/,
+                            /*uint256 liquidity*/,
+                            /*uint128 amount0Max*/,
+                            /*uint128 amount1Max*/,
                             address owner,
                             bytes calldata hookData
                         ) = params.decodeMintParams();
@@ -351,7 +351,7 @@ abstract contract AUniswapDecoder {
                     }
                 } else {
                     // placeholder area for commands 0x13-0x20
-                    revert InvalidCommandType(command);;
+                    revert InvalidCommandType(command);
                 }
             }
         } else {
@@ -359,7 +359,7 @@ abstract contract AUniswapDecoder {
             if (command == Commands.EXECUTE_SUB_PLAN) {
                 (bytes calldata _commands, bytes[] calldata _inputs) = inputs.decodeCommandsAndInputs();
                 // TODO: check if this call could fail silently and its consequences
-                (address(this)).call(abi.encodeCall(Dispatcher.execute, (_commands, _inputs)));
+                (address(this)).call(abi.encodeCall(IAUniswapRouter.execute, (_commands, _inputs)));
             }
         }
 

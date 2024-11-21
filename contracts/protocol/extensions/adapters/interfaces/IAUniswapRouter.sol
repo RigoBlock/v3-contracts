@@ -19,13 +19,11 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-// TODO: use package dep when uniswap published release
-import "https://github.com/Uniswap/universal-router/blob/dev/contracts/interfaces/IUniversalRouter.sol";
+import "@uniswap/universal-router/contracts/interfaces/IUniversalRouter.sol";
 
-interface IAUniswap {
-    // TODO: check make external
+interface IAUniswapRouter {
     /// @notice The Uniswap universal router contract
-    IUniversalRouter public immutable uniswapRouter;
+    function uniswapRouter() external view returns (IUniversalRouter uniswapRouter);
 
     /// @notice Executes encoded commands along with provided inputs. Reverts if deadline has expired.
     /// @param commands A set of concatenated commands, each 1 byte in length
