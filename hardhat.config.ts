@@ -62,7 +62,7 @@ const userConfig: HardhatUserConfig = {
     artifacts: "build/artifacts",
     cache: "build/cache",
     deploy: "src/deploy",
-    sources: "contracts",
+    sources: "contracts"
   },
   solidity: {
     compilers: [
