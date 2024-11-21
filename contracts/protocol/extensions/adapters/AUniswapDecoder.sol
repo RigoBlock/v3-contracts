@@ -20,7 +20,7 @@
 // solhint-disable-next-line
 pragma solidity 0.8.27;
 
-import {Actions} from "#uniswap/v4-periphery/libraries/Actions.sol";
+import {Actions} from "@uniswap/v4-periphery/libraries/Actions.sol";
 import "https://github.com/Uniswap/universal-router/blob/dev/contracts/base/Dispatcher.sol";
 import "https://github.com/Uniswap/universal-router/blob/dev/contracts/libraries/Commands.sol";
 import "./interfaces/IEWhitelist.sol";
