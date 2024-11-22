@@ -69,9 +69,29 @@ const userConfig: HardhatUserConfig = {
     compilers: [
       { version: primarySolidityVersion, settings: soliditySettings },
       { version: "0.8.28", settings: soliditySettings },
+      { version: "0.8.26", settings: soliditySettings },
+      { version: "0.8.24", settings: soliditySettings },
       { version: "0.8.17", settings: soliditySettings },
+      { version: "0.8.4", settings: soliditySettings },
       { version: "0.7.4", settings: soliditySettings },
-    ]
+      { version: "0.7.0", settings: soliditySettings },
+    ] //,
+    // If you need to override settings for specific files:
+    //overrides: {
+    //  "@uniswap/universal-router/contracts/interfaces/external/IWETH9.sol": {
+    //    version: "0.8.4"
+    //  },
+    //  // Ensure OpenZeppelin's contracts are compiled with 0.7.0
+    //  "@openzeppelin/contracts/token/ERC20/IERC20.sol": {
+    //    version: "0.7.0"
+    //  },
+    //  "@openzeppelin/contracts/token/ERC721/IERC721Enumerable.sol": {
+    //    version: "0.7.0"
+    //  },
+    //  "@openzeppelin/contracts/token/ERC721/IERC721Metadata.sol": {
+    //    version: "0.7.0"
+    //  },
+    //}
   },
   networks: {
     hardhat: {

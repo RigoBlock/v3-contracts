@@ -22,8 +22,8 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@uniswap/universal-router/contracts/interfaces/IUniversalRouter.sol";
 
 interface IAUniswapRouter {
-    /// @notice The Uniswap universal router contract
-    function uniswapRouter() external view returns (IUniversalRouter uniswapRouter);
+    /// @notice The address of the Uniswap universal router contract
+    function uniswapRouter() external view returns (address uniswapRouter);
 
     /// @notice Executes encoded commands along with provided inputs. Reverts if deadline has expired.
     /// @param commands A set of concatenated commands, each 1 byte in length
