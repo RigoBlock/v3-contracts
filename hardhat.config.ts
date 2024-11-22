@@ -43,8 +43,12 @@ import "./src/tasks/deploy_contracts"
 import "./src/tasks/show_codesize"
 import { BigNumber } from "@ethersproject/bignumber";
 
-const primarySolidityVersion = SOLIDITY_VERSION || "0.8.14"
-const soliditySettings = !!SOLIDITY_SETTINGS ? JSON.parse(SOLIDITY_SETTINGS) : undefined
+const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28"
+//const soliditySettings = !!SOLIDITY_SETTINGS ? JSON.parse(SOLIDITY_SETTINGS) : undefined
+const soliditySettings = !!SOLIDITY_SETTINGS ? {
+  ...JSON.parse(SOLIDITY_SETTINGS),
+  evmVersion: process.env.EVM_VERSION || "cancun"
+} : undefined;
 
 const deterministicDeployment = CUSTOM_DETERMINISTIC_DEPLOYMENT == "true" ?
   (network: string) => {
@@ -72,26 +76,17 @@ const userConfig: HardhatUserConfig = {
       { version: "0.8.26", settings: soliditySettings },
       { version: "0.8.24", settings: soliditySettings },
       { version: "0.8.17", settings: soliditySettings },
+      { version: "0.8.14", settings: soliditySettings },
       { version: "0.8.4", settings: soliditySettings },
       { version: "0.7.4", settings: soliditySettings },
       { version: "0.7.0", settings: soliditySettings },
-    ] //,
-    // If you need to override settings for specific files:
-    //overrides: {
-    //  "@uniswap/universal-router/contracts/interfaces/external/IWETH9.sol": {
-    //    version: "0.8.4"
-    //  },
-    //  // Ensure OpenZeppelin's contracts are compiled with 0.7.0
-    //  "@openzeppelin/contracts/token/ERC20/IERC20.sol": {
-    //    version: "0.7.0"
-    //  },
-    //  "@openzeppelin/contracts/token/ERC721/IERC721Enumerable.sol": {
-    //    version: "0.7.0"
-    //  },
-    //  "@openzeppelin/contracts/token/ERC721/IERC721Metadata.sol": {
-    //    version: "0.7.0"
-    //  },
-    //}
+    ].map(compiler => ({
+      ...compiler,
+      settings: {
+        ...compiler.settings,
+        evmVersion: compiler.settings?.evmVersion || soliditySettings?.evmVersion
+      }
+    }))
   },
   networks: {
     hardhat: {
