@@ -62,6 +62,8 @@ const deterministicDeployment = CUSTOM_DETERMINISTIC_DEPLOYMENT == "true" ?
     }
   } : undefined
 
+// TODO: Fix the 'Invalid EVM version requested' error by properly setting up the EVM version in our Hardhat configuration
+// How do I configure Hardhat to use the cancun EVM version?
 const userConfig: HardhatUserConfig = {
   paths: {
     artifacts: "build/artifacts",
@@ -72,14 +74,14 @@ const userConfig: HardhatUserConfig = {
   solidity: {
     compilers: [
       { version: primarySolidityVersion, settings: soliditySettings },
-      { version: "0.8.28", settings: soliditySettings },
-      { version: "0.8.26", settings: soliditySettings },
-      { version: "0.8.24", settings: soliditySettings },
-      { version: "0.8.17", settings: soliditySettings },
-      { version: "0.8.14", settings: soliditySettings },
-      { version: "0.8.4", settings: soliditySettings },
-      { version: "0.7.4", settings: soliditySettings },
-      { version: "0.7.0", settings: soliditySettings },
+      { version: "0.8.28", settings: { ...soliditySettings, evmVersion: "cancun" } },
+      { version: "0.8.26", settings: { ...soliditySettings, evmVersion: "berlin" } },
+      { version: "0.8.24", settings: { ...soliditySettings, evmVersion: "berlin" } },
+      { version: "0.8.17", settings: { ...soliditySettings, evmVersion: "london" } },
+      { version: "0.8.14", settings: { ...soliditySettings, evmVersion: "london" } },
+      { version: "0.8.4", settings: { ...soliditySettings, evmVersion: "istanbul" } },
+      { version: "0.7.4", settings: { ...soliditySettings, evmVersion: "istanbul" } },
+      { version: "0.7.0", settings: { ...soliditySettings, evmVersion: "istanbul" } },
     ].map(compiler => ({
       ...compiler,
       settings: {
