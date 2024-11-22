@@ -109,7 +109,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         _safeApproveTokensIn(tokensIn, uniswapRouter(), type(uint256).max);
 
         // we forward the validate inputs to the Uniswap universal router
-        try IAUniswapRouter(uniswapRouter()).execute(commands, inputs) {
+        // TODO: check if can avoid redefining a variable here
+        try IAUniswapRouter(uniswapRouter()).execute(commands, inputs) returns (bytes memory returnData2) {
+            returnData = returnData2;
         } catch Error(string memory reason) {
             revert(reason);
         } catch (bytes memory returnDataPluto) {
@@ -135,8 +137,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         address spender,
         uint256 amount
     ) private {
-        try IERC20(token).approve(spender, amount) returns (bool success) {}
-        catch {
+        try IERC20(token).approve(spender, amount) returns (bool success) {
+            assert(success);
+        } catch {
             try IERC20(token).approve(spender, amount) {}
             // USDT on mainnet requires approval to be set to 0 before being reset again
             catch {
@@ -149,17 +152,16 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                 }
             }
         }
-
-        // TODO: we could simply assert, this guarantees that there is no approval inflation
-        require(
-            IERC20(token).allowance(address(this), spender) == 1,
-            ApprovalNotReset()
-        );
     }
 
     function _safeApproveTokensIn(address[] memory tokensIn, address spender, uint256 value) private {
         for (uint i = 0; i < tokensIn.length; i++) {
             _safeApprove(tokensIn[i], spender, value);
+
+            // assert no approval inflation exists after removing approval
+            if (value == 1) {
+                assert(IERC20(tokensIn[i]).allowance(address(this), uniswapRouter()) == 1);
+            }
         }
     }
 

@@ -282,8 +282,8 @@ abstract contract AUniswapDecoder {
                                 //IV4Router.ExactInputParams calldata swapParams = paramsAtIndex.decodeSwapExactInParams();
                                 IV4Router.ExactInputParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactInputParams));
                                 uint256 pathLength = swapParams.path.length;
-                                Currency currencyIn = swapParams.currencyIn;
-                                PathKey calldata pathKey;
+                                //Currency currencyIn = swapParams.currencyIn;
+                                //PathKey calldata pathKey;
 
                                 // TODO: remove if unused
                                 //for (uint256 i = 0; i < pathLength; i++) {
@@ -328,12 +328,12 @@ abstract contract AUniswapDecoder {
                                 _relevantInputs.recipient = recipient;
                             } else if (action == Actions.SETTLE) {
                                 //(Currency currency, uint256 amount, bool payerIsUser) = paramsAtIndex.decodeCurrencyUint256AndBool();
-                                (Currency currency, uint256 amount, bool payerIsUser) = abi.decode(paramsAtIndex, (Currency, uint256, bool));
+                                (Currency currency, /*uint256 amount*/, /*bool payerIsUser*/) = abi.decode(paramsAtIndex, (Currency, uint256, bool));
                                 //_settle(currency, _mapPayer(payerIsUser), _mapSettleAmount(amount, currency));
                                 _relevantInputs.token0 = Currency.unwrap(currency);
                             } else if (action == Actions.TAKE) {
                                 //(Currency currency, address recipient, uint256 amount) = paramsAtIndex.decodeCurrencyAddressAndUint256();
-                                (Currency currency, address recipient, uint256 amount) = abi.decode(paramsAtIndex, (Currency, address, uint256));
+                                (Currency currency, address recipient, /*uint256 amount*/) = abi.decode(paramsAtIndex, (Currency, address, uint256));
                                 //_take(currency, _mapRecipient(recipient), _mapTakeAmount(amount, currency));
                                 _relevantInputs.token0 = Currency.unwrap(currency);
                                 _relevantInputs.recipient = recipient;
@@ -346,13 +346,13 @@ abstract contract AUniswapDecoder {
                                 //return _relevantInputs;
                             } else if (action == Actions.CLEAR_OR_TAKE) {
                                 //(Currency currency, uint256 amountMax) = paramsAtIndex.decodeCurrencyAndUint256();
-                                (Currency currency, uint256 amountMax) = abi.decode(paramsAtIndex, (Currency, uint256));
+                                (Currency currency, /*uint256 amountMax*/) = abi.decode(paramsAtIndex, (Currency, uint256));
                                 _relevantInputs.token1 = Currency.unwrap(currency);
                                 //_clearOrTake(currency, amountMax);
                                 //return _relevantInputs;
                             } else if (action == Actions.SWEEP) {
                                 //(Currency currency, address to) = paramsAtIndex.decodeCurrencyAndAddress();
-                                (Currency currency, address to) = abi.decode(paramsAtIndex, (Currency, address));
+                                (Currency currency, /*address to*/) = abi.decode(paramsAtIndex, (Currency, address));
                                 //_sweep(currency, _mapRecipient(to));
                                 _relevantInputs.token1 = Currency.unwrap(currency);
                                 //return _relevantInputs;
@@ -402,14 +402,14 @@ abstract contract AUniswapDecoder {
                         bytes memory paramsAtIndex = params[actionIndex];
 
                         if (action == Actions.INCREASE_LIQUIDITY) {
-                            (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes memory hookData) =
+                            (uint256 tokenId, /*uint256 liquidity*/, /*uint128 amount0Max*/, /*uint128 amount1Max*/, /*bytes memory hookData*/) =
                                 abi.decode(paramsAtIndex, (uint256, uint256, uint128, uint128, bytes));
                             (PoolKey memory poolKey, ) = IPositionManager(POSITION_MANAGER).getPoolAndPositionInfo(tokenId);
                             _relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
                             _relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
                         } else if (action == Actions.DECREASE_LIQUIDITY) {
-                            (uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes memory hookData) =
-                                abi.decode(paramsAtIndex, (uint256, uint256, uint128, uint128, bytes));
+                            //(uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes memory hookData) =
+                            //    abi.decode(paramsAtIndex, (uint256, uint256, uint128, uint128, bytes));
                             return _relevantInputs;
                         } else if (action == Actions.MINT_POSITION) {
                             (
@@ -420,7 +420,7 @@ abstract contract AUniswapDecoder {
                                 /*uint128 amount0Max*/,
                                 /*uint128 amount1Max*/,
                                 address owner,
-                                bytes memory hookData
+                                /*bytes memory hookData*/
                             ) = abi.decode(paramsAtIndex, (PoolKey, int24, int24, uint256, uint128, uint128, address, bytes));
                             assert(owner == address(this));
                             _relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
