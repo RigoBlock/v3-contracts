@@ -24,27 +24,29 @@ import "./AUniswapDecoder.sol";
 import "./interfaces/IAUniswapRouter.sol";
 
 /// @title AUniswapRouter - Allows interactions with the Uniswap universal router contracts.
+/// @notice This contract is used as a bridge between a Rigoblock smart pool contract and the Uniswap universal router.
+/// @dev This contract ensures that tokens are approved and disapproved correctly, and that recipients and tokens are validated.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
-    // TODO: pass params to errors
+    address private immutable _uniswapRouter;
+    address private immutable _positionManager;
+
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
 
     /// @notice Thrown when attempting to execute commands and an incorrect number of inputs are provided
-    error LengthMismatch();
     error TokenNotWhitelisted(address token);
     error RecipientIsNotSmartPool();
     error ApprovalFailed(address target);
-    error ApprovalNotReset();
+    error TargetIsNotContract();
 
-    address private immutable _uniswapRouter;
-
-    constructor(address _universalRouter, address _positionManager) AUniswapDecoder(_positionManager) {
+    constructor(address _universalRouter, address _v4positionManager) {
         _uniswapRouter = _universalRouter;
+        _positionManager = _v4positionManager;
     }
 
     modifier checkDeadline(uint256 deadline) {
-        if (block.timestamp > deadline) revert TransactionDeadlinePassed();
+        require(block.timestamp <= deadline, TransactionDeadlinePassed());
         _;
     }
 
@@ -61,34 +63,39 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     /// @inheritdoc IAUniswapRouter
     function execute(bytes calldata commands, bytes[] calldata inputs)
         public
+        payable
         override
         returns (bytes memory returnData)
     {
+        // TODO: when executing a subplan, the arrays will be reset, i.e. we won't correctly append additional values
         address[] memory tokensIn = new address[](0);
         address[] memory tokensOut = new address[](0);
         address[] memory recipients = new address[](0);
+        uint256 value = 0;
 
         // we want to keep this duplicate check from universal router
+        // TODO: as if the condition is not satisfied, the tx will revert in uniswap router, we could remove and save gas
         uint256 numCommands = commands.length;
-        require(inputs.length != numCommands, LengthMismatch());
+        assert(numCommands == inputs.length);
 
         // loop through all given commands, verify their inputs and pass along outputs as defined
         for (uint256 commandIndex = 0; commandIndex < numCommands; commandIndex++) {
             bytes1 command = commands[commandIndex];
             bytes calldata input = inputs[commandIndex];
 
-            // TODO: check if should move this block at a lower level (should use transient storage for that purpose)
-            // TODO: move recipient assertion from decoder to here
-            AUniswapDecoder.RelevantInputs memory relevantInputs = _decodeInput(command, input);
+            // TODO: we might have to return an additional boolean should skip, and write a new inputs array where should not skip.
+            RelevantInputs memory relevantInputs = _decodeInput(command, input);
 
             // Check if token0 should be added to tokensIn
             if (relevantInputs.token0 != address(0) && !_contains(tokensIn, relevantInputs.token0)) {
                 tokensIn = _add(tokensIn, relevantInputs.token0);
             }
 
+            // TODO: with increaseLiquidity we used to check if token0, token1 are whitelisted. Check if this is necessary.
             // Check if token1 should be added to tokensIn and ensure it's not the same as token0
             if (relevantInputs.token1 != address(0) && relevantInputs.token0 != relevantInputs.token1 && !_contains(tokensIn, relevantInputs.token1)) {
                 tokensIn = _add(tokensIn, relevantInputs.token1);
+                // TODO: add token1, token0 to tokensOut
             }
 
             // Check if tokenOut should be added to tokensOut
@@ -100,6 +107,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             if (relevantInputs.recipient != address(0) && !_contains(recipients, relevantInputs.recipient)) {
                 recipients = _add(recipients, relevantInputs.recipient);
             }
+
+            // we assume wrapETH can be invoked multiple times for multiple swaps, and forward the total as msg.value
+            if (relevantInputs.value > 0) {
+                value += relevantInputs.value;
+            }
         }
 
         _assertTokensWhitelisted(tokensOut);
@@ -109,26 +121,37 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         _safeApproveTokensIn(tokensIn, uniswapRouter(), type(uint256).max);
 
         // we forward the validate inputs to the Uniswap universal router
-        // TODO: check if can avoid redefining a variable here
-        try IAUniswapRouter(uniswapRouter()).execute(commands, inputs) returns (bytes memory returnData2) {
-            returnData = returnData2;
+        try IAUniswapRouter(uniswapRouter()).execute{value: value}(commands, inputs) returns (bytes memory result) {
+            returnData = result;
         } catch Error(string memory reason) {
             revert(reason);
-        } catch (bytes memory returnDataPluto) {
-            revert(string(returnDataPluto));
+        } catch (bytes memory lowLevelData) {
+            revert(string(lowLevelData));
         }
 
         // we remove allowance without clearing storage
         _safeApproveTokensIn(tokensIn, uniswapRouter(), 1);
+    }
 
-        // we clear the variables in memory
-        delete tokensIn;
-        delete tokensOut;
+    /// @inheritdoc IAUniswapRouter
+    function positionManager() public view override(IAUniswapRouter, AUniswapDecoder) returns (address) {
+        return _positionManager;
     }
 
     /// @inheritdoc IAUniswapRouter
     function uniswapRouter() public view override returns (address universalRouter) {
         return _uniswapRouter;
+    }
+
+    // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
+    // we will have to store the list of owned tokens once done in order to calculate value.
+    function _assertTokensWhitelisted(address[] memory tokensOut) internal override view {
+        for (uint i = 0; i < tokensOut.length; i++) {
+            // we allow swapping to base token even if not whitelisted token
+            if (tokensOut[i] != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
+                require(IEWhitelist(address(this)).isWhitelistedToken(tokensOut[i]), TokenNotWhitelisted(tokensOut[i]));
+            }
+        }
     }
 
     // TODO: should move method to /lib or similar to reuse for any other methot that requires approval
@@ -137,6 +160,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         address spender,
         uint256 amount
     ) private {
+        require(_isContract(token), TargetIsNotContract());
         try IERC20(token).approve(spender, amount) returns (bool success) {
             assert(success);
         } catch {
@@ -172,17 +196,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
-    // we will have to store the list of owned tokens once done in order to calculate value.
-    function _assertTokensWhitelisted(address[] memory tokensOut) private view {
-        for (uint i = 0; i < tokensOut.length; i++) {
-            // we allow swapping to base token even if not whitelisted token
-            if (tokensOut[i] != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
-                require(IEWhitelist(address(this)).isWhitelistedToken(tokensOut[i]), TokenNotWhitelisted(tokensOut[i]));
-            }
-        }
-    }
-
     function _contains(address[] memory arr, address value) private pure returns (bool) {
         for (uint i = 0; i < arr.length; i++) {
             if (arr[i] == value) return true;
@@ -190,6 +203,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         return false;
     }
 
+    // TODO: check merge _contains into _add and remove from methods assertions, i.e. add only if not already added to array
     function _add(address[] memory arr, address value) private pure returns (address[] memory) {
         address[] memory newArr = new address[](arr.length + 1);
         for (uint i = 0; i < arr.length; i++) {
@@ -197,5 +211,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
         newArr[arr.length] = value;
         return newArr;
+    }
+
+    function _isContract(address target) private view returns (bool) {
+        return target.code.length > 0;
     }
 }

@@ -40,34 +40,30 @@ abstract contract AUniswapDecoder {
     
     error InvalidCommandType(uint256 commandType);
 
-    address public immutable POSITION_MANAGER;
-
     struct RelevantInputs {
         address token0;
         address token1 ;
         address tokenOut;
         address recipient;
-        bool isPayableInput;
+        uint256 value;
     }
 
-    // initialize struct with nil addresses
-    RelevantInputs private _relevantInputs = RelevantInputs({
-        token0: address(0),
-        token1: address(0),
-        tokenOut: address(0),
-        recipient: address(0),
-        isPayableInput: false
-    });
-
-    constructor(address _positionManager) {
-        POSITION_MANAGER = _positionManager;
-    }
+    function positionManager() public view virtual returns (address);
 
     function _decodeInput(bytes1 commandType, bytes calldata inputs)
         internal
         returns (RelevantInputs memory relevantInputs)
     {
         uint256 command = uint8(commandType & Commands.COMMAND_TYPE_MASK);
+
+        // initialize struct with nil values
+        relevantInputs = RelevantInputs({
+            token0: address(0),
+            token1: address(0),
+            tokenOut: address(0),
+            recipient: address(0),
+            value: uint256(0)
+        });
 
         // 0x00 <= command < 0x21
         if (command < Commands.EXECUTE_SUB_PLAN) {
@@ -76,90 +72,48 @@ abstract contract AUniswapDecoder {
                 // 0x00 <= command < 0x08
                 if (command < Commands.V2_SWAP_EXACT_IN) {
                     if (command == Commands.V3_SWAP_EXACT_IN) {
-                        // equivalent: abi.decode(inputs, (address, uint256, uint256, bytes, bool))
-                        address recipient;
-                        //uint256 amountIn;
-                        //uint256 amountOutMin;
-                        bool payerIsUser;
-                        assembly {
-                            recipient := calldataload(inputs.offset)
-                            //amountIn := calldataload(add(inputs.offset, 0x20))
-                            //amountOutMin := calldataload(add(inputs.offset, 0x40))
-                            // 0x60 offset is the path, decoded below
-                            payerIsUser := calldataload(add(inputs.offset, 0x80))
-                        }
-                        bytes calldata path = inputs.toBytes(3);
+                        (
+                            address recipient,
+                            /*uint256 amountIn*/,
+                            /*uint256 amountOutMin*/,
+                            /*bytes memory path*/,
+                            bool payerIsUser
+                        ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         assert(payerIsUser);
-                        // TODO: check if this is duplicate from main adapter contract
-                        assert(recipient == address(this));
-                        _relevantInputs.token0 = path.toAddress();
-                        _relevantInputs.tokenOut = path.toBytes(path.length - 20).toAddress();
-                        _relevantInputs.recipient = recipient;
+                        bytes calldata path = inputs.toBytes(3);
+                        relevantInputs.token0 = path.toAddress();
+                        relevantInputs.tokenOut = path.toBytes(path.length - 20).toAddress();
+                        relevantInputs.recipient = recipient;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
-                        // equivalent: abi.decode(inputs, (address, uint256, uint256, bytes, bool))
-                        address recipient;
-                        //uint256 amountOut;
-                        //uint256 amountInMax;
-                        bool payerIsUser;
-                        assembly {
-                            recipient := calldataload(inputs.offset)
-                            //amountOut := calldataload(add(inputs.offset, 0x20))
-                            //amountInMax := calldataload(add(inputs.offset, 0x40))
-                            // 0x60 offset is the path, decoded below
-                            payerIsUser := calldataload(add(inputs.offset, 0x80))
-                        }
-                        bytes calldata path = inputs.toBytes(3);
+                        (
+                            address recipient,
+                            /*uint256 amountOut*/,
+                            /*uint256 amountInMax*/,
+                            /*bytes memory path*/,
+                            bool payerIsUser
+                        ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         assert(payerIsUser);
-                        assert(recipient == address(this));
-                        _relevantInputs.tokenOut = path.toAddress();
-                        _relevantInputs.token0 = path.toBytes(path.length - 20).toAddress();
-                        _relevantInputs.recipient = recipient;
+                        bytes calldata path = inputs.toBytes(3);
+                        relevantInputs.tokenOut = path.toAddress();
+                        relevantInputs.token0 = path.toBytes(path.length - 20).toAddress();
+                        relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
-                        // return nil values and do nothing
-                        return _relevantInputs;
+                        // Skip this command, return nil values
                     } else if (command == Commands.PERMIT2_PERMIT_BATCH) {
-                        return _relevantInputs;
+                        // Skip this command, return nil values
                     } else if (command == Commands.SWEEP) {
-                        // equivalent:  abi.decode(inputs, (address, address, uint256))
-                        address token;
-                        address recipient;
-                        //uint160 amountMin;
-                        assembly {
-                            token := calldataload(inputs.offset)
-                            recipient := calldataload(add(inputs.offset, 0x20))
-                            //amountMin := calldataload(add(inputs.offset, 0x40))
-                        }
-                        assert(recipient == address(this));
+                        (/*address token*/, address recipient, /*uint160 amountMin*/) = abi.decode(inputs, (address, address, uint256));
                         // sweep is used when the router is used for transfers
-                        // TODO: check if should validate token, as should return recipient
-                        //Payments.sweep(token, address(this), amountMin);
-                        _relevantInputs.recipient = recipient;
+                        relevantInputs.recipient = recipient;
                     } else if (command == Commands.TRANSFER) {
-                        // equivalent:  abi.decode(inputs, (address, address, uint256))
-                        address token;
-                        address recipient;
-                        uint256 value;
-                        assembly {
-                            token := calldataload(inputs.offset)
-                            recipient := calldataload(add(inputs.offset, 0x20))
-                            value := calldataload(add(inputs.offset, 0x40))
-                        }
-                        assert(recipient == address(this));
                         // TODO: check should validate token
+                        (/*address token*/, address recipient, /*uint256 value*/) = abi.decode(inputs, (address, address, uint256));
+                        relevantInputs.recipient = recipient;
                     } else if (command == Commands.PAY_PORTION) {
                         // TODO: check what this does and if should early return
-                        // equivalent:  abi.decode(inputs, (address, address, uint256))
-                        address token;
-                        address recipient;
-                        uint256 bips;
-                        assembly {
-                            token := calldataload(inputs.offset)
-                            recipient := calldataload(add(inputs.offset, 0x20))
-                            bips := calldataload(add(inputs.offset, 0x40))
-                        }
-                        assert(recipient == address(this));
-                        _relevantInputs.recipient = recipient;
                         // TODO: check should validate token
+                        (/*address token*/, address recipient, /*uint256 bips*/) = abi.decode(inputs, (address, address, uint256));
+                        relevantInputs.recipient = recipient;
                     } else {
                         // placeholder area for command 0x07
                         revert InvalidCommandType(command);
@@ -167,91 +121,57 @@ abstract contract AUniswapDecoder {
                 } else {
                     // 0x08 <= command < 0x10
                     if (command == Commands.V2_SWAP_EXACT_IN) {
-                        // equivalent: abi.decode(inputs, (address, uint256, uint256, bytes, bool))
-                        address recipient;
-                        uint256 amountIn;
-                        uint256 amountOutMin;
-                        bool payerIsUser;
-                        assembly {
-                            recipient := calldataload(inputs.offset)
-                            amountIn := calldataload(add(inputs.offset, 0x20))
-                            amountOutMin := calldataload(add(inputs.offset, 0x40))
-                            // 0x60 offset is the path, decoded below
-                            payerIsUser := calldataload(add(inputs.offset, 0x80))
-                        }
-                        assert(recipient == address(this));
+                        (
+                            address recipient,
+                            /*uint256 amountIn*/,
+                            /*uint256 amountOutMin*/,
+                            /*bytes memory path*/,
+                            bool payerIsUser
+                        ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         assert(payerIsUser);
                         address[] calldata path = inputs.toAddressArray(3);
-                        _relevantInputs.token0 = path[0];
-                        _relevantInputs.tokenOut = path[1];
-                        _relevantInputs.recipient = recipient;
+                        relevantInputs.token0 = path[0];
+                        relevantInputs.tokenOut = path[path.length - 1];
+                        relevantInputs.recipient = recipient;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
-                        // equivalent: abi.decode(inputs, (address, uint256, uint256, bytes, bool))
-                        address recipient;
-                        uint256 amountOut;
-                        uint256 amountInMax;
-                        bool payerIsUser;
-                        assembly {
-                            recipient := calldataload(inputs.offset)
-                            amountOut := calldataload(add(inputs.offset, 0x20))
-                            amountInMax := calldataload(add(inputs.offset, 0x40))
-                            // 0x60 offset is the path, decoded below
-                            payerIsUser := calldataload(add(inputs.offset, 0x80))
-                        }
-                        address[] calldata path = inputs.toAddressArray(3);
-                        assert(recipient == address(this));
+                        (
+                            address recipient,
+                            /*uint256 amountOut*/,
+                            /*uint256 amountInMax*/,
+                            /*bytes memory path*/,
+                            bool payerIsUser
+                        ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         assert(payerIsUser);
+                        address[] calldata path = inputs.toAddressArray(3);
                         // TODO: check order in/out is correct
-                        _relevantInputs.token0 = path[0];
-                        _relevantInputs.tokenOut = path[1];
-                        _relevantInputs.recipient = recipient;
+                        relevantInputs.token0 = path[0];
+                        relevantInputs.tokenOut = path[path.length - 1];
+                        relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_PERMIT) {
-                        return _relevantInputs;
+                        // Skip this command, return nil values
                     } else if (command == Commands.WRAP_ETH) {
-                        // equivalent: abi.decode(inputs, (address, uint256))
-                        address recipient;
-                        uint256 amount;
-                        assembly {
-                            recipient := calldataload(inputs.offset)
-                            amount := calldataload(add(inputs.offset, 0x20))
-                        }
-                        assert(recipient == address(this));
-                        // TODO: check how it works with value, we may have to add return `value`
-                        // or we could directly wrap here, as in uniswap adapter
-                        // TODO: check why we directly call, as the core adapter will try to execute
-                        //Payments.wrapETH(_mapRecipient(recipient), amount);
-                        // if we call directly the target contract, we should return to skip swap checks,
-                        // which would result in revert
-                        _relevantInputs.recipient = recipient;
-                        _relevantInputs.isPayableInput = true;
+                        (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
+                        // TODO: we might want to _mapRecipient(recipient), but we do not accept calls from
+                        // wallet other than user (like a trusted forwarder)
+                        relevantInputs.recipient = recipient;
+                        relevantInputs.value = amount;
                     } else if (command == Commands.UNWRAP_WETH) {
-                        // equivalent: abi.decode(inputs, (address, uint256))
-                        address recipient;
-                        //uint256 amountMin;
-                        assembly {
-                            recipient := calldataload(inputs.offset)
-                            //amountMin := calldataload(add(inputs.offset, 0x20))
-                        }
-                        assert(recipient == address(this));
-                        _relevantInputs.recipient = recipient;
-                        // TODO: in auniswap we define but not use recipient, check if direct weth call
+                        (address recipient, /*uint256 amountMin*/) = abi.decode(inputs, (address, uint256));
+                        relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
-                        return _relevantInputs;
+                        // Skip this command, return nil values
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
-                        // equivalent: abi.decode(inputs, (address, address, uint256))
-                        address owner;
-                        address token;
-                        uint256 minBalance;
-                        assembly {
-                            owner := calldataload(inputs.offset)
-                            token := calldataload(add(inputs.offset, 0x20))
-                            minBalance := calldataload(add(inputs.offset, 0x40))
-                        }
-                        assert(owner == address(this));
-                        // TODO: we should check if it is safe to call an arbitrary contract. We may have to
-                        //  forward as .staticcall to prevent race conditions
-                        //success = (ERC20(token).balanceOf(owner) >= minBalance);
-                        //if (!success) output = abi.encodePacked(BalanceTooLow.selector);
+                        (
+                            address owner,
+                            address token,
+                            /*uint256 minBalance*/
+                        ) = abi.decode(inputs, (address, address, uint256));
+                        // TODO: check if this assertion is needed, as we need to prevent a call to an arbitrary external
+                        // contract, which could be a rogue contract
+                        address[] memory newArr = new address[](1);
+                        newArr[0] = token;
+                        _assertTokensWhitelisted(newArr);
+                        relevantInputs.recipient = owner;
                     } else {
                         // placeholder area for command 0x0f
                         revert InvalidCommandType(command);
@@ -279,116 +199,71 @@ abstract contract AUniswapDecoder {
 
                         if (action < Actions.SETTLE) {
                             if (action == Actions.SWAP_EXACT_IN) {
-                                //IV4Router.ExactInputParams calldata swapParams = paramsAtIndex.decodeSwapExactInParams();
                                 IV4Router.ExactInputParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactInputParams));
                                 uint256 pathLength = swapParams.path.length;
-                                //Currency currencyIn = swapParams.currencyIn;
-                                //PathKey calldata pathKey;
-
-                                // TODO: remove if unused
-                                //for (uint256 i = 0; i < pathLength; i++) {
-                                //    pathKey = swapParams.path[i];
-                                //    (PoolKey memory poolKey, /*bool*/) = pathKey.getPoolAndSwapDirection(currencyIn);
-                                //    // just an example of requirements on uniswap hook
-                                //    // TODO: initially it would be appropriate to require hookData.length == 0
-                                //    //require(!pathKey.hooks.getHookPermissions().afterSwap, HookPermissionError());
-                                //}
-
-                                _relevantInputs.token0 = Currency.unwrap(swapParams.currencyIn);
-                                _relevantInputs.tokenOut = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
+                                relevantInputs.token0 = Currency.unwrap(swapParams.currencyIn);
+                                relevantInputs.tokenOut = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
                             } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
-                                //IV4Router.ExactInputSingleParams calldata swapParams = paramsAtIndex.decodeSwapExactInSingleParams();
                                 IV4Router.ExactInputSingleParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactInputSingleParams));
-                                _relevantInputs.token0 = Currency.unwrap(swapParams.poolKey.currency0);
-                                _relevantInputs.tokenOut = Currency.unwrap(swapParams.poolKey.currency1);
+                                relevantInputs.token0 = Currency.unwrap(swapParams.poolKey.currency0);
+                                relevantInputs.tokenOut = Currency.unwrap(swapParams.poolKey.currency1);
                             } else if (action == Actions.SWAP_EXACT_OUT) {
-                                //IV4Router.ExactOutputParams calldata swapParams = paramsAtIndex.decodeSwapExactOutParams();
                                 IV4Router.ExactOutputParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactOutputParams));
                                 uint256 pathLength = swapParams.path.length;
-                                _relevantInputs.tokenOut = Currency.unwrap(swapParams.currencyOut);
-                                _relevantInputs.token0 = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
+                                relevantInputs.tokenOut = Currency.unwrap(swapParams.currencyOut);
+                                relevantInputs.token0 = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
                             } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
-                                //IV4Router.ExactOutputSingleParams calldata swapParams = paramsAtIndex.decodeSwapExactOutSingleParams();
                                 IV4Router.ExactOutputSingleParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactOutputSingleParams));
-                                _relevantInputs.token0 = Currency.unwrap(swapParams.poolKey.currency1);
-                                _relevantInputs.tokenOut = Currency.unwrap(swapParams.poolKey.currency0);
+                                relevantInputs.token0 = Currency.unwrap(swapParams.poolKey.currency1);
+                                relevantInputs.tokenOut = Currency.unwrap(swapParams.poolKey.currency0);
                             }
                         } else {
+                            // TODO: check payment methods and that we are correctly returning token0 or token1 or tokenOut
                             if (action == Actions.SETTLE_PAIR) {
                                 // TODO: verify we cannot decode recipient, i.e. not an input for settle
-                                //(Currency currency0, Currency currency1) = paramsAtIndex.decodeCurrencyPair();
                                 (Currency currency0, Currency currency1) = abi.decode(paramsAtIndex, (Currency, Currency));
-                                _relevantInputs.token0 = Currency.unwrap(currency0);
-                                _relevantInputs.tokenOut = Currency.unwrap(currency1);
+                                relevantInputs.token0 = Currency.unwrap(currency0);
+                                relevantInputs.tokenOut = Currency.unwrap(currency1);
                             } else if (action == Actions.TAKE_PAIR) {
-                                //(Currency currency0, Currency currency1, address recipient) = paramsAtIndex.decodeCurrencyPairAndAddress();
                                 (Currency currency0, Currency currency1, address recipient) = abi.decode(paramsAtIndex, (Currency, Currency, address));
-                                _relevantInputs.token0 = Currency.unwrap(currency0);
-                                _relevantInputs.tokenOut = Currency.unwrap(currency1);
-                                _relevantInputs.recipient = recipient;
+                                relevantInputs.token0 = Currency.unwrap(currency0);
+                                relevantInputs.tokenOut = Currency.unwrap(currency1);
+                                relevantInputs.recipient = recipient;
                             } else if (action == Actions.SETTLE) {
-                                //(Currency currency, uint256 amount, bool payerIsUser) = paramsAtIndex.decodeCurrencyUint256AndBool();
                                 (Currency currency, /*uint256 amount*/, /*bool payerIsUser*/) = abi.decode(paramsAtIndex, (Currency, uint256, bool));
                                 //_settle(currency, _mapPayer(payerIsUser), _mapSettleAmount(amount, currency));
-                                _relevantInputs.token0 = Currency.unwrap(currency);
+                                relevantInputs.token0 = Currency.unwrap(currency);
                             } else if (action == Actions.TAKE) {
-                                //(Currency currency, address recipient, uint256 amount) = paramsAtIndex.decodeCurrencyAddressAndUint256();
                                 (Currency currency, address recipient, /*uint256 amount*/) = abi.decode(paramsAtIndex, (Currency, address, uint256));
                                 //_take(currency, _mapRecipient(recipient), _mapTakeAmount(amount, currency));
-                                _relevantInputs.token0 = Currency.unwrap(currency);
-                                _relevantInputs.recipient = recipient;
+                                relevantInputs.token0 = Currency.unwrap(currency);
+                                relevantInputs.recipient = recipient;
                             } else if (action == Actions.CLOSE_CURRENCY) {
                                 // TODO: in these methods, we should check if simply return to skip checks if possible
-                                //Currency currency = paramsAtIndex.decodeCurrency();
                                 Currency currency = abi.decode(paramsAtIndex, (Currency));
                                 //_close(currency);
-                                _relevantInputs.token0 = Currency.unwrap(currency);
-                                //return _relevantInputs;
+                                relevantInputs.token0 = Currency.unwrap(currency);
+                                //return relevantInputs;
                             } else if (action == Actions.CLEAR_OR_TAKE) {
-                                //(Currency currency, uint256 amountMax) = paramsAtIndex.decodeCurrencyAndUint256();
                                 (Currency currency, /*uint256 amountMax*/) = abi.decode(paramsAtIndex, (Currency, uint256));
-                                _relevantInputs.token1 = Currency.unwrap(currency);
+                                relevantInputs.tokenOut = Currency.unwrap(currency);
                                 //_clearOrTake(currency, amountMax);
-                                //return _relevantInputs;
+                                //return relevantInputs;
                             } else if (action == Actions.SWEEP) {
-                                //(Currency currency, address to) = paramsAtIndex.decodeCurrencyAndAddress();
-                                (Currency currency, /*address to*/) = abi.decode(paramsAtIndex, (Currency, address));
+                                (Currency currency, address to) = abi.decode(paramsAtIndex, (Currency, address));
                                 //_sweep(currency, _mapRecipient(to));
-                                _relevantInputs.token1 = Currency.unwrap(currency);
-                                //return _relevantInputs;
+                                relevantInputs.tokenOut = Currency.unwrap(currency);
+                                relevantInputs.recipient = to;
                             }
                         }
                     }
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
-                    return _relevantInputs;
+                    // TODO: assert that we are actually skipping command, instead of creating a permit2 approval (which would fail as we do not set initial approval)
+                    // TODO: when skipping, instead of adding a boolean we might check on a pre-defined address, like recipient == address(1)
+                    // Skip this command, return nil values
                 } else if (command == Commands.V3_POSITION_MANAGER_CALL) {
-                    bytes4 selector;
-                    assembly {
-                        selector := calldataload(inputs.offset)
-                    }
-
-                    // TODO: check why we introduced this assertion
-                    //if (!isValidAction(selector)) {
-                    //    revert InvalidAction(selector);
-                    //}
-
-                    uint256 tokenId;
-                    assembly {
-                        // tokenId is always the first parameter in the valid actions
-                        tokenId := calldataload(add(inputs.offset, 0x04))
-                    }
-
-                    // If any other address that is not the owner wants to call this function, it also needs to be approved (in addition to this contract)
-                    // This can be done in 2 ways:
-                    //    1. This contract is permitted for the specific token and the caller is approved for ALL of the owner's tokens
-                    //    2. This contract is permitted for ALL of the owner's tokens and the caller is permitted for the specific token
-                    // TODO: check why we introduced this selector
-                    //if (!isAuthorizedForToken(msgSender(), tokenId)) {
-                    //    revert NotAuthorizedForToken(tokenId);
-                    //}
-
-                    // TODO: remove direct call to target
-                    //(success, output) = address(V3_POSITION_MANAGER).call(inputs);
+                    // v3 calls are used to migrate liquidity only, no further actions or assertions are necessary. Migration supported methods are:
+                    //  decreaseLiquidity, collect, burn
                 } else if (command == Commands.V4_POSITION_CALL) {
                     // should only call modifyLiquidities() to mint
                     // do not permit or approve this contract over a v4 position or someone could use this command to decrease, burn, or transfer your position
@@ -401,16 +276,25 @@ abstract contract AUniswapDecoder {
                         uint256 action = uint8(actions[actionIndex]);
                         bytes memory paramsAtIndex = params[actionIndex];
 
+                        // TODO: verify liquidity position owner is always sender in v4
                         if (action == Actions.INCREASE_LIQUIDITY) {
                             (uint256 tokenId, /*uint256 liquidity*/, /*uint128 amount0Max*/, /*uint128 amount1Max*/, /*bytes memory hookData*/) =
                                 abi.decode(paramsAtIndex, (uint256, uint256, uint128, uint128, bytes));
-                            (PoolKey memory poolKey, ) = IPositionManager(POSITION_MANAGER).getPoolAndPositionInfo(tokenId);
-                            _relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
-                            _relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                            (PoolKey memory poolKey, /*PositionInfo*/) = IPositionManager(positionManager()).getPoolAndPositionInfo(tokenId);
+                            // TODO: return owner as recipient if stored in PositionInfo
+                            // TODO: we should verify that tokens are whitelisted as well
+                            relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
+                            relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                        // TODO: the following method is not implemented in the deployed uni package, but it is in uni universal dev
+                        //} else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
+                        //    (uint256 tokenId, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
+                        //        abi.decode(paramsAtIndex, (uint256, uint128, uint128, bytes));
+                        //    (PoolKey memory poolKey, /*PositionInfo*/) = IPositionManager(positionManager()).getPoolAndPositionInfo(tokenId);
+                        //    // TODO: return owner as recipient if stored in PositionInfo
+                        //    relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
+                        //    relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
                         } else if (action == Actions.DECREASE_LIQUIDITY) {
-                            //(uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes memory hookData) =
-                            //    abi.decode(paramsAtIndex, (uint256, uint256, uint128, uint128, bytes));
-                            return _relevantInputs;
+                            // Skip this command, return nil values
                         } else if (action == Actions.MINT_POSITION) {
                             (
                                 PoolKey memory poolKey,
@@ -422,11 +306,11 @@ abstract contract AUniswapDecoder {
                                 address owner,
                                 /*bytes memory hookData*/
                             ) = abi.decode(paramsAtIndex, (PoolKey, int24, int24, uint256, uint128, uint128, address, bytes));
-                            assert(owner == address(this));
-                            _relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
-                            _relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                            relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
+                            relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                            relevantInputs.recipient = owner;
                         } else if (action == Actions.BURN_POSITION) {
-                            return _relevantInputs;
+                            return relevantInputs;
                         }
                     }
                 } else {
@@ -440,10 +324,11 @@ abstract contract AUniswapDecoder {
                 (bytes memory _commands, bytes[] memory _inputs) = abi.decode(inputs, (bytes, bytes[]));
                 // TODO: check if this call could fail silently and its consequences
                 //(address(this)).call(abi.encodeCall(IAUniswapRouter.execute, (_commands, _inputs)));
+                // TODO: check if this could fail silently, thus creating approvals inflation if placed as last input, or just after an input
                 IAUniswapRouter(address(this)).execute(_commands, _inputs);
             }
         }
-
-        return _relevantInputs;
     }
+
+    function _assertTokensWhitelisted(address[] memory token) internal view virtual;
 }

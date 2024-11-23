@@ -22,9 +22,6 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@uniswap/universal-router/contracts/interfaces/IUniversalRouter.sol";
 
 interface IAUniswapRouter {
-    /// @notice The address of the Uniswap universal router contract
-    function uniswapRouter() external view returns (address uniswapRouter);
-
     /// @notice Executes encoded commands along with provided inputs. Reverts if deadline has expired.
     /// @param commands A set of concatenated commands, each 1 byte in length
     /// @param inputs An array of byte strings containing abi encoded inputs for each command
@@ -34,5 +31,11 @@ interface IAUniswapRouter {
     /// @notice Executes encoded commands along with provided inputs.
     /// @param commands A set of concatenated commands, each 1 byte in length
     /// @param inputs An array of byte strings containing abi encoded inputs for each command
-    function execute(bytes calldata commands, bytes[] calldata inputs) external returns (bytes memory returnData);
+    function execute(bytes calldata commands, bytes[] calldata inputs) external payable returns (bytes memory returnData);
+
+    /// @notice The address of the Uniswap liquidity position manager contract
+    function positionManager() external view returns (address positionManager);
+
+    /// @notice The address of the Uniswap universal router contract
+    function uniswapRouter() external view returns (address uniswapRouter);
 }
