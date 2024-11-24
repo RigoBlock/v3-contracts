@@ -40,6 +40,10 @@ abstract contract AUniswapDecoder {
     
     error InvalidCommandType(uint256 commandType);
 
+    address internal constant ZERO_ADDRESS = address(0);
+    address internal constant SKIP_FLAG = address(1);
+    uint256 internal constant NIL_VALUE = 0;
+
     struct RelevantInputs {
         address token0;
         address token1 ;
@@ -50,19 +54,24 @@ abstract contract AUniswapDecoder {
 
     function positionManager() public view virtual returns (address);
 
+    /// @dev Decodes the input for a command.
+    /// @param commandType The command type to decode.
+    /// @param inputs The encoded input data.
+    /// @return relevantInputs containing decoded information.
     function _decodeInput(bytes1 commandType, bytes calldata inputs)
         internal
+        view
         returns (RelevantInputs memory relevantInputs)
     {
         uint256 command = uint8(commandType & Commands.COMMAND_TYPE_MASK);
 
         // initialize struct with nil values
         relevantInputs = RelevantInputs({
-            token0: address(0),
-            token1: address(0),
-            tokenOut: address(0),
-            recipient: address(0),
-            value: uint256(0)
+            token0: ZERO_ADDRESS,
+            token1: ZERO_ADDRESS,
+            tokenOut: ZERO_ADDRESS,
+            recipient: ZERO_ADDRESS,
+            value: NIL_VALUE
         });
 
         // 0x00 <= command < 0x21
@@ -98,9 +107,9 @@ abstract contract AUniswapDecoder {
                         relevantInputs.token0 = path.toBytes(path.length - 20).toAddress();
                         relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
-                        // Skip this command, return nil values
+                        relevantInputs.recipient = SKIP_FLAG;
                     } else if (command == Commands.PERMIT2_PERMIT_BATCH) {
-                        // Skip this command, return nil values
+                        relevantInputs.recipient = SKIP_FLAG;
                     } else if (command == Commands.SWEEP) {
                         (/*address token*/, address recipient, /*uint160 amountMin*/) = abi.decode(inputs, (address, address, uint256));
                         // sweep is used when the router is used for transfers
@@ -148,7 +157,7 @@ abstract contract AUniswapDecoder {
                         relevantInputs.tokenOut = path[path.length - 1];
                         relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_PERMIT) {
-                        // Skip this command, return nil values
+                        relevantInputs.recipient = SKIP_FLAG;
                     } else if (command == Commands.WRAP_ETH) {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
                         // TODO: we might want to _mapRecipient(recipient), but we do not accept calls from
@@ -159,7 +168,7 @@ abstract contract AUniswapDecoder {
                         (address recipient, /*uint256 amountMin*/) = abi.decode(inputs, (address, uint256));
                         relevantInputs.recipient = recipient;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
-                        // Skip this command, return nil values
+                        relevantInputs.recipient = SKIP_FLAG;
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
                         (
                             address owner,
@@ -168,9 +177,7 @@ abstract contract AUniswapDecoder {
                         ) = abi.decode(inputs, (address, address, uint256));
                         // TODO: check if this assertion is needed, as we need to prevent a call to an arbitrary external
                         // contract, which could be a rogue contract
-                        address[] memory newArr = new address[](1);
-                        newArr[0] = token;
-                        _assertTokensWhitelisted(newArr);
+                        relevantInputs.tokenOut = token;
                         relevantInputs.recipient = owner;
                     } else {
                         // placeholder area for command 0x0f
@@ -258,9 +265,7 @@ abstract contract AUniswapDecoder {
                         }
                     }
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
-                    // TODO: assert that we are actually skipping command, instead of creating a permit2 approval (which would fail as we do not set initial approval)
-                    // TODO: when skipping, instead of adding a boolean we might check on a pre-defined address, like recipient == address(1)
-                    // Skip this command, return nil values
+                    relevantInputs.recipient = SKIP_FLAG;
                 } else if (command == Commands.V3_POSITION_MANAGER_CALL) {
                     // v3 calls are used to migrate liquidity only, no further actions or assertions are necessary. Migration supported methods are:
                     //  decreaseLiquidity, collect, burn
@@ -294,7 +299,7 @@ abstract contract AUniswapDecoder {
                         //    relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
                         //    relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
                         } else if (action == Actions.DECREASE_LIQUIDITY) {
-                            // Skip this command, return nil values
+                            relevantInputs.recipient = SKIP_FLAG;
                         } else if (action == Actions.MINT_POSITION) {
                             (
                                 PoolKey memory poolKey,
@@ -320,15 +325,7 @@ abstract contract AUniswapDecoder {
             }
         } else {
             // 0x21 <= command
-            if (command == Commands.EXECUTE_SUB_PLAN) {
-                (bytes memory _commands, bytes[] memory _inputs) = abi.decode(inputs, (bytes, bytes[]));
-                // TODO: check if this call could fail silently and its consequences
-                //(address(this)).call(abi.encodeCall(IAUniswapRouter.execute, (_commands, _inputs)));
-                // TODO: check if this could fail silently, thus creating approvals inflation if placed as last input, or just after an input
-                IAUniswapRouter(address(this)).execute(_commands, _inputs);
-            }
+            // we skip Commands.EXECUTE_SUB_PLAN here, as it is already handled in AUniswapDecoder
         }
     }
-
-    function _assertTokensWhitelisted(address[] memory token) internal view virtual;
 }

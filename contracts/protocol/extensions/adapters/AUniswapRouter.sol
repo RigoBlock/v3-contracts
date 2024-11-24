@@ -20,6 +20,7 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
+import "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import "./AUniswapDecoder.sol";
 import "./interfaces/IAUniswapRouter.sol";
 
@@ -28,13 +29,24 @@ import "./interfaces/IAUniswapRouter.sol";
 /// @dev This contract ensures that tokens are approved and disapproved correctly, and that recipients and tokens are validated.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
+    using CalldataDecoder for bytes;
+
     address private immutable _uniswapRouter;
     address private immutable _positionManager;
+
+    // Use transient for temporary storage that doesn't need to persist
+    // Initialize counters for transient storage, so we can forward sub plan to self
+    uint256 private transient tokensInCount;
+    uint256 private transient tokensOutCount;
+    uint256 private transient recipientsCount;
+
+    uint256 private transient value;
 
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
 
     /// @notice Thrown when attempting to execute commands and an incorrect number of inputs are provided
+    error LengthMismatch();
     error TokenNotWhitelisted(address token);
     error RecipientIsNotSmartPool();
     error ApprovalFailed(address target);
@@ -61,67 +73,92 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     }
 
     /// @inheritdoc IAUniswapRouter
+    // TODO: protect from reentrancy
     function execute(bytes calldata commands, bytes[] calldata inputs)
         public
         payable
         override
         returns (bytes memory returnData)
     {
-        // TODO: when executing a subplan, the arrays will be reset, i.e. we won't correctly append additional values
-        address[] memory tokensIn = new address[](0);
-        address[] memory tokensOut = new address[](0);
-        address[] memory recipients = new address[](0);
-        uint256 value = 0;
-
-        // we want to keep this duplicate check from universal router
-        // TODO: as if the condition is not satisfied, the tx will revert in uniswap router, we could remove and save gas
+        // TODO: check we want to silence warning and are successfully doing so
+        // solhint-disable transient-storage-not-cleared
+        // duplicate check from universal router, as we manipulate inputs before forwarding
         uint256 numCommands = commands.length;
-        assert(numCommands == inputs.length);
+        require(numCommands == inputs.length, LengthMismatch());
+
+        bytes[] memory newInputs = new bytes[](numCommands);
+        uint256[] memory newCommands = new uint256[](numCommands);
+        uint256 newNumCommands = 0;
 
         // loop through all given commands, verify their inputs and pass along outputs as defined
-        for (uint256 commandIndex = 0; commandIndex < numCommands; commandIndex++) {
-            bytes1 command = commands[commandIndex];
-            bytes calldata input = inputs[commandIndex];
+        for (uint256 i = 0; i < numCommands; i++) {
+            uint256 command = uint8(commands[i] & Commands.COMMAND_TYPE_MASK);
+            bytes calldata input = inputs[i];
 
-            // TODO: we might have to return an additional boolean should skip, and write a new inputs array where should not skip.
-            RelevantInputs memory relevantInputs = _decodeInput(command, input);
+            // Handle EXECUTE_SUB_PLAN separately
+            // TODO: to avoid complex logic, we could make assumption that subplans are executed last, so we could store them in an array, skip appending
+            //  and execute them via a new execute call to self
+            if (command == Commands.EXECUTE_SUB_PLAN) {
+                //(bytes memory subCommands, bytes[] memory subInputs) = abi.decode(input, (bytes, bytes[]));
+                (bytes calldata subCommands, bytes[] calldata subInputs) = input.decodeActionsRouterParams();
 
-            // Check if token0 should be added to tokensIn
-            if (relevantInputs.token0 != address(0) && !_contains(tokensIn, relevantInputs.token0)) {
-                tokensIn = _add(tokensIn, relevantInputs.token0);
+                bytes[] memory newSubInputs = new bytes[](subCommands.length);
+                uint256[] memory newSubCommands = new uint256[](subCommands.length);
+                uint256 newSubNumCommands = 0;
+
+                for (uint256 j = 0; j < subCommands.length; j++) {
+                    uint256 subCommand = uint8(subCommands[j] & Commands.COMMAND_TYPE_MASK);
+                    bytes calldata subInput = subInputs[j];
+
+                    RelevantInputs memory relevantSubInputs = _decodeInput(subCommands[j], subInput);
+
+                    if (relevantSubInputs.recipient != SKIP_FLAG) {
+                        // Add the subInput to newSubInputs at the newSubNumCommands position
+                        // probably newSubNumCommands could be substituted with j
+                        newSubInputs[newSubNumCommands] = subInput;
+                        newSubCommands[newSubNumCommands] = subCommand;
+                        // TODO: can use inputs length if saves gas by not adding to newSubNumCommands
+                        newSubNumCommands++;
+                        // TODO: check if passing a struct removes error of too many variables
+                        _processRelevantInputs(relevantSubInputs);
+                    }
+                }
+
+                // Adjust the length of newSubInputs to remove empty fields
+                assembly {
+                    mstore(newSubInputs, newSubNumCommands)
+                    mstore(newSubCommands, newSubNumCommands)
+                }
+
+                newInputs[newNumCommands] = abi.encode(abi.encodePacked(newSubCommands), newSubInputs);
+                newCommands[newNumCommands] = command;
+                newNumCommands++;
+
+                continue;
             }
 
-            // TODO: with increaseLiquidity we used to check if token0, token1 are whitelisted. Check if this is necessary.
-            // Check if token1 should be added to tokensIn and ensure it's not the same as token0
-            if (relevantInputs.token1 != address(0) && relevantInputs.token0 != relevantInputs.token1 && !_contains(tokensIn, relevantInputs.token1)) {
-                tokensIn = _add(tokensIn, relevantInputs.token1);
-                // TODO: add token1, token0 to tokensOut
-            }
+            RelevantInputs memory relevantInputs = _decodeInput(commands[i], input);
 
-            // Check if tokenOut should be added to tokensOut
-            if (relevantInputs.tokenOut != address(0) && !_contains(tokensOut, relevantInputs.tokenOut)) {
-                tokensOut = _add(tokensOut, relevantInputs.tokenOut);
-            }
-
-            // Check if recipient should be added to recipients
-            if (relevantInputs.recipient != address(0) && !_contains(recipients, relevantInputs.recipient)) {
-                recipients = _add(recipients, relevantInputs.recipient);
-            }
-
-            // we assume wrapETH can be invoked multiple times for multiple swaps, and forward the total as msg.value
-            if (relevantInputs.value > 0) {
-                value += relevantInputs.value;
+            if (relevantInputs.recipient != SKIP_FLAG) {
+                // Add the input to newInputs at the newNumCommands position
+                newInputs[newNumCommands] = input;
+                newCommands[newNumCommands] = command;
+                newNumCommands++;
+                _processRelevantInputs(relevantInputs);
             }
         }
 
-        _assertTokensWhitelisted(tokensOut);
-        _assertRecipientIsThisAddress(recipients);
+        _assertTokensOutWhitelisted();
+        _assertRecipientIsThisAddress();
 
         // we approve all the tokens that are exiting the smart pool
-        _safeApproveTokensIn(tokensIn, uniswapRouter(), type(uint256).max);
+        _safeApproveTokensIn(uniswapRouter(), type(uint256).max);
 
-        // we forward the validate inputs to the Uniswap universal router
-        try IAUniswapRouter(uniswapRouter()).execute{value: value}(commands, inputs) returns (bytes memory result) {
+        // we forward the validate filtered inputs to the Uniswap universal router
+        // TODO: commands should be modified to newCommands, including only the filtered ones
+        // TODO: if we prompt call to router only after last command decoding, we could possibly simplify by handling EXECUTE_SUB_PLAN as forwarding
+        //  to self and making sure the transactions are executed in the correct order, while preserving inputs
+        try IAUniswapRouter(uniswapRouter()).execute{value: value}(abi.encodePacked(newCommands), newInputs) returns (bytes memory result) {
             returnData = result;
         } catch Error(string memory reason) {
             revert(reason);
@@ -130,7 +167,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
 
         // we remove allowance without clearing storage
-        _safeApproveTokensIn(tokensIn, uniswapRouter(), 1);
+        _safeApproveTokensIn(uniswapRouter(), 1);
+
+        // we clear transient storage
+        _clearTransientStorage();
     }
 
     /// @inheritdoc IAUniswapRouter
@@ -143,13 +183,55 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         return _uniswapRouter;
     }
 
+    function _clearTransientStorage() private {
+        uint256 length;
+        
+        // Clear tokensIn
+        assembly {
+            length := tload(tokensInCount.slot)
+            tstore(tokensInCount.slot, 0)
+        }
+        for (uint256 i = 0; i < length; i++) {
+            assembly {
+                tstore(add(1, i), 0)  // Clear starting from slot 1
+            }
+        }
+
+        // Clear tokensOut
+        assembly {
+            length := tload(tokensOutCount.slot)
+            tstore(tokensOutCount.slot, 0)
+        }
+        for (uint256 i = 0; i < length; i++) {
+            assembly {
+                tstore(add(1000, i), 0)  // Clear starting from slot 1000
+            }
+        }
+
+        // Clear recipients
+        assembly {
+            length := tload(recipientsCount.slot)
+            tstore(recipientsCount.slot, 0)
+        }
+        for (uint256 i = 0; i < length; i++) {
+            assembly {
+                tstore(add(2000, i), 0)  // Clear starting from slot 2000
+            }
+        }
+    }
+
     // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
     // we will have to store the list of owned tokens once done in order to calculate value.
-    function _assertTokensWhitelisted(address[] memory tokensOut) internal override view {
-        for (uint i = 0; i < tokensOut.length; i++) {
+    function _assertTokensOutWhitelisted() private view {
+        for (uint i = 0; i < tokensOutCount; i++) {
+            address tokenOut;
+            assembly {
+                tokenOut := tload(add(1000, i))
+            }
+
             // we allow swapping to base token even if not whitelisted token
-            if (tokensOut[i] != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
-                require(IEWhitelist(address(this)).isWhitelistedToken(tokensOut[i]), TokenNotWhitelisted(tokensOut[i]));
+            if (tokenOut != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
+                require(IEWhitelist(address(this)).isWhitelistedToken(tokenOut), TokenNotWhitelisted(tokenOut));
             }
         }
     }
@@ -178,39 +260,92 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    function _safeApproveTokensIn(address[] memory tokensIn, address spender, uint256 value) private {
-        for (uint i = 0; i < tokensIn.length; i++) {
-            _safeApprove(tokensIn[i], spender, value);
+    function _safeApproveTokensIn(address spender, uint256 amount) private {
+        for (uint i = 0; i < tokensInCount; i++) {
+            address tokenIn;
+            assembly {
+                tokenIn := tload(add(1, i))
+            }
+            _safeApprove(tokenIn, spender, amount);
 
             // assert no approval inflation exists after removing approval
-            if (value == 1) {
-                assert(IERC20(tokensIn[i]).allowance(address(this), uniswapRouter()) == 1);
+            if (amount == 1) {
+                assert(IERC20(tokenIn).allowance(address(this), uniswapRouter()) == 1);
             }
         }
     }
 
-    // instead of overriding the inputs recipient, we simply validate, so we do not need to re-encode the params.
-    function _assertRecipientIsThisAddress(address[] memory recipients) private view {
-        for (uint i = 0 ; i < recipients.length; i++) {
-            require(recipients[i] == address(this), RecipientIsNotSmartPool());
+    function _processRelevantInputs(
+        RelevantInputs memory relevantInputs
+    ) private {
+        address token0 = relevantInputs.token0;
+        address token1 = relevantInputs.token1;
+        address tokenOut = relevantInputs.tokenOut;
+        address recipient = relevantInputs.recipient;
+        uint256 inputValue = relevantInputs.value;
+
+        // TODO: check if we are using correct slots
+        if (token0 != ZERO_ADDRESS && !_contains(1, tokensInCount, token0)) {
+            // equivalent to tokensIn[tokensInCount++] = relevantInputs.token0
+            assembly {
+                tstore(add(1, tokensInCount.slot), token0)
+                tstore(0, add(tokensInCount.slot, 1))
+            }
+        }
+
+        // TODO: we may not have to assert token1 != token0, as it will not be added if not unique, but might save some gas
+        if (token1 != ZERO_ADDRESS && token0 != token1 && !_contains(1, tokensInCount, token1)) {
+            // equivalent to tokensIn[tokensInCount++] = relevantInputs.token1;
+            assembly {
+                tstore(add(1, add(tokensInCount.slot, 1)), token1)
+                tstore(0, add(tokensInCount.slot, 2))
+            }
+        }
+
+        if (tokenOut != ZERO_ADDRESS && !_contains(1000, tokensOutCount, tokenOut)) {
+            // equivalent to tokensOut[tokensOutCount++] = relevantInputs.tokenOut;
+            assembly {
+                tstore(add(1000, tokensOutCount.slot), tokenOut)
+                tstore(1, add(tokensOutCount.slot, 1))
+            }
+        }
+
+        if (recipient != ZERO_ADDRESS && !_contains(2000, recipientsCount, recipient)) {
+            // equivalent to recipients[recipientsCount++] = relevantInputs.recipient;
+            assembly {
+                tstore(add(2000, recipientsCount.slot), recipient)
+                tstore(2, add(recipientsCount.slot, 1))
+            }
+        }
+
+        // We assume wrapETH can be invoked multiple times for multiple swaps, and forward the total as msg.value
+        if (inputValue > NIL_VALUE) {
+            value += inputValue;
         }
     }
 
-    function _contains(address[] memory arr, address value) private pure returns (bool) {
-        for (uint i = 0; i < arr.length; i++) {
-            if (arr[i] == value) return true;
+    // instead of overriding the inputs recipient, we simply validate, so we do not need to re-encode the params.
+    function _assertRecipientIsThisAddress() private view {
+        for (uint i = 0 ; i < recipientsCount; i++) {
+            address recipient;
+            assembly {
+                recipient := tload(add(2000, i))
+            }
+            require(recipient == address(this), RecipientIsNotSmartPool());
+        }
+    }
+
+    function _contains(uint256 startSlot, uint256 length, address target) private view returns (bool) {
+        for (uint i = 0; i < length; i++) {
+            address storedValue;
+            assembly {
+                storedValue := tload(add(startSlot, i))
+            }
+            if (storedValue == target) {
+                return true;
+            }
         }
         return false;
-    }
-
-    // TODO: check merge _contains into _add and remove from methods assertions, i.e. add only if not already added to array
-    function _add(address[] memory arr, address value) private pure returns (address[] memory) {
-        address[] memory newArr = new address[](arr.length + 1);
-        for (uint i = 0; i < arr.length; i++) {
-            newArr[i] = arr[i];
-        }
-        newArr[arr.length] = value;
-        return newArr;
     }
 
     function _isContract(address target) private view returns (bool) {
