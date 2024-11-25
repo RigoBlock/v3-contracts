@@ -58,6 +58,8 @@ abstract contract AUniswapDecoder {
     /// @param commandType The command type to decode.
     /// @param inputs The encoded input data.
     /// @return relevantInputs containing decoded information.
+    // TODO: we should check if we should return the output, as with Actions we will filter
+    //  a command's multiple actions, and we could handle subplan
     function _decodeInput(bytes1 commandType, bytes calldata inputs)
         internal
         view
@@ -200,6 +202,7 @@ abstract contract AUniswapDecoder {
                     // i.e. if multiple swaps are sent most will fail, as multiple swaps should be sent as an array
                     // of v4 swaps
 
+                    // TODO: here we may be overwriting for multiple actions, therefore should return the output?
                     for (uint256 actionIndex = 0; actionIndex < numActions; actionIndex++) {
                         uint256 action = uint8(actions[actionIndex]);
                         bytes memory paramsAtIndex = params[actionIndex];

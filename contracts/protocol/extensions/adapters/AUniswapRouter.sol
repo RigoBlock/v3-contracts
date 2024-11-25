@@ -34,22 +34,25 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     // assign randomly big storage slots to transient types not supported by solc
     bytes32 internal constant _ALL_COMMANDS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.allCommands")) - 1);
     bytes32 internal constant _ALL_INPUTS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.allInputs")) - 1);
+    bytes32 private constant _TOKENS_IN_SLOT = bytes32(uint256(keccak256("AUniswapRouter.tokensIn")) - 1);
+    bytes32 private constant _TOKENS_OUT_SLOT = bytes32(uint256(keccak256("AUniswapRouter.tokensOut")) - 1);
+    bytes32 private constant _RECIPIENTS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.recipients")) - 1);
 
     address private immutable _uniswapRouter;
     address private immutable _positionManager;
 
-    // Use transient for temporary storage that doesn't need to persist
     // Initialize counters for transient storage, so we can forward sub plan to self
-    // TODO: redefine private as _
-    uint256 private transient tokensInCount;
-    uint256 private transient tokensOutCount;
-    uint256 private transient recipientsCount;
+    // TODO: we could move count as first value in slot, then append addresses, to avoid solidity coverage
+    //  compile error, but only if can do for all other transient variables.
+    uint256 private transient _tokensInCount;
+    uint256 private transient _tokensOutCount;
+    uint256 private transient _recipientsCount;
 
     // we keep track of all commands, appending a sub-plan's commands
     uint256 private transient _allCommandsCount;
     uint8 private transient _reentrancyDepth;
 
-    uint256 private transient value;
+    uint256 private transient _value;
 
     bool private transient _locked;
 
@@ -90,34 +93,24 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    struct AllCommands {
-        bytes1[] values;
-    }
-
-    function allCommands() internal pure returns (AllCommands storage s) {
-        bytes32 cSlot = _commandsSlot();
-        assembly {
-            s.slot := cSlot
-        }
-    }
-
-    struct InputsStorage {
-        mapping(uint256 => bytes) values;
-    }
-
-    function allInputs() internal pure returns (InputsStorage storage s) {
-        bytes32 iSlot = _inputsSlot();
-        assembly {
-            s.slot := iSlot
-        }
-    }
-
     function _commandsSlot() private pure returns (bytes32) {
         return _ALL_COMMANDS_SLOT;
     }
 
     function _inputsSlot() private pure returns (bytes32) {
         return _ALL_INPUTS_SLOT;
+    }
+
+    function _tokensInSlot() private pure returns (bytes32) {
+        return _TOKENS_IN_SLOT;
+    }
+
+    function _tokensOutSlot() private pure returns (bytes32) {
+        return _TOKENS_OUT_SLOT;
+    }
+
+    function _recipientsSlot() private pure returns (bytes32) {
+        return _RECIPIENTS_SLOT;
     }
 
     /// @inheritdoc IAUniswapRouter
@@ -168,12 +161,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                 RelevantInputs memory relevantInputs = _decodeInput(commands[i], input);
 
                 if (relevantInputs.recipient != SKIP_FLAG) {
-                    //bytes1[] storage _commands = allCommands().values;
-                    //bytes[] storage _inputs = allInputs().values;
-
                     bytes32 commandsSlot = _commandsSlot();
                     bytes32 inputsSlot = _inputsSlot();
-                    //bytes32 inputsSlot = allInputs().values.slot;
 
                     assembly {
                         // Store command in temporary storage
@@ -247,7 +236,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             _safeApproveTokensIn(uniswapRouter(), type(uint256).max);
 
             // we forward the validate filtered inputs to the Uniswap universal router
-            try IAUniswapRouter(uniswapRouter()).execute{value: value}(abi.encodePacked(finalCommands), finalInputs) returns (bytes memory result) {
+            try IAUniswapRouter(uniswapRouter()).execute{value: _value}(abi.encodePacked(finalCommands), finalInputs) returns (bytes memory result) {
                 returnData = result;
             } catch Error(string memory reason) {
                 revert(reason);
@@ -277,32 +266,34 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         // TODO: check clearing values is not overkill, identify use for abuse
         assembly {
             // Clear tokensIn
-            for { let i := 0 } lt(i, tokensInCount.slot) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, _tokensInCount.slot) { i := add(i, 1) } {
                 tstore(add(1, i), 0)
             }
             // Clear tokensOut
-            for { let i := 0 } lt(i, tokensOutCount.slot) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, _tokensOutCount.slot) { i := add(i, 1) } {
                 tstore(add(1000, i), 0)
             }
             // Clear recipients
-            for { let i := 0 } lt(i, recipientsCount.slot) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, _recipientsCount.slot) { i := add(i, 1) } {
                 tstore(add(2000, i), 0)
             }
         }
         // clear counters
-        tokensInCount = 0;
-        tokensOutCount = 0;
-        recipientsCount = 0;
+        _tokensInCount = 0;
+        _tokensOutCount = 0;
+        _recipientsCount = 0;
         _allCommandsCount = 0;
     }
 
     // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
-    // we will have to store the list of owned tokens once done in order to calculate value.
+    // we will have to store in a list of owned tokens once done in order to calculate value.
     function _assertTokensOutWhitelisted() private view {
-        for (uint i = 0; i < tokensOutCount; i++) {
+        // TODO: check use pure method to avoid copying constants around the code
+        uint256 tOSlot = uint256(_tokensInSlot());
+        for (uint i = 0; i < _tokensOutCount; i++) {
             address tokenOut;
             assembly {
-                tokenOut := tload(add(1000, i))
+                tokenOut := tload(add(tOSlot, i))
             }
 
             // we allow swapping to base token even if not whitelisted token
@@ -337,10 +328,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     }
 
     function _safeApproveTokensIn(address spender, uint256 amount) private {
-        for (uint i = 0; i < tokensInCount; i++) {
+        uint256 tSlot = uint256(_tokensInSlot());
+        for (uint i = 0; i < _tokensInCount; i++) {
             address tokenIn;
             assembly {
-                tokenIn := tload(add(1, i))
+                tokenIn := tload(add(tSlot, i))
             }
             _safeApprove(tokenIn, spender, amount);
 
@@ -360,51 +352,56 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         address recipient = relevantInputs.recipient;
         uint256 inputValue = relevantInputs.value;
 
-        if (token0 != ZERO_ADDRESS && !_contains(1, tokensInCount, token0)) {
-            // equivalent to tokensIn[tokensInCount++] = relevantInputs.token0
+        // TODO: these slots we could store as uint256 to avoid conversion here
+        uint256 tSlot = uint256(_tokensInSlot());
+        if (token0 != ZERO_ADDRESS && !_contains(tSlot, _tokensInCount, token0)) {
+            // equivalent to tokensIn[_tokensInCount++] = relevantInputs.token0
             assembly {
-                tstore(add(1, tokensInCount.slot), token0)
-                tstore(0, add(tokensInCount.slot, 1))
+                tstore(add(tSlot, _tokensInCount.slot), token0)
+                tstore(_tokensInCount.slot, add(_tokensInCount.slot, 1))
             }
         }
 
         // TODO: we may not have to assert token1 != token0, as it will not be added if not unique, but might save some gas
-        if (token1 != ZERO_ADDRESS && token0 != token1 && !_contains(1, tokensInCount, token1)) {
-            // equivalent to tokensIn[tokensInCount++] = relevantInputs.token1;
+        if (token1 != ZERO_ADDRESS && token0 != token1 && !_contains(tSlot, _tokensInCount, token1)) {
+            // equivalent to tokensIn[_tokensInCount++] = relevantInputs.token1;
             assembly {
-                tstore(add(1, add(tokensInCount.slot, 1)), token1)
-                tstore(0, add(tokensInCount.slot, 2))
+                tstore(add(tSlot, _tokensInCount.slot), token1)  // Store token1
+                tstore(_tokensInCount.slot, add(_tokensInCount.slot, 1))
             }
         }
 
-        if (tokenOut != ZERO_ADDRESS && !_contains(1000, tokensOutCount, tokenOut)) {
-            // equivalent to tokensOut[tokensOutCount++] = relevantInputs.tokenOut;
+        uint256 tOSlot = uint256(_tokensOutSlot());
+        if (tokenOut != ZERO_ADDRESS && !_contains(tOSlot, _tokensOutCount, tokenOut)) {
+            // equivalent to _tokensOut[_tokensOutCount++] = relevantInputs.tokenOut;
             assembly {
-                tstore(add(1000, tokensOutCount.slot), tokenOut)
-                tstore(1, add(tokensOutCount.slot, 1))
+                tstore(add(tOSlot, _tokensOutCount.slot), tokenOut)
+                tstore(_tokensOutCount.slot, add(_tokensOutCount.slot, 1))
             }
         }
 
-        if (recipient != ZERO_ADDRESS && !_contains(2000, recipientsCount, recipient)) {
-            // equivalent to recipients[recipientsCount++] = relevantInputs.recipient;
+        uint256 rSlot = uint256(_RECIPIENTS_SLOT);
+        if (recipient != ZERO_ADDRESS && !_contains(rSlot, _recipientsCount, recipient)) {
+            // equivalent to recipients[_recipientsCount++] = relevantInputs.recipient;
             assembly {
-                tstore(add(2000, recipientsCount.slot), recipient)
-                tstore(2, add(recipientsCount.slot, 1))
+                tstore(add(rSlot, _recipientsCount.slot), recipient)
+                tstore(_recipientsCount.slot, add(_recipientsCount.slot, 1))
             }
         }
 
         // We assume wrapETH can be invoked multiple times for multiple swaps, and forward the total as msg.value
         if (inputValue > NIL_VALUE) {
-            value += inputValue;
+            _value += inputValue;
         }
     }
 
     // instead of overriding the inputs recipient, we simply validate, so we do not need to re-encode the params.
     function _assertRecipientIsThisAddress() private view {
-        for (uint i = 0 ; i < recipientsCount; i++) {
+        uint256 rSlot = uint256(_recipientsSlot());
+        for (uint i = 0 ; i < _recipientsCount; i++) {
             address recipient;
             assembly {
-                recipient := tload(add(2000, i))
+                recipient := tload(add(rSlot, i))
             }
             require(recipient == address(this), RecipientIsNotSmartPool());
         }
