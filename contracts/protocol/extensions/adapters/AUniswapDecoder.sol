@@ -20,8 +20,6 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
-// TODO: check if can add remapping an declare as @uniswap/universal-router without messing with uniswap v3 imports
-//import "@uniswap/universal-router/contracts/UniversalRouter.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
