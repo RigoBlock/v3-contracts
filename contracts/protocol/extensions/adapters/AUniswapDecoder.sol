@@ -269,7 +269,7 @@ abstract contract AUniswapDecoder {
                 } else if (command == Commands.V3_POSITION_MANAGER_CALL) {
                     // v3 calls are used to migrate liquidity only, no further actions or assertions are necessary. Migration supported methods are:
                     //  decreaseLiquidity, collect, burn
-                } else if (command == Commands.V4_POSITION_CALL) {
+                } else if (command == Commands.V4_POSITION_MANAGER_CALL) {
                     // should only call modifyLiquidities() to mint
                     // do not permit or approve this contract over a v4 position or someone could use this command to decrease, burn, or transfer your position
                     (bytes memory actions, bytes[] memory params) = abi.decode(inputs, (bytes, bytes[]));
