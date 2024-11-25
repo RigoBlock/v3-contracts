@@ -31,16 +31,26 @@ import "./interfaces/IAUniswapRouter.sol";
 contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     using CalldataDecoder for bytes;
 
+    uint256 private constant _ALL_COMMANDS_SLOT = uint256(keccak256("AUniswapRouter.allCommands"));
+    uint256 private constant _ALL_INPUTS_SLOT = uint256(keccak256("AUniswapRouter.allInputs"));
+
     address private immutable _uniswapRouter;
     address private immutable _positionManager;
 
     // Use transient for temporary storage that doesn't need to persist
     // Initialize counters for transient storage, so we can forward sub plan to self
+    // TODO: redefine private as _
     uint256 private transient tokensInCount;
     uint256 private transient tokensOutCount;
     uint256 private transient recipientsCount;
 
+    // we keep track of all commands, appending a sub-plan's commands
+    uint256 private transient _allCommandsCount;
+    uint8 private transient _reentrancyDepth;
+
     uint256 private transient value;
+
+    bool private transient _locked;
 
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
@@ -51,6 +61,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     error RecipientIsNotSmartPool();
     error ApprovalFailed(address target);
     error TargetIsNotContract();
+    error ReentrantCall();
+    error NestedSubPlan();
 
     constructor(address _universalRouter, address _v4positionManager) {
         _uniswapRouter = _universalRouter;
@@ -60,6 +72,42 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     modifier checkDeadline(uint256 deadline) {
         require(block.timestamp <= deadline, TransactionDeadlinePassed());
         _;
+    }
+
+    modifier nonReentrant() {
+        if (!_locked) {
+            _locked = true;
+            _reentrancyDepth = 0;
+        } else {
+            require(msg.sender == address(this), ReentrantCall());
+        }
+        _reentrancyDepth++;
+        _;
+        _reentrancyDepth--;
+        if (_reentrancyDepth == 0) {
+            _locked = false;
+        }
+    }
+
+    struct AllCommands {
+        bytes1[] values;
+    }
+
+    function allCommands() internal pure returns (AllCommands storage s) {
+        assembly {
+            s.slot := _ALL_COMMANDS_SLOT
+        }
+    }
+
+    struct InputsStorage {
+        //mapping(uint256 => bytes) values;
+        bytes[] values;
+    }
+
+    function allInputs() internal pure returns (InputsStorage storage s) {
+        assembly {
+            s.slot := _ALL_INPUTS_SLOT
+        }
     }
 
     /// @inheritdoc IAUniswapRouter
@@ -78,6 +126,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         public
         payable
         override
+        nonReentrant
         returns (bytes memory returnData)
     {
         // TODO: check we want to silence warning and are successfully doing so
@@ -86,91 +135,71 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         uint256 numCommands = commands.length;
         require(numCommands == inputs.length, LengthMismatch());
 
-        bytes[] memory newInputs = new bytes[](numCommands);
-        uint256[] memory newCommands = new uint256[](numCommands);
-        uint256 newNumCommands = 0;
-
         // loop through all given commands, verify their inputs and pass along outputs as defined
         for (uint256 i = 0; i < numCommands; i++) {
             uint256 command = uint8(commands[i] & Commands.COMMAND_TYPE_MASK);
             bytes calldata input = inputs[i];
 
-            // Handle EXECUTE_SUB_PLAN separately
-            // TODO: to avoid complex logic, we could make assumption that subplans are executed last, so we could store them in an array, skip appending
-            //  and execute them via a new execute call to self
+            // Handle EXECUTE_SUB_PLAN by forwarding to self and then forwarding the underlying subcommands, stored where?
             if (command == Commands.EXECUTE_SUB_PLAN) {
-                //(bytes memory subCommands, bytes[] memory subInputs) = abi.decode(input, (bytes, bytes[]));
-                (bytes calldata subCommands, bytes[] calldata subInputs) = input.decodeActionsRouterParams();
-
-                bytes[] memory newSubInputs = new bytes[](subCommands.length);
-                uint256[] memory newSubCommands = new uint256[](subCommands.length);
-                uint256 newSubNumCommands = 0;
-
-                for (uint256 j = 0; j < subCommands.length; j++) {
+                (bytes memory subCommands, bytes[] memory subInputs) = abi.decode(input, (bytes, bytes[]));
+                
+                // ensure a sub-plan does not include nested sub-plans
+                for (uint j = 0; j < subCommands.length; j++) {
                     uint256 subCommand = uint8(subCommands[j] & Commands.COMMAND_TYPE_MASK);
-                    bytes calldata subInput = subInputs[j];
+                    require(subCommand != Commands.EXECUTE_SUB_PLAN, NestedSubPlan());
+                }
 
-                    RelevantInputs memory relevantSubInputs = _decodeInput(subCommands[j], subInput);
+                try IAUniswapRouter(address(this)).execute(subCommands, subInputs) returns (bytes memory) {
 
-                    if (relevantSubInputs.recipient != SKIP_FLAG) {
-                        // Add the subInput to newSubInputs at the newSubNumCommands position
-                        // probably newSubNumCommands could be substituted with j
-                        newSubInputs[newSubNumCommands] = subInput;
-                        newSubCommands[newSubNumCommands] = subCommand;
-                        // TODO: can use inputs length if saves gas by not adding to newSubNumCommands
-                        newSubNumCommands++;
-                        // TODO: check if passing a struct removes error of too many variables
-                        _processRelevantInputs(relevantSubInputs);
+                } catch Error(string memory reason) {
+                    revert(reason);
+                }
+            } else {
+                RelevantInputs memory relevantInputs = _decodeInput(commands[i], input);
+
+                if (relevantInputs.recipient != SKIP_FLAG) {
+                    bytes1[] storage _commands = allCommands().values;
+                    bytes[] memory _inputs = allInputs().values;
+                    assembly {
+                        let count := _allCommandsCount.slot
+                        let inputSlot := add(_inputs, mul(count, 0x20))
+                        tstore(inputSlot, add(input.offset, 0x20))  // Store the offset
+                        tstore(add(inputSlot, 0x20), input.length)   // Store the length
+                        tstore(add(_commands.slot, mul(count, 0x20)), command)
                     }
+                    _allCommandsCount++;
+                    _processRelevantInputs(relevantInputs);
                 }
-
-                // Adjust the length of newSubInputs to remove empty fields
-                assembly {
-                    mstore(newSubInputs, newSubNumCommands)
-                    mstore(newSubCommands, newSubNumCommands)
-                }
-
-                newInputs[newNumCommands] = abi.encode(abi.encodePacked(newSubCommands), newSubInputs);
-                newCommands[newNumCommands] = command;
-                newNumCommands++;
-
-                continue;
-            }
-
-            RelevantInputs memory relevantInputs = _decodeInput(commands[i], input);
-
-            if (relevantInputs.recipient != SKIP_FLAG) {
-                // Add the input to newInputs at the newNumCommands position
-                newInputs[newNumCommands] = input;
-                newCommands[newNumCommands] = command;
-                newNumCommands++;
-                _processRelevantInputs(relevantInputs);
             }
         }
 
-        _assertTokensOutWhitelisted();
-        _assertRecipientIsThisAddress();
+        // only execute when finished decoding inputs
+        if (_reentrancyDepth == 1) {
+            _assertTokensOutWhitelisted();
+            _assertRecipientIsThisAddress();
 
-        // we approve all the tokens that are exiting the smart pool
-        _safeApproveTokensIn(uniswapRouter(), type(uint256).max);
+            bytes1[] storage finalCommands = allCommands().values;
+            bytes[] storage finalInputs = allInputs().values;
 
-        // we forward the validate filtered inputs to the Uniswap universal router
-        // TODO: commands should be modified to newCommands, including only the filtered ones
-        // TODO: if we prompt call to router only after last command decoding, we could possibly simplify by handling EXECUTE_SUB_PLAN as forwarding
-        //  to self and making sure the transactions are executed in the correct order, while preserving inputs
-        try IAUniswapRouter(uniswapRouter()).execute{value: value}(abi.encodePacked(newCommands), newInputs) returns (bytes memory result) {
-            returnData = result;
-        } catch Error(string memory reason) {
-            revert(reason);
-        } catch (bytes memory lowLevelData) {
-            revert(string(lowLevelData));
+            // we approve all the tokens that are exiting the smart pool
+            _safeApproveTokensIn(uniswapRouter(), type(uint256).max);
+
+            // we forward the validate filtered inputs to the Uniswap universal router
+            try IAUniswapRouter(uniswapRouter()).execute{value: value}(abi.encodePacked(finalCommands), finalInputs) returns (bytes memory result) {
+                returnData = result;
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch (bytes memory lowLevelData) {
+                revert(string(lowLevelData));
+            }
+
+            // we remove allowance without clearing storage
+            _safeApproveTokensIn(uniswapRouter(), 1);
+
+            // we clear transient storage
+            _clearTransientStorage();
         }
-
-        // we remove allowance without clearing storage
-        _safeApproveTokensIn(uniswapRouter(), 1);
-
-        // we clear transient storage
-        _clearTransientStorage();
     }
 
     /// @inheritdoc IAUniswapRouter
@@ -184,40 +213,23 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     }
 
     function _clearTransientStorage() private {
-        uint256 length;
-        
-        // Clear tokensIn
         assembly {
-            length := tload(tokensInCount.slot)
             tstore(tokensInCount.slot, 0)
-        }
-        for (uint256 i = 0; i < length; i++) {
-            assembly {
-                tstore(add(1, i), 0)  // Clear starting from slot 1
-            }
-        }
-
-        // Clear tokensOut
-        assembly {
-            length := tload(tokensOutCount.slot)
             tstore(tokensOutCount.slot, 0)
-        }
-        for (uint256 i = 0; i < length; i++) {
-            assembly {
-                tstore(add(1000, i), 0)  // Clear starting from slot 1000
-            }
+            tstore(recipientsCount.slot, 0)
+            tstore(_allCommandsCount.slot, 0)
         }
 
-        // Clear recipients
-        assembly {
-            length := tload(recipientsCount.slot)
-            tstore(recipientsCount.slot, 0)
-        }
-        for (uint256 i = 0; i < length; i++) {
-            assembly {
-                tstore(add(2000, i), 0)  // Clear starting from slot 2000
-            }
-        }
+        // Clearing commands and inputs
+        //for (uint256 i = 0; i < _allCommandsCount; i++) {
+        //    assembly {
+        //        let slotOffset := mul(i, 0x20)
+        //        tstore(add(allInputs(), slotOffset), 0)
+        //        tstore(add(add(allInputs(), slotOffset), 0x20), 0)
+        //        tstore(add(allCommands(), slotOffset), 0)
+        //    }
+        //}
+        _allCommandsCount = 0;
     }
 
     // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
