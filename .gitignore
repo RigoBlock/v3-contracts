@@ -1,4 +1,6 @@
 build/
+cache_forge/
+out/
 node_modules/
 .DS_Store
 .zos.session
