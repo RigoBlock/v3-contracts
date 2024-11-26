@@ -44,7 +44,6 @@ import "./src/tasks/show_codesize"
 import { BigNumber } from "@ethersproject/bignumber";
 
 const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28"
-//const soliditySettings = !!SOLIDITY_SETTINGS ? JSON.parse(SOLIDITY_SETTINGS) : undefined
 const soliditySettings = !!SOLIDITY_SETTINGS ? {
   ...JSON.parse(SOLIDITY_SETTINGS),
   evmVersion: process.env.EVM_VERSION || "cancun"
@@ -62,8 +61,6 @@ const deterministicDeployment = CUSTOM_DETERMINISTIC_DEPLOYMENT == "true" ?
     }
   } : undefined
 
-// TODO: Fix the 'Invalid EVM version requested' error by properly setting up the EVM version in our Hardhat configuration
-// How do I configure Hardhat to use the cancun EVM version?
 const userConfig: HardhatUserConfig = {
   paths: {
     artifacts: "build/artifacts",
