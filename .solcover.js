@@ -2,8 +2,7 @@ module.exports = {
     skipFiles: [
         './examples',
         './tokens',
-        './utils',
-        'protocol/extensions/adapters/AUniswapRouter.sol'
+        './utils'
     ],
     mocha: {
         grep: "@skip-on-coverage", // Find everything with this tag
