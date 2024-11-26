@@ -38,15 +38,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     bytes32 private constant _TOKENS_OUT_SLOT = bytes32(uint256(keccak256("AUniswapRouter.tokensOut")) - 1);
     bytes32 private constant _RECIPIENTS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.recipients")) - 1);
 
+    uint256 private constant NIL_VALUE = 0;
+
     address private immutable _uniswapRouter;
     address private immutable _positionManager;
-
-    // Initialize counters for transient storage, so we can forward sub plan to self
-    // TODO: we could move count as first value in slot, then append addresses, to avoid solidity coverage
-    //  compile error, but only if can do for all other transient variables.
-    uint256 private transient _tokensInCount;
-    uint256 private transient _tokensOutCount;
-    uint256 private transient _recipientsCount;
 
     // we keep track of all commands, appending a sub-plan's commands
     uint256 private transient _allCommandsCount;
@@ -131,7 +126,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         nonReentrant
         returns (bytes memory returnData)
     {
-        // TODO: check we want to silence warning and are successfully doing so
         // solhint-disable transient-storage-not-cleared
         // duplicate check from universal router, as we manipulate inputs before forwarding
         uint256 numCommands = commands.length;
@@ -139,55 +133,13 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
         // loop through all given commands, verify their inputs and pass along outputs as defined
         for (uint256 i = 0; i < numCommands; i++) {
-            uint256 command = uint8(commands[i] & Commands.COMMAND_TYPE_MASK);
             bytes calldata input = inputs[i];
+            RelevantInputs memory relevantInputs = _decodeInput(commands[i], input);
 
-            // Handle EXECUTE_SUB_PLAN by forwarding to self and then forwarding the underlying subcommands, stored where?
-            if (command == Commands.EXECUTE_SUB_PLAN) {
-                (bytes memory subCommands, bytes[] memory subInputs) = abi.decode(input, (bytes, bytes[]));
-                
-                // ensure a sub-plan does not include nested sub-plans
-                for (uint j = 0; j < subCommands.length; j++) {
-                    uint256 subCommand = uint8(subCommands[j] & Commands.COMMAND_TYPE_MASK);
-                    require(subCommand != Commands.EXECUTE_SUB_PLAN, NestedSubPlan());
-                }
-
-                try IAUniswapRouter(address(this)).execute(subCommands, subInputs) returns (bytes memory) {
-
-                } catch Error(string memory reason) {
-                    revert(reason);
-                }
-            } else {
-                RelevantInputs memory relevantInputs = _decodeInput(commands[i], input);
-
-                if (relevantInputs.recipient != SKIP_FLAG) {
-                    bytes32 commandsSlot = _commandsSlot();
-                    bytes32 inputsSlot = _inputsSlot();
-
-                    assembly {
-                        // Store command in temporary storage
-                        let count := _allCommandsCount.slot
-                        let commandSlot := add(commandsSlot, mul(count, 0x20))
-                        tstore(commandSlot, command)
-
-                        // Store input offset and length in temporary storage
-                        let inputSlot := add(inputsSlot, mul(count, 0x40))
-                        let dataOffset := add(input.offset, 0x20)
-                        let dataLength := input.length
-
-                        // Store the offset and length
-                        tstore(inputSlot, dataOffset)
-                        tstore(add(inputSlot, 1), dataLength)
-
-                        // Store the actual byte data
-                        for { let k := 0 } lt(k, div(add(dataLength, 31), 32)) { k := add(k, 1) } {
-                            let data := calldataload(add(dataOffset, mul(k, 0x20)))
-                            tstore(add(inputSlot, add(2, k)), data)  // +2 to skip over the offset and length slots
-                        }
-                    }
-                    _allCommandsCount++;
-                    _processRelevantInputs(relevantInputs);
-                }
+            // we temporary store only if the returned input exists
+            if (relevantInputs.filteredInput.length > 0) {
+                _processRelevantInputs(relevantInputs);
+                _allCommandsCount++;
             }
         }
 
@@ -196,41 +148,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             _assertTokensOutWhitelisted();
             _assertRecipientIsThisAddress();
 
-            bytes memory finalCommands = new bytes(_allCommandsCount);
-            bytes[] memory finalInputs = new bytes[](_allCommandsCount);
-
-            bytes32 commandsSlot = _commandsSlot();
-            bytes32 inputsSlot = _inputsSlot();
-
-            for (uint256 i = 0; i < _allCommandsCount; i++) {
-                assembly {
-                    let commandSlot := add(commandsSlot, mul(i, 0x20))
-                    mstore(add(finalCommands, add(0x20, i)), tload(commandSlot))
-                    tstore(commandSlot, 0)  // Clear command from transient storage
-
-                    // Retrieve the length and data
-                    let inputSlot := add(inputsSlot, mul(i, 0x40))
-                    let dataLength := tload(add(inputSlot, 1))
-
-                    let memoryPtr := mload(0x40)
-                    for { let j := 0 } lt(j, div(add(dataLength, 31), 32)) { j := add(j, 1) } {
-                        mstore(add(memoryPtr, mul(j, 0x20)), tload(add(inputSlot, add(2, j))))
-                        tstore(add(inputSlot, add(2, j)), 0)  // Clear input data from transient storage
-                    }
-
-                    // Set the length of the bytes array in memory
-                    mstore(add(finalInputs, add(0x20, mul(i, 0x20))), dataLength)
-                    // Copy the data to the correct position in the finalInputs array
-                    for { let j := 0 } lt(j, div(add(dataLength, 31), 32)) { j := add(j, 1) } {
-                        mstore(add(finalInputs, add(0x40, mul(i, 0x20))), mload(add(memoryPtr, mul(j, 0x20))))
-                    }
-
-                    tstore(add(inputSlot, 1), 0)  // Clear the length from transient storage
-
-                    // Update free memory pointer
-                    mstore(0x40, add(memoryPtr, and(add(dataLength, 31), not(31))))
-                }
-            }
+            (bytes memory finalCommands, bytes[] memory finalInputs) = _loadFinalCommandsAndInputs();
 
             // we approve all the tokens that are exiting the smart pool
             _safeApproveTokensIn(uniswapRouter(), type(uint256).max);
@@ -247,8 +165,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             // we remove allowance without clearing storage
             _safeApproveTokensIn(uniswapRouter(), 1);
 
-            // we clear transient storage
-            _clearTransientStorage();
+            _clearCounters();
         }
     }
 
@@ -262,23 +179,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         return _uniswapRouter;
     }
 
-    function _clearTransientStorage() private {
-        // TODO: check clearing values is not overkill, identify use for abuse
-        assembly {
-            // Clear tokensIn
-            for { let i := 0 } lt(i, _tokensInCount.slot) { i := add(i, 1) } {
-                tstore(add(1, i), 0)
-            }
-            // Clear tokensOut
-            for { let i := 0 } lt(i, _tokensOutCount.slot) { i := add(i, 1) } {
-                tstore(add(1000, i), 0)
-            }
-            // Clear recipients
-            for { let i := 0 } lt(i, _recipientsCount.slot) { i := add(i, 1) } {
-                tstore(add(2000, i), 0)
-            }
-        }
-        // clear counters
+    // inputs and commands are cleared directly when retrieving them for final ones for efficiency
+    function _clearCounters() private {
         _tokensInCount = 0;
         _tokensOutCount = 0;
         _recipientsCount = 0;
@@ -287,13 +189,14 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
     // we will have to store in a list of owned tokens once done in order to calculate value.
-    function _assertTokensOutWhitelisted() private view {
-        // TODO: check use pure method to avoid copying constants around the code
+    function _assertTokensOutWhitelisted() private {
         uint256 tOSlot = uint256(_tokensInSlot());
         for (uint i = 0; i < _tokensOutCount; i++) {
             address tokenOut;
             assembly {
                 tokenOut := tload(add(tOSlot, i))
+                // we can safely clear slot as we do not need it any more
+                tstore(add(tOSlot, i), 0)
             }
 
             // we allow swapping to base token even if not whitelisted token
@@ -339,53 +242,122 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             // assert no approval inflation exists after removing approval
             if (amount == 1) {
                 assert(IERC20(tokenIn).allowance(address(this), uniswapRouter()) == 1);
+                
+                // we can safely clear slot as we do not need it any more
+                assembly {
+                    tstore(add(tSlot, i), 0)
+                }
             }
         }
+    }
+
+    // loads final values and clears slots after storing them in memory
+    function _loadFinalCommandsAndInputs() private returns (bytes memory, bytes[] memory) {
+        bytes memory finalCommands = new bytes(_allCommandsCount);
+        bytes[] memory finalInputs = new bytes[](_allCommandsCount);
+
+        bytes32 commandsSlot = _commandsSlot();
+        bytes32 inputsSlot = _inputsSlot();
+
+        for (uint256 i = 0; i < _allCommandsCount; i++) {
+            assembly {
+                let commandSlot := add(commandsSlot, mul(i, 0x20))
+                mstore(add(finalCommands, add(0x20, i)), tload(commandSlot))
+                tstore(commandSlot, 0)  // Clear command from transient storage
+
+                // Retrieve the length and data
+                let inputSlot := add(inputsSlot, mul(i, 0x40))
+                let dataLength := tload(add(inputSlot, 1))
+
+                let memoryPtr := mload(0x40)
+                for { let j := 0 } lt(j, div(add(dataLength, 31), 32)) { j := add(j, 1) } {
+                    mstore(add(memoryPtr, mul(j, 0x20)), tload(add(inputSlot, add(2, j))))
+                    tstore(add(inputSlot, add(2, j)), 0)  // Clear input data from transient storage
+                }
+
+                // Set the length of the bytes array in memory
+                mstore(add(finalInputs, add(0x20, mul(i, 0x20))), dataLength)
+                // Copy the data to the correct position in the finalInputs array
+                for { let j := 0 } lt(j, div(add(dataLength, 31), 32)) { j := add(j, 1) } {
+                    mstore(add(finalInputs, add(0x40, mul(i, 0x20))), mload(add(memoryPtr, mul(j, 0x20))))
+                }
+
+                tstore(add(inputSlot, 1), 0)  // Clear the length from transient storage
+
+                // Update free memory pointer
+                mstore(0x40, add(memoryPtr, and(add(dataLength, 31), not(31))))
+            }
+        }
+        return (finalCommands, finalInputs);
     }
 
     function _processRelevantInputs(
         RelevantInputs memory relevantInputs
     ) private {
-        address token0 = relevantInputs.token0;
-        address token1 = relevantInputs.token1;
-        address tokenOut = relevantInputs.tokenOut;
-        address recipient = relevantInputs.recipient;
         uint256 inputValue = relevantInputs.value;
+        uint256 command = relevantInputs.command;
+        bytes memory input = relevantInputs.filteredInput;
 
-        // TODO: these slots we could store as uint256 to avoid conversion here
-        uint256 tSlot = uint256(_tokensInSlot());
-        if (token0 != ZERO_ADDRESS && !_contains(tSlot, _tokensInCount, token0)) {
-            // equivalent to tokensIn[_tokensInCount++] = relevantInputs.token0
-            assembly {
-                tstore(add(tSlot, _tokensInCount.slot), token0)
-                tstore(_tokensInCount.slot, add(_tokensInCount.slot, 1))
+        bytes32 commandsSlot = _commandsSlot();
+        bytes32 inputsSlot = _inputsSlot();
+
+        assembly {
+            // Store command in temporary storage
+            let count := _allCommandsCount.slot
+            let commandSlot := add(commandsSlot, mul(count, 0x20))
+            tstore(commandSlot, command)
+
+            // Store input offset and length in temporary storage
+            let inputSlot := add(inputsSlot, mul(count, 0x40))
+            let dataOffset := add(input, 0x20)
+            let dataLength := mload(input)
+
+            // Store the offset and length
+            tstore(inputSlot, dataOffset)
+            tstore(add(inputSlot, 1), dataLength)
+
+            // Store the actual byte data
+            for { let k := 0 } lt(k, div(add(dataLength, 31), 32)) { k := add(k, 1) } {
+                let data := mload(add(dataOffset, mul(k, 0x20)))
+                tstore(add(inputSlot, add(2, k)), data)  // +2 to skip over the offset and length slots
             }
         }
 
-        // TODO: we may not have to assert token1 != token0, as it will not be added if not unique, but might save some gas
-        if (token1 != ZERO_ADDRESS && token0 != token1 && !_contains(tSlot, _tokensInCount, token1)) {
-            // equivalent to tokensIn[_tokensInCount++] = relevantInputs.token1;
-            assembly {
-                tstore(add(tSlot, _tokensInCount.slot), token1)  // Store token1
-                tstore(_tokensInCount.slot, add(_tokensInCount.slot, 1))
+        // TODO: these slots we could store as uint256 to avoid conversion here
+        uint256 tSlot = uint256(_tokensInSlot());
+        for (uint256 i = 0; i < _tokensInCount; i++) {
+            address tokenIn = relevantInputs.tokensIn[i];
+            if (tokenIn != ZERO_ADDRESS && !_contains(tSlot, _tokensInCount, tokenIn)) {
+                // equivalent to tokensIn[_tokensInCount++] = relevantInputs.tokenIn
+                assembly {
+                    tstore(add(tSlot, _tokensInCount.slot), tokenIn)
+                    // TODO: not sure we need to increase count here as would be wrong?
+                    tstore(_tokensInCount.slot, add(_tokensInCount.slot, 1))
+                }
             }
         }
 
         uint256 tOSlot = uint256(_tokensOutSlot());
-        if (tokenOut != ZERO_ADDRESS && !_contains(tOSlot, _tokensOutCount, tokenOut)) {
-            // equivalent to _tokensOut[_tokensOutCount++] = relevantInputs.tokenOut;
-            assembly {
-                tstore(add(tOSlot, _tokensOutCount.slot), tokenOut)
-                tstore(_tokensOutCount.slot, add(_tokensOutCount.slot, 1))
+        for (uint256 i = 0; i < _tokensOutCount; i++) {
+            address tokenOut = relevantInputs.tokensOut[i];
+            if (tokenOut != ZERO_ADDRESS && !_contains(tOSlot, _tokensOutCount, tokenOut)) {
+                // equivalent to _tokensOut[_tokensOutCount++] = relevantInputs.tokenOut;
+                assembly {
+                    tstore(add(tOSlot, _tokensOutCount.slot), tokenOut)
+                    tstore(_tokensOutCount.slot, add(_tokensOutCount.slot, 1))
+                }
             }
         }
 
         uint256 rSlot = uint256(_RECIPIENTS_SLOT);
-        if (recipient != ZERO_ADDRESS && !_contains(rSlot, _recipientsCount, recipient)) {
-            // equivalent to recipients[_recipientsCount++] = relevantInputs.recipient;
-            assembly {
-                tstore(add(rSlot, _recipientsCount.slot), recipient)
-                tstore(_recipientsCount.slot, add(_recipientsCount.slot, 1))
+        for (uint256 i = 0; i < _recipientsCount; i++) {
+            address recipient = relevantInputs.recipients[i];
+            if (recipient != ZERO_ADDRESS && !_contains(rSlot, _recipientsCount, recipient)) {
+                // equivalent to recipients[_recipientsCount++] = relevantInputs.recipient;
+                assembly {
+                    tstore(add(rSlot, _recipientsCount.slot), recipient)
+                    tstore(_recipientsCount.slot, add(_recipientsCount.slot, 1))
+                }
             }
         }
 
@@ -395,13 +367,14 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // instead of overriding the inputs recipient, we simply validate, so we do not need to re-encode the params.
-    function _assertRecipientIsThisAddress() private view {
+    function _assertRecipientIsThisAddress() private {
         uint256 rSlot = uint256(_recipientsSlot());
         for (uint i = 0 ; i < _recipientsCount; i++) {
             address recipient;
             assembly {
                 recipient := tload(add(rSlot, i))
+                // we can safely clear slot as we do not need it any more
+                tstore(add(rSlot, i), 0)
             }
             require(recipient == address(this), RecipientIsNotSmartPool());
         }

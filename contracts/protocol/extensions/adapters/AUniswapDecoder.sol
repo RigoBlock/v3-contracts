@@ -40,14 +40,21 @@ abstract contract AUniswapDecoder {
 
     address internal constant ZERO_ADDRESS = address(0);
     address internal constant SKIP_FLAG = address(1);
-    uint256 internal constant NIL_VALUE = 0;
 
+    // Initialize counters for transient storage, so we can forward sub plan to self
+    uint256 internal transient _tokensInCount;
+    uint256 internal transient _tokensOutCount;
+    uint256 internal transient _recipientsCount;
+
+    // arrays length is not updated on purpose, use the transient counters instead
+    // TODO: however, verify that a reentrant call correctly indexes tokens
     struct RelevantInputs {
-        address token0;
-        address token1 ;
-        address tokenOut;
-        address recipient;
+        address[] tokensIn;
+        address[] tokensOut;
+        address[] recipients;
         uint256 value;
+        uint256 command;
+        bytes filteredInput;
     }
 
     function positionManager() public view virtual returns (address);
@@ -56,24 +63,14 @@ abstract contract AUniswapDecoder {
     /// @param commandType The command type to decode.
     /// @param inputs The encoded input data.
     /// @return relevantInputs containing decoded information.
-    // TODO: we should check if we should return the output, as with Actions we will filter
-    //  a command's multiple actions, and we could handle subplan
     function _decodeInput(bytes1 commandType, bytes calldata inputs)
         internal
-        view
         returns (RelevantInputs memory relevantInputs)
     {
         uint256 command = uint8(commandType & Commands.COMMAND_TYPE_MASK);
+        relevantInputs.command = command;
 
-        // initialize struct with nil values
-        relevantInputs = RelevantInputs({
-            token0: ZERO_ADDRESS,
-            token1: ZERO_ADDRESS,
-            tokenOut: ZERO_ADDRESS,
-            recipient: ZERO_ADDRESS,
-            value: NIL_VALUE
-        });
-
+        // TODO: verify a subplan does not overwrite to relevantInpus, but uses a separate one, so we do not need to use _tokensInCount, ... as index for position storing
         // 0x00 <= command < 0x21
         if (command < Commands.EXECUTE_SUB_PLAN) {
             // 0x00 <= command < 0x10
@@ -90,9 +87,10 @@ abstract contract AUniswapDecoder {
                         ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         assert(payerIsUser);
                         bytes calldata path = inputs.toBytes(3);
-                        relevantInputs.token0 = path.toAddress();
-                        relevantInputs.tokenOut = path.toBytes(path.length - 20).toAddress();
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.tokensIn[0] = path.toAddress();
+                        relevantInputs.tokensOut[0] = path.toBytes(path.length - 20).toAddress();
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput = inputs;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
                         (
                             address recipient,
@@ -103,26 +101,30 @@ abstract contract AUniswapDecoder {
                         ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         assert(payerIsUser);
                         bytes calldata path = inputs.toBytes(3);
-                        relevantInputs.tokenOut = path.toAddress();
-                        relevantInputs.token0 = path.toBytes(path.length - 20).toAddress();
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.tokensOut[0] = path.toAddress();
+                        relevantInputs.tokensIn[0] = path.toBytes(path.length - 20).toAddress();
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput = inputs;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
-                        relevantInputs.recipient = SKIP_FLAG;
+                        // skip this command
                     } else if (command == Commands.PERMIT2_PERMIT_BATCH) {
-                        relevantInputs.recipient = SKIP_FLAG;
+                        // skip this command
                     } else if (command == Commands.SWEEP) {
                         (/*address token*/, address recipient, /*uint160 amountMin*/) = abi.decode(inputs, (address, address, uint256));
-                        // sweep is used when the router is used for transfers
-                        relevantInputs.recipient = recipient;
+                        // sweep is used when the router is used for transfers to clear leftover
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput = inputs;
                     } else if (command == Commands.TRANSFER) {
                         // TODO: check should validate token
                         (/*address token*/, address recipient, /*uint256 value*/) = abi.decode(inputs, (address, address, uint256));
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput = inputs;
                     } else if (command == Commands.PAY_PORTION) {
                         // TODO: check what this does and if should early return
                         // TODO: check should validate token
                         (/*address token*/, address recipient, /*uint256 bips*/) = abi.decode(inputs, (address, address, uint256));
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput = inputs;
                     } else {
                         // placeholder area for command 0x07
                         revert InvalidCommandType(command);
@@ -139,9 +141,10 @@ abstract contract AUniswapDecoder {
                         ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         assert(payerIsUser);
                         address[] calldata path = inputs.toAddressArray(3);
-                        relevantInputs.token0 = path[0];
-                        relevantInputs.tokenOut = path[path.length - 1];
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.tokensIn[0] = path[0];
+                        relevantInputs.tokensOut[0] = path[path.length - 1];
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
                         (
                             address recipient,
@@ -153,23 +156,27 @@ abstract contract AUniswapDecoder {
                         assert(payerIsUser);
                         address[] calldata path = inputs.toAddressArray(3);
                         // TODO: check order in/out is correct
-                        relevantInputs.token0 = path[0];
-                        relevantInputs.tokenOut = path[path.length - 1];
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.tokensIn[0] = path[0];
+                        relevantInputs.tokensOut[0] = path[path.length - 1];
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput = inputs;
                     } else if (command == Commands.PERMIT2_PERMIT) {
-                        relevantInputs.recipient = SKIP_FLAG;
+                        // skip this command
                     } else if (command == Commands.WRAP_ETH) {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
                         // TODO: we might want to _mapRecipient(recipient), but we do not accept calls from
                         // wallet other than user (like a trusted forwarder)
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.recipients[0] = recipient;
                         relevantInputs.value = amount;
+                        relevantInputs.filteredInput = inputs;
                     } else if (command == Commands.UNWRAP_WETH) {
                         (address recipient, /*uint256 amountMin*/) = abi.decode(inputs, (address, uint256));
-                        relevantInputs.recipient = recipient;
+                        relevantInputs.recipients[0] = recipient;
+                        relevantInputs.filteredInput = inputs;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
-                        relevantInputs.recipient = SKIP_FLAG;
+                        // skip this command
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
+                        // TODO: check if we need this one, we could simply not pass it
                         (
                             address owner,
                             address token,
@@ -177,30 +184,30 @@ abstract contract AUniswapDecoder {
                         ) = abi.decode(inputs, (address, address, uint256));
                         // TODO: check if this assertion is needed, as we need to prevent a call to an arbitrary external
                         // contract, which could be a rogue contract
-                        relevantInputs.tokenOut = token;
-                        relevantInputs.recipient = owner;
+                        relevantInputs.tokensOut[0] = token;
+                        relevantInputs.recipients[0] = owner;
+                        relevantInputs.filteredInput = inputs;
                     } else {
                         // placeholder area for command 0x0f
                         revert InvalidCommandType(command);
                     }
                 }
+
+                // TODO: we should adjust the arrays' length for completeness
+                // Adjust array lengths
+                //    assembly {
+                //        mstore(relevantInputs.tokensIn, tokensInCount)
+                //        mstore(relevantInputs.tokensOut, tokensOutCount)
+                //        mstore(relevantInputs.recipients, recipientsCount)
+                //    }
             } else {
                 // 0x10 <= command < 0x21
-                // TODO: restrict conditions on NO_OP hook flag
-                // TODO: we can allow any hook, as frontrunning is always possible, but should retrieve recipient
-                //  and tokens
-                // should loop through actions as in https://github.com/Uniswap/v4-periphery/blob/d767807d357b18bb8d35876b52c0556f1c2b302f/src/base/BaseActionsRouter.sol#L38
                 if (command == Commands.V4_SWAP) {
                     (bytes memory actions, bytes[] memory params) = abi.decode(inputs, (bytes, bytes[]));
 
                     uint256 numActions = actions.length;
                     assert(numActions == params.length);
 
-                    // TODO: we need to store tokens and recipient in memory, and can override as 1 swap is intended,
-                    // i.e. if multiple swaps are sent most will fail, as multiple swaps should be sent as an array
-                    // of v4 swaps
-
-                    // TODO: here we may be overwriting for multiple actions, therefore should return the output?
                     for (uint256 actionIndex = 0; actionIndex < numActions; actionIndex++) {
                         uint256 action = uint8(actions[actionIndex]);
                         bytes memory paramsAtIndex = params[actionIndex];
@@ -209,68 +216,65 @@ abstract contract AUniswapDecoder {
                             if (action == Actions.SWAP_EXACT_IN) {
                                 IV4Router.ExactInputParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactInputParams));
                                 uint256 pathLength = swapParams.path.length;
-                                relevantInputs.token0 = Currency.unwrap(swapParams.currencyIn);
-                                relevantInputs.tokenOut = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(swapParams.currencyIn);
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
                             } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
                                 IV4Router.ExactInputSingleParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactInputSingleParams));
-                                relevantInputs.token0 = Currency.unwrap(swapParams.poolKey.currency0);
-                                relevantInputs.tokenOut = Currency.unwrap(swapParams.poolKey.currency1);
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(swapParams.poolKey.currency0);
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(swapParams.poolKey.currency1);
                             } else if (action == Actions.SWAP_EXACT_OUT) {
                                 IV4Router.ExactOutputParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactOutputParams));
                                 uint256 pathLength = swapParams.path.length;
-                                relevantInputs.tokenOut = Currency.unwrap(swapParams.currencyOut);
-                                relevantInputs.token0 = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(swapParams.currencyOut);
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency);
                             } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
                                 IV4Router.ExactOutputSingleParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactOutputSingleParams));
-                                relevantInputs.token0 = Currency.unwrap(swapParams.poolKey.currency1);
-                                relevantInputs.tokenOut = Currency.unwrap(swapParams.poolKey.currency0);
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(swapParams.poolKey.currency1);
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(swapParams.poolKey.currency0);
                             }
                         } else {
-                            // TODO: check payment methods and that we are correctly returning token0 or token1 or tokenOut
                             if (action == Actions.SETTLE_PAIR) {
                                 // TODO: verify we cannot decode recipient, i.e. not an input for settle
                                 (Currency currency0, Currency currency1) = abi.decode(paramsAtIndex, (Currency, Currency));
-                                relevantInputs.token0 = Currency.unwrap(currency0);
-                                relevantInputs.tokenOut = Currency.unwrap(currency1);
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(currency0);
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(currency1);
                             } else if (action == Actions.TAKE_PAIR) {
                                 (Currency currency0, Currency currency1, address recipient) = abi.decode(paramsAtIndex, (Currency, Currency, address));
-                                relevantInputs.token0 = Currency.unwrap(currency0);
-                                relevantInputs.tokenOut = Currency.unwrap(currency1);
-                                relevantInputs.recipient = recipient;
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(currency0);
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(currency1);
+                                relevantInputs.recipients[_recipientsCount++] = recipient;
                             } else if (action == Actions.SETTLE) {
                                 (Currency currency, /*uint256 amount*/, /*bool payerIsUser*/) = abi.decode(paramsAtIndex, (Currency, uint256, bool));
-                                //_settle(currency, _mapPayer(payerIsUser), _mapSettleAmount(amount, currency));
-                                relevantInputs.token0 = Currency.unwrap(currency);
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(currency);
                             } else if (action == Actions.TAKE) {
                                 (Currency currency, address recipient, /*uint256 amount*/) = abi.decode(paramsAtIndex, (Currency, address, uint256));
-                                //_take(currency, _mapRecipient(recipient), _mapTakeAmount(amount, currency));
-                                relevantInputs.token0 = Currency.unwrap(currency);
-                                relevantInputs.recipient = recipient;
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(currency);
+                                relevantInputs.recipients[_recipientsCount++] = recipient;
                             } else if (action == Actions.CLOSE_CURRENCY) {
                                 // TODO: in these methods, we should check if simply return to skip checks if possible
                                 Currency currency = abi.decode(paramsAtIndex, (Currency));
-                                //_close(currency);
-                                relevantInputs.token0 = Currency.unwrap(currency);
-                                //return relevantInputs;
+                                relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(currency);
                             } else if (action == Actions.CLEAR_OR_TAKE) {
                                 (Currency currency, /*uint256 amountMax*/) = abi.decode(paramsAtIndex, (Currency, uint256));
-                                relevantInputs.tokenOut = Currency.unwrap(currency);
-                                //_clearOrTake(currency, amountMax);
-                                //return relevantInputs;
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(currency);
                             } else if (action == Actions.SWEEP) {
                                 (Currency currency, address to) = abi.decode(paramsAtIndex, (Currency, address));
-                                //_sweep(currency, _mapRecipient(to));
-                                relevantInputs.tokenOut = Currency.unwrap(currency);
-                                relevantInputs.recipient = to;
+                                relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(currency);
+                                relevantInputs.recipients[_recipientsCount++] = to;
                             }
                         }
                     }
+
+                    // all v4 swap actions are forwarded
+                    relevantInputs.filteredInput = inputs;
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
-                    relevantInputs.recipient = SKIP_FLAG;
+                    // skip this command
                 } else if (command == Commands.V3_POSITION_MANAGER_CALL) {
                     // v3 calls are used to migrate liquidity only, no further actions or assertions are necessary. Migration supported methods are:
                     //  decreaseLiquidity, collect, burn
+                    relevantInputs.filteredInput = inputs;
                 } else if (command == Commands.V4_POSITION_MANAGER_CALL) {
+                    // TODO: we should store filteredActions in memory, re-encode the good ones and return them for execution
                     // should only call modifyLiquidities() to mint
                     // do not permit or approve this contract over a v4 position or someone could use this command to decrease, burn, or transfer your position
                     (bytes memory actions, bytes[] memory params) = abi.decode(inputs, (bytes, bytes[]));
@@ -278,30 +282,43 @@ abstract contract AUniswapDecoder {
                     uint256 numActions = actions.length;
                     assert(numActions == params.length);
 
+                    bytes1[] memory filteredActions = new bytes1[](numActions);
+                    bytes[] memory filteredParams = new bytes[](numActions);
+                    uint256 filteredActionIndex = 0;
+
                     for (uint256 actionIndex = 0; actionIndex < numActions; actionIndex++) {
                         uint256 action = uint8(actions[actionIndex]);
                         bytes memory paramsAtIndex = params[actionIndex];
 
-                        // TODO: verify liquidity position owner is always sender in v4
+                        // TODO: must assert liquidity position owner is always sender in v4
                         if (action == Actions.INCREASE_LIQUIDITY) {
                             (uint256 tokenId, /*uint256 liquidity*/, /*uint128 amount0Max*/, /*uint128 amount1Max*/, /*bytes memory hookData*/) =
                                 abi.decode(paramsAtIndex, (uint256, uint256, uint128, uint128, bytes));
                             (PoolKey memory poolKey, /*PositionInfo*/) = IPositionManager(positionManager()).getPoolAndPositionInfo(tokenId);
                             // TODO: return owner as recipient if stored in PositionInfo
-                            // TODO: we should verify that tokens are whitelisted as well
-                            relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
-                            relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                            relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(poolKey.currency0);
+                            relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(poolKey.currency0);
+                            relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(poolKey.currency1);
+                            relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(poolKey.currency1);
+                            filteredActions[filteredActionIndex] = bytes1(uint8(action));
+                            filteredParams[filteredActionIndex] = paramsAtIndex;
+                            filteredActionIndex++;
                         // TODO: the following method is not implemented in the deployed uni package, but it is in uni universal dev
                         //} else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
                         //    (uint256 tokenId, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
-                        //        abi.decode(paramsAtIndex, (uint256, uint128, uint128, bytes));
+                        //    abi.decode(paramsAtIndex, (uint256, uint128, uint128, bytes));
                         //    (PoolKey memory poolKey, /*PositionInfo*/) = IPositionManager(positionManager()).getPoolAndPositionInfo(tokenId);
                         //    // TODO: return owner as recipient if stored in PositionInfo
                         //    relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
                         //    relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
+                        //    filteredActions[filteredActionIndex] = bytes1(uint8(action));
+                        //    filteredParams[filteredActionIndex] = paramsAtIndex;
+                        //    filteredActionIndex++;
                         } else if (action == Actions.DECREASE_LIQUIDITY) {
-                            relevantInputs.recipient = SKIP_FLAG;
+                            // skip this command (not yet implemented in uniswap v4)
                         } else if (action == Actions.MINT_POSITION) {
+                            // TODO: with mint and increase we might not need to require tokens out whitelisted, but must ensure using a rogue
+                            //  token as input does not result in side effects, i.e. reentrancies, attacks, ...
                             (
                                 PoolKey memory poolKey,
                                 /*int24 tickLower*/,
@@ -312,13 +329,35 @@ abstract contract AUniswapDecoder {
                                 address owner,
                                 /*bytes memory hookData*/
                             ) = abi.decode(paramsAtIndex, (PoolKey, int24, int24, uint256, uint128, uint128, address, bytes));
-                            relevantInputs.token0 = Currency.unwrap(poolKey.currency0);
-                            relevantInputs.token1 = Currency.unwrap(poolKey.currency1);
-                            relevantInputs.recipient = owner;
+                            relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(poolKey.currency0);
+                            relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(poolKey.currency0);
+                            relevantInputs.tokensIn[_tokensInCount++] = Currency.unwrap(poolKey.currency1);
+                            relevantInputs.tokensOut[_tokensOutCount++] = Currency.unwrap(poolKey.currency1);
+                            relevantInputs.recipients[_recipientsCount++] = owner;
+                            filteredActions[filteredActionIndex] = bytes1(uint8(action));
+                            filteredParams[filteredActionIndex] = paramsAtIndex;
+                            filteredActionIndex++;
                         } else if (action == Actions.BURN_POSITION) {
-                            return relevantInputs;
+                            // skip this action (not yet implemented in uniswap v4)
                         }
                     }
+
+                    // TODO: we should adjust arrays' length for completeness
+                    // Adjust array lengths
+                    //assembly {
+                    //    mstore(relevantInputs.tokensIn, tokensInCount)
+                    //    mstore(relevantInputs.tokensOut, tokensOutCount)
+                    //    mstore(relevantInputs.recipients, recipientsCount)
+                    //    mstore(filteredActions, filteredActionIndex)
+                    //}
+
+                    // Truncate filteredParams
+                    bytes[] memory actualFilteredParams = new bytes[](filteredActionIndex);
+                    for (uint256 i = 0; i < filteredActionIndex; i++) {
+                        actualFilteredParams[i] = filteredParams[i];
+                    }
+
+                    relevantInputs.filteredInput = abi.encodePacked(abi.encodePacked(filteredActions), abi.encode(filteredParams));
                 } else {
                     // placeholder area for commands 0x13-0x20
                     revert InvalidCommandType(command);
@@ -326,7 +365,15 @@ abstract contract AUniswapDecoder {
             }
         } else {
             // 0x21 <= command
-            // we skip Commands.EXECUTE_SUB_PLAN here, as it is already handled in AUniswapDecoder
+            if (command == Commands.EXECUTE_SUB_PLAN) {
+                (bytes memory subCommands, bytes[] memory subInputs) = abi.decode(inputs, (bytes, bytes[]));
+
+                try IAUniswapRouter(address(this)).execute(subCommands, subInputs) returns (bytes memory) {
+                    // we do not return input, as they will be handled by the reentrant call
+                } catch Error(string memory reason) {
+                    revert(reason);
+                }
+            }
         }
     }
 }
