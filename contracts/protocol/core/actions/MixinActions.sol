@@ -9,6 +9,7 @@ abstract contract MixinActions is MixinStorage {
      * MODIFIERS
      */
     /// @notice Functions with this modifer cannot be reentered. The mutex will be locked before function execution and unlocked after.
+    // TODO: use transient modifier
     modifier nonReentrant() {
         // Ensure mutex is unlocked
         Pool storage pool = pool();
@@ -48,9 +49,14 @@ abstract contract MixinActions is MixinStorage {
             _safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
+        // update stored pool value
+        uint256 unitaryValue = _updateNav();
+
+        // TODO: spread could be nil if user is only holder, also markup could be  minted to pool operator
+        // if helped with mitigating attack vectors, like unitary value inflation
         uint256 markup = (amountIn * _getSpread()) / _SPREAD_BASE;
         amountIn -= markup;
-        uint256 mintedAmount = (amountIn * 10**decimals()) / _getUnitaryValue();
+        uint256 mintedAmount = (amountIn * 10**decimals()) / unitaryValue;
         require(mintedAmount > amountOutMin, "POOL_MINT_OUTPUT_AMOUNT_ERROR");
         poolTokens().totalSupply += mintedAmount;
 
@@ -65,13 +71,18 @@ abstract contract MixinActions is MixinStorage {
         require(userAccount.userBalance >= amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
         require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
 
+        // update stored pool value
+        uint256 unitaryValue = _updateNav();
+
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn);
         poolTokens().totalSupply -= burntAmount;
 
+        // TODO: spread should be null if user owns all of total supply, i.e. only holder
         uint256 markup = (burntAmount * _getSpread()) / _SPREAD_BASE;
         burntAmount -= markup;
-        netRevenue = (burntAmount * _getUnitaryValue()) / 10**decimals();
+        // TODO: verify cases of possible underflow for small nav value
+        netRevenue = (burntAmount * unitaryValue) / 10**decimals();
         require(netRevenue >= amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
 
         if (pool().baseToken == address(0)) {
@@ -79,6 +90,15 @@ abstract contract MixinActions is MixinStorage {
         } else {
             _safeTransfer(msg.sender, netRevenue);
         }
+    }
+
+    /// @inheritdoc IRigoblockV3PoolActions
+    function setUnitaryValue() external override {
+        // unitary value can be updated only after first mint
+        require(poolTokens().totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
+
+        poolTokens().unitaryValue = unitaryValue;
+        emit NewNav(msg.sender, address(this), unitaryValue);
     }
 
     /*
@@ -89,13 +109,13 @@ abstract contract MixinActions is MixinStorage {
     /*
      * INTERNAL METHODS
      */
+    function _updateNav() internal virtual returns (uint256 unitaryValue);
+
     function _getFeeCollector() internal view virtual returns (address);
 
     function _getMinPeriod() internal view virtual returns (uint48);
 
     function _getSpread() internal view virtual returns (uint16);
-
-    function _getUnitaryValue() internal view virtual returns (uint256);
 
     /*
      * PRIVATE METHODS

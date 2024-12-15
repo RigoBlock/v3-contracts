@@ -26,6 +26,7 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
+    // TODO: as max is 1 months, we can simply set variable spread and remove this method
     function changeMinPeriod(uint48 minPeriod) external override onlyOwner {
         /// @notice minimum period is always at least 1 to prevent flash txs.
         require(minPeriod >= _MIN_LOCKUP && minPeriod <= _MAX_LOCKUP, "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR");
@@ -34,6 +35,7 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
+    // TODO: check if this method should be deprecated for an automated spread.
     function changeSpread(uint16 newSpread) external override onlyOwner {
         // new spread must always be != 0, otherwise default spread from immutable storage will be returned
         require(newSpread > 0, "POOL_SPREAD_NULL_ERROR");
@@ -43,6 +45,10 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
+    // TODO: we can add storage mapping as canonical whitelist, with a flag for canonical list
+    // TODO: remove ability to set custom kyc provider, as it is not a demanded feature and there is no
+    // guarantee kyc provider will use same interface. We could instead develop a userWhitelist extension
+    // to support known kyc providers in the future
     function setKycProvider(address kycProvider) external override onlyOwner {
         require(_isContract(kycProvider), "POOL_INPUT_NOT_CONTRACT_ERROR");
         poolParams().kycProvider = kycProvider;
@@ -54,28 +60,6 @@ abstract contract MixinOwnerActions is MixinActions {
         require(transactionFee <= _MAX_TRANSACTION_FEE, "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"); //fee cannot be higher than 1%
         poolParams().transactionFee = transactionFee;
         emit NewFee(msg.sender, address(this), transactionFee);
-    }
-
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
-    function setUnitaryValue(uint256 unitaryValue) external override onlyOwner notPriceError(unitaryValue) {
-        // unitary value can be updated only after first mint. we require positive value as would
-        //  return to default value if storage cleared
-        require(poolTokens().totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
-
-        // This will underflow with small decimals tokens at some point, which is ok
-        uint256 minimumLiquidity = ((unitaryValue * totalSupply()) / 10**decimals() / 100) * 3;
-
-        if (pool().baseToken == address(0)) {
-            require(address(this).balance >= minimumLiquidity, "POOL_CURRENCY_BALANCE_TOO_LOW_ERROR");
-        } else {
-            require(
-                IERC20(pool().baseToken).balanceOf(address(this)) >= minimumLiquidity,
-                "POOL_TOKEN_BALANCE_TOO_LOW_ERROR"
-            );
-        }
-
-        poolTokens().unitaryValue = unitaryValue;
-        emit NewNav(msg.sender, address(this), unitaryValue);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions

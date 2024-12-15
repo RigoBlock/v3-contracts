@@ -114,13 +114,30 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return minPeriod != 0 ? minPeriod : _MIN_LOCKUP;
     }
 
+    // TODO: spread should be 100% -> 0% from time0 to time 1 month
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
         return spread != 0 ? spread : _INITIAL_SPREAD;
     }
 
+    // TODO: assert not possible to inflate total supply to manipulate pool price.
     function _getUnitaryValue() internal view override returns (uint256) {
-        uint256 unitaryValue = poolTokens().unitaryValue;
-        return unitaryValue != 0 ? unitaryValue : 10**pool().decimals;
+        uint256 poolValue = _getPoolValue();
+        uint256 totalSupply = totalSupply();
+        uint256 storedValue = poolTokens().unitaryValue;
+
+        // a previously minted pool cannot have storedValue = 0 
+        if (storedValue != 0) {
+            // default scenario
+            if (poolValue != 0 && totalSupply != 0) {
+                return poolValue / totalSupply;
+            // fallback to stored value when value would be null or infinite
+            } else if (poolValue == 0 || totalSupply == 0) {
+                return storedValue;
+            }
+        // return 1 in base token units at first mint
+        } else {
+            return 10**pool().decimals;
+        }
     }
 }
