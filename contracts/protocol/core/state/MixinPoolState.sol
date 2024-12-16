@@ -28,6 +28,23 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
 
+    /// @inheritdoc IRigoblockV3PoolState
+    function getPortfolioComponents() external view override returns (PortfolioComponents memory components) {
+        components.activeTokens = getTrackedTokens();
+        components.activeApplications = getTrackedApplications();
+        components.baseToken = getPool().baseToken;
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function getTrackedTokens() public view override returns (address[] memory) {
+        return tokenRegistry().addressList;
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function getTrackedApplications() public view override returns (address[] memory) {
+        return applicationRegistry().addressList;
+    }
+
     function getUserAccount(address who) external view override returns (UserAccount memory) {
         return accounts().userAccounts[who];
     }
@@ -121,8 +138,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     // TODO: assert not possible to inflate total supply to manipulate pool price.
-    function _getUnitaryValue() internal view override returns (uint256) {
-        uint256 poolValue = _getPoolValue();
+    function _getUnitaryValue(uint256 poolValue) internal view override returns (uint256) {
         uint256 totalSupply = totalSupply();
         uint256 storedValue = poolTokens().unitaryValue;
 

@@ -365,10 +365,12 @@ abstract contract AUniswapDecoder {
         }
     }
 
+    // TODO: this uses tstore, but we might improve the logic with new library
     function _addUnique(bytes32 slot, uint256 length, address target) private {
         AddressesSlot storage addresses = _addressesSlot(slot);
 
-        if (target != ZERO_ADDRESS && !_contains(addresses, length, target)) {
+        // TODO: verify passing ZERO_ADDRESS as well is ok
+        if (!_contains(addresses, length, target)) { // target != ZERO_ADDRESS &&
             assembly {
                 tstore(add(addresses.slot, length), target)
             }

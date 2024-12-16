@@ -24,16 +24,16 @@ pragma solidity 0.8.28;
 //  General idea is if the component is simple and not requires revisit of logic, implement as library, otherwise
 //  implement as extension.
 contract MixinPoolValue {
-    error InvalidNavUpdate();
+    error BaseTokenBalanceError();
 
-    // TODO: we must return address(0) in owned tokens
     struct PortfolioComponents {
-        address[] ownedTokens;
-        address[] externalApplications;
+        address[] activeTokens;
+        address[] activeApplications;
         address baseToken;
     }
 
     struct TokenBalance {
+        // written to avoid overwriting balance when the same token is returned multiple times
         bool isStored;
         int256 balance;
     }
@@ -43,53 +43,71 @@ contract MixinPoolValue {
         uint256 tokensCount;
     }
 
-    // TODO: verify it is ok to call state internal method, that then calls _getPoolValue in this contract
     function _updateNav() internal override returns (uint256 unitaryValue) {
-        unitaryValue = _getUnitaryValue();
-        require(unitaryValue > 0, InvalidNavUpdate());
+        unitaryValue = _getUnitaryValue(_getPoolValue());
+        // unitary value cannot be nil
+        assert(unitaryValue > 0);
         poolTokens().unitaryValue = unitaryValue;
         emit NewNav(msg.sender, address(this), unitaryValue);
     }
 
+    /// @dev Assumes the stored list contain unique elements
     function _getPoolValue() internal /*override*/ returns (uint256 poolValue) {
-        // TODO: verify if base token should be stored in ownedTokens or not, since we already store it in state
-        // we could simply return it, and not add to list when swapping.
-        // TODO: we could use state instead of calling self to save gas on runtime
+        // this is called just once, so gas overhead of self calling is acceptable
         PortfolioComponents memory components = IRigoblockV3Pool(address(this)).getPortfolioComponents();
         TokenBalances tokenBalances;
 
-        for (uint256 i = 0; i < components.ownedTokens.length; i++) {
-            try IERC20(components.ownedTokens[i]).balanceOf(address(this)) returns (uint256 balance) {
-                // skip nil values (1 could be used to avoid clearing storage)
-                if (balance > 1) {
-                    tokenBalances.balances[components.ownedTokens[i]].balance = int256(balance);
-                    tokenBalances.balances[components.ownedTokens[i]].isStored = true;
-                    tokenBalances.tokensCount++;
-                }
-            } catch {
-                // store chain's base currency only once
-                if (components.ownedTokens[i] == address(0) && !tokenBalances.balances[components.ownedTokens[i]].isStored) {
-                    tokenBalances.balances[components.ownedTokens[i]].balance = address(this).balance;
-                    tokenBalances.balances[components.ownedTokens[i]].isStored = true;
-                    tokenBalances.tokensCount++;
+        // TODO: base token could be ETH, must correctly handle
+        // also TODO: ETH is not being stored in token list, and we have to check whether a zero address mapping works
+        // retrieve base token balance, most likely not nil.
+        try IERC20(components.baseToken).balanceOf(address(this)) returns (uint256 _balance) {
+            if (_balance > 1) {
+                tokenBalances.balances[components.activeTokens[i]].balance = int256(balance);
+                tokenBalances.balances[components.activeTokens[i]].isStored = true;
+                tokenBalances.tokensCount++;
+            }
+        } catch {
+            // a critical base token balance retrieval error will prevent mint/burn ops
+            revert BaseTokenBalanceError();
+        }
+
+
+        // base token is not stored in activeTokens slot, as already stored in baseToken slot
+        for (uint256 i = 0; i < components.activeTokens.length; i++) {
+            // this condition should always be true, but a double counting would result in wrong mint/burn values
+            if (!tokenBalances.balances[components.activeTokens[i]].isStored) {
+                uint256 balance;
+                if (components.activeTokens[i] == address(0)) {
+                    balance = address(this).balance;
+                } else {
+                    try IERC20(components.activeTokens[i]).balanceOf(address(this)) returns (uint256 _balance) {
+                        balance = _balance;
+                    } catch {
+                        // do not stop aum calculation in case of chain's base currency or rogue token
+                        continue;
+                    }
                 }
 
-                // do not stop aum calculation in case of chain's base currency or rogue token
-                continue;
+                if (balance > 1) {
+                    tokenBalances.balances[components.activeTokens[i]].balance = int256(balance);
+                    tokenBalances.balances[components.activeTokens[i]].isStored = true;
+                    tokenBalances.tokensCount++;
+                }
             }
         }
 
-        // TODO: when a position returns tokens, we must ensure they are added to stored tokens list,
-        // otherwise calculation will be wrong.
-        if (components.externalApplications.length > 0) {
-            for (i = 0; i < components.externalApplications.length; i++) {
+        if (components.activeApplications.length > 0) {
+            for (i = 0; i < components.activeApplications.length; i++) {
                 // do not stop aum calculation in case of application adapter failure
                 // only 1 adapter for all external applications, to prevent selector clashing. If want to use
                 // multiple adapters, will have to route to the correct extension from the general extension,
                 // or we should call the application's adapter directly (though less desirable to call directly)
                 try IAExternalApplication(address(this)).getUnderlyingTokens(
-                    components.externalApplications[i]
+                    components.activeApplications[i]
                 ) returns (address[] memory tokens, int256[] memory amounts) {
+                    
+                    // position balances can be negative or positive, an edge case is if nil positions are not
+                    // pruned, which is explicitly handled later
                     for (uint j = 0; j < tokens.length; j++) {
                         tokenBalances.balances[tokens[j]].balance += amounts[j];
 
@@ -109,30 +127,28 @@ contract MixinPoolValue {
 
         for (uint i = 0; i < tokenBalances.tokensCount; i++) {
             tokensValue += _getBaseTokenValue(
-                tokenBalances[tokenBalances.tokens[i]],
-                tokenBalances[tokenBalances.tokens[i]],
+                tokenBalances[balances.tokens[i]],
+                tokenBalances[balances.tokens[i]],
                 components.baseToken,
             );
         }
 
-        // we never return 0, so updating stored value won't clear storage
+        // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
         return (poolValueInBaseToken > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
+    /// @dev TODO: add Assumes baseToken is never stored in the token list, i.e. never same as token
     function _getBaseTokenValue(address memory token, uint256 memory amount, address baseToken)
         private
         returns (uint256 value)
     {
+        // a pool that has only base token balances will always return correct nav even in case of oracle failure
+        // token can be base token, and a position might return a nil balance
         if (token == baseToken || amount == 0) {
             return amount;
         }
 
-        // TODO: in uniswap, same token can be owned by multiple tokenIds, verify aggregated is returned
-        // TODO: check correct decimals conversion in oracle extension
-        // value = token * amount * price against base token * decimals adjustment
-        // this is the first part we use a moving part, i.e. we can rewrite as library, and implement
-        // price return logic in extension. Meaning the call will have to warm up one less contract,
-        // and the logic that will need upgrade will be in an extension.
+        // perform a staticcall to oracle extension
         try IEOracle(address(this)).getBaseTokenValue(token, amount, baseToken) returns (uint256 value) {
             return value;
         } catch {

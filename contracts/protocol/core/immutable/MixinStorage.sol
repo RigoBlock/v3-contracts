@@ -18,6 +18,7 @@
 */
 
 import "./MixinImmutables.sol";
+import {Set} from "../../../libraries/EnumerableSet.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
 
@@ -30,6 +31,8 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
         assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
         assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
+        assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
+        assert(_APPLICATION_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.application.registry")) - 1));
     }
 
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
@@ -89,6 +92,18 @@ abstract contract MixinStorage is MixinImmutables {
     function poolTokens() internal pure returns (PoolTokens storage s) {
         assembly {
             s.slot := _POOL_TOKENS_SLOT
+        }
+    }
+
+    function tokenRegistry() internal pure returns (AddressSet storage s) {
+        assembly {
+            s.slot := _TOKEN_REGISTRY_SLOT;
+        }
+    }
+
+    function applicationRegistry() internal pure returns (AddressSet storage s) {
+        assembly {
+            s.slot := _APPLICATION_REGISTRY_SLOT;
         }
     }
 }

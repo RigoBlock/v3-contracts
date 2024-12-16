@@ -23,6 +23,7 @@ pragma solidity 0.8.28;
 import "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import "./AUniswapDecoder.sol";
 import "./interfaces/IAUniswapRouter.sol";
+import "../../../libraries/EnumerableSet.sol";
 
 /// @title AUniswapRouter - Allows interactions with the Uniswap universal router contracts.
 /// @notice This contract is used as a bridge between a Rigoblock smart pool contract and the Uniswap universal router.
@@ -30,6 +31,7 @@ import "./interfaces/IAUniswapRouter.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     using CalldataDecoder for bytes;
+    using EnumerableSet for Set;
 
     // assign randomly big storage slots to transient types not supported by solc
     bytes32 internal constant _ALL_COMMANDS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.allCommands")) - 1);
@@ -56,7 +58,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     /// @notice Thrown when attempting to execute commands and an incorrect number of inputs are provided
     error LengthMismatch();
-    error TokenNotWhitelisted(address token);
+    error TokenPriceFeedError(address token);
     error RecipientIsNotSmartPool();
     error ApprovalFailed(address target);
     error TargetIsNotContract();
@@ -201,9 +203,25 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                 tstore(add(tOSlot.slot, i), 0)
             }
 
-            // we allow swapping to base token even if not whitelisted token
+            // TODO: we could alternatively directly read from storage slot
+            Slot storage tokenRegistrySlot = IRigoblockV3PoolState(address(this)).tokenRegistry();
+            // we always allow move to base token, which is never added to the tracked list as already stored in its own slot
             if (tokenOut != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
-                require(IEWhitelist(address(this)).isWhitelistedToken(tokenOut), TokenNotWhitelisted(tokenOut));
+                // first check in the list of owned assets. If a token is already active, no further check is needed
+                if (tokenRegistrySlot.positions[tokenOut] == 0) {
+                    (uint16 cardinality, uint16 targetCardinality) = IEOracle(address(this)).hasPriceFeed(tokenOut);
+                    require(cardinality != 0, TokenPriceFeedError(tokenOut));
+                    addUnique(tokenOut);
+
+                    if (cardinality++ < targetCardinality) {
+                        address oracle = IOracle(IEOracle(address(this))).getOracleAddress();
+
+                        // try increase cardinality by 1 if oracle exists, will revert otherwise
+                        try oracle.increaseCardinalityNext(cardinality) {} catch {
+                            // continue execution if not possible to increase cardinality
+                        }
+                    }
+                }
             }
         }
     }
@@ -213,7 +231,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         address spender,
         uint256 amount
     ) private {
-        require(_isContract(token), TargetIsNotContract());
         try IERC20(token).approve(spender, amount) returns (bool success) {
             assert(success);
         } catch {
@@ -231,6 +248,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
+    // TODO: verify logic is correct when 1. wrapping/unwrapping eth 2. adding to a liquidity position 3. removing from liquidity
+    // adding to liquidity should be ok 
+    // removing liquidity should instead add token, they should enter the tokensOut checks
+    // wrapping should remove, but we could accept if does not (as it's eth)
+    // TODO: check this condition is correct, as otherwise it could fail for eth
     function _safeApproveTokensIn(address spender, uint256 amount) private {
         AddressesSlot storage tSlot = _addressesSlot(_tokensInSlot());
         for (uint i = 0; i < _tokensInCount--; i++) {
@@ -238,11 +260,26 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             assembly {
                 tokenIn := tload(add(tSlot.slot, i))
             }
+
+            // early return for chain currency
+            // TODO: as eth is only one and is used frequently, we could leave it in the list even if sold. TDB.
+            if (tokenIn == ZERO_ADDRESS) {
+                if (address(this).balance <= 1) {
+                    remove(tokenIn);
+                }
+                return;
+            }
+
             _safeApprove(tokenIn, spender, amount);
 
             // assert no approval inflation exists after removing approval
             if (amount == 1) {
                 assert(IERC20(tokenIn).allowance(address(this), uniswapRouter()) == 1);
+                
+                // remove from active tokens if sold entire balance or left 1 to prevent clearing storage
+                if (IERC20(tokenIn).balanceOf(address(this)) <= 1) {
+                    remove(tokenIn);
+                }
                 
                 // we can safely clear slot as we do not need it any more
                 assembly {
@@ -328,9 +365,5 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         if (inputValue > NIL_VALUE) {
             _value += inputValue;
         }
-    }
-
-    function _isContract(address target) private view returns (bool) {
-        return target.code.length > 0;
     }
 }

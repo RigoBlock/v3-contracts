@@ -75,6 +75,18 @@ interface IRigoblockV3PoolState {
         uint48 activation;
     }
 
+    /// @notice Returns a list of external applications held by this contract
+    /// @return
+    function getTrackedTokens() public view override returns (address[] memory) {
+        return tokenRegistry().addressList;
+    }
+
+    /// @notice Returns a list of external applications used by this contract
+    /// @return List of applications addresses
+    function getTrackedApplications() public view override returns (address[] memory) {
+        return applicationRegistry().addressList;
+    }
+
     /// @notice Returns a pool holder's account struct.
     /// @return UserAccount struct.
     function getUserAccount(address _who) external view returns (UserAccount memory);
