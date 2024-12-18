@@ -20,14 +20,14 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 interface IEOracle {
-    /// @notice Returns the token amount converted to base token.
+    /// @notice Returns the token amount converted to a target token.
     /// @param token The address of the token to be converted
     /// @param amount The token amount to be converted
-    /// @param baseToken The address of the base token
-    /// @return value The converted amount in base token
+    /// @param targetToken The address of the target token
+    /// @return value The converted amount in target token
     /// @dev Will first try to convert via crosses with chain currency, fallback to direct cross if not available.
-    /// @dev Assumes token is always different from baseToken. it is the msg.sender's responsibility to verify that.
-    function getBaseTokenValue(address token, uint256 amount, address baseToken)
+    /// @dev Assumes token is always different from targetToken, which is the msg.sender's responsibility to verify.
+    function convertTokenAmount(address token, uint256 amount, address targetToken)
         external
         view
         returns (uint256 value)
@@ -35,4 +35,8 @@ interface IEOracle {
     /// @notice Returns the address of the oracle hook stored in the bytecode
     /// @return oracleAddress The address of the oracle hook
     function getOracleAddress() external view returns (address);
+
+    function hasPriceFeed(address token) external view returns (bool);
+
+    function tryFindCrossRate(token0, token1) external view returns (uint160 sqrtPriceX96);
 }

@@ -136,7 +136,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
         // only execute when finished decoding inputs
         if (_reentrancyDepth == 1) {
-            _assertTokensOutWhitelisted();
+            _assertTokensOutHavePriceFeed();
             _assertRecipientIsThisAddress();
 
             (bytes memory finalCommands, bytes[] memory finalInputs) = _loadFinalCommandsAndInputs();
@@ -191,9 +191,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // TODO: we want just an oracle to exist, but not sure will be launched at v4 release.
-    // we will have to store in a list of owned tokens once done in order to calculate value.
-    function _assertTokensOutWhitelisted() private {
+    // TODO: check rename method
+    function _assertTokensOutHavePriceFeed() private {
         AddressesSlot storage tOSlot = _addressesSlot(_tokensOutSlot());
         for (uint i = 0; i < _tokensOutCount--; i++) {
             address tokenOut;
@@ -203,24 +202,16 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                 tstore(add(tOSlot.slot, i), 0)
             }
 
-            // TODO: we could alternatively directly read from storage slot
+            // TODO: we could alternatively directly read from storage slot. Actually we should because this is an adapter.
             Slot storage tokenRegistrySlot = IRigoblockV3PoolState(address(this)).tokenRegistry();
-            // we always allow move to base token, which is never added to the tracked list as already stored in its own slot
+            // we always allow move to base token, which is never added to the tracked list as already stored in its own slot.
+            // Base token price feed check is performed at pool initialization
             if (tokenOut != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
                 // first check in the list of owned assets. If a token is already active, no further check is needed
                 if (tokenRegistrySlot.positions[tokenOut] == 0) {
-                    (uint16 cardinality, uint16 targetCardinality) = IEOracle(address(this)).hasPriceFeed(tokenOut);
-                    require(cardinality != 0, TokenPriceFeedError(tokenOut));
+                    // a token is tradable if has price feed against chain currency
+                    require(IEOracle(address(this)).hasPriceFeed(tokenOut), TokenPriceFeedError(tokenOut));
                     addUnique(tokenOut);
-
-                    if (cardinality++ < targetCardinality) {
-                        address oracle = IOracle(IEOracle(address(this))).getOracleAddress();
-
-                        // try increase cardinality by 1 if oracle exists, will revert otherwise
-                        try oracle.increaseCardinalityNext(cardinality) {} catch {
-                            // continue execution if not possible to increase cardinality
-                        }
-                    }
                 }
             }
         }

@@ -49,6 +49,8 @@ abstract contract MixinActions is MixinStorage {
             _safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
+        // TODO: verify if we should add base token to active assets, which may save some gas on nav estimate.
+
         // update stored pool value
         uint256 unitaryValue = _updateNav();
 

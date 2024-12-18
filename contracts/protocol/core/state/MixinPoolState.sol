@@ -28,6 +28,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
 
+    // TODO: check if should return tracked applicationsm or if should return in separate method
     /// @inheritdoc IRigoblockV3PoolState
     function getPortfolioComponents() external view override returns (PortfolioComponents memory components) {
         components.activeTokens = getTrackedTokens();
@@ -148,7 +149,8 @@ abstract contract MixinPoolState is MixinOwnerActions {
             if (poolValue != 0 && totalSupply != 0) {
                 return poolValue / totalSupply;
             // fallback to stored value when value would be null or infinite
-            } else if (poolValue == 0 || totalSupply == 0) {
+            // TODO: verify why we did else if (poolValue == 0 || totalSupply == 0)
+            } else {
                 return storedValue;
             }
         // return 1 in base token units at first mint

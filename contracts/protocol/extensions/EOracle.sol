@@ -26,12 +26,15 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
+import {Observation} from "../types/Observation.sol";
 
 contract EOracle is IEOracle {
-    address private immutable _ORACLE_ADDRESS;
+    using TickMath for int24;
+
+    IOracle private immutable _oracle;
 
     constructor(address oracleHookAddress) {
-        _ORACLE_ADDRESS = oracleHookAddress;
+        _oracle = IOracle(oracleHookAddress);
     }
 
     struct PoolSettings {
@@ -44,18 +47,19 @@ contract EOracle is IEOracle {
     }
 
     /// @inheritdoc IEOracle
-    function getBaseTokenValue(address token, uint256 amount, address baseToken)
+    // TODO: as we will use a try statement in the calling method, we could avoid using try/catch statements here to save gas
+    // provided we do not need to return important information
+    function convertTokenAmount(address token, uint256 amount, address targetToken)
         external
         view
         override
         returns (uint256 value)
     {
         PoolSettings memory settings;
-        address oracleAddress = _getOracleAddress();
 
         if (token == address(0)) {
-            settings = _getPoolSettings(address(0), baseToken, oracleAddress);
-            try IOracle(oracleAddress).observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
+            settings = _getPoolSettings(address(0), targetToken, address(_getOracle()));
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(amount, priceX128, 1 << 128); // convert native to token
                 return value;
@@ -64,11 +68,11 @@ contract EOracle is IEOracle {
             }
         }
 
-        if (baseToken == address(0)) {
+        if (targetToken == address(0)) {
             // Convert directly to ETH
-            settings = _getPoolSettings(address(0), token, oracleAddress);
+            settings = _getPoolSettings(address(0), token, address(_getOracle()));
 
-            try IOracle(oracleAddress).observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to ETH
                 return value;
@@ -78,52 +82,109 @@ contract EOracle is IEOracle {
         }
 
         // try and convert token to chain currency
-        settings = _getPoolSettings(address(0), token, oracleAddress);
+        settings = _getPoolSettings(address(0), token, address(_getOracle()));
 
-        try IOracle(oracleAddress).observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
+        try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
             uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
             uint256 ethAmount = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to native
 
-            // try and convert chain currency to base token
-            settings = _getPoolSettings(address(0), baseToken, oracleAddress);
+            // try and convert chain currency to the target token
+            settings = _getPoolSettings(address(0), targetToken, address(_getOracle()));
 
             // try to get first conversion
-            try IOracle(oracleAddress).observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(ethAmount, priceX128, 1 << 128); // convert native to base token
                 return value;
             } catch {
-                return _tryDirectPairConversion(token, amount, baseToken, settings);
+                return value = 0;
             }
         } catch {
-            return _tryDirectPairConversion(token, amount, baseToken, settings);
+            return value = 0;
         }
     }
 
     /// @inheritdoc IEOracle
     function getOracleAddress() external view override returns (address) {
-        return _getOracleAddress();
+        return address(_getOracle());
     }
 
-    function hasPriceFeed(address token) external view returns (uint16 cardinality, uint16 cardinalityNext) {
+    /// @dev This method will return true if the last stored observation has a non nil timestamp
+    // TODO: verify if instead of the boolean we can return the value directly, or the observation so we can use it for deeper
+    // inspections and can skip one check here. Also check if want to check observations[0].timestamp != 0 to save gas
+    function hasPriceFeed(address token) external view returns (bool) {
+        if (token == address(0)) {
+            return true;
+        } else {
+            PoolSettings memory settings;
+            settings = _getPoolSettings(address(0), token, address(_getOracle()));
+
+            try _getOracle().getObservation(settings.key, settings.cardinality)
+                view
+                returns (Oracle.Observation memory observation)
+            {
+                return observation.blockTimestamp != 0;
+            } catch {
+                return false;
+            }
+        }
+    }
+
+    /// @dev Returns the cross rate of a token pair through chain currency rate
+    function tryFindCrossRate(token0, token1) external view returns (uint160 sqrtPriceX96) {
+        // first try to get rate of token to chain currency
+        (uint160 sqrtPriceX96_0) = _tryFindRate(token0);
+
+        // then try to get rate of token to chain currency 
+        (uint160 sqrtPriceX96_1) = _tryFindRate(token1);
+
+        // finally return the cross exchange rate from the two rates
+        sqrtPriceX96 = _calculateSqrtPriceX96FromSqrtPrices(sqrtPriceX96_0, sqrtPriceX96_1);
+    }
+
+    /// @notice Returns positive values if token has price feed against chain currency
+    function _tryFindRate(address token) private view returns (uint160 sqrtPriceX96) {
         PoolSettings memory settings;
-        address oracleAddress = _getOracleAddress();
 
         if (token == address(0)) {
-            settings = _getPoolSettings(address(0), baseToken, oracleAddress);
-            try IOracle(oracleAddress).observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
-                uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
-                value = FullMath.mulDiv(amount, priceX128, 1 << 128); // convert native to token
-                return value;
+            return ONE_X96;
+        } else {
+            settings = _getPoolSettings(address(0), baseToken, address(_getOracle()));
+
+            // get the last stored observation position
+            (uint16 index,,) = _getOracle().getState(settings.key);
+
+            try _getOracle().getObservation(settings.key, index) returns (Observation memory observation) {
+                sqrtPriceX96 = observation.prevTick.getSqrtPriceAtTick();
             } catch {
                 return value = 0; // Oracle failure or no pair available
             }
         }
     }
 
+    function _calculateSqrtPriceX96FromSqrtPrices(uint160 sqrtPriceX96_0, uint160 sqrtPriceX96_1) private pure returns (uint160) {
+        if (sqrtPriceX96_1 == 0) return 0; // Division by zero check
+
+        // Scale sqrtPriceX96_0 down to avoid overflow in division
+        uint256 scaledSqrtPriceX96_0 = uint256(sqrtPriceX96_0) >> 48;
+
+        // Perform division with the scaled value
+        uint256 temp = FullMath.mulDiv(scaledSqrtPriceX96_0, 1 << 144, sqrtPriceX96_1); // (sqrtPriceX96_0 / 2^48) * (2^144 / sqrtPriceX96_1)
+        // before scaling was
+        //uint256 temp = FullMath.mulDiv(sqrtPriceX96_0, 1 << 96, sqrtPriceX96_1); // multiply by 2^96 to convert back to Q64.96 format
+
+        // Check for overflow before casting to uint160
+        if (temp > type(uint160).max) {
+                // 0 is a flag for overflow
+                return 0;
+        }
+
+        return uint160(temp);
+    }
+
     /// @dev Private method to fetch the oracle address
-    function _getOracleAddress() private view returns (address) {
-        return _ORACLE_ADDRESS;
+    function _getOracle() private view returns (IOracle) {
+        return _oracle;
     }
 
     function _getPoolSettings(address token0, address token1, address oracle)
@@ -138,7 +199,7 @@ contract EOracle is IEOracle {
             tickSpacing: TickMath.MAX_TICK_SPACING,
             hooks: IHooks(oracle)
         });
-        IOracle.ObservationState memory state = IOracle(oracle).getState(settings.key);
+        IOracle.ObservationState memory state = _getOracle().getState(settings.key);
         settings.cardinality = state.cardinality;
         settings.secondsAgos = _getSecondsAgos(settings.cardinality);
     }
@@ -164,32 +225,5 @@ contract EOracle is IEOracle {
         secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
         secondsAgos[1] = 0;
         return secondsAgos;
-    }
-
-    function _tryDirectPairConversion(address token, uint256 amount, address baseToken, PoolSettings memory settings) 
-        private 
-        view 
-        returns (uint256 value) 
-    {
-        (address token0, address token1) = uint160(token) < uint160(baseToken)
-            ? (token, baseToken)
-            : (baseToken, token);
-
-        settings = _getPoolSettings(token0, token1, address(settings.key.hooks));
-
-        try IOracle(address(settings.key.hooks)).observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
-            uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
-
-            // Convert the amount based on the price
-            if (token0 == token) {
-                value = FullMath.mulDiv(amount, priceX128, 1 << 128);
-            } else {
-                value = FullMath.mulDiv(amount, 1 << 128, priceX128);
-            }
-            return value;
-        } catch {
-            // return 0 and allow continuation of nav estimate in case of oracle failure
-            return value = 0; // Oracle failure or no pair available
-        }
     }
 }
