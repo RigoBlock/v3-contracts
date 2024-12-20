@@ -32,7 +32,7 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
         assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
         assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
-        assert(_APPLICATION_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.application.registry")) - 1));
+        assert(_APPLICATIONS_SLOT == bytes32(uint256(keccak256("pool.proxy.applications")) - 1));
     }
 
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
@@ -95,15 +95,21 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
+    // todo: check if set naming is correct, as we only define an addresses list and mapping
     function tokenRegistry() internal pure returns (AddressSet storage s) {
         assembly {
             s.slot := _TOKEN_REGISTRY_SLOT;
         }
     }
 
-    function applicationRegistry() internal pure returns (AddressSet storage s) {
+    // active applications are stored as a packed single uint256, without length
+    struct ApplicationsSlot {
+        uint256 packedApplications;
+    }
+
+    function applications() internal pure returns (ApplicationsSlot storage s) {
         assembly {
-            s.slot := _APPLICATION_REGISTRY_SLOT;
+            s.slot := _APPLICATIONS_SLOT;
         }
     }
 }

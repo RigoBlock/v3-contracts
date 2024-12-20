@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
  Copyright 2024 Rigo Intl.
@@ -26,28 +26,21 @@ pragma solidity 0.8.28;
 contract MixinPoolValue {
     error BaseTokenBalanceError();
 
-    struct PortfolioComponents {
+    struct PortfolioTokens {
         address[] activeTokens;
-        // TODO: check remove activeApplications from tuple, even though it's a useful info and a short array
-        address[] activeApplications;
         address baseToken;
     }
 
     struct TokenBalance {
-        // written to avoid overwriting balance when the same token is returned multiple times
+        // flat to avoid overwriting balance should the same token be returned multiple times
         bool isStored;
         int256 balance;
     }
 
-    struct TokenBalances {
-        // TODO: not sure we need this, as the length is stored in the Portfolio components. Probably could add
-        // the mapping to the portfolio components, as one major nested tuple, and write to that when adding tokens
-        mapping(address => TokenBalance) balances;
-    }
-
     function _updateNav() internal override returns (uint256 unitaryValue) {
         unitaryValue = _getUnitaryValue(_getPoolValue());
-        // unitary value cannot be nil
+
+        // unitary value cannot be null
         assert(unitaryValue > 0);
         poolTokens().unitaryValue = unitaryValue;
         emit NewNav(msg.sender, address(this), unitaryValue);
@@ -56,16 +49,15 @@ contract MixinPoolValue {
     /// @dev Assumes the stored list contain unique elements
     function _getPoolValue() internal /*override*/ returns (uint256 poolValue) {
         // this is called just once, so gas overhead of self calling is acceptable
-        PortfolioComponents memory components = IRigoblockV3Pool(address(this)).getPortfolioComponents();
-        TokenBalances tokenBalances;
-
-        // append base token to uniform balance query
-        components.activeTokens.push(components.baseToken);
+        // TODO: as this is calling self, not an extension, we could simply call the method directly
+        // check where we define in the inheritance architecture so can inherit state and read directly
+        PortfolioTokens memory components = IRigoblockV3Pool(address(this)).getPortfolioTokens();
 
         // base token is not stored in activeTokens slot, as already stored in baseToken slot
+        // TODO: token must be stored in the active tokens at mint or burn liquidity, removed at burn or sell or add liquidity
         for (uint256 i = 0; i < components.activeTokens.length; i++) {
             // this condition should always be true, but a double counting would result in wrong mint/burn values
-            if (!tokenBalances.balances[components.activeTokens[i]].isStored) {
+            if (!_isBalanceStored(components.activeTokens[i])) {
                 uint256 balance;
                 if (components.activeTokens[i] == address(0)) {
                     balance = address(this).balance;
@@ -79,42 +71,74 @@ contract MixinPoolValue {
                 }
 
                 if (balance > 1) {
-                    tokenBalances.balances[components.activeTokens[i]].balance = int256(balance);
-                    tokenBalances.balances[components.activeTokens[i]].isStored = true;
+                    _storeBalance(components.activeTokens[i], int256(balance), true);
                 }
             }
         }
 
         struct AppTokenBalance {
             address token;
-            in128 amount;
+            int128 amount;
         }
 
-        try IEApps(address(this)).getAppTokens() returns (AppTokenBalance[] memory balances) {
+        // store counter of new unique tokens
+        uint256 additionalUniqueTokensCount = 0;
+
+        // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
+        try IEApps(address(this)).getAppTokenBalances(applications().packedApplications) returns (AppTokenBalance[] memory balances) {
             // position balances can be negative or positive, an edge case is if nil positions are not
             // pruned, which is explicitly handled later
             for (uint j = 0; j < balances.length; j++) {
-                tokenBalances.balances[balances[j].token].balance += balances[j].amount;
+                // Always add or update the balance from positions
+                int256 newBalance = _getBalance(balances[j].token) + int256(balances[j].amount);
+                _storeBalance(balances[j].token, newBalance, true);
 
-                // increase tokens count only the first time a balance is stored in memory
-                if (!tokenBalances.balances[balances[j].token].isStored) {
-                    tokenBalances.balances[balances[j].token].isStored = true;
-                    components.activeTokens.push(balances[j].token);
+                // store the token in a new address mapping. Address could be null so we use an additional flag.
+                if (!_isTokenStored(balances[j].token)) {
+                    _storeToken(balances[j].token, true);
+                    _storeNewTokenPosition(j, balances[j].token);
+
+                    // increase tokens count only the first time a tokens is seen
+                    additionalUniqueTokensCount++;
                 }
             }
-        } catch {
-            continue;
+        } catch Error(string memory reason) {
+            // we prevent returning pool value when one of the tracked applications fails
+            revert reason;
+        }
+
+        // Create array with the total unique tokens size
+        address[] memory uniqueTokens = new address[](components.activeTokens.length + additionalUniqueTokensCount);
+
+        // Fill uniqueTokens with active tokens
+        for (uint256 i = 0; i < components.activeTokens.length; i++) {
+            uniqueTokens[i] = components.activeTokens[i];
+        }
+
+        // Add new tokens from positions
+        uint256 index = components.activeTokens.length;
+        for (uint256 j = 0; j < additionalUniqueTokensCount; j++) {
+            uniqueTokens[index++] = _getTokenFromNewTokenPosition(j);
         }
 
         int256 poolValueInBaseToken;
 
-        // TODO: not sure this will work, as we need to use the tokens array to get the address at index
-        for (uint i = 0; i < components.activeTokens.length; i++) {
-            tokensValue += _getBaseTokenValue(
-                components.activeTokens[i],
-                tokenBalances[components.activeTokens[i]],
-                components.baseToken,
-            );
+        for (uint256 i = 0; i < uniqueTokens.length; i++) {
+            int256 balance = _getBalance(uniqueTokens[i]);
+
+            if (balance < 0) {
+                poolValueInBaseToken -= int256(_getBaseTokenValue(
+                    uniqueTokens[i],
+                    uint256(-balance),
+                    components.baseToken,
+                ));
+            } else {
+                poolValueInBaseToken += int256(_getBaseTokenValue(
+                    uniqueTokens[i],
+                    uint256(balance),
+                    components.baseToken
+                ));
+            }
         }
 
         // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
@@ -122,7 +146,7 @@ contract MixinPoolValue {
     }
 
     /// @dev Base token is always passed once in the loop
-    function _getBaseTokenValue(address memory token, uint256 memory amount, address baseToken)
+    function _getBaseTokenValue(address token, uint256 amount, address baseToken)
         private
         returns (uint256 value)
     {
@@ -136,6 +160,48 @@ contract MixinPoolValue {
             return value;
         } catch {
             return 0;
+        }
+    }
+
+    // Helper functions for tstore operations
+    // TODO: can move to a library
+    function _storeBalance(address token, int256 balance, bool isStored) private {
+        bytes32 key = keccak256(abi.encodePacked("tokenBalance", token));
+        uint256 packed = (uint256(balance) & (2**255 - 1)) | (isStored ? 1 : 0);
+        assembly {
+            tstore(key, packed)
+        }
+    }
+
+    function _getBalance(address token) private view returns (int256 balance) {
+        bytes32 key = keccak256(abi.encodePacked("tokenBalance", token));
+        assembly {
+            balance := and(tload(key), 2**255 - 1)
+        }
+        return int256(balance);
+    }
+
+    function _isBalanceStored(address token) private view returns (bool) {
+        bytes32 key = keccak256(abi.encodePacked("tokenBalance", token));
+        assembly {
+            let packed := tload(key)
+            return and(packed, 1) // Check if the least significant bit is set
+        }
+    }
+
+    // Helper function to store the position of a new token
+    function _storeNewTokenPosition(uint256 position, address token) private {
+        bytes32 key = keccak256(abi.encodePacked("newTokenPosition", position));
+        assembly {
+            tstore(key, token)
+        }
+    }
+
+    // Helper function to get the token address from its stored position
+    function _getTokenFromNewTokenPosition(uint256 position) private view returns (address) {
+        bytes32 key = keccak256(abi.encodePacked("newTokenPosition", position));
+        assembly {
+            return tload(key)
         }
     }
 }

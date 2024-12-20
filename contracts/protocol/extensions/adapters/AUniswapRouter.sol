@@ -191,7 +191,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // TODO: check rename method
     function _assertTokensOutHavePriceFeed() private {
         AddressesSlot storage tOSlot = _addressesSlot(_tokensOutSlot());
         for (uint i = 0; i < _tokensOutCount--; i++) {
@@ -209,9 +208,14 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             if (tokenOut != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
                 // first check in the list of owned assets. If a token is already active, no further check is needed
                 if (tokenRegistrySlot.positions[tokenOut] == 0) {
+                    // TODO: check if we want to return last obs timestamp from eoracle and assert non null, to save gas
                     // a token is tradable if has price feed against chain currency
                     require(IEOracle(address(this)).hasPriceFeed(tokenOut), TokenPriceFeedError(tokenOut));
-                    addUnique(tokenOut);
+                    // TODO: complete the implementation of `addUnique` in enumerable set and assert list is less than 1000 tokens
+                    // max num elements assertion should be performed in library that uses EnumerableSet but implements methods
+                    // for the active lists, even though we want to abstract that as we do not want to change core when adding new
+                    // applications or storage slots
+                    _activeTokensSlot().addUnique(tokenOut);
                 }
             }
         }

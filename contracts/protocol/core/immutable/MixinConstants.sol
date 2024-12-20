@@ -37,7 +37,7 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
 
-    bytes32 internal constant _APPLICATION_REGISTRY_SLOT = 0x2c194a1717c0c99dd43c542078ff1d3311d53b31aa71d803dc6ae0c6a31be793;
+    bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
 
     uint16 internal constant _FEE_BASE = 10000;
 

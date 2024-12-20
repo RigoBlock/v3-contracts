@@ -38,5 +38,5 @@ interface IEOracle {
 
     function hasPriceFeed(address token) external view returns (bool);
 
-    function tryFindCrossRate(token0, token1) external view returns (uint160 sqrtPriceX96);
+    function getCrossSqrtPriceX96(token0, token1) external view returns (uint160 sqrtPriceX96);
 }

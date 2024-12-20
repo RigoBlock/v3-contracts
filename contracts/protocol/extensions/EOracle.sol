@@ -131,7 +131,7 @@ contract EOracle is IEOracle {
     }
 
     /// @dev Returns the cross rate of a token pair through chain currency rate
-    function tryFindCrossRate(token0, token1) external view returns (uint160 sqrtPriceX96) {
+    function getCrossSqrtPriceX96(token0, token1) external view returns (uint160 sqrtPriceX96) {
         // first try to get rate of token to chain currency
         (uint160 sqrtPriceX96_0) = _tryFindRate(token0);
 

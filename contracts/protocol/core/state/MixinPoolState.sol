@@ -30,9 +30,8 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     // TODO: check if should return tracked applicationsm or if should return in separate method
     /// @inheritdoc IRigoblockV3PoolState
-    function getPortfolioComponents() external view override returns (PortfolioComponents memory components) {
+    function getPortfolioTokens() external view override returns (PortfolioTokens memory tokens) {
         components.activeTokens = getTrackedTokens();
-        components.activeApplications = getTrackedApplications();
         components.baseToken = getPool().baseToken;
     }
 
@@ -43,7 +42,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolState
     function getTrackedApplications() public view override returns (address[] memory) {
-        return applicationRegistry().addressList;
+        return applicationRegistry().packedApplications;
     }
 
     function getUserAccount(address who) external view override returns (UserAccount memory) {
