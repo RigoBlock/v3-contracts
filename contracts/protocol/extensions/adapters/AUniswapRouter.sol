@@ -42,6 +42,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     uint256 private constant NIL_VALUE = 0;
 
+    // TODO: check store as inintiate instances
     address private immutable _uniswapRouter;
     address private immutable _positionManager;
 
@@ -166,6 +167,17 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     /// @inheritdoc IAUniswapRouter
     function uniswapRouter() public view override returns (address universalRouter) {
         return _uniswapRouter;
+    }
+
+    // active applications are stored as a packed single uint256, without length
+    struct TokenIdSlot {
+        uint256[] tokenIds;
+    }
+
+    function uniV4TokenIds() internal pure returns (ApplicationsSlot storage s) {
+        assembly {
+            s.slot := _APPLICATIONS_SLOT;
+        }
     }
 
     function _tokensInSlot() internal pure override returns (bytes32) { return _TOKENS_IN_SLOT; }

@@ -300,6 +300,8 @@ abstract contract AUniswapDecoder {
                             filteredActions[filteredActionIndex] = bytes1(uint8(action));
                             filteredParams[filteredActionIndex] = paramsAtIndex;
                             filteredActionIndex++;
+                        // TODO: this method allows using deltas to swap instead of transferring erc20s. If we support this, we must
+                        // also make sure ERC6909 balances are correctly returned by the EApps contract
                         // TODO: the following method is not implemented in the deployed uni package, but it is in uni universal dev
                         //} else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
                         //    (uint256 tokenId, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
@@ -334,6 +336,13 @@ abstract contract AUniswapDecoder {
                             filteredActions[filteredActionIndex] = bytes1(uint8(action));
                             filteredParams[filteredActionIndex] = paramsAtIndex;
                             filteredActionIndex++;
+
+                            // TODO: correctly write to storage
+                            // store liquidity position id
+                            uint256[] storage tokenIds = uniV4TokenIdsSlot().tokenIds;
+                            require(tokenIds.length < 255, UniV4PositionsLimitExceeded());
+                            uint256 nextTokenId = IPositionManager(positionManager()).nextTokenId();
+                            tokenIds.push(nextTokenId);
                         } else if (action == Actions.BURN_POSITION) {
                             // skip this action (not yet implemented in uniswap v4)
                         }
@@ -368,6 +377,7 @@ abstract contract AUniswapDecoder {
     // TODO: this uses tstore, but we might improve the logic with new library
     function _addUnique(bytes32 slot, uint256 length, address target) private {
         AddressesSlot storage addresses = _addressesSlot(slot);
+        require(addresses.)
 
         // TODO: verify passing ZERO_ADDRESS as well is ok
         if (!_contains(addresses, length, target)) { // target != ZERO_ADDRESS &&

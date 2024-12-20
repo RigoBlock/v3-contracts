@@ -42,6 +42,8 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolState
     function getTrackedApplications() public view override returns (address[] memory) {
+        // TODO: should return packedApplications if some feature flag is initialized (we can use a total feature flag)
+        // and return a uint that includes grg staking and uni v3 apps by default
         return applicationRegistry().packedApplications;
     }
 
