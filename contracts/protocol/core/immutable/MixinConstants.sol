@@ -41,9 +41,7 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     uint16 internal constant _FEE_BASE = 10000;
 
-    uint16 internal constant _INITIAL_SPREAD = 500; // +-5%, in basis points
-
-    uint16 internal constant _MAX_SPREAD = 1000; // +-10%, in basis points
+    uint16 internal constant _MAX_SPREAD = 500; // +-5%, in basis points
 
     uint16 internal constant _MAX_TRANSACTION_FEE = 100; // maximum 1%
 

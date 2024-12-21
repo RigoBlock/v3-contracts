@@ -51,7 +51,8 @@ contract MixinPoolValue {
         // this is called just once, so gas overhead of self calling is acceptable
         // TODO: as this is calling self, not an extension, we could simply call the method directly
         // check where we define in the inheritance architecture so can inherit state and read directly
-        PortfolioTokens memory components = IRigoblockV3Pool(address(this)).getPortfolioTokens();
+        //PortfolioTokens memory components = IRigoblockV3Pool(address(this)).getPortfolioTokens();
+        PortfolioTokens memory components = getPortfolioTokens();
 
         // base token is not stored in activeTokens slot, as already stored in baseToken slot
         // TODO: token must be stored in the active tokens at mint or burn liquidity, removed at burn or sell or add liquidity
@@ -76,30 +77,37 @@ contract MixinPoolValue {
             }
         }
 
+        // TODO: move to types
         struct AppTokenBalance {
             address token;
             int128 amount;
+        }
+
+        struct App {
+            AppTokenBalance[] balances;
+            uint256 appType; // converted to uint to facilitate supporting new apps
         }
 
         // store counter of new unique tokens
         uint256 additionalUniqueTokensCount = 0;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
-        try IEApps(address(this)).getAppTokenBalances(applications().packedApplications) returns (AppTokenBalance[] memory balances) {
-            // position balances can be negative or positive, an edge case is if nil positions are not
-            // pruned, which is explicitly handled later
-            for (uint j = 0; j < balances.length; j++) {
-                // Always add or update the balance from positions
-                int256 newBalance = _getBalance(balances[j].token) + int256(balances[j].amount);
-                _storeBalance(balances[j].token, newBalance, true);
+        try IEApps(address(this)).getAppTokenBalances(applications().packedApplications) returns (App[] memory apps) {
+            // position balances can be negative, positive, or nil (handled explicitly later)
+            for (i = 0; i < apps.length; i++) {
+                for (uint j = 0; j < apps[i].balances.length; j++) {
+                    // Always add or update the balance from positions
+                    int256 newBalance = _getBalance(apps[i].balances[j].token) + int256(apps[i].balances[j].amount);
+                    _storeBalance(apps[i].balances[j].token, newBalance, true);
 
-                // store the token in a new address mapping. Address could be null so we use an additional flag.
-                if (!_isTokenStored(balances[j].token)) {
-                    _storeToken(balances[j].token, true);
-                    _storeNewTokenPosition(j, balances[j].token);
+                    // store the token in a new address mapping. Address could be null so we use an additional flag.
+                    if (!_isTokenStored(apps[i].balances[j].token)) {
+                        _storeToken(apps[i].balances[j].token, true);
+                        _storeNewTokenPosition(j, apps[i].balances[j].token);
 
-                    // increase tokens count only the first time a tokens is seen
-                    additionalUniqueTokensCount++;
+                        // increase tokens count only the first time a tokens is seen
+                        additionalUniqueTokensCount++;
+                    }
                 }
             }
         } catch Error(string memory reason) {

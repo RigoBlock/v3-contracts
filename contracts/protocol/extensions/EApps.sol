@@ -38,19 +38,19 @@ pragma solidity 0.8.28;
 contract EApps {
     using ApplicationsLib for uint256;
     using StateLibrary for IPoolManager;
-    
-    error UnsupportedApplicationType(Application appType);
+
+    error UnknownApplication(Application appType);
 
     IGrgProxy private immutable _grgStakingProxy;
-    IUniv3Pm private immutable _uniV3Pm;
-    IUniv4Pm private immutable _uniV4Pm;
-    
-    bytes32 private immutable _uniV4PmPositionsSlot;
-    
+    IUniv3Pm private immutable _uniV3NPM;
+    IUniv4Pm private immutable _uniV4Posm;
+
+    bytes32 private immutable _uniV4PosmPositionsSlot;
+
     constructor(address grgStakingProxy, address univ3pm, address univ4pm) {
         _grgStakingProxy = IGrgProxy(grgStakingProxy);
-        _uniV3Pm = IUniv3Pm(univ3pm);
-        _uniV4Pm = IUniv4Pm(univ4pm);
+        _uniV3NPM = IUniv3Pm(univ3pm);
+        _uniV4Posm = IUniv4Pm(univ4pm);
     }
 
     /// @notice Supported Applications.
@@ -74,12 +74,14 @@ contract EApps {
         int128 amount;
     }
 
-    // TODO: check if want to use transient storage for easier arrays management. Consider memory will be more
-    // gas efficient in this context of big potentially big arrays
-    // TODO: could we add weth if not a tracked token?
-    function getAppTokenBalances(uint256 packedApplications) external view returns (AppTokenBalance[] memory) {
-        uint256 activeAppCount = 0;
-        
+    struct App {
+        AppTokenBalance[] balances;
+        uint256 appType; // converted to uint to facilitate supporting new apps
+    }
+
+    function getAppTokenBalances(uint256 packedApplications) external view returns (App[] memory) {
+        uint256 activeAppCount;
+
         // Count how many applications are active
         for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
             if (packedApplications.isActiveApplication(i)) {
@@ -87,45 +89,36 @@ contract EApps {
             }
         }
 
-        AppTokenBalance[][] memory nestedBalances = new AppTokenBalance[][](activeAppCount);
+        App[] memory nestedBalances = new App[][](activeAppCount);
         uint256 activeAppIndex = 0;
 
         for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
             if (packedApplications.isActiveApplication(i)) {
-                nestedBalances[activeAppIndex++] = _handleApplication(Applications(i), address(this));
+                nestedBalances[activeAppIndex++] = (_handleApplication(Applications(i), address(this)), Applications(i));
+            } else {
+                // grg staking and univ3 liquidity are pre-existing applications that do not require an upgrade, so they won't be
+                // stored. However, future upgrades may change that and we use this fallback block until implemented. 
+                if (Applications(i) == Applications.GRG_STAKING || Applications(i) == Applications.UNIV3_LIQUIDITY) {
+                    nestedBalances[activeAppIndex++] = (_handleApplication(Applications(i), address(this)), Applications(i));
+                }
             }
         }
 
-        // Flatten the nested array into a single array
-        uint256 totalBalanceCount = 0;
-        for (uint256 i = 0; i < nestedBalances.length; i++) {
-            totalBalanceCount += nestedBalances[i].length;
-        }
-        
-        AppTokenBalance[] memory consolidatedBalances = new AppTokenBalance[](totalBalanceCount);
-        uint256 currentIndex = 0;
-        
-        for (uint256 i = 0; i < nestedBalances.length; i++) {
-            for (uint256 j = 0; j < nestedBalances[i].length; j++) {
-                consolidatedBalances[currentIndex++] = nestedBalances[i][j];
-            }
-        }
-
-        return consolidatedBalances;
+        return nestedBalances;
     }
 
     /// @notice Directly retrieve balances from target application contract.
     /// @dev A failure to get response from one application will revert the entire call.
     /// @dev This is ok as we do not want to produce an inaccurate nav.
-    function _handleApplication(Applications appType) private view returns (AppTokenBalance[] memory) {
+    function _handleApplication(Applications appType) private view returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.GRG_STAKING) {
-            return _getGrgStakingProxyBalances();
+            balances = _getGrgStakingProxyBalances();
         } else if (appType == Applications.UNIV3_LIQUIDITY) {
-            return _getUniV3PmBalances();
+            balances = _getUniV3PmBalances();
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
-            return _getUniV4PmBalances();
+            balances = _getUniV4PmBalances();
         } else {
-            revert UnsupportedApplicationType(appType);
+            revert UnknownApplication(appType);
         }
     }
 
@@ -138,7 +131,7 @@ contract EApps {
 
     /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)
     function _getUniV3PmBalances() private view returns (AppTokenBalance[] memory) {
-        uint256 numPositions = _uniV3Pm.balanceOf(address(this));
+        uint256 numPositions = _uniV3NPM.balanceOf(address(this));
 
         // only get first 20 positions as no pool has more than that and we can save gas plus prevent DOS
         uint256 maxLength = numPositions < 20 ? numPositions * 2 : 40;
@@ -150,8 +143,8 @@ contract EApps {
         uint160[] memory cachedPrices = new uint160[](0);
 
         for (uint i = 0; i < maxLength / 2; i++) {
-            uint256 tokenId = _uniV3Pm.tokenOfOwnerByIndex(address(this), i);
-            (,, address token0, address token1,,,,,,,,) = _uniV3Pm.positions(tokenId);
+            uint256 tokenId = _uniV3NPM.tokenOfOwnerByIndex(address(this), i);
+            (,, address token0, address token1,,,,,,,,) = _uniV3NPM.positions(tokenId);
 
             // Compute balance index once
             uint256 currentBalanceIndex = i * 2;
@@ -163,8 +156,8 @@ contract EApps {
                 sqrtPriceX96 = IEOracle(address(this)).getCrossSqrtPriceX96(token0, token1);
                 cachedPrices = appendCachedPrice(cachedPrices, sqrtPriceX96);
             }
-            
-            (uint256 amount0, uint256 amount1) = PositionValue.total(_uniV3Pm, tokenId, sqrtPriceX96);
+
+            (uint256 amount0, uint256 amount1) = PositionValue.total(_uniV3NPM, tokenId, sqrtPriceX96);
 
             balances[currentBalanceIndex] = AppTokenBalance(token0, int128(amount0));
             balances[currentBalanceIndex + 1] = AppTokenBalance(token: token1, amount: int128(amount1));
@@ -195,14 +188,14 @@ contract EApps {
         return newPrices;
     }
 
-    // TODO: must add and purge token id mapping when minting or completely removing liquidity + burn
     /// @dev Assumes a hook does not influence liquidity.
     /// @dev Value of fees can be inflated by pool operator https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
     function _getUniV4PmBalances() private view returns (AppTokenBalance[] memory) {
-        uint256 numPositions = _uniV4Pm.balanceOf(address(this));
+        uint256 numPositions = _uniV4Posm.balanceOf(address(this));
 
-        // only get first 500 positions. In production, no more than 500 liquidity positions can be created.
-        uint256 maxLength = numPositions < 500 ? numPositions * 2 : 1000;
+        // TODO: remove check when storage asserts limit cannot be broken
+        // only get first 255 positions. In production, no more than 255 liquidity positions can be created.
+        uint256 maxLength = numPositions < 255 ? numPositions * 2 : 255;
         AppTokenBalance[] memory balances = new AppTokenBalance[](maxLength);
         uint160[] memory cachedPrices = new uint160[](0);
 
@@ -212,8 +205,7 @@ contract EApps {
 
         for (uint i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
-            // TODO: rename _uniV4Pm as _uniV4Posm
-            (PoolKey memory poolKey, PositionInfo info) = _uniV4Pm.getPoolAndPositionInfo(tokenId);
+            (PoolKey memory poolKey, PositionInfo info) = _uniV4Posm.getPoolAndPositionInfo(tokenId);
             (int24 tickLower, int24 tickUpper) = (info.tickLower(), info.tickUpper());
             address token0 = Currency.unwrap(poolKey.currency0);
             address token1 = Currency.unwrap(poolKey.currency1);

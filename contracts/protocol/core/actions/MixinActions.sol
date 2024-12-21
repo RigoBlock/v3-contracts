@@ -1,29 +1,14 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import "../immutable/MixinStorage.sol";
 import "../../interfaces/IKyc.sol";
 
-abstract contract MixinActions is MixinStorage {
-    /*
-     * MODIFIERS
-     */
-    /// @notice Functions with this modifer cannot be reentered. The mutex will be locked before function execution and unlocked after.
-    // TODO: use transient modifier
-    modifier nonReentrant() {
-        // Ensure mutex is unlocked
-        Pool storage pool = pool();
-        require(pool.unlocked, "REENTRANCY_ILLEGAL");
-
-        // Lock mutex before function call
-        pool.unlocked = false;
-
-        // Perform function call
-        _;
-
-        // Unlock mutex after function call
-        pool.unlocked = true;
-    }
+// TODO: check at what level of hierarchy the implementation should inherit ReentrancyGuardTransient
+abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
+    error PoolTransferFailed();
+    error PoolTransferFromFailed();
 
     /*
      * EXTERNAL METHODS
@@ -51,13 +36,17 @@ abstract contract MixinActions is MixinStorage {
 
         // TODO: verify if we should add base token to active assets, which may save some gas on nav estimate.
 
+        // TODO: verify what happens with null total supply
         // update stored pool value
         uint256 unitaryValue = _updateNav();
 
-        // TODO: spread could be nil if user is only holder, also markup could be  minted to pool operator
-        // if helped with mitigating attack vectors, like unitary value inflation
-        uint256 markup = (amountIn * _getSpread()) / _SPREAD_BASE;
-        amountIn -= markup;
+        bool isOnlyHolder = poolTokens().totalSupply == balanceOf(msg.sender);
+
+        if (!isOnlyHolder) {
+            // apply markup
+            amountIn -= (amountIn * _getSpread()) / _SPREAD_BASE;
+        }
+
         uint256 mintedAmount = (amountIn * 10**decimals()) / unitaryValue;
         require(mintedAmount > amountOutMin, "POOL_MINT_OUTPUT_AMOUNT_ERROR");
         poolTokens().totalSupply += mintedAmount;
@@ -68,36 +57,73 @@ abstract contract MixinActions is MixinStorage {
 
     /// @inheritdoc IRigoblockV3PoolActions
     function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant returns (uint256 netRevenue) {
+        netRevenue = _burn(amountIn, amountOutMin, tokenOut);
+    }
+
+    // TODO: test for potential abuse. Technically, if the token can be manipulated, a burn in base token can do just as much
+    // harm as a burn in any token. Considering burn must happen after a certain period, a pool opeartor has time to sell illiquid tokens.
+    // technically, this could be used for exchanging big quantities of tokens at market rate. Which is not a big deal. prob should
+    // allow only if user does not have enough base tokens
+    function burnForToken(uint256 amountIn, uint256 amountOutMin, address tokenOut)
+        external
+        /*override*/
+        nonReentrant
+        returns (uint256 netRevenue)
+    {
+        // early revert if token does not have price feed, 0 is sentinel for token not being in portfolio
+        require(getTrackedTokens().positions[tokenOut] != 0);
+        netRevenue = _burn(amountIn, amountOutMin, tokenOut);
+    }
+
+    function _burn(uint256 amountIn, uint256 amountOutMin, address tokenOut) private returns (uint256 netRevenue) {
         require(amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
         UserAccount memory userAccount = accounts().userAccounts[msg.sender];
         require(userAccount.userBalance >= amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
         require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
 
         // update stored pool value
+        // TODO: could implement some form of caching, like take the value valid up until 5 minutes
         uint256 unitaryValue = _updateNav();
 
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn);
+        bool isOnlyHolder = poolTokens().totalSupply == balanceOf(msg.sender);
         poolTokens().totalSupply -= burntAmount;
 
-        // TODO: spread should be null if user owns all of total supply, i.e. only holder
-        uint256 markup = (burntAmount * _getSpread()) / _SPREAD_BASE;
-        burntAmount -= markup;
+        if (!isOnlyHolder) {
+            // apply markup
+            burntAmount -= (burntAmount * _getSpread()) / _SPREAD_BASE;
+        }
+
         // TODO: verify cases of possible underflow for small nav value
         netRevenue = (burntAmount * unitaryValue) / 10**decimals();
+
+        address baseToken = pool().baseToken;
+
+        // TODO: test how this could be exploited
+        if (tokenOut != baseToken) {
+            // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
+            require(netRevenue > IERC20(baseToken).balanceOf(address(this)));
+            try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
+                netRevenue = value;
+            } catch Error(string memory reason) {
+                revert reason;
+            }
+        }
+
         require(netRevenue >= amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
 
-        if (pool().baseToken == address(0)) {
+        if (tokenOut == address(0)) {
             payable(msg.sender).transfer(netRevenue);
         } else {
-            _safeTransfer(msg.sender, netRevenue);
+            _safeTransfer(tokenOut, msg.sender, netRevenue);
         }
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
     function setUnitaryValue() external override {
         // unitary value can be updated only after first mint
-        require(poolTokens().totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
+        require(poolTokens().totalSupply > 1e2, "POOL_SUPPLY_NULL_ERROR");
 
         poolTokens().unitaryValue = unitaryValue;
         emit NewNav(msg.sender, address(this), unitaryValue);
@@ -106,6 +132,7 @@ abstract contract MixinActions is MixinStorage {
     /*
      * PUBLIC METHODS
      */
+    function balanceOf(address who) external view returns (uint256);
     function decimals() public view virtual override returns (uint8);
 
     /*
@@ -117,6 +144,7 @@ abstract contract MixinActions is MixinStorage {
 
     function _getMinPeriod() internal view virtual returns (uint48);
 
+    /// @dev Returns the spread, or _MAX_SPREAD if not set
     function _getSpread() internal view virtual returns (uint16);
 
     /*
@@ -221,14 +249,16 @@ abstract contract MixinActions is MixinStorage {
         require(amount >= 10**decimals() / _MINIMUM_ORDER_DIVISOR, "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR");
     }
 
-    function _safeTransfer(address to, uint256 amount) private {
+    // TODO: use try/catch implementation
+    function _safeTransfer(address token, address to, uint256 amount) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = pool().baseToken.call(
+        (bool success, bytes memory data) = token.call(
             abi.encodeWithSelector(_TRANSFER_SELECTOR, to, amount)
         );
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FAILED_ERROR");
+        require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFailed());
     }
 
+    // TODO: use our try/catch implementation
     function _safeTransferFrom(
         address from,
         address to,
@@ -238,6 +268,6 @@ abstract contract MixinActions is MixinStorage {
         (bool success, bytes memory data) = pool().baseToken.call(
             abi.encodeWithSelector(_TRANSFER_FROM_SELECTOR, from, to, amount)
         );
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "POOL_TRANSFER_FROM_FAILED_ERROR");
+        require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFromFailed());
     }
 }

@@ -130,13 +130,12 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     function _getMinPeriod() internal view override returns (uint48) {
         uint48 minPeriod = poolParams().minPeriod;
-        return minPeriod != 0 ? minPeriod : _MIN_LOCKUP;
+        return minPeriod != 0 ? minPeriod : _MAX_LOCKUP;
     }
 
-    // TODO: spread should be 100% -> 0% from time0 to time 1 month
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
-        return spread != 0 ? spread : _INITIAL_SPREAD;
+        return spread != 0 ? spread : _MAX_SPREAD;
     }
 
     // TODO: assert not possible to inflate total supply to manipulate pool price.

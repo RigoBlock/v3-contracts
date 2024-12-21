@@ -4,15 +4,8 @@ pragma solidity >=0.8.0 <0.9.0;
 import "./MixinActions.sol";
 
 abstract contract MixinOwnerActions is MixinActions {
-    /// @dev We keep this check to prevent accidental failure in Nav calculations.
-    modifier notPriceError(uint256 newUnitaryValue) {
-        /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
-        require(
-            newUnitaryValue < _getUnitaryValue() * 5 && newUnitaryValue > _getUnitaryValue() / 5,
-            "POOL_INPUT_VALUE_ERROR"
-        );
-        _;
-    }
+    PoolSpreadInvalid(uint16 maxSpread);
+    PoolLockupPeriodInvalid(uint48 minimum, uint48 maximum);
 
     modifier onlyOwner() {
         require(msg.sender == pool().owner, "POOL_CALLER_IS_NOT_OWNER_ERROR");
@@ -26,22 +19,97 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
-    // TODO: as max is 1 months, we can simply set variable spread and remove this method
     function changeMinPeriod(uint48 minPeriod) external override onlyOwner {
         /// @notice minimum period is always at least 1 to prevent flash txs.
-        require(minPeriod >= _MIN_LOCKUP && minPeriod <= _MAX_LOCKUP, "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR");
+        require(
+            minPeriod >= _MIN_LOCKUP && minPeriod <= _MAX_LOCKUP,
+            PoolLockupPeriodInvalid(_MIN_LOCKUP, _MAX_LOCKUP)
+        );
         poolParams().minPeriod = minPeriod;
         emit MinimumPeriodChanged(address(this), minPeriod);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
-    // TODO: check if this method should be deprecated for an automated spread.
     function changeSpread(uint16 newSpread) external override onlyOwner {
-        // new spread must always be != 0, otherwise default spread from immutable storage will be returned
-        require(newSpread > 0, "POOL_SPREAD_NULL_ERROR");
-        require(newSpread <= _MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
+        // 0 value is sentinel for uninitialized spread, returning _MAX_SPREAD
+        require(newSpread > 0 && newSpread <= _MAX_SPREAD, PoolSpreadInvalid(_MAX_SPREAD));
         poolParams().spread = newSpread;
         emit SpreadChanged(address(this), newSpread);
+    }
+
+    // TODO: move to types
+    struct AppTokenBalance {
+        address token;
+        int128 amount;
+    }
+
+    struct App {
+        AppTokenBalance[] balances;
+        uint256 appType; // converted to uint to facilitate supporting new apps
+    }
+
+    struct IdleToken {
+        address token;
+        uint256 originalIndex;
+    }
+
+    // TODO: check if want to keep here, in case it's clear this won't need frequent upgrade, or to an extension
+    // TODO: make minimal method, so can keep here and change extensions in case, as we want to provide logic in core.
+    /// @notice Allows clearing storage from idle tokens. This method also removes any potential duplicates.
+    /// @dev This is the only endpoint that has access to removing a token from the active tokens tuple.
+    function purgeInactiveTokensAndApps() external /*override*/ onlyOwner {
+        // TODO: this method must read from storage slot, without addition of default tokens in between, verify
+        AddressSet[] storage set = activeTokensSet();
+        AppTokenBalance[] memory appTokens;
+        uint256 activeApps = applications().packedApplications;
+        try IEApps(address(this)).getAppTokenBalances(applications().packedApplications) returns (App[] memory apps) {
+            for (uint i = 0; i < apps.length; i++) {
+                // all supported apps are returned, non active with empty tuple. We do not update storage unless the
+                // specific app is stored as active
+                if (apps[i].balances.length == 0 && ApplicationsLib.isActiveApplication(uint256(apps[i].appType))) {
+                    // as this uses applications library, check if want to move to extension, or the library is fine
+                    // as we won't be update to upgrade the library without causing implementation bytecode to change
+                    ApplicationsLib.removeApplication(apps[i].appType);
+                }
+            }
+        } catch Error(string memory reason) {
+            // do not allow removing tokens if the apps do not return their tokens correctly
+            revert reason;
+        }
+
+        IdleToken[] memory idleTokens = new IdleToken[](set.activeTokens);
+
+        for (uint i = 0; i < set.activeTokens.length; i++) {
+            bool isPositiveBalance;
+            if (set.activeTokens[i] == address(0) || set.activeTokens[i] == pool().baseToken) {
+                // do not remove chain currency or base token for gas optimizations
+                continue;
+            } else {
+                try IERC20(set.activeTokens[i]).balanceOf(address(this)) returns (uint256 _balance) {
+                    isPositiveBalance = _balance > 1;
+                } catch {
+                    continue;
+                }
+            }
+
+            if (!isPositiveBalance) {
+                bool isActiveAppToken;
+                for (i = 0; i < app.length)
+                for (uint j = 0; j < appTokens.length; j++) {
+                    // remove a null balance token only if not used in an app
+                    if (set.activeTokens(j) == appTokens(j).token) {
+                        isActiveAppToken = true;
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+
+                if (!isActiveAppToken) {
+                    set.remove(set.activeTokens(j));
+                }
+            }
+        }
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
