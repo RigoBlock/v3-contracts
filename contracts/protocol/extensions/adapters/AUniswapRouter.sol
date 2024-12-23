@@ -20,6 +20,7 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
+import {TransientSlot} from "@openzeppelin/contracts/contracts/utils/TransientSlot.sol";
 import "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import "./AUniswapDecoder.sol";
 import "./interfaces/IAUniswapRouter.sol";
@@ -27,32 +28,35 @@ import "../../../libraries/EnumerableSet.sol";
 
 /// @title AUniswapRouter - Allows interactions with the Uniswap universal router contracts.
 /// @notice This contract is used as a bridge between a Rigoblock smart pool contract and the Uniswap universal router.
-/// @dev This contract ensures that tokens are approved and disapproved correctly, and that recipients and tokens are validated.
+/// @dev This contract ensures that tokens approvals are set and removed correctly, and that recipient and tokens are validated.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     using CalldataDecoder for bytes;
     using EnumerableSet for Set;
+    // TODO: these will be conflicting with persistent storage slots?
+    using TransientSlot for UintsSlot;
+    using TransientSlot for AddressesSlot;
 
-    // assign randomly big storage slots to transient types not supported by solc
+    // transient storage slots
     bytes32 internal constant _ALL_COMMANDS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.allCommands")) - 1);
     bytes32 internal constant _ALL_INPUTS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.allInputs")) - 1);
+    bytes32 internal constant _LOCK_SLOT = bytes32(uint256(keccak256("AUniswapRouter.lock")) - 1);
+    bytes32 private constant _REENTRANCY_DEPTH_SLOT = bytes32(uint256(keccak256("AUniswapRouter.reentrancy.depth")) - 1);
     bytes32 private constant _TOKENS_IN_SLOT = bytes32(uint256(keccak256("AUniswapRouter.tokensIn")) - 1);
     bytes32 private constant _TOKENS_OUT_SLOT = bytes32(uint256(keccak256("AUniswapRouter.tokensOut")) - 1);
-    bytes32 private constant _RECIPIENTS_SLOT = bytes32(uint256(keccak256("AUniswapRouter.recipients")) - 1);
+    bytes32 private constant _TRANSACTION_VALUE_SLOT = bytes32(uint256(keccak256("AUniswapRouter.transaction.value")) - 1);
+
+    // TODO: verify import from common library as EApps uses the same slot
+    // persistent storage slots
+    bytes32 private constant _TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1)
+    bytes32 private constant _UNIV4_TOKEN_IDS_SLOT = bytes32(uint256(keccak256("Proxy.uniV4.tokenIds")) - 1);
 
     uint256 private constant NIL_VALUE = 0;
+    uint256 private constant _MAX_TOKEN_COUNT = 255;
 
     // TODO: check store as inintiate instances
     address private immutable _uniswapRouter;
     address private immutable _positionManager;
-
-    // we keep track of all commands, appending a sub-plan's commands
-    uint256 private transient _allCommandsCount;
-    uint8 private transient _reentrancyDepth;
-
-    uint256 private transient _value;
-
-    bool private transient _locked;
 
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
@@ -91,14 +95,16 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    function _commandsSlot() private pure returns (bytes32) {
-        return _ALL_COMMANDS_SLOT;
-    }
+    function _commandsSlot() private pure returns (bytes32) { return _ALL_COMMANDS_SLOT; }
+    function _inputsSlot() private pure returns (bytes32) { return _ALL_INPUTS_SLOT; }
+    function _lockSlot() private pure returns (bytes32) { return _LOCK_SLOT; }
+    function _reentrancyDepthSlot() private pure returns (bytes32) { return _REENTRANCY_DEPTH_SLOT; }
+    function _tokensInSlot() private pure returns (bytes32) { return _TOKENS_IN_SLOT; }
+    function _tokensOutSlot() private pure returns (bytes32) { return _TOKENS_OUT_SLOT; }
+    function _valueSlot() private pure returns (bytes32) { return _TRANSACTION_VALUE_SLOT; }
 
-    function _inputsSlot() private pure returns (bytes32) {
-        return _ALL_INPUTS_SLOT;
-    }
-
+    // TODO: these should be only delegatecall to avoid users storing tokens and positions in this contract?
+    // however, functions will fail as the contract will try to get a price feed from itself, which will revert
     /// @inheritdoc IAUniswapRouter
     function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline)
         external
@@ -114,7 +120,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         public
         payable
         override
-        nonReentrant
+        nonReentrant()
         returns (bytes memory returnData)
     {
         // solhint-disable transient-storage-not-cleared
@@ -125,12 +131,13 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         // loop through all given commands, verify their inputs and pass along outputs as defined
         for (uint256 i = 0; i < numCommands; i++) {
             bytes calldata input = inputs[i];
-            InputState memory inputState = _decodeInput(commands[i], input);
+            (InputState memory inputState, Parameters memory params) = _decodeInput(commands[i], input);
 
             // we temporary store only if the returned input exists
             // TODO: verify we are always writing filteredInput for implemented commands
             if (inputState.filteredInput.length > 0) {
                 _processInputState(inputState);
+                _processParams(params);
                 _allCommandsCount++;
             }
         }
@@ -139,6 +146,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         if (_reentrancyDepth == 1) {
             _assertTokensOutHavePriceFeed();
             _assertRecipientIsThisAddress();
+            _updateTokenIdsAsNeeded();
 
             (bytes memory finalCommands, bytes[] memory finalInputs) = _loadFinalCommandsAndInputs();
 
@@ -169,68 +177,71 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         return _uniswapRouter;
     }
 
+    // TODO: must make sure we are writing to the proxy storage, not the adapter storage
     // active applications are stored as a packed single uint256, without length
     struct TokenIdSlot {
         uint256[] tokenIds;
     }
 
-    function uniV4TokenIds() internal pure returns (ApplicationsSlot storage s) {
+    function uniV4TokenIds() internal pure returns (TokenIdSlot storage s) {
+        assembly {
+            s.slot := _TOKEN_IDS_SLOT;
+        }
+    }
+
+    // applications stored as bitmap
+    struct ApplicationsSlot {
+        uint256 applications;
+    }
+
+    // TODO: added slot to purge application, but can do in future release
+    function activeApplications() internal pure returns (ApplicationsSlot storage s) {
         assembly {
             s.slot := _APPLICATIONS_SLOT;
         }
     }
 
-    function _tokensInSlot() internal pure override returns (bytes32) { return _TOKENS_IN_SLOT; }
-    function _tokensOutSlot() internal pure override returns (bytes32) { return _TOKENS_OUT_SLOT; }
-    function _recipientsSlot() internal pure override returns (bytes32) { return _RECIPIENTS_SLOT; }
-
-    function _addressesSlot(bytes32 slot) internal pure override returns (AddressesSlot storage s) {
-        assembly {
-            s.slot := slot
-        }
+    struct ActiveTokensSlot {
+        address[] tokens;
     }
 
-    function _assertRecipientIsThisAddress() private {
-        AddressesSlot storage rSlot = _addressesSlot(_recipientsSlot());
-        for (uint i = 0 ; i < _recipientsCount--; i++) {
-            address recipient;
-            assembly {
-                recipient := tload(add(rSlot.slot, i))
-                // we can safely clear slot as we do not need it any more
-                tstore(add(rSlot.slot, i), 0)
-            }
-            require(recipient == address(this), RecipientIsNotSmartPool());
+    function activeTokens() internal pure returns (ActiveTokensSlot storage s) {
+        assembly {
+            s.slot := _TOKEN_REGISTRY_SLOT;
         }
     }
 
     function _assertTokensOutHavePriceFeed() private {
-        AddressesSlot storage tOSlot = _addressesSlot(_tokensOutSlot());
-        for (uint i = 0; i < _tokensOutCount--; i++) {
-            address tokenOut;
-            assembly {
-                tokenOut := tload(add(tOSlot.slot, i))
-                // we can safely clear slot as we do not need it any more
-                tstore(add(tOSlot.slot, i), 0)
-            }
+        // array length is stored at slot position
+        uint256 length = _tokensOutSlot().slot;
+        bytes32 tokensSlot = _tokensOutSlot().deriveArray();
 
-            // TODO: we could alternatively directly read from storage slot. Actually we should because this is an adapter.
-            Slot storage tokenRegistrySlot = IRigoblockV3PoolState(address(this)).tokenRegistry();
-            // we always allow move to base token, which is never added to the tracked list as already stored in its own slot.
-            // Base token price feed check is performed at pool initialization
-            if (tokenOut != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
-                // first check in the list of owned assets. If a token is already active, no further check is needed
-                if (tokenRegistrySlot.positions[tokenOut] == 0) {
-                    // TODO: check if we want to return last obs timestamp from eoracle and assert non null, to save gas
-                    // a token is tradable if has price feed against chain currency
-                    require(IEOracle(address(this)).hasPriceFeed(tokenOut), TokenPriceFeedError(tokenOut));
-                    // TODO: complete the implementation of `addUnique` in enumerable set and assert list is less than 1000 tokens
-                    // max num elements assertion should be performed in library that uses EnumerableSet but implements methods
-                    // for the active lists, even though we want to abstract that as we do not want to change core when adding new
-                    // applications or storage slots
-                    _activeTokensSlot().addUnique(tokenOut);
-                }
+        // load active tokens from storage
+        AddressSet[] storage activeTokensSlot = activeTokens();
+
+        for (uint i = 0; i < length; i++) {
+            address tokenOut;
+            bytes32 offset = _tokensOutSlot().offset(i);
+            tokenOut = offset.tload();
+            offset.tstore(0); // clear temporary storage slot
+
+            // we push any target token, even null or base token, which is added at mint and never purged.
+            // Position 0 is sentinel for non active.
+            if (activeTokensSlot.positions[tokenOut] == 0) {
+                require(activeTokensSlot().tokens.length <= _MAX_TOKEN_COUNT, MaxActiveTokenReached());
+
+                // verify price feed exists. Call context sender is pool, call will be staticcall to oracle extension.
+                require(IEOracle(address(this)).hasPriceFeed(tokenOut), TokenPriceFeedError(tokenOut));
+                // TODO: verify variables names correct
+                // verify tokenOut has a price feed in the oracle extension
+                activeTokensSlot().tokens.push();
+                activeTokensSlot().positions[tokenOut] == activeTokensSlot().tokens.length;
+
+                // TODO: complete EnumberableSet library and type definition, possily use method
+                //_activeTokensSlot().addUnique(tokenOut);
             }
         }
+        _tokensOutSlot().tstore(0); // clear temporary storage
     }
 
     function _safeApprove(
@@ -336,6 +347,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         return (finalCommands, finalInputs);
     }
 
+    // TODO: should store length at slot, and elements of array at slot hash
     function _processInputState(
         InputState memory state
     ) private {
@@ -372,5 +384,30 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         if (inputValue > NIL_VALUE) {
             _value += inputValue;
         }
+    }
+
+    function _processParams(Parameters memory params) {
+        // update tokenIds in proxy persistent storage. No benefit in appending to array for later executing.
+        uint256[] storage tokenIds = uniV4TokenIds().slot;
+        if (params.tokenId != 0) {
+            // negative value is a sentinel for burn
+            if (params.tokenId > 0) {
+                require(tokenIds.length < 255, UniV4PositionsLimitExceeded());
+                tokenIds.push(params.tokenId);
+            } else {
+                for (uint i = 0; i < tokenIds.length; i++) {
+                    if (tokenIds[i] == tokenId) {
+                        tokenIds[i] = tokenIds[tokenIds.length];
+                        tokenIds.pop();
+                        break;
+                    }
+                }
+            }
+        }
+
+        // simple request, no benefit in adding to temporary storage
+        require(recipient == address(this), RecipientIsNotSmartPool());
+
+        // append tokensIn, tokensOut
     }
 }

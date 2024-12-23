@@ -19,12 +19,19 @@
 
 pragma solidity 0.8.28;
 
+import {TransientSlot} from "@openzeppelin/contracts/contracts/utils/TransientSlot.sol";
+
 // TODO: check make catastrophic failure resistant, i.e. must always be possible to liquidate pool + must always
 //  use base token balances. If cannot guarantee base token balances can be retrieved, pointless and can be implemented in extension.
 //  General idea is if the component is simple and not requires revisit of logic, implement as library, otherwise
 //  implement as extension.
 contract MixinPoolValue {
+    using TransientSlot for Int256Slot;
+
     error BaseTokenBalanceError();
+
+    // TODO: verify move to immutables
+    bytes32 private constant _TRANSIENT_BALANCE_SLOT = bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
 
     struct PortfolioTokens {
         address[] activeTokens;
@@ -32,7 +39,7 @@ contract MixinPoolValue {
     }
 
     struct TokenBalance {
-        // flat to avoid overwriting balance should the same token be returned multiple times
+        // flag to avoid overwriting balance should the same token be returned multiple times
         bool isStored;
         int256 balance;
     }
@@ -57,23 +64,22 @@ contract MixinPoolValue {
         // base token is not stored in activeTokens slot, as already stored in baseToken slot
         // TODO: token must be stored in the active tokens at mint or burn liquidity, removed at burn or sell or add liquidity
         for (uint256 i = 0; i < components.activeTokens.length; i++) {
-            // this condition should always be true, but a double counting would result in wrong mint/burn values
-            if (!_isBalanceStored(components.activeTokens[i])) {
-                uint256 balance;
-                if (components.activeTokens[i] == address(0)) {
-                    balance = address(this).balance;
-                } else {
-                    try IERC20(components.activeTokens[i]).balanceOf(address(this)) returns (uint256 _balance) {
-                        balance = _balance;
-                    } catch {
-                        // do not stop aum calculation in case of chain's base currency or rogue token
-                        continue;
-                    }
+            // TODO: verify how base token is taken into account, as we could store it when minting and it will be there until pruning
+            // the active tokens list contains unique addresses
+            uint256 balance;
+            if (components.activeTokens[i] == address(0)) {
+                balance = address(this).balance;
+            } else {
+                try IERC20(components.activeTokens[i]).balanceOf(address(this)) returns (uint256 _balance) {
+                    balance = _balance;
+                } catch {
+                    // do not stop aum calculation in case of chain's base currency or rogue token
+                    continue;
                 }
+            }
 
-                if (balance > 1) {
-                    _storeBalance(components.activeTokens[i], int256(balance), true);
-                }
+            if (balance > 1) {
+                _storeBalance(components.activeTokens[i], int256(balance));
             }
         }
 
@@ -88,25 +94,16 @@ contract MixinPoolValue {
             uint256 appType; // converted to uint to facilitate supporting new apps
         }
 
-        // store counter of new unique tokens
-        uint256 additionalUniqueTokensCount = 0;
-
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
         try IEApps(address(this)).getAppTokenBalances(applications().packedApplications) returns (App[] memory apps) {
-            // position balances can be negative, positive, or nil (handled explicitly later)
+            // position balances can be negative, positive, or null (handled explicitly later)
             for (i = 0; i < apps.length; i++) {
+                // active positions tokens are a subset of active tokens
                 for (uint j = 0; j < apps[i].balances.length; j++) {
                     // Always add or update the balance from positions
-                    int256 newBalance = _getBalance(apps[i].balances[j].token) + int256(apps[i].balances[j].amount);
-                    _storeBalance(apps[i].balances[j].token, newBalance, true);
-
-                    // store the token in a new address mapping. Address could be null so we use an additional flag.
-                    if (!_isTokenStored(apps[i].balances[j].token)) {
-                        _storeToken(apps[i].balances[j].token, true);
-                        _storeNewTokenPosition(j, apps[i].balances[j].token);
-
-                        // increase tokens count only the first time a tokens is seen
-                        additionalUniqueTokensCount++;
+                    if (apps[i].balances[j].amount != 0) {
+                        int256 newBalance = _getBalance(apps[i].balances[j].token) + int256(apps[i].balances[j].amount);
+                        _storeBalance(apps[i].balances[j].token, newBalance);
                     }
                 }
             }
@@ -115,34 +112,23 @@ contract MixinPoolValue {
             revert reason;
         }
 
-        // Create array with the total unique tokens size
-        address[] memory uniqueTokens = new address[](components.activeTokens.length + additionalUniqueTokensCount);
-
-        // Fill uniqueTokens with active tokens
-        for (uint256 i = 0; i < components.activeTokens.length; i++) {
-            uniqueTokens[i] = components.activeTokens[i];
-        }
-
-        // Add new tokens from positions
-        uint256 index = components.activeTokens.length;
-        for (uint256 j = 0; j < additionalUniqueTokensCount; j++) {
-            uniqueTokens[index++] = _getTokenFromNewTokenPosition(j);
-        }
-
         int256 poolValueInBaseToken;
 
-        for (uint256 i = 0; i < uniqueTokens.length; i++) {
-            int256 balance = _getBalance(uniqueTokens[i]);
+        for (uint256 i = 0; i < components.activeTokens.length; i++) {
+            int256 balance = _getBalance(components.activeTokens[i]);
+
+            // clear transient storage slot as we do not need them any more
+            _storeBalance(components.activeTokens[i], 0);
 
             if (balance < 0) {
                 poolValueInBaseToken -= int256(_getBaseTokenValue(
-                    uniqueTokens[i],
+                    components.activeTokens[i],
                     uint256(-balance),
                     components.baseToken,
                 ));
             } else {
                 poolValueInBaseToken += int256(_getBaseTokenValue(
-                    uniqueTokens[i],
+                    components.activeTokens[i],
                     uint256(balance),
                     components.baseToken
                 ));
@@ -172,44 +158,14 @@ contract MixinPoolValue {
     }
 
     // Helper functions for tstore operations
-    // TODO: can move to a library
-    function _storeBalance(address token, int256 balance, bool isStored) private {
-        bytes32 key = keccak256(abi.encodePacked("tokenBalance", token));
-        uint256 packed = (uint256(balance) & (2**255 - 1)) | (isStored ? 1 : 0);
-        assembly {
-            tstore(key, packed)
-        }
+    /// @notice Stores a mapping of token addresses to int256 balances
+    function _storeBalance(address token, int256 balance) private {
+        bytes32 key = _TRANSIENT_BALANCE_SLOT.deriveMapping(token);
+        _TRANSIENT_BALANCE_SLOT.tstore(key, token);
     }
 
-    function _getBalance(address token) private view returns (int256 balance) {
-        bytes32 key = keccak256(abi.encodePacked("tokenBalance", token));
-        assembly {
-            balance := and(tload(key), 2**255 - 1)
-        }
-        return int256(balance);
-    }
-
-    function _isBalanceStored(address token) private view returns (bool) {
-        bytes32 key = keccak256(abi.encodePacked("tokenBalance", token));
-        assembly {
-            let packed := tload(key)
-            return and(packed, 1) // Check if the least significant bit is set
-        }
-    }
-
-    // Helper function to store the position of a new token
-    function _storeNewTokenPosition(uint256 position, address token) private {
-        bytes32 key = keccak256(abi.encodePacked("newTokenPosition", position));
-        assembly {
-            tstore(key, token)
-        }
-    }
-
-    // Helper function to get the token address from its stored position
-    function _getTokenFromNewTokenPosition(uint256 position) private view returns (address) {
-        bytes32 key = keccak256(abi.encodePacked("newTokenPosition", position));
-        assembly {
-            return tload(key)
-        }
+    function _getBalance(address token) private view returns (int256) {
+        bytes32 key = _TRANSIENT_BALANCE_SLOT.deriveMapping(token);
+        return _TRANSIENT_BALANCE_SLOT.tload(key);
     }
 }

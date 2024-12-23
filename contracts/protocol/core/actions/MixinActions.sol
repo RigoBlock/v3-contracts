@@ -18,7 +18,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         address recipient,
         uint256 amountIn,
         uint256 amountOutMin
-    ) public payable override nonReentrant returns (uint256 recipientAmount) {
+    ) public payable override nonReentrant() returns (uint256 recipientAmount) {
         address kycProvider = poolParams().kycProvider;
 
         // require whitelisted user if kyc is enforced
@@ -56,7 +56,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
-    function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant returns (uint256 netRevenue) {
+    function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant() returns (uint256 netRevenue) {
         netRevenue = _burn(amountIn, amountOutMin, tokenOut);
     }
 
@@ -67,7 +67,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     function burnForToken(uint256 amountIn, uint256 amountOutMin, address tokenOut)
         external
         /*override*/
-        nonReentrant
+        nonReentrant()
         returns (uint256 netRevenue)
     {
         // early revert if token does not have price feed, 0 is sentinel for token not being in portfolio
@@ -75,53 +75,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         netRevenue = _burn(amountIn, amountOutMin, tokenOut);
     }
 
-    function _burn(uint256 amountIn, uint256 amountOutMin, address tokenOut) private returns (uint256 netRevenue) {
-        require(amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
-        UserAccount memory userAccount = accounts().userAccounts[msg.sender];
-        require(userAccount.userBalance >= amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
-        require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
-
-        // update stored pool value
-        // TODO: could implement some form of caching, like take the value valid up until 5 minutes
-        uint256 unitaryValue = _updateNav();
-
-        /// @notice allocate pool token transfers and log events.
-        uint256 burntAmount = _allocateBurnTokens(amountIn);
-        bool isOnlyHolder = poolTokens().totalSupply == balanceOf(msg.sender);
-        poolTokens().totalSupply -= burntAmount;
-
-        if (!isOnlyHolder) {
-            // apply markup
-            burntAmount -= (burntAmount * _getSpread()) / _SPREAD_BASE;
-        }
-
-        // TODO: verify cases of possible underflow for small nav value
-        netRevenue = (burntAmount * unitaryValue) / 10**decimals();
-
-        address baseToken = pool().baseToken;
-
-        // TODO: test how this could be exploited
-        if (tokenOut != baseToken) {
-            // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
-            require(netRevenue > IERC20(baseToken).balanceOf(address(this)));
-            try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
-                netRevenue = value;
-            } catch Error(string memory reason) {
-                revert reason;
-            }
-        }
-
-        require(netRevenue >= amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
-
-        if (tokenOut == address(0)) {
-            payable(msg.sender).transfer(netRevenue);
-        } else {
-            _safeTransfer(tokenOut, msg.sender, netRevenue);
-        }
-    }
-
     /// @inheritdoc IRigoblockV3PoolActions
-    function setUnitaryValue() external override {
+    function setUnitaryValue() external override nonReentrant() {
         // unitary value can be updated only after first mint
         require(poolTokens().totalSupply > 1e2, "POOL_SUPPLY_NULL_ERROR");
 
@@ -197,6 +152,51 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         accounts.userAccounts[recipient] = UserAccount({userBalance: recipientBalance, activation: activation});
         emit Transfer(address(0), recipient, recipientAmount);
+    }
+
+    function _burn(uint256 amountIn, uint256 amountOutMin, address tokenOut) private returns (uint256 netRevenue) {
+        require(amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
+        UserAccount memory userAccount = accounts().userAccounts[msg.sender];
+        require(userAccount.userBalance >= amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
+        require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
+
+        // update stored pool value
+        // TODO: could implement some form of caching, like take the value valid up until 5 minutes
+        uint256 unitaryValue = _updateNav();
+
+        /// @notice allocate pool token transfers and log events.
+        uint256 burntAmount = _allocateBurnTokens(amountIn);
+        bool isOnlyHolder = poolTokens().totalSupply == balanceOf(msg.sender);
+        poolTokens().totalSupply -= burntAmount;
+
+        if (!isOnlyHolder) {
+            // apply markup
+            burntAmount -= (burntAmount * _getSpread()) / _SPREAD_BASE;
+        }
+
+        // TODO: verify cases of possible underflow for small nav value
+        netRevenue = (burntAmount * unitaryValue) / 10**decimals();
+
+        address baseToken = pool().baseToken;
+
+        // TODO: test how this could be exploited
+        if (tokenOut != baseToken) {
+            // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
+            require(netRevenue > IERC20(baseToken).balanceOf(address(this)));
+            try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
+                netRevenue = value;
+            } catch Error(string memory reason) {
+                revert reason;
+            }
+        }
+
+        require(netRevenue >= amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
+
+        if (tokenOut == address(0)) {
+            payable(msg.sender).transfer(netRevenue);
+        } else {
+            _safeTransfer(tokenOut, msg.sender, netRevenue);
+        }
     }
 
     /// @notice Destroys tokens of holder.

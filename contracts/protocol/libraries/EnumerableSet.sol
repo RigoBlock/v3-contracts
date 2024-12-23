@@ -19,9 +19,18 @@
 
 pragma solidity ^0.8.20;
 
+// TODO: we could use the enumerable set from openzeppelin here, as we don't use tstore in this context. However,
+// we should use that library, and overwrite with our own specifications, i.e. limit the max number of elements in the array.
+// This way, we could use this library for pushing active addresses, tokenIds, and potentially more types without need to
+// upgrade this library. This means we should overwrite all methods. Also add and remove are used in mint and purge in core,
+// therefore library should be stable. Ideally we should keep those compact, so can avoid errors with upgrades, gas overhead
+// of storing as bytes32 and reading as bytes32 is very small if compared to the gas used to decode transactions, or estimate nav.
 // TODO: should add bytes32[] IdsSet for application positions, but should do so in a way that is extendable
 library EnumerableSet {
     error AddressListLength();
+
+    // limit size of array to prevent DOS to nav estimates
+    uint256 private constant _MAX_UNIQUE_ADDRESSES = 255;
 
     // TODO: address(0) can be added as mapping to 0 is sentinel for not stored, while we can push a null element in the list
     struct AddressSet {
@@ -34,10 +43,10 @@ library EnumerableSet {
 
     // TODO: verify what we have removed here, and also verify if can pass a max length to verify against
     function addUnique(Set storage set, address value) internal returns (bool) {
-        require(set.addresses.length <= 1000, AddressListLength());
+        require(set.params.length <= _MAX_UNIQUE_ADDRESSES, AddressListLength());
         if (!_contains(set, value)) {
-            set.addresses.push(value);
-            set.positions[value] = set.addresses.length;
+            set.params.push(value);
+            set.positions[value] = set.params.length;
             return true;
         } else {
             return false;
@@ -50,7 +59,7 @@ library EnumerableSet {
         if (position != 0) {
             // Copy last element at index position and pop last element
             uint256 valueIndex = position - 1;
-            uint256 lastIndex = set.addresses.length - 1;
+            uint256 lastIndex = set.params.length - 1;
 
             if (valueIndex != lastIndex) {
                 bytes32 lastValue = set.addresses[lastIndex];
@@ -62,7 +71,7 @@ library EnumerableSet {
             }
 
             // Delete the slot where the moved value was stored
-            set.addresses.pop();
+            set.params.pop();
 
             // Delete the tracked position for the deleted slot
             delete set.positions[value];

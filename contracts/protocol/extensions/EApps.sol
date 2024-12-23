@@ -47,6 +47,9 @@ contract EApps {
 
     bytes32 private immutable _uniV4PosmPositionsSlot;
 
+    // persistent storage slots, used to read from proxy storage without having to update implementation
+    bytes32 private constant _UNIV4_TOKEN_IDS_SLOT = bytes32(uint256(keccak256("Eapps.uniV4.tokenIds")) - 1);
+
     constructor(address grgStakingProxy, address univ3pm, address univ4pm) {
         _grgStakingProxy = IGrgProxy(grgStakingProxy);
         _uniV3NPM = IUniv3Pm(univ3pm);
@@ -188,6 +191,17 @@ contract EApps {
         return newPrices;
     }
 
+    struct TokenIdsSlot {
+        uint256 tokenIds;
+    }
+
+    // TODO: we reuse this one in uniswap adapter, should import from library
+    function _uniV4TokenIdsSlot() internal pure returns (TokenIdsSlot storage s) {
+        assembly {
+            s.slot := _UNIV4_TOKEN_IDS_SLOT
+        }
+    }
+
     /// @dev Assumes a hook does not influence liquidity.
     /// @dev Value of fees can be inflated by pool operator https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
     function _getUniV4PmBalances() private view returns (AppTokenBalance[] memory) {
@@ -201,8 +215,10 @@ contract EApps {
 
         // need to store the owned tokensIds array or mapping
         // access stored position ids
-        uint256[] tokenIds = uniV4TokenIdsSlot().tokenIds;
+        // TODO: check use EnumerableSet but overwritten with our specs
+        uint256[] memory tokenIds = _uniV4TokenIdsSlot().tokenIds;
 
+        // TODO: verify if should return only first n positions in case more are stored (but they shouldn't)
         for (uint i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             (PoolKey memory poolKey, PositionInfo info) = _uniV4Posm.getPoolAndPositionInfo(tokenId);
