@@ -5,9 +5,11 @@ import "../immutable/MixinImmutables.sol";
 import "../immutable/MixinStorage.sol";
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IRigoblockPoolProxyFactory.sol";
+import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     error BaseTokenDecimals();
+    error BaseTokenPriceFeedNotFound();
 
     modifier onlyUninitialized() {
         // pool proxy is always initialized in the constructor, therefore
@@ -35,7 +37,7 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
                     revert BaseTokenDecimals();
                 }
             } catch {
-                revert BaseTokenPriceFeed();
+                revert BaseTokenPriceFeedNotFound();
             }
         } else {
             tokenDecimals = 18;

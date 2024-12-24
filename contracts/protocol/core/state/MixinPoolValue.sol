@@ -19,24 +19,28 @@
 
 pragma solidity 0.8.28;
 
-import {TransientSlot} from "@openzeppelin/contracts/contracts/utils/TransientSlot.sol";
+import {SlotDerivation} from "@openzeppelin/contracts/utils/SlotDerivation.sol";
+import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
+import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
+import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
+import {ExternalApp} from "../../types/ExternalApp.sol"; 
 
 // TODO: check make catastrophic failure resistant, i.e. must always be possible to liquidate pool + must always
 //  use base token balances. If cannot guarantee base token balances can be retrieved, pointless and can be implemented in extension.
 //  General idea is if the component is simple and not requires revisit of logic, implement as library, otherwise
 //  implement as extension.
-contract MixinPoolValue {
-    using TransientSlot for Int256Slot;
+// TODO: MixinPoolState should inherit from MixinPoolValue as needs to display some data. Meaning some methods will have to be inverted
+abstract contract MixinPoolValue is MixinOwnerActions {
+    type Int256Slot is bytes32;
+    using TransientSlot for *;
+    using SlotDerivation for bytes32;
 
     error BaseTokenBalanceError();
 
     // TODO: verify move to immutables
     bytes32 private constant _TRANSIENT_BALANCE_SLOT = bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
-
-    struct PortfolioTokens {
-        address[] activeTokens;
-        address baseToken;
-    }
 
     struct TokenBalance {
         // flag to avoid overwriting balance should the same token be returned multiple times
@@ -44,8 +48,10 @@ contract MixinPoolValue {
         int256 balance;
     }
 
+    function getPortfolioTokens() public view virtual returns (PortfolioTokens memory);
+
     function _updateNav() internal override returns (uint256 unitaryValue) {
-        unitaryValue = _getUnitaryValue(_getPoolValue());
+        unitaryValue = _getUnitaryValue();
 
         // unitary value cannot be null
         assert(unitaryValue > 0);
@@ -53,12 +59,10 @@ contract MixinPoolValue {
         emit NewNav(msg.sender, address(this), unitaryValue);
     }
 
-    /// @dev Assumes the stored list contain unique elements
-    function _getPoolValue() internal /*override*/ returns (uint256 poolValue) {
-        // this is called just once, so gas overhead of self calling is acceptable
-        // TODO: as this is calling self, not an extension, we could simply call the method directly
-        // check where we define in the inheritance architecture so can inherit state and read directly
-        //PortfolioTokens memory components = IRigoblockV3Pool(address(this)).getPortfolioTokens();
+    /// @notice Updates the stored value with an updated one.
+    /// @dev Assumes the stored list contain unique elements.
+    /// @dev A write method to be used in mint and burn operations.
+    function _getPoolValue() internal returns (uint256 poolValue) {
         PortfolioTokens memory components = getPortfolioTokens();
 
         // base token is not stored in activeTokens slot, as already stored in baseToken slot
@@ -83,21 +87,10 @@ contract MixinPoolValue {
             }
         }
 
-        // TODO: move to types
-        struct AppTokenBalance {
-            address token;
-            int128 amount;
-        }
-
-        struct App {
-            AppTokenBalance[] balances;
-            uint256 appType; // converted to uint to facilitate supporting new apps
-        }
-
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
-        try IEApps(address(this)).getAppTokenBalances(applications().packedApplications) returns (App[] memory apps) {
+        try IEApps(address(this)).getAppTokenBalances(applications().packedApplications) returns (ExternalApp[] memory apps) {
             // position balances can be negative, positive, or null (handled explicitly later)
-            for (i = 0; i < apps.length; i++) {
+            for (uint256 i = 0; i < apps.length; i++) {
                 // active positions tokens are a subset of active tokens
                 for (uint j = 0; j < apps[i].balances.length; j++) {
                     // Always add or update the balance from positions
@@ -109,7 +102,7 @@ contract MixinPoolValue {
             }
         } catch Error(string memory reason) {
             // we prevent returning pool value when one of the tracked applications fails
-            revert reason;
+            revert(reason);
         }
 
         int256 poolValueInBaseToken;
@@ -124,7 +117,7 @@ contract MixinPoolValue {
                 poolValueInBaseToken -= int256(_getBaseTokenValue(
                     components.activeTokens[i],
                     uint256(-balance),
-                    components.baseToken,
+                    components.baseToken
                 ));
             } else {
                 poolValueInBaseToken += int256(_getBaseTokenValue(
@@ -139,10 +132,34 @@ contract MixinPoolValue {
         return (poolValueInBaseToken > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
+    // TODO: assert not possible to inflate total supply to manipulate pool price.
+    /// @notice Uses transient storage to keep track of unique token balances.
+    function _getUnitaryValue() internal returns (uint256) {
+        uint256 poolSupply = poolTokens().totalSupply;
+        uint256 storedValue = poolTokens().unitaryValue;
+        uint256 poolValue = _getPoolValue();
+
+        // a previously minted pool cannot have storedValue = 0 
+        if (storedValue != 0) {
+            // default scenario
+            if (poolValue != 0 && poolSupply != 0) {
+                return poolValue / poolSupply;
+            // fallback to stored value when value would be null or infinite
+            // TODO: verify why we did else if (poolValue == 0 || poolSupply == 0)
+            } else {
+                return storedValue;
+            }
+        // return 1 in base token units at first mint
+        } else {
+            return 10**pool().decimals;
+        }
+    }
+
     /// @dev Base token is always passed once in the loop
     function _getBaseTokenValue(address token, uint256 amount, address baseToken)
         private
-        returns (uint256 value)
+        view
+        returns (uint256)
     {
         // early return for base token or if amount nil, like when a sum of positions leads to nil amount
         if (token == baseToken || amount == 0) {
@@ -161,11 +178,11 @@ contract MixinPoolValue {
     /// @notice Stores a mapping of token addresses to int256 balances
     function _storeBalance(address token, int256 balance) private {
         bytes32 key = _TRANSIENT_BALANCE_SLOT.deriveMapping(token);
-        _TRANSIENT_BALANCE_SLOT.tstore(key, token);
+        key.asInt256().tstore(balance);
     }
 
     function _getBalance(address token) private view returns (int256) {
         bytes32 key = _TRANSIENT_BALANCE_SLOT.deriveMapping(token);
-        return _TRANSIENT_BALANCE_SLOT.tload(key);
+        return key.asInt256().tload();
     }
 }

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../actions/MixinOwnerActions.sol";
+import "../state/MixinPoolValue.sol";
+import "../../interfaces/pool/IRigoblockV3PoolState.sol";
 
-abstract contract MixinPoolState is MixinOwnerActions {
+abstract contract MixinPoolState is MixinPoolValue {
     /*
      * EXTERNAL VIEW METHODS
      */
@@ -28,23 +29,23 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
 
-    // TODO: check if should return tracked applicationsm or if should return in separate method
     /// @inheritdoc IRigoblockV3PoolState
-    function getPortfolioTokens() external view override returns (PortfolioTokens memory tokens) {
-        components.activeTokens = getTrackedTokens();
-        components.baseToken = getPool().baseToken;
+    function getPortfolioTokens() public view override returns (PortfolioTokens memory tokens) {
+        tokens.activeTokens = getActiveTokens();
+        tokens.baseToken = getPool().baseToken;
+    }
+
+    // TODO: verify public is correct visibility
+    /// @inheritdoc IRigoblockV3PoolState
+    function getActiveTokens() public view override returns (address[] memory) {
+        return activeTokensSet().addresses;
     }
 
     /// @inheritdoc IRigoblockV3PoolState
-    function getTrackedTokens() public view override returns (address[] memory) {
-        return tokenRegistry().addressList;
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function getTrackedApplications() public view override returns (address[] memory) {
-        // TODO: should return packedApplications if some feature flag is initialized (we can use a total feature flag)
+    /// @dev Grg staking and UniV3 positions will not be returned by default.
+    function getActiveApplications() public view override returns (uint256 packedApplications) {
         // and return a uint that includes grg staking and uni v3 apps by default
-        return applicationRegistry().packedApplications;
+        return applications().packedApplications;
     }
 
     function getUserAccount(address who) external view override returns (UserAccount memory) {
@@ -93,7 +94,7 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolState
     function getPoolTokens() public view override returns (PoolTokens memory) {
-        return PoolTokens({unitaryValue: _getUnitaryValue(), totalSupply: poolTokens().totalSupply});
+        return PoolTokens({unitaryValue: poolTokens().unitaryValue, totalSupply: poolTokens().totalSupply});
     }
 
     /// @inheritdoc IRigoblockV3PoolState
@@ -136,26 +137,5 @@ abstract contract MixinPoolState is MixinOwnerActions {
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
         return spread != 0 ? spread : _MAX_SPREAD;
-    }
-
-    // TODO: assert not possible to inflate total supply to manipulate pool price.
-    function _getUnitaryValue(uint256 poolValue) internal view override returns (uint256) {
-        uint256 totalSupply = totalSupply();
-        uint256 storedValue = poolTokens().unitaryValue;
-
-        // a previously minted pool cannot have storedValue = 0 
-        if (storedValue != 0) {
-            // default scenario
-            if (poolValue != 0 && totalSupply != 0) {
-                return poolValue / totalSupply;
-            // fallback to stored value when value would be null or infinite
-            // TODO: verify why we did else if (poolValue == 0 || totalSupply == 0)
-            } else {
-                return storedValue;
-            }
-        // return 1 in base token units at first mint
-        } else {
-            return 10**pool().decimals;
-        }
     }
 }

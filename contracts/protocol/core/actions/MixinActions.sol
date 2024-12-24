@@ -3,8 +3,10 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import "../immutable/MixinStorage.sol";
+import "../../extensions/adapters/interfaces/IEOracle.sol";
 import "../../interfaces/IKyc.sol";
 
+// TODO: should be MixinAbstract as well?
 // TODO: check at what level of hierarchy the implementation should inherit ReentrancyGuardTransient
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolTransferFailed();
@@ -40,7 +42,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         // update stored pool value
         uint256 unitaryValue = _updateNav();
 
-        bool isOnlyHolder = poolTokens().totalSupply == balanceOf(msg.sender);
+        bool isOnlyHolder = poolTokens().totalSupply == accounts().userAccounts[msg.sender].userBalance;
 
         if (!isOnlyHolder) {
             // apply markup
@@ -57,7 +59,9 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
     /// @inheritdoc IRigoblockV3PoolActions
     function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant() returns (uint256 netRevenue) {
-        netRevenue = _burn(amountIn, amountOutMin, tokenOut);
+        // TODO: verify define in constants
+        // address(1) is a flag for burn in base tokens
+        netRevenue = _burn(amountIn, amountOutMin, address(1));
     }
 
     // TODO: test for potential abuse. Technically, if the token can be manipulated, a burn in base token can do just as much
@@ -71,7 +75,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         returns (uint256 netRevenue)
     {
         // early revert if token does not have price feed, 0 is sentinel for token not being in portfolio
-        require(getTrackedTokens().positions[tokenOut] != 0);
+        require(activeTokensSet().positions[tokenOut] != 0);
         netRevenue = _burn(amountIn, amountOutMin, tokenOut);
     }
 
@@ -80,6 +84,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         // unitary value can be updated only after first mint
         require(poolTokens().totalSupply > 1e2, "POOL_SUPPLY_NULL_ERROR");
 
+        uint256 unitaryValue = _updateNav();
         poolTokens().unitaryValue = unitaryValue;
         emit NewNav(msg.sender, address(this), unitaryValue);
     }
@@ -87,7 +92,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /*
      * PUBLIC METHODS
      */
-    function balanceOf(address who) external view returns (uint256);
     function decimals() public view virtual override returns (uint8);
 
     /*
@@ -166,7 +170,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn);
-        bool isOnlyHolder = poolTokens().totalSupply == balanceOf(msg.sender);
+        bool isOnlyHolder = poolTokens().totalSupply == accounts().userAccounts[msg.sender].userBalance;
         poolTokens().totalSupply -= burntAmount;
 
         if (!isOnlyHolder) {
@@ -179,14 +183,18 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         address baseToken = pool().baseToken;
 
-        // TODO: test how this could be exploited
-        if (tokenOut != baseToken) {
+        // TODO: test how this could be exploited. Also verify if we can save gas for base token burn ops
+        if (tokenOut != baseToken && tokenOut != address(1)) {
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
             require(netRevenue > IERC20(baseToken).balanceOf(address(this)));
             try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
                 netRevenue = value;
             } catch Error(string memory reason) {
-                revert reason;
+                revert(reason);
+            }
+        } else {
+            if (tokenOut == address(1)) {
+                tokenOut = baseToken;
             }
         }
 

@@ -30,7 +30,7 @@ interface IEOracle {
     function convertTokenAmount(address token, uint256 amount, address targetToken)
         external
         view
-        returns (uint256 value)
+        returns (uint256 value);
 
     /// @notice Returns the address of the oracle hook stored in the bytecode
     /// @return oracleAddress The address of the oracle hook
@@ -38,5 +38,5 @@ interface IEOracle {
 
     function hasPriceFeed(address token) external view returns (bool);
 
-    function getCrossSqrtPriceX96(token0, token1) external view returns (uint160 sqrtPriceX96);
+    function getCrossSqrtPriceX96(address token0, address token1) external view returns (uint160 sqrtPriceX96);
 }

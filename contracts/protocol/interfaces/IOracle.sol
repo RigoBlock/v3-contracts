@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Observation} from "../types/Observation.sol";
 
 interface IOracle {
     /// @member index The index of the last written observation for the pool
@@ -16,6 +17,11 @@ interface IOracle {
     function increaseCardinalityNext(PoolKey calldata key, uint16 cardinalityNext)
         external
         returns (uint16 cardinalityNextOld, uint16 cardinalityNextNew);
+
+    function getObservation(PoolKey calldata key, uint256 index)
+        external
+        view
+        returns (Observation memory observation);
 
     function getState(PoolKey calldata key) external view returns (ObservationState memory state);
 

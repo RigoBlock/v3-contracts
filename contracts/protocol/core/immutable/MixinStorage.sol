@@ -18,7 +18,8 @@
 */
 
 import "./MixinImmutables.sol";
-import {Set} from "../../../libraries/EnumerableSet.sol";
+import {AddressSet} from "../../libraries/EnumerableSet.sol";
+import {ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
 
@@ -95,21 +96,15 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    // todo: check if set naming is correct, as we only define an addresses list and mapping
-    function tokenRegistry() internal pure returns (AddressSet storage s) {
+    function activeTokensSet() internal pure returns (AddressSet storage s) {
         assembly {
-            s.slot := _TOKEN_REGISTRY_SLOT;
+            s.slot := _TOKEN_REGISTRY_SLOT
         }
-    }
-
-    // active applications are stored as a packed single uint256, without length
-    struct ApplicationsSlot {
-        uint256 packedApplications;
     }
 
     function applications() internal pure returns (ApplicationsSlot storage s) {
         assembly {
-            s.slot := _APPLICATIONS_SLOT;
+            s.slot := _APPLICATIONS_SLOT
         }
     }
 }

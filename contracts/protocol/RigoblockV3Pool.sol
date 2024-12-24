@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.28;
 
 import "./IRigoblockV3Pool.sol";
 import "./core/immutable/MixinStorage.sol";
@@ -27,6 +27,7 @@ import "./core/sys/MixinAbstract.sol";
 import "./core/sys/MixinInitializer.sol";
 import "./core/sys/MixinFallback.sol";
 
+// TODO: rename to V4, in a seaprate PR
 /// @title RigoblockV3Pool - A set of rules for Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line

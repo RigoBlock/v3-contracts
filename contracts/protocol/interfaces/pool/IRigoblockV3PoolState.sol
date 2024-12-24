@@ -51,7 +51,8 @@ interface IRigoblockV3PoolState {
     }
 
     /// @notice Returns the struct containing pool tokens info.
-    /// @return PoolTokens struct.
+    /// @return PoolTokens struct. 
+    /// @notice Unitary value is the last stored unitary value.
     function getPoolTokens() external view returns (PoolTokens memory);
 
     /// @notice Returns the aggregate pool generic storage.
@@ -67,6 +68,15 @@ interface IRigoblockV3PoolState {
             PoolTokens memory poolTokensInfo
         );
 
+    struct PortfolioTokens {
+        address[] activeTokens;
+        address baseToken;
+    }
+
+    /// @notice Returns the list of active tokens and the base token.
+    /// @return tokens Tuple of active tokens array and base token.
+    function getPortfolioTokens() external view returns (PortfolioTokens memory tokens);
+
     /// @notice Pool holder account.
     /// @param userBalance Number of tokens held by user.
     /// @param activation Time when tokens become active.
@@ -75,17 +85,13 @@ interface IRigoblockV3PoolState {
         uint48 activation;
     }
 
-    /// @notice Returns a list of external applications held by this contract
-    /// @return
-    function getTrackedTokens() public view override returns (address[] memory) {
-        return tokenRegistry().addressList;
-    }
+    /// @notice Returns a list of tokens held by this contract.
+    /// @return List of active token addresses.
+    function getActiveTokens() external view returns (address[] memory);
 
-    /// @notice Returns a list of external applications used by this contract
-    /// @return List of applications addresses
-    function getTrackedApplications() public view override returns (address[] memory) {
-        return applicationRegistry().addressList;
-    }
+    /// @notice Returns the active application flags.
+    /// @return packedApplications Packed value of bitmap encoded active flags.
+    function getActiveApplications() external view returns (uint256 packedApplications);
 
     /// @notice Returns a pool holder's account struct.
     /// @return UserAccount struct.

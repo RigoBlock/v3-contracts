@@ -31,6 +31,8 @@ import {Observation} from "../types/Observation.sol";
 contract EOracle is IEOracle {
     using TickMath for int24;
 
+    uint160 constant ONE_X96 = 2**96;
+
     IOracle private immutable _oracle;
 
     constructor(address oracleHookAddress) {
@@ -41,7 +43,7 @@ contract EOracle is IEOracle {
         /// @notice The number of stored observations
         uint16 cardinality;
         /// @notice The pool key
-        PoolKey memory key;
+        PoolKey key;
         /// @notice The time range of the observations
         uint32[] secondsAgos;
     }
@@ -59,7 +61,7 @@ contract EOracle is IEOracle {
 
         if (token == address(0)) {
             settings = _getPoolSettings(address(0), targetToken, address(_getOracle()));
-            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(amount, priceX128, 1 << 128); // convert native to token
                 return value;
@@ -72,7 +74,7 @@ contract EOracle is IEOracle {
             // Convert directly to ETH
             settings = _getPoolSettings(address(0), token, address(_getOracle()));
 
-            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to ETH
                 return value;
@@ -84,7 +86,7 @@ contract EOracle is IEOracle {
         // try and convert token to chain currency
         settings = _getPoolSettings(address(0), token, address(_getOracle()));
 
-        try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
+        try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
             uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
             uint256 ethAmount = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to native
 
@@ -92,8 +94,8 @@ contract EOracle is IEOracle {
             settings = _getPoolSettings(address(0), targetToken, address(_getOracle()));
 
             // try to get first conversion
-            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives,) {
-                uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulativesTarget, uint144[] memory) {
+                priceX128 = _getPriceX128(tickCumulativesTarget, settings.secondsAgos);
                 value = FullMath.mulDiv(ethAmount, priceX128, 1 << 128); // convert native to base token
                 return value;
             } catch {
@@ -120,8 +122,7 @@ contract EOracle is IEOracle {
             settings = _getPoolSettings(address(0), token, address(_getOracle()));
 
             try _getOracle().getObservation(settings.key, settings.cardinality)
-                view
-                returns (Oracle.Observation memory observation)
+                returns (Observation memory observation)
             {
                 return observation.blockTimestamp != 0;
             } catch {
@@ -131,7 +132,7 @@ contract EOracle is IEOracle {
     }
 
     /// @dev Returns the cross rate of a token pair through chain currency rate
-    function getCrossSqrtPriceX96(token0, token1) external view returns (uint160 sqrtPriceX96) {
+    function getCrossSqrtPriceX96(address token0, address token1) external view returns (uint160 sqrtPriceX96) {
         // first try to get rate of token to chain currency
         (uint160 sqrtPriceX96_0) = _tryFindRate(token0);
 
@@ -149,15 +150,15 @@ contract EOracle is IEOracle {
         if (token == address(0)) {
             return ONE_X96;
         } else {
-            settings = _getPoolSettings(address(0), baseToken, address(_getOracle()));
+            settings = _getPoolSettings(address(0), token, address(_getOracle()));
 
             // get the last stored observation position
-            (uint16 index,,) = _getOracle().getState(settings.key);
+            IOracle.ObservationState memory state = _getOracle().getState(settings.key);
 
-            try _getOracle().getObservation(settings.key, index) returns (Observation memory observation) {
+            try _getOracle().getObservation(settings.key, state.index) returns (Observation memory observation) {
                 sqrtPriceX96 = observation.prevTick.getSqrtPriceAtTick();
             } catch {
-                return value = 0; // Oracle failure or no pair available
+                sqrtPriceX96 = 0; // Oracle failure or no pair available
             }
         }
     }
@@ -204,24 +205,24 @@ contract EOracle is IEOracle {
         settings.secondsAgos = _getSecondsAgos(settings.cardinality);
     }
 
-    function _getPriceX128(int48[] memory tickCumulatives, uint32[] secondsAgos)
+    function _getPriceX128(int48[] memory tickCumulatives, uint32[] memory secondsAgos)
         private
         pure
         returns (uint256 priceX128)
     {
         int56 tickCumulativesDelta = int56(tickCumulatives[1] - tickCumulatives[0]);
-        int24 twapTick = int24(tickCumulativesDelta / int56(secondsAgos[0]));
-        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(secondsAgos[0]) != 0)) twapTick--;
+        int24 twapTick = int24(tickCumulativesDelta / int56(int32(secondsAgos[0])));
+        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(int32(secondsAgos[0])) != 0)) twapTick--;
 
         uint160 sqrtPriceX96 = twapTick.getSqrtPriceAtTick();
-        uint256 priceX128 = FullMath.mulDiv(sqrtPriceX96, sqrtPriceX96, 1 << 64);
+        priceX128 = FullMath.mulDiv(sqrtPriceX96, sqrtPriceX96, 1 << 64);
     }
 
     function _getSecondsAgos(uint16 cardinality) private view returns (uint32[] memory) {
         // blocktime cannot be lower than 8 seconds on Ethereum, 1 seconds on any other chain
         uint16 blockTime = block.chainid == 1 ? 8 : 1;
         uint32 maxSecondsAgos = uint32(cardinality * blockTime);
-        uint32[] secondsAgos = new uint32[](2);
+        uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
         secondsAgos[1] = 0;
         return secondsAgos;

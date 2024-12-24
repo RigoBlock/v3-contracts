@@ -19,6 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+// TODO: rename to V4, in a seaprate PR
 import "./interfaces/IERC20.sol";
 import "./interfaces/pool/IRigoblockV3PoolActions.sol";
 import "./interfaces/pool/IRigoblockV3PoolEvents.sol";

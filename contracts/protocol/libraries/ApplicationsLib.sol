@@ -1,37 +1,40 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.24;
 
-// TODO: verify this is the correct import, and if should import from types
-import {ApplicationsSlot} from "../interfaces/pool/IRigoblockV3PoolState.sol"
+struct ApplicationsSlot {
+    uint256 packedApplications;
+}
 
 library ApplicationsLib {
     error ApplicationIndexBitmaskRange();
 
-    /// @notice Sets an application as active in the bitmask
-    /// @param self The storage slot where the packed applications are stored
-    /// @param appIndex The application to set as active
+    uint256 private constant MAX_ALLOWED_APPLICATIONS = 31;
+
+    /// @notice Sets an application as active in the bitmask.
+    /// @param self The storage slot where the packed applications are stored.
+    /// @param appIndex The application to set as active.
     function storeApplication(ApplicationsSlot storage self, uint256 appIndex) internal {
-        require(appIndex < 256, ApplicationIndexBitmaskRange());
+        require(appIndex < MAX_ALLOWED_APPLICATIONS, ApplicationIndexBitmaskRange());
         uint256 flag = 1 << appIndex;
         self.packedApplications |= flag;
     }
 
-    /// @notice Removes an application from being active in the bitmask
-    /// @param self The storage slot where the packed applications are stored
-    /// @param appIndex The application to remove
+    /// @notice Removes an application from being active in the bitmask.
+    /// @param self The storage slot where the packed applications are stored.
+    /// @param appIndex The application to remove.
     function removeApplication(ApplicationsSlot storage self, uint256 appIndex) internal {
-        require(appIndex < 256, ApplicationIndexBitmaskRange());
+        require(appIndex < MAX_ALLOWED_APPLICATIONS, ApplicationIndexBitmaskRange());
         uint256 flag = ~(1 << appIndex);
         self.packedApplications &= flag;
     }
 
-    /// @notice Checks if an application is active in the bitmask
-    /// @param packed The stored packed active applications
-    /// @param appIndex The application to check
-    /// @return bool Whether the application is active
-    function isActiveApplication(uint256 packed, uint256 appIndex) internal view returns (bool) {
-        require(appIndex < 256, ApplicationIndexBitmaskRange());
+    /// @notice Checks if an application is active in the bitmask.
+    /// @param packedApplications The bitmap packed active applications flags.
+    /// @param appIndex The application to check.
+    /// @return bool Whether the application is active.
+    function isActiveApplication(uint256 packedApplications, uint256 appIndex) internal pure returns (bool) {
+        require(appIndex < MAX_ALLOWED_APPLICATIONS, ApplicationIndexBitmaskRange());
         uint256 flag = 1 << appIndex;
-        return (packed & app) != 0;
+        return (packedApplications & flag) != 0;
     }
 }
