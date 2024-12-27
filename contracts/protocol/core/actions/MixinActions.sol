@@ -68,9 +68,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     // harm as a burn in any token. Considering burn must happen after a certain period, a pool opeartor has time to sell illiquid tokens.
     // technically, this could be used for exchanging big quantities of tokens at market rate. Which is not a big deal. prob should
     // allow only if user does not have enough base tokens
+    /// @inheritdoc IRigoblockV3PoolActions
     function burnForToken(uint256 amountIn, uint256 amountOutMin, address tokenOut)
         external
-        /*override*/
+        override
         nonReentrant()
         returns (uint256 netRevenue)
     {

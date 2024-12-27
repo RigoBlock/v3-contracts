@@ -92,6 +92,7 @@ abstract contract MixinPoolState is MixinPoolValue {
             });
     }
 
+    // TODO: verify, as we would return no value until pool is initialized, 
     /// @inheritdoc IRigoblockV3PoolState
     function getPoolTokens() public view override returns (PoolTokens memory) {
         return PoolTokens({unitaryValue: poolTokens().unitaryValue, totalSupply: poolTokens().totalSupply});

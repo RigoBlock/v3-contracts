@@ -66,29 +66,35 @@ abstract contract MixinOwnerActions is MixinActions {
 
         address baseToken = pool().baseToken;
 
-        // TODO: check we are removing mapping
         for (uint i = 0; i < set.addresses.length; i++) {
             // skip removal if base token
             if (set.addresses[i] == baseToken) {
                 continue;
             }
 
-            // TODO: verify this exits the j for loop when finding an equality condition
+            bool foundInApp = false;
+
             // skip removal if a token is active in an application
             for (uint j = 0; j < activeApps.length; j++) {
                 for (uint k = 0; k < activeApps[i].balances.length; k++) {
                     if (activeApps[j].balances[k].token == set.addresses[i]) {
-                        continue;
+                        foundInApp = true;
+                        break; // Exit k loop
                     }
+                }
+                if (foundInApp) {
+                    break; // Exit j loop if token found in any app
                 }
             }
 
-            try IERC20(set.addresses[i]).balanceOf(address(this)) returns (uint256 _balance) {
-                if (_balance <= 1) {
-                    set.remove(set.addresses[i]);
+            if (!foundInApp) {
+                try IERC20(set.addresses[i]).balanceOf(address(this)) returns (uint256 _balance) {
+                    if (_balance <= 1) {
+                        set.remove(set.addresses[i]);
+                    }
+                } catch {
+                    continue;
                 }
-            } catch {
-                continue;
             }
         }
     }
