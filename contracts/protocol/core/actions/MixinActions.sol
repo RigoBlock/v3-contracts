@@ -205,7 +205,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /// @return Number of user burnt tokens.
     function _allocateBurnTokens(uint256 amountIn, uint256 holderBalance) private returns (uint256) {
         if (amountIn < holderBalance) {
-            accounts().userAccounts[msg.sender].userBalance -= amountIn;
+            accounts().userAccounts[msg.sender].userBalance -= uint208(amountIn);
         } else {
             delete accounts().userAccounts[msg.sender];
         }
