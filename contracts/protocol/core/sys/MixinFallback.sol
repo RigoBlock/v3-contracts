@@ -7,6 +7,9 @@ import "../immutable/MixinStorage.sol";
 import "../../interfaces/IAuthority.sol";
 
 abstract contract MixinFallback is MixinImmutables, MixinStorage {
+    error PoolMethodNotAllowed();
+    error PoolImplementationDirectCallNotAllowed();
+
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
         _checkDelegateCall();
@@ -18,7 +21,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
-        require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
+        require(adapter != address(0), PoolMethodNotAllowed());
 
         // direct fallback to implementation will result in staticcall to extension as implementation owner is address(1)
         address poolOwner = pool().owner;
@@ -50,7 +53,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     receive() external payable onlyDelegateCall {}
 
     function _checkDelegateCall() private view {
-        require(address(this) != _implementation, "POOL_IMPLEMENTATION_DIRECT_CALL_NOT_ALLOWED_ERROR");
+        require(address(this) != _implementation, PoolImplementationDirectCallNotAllowed());
     }
 
     /// @dev Returns the address of the application adapter.

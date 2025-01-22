@@ -27,6 +27,8 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     /// @inheritdoc IRigoblockV3PoolImmutable
     string public constant override VERSION = "4.0.0";
 
+    bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
+
     bytes32 internal constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
 
     bytes32 internal constant _POOL_VARIABLES_SLOT = 0xe3ed9e7d534645c345f2d15f0c405f8de0227b60eb37bbeb25b26db462415dec;
@@ -36,8 +38,6 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     bytes32 internal constant _POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
 
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
-
-    bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
 
     uint16 internal constant _FEE_BASE = 10000;
 
@@ -52,7 +52,8 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     uint48 internal constant _MAX_LOCKUP = 30 days;
 
-    uint48 internal constant _MIN_LOCKUP = 2;
+    // TODO: verify moving minimum from 2 to 10 blocks is helpful for rogue validator/sequencer protection
+    uint48 internal constant _MIN_LOCKUP = 10;
 
     bytes4 internal constant _TRANSFER_FROM_SELECTOR =
         bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));

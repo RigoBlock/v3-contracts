@@ -27,6 +27,7 @@ import "./AUniswapDecoder.sol";
 import "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
+import "../../IRigoblockV3Pool.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {Applications} from "../../types/Applications.sol";
@@ -45,7 +46,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     type BooleanSlot is bytes32;
 
     using CalldataDecoder for bytes;
-    //using EnumerableSet for AddressSet;
     using TransientSlot for *;
     using SlotDerivation for bytes32;
     using ApplicationsLib for ApplicationsSlot;
@@ -77,16 +77,15 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     /// @notice Thrown when attempting to execute commands and an incorrect number of inputs are provided
     error LengthMismatch();
-    error TokenPriceFeedError(address token);
     error RecipientIsNotSmartPool();
     error ApprovalFailed(address target);
     error TargetIsNotContract();
     error ReentrantCall();
     error NestedSubPlan();
 
-    constructor(address _universalRouter, address _v4positionManager) {
+    constructor(address _universalRouter, address _v4PositionManager) {
         _uniswapRouter = _universalRouter;
-        _positionManager = _v4positionManager;
+        _positionManager = _v4PositionManager;
     }
 
     modifier checkDeadline(uint256 deadline) {
@@ -134,6 +133,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
             // input sanity check and parameters return
             params = _decodeInput(commands[i], input, params);
+
         }
 
         // only execute when finished decoding inputs
@@ -201,12 +201,12 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         AddressSet storage values = activeTokens();
 
         for (uint i = 0; i < tokensOut.length; i++) {
-            // update storage with new token
-            bool isNew = values.addUnique(tokensOut[i]);
-            if (isNew) {
-                // perform a staticcall to the oracle extension and assert tokenOut has a price feed
-                require(IEOracle(address(this)).hasPriceFeed(tokensOut[i]), TokenPriceFeedError(tokensOut[i]));
-            }
+            // update storage with new token. Skips and returns false for base token, which is already in storage
+            values.addUnique(
+                IEOracle(address(this)),
+                tokensOut[i],
+                IRigoblockV3Pool(payable(address(this))).getPool().baseToken
+            );
         }
     }
 

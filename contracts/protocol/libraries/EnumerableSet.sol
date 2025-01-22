@@ -19,28 +19,40 @@
 
 pragma solidity ^0.8.20;
 
+import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
+
 struct AddressSet {
     // List of stored addresses
     address[] addresses;
     // Mapping of address to position.
-    // Position 0 means an address has been removed.
+    // Position 0 means an address has never been added before.
     mapping(address => uint256) positions;
 }
 
 library EnumerableSet {
-    error AddressListLength();
+    error AddressListExceedsMaxLength();
+    error TokenPriceFeedDoesNotExist(address token);
 
     // limit size of array to prevent DOS to nav estimates
-    uint256 private constant _MAX_UNIQUE_ADDRESSES = 255;
+    uint256 private constant _MAX_UNIQUE_ADDRESSES = type(uint8).max;
 
-    function addUnique(AddressSet storage set, address value) internal returns (bool) {
-        require(set.addresses.length <= _MAX_UNIQUE_ADDRESSES, AddressListLength());
-        if (!_contains(set, value)) {
-            set.addresses.push(value);
-            set.positions[value] = set.addresses.length;
-            return true;
-        } else {
-            return false;
+    // flag for removed address
+    uint256 private constant _REMOVED_ADDRESS_FLAG = type(uint256).max;
+
+    // TODO: check if should log, even though we already store in list so not strictly needed.
+    /// @notice Base token is never pushed to active tokens, as already stored.
+    function addUnique(AddressSet storage set, IEOracle oracle, address value, address baseToken) internal {
+        if (value != baseToken) {
+            if (set.positions[value] == 0 || set.positions[value] == _REMOVED_ADDRESS_FLAG) {
+                require(set.addresses.length < _MAX_UNIQUE_ADDRESSES, AddressListExceedsMaxLength());
+
+                // perform a staticcall to the oracle extension and assert new token has a price feed. Removed token as well
+                require(oracle.hasPriceFeed(value), TokenPriceFeedDoesNotExist(value));
+
+                // update storage
+                set.addresses.push(value);
+                set.positions[value] = set.addresses.length;
+            }
         }
     }
 
@@ -64,16 +76,12 @@ library EnumerableSet {
             // Delete the slot where the moved value was stored
             set.addresses.pop();
 
-            // Delete the tracked position for the deleted slot
-            delete set.positions[value];
+            // Delete the tracked position for the deleted slot without clearing storage
+            set.positions[value] = _REMOVED_ADDRESS_FLAG;
 
             return true;
         } else {
             return false;
         }
-    }
-
-    function _contains(AddressSet storage set, address value) private view returns (bool) {
-        return set.positions[value] != 0;
     }
 }

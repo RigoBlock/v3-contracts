@@ -29,6 +29,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
+import {NativeWrapper} from "@uniswap/v4-periphery/src/base/NativeWrapper.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
@@ -51,6 +52,8 @@ contract EApps is IEApps {
 
     error UnknownApplication(uint256 appType);
 
+    address public immutable override wrappedNative;
+
     IStaking private immutable _grgStakingProxy;
     INonfungiblePositionManager private immutable _uniV3NPM;
     IPositionManager private immutable _uniV4Posm;
@@ -61,16 +64,14 @@ contract EApps is IEApps {
     // bytes32(uint256(keccak256("Eapps.uniV4.tokenIds")) - 1)
     bytes32 private constant _UNIV4_TOKEN_IDS_SLOT = 0x27616b43efe6cac399303df84ec58b87084277217488937eeb864ace11507167;
 
-    constructor(address grgStakingProxy, address univ3pm, address univ4pm) {
+    // TODO: we could use universal router as input, query immutables from the constructor.
+    /// @notice The different immutable addresses will result in different deployed addresses on different networks.
+    constructor(address grgStakingProxy, address univ3Npm, address payable univ4Posm) {
+        // univ4 POSM does not implement inherited NativeWrapper methods in its interface
+        wrappedNative = address(NativeWrapper(univ4Posm).WETH9());
         _grgStakingProxy = IStaking(grgStakingProxy);
-        _uniV3NPM = INonfungiblePositionManager(univ3pm);
-        _uniV4Posm = IPositionManager(univ4pm);
-    }
-
-    struct UniV4Position {
-        // TODO: verify we need this
-        mapping(address => uint256 poolId) poolIdsByAddress;
-        uint256[] poolIds;
+        _uniV3NPM = INonfungiblePositionManager(univ3Npm);
+        _uniV4Posm = IPositionManager(univ4Posm);
     }
 
     function getAppTokenBalances(uint256 packedApplications) external view override returns (ExternalApp[] memory) {

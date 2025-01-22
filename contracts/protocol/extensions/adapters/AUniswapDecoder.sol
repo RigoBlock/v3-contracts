@@ -22,9 +22,12 @@ pragma solidity 0.8.28;
 
 import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {NativeWrapper} from "@uniswap/v4-periphery/src/base/NativeWrapper.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
@@ -33,6 +36,7 @@ import {BytesLib} from './lib/uni-v3/BytesLib.sol';
 
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
+    using TransientStateLibrary for IPoolManager;
     
     error InvalidCommandType(uint256 commandType);
 
@@ -118,49 +122,49 @@ abstract contract AUniswapDecoder {
                     if (command == Commands.V2_SWAP_EXACT_IN) {
                         (
                             address recipient,
-                            /*uint256 amountIn*/,
+                            uint256 amountIn,
                             /*uint256 amountOutMin*/,
                             /*bytes memory path*/,
                             bool payerIsUser
                         ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        // TODO: for native, payer can be router. Probably this check is unnecessary
                         assert(payerIsUser);
                         address[] calldata path = inputs.toAddressArray(3);
-                        params.tokensOut = _addUnique(params.tokensIn, path[0]);
+                        params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
                         params.recipients = _addUnique(params.recipients, recipient);
+                        params.value += path[0] == ZERO_ADDRESS ? amountIn : 0;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
                         (
                             address recipient,
                             /*uint256 amountOut*/,
-                            /*uint256 amountInMax*/,
+                            uint256 amountInMax,
                             /*bytes memory path*/,
                             bool payerIsUser
                         ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        // TODO: payer could be router for native swaps. This assertion could be unnecessary.
                         assert(payerIsUser);
                         address[] calldata path = inputs.toAddressArray(3);
                         // TODO: check order in/out is correct
-                        params.tokensOut = _addUnique(params.tokensIn, path[0]);
+                        params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
                         params.recipients = _addUnique(params.recipients, recipient);
+                        // TODO: verify that excess native amount is returned after swaps concluded
+                        params.value += path[0] == ZERO_ADDRESS ? amountInMax : 0;
                     } else if (command == Commands.PERMIT2_PERMIT) {
                         revert InvalidCommandType(command);
                     } else if (command == Commands.WRAP_ETH) {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
-                        // TODO: we might want to _mapRecipient(recipient), but we do not accept calls from
-                        // wallet other than user (like a trusted forwarder)
                         params.recipients = _addUnique(params.recipients, recipient);
-                        params.value = amount;
-                        // TODO: must also add WETH to tracked assets, prob best in router adapter for all tokensOut
-                        // TODO: also add to apps, as oracle may not exist, we may want to return base balances back when oracle
-                        // does not exist
+                        params.tokensOut = _addUnique(params.tokensOut, address(NativeWrapper(payable(positionManager())).WETH9()));
+                        params.value += amount;
                     } else if (command == Commands.UNWRAP_WETH) {
                         (address recipient, /*uint256 amountMin*/) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
-                        // TODO: must also remove WETH from tracked assets, but we are not passing the correct flag to router adapter
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
                         revert InvalidCommandType(command);
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
-                        // TODO: check if we need this one, we could simply not pass it
+                        // TODO: check if we need this one, as it is read only (verify)
                         (
                             address owner,
                             address token,
@@ -188,47 +192,57 @@ abstract contract AUniswapDecoder {
                         bytes memory paramsAtIndex = encodedParams[actionIndex];
 
                         if (action < Actions.SETTLE) {
+                            // TODO: if we only append approvals and requirements in settlement, i.e. payments actions, we can
+                            // save gas by avoiding unnecessary approvals and checks. However must make sure recipient is this.
                             if (action == Actions.SWAP_EXACT_IN) {
                                 IV4Router.ExactInputParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactInputParams));
                                 uint256 pathLength = swapParams.path.length;
-                                params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(swapParams.currencyIn));
+                                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(swapParams.currencyIn));
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency));
                             } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
                                 IV4Router.ExactInputSingleParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactInputSingleParams));
-                                params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(swapParams.poolKey.currency0));
+                                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(swapParams.poolKey.currency0));
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(swapParams.poolKey.currency1));
                             } else if (action == Actions.SWAP_EXACT_OUT) {
                                 IV4Router.ExactOutputParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactOutputParams));
                                 uint256 pathLength = swapParams.path.length;
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(swapParams.currencyOut));
-                                params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency));
+                                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(swapParams.path[pathLength - 1].intermediateCurrency));
                             } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
                                 IV4Router.ExactOutputSingleParams memory swapParams = abi.decode(paramsAtIndex, (IV4Router.ExactOutputSingleParams));
                                 // TODO: verify ordering on tokens
-                                params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(swapParams.poolKey.currency1));
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(swapParams.poolKey.currency0));
+                                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(swapParams.poolKey.currency1));
                             }
                         } else {
+                            // TODO: verify we need to append tokensIn, tokensOut here, as already appended in swap actions
                             if (action == Actions.SETTLE_PAIR) {
                                 // TODO: verify we cannot decode recipient, i.e. not an input for settle
                                 (Currency currency0, Currency currency1) = abi.decode(paramsAtIndex, (Currency, Currency));
                                 params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(currency0));
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency1));
+                                // TODO: verify initialization as address or instance
+                                int256 amount = IPositionManager(positionManager()).poolManager().currencyDelta(address(this), currency0);
+                                params.value += Currency.unwrap(currency0) == ZERO_ADDRESS  && amount < 0 ? uint256(-amount) : 0;
                             } else if (action == Actions.TAKE_PAIR) {
-                                // TODO: verify if currency is eth we must forward currency.value?
+                                // we still require both tokens to have a price feed, even though we could skip check but for recipient
                                 (Currency currency0, Currency currency1, address recipient) = abi.decode(paramsAtIndex, (Currency, Currency, address));
                                 params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(currency0));
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency1));
                                 params.recipients = _addUnique(params.recipients, recipient);
                             } else if (action == Actions.SETTLE) {
-                                (Currency currency, /*uint256 amount*/, /*bool payerIsUser*/) = abi.decode(paramsAtIndex, (Currency, uint256, bool));
+                                (Currency currency, uint256 amount, /*bool payerIsUser*/) = abi.decode(paramsAtIndex, (Currency, uint256, bool));
                                 params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(currency));
+                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
                             } else if (action == Actions.TAKE) {
                                 (Currency currency, address recipient, /*uint256 amount*/) = abi.decode(paramsAtIndex, (Currency, address, uint256));
                                 params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, recipient);
                             } else if (action == Actions.CLOSE_CURRENCY) {
+                                // Handles either direction based on final delta
                                 // TODO: in these methods, we should check if simply return to skip checks if possible
+                                // technically, should append value if neg delta and native, approve if neg delta and not native
+                                // should check how often we will use this
                                 Currency currency = abi.decode(paramsAtIndex, (Currency));
                                 params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(currency));
                             } else if (action == Actions.CLEAR_OR_TAKE) {
@@ -262,13 +276,14 @@ abstract contract AUniswapDecoder {
                         // TODO: in uni V4, only position owner can modify liquiity, assert
                         // TODO: verify how we extract value if currency is eth
                         if (action == Actions.INCREASE_LIQUIDITY) {
-                            (uint256 tokenId, /*uint256 liquidity*/, /*uint128 amount0Max*/, /*uint128 amount1Max*/, /*bytes memory hookData*/) =
+                            (uint256 tokenId, /*uint256 liquidity*/, uint128 amount0Max, /*uint128 amount1Max*/, /*bytes memory hookData*/) =
                                 abi.decode(paramsAtIndex, (uint256, uint256, uint128, uint128, bytes));
                             (PoolKey memory poolKey, /*PositionInfo*/) = IPositionManager(positionManager()).getPoolAndPositionInfo(tokenId);
-                            params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
+                            params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
                             params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
-                            params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency1));
+                            params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency1));
                             params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
+                            params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
                         // TODO: this method allows using deltas to swap instead of transferring erc20s. If we support this, we must
                         // also make sure ERC6909 balances are correctly returned by the EApps contract
                         // TODO: the following method is not implemented in the deployed uni package, but it is in uni universal dev
@@ -277,8 +292,8 @@ abstract contract AUniswapDecoder {
                         //    abi.decode(paramsAtIndex, (uint256, uint128, uint128, bytes));
                         //    (PoolKey memory poolKey, /*PositionInfo*/) = IPositionManager(positionManager()).getPoolAndPositionInfo(tokenId);
                         //    // TODO: return owner as recipient if stored in PositionInfo
-                        //    params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
-                        //    params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency1));
+                        //    params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
+                        //    params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                         } else if (action == Actions.DECREASE_LIQUIDITY) {
                             // skip this command (not yet implemented in uniswap v4)
                         } else if (action == Actions.MINT_POSITION) {
@@ -289,7 +304,7 @@ abstract contract AUniswapDecoder {
                                 /*int24 tickLower*/,
                                 /*int24 tickUpper*/,
                                 /*uint256 liquidity*/,
-                                /*uint128 amount0Max*/,
+                                uint128 amount0Max,
                                 /*uint128 amount1Max*/,
                                 address owner,
                                 /*bytes memory hookData*/
@@ -301,12 +316,13 @@ abstract contract AUniswapDecoder {
                             //    !poolKey.hooks.afterRemoveLiquidityReturnDelta,
                             //    LiquidityMintHookError(address(poolKey.hooks))
                             //);
-                            params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
+                            params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
                             params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
-                            params.tokensOut = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency1));
+                            params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency1));
                             params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                             params.recipients = _addUnique(params.recipients, owner);
                             params.tokenIds = _addUnique(params.tokenIds, IPositionManager(positionManager()).nextTokenId(), true);
+                            params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
                         } else if (action == Actions.BURN_POSITION) {
                             // TODO: check if has been implemented in universal router
                             // skip this action (not yet implemented in uniswap v4). When burning, remember to remove tokenId from proxy storage

@@ -11,11 +11,15 @@ abstract contract MixinOwnerActions is MixinActions {
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
 
-    error PoolSpreadInvalid(uint16 maxSpread);
+    error PoolCallerIsNotOwner();
+    error PoolFeeBiggerThanMax(uint16 maxFee);
+    error PoolInputIsNotContract();
     error PoolLockupPeriodInvalid(uint48 minimum, uint48 maximum);
+    error PoolNullOwnerInput();
+    error PoolSpreadInvalid(uint16 maxSpread);
 
     modifier onlyOwner() {
-        require(msg.sender == pool().owner, "POOL_CALLER_IS_NOT_OWNER_ERROR");
+        require(msg.sender == pool().owner, PoolCallerIsNotOwner());
         _;
     }
 
@@ -64,16 +68,10 @@ abstract contract MixinOwnerActions is MixinActions {
             revert(reason);
         }
 
-        address baseToken = pool().baseToken;
+        bool foundInApp;
 
+        // base token is never pushed to active list for gas savings, we can safely remove any unactive token
         for (uint i = 0; i < set.addresses.length; i++) {
-            // skip removal if base token
-            if (set.addresses[i] == baseToken) {
-                continue;
-            }
-
-            bool foundInApp = false;
-
             // skip removal if a token is active in an application
             for (uint j = 0; j < activeApps.length; j++) {
                 for (uint k = 0; k < activeApps[i].balances.length; k++) {
@@ -95,35 +93,33 @@ abstract contract MixinOwnerActions is MixinActions {
                 } catch {
                     continue;
                 }
+            } else {
+                foundInApp = false;
             }
         }
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setKycProvider(address kycProvider) external override onlyOwner {
-        require(_isContract(kycProvider), "POOL_INPUT_NOT_CONTRACT_ERROR");
+        require(_isContract(kycProvider), PoolInputIsNotContract());
         poolParams().kycProvider = kycProvider;
         emit KycProviderSet(address(this), kycProvider);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setTransactionFee(uint16 transactionFee) external override onlyOwner {
-        require(transactionFee <= _MAX_TRANSACTION_FEE, "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"); //fee cannot be higher than 1%
+        require(transactionFee <= _MAX_TRANSACTION_FEE, PoolFeeBiggerThanMax(_MAX_TRANSACTION_FEE)); //fee cannot be higher than 1%
         poolParams().transactionFee = transactionFee;
         emit NewFee(msg.sender, address(this), transactionFee);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setOwner(address newOwner) public override onlyOwner {
-        require(newOwner != address(0), "POOL_NULL_OWNER_INPUT_ERROR");
+        require(newOwner != address(0), PoolNullOwnerInput());
         address oldOwner = pool().owner;
         pool().owner = newOwner;
         emit NewOwner(oldOwner, newOwner);
     }
-
-    function totalSupply() public view virtual override returns (uint256);
-
-    function decimals() public view virtual override returns (uint8);
 
     function _isContract(address target) private view returns (bool) {
         return target.code.length > 0;

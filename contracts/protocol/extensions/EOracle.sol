@@ -31,7 +31,7 @@ import {Observation} from "../types/Observation.sol";
 contract EOracle is IEOracle {
     using TickMath for int24;
 
-    uint160 constant ONE_X96 = 2**96;
+    uint160 private constant ONE_X96 = 2**96;
 
     IOracle private immutable _oracle;
 
@@ -71,7 +71,7 @@ contract EOracle is IEOracle {
         }
 
         if (targetToken == address(0)) {
-            // Convert directly to ETH
+            // Convert directly to native
             settings = _getPoolSettings(address(0), token, address(_getOracle()));
 
             try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
@@ -111,9 +111,9 @@ contract EOracle is IEOracle {
         return address(_getOracle());
     }
 
-    /// @dev This method will return true if the last stored observation has a non nil timestamp
-    // TODO: verify if instead of the boolean we can return the value directly, or the observation so we can use it for deeper
-    // inspections and can skip one check here. Also check if want to check observations[0].timestamp != 0 to save gas
+    /// @dev This method will return true if the last stored observation has a non-nil timestamp.
+    /// @dev Adding wrapped native token requires a price feed against navite, as otherwise must warm up EApps in order
+    /// to have same contract address on all chains.
     function hasPriceFeed(address token) external view returns (bool) {
         if (token == address(0)) {
             return true;

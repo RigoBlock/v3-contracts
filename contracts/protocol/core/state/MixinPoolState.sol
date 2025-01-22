@@ -16,6 +16,17 @@ abstract contract MixinPoolState is MixinPoolValue {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
+    /// @dev Grg staking and UniV3 positions will not be returned by default.
+    function getActiveApplications() external view override returns (uint256 packedApplications) {
+        return _getActiveApplications();
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function getActiveTokens() external view override returns (ActiveTokens memory tokens) {
+        return _getActiveTokens();
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
     function getPoolStorage()
         external
         view
@@ -29,32 +40,23 @@ abstract contract MixinPoolState is MixinPoolValue {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
-    function getPortfolioTokens() public view override returns (PortfolioTokens memory tokens) {
-        tokens.activeTokens = getActiveTokens();
-        tokens.baseToken = getPool().baseToken;
-    }
-
-    // TODO: verify public is correct visibility
-    /// @inheritdoc IRigoblockV3PoolState
-    function getActiveTokens() public view override returns (address[] memory) {
-        return activeTokensSet().addresses;
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    /// @dev Grg staking and UniV3 positions will not be returned by default.
-    function getActiveApplications() public view override returns (uint256 packedApplications) {
-        // and return a uint that includes grg staking and uni v3 apps by default
-        return applications().packedApplications;
-    }
-
     function getUserAccount(address who) external view override returns (UserAccount memory) {
         return accounts().userAccounts[who];
     }
 
     /// @inheritdoc IRigoblockV3PoolState
+    function name() external view override returns (string memory) {
+        return pool().name;
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
     function owner() external view override returns (address) {
         return pool().owner;
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function totalSupply() external view override returns (uint256) {
+        return poolTokens().totalSupply;
     }
 
     /*
@@ -92,15 +94,15 @@ abstract contract MixinPoolState is MixinPoolValue {
             });
     }
 
-    // TODO: verify, as we would return no value until pool is initialized, 
     /// @inheritdoc IRigoblockV3PoolState
     function getPoolTokens() public view override returns (PoolTokens memory) {
-        return PoolTokens({unitaryValue: poolTokens().unitaryValue, totalSupply: poolTokens().totalSupply});
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function name() public view override returns (string memory) {
-        return pool().name;
+        uint256 unitaryValue = poolTokens().unitaryValue;
+        return PoolTokens(
+            {
+                unitaryValue: unitaryValue != 0 ? unitaryValue : 10 ** pool().decimals,
+                totalSupply: poolTokens().totalSupply
+            }
+        );
     }
 
     /// @inheritdoc IRigoblockV3PoolState
@@ -117,14 +119,18 @@ abstract contract MixinPoolState is MixinPoolValue {
         return string(bytesArray);
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
-    function totalSupply() public view override returns (uint256) {
-        return poolTokens().totalSupply;
-    }
-
     /*
      * INTERNAL VIEW METHODS
      */
+    function _getActiveApplications() internal view override returns (uint256) {
+        return applications().packedApplications;
+    }
+
+    function _getActiveTokens() internal view override returns (ActiveTokens memory tokens) {
+        tokens.activeTokens = activeTokensSet().addresses;
+        tokens.baseToken = pool().baseToken;
+    }
+
     function _getFeeCollector() internal view override returns (address) {
         address feeCollector = poolParams().feeCollector;
         return feeCollector != address(0) ? feeCollector : pool().owner;

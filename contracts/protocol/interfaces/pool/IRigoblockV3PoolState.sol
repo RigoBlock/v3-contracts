@@ -4,6 +4,20 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolState {
+    /// @notice Returns the active application flags.
+    /// @return packedApplications Packed value of bitmap encoded active flags.
+    function getActiveApplications() external view returns (uint256 packedApplications);
+
+    struct ActiveTokens {
+        address[] activeTokens;
+        address baseToken;
+    }
+
+    /// @notice Returns the list of active tokens and the base token.
+    /// @return tokens Tuple of active tokens list and base token.
+    /// @dev Base token is always active.
+    function getActiveTokens() external view returns (ActiveTokens memory tokens);
+
     /// @notice Returned pool initialization parameters.
     /// @dev Symbol is stored as bytes8 but returned as string to facilitating client view.
     /// @param name String of the pool name (max 32 characters).
@@ -68,15 +82,6 @@ interface IRigoblockV3PoolState {
             PoolTokens memory poolTokensInfo
         );
 
-    struct PortfolioTokens {
-        address[] activeTokens;
-        address baseToken;
-    }
-
-    /// @notice Returns the list of active tokens and the base token.
-    /// @return tokens Tuple of active tokens array and base token.
-    function getPortfolioTokens() external view returns (PortfolioTokens memory tokens);
-
     /// @notice Pool holder account.
     /// @param userBalance Number of tokens held by user.
     /// @param activation Time when tokens become active.
@@ -84,14 +89,6 @@ interface IRigoblockV3PoolState {
         uint208 userBalance;
         uint48 activation;
     }
-
-    /// @notice Returns a list of tokens held by this contract.
-    /// @return List of active token addresses.
-    function getActiveTokens() external view returns (address[] memory);
-
-    /// @notice Returns the active application flags.
-    /// @return packedApplications Packed value of bitmap encoded active flags.
-    function getActiveApplications() external view returns (uint256 packedApplications);
 
     /// @notice Returns a pool holder's account struct.
     /// @return UserAccount struct.

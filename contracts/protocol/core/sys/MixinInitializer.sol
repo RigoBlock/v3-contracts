@@ -5,20 +5,23 @@ import "../immutable/MixinImmutables.sol";
 import "../immutable/MixinStorage.sol";
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IRigoblockPoolProxyFactory.sol";
+import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     error BaseTokenDecimals();
     error BaseTokenPriceFeedNotFound();
+    error PoolAlreadyInitialized();
 
     modifier onlyUninitialized() {
         // pool proxy is always initialized in the constructor, therefore
         // empty code means the pool has not been initialized
-        require(address(this).code.length == 0, "POOL_ALREADY_INITIALIZED_ERROR");
+        require(address(this).code.length == 0, PoolAlreadyInitialized());
         _;
     }
 
     /// @inheritdoc IRigoblockV3PoolInitializer
+    /// @dev Cannot be reentered as no non-view call is performed to external contracts.
     function initializePool() external override onlyUninitialized {
         IRigoblockPoolProxyFactory.Parameters memory initParams = IRigoblockPoolProxyFactory(msg.sender).parameters();
         uint8 tokenDecimals;

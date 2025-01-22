@@ -6,9 +6,18 @@ import "../immutable/MixinStorage.sol";
 import "../../extensions/adapters/interfaces/IEOracle.sol";
 import "../../interfaces/IKyc.sol";
 
-// TODO: should be MixinAbstract as well?
-// TODO: check at what level of hierarchy the implementation should inherit ReentrancyGuardTransient
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
+    // TODO: check if we can merge some errors, and log info with them.
+    error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
+    error PoolBurnNotEnough();
+    error PoolBurnNullAmount();
+    error PoolBurnOutputAmount();
+    error PoolCallerNotWhitelisted();
+    error PoolMinimumPeriodNotEnough();
+    error PoolMintAmountIn();
+    error PoolMintOutputAmount();
+    error PoolSupplyIsNullOrDust();
+    error PoolTokenNotActive();
     error PoolTransferFailed();
     error PoolTransferFromFailed();
 
@@ -25,18 +34,16 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         // require whitelisted user if kyc is enforced
         if (kycProvider != address(0)) {
-            require(IKyc(kycProvider).isWhitelistedUser(recipient), "POOL_CALLER_NOT_WHITELISTED_ERROR");
+            require(IKyc(kycProvider).isWhitelistedUser(recipient), PoolCallerNotWhitelisted());
         }
 
         _assertBiggerThanMinimum(amountIn);
 
         if (pool().baseToken == address(0)) {
-            require(msg.value == amountIn, "POOL_MINT_AMOUNTIN_ERROR,");
+            require(msg.value == amountIn, PoolMintAmountIn());
         } else {
             _safeTransferFrom(msg.sender, address(this), amountIn);
         }
-
-        // TODO: verify if we should add base token to active assets, which may save some gas on nav estimate.
 
         // TODO: verify what happens with null total supply
         // update stored pool value
@@ -50,10 +57,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         uint256 mintedAmount = (amountIn * 10**decimals()) / unitaryValue;
-        require(mintedAmount > amountOutMin, "POOL_MINT_OUTPUT_AMOUNT_ERROR");
+        require(mintedAmount > amountOutMin, PoolMintOutputAmount());
         poolTokens().totalSupply += mintedAmount;
 
-        /// @notice allocate pool token transfers and log events.
+        // allocate pool token transfers and log events.
         recipientAmount = _allocateMintTokens(recipient, mintedAmount);
     }
 
@@ -75,19 +82,17 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         nonReentrant()
         returns (uint256 netRevenue)
     {
-        // early revert if token does not have price feed, 0 is sentinel for token not being in portfolio
-        require(activeTokensSet().positions[tokenOut] != 0);
+        // early revert if token does not have price feed, 0 is sentinel for token not being active. Removed token will revert later.
+        // TODO: we also use type(uint256).max as flag for removed token
+        require(activeTokensSet().positions[tokenOut] != 0, PoolTokenNotActive());
         netRevenue = _burn(amountIn, amountOutMin, tokenOut);
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
     function setUnitaryValue() external override nonReentrant() {
         // unitary value can be updated only after first mint
-        require(poolTokens().totalSupply > 1e2, "POOL_SUPPLY_NULL_ERROR");
-
-        uint256 unitaryValue = _updateNav();
-        poolTokens().unitaryValue = unitaryValue;
-        emit NewNav(msg.sender, address(this), unitaryValue);
+        require(poolTokens().totalSupply > 1e2, PoolSupplyIsNullOrDust());
+        _updateNav();
     }
 
     /*
@@ -114,64 +119,49 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /// @dev Each new mint on same recipient sets new activation on all owned tokens.
     /// @param recipient Address of the recipient.
     /// @param mintedAmount Value of issued tokens.
-    /// @return recipientAmount Number of new tokens issued to recipient.
-    function _allocateMintTokens(address recipient, uint256 mintedAmount) private returns (uint256 recipientAmount) {
-        recipientAmount = mintedAmount;
-        Accounts storage accounts = accounts();
-        uint208 recipientBalance = accounts.userAccounts[recipient].userBalance;
+    /// @return Amount of tokens minted to the recipient.
+    function _allocateMintTokens(address recipient, uint256 mintedAmount) private returns (uint256) {
         uint48 activation;
+
         // it is safe to use unckecked as max min period is 30 days
         unchecked {
             activation = uint48(block.timestamp) + _getMinPeriod();
         }
+
         uint16 transactionFee = poolParams().transactionFee;
 
         if (transactionFee != 0) {
             address feeCollector = _getFeeCollector();
 
-            if (feeCollector == recipient) {
-                // it is safe to use unckecked as recipientAmount requires user holding enough base tokens.
-                unchecked {
-                    recipientBalance += uint208(recipientAmount);
-                }
-            } else {
-                uint208 feeCollectorBalance = accounts.userAccounts[feeCollector].userBalance;
+            if (feeCollector != recipient) {
                 uint256 feePool = (mintedAmount * transactionFee) / _FEE_BASE;
-                recipientAmount -= feePool;
-                unchecked {
-                    feeCollectorBalance += uint208(feePool);
-                    recipientBalance += uint208(recipientAmount);
-                }
-                //fee tokens are locked as well
-                accounts.userAccounts[feeCollector] = UserAccount({
-                    userBalance: feeCollectorBalance,
-                    activation: activation
-                });
+                mintedAmount -= feePool;
+
+                // fee tokens are locked as well
+                accounts().userAccounts[feeCollector].userBalance += uint208(feePool);
+                accounts().userAccounts[feeCollector].activation = activation;
                 emit Transfer(address(0), feeCollector, feePool);
-            }
-        } else {
-            unchecked {
-                recipientBalance += uint208(recipientAmount);
             }
         }
 
-        accounts.userAccounts[recipient] = UserAccount({userBalance: recipientBalance, activation: activation});
-        emit Transfer(address(0), recipient, recipientAmount);
+        accounts().userAccounts[recipient].userBalance += uint208(mintedAmount);
+        accounts().userAccounts[recipient].activation = activation;
+        emit Transfer(address(0), recipient, mintedAmount);
+        return mintedAmount;
     }
 
     function _burn(uint256 amountIn, uint256 amountOutMin, address tokenOut) private returns (uint256 netRevenue) {
-        require(amountIn > 0, "POOL_BURN_NULL_AMOUNT_ERROR");
+        require(amountIn > 0, PoolBurnNullAmount());
         UserAccount memory userAccount = accounts().userAccounts[msg.sender];
-        require(userAccount.userBalance >= amountIn, "POOL_BURN_NOT_ENOUGH_ERROR");
-        require(block.timestamp >= userAccount.activation, "POOL_MINIMUM_PERIOD_NOT_ENOUGH_ERROR");
+        require(userAccount.userBalance >= amountIn, PoolBurnNotEnough());
+        require(block.timestamp >= userAccount.activation, PoolMinimumPeriodNotEnough());
 
         // update stored pool value
-        // TODO: could implement some form of caching, like take the value valid up until 5 minutes
         uint256 unitaryValue = _updateNav();
 
         /// @notice allocate pool token transfers and log events.
-        uint256 burntAmount = _allocateBurnTokens(amountIn);
-        bool isOnlyHolder = poolTokens().totalSupply == accounts().userAccounts[msg.sender].userBalance;
+        uint256 burntAmount = _allocateBurnTokens(amountIn, userAccount.userBalance);
+        bool isOnlyHolder = poolTokens().totalSupply == userAccount.userBalance;
         poolTokens().totalSupply -= burntAmount;
 
         if (!isOnlyHolder) {
@@ -180,28 +170,28 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         // TODO: verify cases of possible underflow for small nav value
-        netRevenue = (burntAmount * unitaryValue) / 10**decimals();
+        netRevenue = (burntAmount * unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
 
-        // TODO: test how this could be exploited. Also verify if we can save gas for base token burn ops
-        if (tokenOut != baseToken && tokenOut != address(1)) {
+        // TODO: test how this could be exploited. Also define address(1) as constant BASE_TOKEN_FLAG
+        // address(1) is flag for base token burn
+        if (tokenOut == address(1)) {
+            tokenOut = baseToken;
+        } else if (tokenOut != baseToken) {
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
-            require(netRevenue > IERC20(baseToken).balanceOf(address(this)));
+            require(netRevenue > IERC20(baseToken).balanceOf(address(this)), PoolBurnOutputAmount());
             try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
                 netRevenue = value;
             } catch Error(string memory reason) {
                 revert(reason);
             }
-        } else {
-            if (tokenOut == address(1)) {
-                tokenOut = baseToken;
-            }
         }
 
-        require(netRevenue >= amountOutMin, "POOL_BURN_OUTPUT_AMOUNT_ERROR");
+        require(netRevenue >= amountOutMin, PoolBurnOutputAmount());
 
         if (tokenOut == address(0)) {
+            require(address(this).balance >= netRevenue, PoolTransferFailed());
             payable(msg.sender).transfer(netRevenue);
         } else {
             _safeTransfer(tokenOut, msg.sender, netRevenue);
@@ -209,53 +199,39 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     /// @notice Destroys tokens of holder.
-    /// @dev Fee is paid in pool tokens.
+    /// @dev Fee is paid in pool tokens, fee amount is not burnt.
     /// @param amountIn Value of tokens to be burnt.
-    /// @return burntAmount Number of net burnt tokens.
-    function _allocateBurnTokens(uint256 amountIn) private returns (uint256 burntAmount) {
-        burntAmount = amountIn;
-        Accounts storage accounts = accounts();
-        uint208 holderBalance = accounts.userAccounts[msg.sender].userBalance;
+    /// @param holderBalance The balance of the caller.
+    /// @return Number of user burnt tokens.
+    function _allocateBurnTokens(uint256 amountIn, uint256 holderBalance) private returns (uint256) {
+        if (amountIn < holderBalance) {
+            accounts().userAccounts[msg.sender].userBalance -= amountIn;
+        } else {
+            delete accounts().userAccounts[msg.sender];
+        }
 
+        // TODO: define from constants
         if (poolParams().transactionFee != uint256(0)) {
             address feeCollector = _getFeeCollector();
 
-            if (msg.sender == feeCollector) {
-                holderBalance -= uint208(burntAmount);
-            } else {
+            if (msg.sender != feeCollector) {
                 uint256 feePool = (amountIn * poolParams().transactionFee) / _FEE_BASE;
-                burntAmount -= feePool;
-                holderBalance -= uint208(burntAmount);
+                amountIn -= feePool;
 
                 // allocate fee tokens to fee collector
-                uint208 feeCollectorBalance = accounts.userAccounts[feeCollector].userBalance;
-                uint48 activation;
-                unchecked {
-                    feeCollectorBalance += uint208(feePool);
-                    activation = uint48(block.timestamp + 1);
-                }
-                accounts.userAccounts[feeCollector] = UserAccount({
-                    userBalance: feeCollectorBalance,
-                    activation: uint48(block.timestamp + 1)
-                });
+                accounts().userAccounts[feeCollector].userBalance += uint208(feePool);
+                accounts().userAccounts[feeCollector].activation = uint48(block.timestamp + 1);
                 emit Transfer(msg.sender, feeCollector, feePool);
             }
-        } else {
-            holderBalance -= uint208(burntAmount);
         }
 
-        // clear storage is user account has sold all held tokens
-        if (holderBalance == 0) {
-            delete accounts.userAccounts[msg.sender];
-        } else {
-            accounts.userAccounts[msg.sender].userBalance = holderBalance;
-        }
-
-        emit Transfer(msg.sender, address(0), burntAmount);
+        // TODO: verify as this is inconsistent with mint, i.e. fee comes from user here, from null address in mint
+        emit Transfer(msg.sender, address(0), amountIn);
+        return amountIn;
     }
 
     function _assertBiggerThanMinimum(uint256 amount) private view {
-        require(amount >= 10**decimals() / _MINIMUM_ORDER_DIVISOR, "POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR");
+        require(amount >= 10**decimals() / _MINIMUM_ORDER_DIVISOR, PoolAmountSmallerThanMinumum(_MINIMUM_ORDER_DIVISOR));
     }
 
     // TODO: use try/catch implementation

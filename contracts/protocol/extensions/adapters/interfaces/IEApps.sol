@@ -26,4 +26,9 @@ interface IEApps {
     /// @param packedApplications The uint encoded bitmap flags of the active applications.
     /// @return The arrays of lists of token balances grouped by application type.
     function getAppTokenBalances(uint256 packedApplications) external view returns (ExternalApp[] memory);
+
+    /// @notice Returns the wrapped native token.
+    /// @return Address of the wrapped native token.
+    /// @dev Used to convert wrapped native to native without using oracle.
+    function wrappedNative() external view returns (address);
 }
