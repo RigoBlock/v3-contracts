@@ -426,7 +426,7 @@ describe("AUniswap", async () => {
             await authority.removeMethod("0x12210e8a", aUniswap)
             await expect(
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            ).to.be.revertedWith('PoolMethodNotAllowed()')
         })
 
         it('should send multicall with deadline', async () => {
@@ -960,7 +960,7 @@ describe("AUniswap", async () => {
                 [grgToken.address, 50]
             )
             await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData}))
-                .to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+                .to.be.revertedWith('PoolMethodNotAllowed()')
             await authority.addMethod("0xe90a182f", aUniswap)
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData})
         })

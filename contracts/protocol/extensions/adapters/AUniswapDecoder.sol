@@ -160,6 +160,7 @@ abstract contract AUniswapDecoder {
                         params.value += amount;
                     } else if (command == Commands.UNWRAP_WETH) {
                         (address recipient, /*uint256 amountMin*/) = abi.decode(inputs, (address, uint256));
+                        params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
                         params.recipients = _addUnique(params.recipients, recipient);
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
                         revert InvalidCommandType(command);

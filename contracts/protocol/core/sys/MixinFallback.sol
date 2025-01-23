@@ -21,9 +21,9 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     fallback() external payable {
         address adapter = _getApplicationAdapter(msg.sig);
         // we check that the method is approved by governance
-        require(adapter != address(0), PoolMethodNotAllowed());
+        require(adapter != _ZERO_ADDRESS, PoolMethodNotAllowed());
 
-        // direct fallback to implementation will result in staticcall to extension as implementation owner is address(1)
+        // direct fallback to implementation will result in staticcall to extension as implementation owner is null address
         address poolOwner = pool().owner;
         assembly {
             calldatacopy(0, 0, calldatasize())

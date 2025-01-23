@@ -115,7 +115,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setOwner(address newOwner) public override onlyOwner {
-        require(newOwner != address(0), PoolNullOwnerInput());
+        require(newOwner != _ZERO_ADDRESS, PoolNullOwnerInput());
         address oldOwner = pool().owner;
         pool().owner = newOwner;
         emit NewOwner(oldOwner, newOwner);

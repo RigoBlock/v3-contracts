@@ -65,7 +65,7 @@ describe("AMulticall", async () => {
             // txn will always revert in fallback
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            ).to.be.revertedWith('PoolMethodNotAllowed()')
             // if a rogue adapter could be added by the governance, but that is part of the protocol rules.
             await authority.setAdapter(factory.address, true)
             // "d784d426": "setImplementation(address)"
@@ -105,7 +105,7 @@ describe("AMulticall", async () => {
         it('should allow owner to set a new owner', async () => {
             const { pool } = await setupTests()
             await expect(pool.connect(user2).setOwner(user2.address))
-                .to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+                .to.be.revertedWith('PoolCallerIsNotOwner()')
             const encodedSetOwnerData = pool.interface.encodeFunctionData('setOwner', [user2.address])
             let encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(bytes[])',

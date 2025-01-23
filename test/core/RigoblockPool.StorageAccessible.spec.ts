@@ -42,7 +42,7 @@ describe("MixinStorageAccessible", async () => {
             const EPool = await hre.ethers.getContractFactory("EUpgrade")
             const extension = await EPool.deploy(factory.address)
             const ePool = EPool.attach(pool.address)
-            await expect(ePool.getBeacon()).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            await expect(ePool.getBeacon()).to.be.revertedWith('PoolMethodNotAllowed()')
             await authority.setAdapter(extension.address, true)
             // "2d6b3a6b": "getBeacon()"
             authority.addMethod("0x2d6b3a6b", extension.address)

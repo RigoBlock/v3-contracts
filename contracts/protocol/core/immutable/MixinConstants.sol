@@ -39,6 +39,13 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
 
+    // TODO: verify correctness
+    bytes32 internal constant _TRANSIENT_BALANCE_SLOT = bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
+
+    address internal constant _ZERO_ADDRESS = address(0);
+
+    address internal constant _BASE_TOKEN_FLAG = address(1);
+
     uint16 internal constant _FEE_BASE = 10000;
 
     uint16 internal constant _MAX_SPREAD = 500; // +-5%, in basis points
@@ -52,7 +59,6 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     uint48 internal constant _MAX_LOCKUP = 30 days;
 
-    // TODO: verify moving minimum from 2 to 10 blocks is helpful for rogue validator/sequencer protection
     uint48 internal constant _MIN_LOCKUP = 10;
 
     bytes4 internal constant _TRANSFER_FROM_SELECTOR =

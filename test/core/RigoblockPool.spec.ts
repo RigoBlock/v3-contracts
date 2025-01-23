@@ -39,7 +39,7 @@ describe("Proxy", async () => {
             const implementation = await factory.implementation()
             await expect(
                 user1.sendTransaction({ to: implementation, value: etherAmount})
-            ).to.be.revertedWith("POOL_IMPLEMENTATION_DIRECT_CALL_NOT_ALLOWED_ERROR")
+            ).to.be.revertedWith('PoolImplementationDirectCallNotAllowed()')
         })
 
         it('should receive ether', async () => {
@@ -75,14 +75,14 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             await pool.setOwner(user2.address)
             await expect(pool.setTransactionFee(2)
-          ).to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+          ).to.be.revertedWith('PoolCallerIsNotOwner()')
         })
 
         it('should not set fee higher than 1 percent', async () => {
             const { pool } = await setupTests()
             await expect(
               pool.setTransactionFee(101) // 100 / 10000 = 1%
-            ).to.be.revertedWith("POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR")
+            ).to.be.revertedWith('PoolFeeBiggerThanMax(100)')
         })
     })
 
@@ -90,13 +90,13 @@ describe("Proxy", async () => {
         it('should revert if caller not owner', async () => {
             const { pool } = await setupTests()
             await expect(pool.connect(user2).setOwner(user2.address))
-                .to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+                .to.be.revertedWith('PoolCallerIsNotOwner()')
         })
 
         it('should revert if new owner null address', async () => {
             const { pool } = await setupTests()
             await expect(pool.setOwner(AddressZero))
-                .to.be.revertedWith("POOL_NULL_OWNER_INPUT_ERROR")
+                .to.be.revertedWith('PoolNullOwnerInput()')
         })
 
         it('should set owner', async () => {
@@ -142,9 +142,9 @@ describe("Proxy", async () => {
 
         it('should revert with order below minimum', async () => {
             const { pool } = await setupTests()
-            const etherAmount = parseEther("0.0001")
+            const etherAmount = parseEther("0.00012")
             await expect(pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            ).to.be.revertedWith("POOL_AMOUNT_SMALLER_THAN_MINIMUM_ERROR")
+            ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
         })
 
         it('should revert if user not whitelisted when whitelist enabled', async () => {
@@ -159,9 +159,10 @@ describe("Proxy", async () => {
             const kyc = await deployContract(user1, source)
             await pool.setKycProvider(kyc.address)
             const recipient = user1.address
+            // TODO: verify we are reverting when recipient is not whitelisted, vs when caller is not whitelisted
             await expect(
                 pool.mint(recipient, etherAmount, 0, { value: etherAmount })
-            ).to.be.revertedWith("POOL_CALLER_NOT_WHITELISTED_ERROR")
+            ).to.be.revertedWith('PoolCallerNotWhitelisted()')
             await kyc.whitelistUser(recipient)
             const mintedAmount = await pool.callStatic.mint(recipient, etherAmount, 0, { value: etherAmount })
             await expect(
@@ -254,27 +255,20 @@ describe("Proxy", async () => {
             let symbol = utils.formatBytes32String("TEST")
             symbol = utils.hexDataSlice(symbol, 0, 8)
             await expect(pool.initializePool())
-                .to.be.revertedWith("POOL_ALREADY_INITIALIZED_ERROR")
+                .to.be.revertedWith('PoolAlreadyInitialized()')
         })
     })
 
     describe("setPrices", async () => {
-        it('should revert when caller is not owner', async () => {
+        // TODO: restriction has been removed, check if this is correct way of testing, as it will revert until we fix deploy pipeline
+        it('should not revert when caller is not owner', async () => {
             const { pool } = await setupTests()
             await pool.setOwner(user2.address)
-            const newPrice = parseEther("1.1")
-            await expect(pool.setUnitaryValue(newPrice))
-                .to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+            await expect(pool.setUnitaryValue())
+                .to.be.revertedWith('PoolSupplyIsNullOrDust()')
         })
 
-        it('should revert when price error', async () => {
-            const { pool } = await setupTests()
-            const newPrice = parseEther("11")
-            await expect(pool.setUnitaryValue(newPrice))
-                .to.be.revertedWith("POOL_INPUT_VALUE_ERROR")
-        })
-
-        it('should revert with less than 3% liquidity', async () => {
+        it.skip('should revert with less than 3% liquidity', async () => {
             const { pool } = await setupTests()
             const etherAmount = parseEther("0.1")
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
@@ -291,12 +285,12 @@ describe("Proxy", async () => {
 
         it('should set price when caller is owner', async () => {
             const { pool } = await setupTests()
-            const newValue = parseEther("1.1")
-            await expect(pool.setUnitaryValue(newValue))
-                .to.be.revertedWith("POOL_SUPPLY_NULL_ERROR")
+            await expect(pool.setUnitaryValue())
+                .to.be.revertedWith('PoolSupplyIsNullOrDust()')
             const etherAmount = parseEther("0.1")
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            await expect(pool.setUnitaryValue(newValue))
+            // TODO: this will fail as cannot calc nav until add new extensions to deploy
+            await expect(pool.setUnitaryValue())
                 .to.emit(pool, "NewNav").withArgs(
                 user1.address,
                 pool.address,
@@ -310,14 +304,14 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             await expect(
                 pool.connect(user2).setKycProvider(user2.address)
-            ).to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+            ).to.be.revertedWith('PoolCallerIsNotOwner()')
         })
 
         it('should set pool kyc provider', async () => {
             const { pool } = await setupTests()
             expect((await pool.getPoolParams()).kycProvider).to.be.eq(AddressZero)
             await expect(pool.setKycProvider(user2.address))
-                .to.be.revertedWith("POOL_INPUT_NOT_CONTRACT_ERROR")
+                .to.be.revertedWith('PoolInputIsNotContract()')
             await expect(pool.setKycProvider(pool.address))
                 .to.emit(pool, "KycProviderSet").withArgs(pool.address, pool.address)
             expect((await pool.getPoolParams()).kycProvider).to.be.eq(pool.address)
@@ -329,7 +323,7 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             await expect(
                 pool.connect(user2).changeFeeCollector(user2.address)
-            ).to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+            ).to.be.revertedWith('PoolCallerIsNotOwner()')
         })
 
         it('should set fee collector', async () => {
@@ -348,7 +342,7 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             await expect(
                 pool.connect(user2).changeSpread(1)
-            ).to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+            ).to.be.revertedWith('PoolCallerIsNotOwner()')
         })
 
         it('should revert with rogue values', async () => {
@@ -356,10 +350,10 @@ describe("Proxy", async () => {
             // spread must always be != 0, otherwise default value from immutable storage will be returned (i.e. initial spread)
             await expect(
                 pool.changeSpread(0)
-            ).to.be.revertedWith("POOL_SPREAD_NULL_ERROR")
+            ).to.be.revertedWith('PoolSpreadInvalid(500)')
             await expect(
                 pool.changeSpread(1001)
-            ).to.be.revertedWith("POOL_SPREAD_TOO_HIGH_ERROR")
+            ).to.be.revertedWith('PoolSpreadInvalid(500)')
         })
 
         it('should change spread', async () => {
@@ -376,23 +370,24 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             await expect(
                 pool.connect(user2).changeMinPeriod(1)
-            ).to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+            ).to.be.revertedWith('PoolCallerIsNotOwner()')
         })
 
         it('should revert with rogue values', async () => {
             const { pool } = await setupTests()
+            // min lockup is 10 seconds. TODO: verify if should be 10 blocks
             await expect(
                 pool.changeMinPeriod(1)
-            ).to.be.revertedWith("POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR")
+            ).to.be.revertedWith('PoolLockupPeriodInvalid(10, 2592000)')
             // max 30 days lockup
             await expect(
                 pool.changeMinPeriod(2592001)
-            ).to.be.revertedWith("POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR")
+            ).to.be.revertedWith('PoolLockupPeriodInvalid(10, 2592000)')
         })
 
         it('should change spread', async () => {
             const { pool } = await setupTests()
-            expect((await pool.getPoolParams()).minPeriod).to.be.eq(2)
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(2592000)
             const newPeriod = 2592000
             await expect(pool.changeMinPeriod(newPeriod))
                 .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)

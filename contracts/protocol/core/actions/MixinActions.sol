@@ -33,19 +33,18 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         address kycProvider = poolParams().kycProvider;
 
         // require whitelisted user if kyc is enforced
-        if (kycProvider != address(0)) {
+        if (kycProvider != _ZERO_ADDRESS) {
             require(IKyc(kycProvider).isWhitelistedUser(recipient), PoolCallerNotWhitelisted());
         }
 
         _assertBiggerThanMinimum(amountIn);
 
-        if (pool().baseToken == address(0)) {
+        if (pool().baseToken == _ZERO_ADDRESS) {
             require(msg.value == amountIn, PoolMintAmountIn());
         } else {
             _safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
-        // TODO: verify what happens with null total supply
         // update stored pool value
         uint256 unitaryValue = _updateNav();
 
@@ -66,9 +65,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
     /// @inheritdoc IRigoblockV3PoolActions
     function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant() returns (uint256 netRevenue) {
-        // TODO: verify define in constants
-        // address(1) is a flag for burn in base tokens
-        netRevenue = _burn(amountIn, amountOutMin, address(1));
+        netRevenue = _burn(amountIn, amountOutMin, _BASE_TOKEN_FLAG);
     }
 
     // TODO: test for potential abuse. Technically, if the token can be manipulated, a burn in base token can do just as much
@@ -140,13 +137,13 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
                 // fee tokens are locked as well
                 accounts().userAccounts[feeCollector].userBalance += uint208(feePool);
                 accounts().userAccounts[feeCollector].activation = activation;
-                emit Transfer(address(0), feeCollector, feePool);
+                emit Transfer(_ZERO_ADDRESS, feeCollector, feePool);
             }
         }
 
         accounts().userAccounts[recipient].userBalance += uint208(mintedAmount);
         accounts().userAccounts[recipient].activation = activation;
-        emit Transfer(address(0), recipient, mintedAmount);
+        emit Transfer(_ZERO_ADDRESS, recipient, mintedAmount);
         return mintedAmount;
     }
 
@@ -174,9 +171,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         address baseToken = pool().baseToken;
 
-        // TODO: test how this could be exploited. Also define address(1) as constant BASE_TOKEN_FLAG
-        // address(1) is flag for base token burn
-        if (tokenOut == address(1)) {
+        // TODO: test how this could be exploited.
+        if (tokenOut == _BASE_TOKEN_FLAG) {
             tokenOut = baseToken;
         } else if (tokenOut != baseToken) {
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
@@ -190,7 +186,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());
 
-        if (tokenOut == address(0)) {
+        if (tokenOut == _ZERO_ADDRESS) {
             require(address(this).balance >= netRevenue, PoolTransferFailed());
             payable(msg.sender).transfer(netRevenue);
         } else {
@@ -226,7 +222,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         // TODO: verify as this is inconsistent with mint, i.e. fee comes from user here, from null address in mint
-        emit Transfer(msg.sender, address(0), amountIn);
+        emit Transfer(msg.sender, _ZERO_ADDRESS, amountIn);
         return amountIn;
     }
 

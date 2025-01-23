@@ -19,29 +19,24 @@
 
 pragma solidity 0.8.28;
 
-import {SlotDerivation} from "@openzeppelin/contracts/utils/SlotDerivation.sol";
-import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
+// TODO: this contract does not really belong to state, as we cannot just read due to temp storage. Should convert to lib.
 import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {AppTokenBalance, ExternalApp} from "../../types/ExternalApp.sol";
+import {Int256, TransientBalance} from "../../types/TransientBalance.sol";
 
 // TODO: check make catastrophic failure resistant, i.e. must always be possible to liquidate pool + must always
 //  use base token balances. If cannot guarantee base token balances can be retrieved, pointless and can be implemented in extension.
 //  General idea is if the component is simple and not requires revisit of logic, implement as library, otherwise
 //  implement as extension.
-// TODO: MixinPoolState should inherit from MixinPoolValue as needs to display some data. Meaning some methods will have to be inverted
 abstract contract MixinPoolValue is MixinOwnerActions {
-    type Int256Slot is bytes32;
-    using TransientSlot for *;
-    using SlotDerivation for bytes32;
+    using TransientBalance for Int256;
 
     error BaseTokenBalanceError();
 
-    // TODO: verify correctness
-    bytes32 private constant _TRANSIENT_BALANCE_SLOT = bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
-
+    // with null total supply a pool will return the last stored value
     function _updateNav() internal override returns (uint256 unitaryValue) {
         unitaryValue = _getUnitaryValue();
 
@@ -51,10 +46,32 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         emit NewNav(msg.sender, address(this), unitaryValue);
     }
 
+    // TODO: assert not possible to inflate total supply to manipulate pool price.
+    /// @notice Uses transient storage to keep track of unique token balances.
+    function _getUnitaryValue() private returns (uint256) {
+        uint256 poolSupply = poolTokens().totalSupply;
+        uint256 storedValue = poolTokens().unitaryValue;
+        uint256 poolValue = _computeTotalPoolValue();
+
+        // a previously minted pool cannot have storedValue = 0 
+        if (storedValue != 0) {
+            // default scenario
+            if (poolValue != 0 && poolSupply != 0) {
+                return poolValue / poolSupply;
+            // fallback to stored value when value would be null or infinite
+            } else {
+                return storedValue;
+            }
+        // return 1 in base token units at first mint
+        } else {
+            return 10 ** pool().decimals;
+        }
+    }
+
     /// @notice Updates the stored value with an updated one.
     /// @dev Assumes the stored list contain unique elements.
     /// @dev A write method to be used in mint and burn operations.
-    function _getPoolValue() internal returns (uint256 poolValue) {
+    function _computeTotalPoolValue() private returns (uint256 poolValue) {
         int256 newBalance;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
@@ -65,8 +82,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                 for (uint j = 0; j < apps[i].balances.length; j++) {
                     // Always add or update the balance from positions
                     if (apps[i].balances[j].amount != 0) {
-                        newBalance = _getBalance(apps[i].balances[j].token) + int256(apps[i].balances[j].amount);
-                        _storeBalance(apps[i].balances[j].token, newBalance);
+                        newBalance = Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(apps[i].balances[j].token) + int256(apps[i].balances[j].amount);
+                        Int256.wrap(_TRANSIENT_BALANCE_SLOT).store(apps[i].balances[j].token, newBalance);
                     }
                 }
             }
@@ -92,15 +109,15 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // base token is not stored in activeTokens slot, so we add it as an additional element at the end of the loop
         for (uint256 i = 0; i <= length; i++) {
             targetToken = i == length ? tokens.baseToken : tokens.activeTokens[i];
-            newBalance = _getBalance(targetToken);
+            newBalance = Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(targetToken);
 
             // clear temporary storage if used
             if (newBalance != 0) {
-                _storeBalance(targetToken, 0);
+                Int256.wrap(_TRANSIENT_BALANCE_SLOT).store(targetToken, 0);
             }
 
             // the active tokens list contains unique addresses
-            if (targetToken == address(0)) {
+            if (targetToken == _ZERO_ADDRESS) {
                 newBalance += int256(address(this).balance);
             } else {
                 try IERC20(targetToken).balanceOf(address(this)) returns (uint256 _balance) {
@@ -111,15 +128,14 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                 }
             }
 
-            // TODO: verify use ZERO_ADDRESS
             // convert wrapped native to native to potentially skip one or more conversions
             if (targetToken == wrappedNative) {
-                targetToken == address(0);
+                targetToken == _ZERO_ADDRESS;
             }
 
             // base token is always appended at the end of the loop
             if (tokens.baseToken == wrappedNative) {
-                tokens.baseToken == address(0);
+                tokens.baseToken == _ZERO_ADDRESS;
             }
 
             if (newBalance < 0) {
@@ -141,28 +157,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         return (poolValueInBaseToken > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
-    // TODO: assert not possible to inflate total supply to manipulate pool price.
-    /// @notice Uses transient storage to keep track of unique token balances.
-    function _getUnitaryValue() internal returns (uint256) {
-        uint256 poolSupply = poolTokens().totalSupply;
-        uint256 storedValue = poolTokens().unitaryValue;
-        uint256 poolValue = _getPoolValue();
-
-        // a previously minted pool cannot have storedValue = 0 
-        if (storedValue != 0) {
-            // default scenario
-            if (poolValue != 0 && poolSupply != 0) {
-                return poolValue / poolSupply;
-            // fallback to stored value when value would be null or infinite
-            } else {
-                return storedValue;
-            }
-        // return 1 in base token units at first mint
-        } else {
-            return 10 ** pool().decimals;
-        }
-    }
-
     function _getBaseTokenValue(address token, uint256 amount, address baseToken)
         private
         view
@@ -178,18 +172,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         } catch {
             return 0;
         }
-    }
-
-    // Helper functions for tstore operations
-    /// @notice Stores a mapping of token addresses to int256 balances
-    function _storeBalance(address token, int256 balance) private {
-        bytes32 key = _TRANSIENT_BALANCE_SLOT.deriveMapping(token);
-        key.asInt256().tstore(balance);
-    }
-
-    function _getBalance(address token) private view returns (int256) {
-        bytes32 key = _TRANSIENT_BALANCE_SLOT.deriveMapping(token);
-        return key.asInt256().tload();
     }
 
     /// virtual methods

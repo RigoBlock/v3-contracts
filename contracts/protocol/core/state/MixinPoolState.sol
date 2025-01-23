@@ -133,7 +133,7 @@ abstract contract MixinPoolState is MixinPoolValue {
 
     function _getFeeCollector() internal view override returns (address) {
         address feeCollector = poolParams().feeCollector;
-        return feeCollector != address(0) ? feeCollector : pool().owner;
+        return feeCollector != _ZERO_ADDRESS ? feeCollector : pool().owner;
     }
 
     function _getMinPeriod() internal view override returns (uint48) {

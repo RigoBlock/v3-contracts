@@ -31,6 +31,8 @@ import {Observation} from "../types/Observation.sol";
 contract EOracle is IEOracle {
     using TickMath for int24;
 
+    address private constant _ZERO_ADDRESS = address(0);
+
     uint160 private constant ONE_X96 = 2**96;
 
     IOracle private immutable _oracle;
@@ -59,8 +61,8 @@ contract EOracle is IEOracle {
     {
         PoolSettings memory settings;
 
-        if (token == address(0)) {
-            settings = _getPoolSettings(address(0), targetToken, address(_getOracle()));
+        if (token == _ZERO_ADDRESS) {
+            settings = _getPoolSettings(_ZERO_ADDRESS, targetToken, address(_getOracle()));
             try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(amount, priceX128, 1 << 128); // convert native to token
@@ -70,9 +72,9 @@ contract EOracle is IEOracle {
             }
         }
 
-        if (targetToken == address(0)) {
+        if (targetToken == _ZERO_ADDRESS) {
             // Convert directly to native
-            settings = _getPoolSettings(address(0), token, address(_getOracle()));
+            settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
             try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
@@ -84,14 +86,14 @@ contract EOracle is IEOracle {
         }
 
         // try and convert token to chain currency
-        settings = _getPoolSettings(address(0), token, address(_getOracle()));
+        settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
         try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
             uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
             uint256 ethAmount = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to native
 
             // try and convert chain currency to the target token
-            settings = _getPoolSettings(address(0), targetToken, address(_getOracle()));
+            settings = _getPoolSettings(_ZERO_ADDRESS, targetToken, address(_getOracle()));
 
             // try to get first conversion
             try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulativesTarget, uint144[] memory) {
@@ -115,11 +117,11 @@ contract EOracle is IEOracle {
     /// @dev Adding wrapped native token requires a price feed against navite, as otherwise must warm up EApps in order
     /// to have same contract address on all chains.
     function hasPriceFeed(address token) external view returns (bool) {
-        if (token == address(0)) {
+        if (token == _ZERO_ADDRESS) {
             return true;
         } else {
             PoolSettings memory settings;
-            settings = _getPoolSettings(address(0), token, address(_getOracle()));
+            settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
             try _getOracle().getObservation(settings.key, settings.cardinality)
                 returns (Observation memory observation)
@@ -147,10 +149,10 @@ contract EOracle is IEOracle {
     function _tryFindRate(address token) private view returns (uint160 sqrtPriceX96) {
         PoolSettings memory settings;
 
-        if (token == address(0)) {
+        if (token == _ZERO_ADDRESS) {
             return ONE_X96;
         } else {
-            settings = _getPoolSettings(address(0), token, address(_getOracle()));
+            settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
             // get the last stored observation position
             IOracle.ObservationState memory state = _getOracle().getState(settings.key);

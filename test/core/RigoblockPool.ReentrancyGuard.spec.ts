@@ -67,7 +67,7 @@ describe("ReentrancyGuard", async () => {
             await rogueToken.init(testReentrancyAttack.address)
             const tokenAmount = parseEther("100")
             await rogueToken.transfer(testReentrancyAttack.address, tokenAmount)
-            await expect(testReentrancyAttack.mintPool()).to.be.revertedWith("POOL_TRANSFER_FROM_FAILED_ERROR")
+            await expect(testReentrancyAttack.mintPool()).to.be.revertedWith('PoolTransferFromFailed()')
             expect(await testReentrancyAttack.count()).to.be.eq(0)
             await testReentrancyAttack.setMaxCount(1)
             await testReentrancyAttack.mintPool()
