@@ -7,8 +7,8 @@ import "../immutable/MixinStorage.sol";
 import "../../interfaces/IAuthority.sol";
 
 abstract contract MixinFallback is MixinImmutables, MixinStorage {
-    error PoolMethodNotAllowed();
     error PoolImplementationDirectCallNotAllowed();
+    error PoolMethodNotAllowed();
 
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {

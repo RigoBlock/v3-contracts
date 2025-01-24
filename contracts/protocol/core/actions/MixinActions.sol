@@ -234,7 +234,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     function _safeTransfer(address token, address to, uint256 amount) private {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(_TRANSFER_SELECTOR, to, amount)
+            abi.encodeCall(IERC20.transfer, (to, amount))
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFailed());
     }
@@ -247,7 +247,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     ) private {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = pool().baseToken.call(
-            abi.encodeWithSelector(_TRANSFER_FROM_SELECTOR, from, to, amount)
+            abi.encodeCall(IERC20.transferFrom, (from, to, amount))
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFromFailed());
     }

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
  Copyright 2024 Rigo Intl.
@@ -58,17 +58,15 @@ contract EApps is IEApps {
     INonfungiblePositionManager private immutable _uniV3NPM;
     IPositionManager private immutable _uniV4Posm;
 
-    bytes32 private immutable _uniV4PosmPositionsSlot;
-
     // persistent storage slots, used to read from proxy storage without having to update implementation
     // bytes32(uint256(keccak256("Eapps.uniV4.tokenIds")) - 1)
     bytes32 private constant _UNIV4_TOKEN_IDS_SLOT = 0x27616b43efe6cac399303df84ec58b87084277217488937eeb864ace11507167;
 
     // TODO: we could use universal router as input, query immutables from the constructor.
     /// @notice The different immutable addresses will result in different deployed addresses on different networks.
-    constructor(address grgStakingProxy, address univ3Npm, address payable univ4Posm) {
+    constructor(address grgStakingProxy, address univ3Npm, address univ4Posm) {
         // univ4 POSM does not implement inherited NativeWrapper methods in its interface
-        wrappedNative = address(NativeWrapper(univ4Posm).WETH9());
+        //wrappedNative = address(NativeWrapper(payable(univ4Posm)).WETH9());
         _grgStakingProxy = IStaking(grgStakingProxy);
         _uniV3NPM = INonfungiblePositionManager(univ3Npm);
         _uniV4Posm = IPositionManager(univ4Posm);
