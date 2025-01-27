@@ -65,7 +65,7 @@ interface IRigoblockV3PoolState {
     }
 
     /// @notice Returns the struct containing pool tokens info.
-    /// @return PoolTokens struct. 
+    /// @return PoolTokens struct.
     /// @notice Unitary value is the last stored unitary value.
     function getPoolTokens() external view returns (PoolTokens memory);
 
@@ -76,11 +76,7 @@ interface IRigoblockV3PoolState {
     function getPoolStorage()
         external
         view
-        returns (
-            ReturnedPool memory poolInitParams,
-            PoolParams memory poolVariables,
-            PoolTokens memory poolTokensInfo
-        );
+        returns (ReturnedPool memory poolInitParams, PoolParams memory poolVariables, PoolTokens memory poolTokensInfo);
 
     /// @notice Pool holder account.
     /// @param userBalance Number of tokens held by user.

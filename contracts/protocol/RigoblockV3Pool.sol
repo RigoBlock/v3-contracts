@@ -19,13 +19,14 @@
 
 pragma solidity 0.8.28;
 
-import "./IRigoblockV3Pool.sol";
-import "./core/immutable/MixinStorage.sol";
-import "./core/state/MixinPoolState.sol";
-import "./core/state/MixinStorageAccessible.sol";
-import "./core/sys/MixinAbstract.sol";
-import "./core/sys/MixinInitializer.sol";
-import "./core/sys/MixinFallback.sol";
+import {IRigoblockV3Pool} from "./IRigoblockV3Pool.sol";
+import {MixinImmutables} from "./core/immutable/MixinImmutables.sol";
+import {MixinStorage} from "./core/immutable/MixinStorage.sol";
+import {MixinPoolState} from "./core/state/MixinPoolState.sol";
+import {MixinStorageAccessible} from "./core/state/MixinStorageAccessible.sol";
+import {MixinAbstract} from "./core/sys/MixinAbstract.sol";
+import {MixinInitializer} from "./core/sys/MixinInitializer.sol";
+import {MixinFallback} from "./core/sys/MixinFallback.sol";
 
 // TODO: rename to V4, in a seaprate PR
 /// @title RigoblockV3Pool - A set of rules for Rigoblock pools.

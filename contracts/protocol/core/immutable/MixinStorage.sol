@@ -17,7 +17,7 @@
 
 */
 
-import "./MixinImmutables.sol";
+import {MixinImmutables} from "./MixinImmutables.sol";
 import {AddressSet} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 

@@ -19,7 +19,8 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../IRigoblockV3Pool.sol";
+import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
+import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.
@@ -40,7 +41,8 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
 
     // TODO: verify correctness
-    bytes32 internal constant _TRANSIENT_BALANCE_SLOT = bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
+    bytes32 internal constant _TRANSIENT_BALANCE_SLOT =
+        bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
 
     address internal constant _ZERO_ADDRESS = address(0);
 

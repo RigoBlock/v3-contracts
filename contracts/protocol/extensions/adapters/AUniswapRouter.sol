@@ -22,12 +22,12 @@ pragma solidity 0.8.28;
 
 import {SlotDerivation} from "@openzeppelin/contracts/utils/SlotDerivation.sol";
 import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
-import "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
-import "./AUniswapDecoder.sol";
-import "./interfaces/IAUniswapRouter.sol";
+import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
+import {AUniswapDecoder} from "./AUniswapDecoder.sol";
+import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
-import "../../IRigoblockV3Pool.sol";
+import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {Applications} from "../../types/Applications.sol";
@@ -57,7 +57,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     // bytes32(uint256(keccak256("AUniswapRouter.lock")) - 1)
     bytes32 private constant _LOCK_SLOT = 0x1e2a0e74e761035cb113c1bf11b7fbac06ae91f3a03ce360dda726ba116c216f;
     // bytes32(uint256(keccak256("AUniswapRouter.reentrancy.depth")) - 1)
-    bytes32 private constant _REENTRANCY_DEPTH_SLOT = 0x3921e0fb5d7436d70b7041cccb0d0f543e6b643f41e09aa71450d5e1c5767376;
+    bytes32 private constant _REENTRANCY_DEPTH_SLOT =
+        0x3921e0fb5d7436d70b7041cccb0d0f543e6b643f41e09aa71450d5e1c5767376;
 
     // TODO: verify import from common library as EApps uses the same slot
     // persistent storage slots
@@ -107,33 +108,34 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    function _lockSlot() private pure returns (bytes32) { return _LOCK_SLOT; }
-    function _reentrancyDepthSlot() private pure returns (bytes32) { return _REENTRANCY_DEPTH_SLOT; }
+    function _lockSlot() private pure returns (bytes32) {
+        return _LOCK_SLOT;
+    }
+
+    function _reentrancyDepthSlot() private pure returns (bytes32) {
+        return _REENTRANCY_DEPTH_SLOT;
+    }
 
     /// @inheritdoc IAUniswapRouter
-    function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline)
-        external
-        override
-        checkDeadline(deadline)
-        returns (Parameters memory params)
-    {
+    function execute(
+        bytes calldata commands,
+        bytes[] calldata inputs,
+        uint256 deadline
+    ) external override checkDeadline(deadline) returns (Parameters memory params) {
         return execute(commands, inputs);
     }
 
     /// @inheritdoc IAUniswapRouter
-    function execute(bytes calldata commands, bytes[] calldata inputs)
-        public
-        override
-        nonReentrant()
-        returns (Parameters memory params)
-    {
+    function execute(
+        bytes calldata commands,
+        bytes[] calldata inputs
+    ) public override nonReentrant returns (Parameters memory params) {
         // loop through all given commands, verify their inputs and pass along outputs as defined
         for (uint256 i = 0; i < commands.length; i++) {
             bytes calldata input = inputs[i];
 
             // input sanity check and parameters return
             params = _decodeInput(commands[i], input, params);
-
         }
 
         // only execute when finished decoding inputs
@@ -200,7 +202,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         // load active tokens from storage
         AddressSet storage values = activeTokens();
 
-        for (uint i = 0; i < tokensOut.length; i++) {
+        for (uint256 i = 0; i < tokensOut.length; i++) {
             // update storage with new token. Skips and returns false for base token, which is already in storage
             values.addUnique(
                 IEOracle(address(this)),
@@ -210,17 +212,12 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    function _safeApprove(
-        address token,
-        address spender,
-        uint256 amount
-    ) private {
+    function _safeApprove(address token, address spender, uint256 amount) private {
         try IERC20(token).approve(spender, amount) returns (bool success) {
             assert(success);
         } catch {
-            try IERC20(token).approve(spender, amount) {}
-            // USDT on mainnet requires approval to be set to 0 before being reset again
-            catch {
+            try IERC20(token).approve(spender, amount) {} catch {
+                // USDT on mainnet requires approval to be set to 0 before being reset again
                 try IERC20(token).approve(spender, 0) {
                     IERC20(token).approve(spender, amount);
                 } catch {
@@ -233,12 +230,12 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     }
 
     // TODO: verify logic is correct when 1. wrapping/unwrapping eth 2. adding to a liquidity position 3. removing from liquidity
-    // adding to liquidity should be ok 
+    // adding to liquidity should be ok
     // removing liquidity should instead add token, they should enter the tokensOut checks
     // wrapping should remove, but we could accept if does not (as it's eth)
     // TODO: check this condition is correct, as otherwise it could fail for eth
     function _safeApproveTokensIn(address[] memory tokensIn, address spender, uint256 amount) private {
-        for (uint i = 0; i < tokensIn.length; i++) {
+        for (uint256 i = 0; i < tokensIn.length; i++) {
             // cannot approve base currency, early return
             if (tokensIn[i] == ZERO_ADDRESS) {
                 continue;
@@ -259,7 +256,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             // update tokenIds in proxy persistent storage.
             TokenIdSlot storage idsSlot = uniV4TokenIds();
 
-            for (uint i = 0; i < tokenIds.length; i++) {
+            for (uint256 i = 0; i < tokenIds.length; i++) {
                 // negative value is a sentinel for burn
                 if (idsSlot.tokenIds[i] > 0) {
                     idsSlot.tokenIds.push(uint256(tokenIds[i]));
@@ -293,7 +290,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     }
 
     function _processRecipients(address[] memory recipients) private view {
-        for (uint i = 0; i < recipients.length; i++) {
+        for (uint256 i = 0; i < recipients.length; i++) {
             require(recipients[i] == address(this), RecipientIsNotSmartPool());
         }
     }

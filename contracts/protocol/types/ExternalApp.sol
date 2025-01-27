@@ -8,5 +8,5 @@ struct AppTokenBalance {
 
 struct ExternalApp {
     AppTokenBalance[] balances;
-    uint256 appType;    // stored as a uint256 to facilityte supporting new apps
+    uint256 appType; // stored as a uint256 to facilityte supporting new apps
 }

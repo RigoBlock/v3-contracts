@@ -19,8 +19,6 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "@uniswap/universal-router/contracts/interfaces/IUniversalRouter.sol";
-
 interface IAUniswapRouter {
     struct Parameters {
         uint256 value;
@@ -35,7 +33,11 @@ interface IAUniswapRouter {
     /// @param inputs An array of byte strings containing abi encoded inputs for each command.
     /// @param deadline The deadline by which the transaction must be executed.
     /// @return params The decoded relevant parameters of the call.
-    function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external returns (Parameters memory params);
+    function execute(
+        bytes calldata commands,
+        bytes[] calldata inputs,
+        uint256 deadline
+    ) external returns (Parameters memory params);
 
     /// @notice Executes encoded commands along with provided inputs.
     /// @param commands A set of concatenated commands, each 1 byte in length.

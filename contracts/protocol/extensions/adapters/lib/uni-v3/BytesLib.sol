@@ -42,11 +42,10 @@ library BytesLib {
     /// @param _arg The index of the argument to extract
     /// @return length Length of the array
     /// @return offset Pointer to the data part of the array
-    function toLengthOffset(bytes calldata _bytes, uint256 _arg)
-        internal
-        pure
-        returns (uint256 length, uint256 offset)
-    {
+    function toLengthOffset(
+        bytes calldata _bytes,
+        uint256 _arg
+    ) internal pure returns (uint256 length, uint256 offset) {
         uint256 relativeOffset;
         assembly {
             // The offset of the `_arg`-th element is `32 * arg`, which stores the offset of the length pointer.

@@ -45,9 +45,11 @@ interface IRigoblockV3PoolActions {
     /// @param amountOutMin Minimum amount to be received, prevents pool operator frontrunning.
     /// @param tokenOut The token to be received in exchange for pool tokens.
     /// @return netRevenue Net amount of burnt pool tokens.
-    function burnForToken(uint256 amountIn, uint256 amountOutMin, address tokenOut)
-        external
-        returns (uint256 netRevenue);
+    function burnForToken(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenOut
+    ) external returns (uint256 netRevenue);
 
     /// @notice Allows anyone to store an up-to-date pool price.
     function setUnitaryValue() external;

@@ -33,7 +33,7 @@ contract EOracle is IEOracle {
 
     address private constant _ZERO_ADDRESS = address(0);
 
-    uint160 private constant ONE_X96 = 2**96;
+    uint160 private constant ONE_X96 = 2 ** 96;
 
     IOracle private immutable _oracle;
 
@@ -53,17 +53,19 @@ contract EOracle is IEOracle {
     /// @inheritdoc IEOracle
     // TODO: as we will use a try statement in the calling method, we could avoid using try/catch statements here to save gas
     // provided we do not need to return important information
-    function convertTokenAmount(address token, uint256 amount, address targetToken)
-        external
-        view
-        override
-        returns (uint256 value)
-    {
+    function convertTokenAmount(
+        address token,
+        uint256 amount,
+        address targetToken
+    ) external view override returns (uint256 value) {
         PoolSettings memory settings;
 
         if (token == _ZERO_ADDRESS) {
             settings = _getPoolSettings(_ZERO_ADDRESS, targetToken, address(_getOracle()));
-            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (
+                int48[] memory tickCumulatives,
+                uint144[] memory
+            ) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(amount, priceX128, 1 << 128); // convert native to token
                 return value;
@@ -76,7 +78,10 @@ contract EOracle is IEOracle {
             // Convert directly to native
             settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
-            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (
+                int48[] memory tickCumulatives,
+                uint144[] memory
+            ) {
                 uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
                 value = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to ETH
                 return value;
@@ -88,7 +93,10 @@ contract EOracle is IEOracle {
         // try and convert token to chain currency
         settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
-        try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulatives, uint144[] memory) {
+        try _getOracle().observe(settings.key, settings.secondsAgos) returns (
+            int48[] memory tickCumulatives,
+            uint144[] memory
+        ) {
             uint256 priceX128 = _getPriceX128(tickCumulatives, settings.secondsAgos);
             uint256 ethAmount = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to native
 
@@ -96,7 +104,10 @@ contract EOracle is IEOracle {
             settings = _getPoolSettings(_ZERO_ADDRESS, targetToken, address(_getOracle()));
 
             // try to get first conversion
-            try _getOracle().observe(settings.key, settings.secondsAgos) returns (int48[] memory tickCumulativesTarget, uint144[] memory) {
+            try _getOracle().observe(settings.key, settings.secondsAgos) returns (
+                int48[] memory tickCumulativesTarget,
+                uint144[] memory
+            ) {
                 priceX128 = _getPriceX128(tickCumulativesTarget, settings.secondsAgos);
                 value = FullMath.mulDiv(ethAmount, priceX128, 1 << 128); // convert native to base token
                 return value;
@@ -123,9 +134,9 @@ contract EOracle is IEOracle {
             PoolSettings memory settings;
             settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
-            try _getOracle().getObservation(settings.key, settings.cardinality)
-                returns (Observation memory observation)
-            {
+            try _getOracle().getObservation(settings.key, settings.cardinality) returns (
+                Observation memory observation
+            ) {
                 return observation.blockTimestamp != 0;
             } catch {
                 return false;
@@ -136,10 +147,10 @@ contract EOracle is IEOracle {
     /// @dev Returns the cross rate of a token pair through chain currency rate
     function getCrossSqrtPriceX96(address token0, address token1) external view returns (uint160 sqrtPriceX96) {
         // first try to get rate of token to chain currency
-        (uint160 sqrtPriceX96_0) = _tryFindRate(token0);
+        uint160 sqrtPriceX96_0 = _tryFindRate(token0);
 
-        // then try to get rate of token to chain currency 
-        (uint160 sqrtPriceX96_1) = _tryFindRate(token1);
+        // then try to get rate of token to chain currency
+        uint160 sqrtPriceX96_1 = _tryFindRate(token1);
 
         // finally return the cross exchange rate from the two rates
         sqrtPriceX96 = _calculateSqrtPriceX96FromSqrtPrices(sqrtPriceX96_0, sqrtPriceX96_1);
@@ -165,7 +176,10 @@ contract EOracle is IEOracle {
         }
     }
 
-    function _calculateSqrtPriceX96FromSqrtPrices(uint160 sqrtPriceX96_0, uint160 sqrtPriceX96_1) private pure returns (uint160) {
+    function _calculateSqrtPriceX96FromSqrtPrices(
+        uint160 sqrtPriceX96_0,
+        uint160 sqrtPriceX96_1
+    ) private pure returns (uint160) {
         if (sqrtPriceX96_1 == 0) return 0; // Division by zero check
 
         // Scale sqrtPriceX96_0 down to avoid overflow in division
@@ -178,8 +192,8 @@ contract EOracle is IEOracle {
 
         // Check for overflow before casting to uint160
         if (temp > type(uint160).max) {
-                // 0 is a flag for overflow
-                return 0;
+            // 0 is a flag for overflow
+            return 0;
         }
 
         return uint160(temp);
@@ -190,11 +204,11 @@ contract EOracle is IEOracle {
         return _oracle;
     }
 
-    function _getPoolSettings(address token0, address token1, address oracle)
-        private
-        view
-        returns (PoolSettings memory settings)
-    {
+    function _getPoolSettings(
+        address token0,
+        address token1,
+        address oracle
+    ) private view returns (PoolSettings memory settings) {
         settings.key = PoolKey({
             currency0: Currency.wrap(token0),
             currency1: Currency.wrap(token1),
@@ -207,11 +221,10 @@ contract EOracle is IEOracle {
         settings.secondsAgos = _getSecondsAgos(settings.cardinality);
     }
 
-    function _getPriceX128(int48[] memory tickCumulatives, uint32[] memory secondsAgos)
-        private
-        pure
-        returns (uint256 priceX128)
-    {
+    function _getPriceX128(
+        int48[] memory tickCumulatives,
+        uint32[] memory secondsAgos
+    ) private pure returns (uint256 priceX128) {
         int56 tickCumulativesDelta = int56(tickCumulatives[1] - tickCumulatives[0]);
         int24 twapTick = int24(tickCumulativesDelta / int56(int32(secondsAgos[0])));
         if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(int32(secondsAgos[0])) != 0)) twapTick--;

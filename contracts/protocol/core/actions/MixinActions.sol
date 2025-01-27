@@ -2,12 +2,14 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import "../immutable/MixinStorage.sol";
-import "../../extensions/adapters/interfaces/IEOracle.sol";
-import "../../interfaces/IKyc.sol";
+import {MixinStorage} from "../immutable/MixinStorage.sol";
+import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {IKyc} from "../../interfaces/IKyc.sol";
+import {IRigoblockV3PoolActions} from "../../interfaces/pool/IRigoblockV3PoolActions.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
-    // TODO: check if we can merge some errors, and log info with them.
+    // TODO: check if we can unify some errors, and log info with them.
     error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
     error PoolBurnNotEnough();
     error PoolBurnNullAmount();
@@ -29,7 +31,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         address recipient,
         uint256 amountIn,
         uint256 amountOutMin
-    ) public payable override nonReentrant() returns (uint256 recipientAmount) {
+    ) public payable override nonReentrant returns (uint256 recipientAmount) {
         address kycProvider = poolParams().kycProvider;
 
         // require whitelisted user if kyc is enforced
@@ -53,7 +55,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             amountIn -= (amountIn * _getSpread()) / _SPREAD_BASE;
         }
 
-        uint256 mintedAmount = (amountIn * 10**decimals()) / unitaryValue;
+        uint256 mintedAmount = (amountIn * 10 ** decimals()) / unitaryValue;
         require(mintedAmount > amountOutMin, PoolMintOutputAmount());
         poolTokens().totalSupply += mintedAmount;
 
@@ -62,7 +64,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
-    function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant() returns (uint256 netRevenue) {
+    function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant returns (uint256 netRevenue) {
         netRevenue = _burn(amountIn, amountOutMin, _BASE_TOKEN_FLAG);
     }
 
@@ -71,12 +73,11 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     // technically, this could be used for exchanging big quantities of tokens at market rate. Which is not a big deal. prob should
     // allow only if user does not have enough base tokens
     /// @inheritdoc IRigoblockV3PoolActions
-    function burnForToken(uint256 amountIn, uint256 amountOutMin, address tokenOut)
-        external
-        override
-        nonReentrant()
-        returns (uint256 netRevenue)
-    {
+    function burnForToken(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenOut
+    ) external override nonReentrant returns (uint256 netRevenue) {
         // early revert if token does not have price feed, 0 is sentinel for token not being active. Removed token will revert later.
         // TODO: we also use type(uint256).max as flag for removed token
         require(activeTokensSet().positions[tokenOut] != 0, PoolTokenNotActive());
@@ -84,7 +85,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc IRigoblockV3PoolActions
-    function setUnitaryValue() external override nonReentrant() {
+    function setUnitaryValue() external override nonReentrant {
         // unitary value is updated only with non-dust supply
         require(poolTokens().totalSupply >= 1e2, PoolSupplyIsNullOrDust());
         _updateNav();
@@ -225,24 +226,21 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     function _assertBiggerThanMinimum(uint256 amount) private view {
-        require(amount >= 10**decimals() / _MINIMUM_ORDER_DIVISOR, PoolAmountSmallerThanMinumum(_MINIMUM_ORDER_DIVISOR));
+        require(
+            amount >= 10 ** decimals() / _MINIMUM_ORDER_DIVISOR,
+            PoolAmountSmallerThanMinumum(_MINIMUM_ORDER_DIVISOR)
+        );
     }
 
     // TODO: use try/catch implementation
     function _safeTransfer(address token, address to, uint256 amount) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = token.call(
-            abi.encodeCall(IERC20.transfer, (to, amount))
-        );
+        (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.transfer, (to, amount)));
         require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFailed());
     }
 
     // TODO: use our try/catch implementation
-    function _safeTransferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) private {
+    function _safeTransferFrom(address from, address to, uint256 amount) private {
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, bytes memory data) = pool().baseToken.call(
             abi.encodeCall(IERC20.transferFrom, (from, to, amount))

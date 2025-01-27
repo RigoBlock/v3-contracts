@@ -23,7 +23,7 @@ import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
-import {AppTokenBalance, ExternalApp} from "../../types/ExternalApp.sol";
+import {ExternalApp} from "../../types/ExternalApp.sol";
 import {Int256, TransientBalance} from "../../types/TransientBalance.sol";
 
 // TODO: check make catastrophic failure resistant, i.e. must always be possible to liquidate pool + must always
@@ -75,10 +75,12 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             // position balances can be negative, positive, or null (handled explicitly later)
             for (uint256 i = 0; i < apps.length; i++) {
                 // active positions tokens are a subset of active tokens
-                for (uint j = 0; j < apps[i].balances.length; j++) {
+                for (uint256 j = 0; j < apps[i].balances.length; j++) {
                     // Always add or update the balance from positions
                     if (apps[i].balances[j].amount != 0) {
-                        newBalance = Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(apps[i].balances[j].token) + int256(apps[i].balances[j].amount);
+                        newBalance =
+                            Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(apps[i].balances[j].token) +
+                            int256(apps[i].balances[j].amount);
                         Int256.wrap(_TRANSIENT_BALANCE_SLOT).store(apps[i].balances[j].token, newBalance);
                     }
                 }
@@ -135,17 +137,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             }
 
             if (newBalance < 0) {
-                poolValueInBaseToken -= int256(_getBaseTokenValue(
-                    targetToken,
-                    uint256(-newBalance),
-                    tokens.baseToken
-                ));
+                poolValueInBaseToken -= int256(_getBaseTokenValue(targetToken, uint256(-newBalance), tokens.baseToken));
             } else {
-                poolValueInBaseToken += int256(_getBaseTokenValue(
-                    targetToken,
-                    uint256(newBalance),
-                    tokens.baseToken
-                ));
+                poolValueInBaseToken += int256(_getBaseTokenValue(targetToken, uint256(newBalance), tokens.baseToken));
             }
         }
 
@@ -153,11 +147,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         return (poolValueInBaseToken > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
-    function _getBaseTokenValue(address token, uint256 amount, address baseToken)
-        private
-        view
-        returns (uint256)
-    {
+    function _getBaseTokenValue(address token, uint256 amount, address baseToken) private view returns (uint256) {
         if (token == baseToken || amount == 0) {
             return amount;
         }

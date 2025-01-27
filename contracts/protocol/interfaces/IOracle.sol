@@ -14,19 +14,17 @@ interface IOracle {
         uint16 cardinalityNext;
     }
 
-    function increaseCardinalityNext(PoolKey calldata key, uint16 cardinalityNext)
-        external
-        returns (uint16 cardinalityNextOld, uint16 cardinalityNextNew);
+    function increaseCardinalityNext(
+        PoolKey calldata key,
+        uint16 cardinalityNext
+    ) external returns (uint16 cardinalityNextOld, uint16 cardinalityNextNew);
 
-    function getObservation(PoolKey calldata key, uint256 index)
-        external
-        view
-        returns (Observation memory observation);
+    function getObservation(PoolKey calldata key, uint256 index) external view returns (Observation memory observation);
 
     function getState(PoolKey calldata key) external view returns (ObservationState memory state);
 
-    function observe(PoolKey calldata key, uint32[] calldata secondsAgos)
-        external
-        view
-        returns (int48[] memory tickCumulatives, uint144[] memory secondsPerLiquidityCumulativeX128s);
+    function observe(
+        PoolKey calldata key,
+        uint32[] calldata secondsAgos
+    ) external view returns (int48[] memory tickCumulatives, uint144[] memory secondsPerLiquidityCumulativeX128s);
 }

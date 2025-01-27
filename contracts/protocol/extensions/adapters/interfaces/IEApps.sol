@@ -19,7 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ExternalApp} from "../../../types/ExternalApp.sol"; 
+import {ExternalApp} from "../../../types/ExternalApp.sol";
 
 interface IEApps {
     /// @notice Returns token balances owned in a set of external contracts.

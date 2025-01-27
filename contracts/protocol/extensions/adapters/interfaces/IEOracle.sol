@@ -27,10 +27,11 @@ interface IEOracle {
     /// @return value The converted amount in target token
     /// @dev Will first try to convert via crosses with chain currency, fallback to direct cross if not available.
     /// @dev Assumes token is always different from targetToken, which is the msg.sender's responsibility to verify.
-    function convertTokenAmount(address token, uint256 amount, address targetToken)
-        external
-        view
-        returns (uint256 value);
+    function convertTokenAmount(
+        address token,
+        uint256 amount,
+        address targetToken
+    ) external view returns (uint256 value);
 
     /// @notice Returns the address of the oracle hook stored in the bytecode
     /// @return oracleAddress The address of the oracle hook

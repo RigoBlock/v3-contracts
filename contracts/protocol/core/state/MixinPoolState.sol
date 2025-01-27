@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../state/MixinPoolValue.sol";
-import "../../interfaces/pool/IRigoblockV3PoolState.sol";
+import {MixinPoolValue} from "../state/MixinPoolValue.sol";
+import {IRigoblockV3PoolState} from "../../interfaces/pool/IRigoblockV3PoolState.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
     /*
@@ -31,11 +31,7 @@ abstract contract MixinPoolState is MixinPoolValue {
         external
         view
         override
-        returns (
-            ReturnedPool memory poolInitParams,
-            PoolParams memory poolVariables,
-            PoolTokens memory poolTokensInfo
-        )
+        returns (ReturnedPool memory poolInitParams, PoolParams memory poolVariables, PoolTokens memory poolTokensInfo)
     {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
@@ -97,12 +93,11 @@ abstract contract MixinPoolState is MixinPoolValue {
     /// @inheritdoc IRigoblockV3PoolState
     function getPoolTokens() public view override returns (PoolTokens memory) {
         uint256 unitaryValue = poolTokens().unitaryValue;
-        return PoolTokens(
-            {
+        return
+            PoolTokens({
                 unitaryValue: unitaryValue != 0 ? unitaryValue : 10 ** pool().decimals,
                 totalSupply: poolTokens().totalSupply
-            }
-        );
+            });
     }
 
     /// @inheritdoc IRigoblockV3PoolState

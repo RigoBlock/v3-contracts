@@ -2,9 +2,10 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 //import "../actions/MixinActions.sol";
-import "../immutable/MixinImmutables.sol";
-import "../immutable/MixinStorage.sol";
-import "../../interfaces/IAuthority.sol";
+import {MixinImmutables} from "../immutable/MixinImmutables.sol";
+import {MixinStorage} from "../immutable/MixinStorage.sol";
+import {IAuthority} from "../../interfaces/IAuthority.sol";
+import {IRigoblockV3PoolFallback} from "../../interfaces/pool/IRigoblockV3PoolFallback.sol";
 
 abstract contract MixinFallback is MixinImmutables, MixinStorage {
     error PoolImplementationDirectCallNotAllowed();

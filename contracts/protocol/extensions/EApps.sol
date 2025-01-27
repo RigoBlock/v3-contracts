@@ -19,8 +19,7 @@
 
 pragma solidity 0.8.28;
 
-import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
-import {FixedPoint128} from '@uniswap/v3-core/contracts/libraries/FixedPoint128.sol';
+import {FixedPoint128} from "@uniswap/v3-core/contracts/libraries/FixedPoint128.sol";
 import {INonfungiblePositionManager} from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
@@ -33,10 +32,9 @@ import {NativeWrapper} from "@uniswap/v4-periphery/src/base/NativeWrapper.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
-import "./adapters/interfaces/IEApps.sol";
-import {ApplicationsSlot} from "../libraries/ApplicationsLib.sol";
+import {IEApps} from "./adapters/interfaces/IEApps.sol";
 import {Applications} from "../types/Applications.sol";
-import {AppTokenBalance} from "../types/ExternalApp.sol"; 
+import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {IEOracle} from "../../protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ApplicationsLib} from "../../protocol/libraries/ApplicationsLib.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
@@ -44,7 +42,7 @@ import {IStorage} from "../../staking/interfaces/IStorage.sol";
 
 /// @notice A universal aggregator for external contracts positions.
 /// @dev External positions are consolidating into a single view contract. As more apps are connected, can be split into multiple mixing.
-/// @dev Future-proof as can route to dedicated extensions, should the size of the contract become too big. 
+/// @dev Future-proof as can route to dedicated extensions, should the size of the contract become too big.
 contract EApps is IEApps {
     using ApplicationsLib for uint256;
     using StateLibrary for IPoolManager;
@@ -52,6 +50,7 @@ contract EApps is IEApps {
 
     error UnknownApplication(uint256 appType);
 
+    // TODO: linter complains about lowercase definitions
     address public immutable override wrappedNative;
 
     IStaking private immutable _grgStakingProxy;
@@ -66,6 +65,7 @@ contract EApps is IEApps {
     /// @notice The different immutable addresses will result in different deployed addresses on different networks.
     constructor(address grgStakingProxy, address univ3Npm, address univ4Posm) {
         // univ4 POSM does not implement inherited NativeWrapper methods in its interface
+        // TODO: uncomment when setup is correct, as this reverts otherwise
         //wrappedNative = address(NativeWrapper(payable(univ4Posm)).WETH9());
         _grgStakingProxy = IStaking(grgStakingProxy);
         _uniV3NPM = INonfungiblePositionManager(univ3Npm);
@@ -91,7 +91,7 @@ contract EApps is IEApps {
                 nestedBalances[activeAppIndex++].appType = uint256(Applications(i));
             } else {
                 // grg staking and univ3 liquidity are pre-existing applications that do not require an upgrade, so they won't be
-                // stored. However, future upgrades may change that and we use this fallback block until implemented. 
+                // stored. However, future upgrades may change that and we use this fallback block until implemented.
                 if (Applications(i) == Applications.GRG_STAKING || Applications(i) == Applications.UNIV3_LIQUIDITY) {
                     nestedBalances[activeAppIndex++].balances = _handleApplication(Applications(i));
                     nestedBalances[activeAppIndex++].appType = uint256(Applications(i));
@@ -139,9 +139,22 @@ contract EApps is IEApps {
         // cache prices.
         params.prices = new uint160[](0);
 
-        for (uint i = 0; i < maxLength / 2; i++) {
+        for (uint256 i = 0; i < maxLength / 2; i++) {
             uint256 tokenId = _uniV3NPM.tokenOfOwnerByIndex(address(this), i);
-            (,, address token0, address token1,, int24 tickLower, int24 tickUpper, uint128 liquidity,,,,) = _uniV3NPM.positions(tokenId);
+            (
+                ,
+                ,
+                address token0,
+                address token1,
+                ,
+                int24 tickLower,
+                int24 tickUpper,
+                uint128 liquidity,
+                ,
+                ,
+                ,
+
+            ) = _uniV3NPM.positions(tokenId);
             params.token0 = token0;
             params.token1 = token1;
 
@@ -185,8 +198,11 @@ contract EApps is IEApps {
     // Helper function to find if a price for a token pair is cached
     function _findCachedPrice(CacheParams memory params) private pure returns (uint160) {
         if (params.index != 0) {
-            for (uint i = 0; i < params.prices.length; i++) {
-                if (params.balances[params.index - 2].token == params.token0 && params.balances[params.index - 1].token == params.token1) {
+            for (uint256 i = 0; i < params.prices.length; i++) {
+                if (
+                    params.balances[params.index - 2].token == params.token0 &&
+                    params.balances[params.index - 1].token == params.token1
+                ) {
                     return params.prices[i];
                 }
             }
@@ -196,11 +212,13 @@ contract EApps is IEApps {
 
     // Helper function to append a new cached price
     function _appendCachedPrice(uint160[] memory prices, uint160 price) private pure returns (uint160[] memory) {
+        // TODO: define length in memory to say storage reads
         uint160[] memory newPrices = new uint160[](prices.length + 1);
-        for (uint i = 0; i < prices.length; i++) {
+        for (uint256 i = 0; i < prices.length; i++) {
             newPrices[i] = prices[i];
         }
-        newPrices[prices.length] = price;
+        // TODO: modified to use newPrices.length, verify if prev using prices.length was a bug
+        newPrices[newPrices.length] = price;
         return newPrices;
     }
 
@@ -226,7 +244,7 @@ contract EApps is IEApps {
         params.prices = new uint160[](0);
 
         // a maximum of 255 positons can be created, so this loop will not break memory or block limits
-        for (uint i = 0; i < tokenIds.length; i++) {
+        for (uint256 i = 0; i < tokenIds.length; i++) {
             (PoolKey memory poolKey, PositionInfo info) = _uniV4Posm.getPoolAndPositionInfo(tokenIds[i]);
             (int24 tickLower, int24 tickUpper) = (info.tickLower(), info.tickUpper());
             params.token0 = Currency.unwrap(poolKey.currency0);
@@ -234,14 +252,9 @@ contract EApps is IEApps {
 
             params.index = i * 2;
 
-            (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128) = 
-                _uniV4Posm.poolManager().getPositionInfo(
-                    poolKey.toId(),
-                    address(this),
-                    tickLower,
-                    tickUpper,
-                    bytes32(tokenIds[i])
-                );
+            (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128) = _uniV4Posm
+                .poolManager()
+                .getPositionInfo(poolKey.toId(), address(this), tickLower, tickUpper, bytes32(tokenIds[i]));
 
             uint160 sqrtPriceX96 = _findCachedPrice(params);
             if (sqrtPriceX96 == 0) {
@@ -259,10 +272,19 @@ contract EApps is IEApps {
 
             // notice: `getFeeGrowthInside` uses `getFeeGrowthGlobals`, which can be inflated by donating to the position
             // https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
-            (uint256 poolFeeGrowthInside0X128, uint256 poolFeeGrowthInside1X128) =
-                _uniV4Posm.poolManager().getFeeGrowthInside(poolKey.toId(), tickLower, tickUpper);
-            amount0 += FullMath.mulDiv(poolFeeGrowthInside0X128 - feeGrowthInside0LastX128, liquidity, FixedPoint128.Q128);
-            amount1 += FullMath.mulDiv(poolFeeGrowthInside1X128 - feeGrowthInside1LastX128, liquidity, FixedPoint128.Q128);
+            (uint256 poolFeeGrowthInside0X128, uint256 poolFeeGrowthInside1X128) = _uniV4Posm
+                .poolManager()
+                .getFeeGrowthInside(poolKey.toId(), tickLower, tickUpper);
+            amount0 += FullMath.mulDiv(
+                poolFeeGrowthInside0X128 - feeGrowthInside0LastX128,
+                liquidity,
+                FixedPoint128.Q128
+            );
+            amount1 += FullMath.mulDiv(
+                poolFeeGrowthInside1X128 - feeGrowthInside1LastX128,
+                liquidity,
+                FixedPoint128.Q128
+            );
 
             params.balances[params.index].token = params.token0;
             params.balances[params.index].amount = int256(amount0);

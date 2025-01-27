@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinActions.sol";
+import {MixinActions} from "./MixinActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {IRigoblockV3PoolOwnerActions} from "../../interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
-import {ExternalApp, AppTokenBalance} from "../../types/ExternalApp.sol"; 
+import {ExternalApp} from "../../types/ExternalApp.sol";
 
 abstract contract MixinOwnerActions is MixinActions {
     using ApplicationsLib for ApplicationsSlot;
@@ -55,11 +57,14 @@ abstract contract MixinOwnerActions is MixinActions {
         uint256 packedApps = appsBitmap.packedApplications;
         ExternalApp[] memory activeApps;
         try IEApps(address(this)).getAppTokenBalances(packedApps) returns (ExternalApp[] memory apps) {
-            for (uint i = 0; i < apps.length; i++) {
+            for (uint256 i = 0; i < apps.length; i++) {
                 activeApps = apps;
 
                 // update storage if the specific app is stored as active
-                if (apps[i].balances.length == 0 && ApplicationsLib.isActiveApplication(packedApps, uint256(apps[i].appType))) {
+                if (
+                    apps[i].balances.length == 0 &&
+                    ApplicationsLib.isActiveApplication(packedApps, uint256(apps[i].appType))
+                ) {
                     appsBitmap.removeApplication(apps[i].appType);
                 }
             }
@@ -71,10 +76,10 @@ abstract contract MixinOwnerActions is MixinActions {
         bool foundInApp;
 
         // base token is never pushed to active list for gas savings, we can safely remove any unactive token
-        for (uint i = 0; i < set.addresses.length; i++) {
+        for (uint256 i = 0; i < set.addresses.length; i++) {
             // skip removal if a token is active in an application
-            for (uint j = 0; j < activeApps.length; j++) {
-                for (uint k = 0; k < activeApps[i].balances.length; k++) {
+            for (uint256 j = 0; j < activeApps.length; j++) {
+                for (uint256 k = 0; k < activeApps[i].balances.length; k++) {
                     if (activeApps[j].balances[k].token == set.addresses[i]) {
                         foundInApp = true;
                         break; // Exit k loop

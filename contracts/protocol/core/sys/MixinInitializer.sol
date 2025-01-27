@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../immutable/MixinImmutables.sol";
-import "../immutable/MixinStorage.sol";
-import "../../interfaces/IERC20.sol";
-import "../../interfaces/IRigoblockPoolProxyFactory.sol";
-import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
-import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
+import {MixinImmutables} from "../immutable/MixinImmutables.sol";
+import {MixinStorage} from "../immutable/MixinStorage.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {IRigoblockPoolProxyFactory} from "../../interfaces/IRigoblockPoolProxyFactory.sol";
+import {IRigoblockV3PoolInitializer} from "../../interfaces/pool/IRigoblockV3PoolInitializer.sol";
+//import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
+//import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     error BaseTokenDecimals();

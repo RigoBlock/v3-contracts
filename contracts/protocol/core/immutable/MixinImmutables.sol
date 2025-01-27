@@ -19,7 +19,8 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinConstants.sol";
+import {MixinConstants} from "./MixinConstants.sol";
+import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
 
 /// @notice Immutables are not assigned a storage slot, can be safely added to this contract.
 abstract contract MixinImmutables is MixinConstants {
