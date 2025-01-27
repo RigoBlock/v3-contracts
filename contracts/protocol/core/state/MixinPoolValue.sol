@@ -19,7 +19,6 @@
 
 pragma solidity 0.8.28;
 
-// TODO: this contract does not really belong to state, as we cannot just read due to temp storage. Should convert to lib.
 import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
@@ -36,9 +35,27 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
     error BaseTokenBalanceError();
 
-    // with null total supply a pool will return the last stored value
+    // TODO: assert not possible to inflate total supply to manipulate pool price.
+    /// @notice Uses transient storage to keep track of unique token balances.
+    /// @dev With null total supply a pool will return the last stored value.
     function _updateNav() internal override returns (uint256 unitaryValue) {
-        unitaryValue = _getUnitaryValue();
+        unitaryValue = poolTokens().unitaryValue;
+
+        // first mint skips nav calculation
+        if (unitaryValue == 0) {
+            unitaryValue = 10 ** pool().decimals;
+        } else if (poolTokens().totalSupply == 0) {
+            return unitaryValue;
+        } else {
+            uint256 totalPoolValue = _computeTotalPoolValue();
+
+            // TODO: verify under what scenario totalPoolValue would be null here
+            if (totalPoolValue > 0) {
+                unitaryValue = totalPoolValue / poolTokens().totalSupply;
+            } else {
+                return unitaryValue;
+            }
+        }
 
         // unitary value cannot be null
         assert(unitaryValue > 0);
@@ -46,31 +63,10 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         emit NewNav(msg.sender, address(this), unitaryValue);
     }
 
-    // TODO: assert not possible to inflate total supply to manipulate pool price.
-    /// @notice Uses transient storage to keep track of unique token balances.
-    function _getUnitaryValue() private returns (uint256) {
-        uint256 poolSupply = poolTokens().totalSupply;
-        uint256 storedValue = poolTokens().unitaryValue;
-        uint256 poolValue = _computeTotalPoolValue();
-
-        // a previously minted pool cannot have storedValue = 0 
-        if (storedValue != 0) {
-            // default scenario
-            if (poolValue != 0 && poolSupply != 0) {
-                return poolValue / poolSupply;
-            // fallback to stored value when value would be null or infinite
-            } else {
-                return storedValue;
-            }
-        // return 1 in base token units at first mint
-        } else {
-            return 10 ** pool().decimals;
-        }
-    }
-
     /// @notice Updates the stored value with an updated one.
     /// @dev Assumes the stored list contain unique elements.
     /// @dev A write method to be used in mint and burn operations.
+    /// @dev Uses transient storage to keep track of unique token balances.
     function _computeTotalPoolValue() private returns (uint256 poolValue) {
         int256 newBalance;
 
