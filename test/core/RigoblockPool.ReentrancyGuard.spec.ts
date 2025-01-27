@@ -72,7 +72,7 @@ describe("ReentrancyGuard", async () => {
             await testReentrancyAttack.setMaxCount(1)
             await testReentrancyAttack.mintPool()
             expect(await testReentrancyAttack.count()).to.be.eq(2)
-            expect(await pool.balanceOf(testReentrancyAttack.address)).to.be.eq(parseEther("9.5"))
+            expect(await pool.balanceOf(testReentrancyAttack.address)).to.be.eq(parseEther("10"))
             expect(await rogueToken.balanceOf(pool.address)).to.be.eq(parseEther("10"))
         })
     })

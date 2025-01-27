@@ -5,3 +5,4 @@ libs = ['node_modules', 'lib']
 test = 'test'
 cache_path  = 'cache_forge'
 optimizer_runs = 1_000_000
+auto_detect_solc = true

@@ -1,6 +1,5 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { AddressZero } from "@ethersproject/constants"
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
@@ -166,7 +165,7 @@ const deploy: DeployFunction = async function (
 
   await rigoTokenInstance.changeMintingAddress(inflation.address)
 
-  const inflationL2 = await deploy("InflationL2", {
+  await deploy("InflationL2", {
     from: deployer,
     args: [deployer],
     log: true,
@@ -198,6 +197,34 @@ const deploy: DeployFunction = async function (
   await deploy("AMulticall", {
     from: deployer,
     args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const oracle = await deploy("MockOracle", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  await deploy("EOracle", {
+    from: deployer,
+    args: [oracle.address],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  // TODO: this deploy fails, as the constructor tries to read WETH from NativeWrapper, which is not deployed. We can
+  // instead build tests with foundry, and deploy from a compiled bytecode in the test environment. However, we will
+  // also need correct deployment pipeline for the actual deployment (which should work as long as uniV4Posm is deployed)
+  await deploy("EApps", {
+    from: deployer,
+    args: [
+      stakingProxy.address,
+      stakingProxy.address, // uniV3NPM
+      stakingProxy.address // uniV4Posm
+    ],
     log: true,
     deterministicDeployment: true,
   })

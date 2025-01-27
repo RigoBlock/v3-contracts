@@ -45,10 +45,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             _safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
-        // update stored pool value
         uint256 unitaryValue = _updateNav();
-
-        bool isOnlyHolder = poolTokens().totalSupply == accounts().userAccounts[msg.sender].userBalance;
+        bool isOnlyHolder = poolTokens().totalSupply == accounts().userAccounts[recipient].userBalance;
 
         if (!isOnlyHolder) {
             // apply markup
@@ -87,8 +85,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
     /// @inheritdoc IRigoblockV3PoolActions
     function setUnitaryValue() external override nonReentrant() {
-        // unitary value can be updated only after first mint
-        require(poolTokens().totalSupply > 1e2, PoolSupplyIsNullOrDust());
+        // unitary value is updated only with non-dust supply
+        require(poolTokens().totalSupply >= 1e2, PoolSupplyIsNullOrDust());
         _updateNav();
     }
 
