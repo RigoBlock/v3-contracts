@@ -25,6 +25,4 @@ import {IRigoblockExtensions} from "../extensions/adapters/interfaces/IRigoblock
 /// @title Rigoblock Pool Extended Interface - Allows interaction with all the pool's supported methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IRigoblockPoolExtended is IRigoblockV3Pool, IRigoblockExtensions {
-
-}
+interface IRigoblockPoolExtended is IRigoblockV3Pool, IRigoblockExtensions {}

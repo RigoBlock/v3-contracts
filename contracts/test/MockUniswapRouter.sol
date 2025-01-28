@@ -27,34 +27,23 @@ contract MockUniswapRouter {
         address to
     ) external returns (uint256 amountIn) {}
 
-    function exactInputSingle(ISwapRouter02.ExactInputSingleParams calldata params)
-        external
-        returns (uint256 amountOut)
-    {}
+    function exactInputSingle(
+        ISwapRouter02.ExactInputSingleParams calldata params
+    ) external returns (uint256 amountOut) {}
 
     function exactInput(ISwapRouter02.ExactInputParams calldata params) external returns (uint256 amountOut) {}
 
-    function exactOutputSingle(ISwapRouter02.ExactOutputSingleParams calldata params)
-        external
-        returns (uint256 amountIn)
-    {}
+    function exactOutputSingle(
+        ISwapRouter02.ExactOutputSingleParams calldata params
+    ) external returns (uint256 amountIn) {}
 
     function exactOutput(ISwapRouter02.ExactOutputParams calldata params) external returns (uint256 amountIn) {}
 
     function sweepToken(address token, uint256 amountMinimum) external {}
 
-    function sweepToken(
-        address token,
-        uint256 amountMinimum,
-        address recipient
-    ) external {}
+    function sweepToken(address token, uint256 amountMinimum, address recipient) external {}
 
-    function sweepTokenWithFee(
-        address token,
-        uint256 amountMinimum,
-        uint256 feeBips,
-        address feeRecipient
-    ) external {}
+    function sweepTokenWithFee(address token, uint256 amountMinimum, uint256 feeBips, address feeRecipient) external {}
 
     function sweepTokenWithFee(
         address token,

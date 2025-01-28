@@ -18,11 +18,7 @@ contract FlashGovernance {
     address private immutable _governance;
     address private immutable _grgTransferProxy;
 
-    constructor(
-        address stakingProxy,
-        address governance,
-        address grgTransferProxy
-    ) {
+    constructor(address stakingProxy, address governance, address grgTransferProxy) {
         _grgTransferProxy = grgTransferProxy;
         _stakingProxy = stakingProxy;
         _governance = governance;

@@ -16,15 +16,9 @@ contract MockUniswapNpm {
         WETH9 = address(new WETH9Contract());
     }
 
-    function mint(INonfungiblePositionManager.MintParams memory)
-        external
-        returns (
-            uint256 tokenId,
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
-    {
+    function mint(
+        INonfungiblePositionManager.MintParams memory
+    ) external returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         tokenId = ++numPools;
         _ownerOf[tokenId] = msg.sender;
         liquidity = 1;
@@ -32,24 +26,17 @@ contract MockUniswapNpm {
         amount1 = 3;
     }
 
-    function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams memory params)
-        external
-        returns (
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
-    {}
+    function increaseLiquidity(
+        INonfungiblePositionManager.IncreaseLiquidityParams memory params
+    ) external returns (uint128 liquidity, uint256 amount0, uint256 amount1) {}
 
-    function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
-        external
-        returns (uint256 amount0, uint256 amount1)
-    {}
+    function decreaseLiquidity(
+        INonfungiblePositionManager.DecreaseLiquidityParams calldata params
+    ) external returns (uint256 amount0, uint256 amount1) {}
 
-    function collect(INonfungiblePositionManager.CollectParams memory params)
-        external
-        returns (uint256 amount0, uint256 amount1)
-    {}
+    function collect(
+        INonfungiblePositionManager.CollectParams memory params
+    ) external returns (uint256 amount0, uint256 amount1) {}
 
     function burn(uint256 tokenId) external {}
 
@@ -60,7 +47,9 @@ contract MockUniswapNpm {
         uint160 sqrtPriceX96
     ) external returns (address pool) {}
 
-    function positions(uint256)
+    function positions(
+        uint256
+    )
         external
         view
         returns (

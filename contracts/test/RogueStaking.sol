@@ -88,17 +88,7 @@ contract RogueStaking {
         return uint256(bytes32(data));
     }
 
-    function getParams()
-        external
-        view
-        returns (
-            uint256,
-            uint32,
-            uint256,
-            uint32,
-            uint32
-        )
-    {
+    function getParams() external view returns (uint256, uint32, uint256, uint32, uint32) {
         return (epochDurationInSeconds, 1, 1, 1, 1);
     }
 }

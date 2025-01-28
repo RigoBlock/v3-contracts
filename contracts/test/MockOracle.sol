@@ -6,17 +6,13 @@ import {IOracle} from "../protocol/interfaces/IOracle.sol";
 import {Observation} from "../protocol/types/Observation.sol";
 
 contract MockOracle {
-    uint160 private constant ONE_X96 = 2**96;
+    uint160 private constant ONE_X96 = 2 ** 96;
 
     IOracle.ObservationState private _state;
     Observation[65535] _observations;
 
     constructor() {
-        _state = IOracle.ObservationState({
-            index: 0,
-            cardinality: 2,
-            cardinalityNext: 2
-        });
+        _state = IOracle.ObservationState({index: 0, cardinality: 2, cardinalityNext: 2});
 
         uint32 initialTimestamp = uint32(block.timestamp);
         uint32 secondTimestamp = initialTimestamp + 1;
@@ -38,11 +34,10 @@ contract MockOracle {
         });
     }
 
-    function getObservations(PoolKey calldata /*key*/, uint256 index)
-        external
-        view
-        returns (Observation memory observation)
-    {
+    function getObservations(
+        PoolKey calldata /*key*/,
+        uint256 index
+    ) external view returns (Observation memory observation) {
         observation = _observations[index];
     }
 
@@ -50,11 +45,10 @@ contract MockOracle {
         state = _state;
     }
 
-    function observe(PoolKey calldata /*key*/, uint32[] calldata secondsAgos)
-        external
-        view
-        returns (int48[] memory tickCumulatives, uint144[] memory secondsPerLiquidityCumulativeX128s)
-    {
+    function observe(
+        PoolKey calldata /*key*/,
+        uint32[] calldata secondsAgos
+    ) external view returns (int48[] memory tickCumulatives, uint144[] memory secondsPerLiquidityCumulativeX128s) {
         tickCumulatives = new int48[](secondsAgos.length);
         secondsPerLiquidityCumulativeX128s = new uint144[](secondsAgos.length);
         uint32 currentTimestamp = uint32(block.timestamp);
@@ -65,8 +59,12 @@ contract MockOracle {
             // Find the closest observation before or at the target timestamp
             Observation memory closestObservation;
             for (uint256 j = 0; j < _state.cardinality; j++) {
-                if (_observations[j].blockTimestamp <= targetTimestamp && 
-                    (_observations[j].blockTimestamp == targetTimestamp || j == _state.cardinality - 1 || _observations[j + 1].blockTimestamp > targetTimestamp)) {
+                if (
+                    _observations[j].blockTimestamp <= targetTimestamp &&
+                    (_observations[j].blockTimestamp == targetTimestamp ||
+                        j == _state.cardinality - 1 ||
+                        _observations[j + 1].blockTimestamp > targetTimestamp)
+                ) {
                     closestObservation = _observations[j];
                     break;
                 }
@@ -77,7 +75,7 @@ contract MockOracle {
             secondsPerLiquidityCumulativeX128s[i] = closestObservation.secondsPerLiquidityCumulativeX128;
 
             // Adjust for time passed since the closest observation (simplified for mock)
-            if(targetTimestamp > closestObservation.blockTimestamp) {
+            if (targetTimestamp > closestObservation.blockTimestamp) {
                 uint32 timeDiff = targetTimestamp - closestObservation.blockTimestamp;
                 tickCumulatives[i] += int48(int24(closestObservation.prevTick) * int32(timeDiff));
                 secondsPerLiquidityCumulativeX128s[i] += uint144(ONE_X96 * timeDiff);
