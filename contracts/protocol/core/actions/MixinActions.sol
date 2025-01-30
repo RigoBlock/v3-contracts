@@ -7,6 +7,7 @@ import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
 import {IRigoblockV3PoolActions} from "../../interfaces/pool/IRigoblockV3PoolActions.sol";
+import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     // TODO: check if we can unify some errors, and log info with them.
@@ -32,6 +33,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 amountIn,
         uint256 amountOutMin
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
+        NavComponents memory components = _updateNav();
         address kycProvider = poolParams().kycProvider;
 
         // require whitelisted user if kyc is enforced
@@ -41,21 +43,20 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         _assertBiggerThanMinimum(amountIn);
 
-        if (pool().baseToken == _ZERO_ADDRESS) {
+        if (components.baseToken == _ZERO_ADDRESS) {
             require(msg.value == amountIn, PoolMintAmountIn());
         } else {
-            _safeTransferFrom(msg.sender, address(this), amountIn);
+            _safeTransferFrom(components.baseToken, msg.sender, address(this), amountIn);
         }
 
-        uint256 unitaryValue = _updateNav();
-        bool isOnlyHolder = poolTokens().totalSupply == accounts().userAccounts[recipient].userBalance;
+        bool isOnlyHolder = components.totalSupply == accounts().userAccounts[recipient].userBalance;
 
         if (!isOnlyHolder) {
             // apply markup
             amountIn -= (amountIn * _getSpread()) / _SPREAD_BASE;
         }
 
-        uint256 mintedAmount = (amountIn * 10 ** decimals()) / unitaryValue;
+        uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
         require(mintedAmount > amountOutMin, PoolMintOutputAmount());
         poolTokens().totalSupply += mintedAmount;
 
@@ -86,9 +87,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
     /// @inheritdoc IRigoblockV3PoolActions
     function setUnitaryValue() external override nonReentrant {
+        NavComponents memory components = _updateNav();
+
         // unitary value is updated only with non-dust supply
-        require(poolTokens().totalSupply >= 1e2, PoolSupplyIsNullOrDust());
-        _updateNav();
+        require(components.totalSupply >= 1e2, PoolSupplyIsNullOrDust());
     }
 
     /*
@@ -99,7 +101,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /*
      * INTERNAL METHODS
      */
-    function _updateNav() internal virtual returns (uint256 unitaryValue);
+    function _updateNav() internal virtual returns (NavComponents memory);
 
     function _getFeeCollector() internal view virtual returns (address);
 
@@ -153,11 +155,11 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         require(block.timestamp >= userAccount.activation, PoolMinimumPeriodNotEnough());
 
         // update stored pool value
-        uint256 unitaryValue = _updateNav();
+        NavComponents memory components = _updateNav();
 
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn, userAccount.userBalance);
-        bool isOnlyHolder = poolTokens().totalSupply == userAccount.userBalance;
+        bool isOnlyHolder = components.totalSupply == userAccount.userBalance;
         poolTokens().totalSupply -= burntAmount;
 
         if (!isOnlyHolder) {
@@ -166,7 +168,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         // TODO: verify cases of possible underflow for small nav value
-        netRevenue = (burntAmount * unitaryValue) / 10 ** decimals();
+        netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
 
@@ -240,9 +242,9 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     // TODO: use our try/catch implementation
-    function _safeTransferFrom(address from, address to, uint256 amount) private {
+    function _safeTransferFrom(address token, address from, address to, uint256 amount) private {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = pool().baseToken.call(
+        (bool success, bytes memory data) = token.call(
             abi.encodeCall(IERC20.transferFrom, (from, to, amount))
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFromFailed());
