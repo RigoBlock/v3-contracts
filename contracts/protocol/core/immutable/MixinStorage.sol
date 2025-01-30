@@ -18,7 +18,7 @@
 */
 
 import {MixinImmutables} from "./MixinImmutables.sol";
-import {AddressSet} from "../../libraries/EnumerableSet.sol";
+import {AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
@@ -48,23 +48,7 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    /// @notice Pool initialization parameters.
-    /// @dev This struct is not visible externally and used to store/read pool init params.
-    /// @param name String of the pool name (max 32 characters).
-    /// @param symbol Bytes8 of the pool symbol (from 3 to 5 characters).
-    /// @param decimals Uint8 decimals.
-    /// @param owner Address of the pool operator.
-    /// @param unlocked Boolean the pool is locked for reentrancy check.
-    /// @param baseToken Address of the base token of the pool (0 for base currency).
-    struct Pool {
-        string name;
-        bytes8 symbol;
-        uint8 decimals;
-        address owner;
-        bool unlocked;
-        address baseToken;
-    }
-
+    // TODO: verify move storage methods to a library and import as using for *, so can re-use in adapters
     function pool() internal pure returns (Pool storage s) {
         assembly {
             s.slot := _POOL_INIT_SLOT

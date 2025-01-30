@@ -42,6 +42,8 @@ contract EOracle is IEOracle {
     }
 
     struct PoolSettings {
+        /// @notice The position of the last stored observation
+        uint16 index;
         /// @notice The number of stored observations
         uint16 cardinality;
         /// @notice The pool key
@@ -103,6 +105,7 @@ contract EOracle is IEOracle {
             // try and convert chain currency to the target token
             settings = _getPoolSettings(_ZERO_ADDRESS, targetToken, address(_getOracle()));
 
+            // TODO: if base token does not have price feed, nav will be 0. Assert that.
             // try to get first conversion
             try _getOracle().observe(settings.key, settings.secondsAgos) returns (
                 int48[] memory tickCumulativesTarget,
@@ -132,9 +135,11 @@ contract EOracle is IEOracle {
             return true;
         } else {
             PoolSettings memory settings;
+            // TODO: if we just verify that the observations[0] exists, we can save 1 storage read for this assertion
             settings = _getPoolSettings(_ZERO_ADDRESS, token, address(_getOracle()));
 
-            try _getOracle().getObservation(settings.key, settings.cardinality) returns (
+            // try and get the last stored observation
+            try _getOracle().getObservation(settings.key, settings.index) returns (
                 Observation memory observation
             ) {
                 return observation.blockTimestamp != 0;
@@ -218,6 +223,7 @@ contract EOracle is IEOracle {
         });
         IOracle.ObservationState memory state = _getOracle().getState(settings.key);
         settings.cardinality = state.cardinality;
+        settings.index = state.index;
         settings.secondsAgos = _getSecondsAgos(settings.cardinality);
     }
 

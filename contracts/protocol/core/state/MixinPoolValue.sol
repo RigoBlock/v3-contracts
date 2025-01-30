@@ -20,10 +20,12 @@
 pragma solidity 0.8.28;
 
 import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";
-import {IERC20} from "../../interfaces/IERC20.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
+import {NavComponents} from "../../types/NavComponents.sol";
 import {Int256, TransientBalance} from "../../types/TransientBalance.sol";
 
 // TODO: check make catastrophic failure resistant, i.e. must always be possible to liquidate pool + must always
@@ -31,44 +33,52 @@ import {Int256, TransientBalance} from "../../types/TransientBalance.sol";
 //  General idea is if the component is simple and not requires revisit of logic, implement as library, otherwise
 //  implement as extension.
 abstract contract MixinPoolValue is MixinOwnerActions {
+    using EnumerableSet for AddressSet;
     using TransientBalance for Int256;
 
     error BaseTokenBalanceError();
+    error BaseTokenPriceFeedError();
 
     // TODO: assert not possible to inflate total supply to manipulate pool price.
     /// @notice Uses transient storage to keep track of unique token balances.
     /// @dev With null total supply a pool will return the last stored value.
-    function _updateNav() internal override returns (uint256 unitaryValue) {
-        unitaryValue = poolTokens().unitaryValue;
+    function _updateNav() internal override returns (NavComponents memory components) {
+        components.unitaryValue = poolTokens().unitaryValue;
+        components.totalSupply = poolTokens().totalSupply;
+        components.baseToken = pool().baseToken;
+        components.decimals = pool().decimals;
 
         // first mint skips nav calculation
-        if (unitaryValue == 0) {
-            unitaryValue = 10 ** pool().decimals;
-        } else if (poolTokens().totalSupply == 0) {
-            return unitaryValue;
+        if (components.unitaryValue == 0) {
+            components.unitaryValue = 10 ** components.decimals;
+        } else if (components.totalSupply == 0) {
+            return components;
         } else {
-            uint256 totalPoolValue = _computeTotalPoolValue();
+            uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
 
             // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
-                unitaryValue = totalPoolValue / poolTokens().totalSupply;
+                components.unitaryValue = totalPoolValue / components.totalSupply;
             } else {
-                return unitaryValue;
+                return components;
             }
         }
 
         // unitary value cannot be null
-        assert(unitaryValue > 0);
-        poolTokens().unitaryValue = unitaryValue;
-        emit NewNav(msg.sender, address(this), unitaryValue);
+        assert(components.unitaryValue > 0);
+        poolTokens().unitaryValue = components.unitaryValue;
+        emit NewNav(msg.sender, address(this), components.unitaryValue);
     }
 
     /// @notice Updates the stored value with an updated one.
+    /// @param baseToken The address of the base token.
+    /// @return poolValue The total value of the pool in base token units.
     /// @dev Assumes the stored list contain unique elements.
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
-    function _computeTotalPoolValue() private returns (uint256 poolValue) {
-        int256 newBalance;
+    function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue) {
+        AddressSet storage values = activeTokensSet();
+        int256 storedBalance;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
@@ -78,10 +88,17 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                 for (uint256 j = 0; j < apps[i].balances.length; j++) {
                     // Always add or update the balance from positions
                     if (apps[i].balances[j].amount != 0) {
-                        newBalance =
-                            Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(apps[i].balances[j].token) +
-                            int256(apps[i].balances[j].amount);
-                        Int256.wrap(_TRANSIENT_BALANCE_SLOT).store(apps[i].balances[j].token, newBalance);
+                        storedBalance = Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(apps[i].balances[j].token);
+
+                        // verify token in active tokens set, add it otherwise (relevant for pool deployed before v4)
+                        if (storedBalance == 0) {
+                            // will add to set only if not already stored
+                            values.addUnique(IEOracle(address(this)), apps[i].balances[j].token, baseToken);
+                        }
+
+                        storedBalance += int256(apps[i].balances[j].amount);
+                        // store balance and make sure slot is not cleared to prevent trying to add token again
+                        Int256.wrap(_TRANSIENT_BALANCE_SLOT).store(apps[i].balances[j].token, storedBalance != 0 ? storedBalance : int256(1));
                     }
                 }
             }
@@ -90,36 +107,46 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             revert(reason);
         }
 
-        // TODO: tokens in apps but not active are not accounted for unless they are the base token. This for example when an
-        // old extension does not push token to active tokens. We could create a new array with app tokens and any additionally
-        // held token.
-        ActiveTokens memory tokens = _getActiveTokens();
-        uint256 length = tokens.activeTokens.length;
+        // active tokens include any potentially not stored app token , like when a pool upgrades from v3 to v4
+        address[] memory activeTokens = activeTokensSet().addresses;
+        uint256 length = activeTokens.length;
         address targetToken;
         int256 poolValueInBaseToken;
+
+        // assert we can convert token values to base token. If there are no active tokens, all balance is in the base token
+        if (length != 0) {
+            // make sure we can convert token values in base token
+            try IEOracle(address(this)).hasPriceFeed(baseToken) returns (bool hasFeed) {
+                require (hasFeed, BaseTokenPriceFeedError());
+            } catch Error(string memory reason) {
+                revert(reason);
+            }
+        }
 
         // wrappedNative is not stored as an immutable to allow deploying at the same address on multiple networks
         address wrappedNative;
         try IEApps(address(this)).wrappedNative() returns (address _wrappedNative) {
             wrappedNative = _wrappedNative;
-        } catch {}
+        } catch Error(string memory reason) {
+            revert(reason);
+        }
 
         // base token is not stored in activeTokens slot, so we add it as an additional element at the end of the loop
         for (uint256 i = 0; i <= length; i++) {
-            targetToken = i == length ? tokens.baseToken : tokens.activeTokens[i];
-            newBalance = Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(targetToken);
+            targetToken = i == length ? baseToken : activeTokens[i];
+            storedBalance = Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(targetToken);
 
             // clear temporary storage if used
-            if (newBalance != 0) {
+            if (storedBalance != 0) {
                 Int256.wrap(_TRANSIENT_BALANCE_SLOT).store(targetToken, 0);
             }
 
             // the active tokens list contains unique addresses
             if (targetToken == _ZERO_ADDRESS) {
-                newBalance += int256(address(this).balance);
+                storedBalance += int256(address(this).balance);
             } else {
                 try IERC20(targetToken).balanceOf(address(this)) returns (uint256 _balance) {
-                    newBalance += int256(_balance);
+                    storedBalance += int256(_balance);
                 } catch {
                     // do not stop aum calculation in case of chain's base currency or rogue token
                     continue;
@@ -132,14 +159,14 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             }
 
             // base token is always appended at the end of the loop
-            if (tokens.baseToken == wrappedNative) {
-                tokens.baseToken == _ZERO_ADDRESS;
+            if (baseToken == wrappedNative) {
+                baseToken == _ZERO_ADDRESS;
             }
 
-            if (newBalance < 0) {
-                poolValueInBaseToken -= int256(_getBaseTokenValue(targetToken, uint256(-newBalance), tokens.baseToken));
+            if (storedBalance < 0) {
+                poolValueInBaseToken -= int256(_getBaseTokenValue(targetToken, uint256(-storedBalance), baseToken));
             } else {
-                poolValueInBaseToken += int256(_getBaseTokenValue(targetToken, uint256(newBalance), tokens.baseToken));
+                poolValueInBaseToken += int256(_getBaseTokenValue(targetToken, uint256(storedBalance), baseToken));
             }
         }
 
@@ -155,8 +182,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // perform a staticcall to oracle extension
         try IEOracle(address(this)).convertTokenAmount(token, amount, baseToken) returns (uint256 value) {
             return value;
-        } catch {
-            return 0;
+        } catch Error(string memory reason) {
+            revert(reason);
         }
     }
 

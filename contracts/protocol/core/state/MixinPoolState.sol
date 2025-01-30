@@ -3,6 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
 import {IRigoblockV3PoolState} from "../../interfaces/pool/IRigoblockV3PoolState.sol";
+import {Pool} from "../../libraries/EnumerableSet.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
     /*

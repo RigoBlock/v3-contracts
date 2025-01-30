@@ -25,11 +25,10 @@ import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";
 import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
-import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
+import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
-import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
-import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
+import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {Applications} from "../../types/Applications.sol";
 
 interface IUniswapRouter {
@@ -62,6 +61,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     // TODO: verify import from common library as EApps uses the same slot
     // persistent storage slots
+    bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
     bytes32 private constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
     // bytes32(uint256(keccak256("pool.proxy.uniV4.tokenIds")) - 1)
@@ -114,6 +114,13 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     function _reentrancyDepthSlot() private pure returns (bytes32) {
         return _REENTRANCY_DEPTH_SLOT;
+    }
+
+    // TODO: same as in constants. Check if can move to library and use from there
+    function pool() private pure returns (Pool storage s) {
+        assembly {
+            s.slot := _POOL_INIT_SLOT
+        }
     }
 
     /// @inheritdoc IAUniswapRouter
@@ -192,7 +199,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    function activeTokens() internal pure returns (AddressSet storage s) {
+    // TODO: by using a shared library, we can avoid type errors
+    function activeTokensSet() internal pure returns (AddressSet storage s) {
         assembly {
             s.slot := _TOKEN_REGISTRY_SLOT
         }
@@ -200,15 +208,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     function _assertTokensOutHavePriceFeed(address[] memory tokensOut) private {
         // load active tokens from storage
-        AddressSet storage values = activeTokens();
+        AddressSet storage values = activeTokensSet();
 
         for (uint256 i = 0; i < tokensOut.length; i++) {
-            // update storage with new token. Skips and returns false for base token, which is already in storage
-            values.addUnique(
-                IEOracle(address(this)),
-                tokensOut[i],
-                IRigoblockV3Pool(payable(address(this))).getPool().baseToken
-            );
+            // update storage with new token
+            values.addUnique(IEOracle(address(this)), tokensOut[i], pool().baseToken);
         }
     }
 

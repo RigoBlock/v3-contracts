@@ -6,12 +6,10 @@ import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IRigoblockPoolProxyFactory} from "../../interfaces/IRigoblockPoolProxyFactory.sol";
 import {IRigoblockV3PoolInitializer} from "../../interfaces/pool/IRigoblockV3PoolInitializer.sol";
-//import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
-//import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
+import {Pool} from "../../libraries/EnumerableSet.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
     error BaseTokenDecimals();
-    error BaseTokenPriceFeedNotFound();
     error PoolAlreadyInitialized();
 
     modifier onlyUninitialized() {
@@ -38,25 +36,6 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         // overwrite token decimals
         if (initParams.baseToken != _ZERO_ADDRESS) {
             assert(initParams.baseToken.code.length > 0);
-            //assert(initParams.baseToken.code.length > 0);
-            // the following condition will never be true if base token is not a token
-            // TODO: verify
-            // TODO: not sure we can make a fallback call before pool is successfully inizialized
-            /*try IEOracle(address(this)).hasPriceFeed(initParams.baseToken) returns (bool hasFeed) {
-                require(hasFeed, BaseTokenPriceFeedNotFound());
-                // revert in case the ERC20 read call fails silently
-                try IERC20(initParams.baseToken).decimals() returns (uint8 decimals) {
-                    // a pool with small decimals could easily underflow.
-                    assert(decimals >= 6);
-
-                    // update with the base token's decimals
-                    pool.decimals = decimals;
-                } catch {
-                    revert BaseTokenDecimals();
-                }
-            } catch {
-                revert BaseTokenPriceFeedNotFound();
-            }*/
             try IERC20(initParams.baseToken).decimals() returns (uint8 decimals) {
                 // a pool with small decimals could easily underflow.
                 assert(decimals >= 6);

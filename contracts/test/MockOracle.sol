@@ -32,6 +32,7 @@ contract MockOracle {
             secondsPerLiquidityCumulativeX128: uint144(ONE_X96 * 1),
             initialized: true
         });
+        _state.index = 1;
     }
 
     function getObservations(

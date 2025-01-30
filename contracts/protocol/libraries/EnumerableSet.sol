@@ -29,6 +29,23 @@ struct AddressSet {
     mapping(address => uint256) positions;
 }
 
+/// @notice Pool initialization parameters.
+/// @dev This struct is not visible externally and used to store/read pool init params.
+/// @param name String of the pool name (max 32 characters).
+/// @param symbol Bytes8 of the pool symbol (from 3 to 5 characters).
+/// @param decimals Uint8 decimals.
+/// @param owner Address of the pool operator.
+/// @param unlocked Boolean the pool is locked for reentrancy check.
+/// @param baseToken Address of the base token of the pool (0 for base currency).
+struct Pool {
+    string name;
+    bytes8 symbol;
+    uint8 decimals;
+    address owner;
+    bool unlocked;
+    address baseToken;
+}
+
 library EnumerableSet {
     error AddressListExceedsMaxLength();
     error TokenPriceFeedDoesNotExist(address token);
@@ -41,43 +58,48 @@ library EnumerableSet {
 
     // TODO: check if should log, even though we already store in list so not strictly needed.
     /// @notice Base token is never pushed to active tokens, as already stored.
-    function addUnique(AddressSet storage set, IEOracle oracle, address value, address baseToken) internal {
-        if (value != baseToken) {
-            if (set.positions[value] == 0 || set.positions[value] == _REMOVED_ADDRESS_FLAG) {
+    /// @dev Skips and returns false for base token, which is already in storage.
+    function addUnique(AddressSet storage set, IEOracle eOracle, address token, address baseToken) internal {
+        if (token != baseToken) {
+            if (set.positions[token] == 0 || set.positions[token] == _REMOVED_ADDRESS_FLAG) {
                 require(set.addresses.length < _MAX_UNIQUE_ADDRESSES, AddressListExceedsMaxLength());
 
                 // perform a staticcall to the oracle extension and assert new token has a price feed. Removed token as well
-                require(oracle.hasPriceFeed(value), TokenPriceFeedDoesNotExist(value));
+                try eOracle.hasPriceFeed(token) returns (bool hasFeed) {
+                    require(hasFeed, TokenPriceFeedDoesNotExist(token));
+                } catch Error(string memory reason) {
+                    revert(reason);
+                }
 
                 // update storage
-                set.addresses.push(value);
-                set.positions[value] = set.addresses.length;
+                set.addresses.push(token);
+                set.positions[token] = set.addresses.length;
             }
         }
     }
 
-    function remove(AddressSet storage set, address value) internal returns (bool) {
-        uint256 position = set.positions[value];
+    function remove(AddressSet storage set, address token) internal returns (bool) {
+        uint256 position = set.positions[token];
 
         if (position != 0) {
             // Copy last element at index position and pop last element
-            uint256 valueIndex = position - 1;
+            uint256 tokenIndex = position - 1;
             uint256 lastIndex = set.addresses.length - 1;
 
-            if (valueIndex != lastIndex) {
-                address lastValue = set.addresses[lastIndex];
+            if (tokenIndex != lastIndex) {
+                address lastToken = set.addresses[lastIndex];
 
-                // Move the lastValue to the index where the value to delete is
-                set.addresses[valueIndex] = lastValue;
-                // Update the tracked position of the lastValue (that was just moved)
-                set.positions[lastValue] = position;
+                // Move the lastToken to the index where the token to delete is
+                set.addresses[tokenIndex] = lastToken;
+                // Update the tracked position of the lastToken (that was just moved)
+                set.positions[lastToken] = position;
             }
 
-            // Delete the slot where the moved value was stored
+            // Delete the slot where the moved token was stored
             set.addresses.pop();
 
             // Delete the tracked position for the deleted slot without clearing storage
-            set.positions[value] = _REMOVED_ADDRESS_FLAG;
+            set.positions[token] = _REMOVED_ADDRESS_FLAG;
 
             return true;
         } else {
