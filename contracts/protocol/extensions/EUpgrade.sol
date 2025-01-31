@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.28;
 
 import "./adapters/interfaces/IEUpgrade.sol";
 import {IRigoblockPoolProxyFactory as Beacon} from "../interfaces/IRigoblockPoolProxyFactory.sol";
@@ -26,6 +26,9 @@ import "../../utils/storageSlot/StorageSlot.sol";
 /// @title EUpgrade - Allows upgrading implementation.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract EUpgrade is IEUpgrade {
+    error EUpgradeDirectCall();
+    error EUpgradeImplementationIsSameAsCurrent();
+
     address private immutable _eUpgrade;
     address private immutable _factory;
 
@@ -37,7 +40,7 @@ contract EUpgrade is IEUpgrade {
     /// @inheritdoc IEUpgrade
     function upgradeImplementation() external override {
         // prevent direct calls to this contract
-        require(_eUpgrade != address(this), "EUPGRADE_DIRECT_CALL_ERROR");
+        require(_eUpgrade != address(this), EUpgradeDirectCall());
 
         // read implementation address from factory. Different factories may have different implementations.
         // implementation will always be a contract as factory asserts that.
@@ -51,14 +54,15 @@ contract EUpgrade is IEUpgrade {
         address currentImplementation = StorageSlot.getAddressSlot(implementationSlot).value;
 
         // transaction reverted if implementation is same as current
-        require(newImplementation != currentImplementation, "EUPGRADE_IMPLEMENTATION_SAME_AS_CURRENT_ERROR");
+        require(newImplementation != currentImplementation, EUpgradeImplementationIsSameAsCurrent());
 
         // we write new address to storage at implementation slot location and emit eip1967 log
         StorageSlot.getAddressSlot(implementationSlot).value = newImplementation;
         emit Upgraded(newImplementation);
     }
 
-    function getBeacon() public view returns (address) {
+    /// @inheritdoc IEUpgrade
+    function getBeacon() public view override returns (address) {
         return _factory;
     }
 }

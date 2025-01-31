@@ -81,6 +81,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         int256 storedBalance;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
+        // TODO: test we get the correct balances, as fallback delegatecalls for this specific method
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
             // position balances can be negative, positive, or null (handled explicitly later)
             for (uint256 i = 0; i < apps.length; i++) {

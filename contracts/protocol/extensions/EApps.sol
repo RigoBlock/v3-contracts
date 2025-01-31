@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 /*
 
- Copyright 2024 Rigo Intl.
+ Copyright 2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -66,19 +66,34 @@ contract EApps is IEApps {
     constructor(address grgStakingProxy, address univ3Npm, address univ4Posm) {
         // univ4 POSM does not implement inherited NativeWrapper methods in its interface
         // TODO: uncomment when setup is correct, as this reverts otherwise
+        // TODO: check move wrappedNative to core deployment constants, as it's not used here
         //wrappedNative = address(NativeWrapper(payable(univ4Posm)).WETH9());
         _grgStakingProxy = IStaking(grgStakingProxy);
         _uniV3NPM = INonfungiblePositionManager(univ3Npm);
         _uniV4Posm = IPositionManager(univ4Posm);
     }
 
+    struct Application {
+        bool isActive;
+    }
+
+    // TODO: maybe we could use a fixed-size bytes1[31]
     function getAppTokenBalances(uint256 packedApplications) external view override returns (ExternalApp[] memory) {
         uint256 activeAppCount;
+        Application[] memory apps = new  Application[](uint256(Applications.COUNT));
 
         // Count how many applications are active
         for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
             if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
                 activeAppCount++;
+                apps[i].isActive = true;
+            // grg staking and univ3 liquidity are pre-existing applications that do not require an upgrade, so they are not
+            // stored. However, future upgrades may change that and we use this fallback block until implemented.
+            } else if (Applications(i) == Applications.GRG_STAKING || Applications(i) == Applications.UNIV3_LIQUIDITY) {
+                activeAppCount++;
+                apps[i].isActive = true;
+            } else {
+                continue;
             }
         }
 
@@ -86,16 +101,10 @@ contract EApps is IEApps {
         uint256 activeAppIndex = 0;
 
         for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
-            if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
-                nestedBalances[activeAppIndex++].balances = _handleApplication(Applications(i));
-                nestedBalances[activeAppIndex++].appType = uint256(Applications(i));
-            } else {
-                // grg staking and univ3 liquidity are pre-existing applications that do not require an upgrade, so they won't be
-                // stored. However, future upgrades may change that and we use this fallback block until implemented.
-                if (Applications(i) == Applications.GRG_STAKING || Applications(i) == Applications.UNIV3_LIQUIDITY) {
-                    nestedBalances[activeAppIndex++].balances = _handleApplication(Applications(i));
-                    nestedBalances[activeAppIndex++].appType = uint256(Applications(i));
-                }
+            if (apps[i].isActive) {
+                nestedBalances[activeAppIndex].balances = _handleApplication(Applications(i));
+                nestedBalances[activeAppIndex].appType = uint256(Applications(i));
+                activeAppIndex++;
             }
         }
         return nestedBalances;

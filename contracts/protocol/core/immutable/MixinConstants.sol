@@ -19,6 +19,9 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
+import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
+import {IEUpgrade} from "../../extensions/adapters/interfaces/IEUpgrade.sol";
 import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
 import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
 
@@ -62,4 +65,12 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     uint48 internal constant _MAX_LOCKUP = 30 days;
 
     uint48 internal constant _MIN_LOCKUP = 10;
+
+    bytes4 internal constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
+    bytes4 internal constant _EAPPS_WRAPPED_NATIVE_SELECTOR = IEApps.wrappedNative.selector;
+    bytes4 internal constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
+    bytes4 internal constant _EORACLE_ORACLE_ADDRESS_SELECTOR = IEOracle.getOracleAddress.selector;
+    bytes4 internal constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
+    bytes4 internal constant _EORACLE_CROSS_PRICE_SELECTOR = IEOracle.getCrossSqrtPriceX96.selector;
+    bytes4 internal constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
 }

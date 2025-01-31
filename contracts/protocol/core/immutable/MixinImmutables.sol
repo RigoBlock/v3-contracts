@@ -30,8 +30,15 @@ abstract contract MixinImmutables is MixinConstants {
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
 
-    constructor(address newAuthority) {
-        authority = newAuthority;
+    address internal immutable _EAPPS;
+    address internal immutable _EORACLE;
+    address internal immutable _EUPGRADE;
+
+    constructor(address _authority, address eApps, address eOracle, address eUpgrade) {
+        authority = _authority;
         _implementation = address(this);
+        _EAPPS = eApps;
+        _EORACLE = eOracle;
+        _EUPGRADE = eUpgrade;
     }
 }

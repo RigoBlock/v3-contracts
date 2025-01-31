@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
+// TODO: remove commented code
 //import "../actions/MixinActions.sol";
 import {MixinImmutables} from "../immutable/MixinImmutables.sol";
 import {MixinStorage} from "../immutable/MixinStorage.sol";
@@ -19,18 +20,46 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
 
     /* solhint-disable no-complex-fallback */
     /// @inheritdoc IRigoblockV3PoolFallback
-    fallback() external payable {
-        address adapter = _getApplicationAdapter(msg.sig);
-        // we check that the method is approved by governance
-        require(adapter != _ZERO_ADDRESS, PoolMethodNotAllowed());
+    /// @dev Extensions are persistent, while Adapters are upgradable by the governance
+    fallback() external payable onlyDelegateCall {
+        // TODO: can group in a single tuple
+        bytes4 selector = msg.sig;
+        address adapter;
 
-        // direct fallback to implementation will result in staticcall to extension as implementation owner is null address
-        address poolOwner = pool().owner;
+        // flag which allows performing a delegatecall in certain scenarios. Will save gas on view methods.
+        bool shouldDelegatecall;
+
+        // TODO: verify this is correct, as the EApps will return wrong balances if caller is owner or not
+        // which is way too risky
+        if (selector == _EAPPS_BALANCES_SELECTOR) {
+            adapter = _EAPPS;
+            shouldDelegatecall = true;
+        } else if (selector == _EAPPS_WRAPPED_NATIVE_SELECTOR) {
+            adapter = _EAPPS;
+        } else if (
+            selector == _EORACLE_CONVERT_AMOUNT_SELECTOR ||
+            selector == _EORACLE_ORACLE_ADDRESS_SELECTOR ||
+            selector == _EORACLE_PRICE_FEED_SELECTOR ||
+            selector == _EORACLE_CROSS_PRICE_SELECTOR
+        ) {
+            adapter = _EORACLE;
+        } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {
+            adapter = _EUPGRADE;
+            shouldDelegatecall = true;
+        } else {
+            adapter = IAuthority(authority).getApplicationAdapter(selector);
+
+            // we check that the method is approved by governance
+            require(adapter != _ZERO_ADDRESS, PoolMethodNotAllowed());
+
+            // adapter calls are aimed at pool operator use and for offchain inspection
+            shouldDelegatecall = pool().owner == msg.sender;
+        }
+
         assembly {
             calldatacopy(0, 0, calldatasize())
             let success
-            // pool owner can execute a delegatecall to extension, any other caller will perform a staticcall
-            if eq(caller(), poolOwner) {
+            if eq(shouldDelegatecall, 1) {
                 success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
                 returndatacopy(0, 0, returndatasize())
                 if eq(success, 0) {
@@ -55,12 +84,5 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
 
     function _checkDelegateCall() private view {
         require(address(this) != _implementation, PoolImplementationDirectCallNotAllowed());
-    }
-
-    /// @dev Returns the address of the application adapter.
-    /// @param selector Hash of the method signature.
-    /// @return Address of the application adapter.
-    function _getApplicationAdapter(bytes4 selector) private view returns (address) {
-        return IAuthority(authority).getApplicationAdapter(selector);
     }
 }

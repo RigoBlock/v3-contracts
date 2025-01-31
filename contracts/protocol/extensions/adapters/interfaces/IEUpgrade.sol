@@ -27,4 +27,8 @@ interface IEUpgrade {
     /// @notice Allows caller to upgrade pool implementation.
     /// @dev Cannot be called directly and in pool is restricted to pool owner.
     function upgradeImplementation() external;
+
+    /// @notice Returns the implementation beacon.
+    /// Address of the beacon.
+    function getBeacon() external view returns (address);
 }

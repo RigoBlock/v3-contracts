@@ -24,8 +24,8 @@ import {ExternalApp} from "../../../types/ExternalApp.sol";
 interface IEApps {
     /// @notice Returns token balances owned in a set of external contracts.
     /// @param packedApplications The uint encoded bitmap flags of the active applications.
-    /// @return The arrays of lists of token balances grouped by application type.
-    function getAppTokenBalances(uint256 packedApplications) external view returns (ExternalApp[] memory);
+    /// @return appBalances The arrays of lists of token balances grouped by application type.
+    function getAppTokenBalances(uint256 packedApplications) external view returns (ExternalApp[] memory appBalances);
 
     /// @notice Returns the wrapped native token.
     /// @return Address of the wrapped native token.
