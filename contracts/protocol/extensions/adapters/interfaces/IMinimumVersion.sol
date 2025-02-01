@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2024 Rigo Intl.
+ Copyright 2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -19,11 +19,9 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ExternalApp} from "../../../types/ExternalApp.sol";
-
-interface IEApps {
-    /// @notice Returns token balances owned in a set of external contracts.
-    /// @param packedApplications The uint encoded bitmap flags of the active applications.
-    /// @return appBalances The arrays of lists of token balances grouped by application type.
-    function getAppTokenBalances(uint256 packedApplications) external view returns (ExternalApp[] memory appBalances);
+interface IMinimumVersion {
+    /// @notice Returns the minimum implementation version to use an external application.
+    /// @dev Adapters must implement it when modifying proxy state or storage.
+    /// @return String of the minimum supported version.
+    function requiredVersion() external view returns (string memory);
 }

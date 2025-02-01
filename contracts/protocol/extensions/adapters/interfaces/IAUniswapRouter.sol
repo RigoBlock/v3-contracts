@@ -19,7 +19,10 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-interface IAUniswapRouter {
+import {IMinimumVersion} from "./IMinimumVersion.sol";
+
+/// @notice Implements IMinimumVersion.requiredVersion()
+interface IAUniswapRouter is IMinimumVersion {
     struct Parameters {
         uint256 value;
         address[] recipients;

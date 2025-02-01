@@ -66,6 +66,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // unitary value cannot be null
         assert(components.unitaryValue > 0);
+
+        // TODO: verify as should probably update only if nav is different from stored?
         poolTokens().unitaryValue = components.unitaryValue;
         emit NewNav(msg.sender, address(this), components.unitaryValue);
     }
@@ -82,6 +84,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
         // TODO: test we get the correct balances, as fallback delegatecalls for this specific method
+        // TODO: should delegatecall to IEApps, as otherwise msg.sender is pool?
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
             // position balances can be negative, positive, or null (handled explicitly later)
             for (uint256 i = 0; i < apps.length; i++) {
@@ -124,14 +127,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             }
         }
 
-        // wrappedNative is not stored as an immutable to allow deploying at the same address on multiple networks
-        address wrappedNative;
-        try IEApps(address(this)).wrappedNative() returns (address _wrappedNative) {
-            wrappedNative = _wrappedNative;
-        } catch Error(string memory reason) {
-            revert(reason);
-        }
-
         // base token is not stored in activeTokens slot, so we add it as an additional element at the end of the loop
         for (uint256 i = 0; i <= length; i++) {
             targetToken = i == length ? baseToken : activeTokens[i];
@@ -171,6 +166,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             }
         }
 
+        // TODO: verify why we return 1 with mint in base token
         // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
         return (poolValueInBaseToken > 0 ? uint256(poolValueInBaseToken) : 1);
     }

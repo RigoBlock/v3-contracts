@@ -21,24 +21,34 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinConstants} from "./MixinConstants.sol";
 import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
+import {IExtensionsMap} from "../../extensions/IExtensionsMap.sol";
 
 /// @notice Immutables are not assigned a storage slot, can be safely added to this contract.
 abstract contract MixinImmutables is MixinConstants {
+    error InvalidAuthorityInput();
+    error InvalidExtensionsMapInput();
+
     /// @inheritdoc IRigoblockV3PoolImmutable
     address public immutable override authority;
+
+    ///@inheritdoc IRigoblockV3PoolImmutable
+    address public immutable override wrappedNative;
 
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
 
-    address internal immutable _EAPPS;
-    address internal immutable _EORACLE;
-    address internal immutable _EUPGRADE;
+    IExtensionsMap internal immutable _extensionsMap;
 
-    constructor(address _authority, address eApps, address eOracle, address eUpgrade) {
+    constructor(address _authority, address extensionsMap, address _wrappedNative) {
+        require(_authority.code.length > 0, InvalidAuthorityInput());
+        require(extensionsMap.code.length > 0, InvalidExtensionsMapInput());
         authority = _authority;
+        wrappedNative = _wrappedNative;
+
         _implementation = address(this);
-        _EAPPS = eApps;
-        _EORACLE = eOracle;
-        _EUPGRADE = eUpgrade;
+
+        // initialize extensions mapping and assert it implements `getExtensionBySelector` method
+        _extensionsMap = IExtensionsMap(extensionsMap);
+        assert(IExtensionsMap.getExtensionBySelector.selector == type(IExtensionsMap).interfaceId);
     }
 }

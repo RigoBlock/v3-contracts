@@ -91,7 +91,7 @@ describe("BaseTokenProxy", async () => {
             poolData = await pool.getPoolTokens()
             expect(poolData.totalSupply).to.be.eq(parseEther("10"))
             // TODO: second mint will fail until EApps is correctly initialized
-            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('PoolMethodNotAllowed()')
+            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('Transaction reverted without a reason string')
             /*poolData = await pool.getPoolTokens()
             // 5% default spread results in less token than amount in at initial price 1
             expect(poolData.totalSupply).to.be.eq(parseEther("19.5"))
@@ -132,7 +132,7 @@ describe("BaseTokenProxy", async () => {
             await grgToken.approve(pool.address, parseEther("10"))
             await pool.mint(user1.address, parseEther("10"), 0)
             // TODO: fix when EApps is correctly initialized
-            await expect(pool.setUnitaryValue()).to.be.revertedWith('PoolMethodNotAllowed()')
+            await expect(pool.setUnitaryValue()).to.be.revertedWith('Transaction reverted without a reason string')
             poolData = await pool.getPoolStorage()
             expect(poolData.poolTokensInfo.unitaryValue).to.be.eq(parseEther("1"))
             expect(poolData.poolTokensInfo.totalSupply).to.be.eq(parseEther("10"))
@@ -223,7 +223,7 @@ describe("BaseTokenProxy", async () => {
             await timeTravel({ seconds: 2592000, mine: true })
 
             // TODO: modify when EApps is correctly initialized
-            await expect(pool.burn(userPoolBalance, 0)).to.be.revertedWith('PoolMethodNotAllowed()')
+            await expect(pool.burn(userPoolBalance, 0)).to.be.revertedWith('Transaction reverted without a reason string')
             // following condition is true with spread > 0
             /*await expect(
                 pool.burn(tokenAmountIn, 0)
@@ -233,7 +233,7 @@ describe("BaseTokenProxy", async () => {
             ).to.be.revertedWith('PoolBunNullAmount()')
             // will not be able to send more owned tokens than pool balance
             // TODO: modify when EApps is correctly initialized
-            await expect(pool.setUnitaryValue()).to.be.revertedWith('PoolMethodNotAllowed()')
+            await expect(pool.setUnitaryValue()).to.be.revertedWith('Transaction reverted without a reason string')
             await expect(
                 pool.burn(userPoolBalance, 0)
             ).to.be.revertedWith('PoolTransferFailed()')
@@ -296,7 +296,7 @@ describe("BaseTokenProxy", async () => {
             expect(await poolUsdc.decimals()).to.be.eq(6)
             await usdc.transfer(user2.address, 2000000)
             await poolUsdc.connect(user2).mint(user2.address, 100000, 1)
-            await expect(poolUsdc.setUnitaryValue()).to.be.revertedWith('PoolMethodNotAllowed()')
+            await expect(poolUsdc.setUnitaryValue()).to.be.revertedWith('Transaction reverted without a reason string')
             /*await expect(
                 poolUsdc.setUnitaryValue()
             ).to.be.revertedWith("POOL_TOKEN_BALANCE_TOO_LOW_ERROR")

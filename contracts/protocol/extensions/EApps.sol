@@ -50,9 +50,6 @@ contract EApps is IEApps {
 
     error UnknownApplication(uint256 appType);
 
-    // TODO: linter complains about lowercase definitions
-    address public immutable override wrappedNative;
-
     IStaking private immutable _grgStakingProxy;
     INonfungiblePositionManager private immutable _uniV3NPM;
     IPositionManager private immutable _uniV4Posm;
@@ -61,13 +58,8 @@ contract EApps is IEApps {
     // bytes32(uint256(keccak256("Eapps.uniV4.tokenIds")) - 1)
     bytes32 private constant _UNIV4_TOKEN_IDS_SLOT = 0x27616b43efe6cac399303df84ec58b87084277217488937eeb864ace11507167;
 
-    // TODO: we could use universal router as input, query immutables from the constructor.
     /// @notice The different immutable addresses will result in different deployed addresses on different networks.
     constructor(address grgStakingProxy, address univ3Npm, address univ4Posm) {
-        // univ4 POSM does not implement inherited NativeWrapper methods in its interface
-        // TODO: uncomment when setup is correct, as this reverts otherwise
-        // TODO: check move wrappedNative to core deployment constants, as it's not used here
-        //wrappedNative = address(NativeWrapper(payable(univ4Posm)).WETH9());
         _grgStakingProxy = IStaking(grgStakingProxy);
         _uniV3NPM = INonfungiblePositionManager(univ3Npm);
         _uniV4Posm = IPositionManager(univ4Posm);
@@ -77,10 +69,10 @@ contract EApps is IEApps {
         bool isActive;
     }
 
-    // TODO: maybe we could use a fixed-size bytes1[31]
+    // TODO: maybe we could use a fixed-size bytes1[31]?
     function getAppTokenBalances(uint256 packedApplications) external view override returns (ExternalApp[] memory) {
         uint256 activeAppCount;
-        Application[] memory apps = new  Application[](uint256(Applications.COUNT));
+        Application[] memory apps = new Application[](uint256(Applications.COUNT));
 
         // Count how many applications are active
         for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
@@ -110,6 +102,7 @@ contract EApps is IEApps {
         return nestedBalances;
     }
 
+    // TODO: uncomment applications after implementing univ4Posm in test pipeline
     /// @notice Directly retrieve balances from target application contract.
     /// @dev A failure to get response from one application will revert the entire call.
     /// @dev This is ok as we do not want to produce an inaccurate nav.
@@ -118,10 +111,10 @@ contract EApps is IEApps {
             balances = _getGrgStakingProxyBalances();
         } else if (appType == Applications.UNIV3_LIQUIDITY) {
             balances = _getUniV3PmBalances();
-        } else if (appType == Applications.UNIV4_LIQUIDITY) {
-            balances = _getUniV4PmBalances();
-        } else {
-            revert UnknownApplication(uint256(appType));
+        //} else if (appType == Applications.UNIV4_LIQUIDITY) {
+        //    balances = _getUniV4PmBalances();
+        //} else {
+        //    revert UnknownApplication(uint256(appType));
         }
     }
 

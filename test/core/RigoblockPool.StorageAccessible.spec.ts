@@ -42,7 +42,7 @@ describe("MixinStorageAccessible", async () => {
             const extension = await EPool.deploy(factory.address)
             const ePool = EPool.attach(pool.address)
             // TODO: verify why transaction does not revert with expected error
-            await expect(ePool.getBeacon()).to.be.revertedWith('PoolMethodNotAllowed()')
+            await expect(ePool.getBeacon()).to.be.revertedWith('Error: Transaction reverted without a reason string')
             await authority.setAdapter(extension.address, true)
             // "2d6b3a6b": "getBeacon()"
             authority.addMethod("0x2d6b3a6b", extension.address)

@@ -52,6 +52,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     error UniV4PositionsLimitExceeded();
 
+    string public override requiredVersion = "4.0.0";
+
     // transient storage slots
     // bytes32(uint256(keccak256("AUniswapRouter.lock")) - 1)
     bytes32 private constant _LOCK_SLOT = 0x1e2a0e74e761035cb113c1bf11b7fbac06ae91f3a03ce360dda726ba116c216f;
@@ -84,6 +86,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     error ReentrantCall();
     error NestedSubPlan();
 
+    // TODO: should verify that it is ok to make direct calls, as they could potentially modify state of the adapter
+    // either we make sure that a constructor value prevents setting, or we require delegatecall, which would prevent
+    // view methods from msg.sender other than the pool operator.
     constructor(address _universalRouter, address _v4PositionManager) {
         _uniswapRouter = _universalRouter;
         _positionManager = _v4PositionManager;

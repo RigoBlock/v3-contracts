@@ -11,6 +11,9 @@ contract MockUniswapNpm {
     uint256 private numPools;
 
     mapping(uint256 => address) private _ownerOf;
+    // TODO: verify correctly stored, and check upgrade solc
+    mapping(address /*owner*/ => mapping(uint256 /*index*/ => uint256)) private _ownedTokens;
+    mapping(address => uint256) private _balances;
 
     constructor() {
         WETH9 = address(new WETH9Contract());
@@ -20,7 +23,9 @@ contract MockUniswapNpm {
         INonfungiblePositionManager.MintParams memory
     ) external returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         tokenId = ++numPools;
+        uint256 index = _balances[msg.sender]++;
         _ownerOf[tokenId] = msg.sender;
+        _ownedTokens[msg.sender][index];
         liquidity = 1;
         amount0 = 2;
         amount1 = 3;
@@ -46,6 +51,10 @@ contract MockUniswapNpm {
         uint24 fee,
         uint160 sqrtPriceX96
     ) external returns (address pool) {}
+
+    function balanceOf(address owner) external view returns (uint256) {
+        return _balances[owner];
+    }
 
     function positions(
         uint256
@@ -83,5 +92,9 @@ contract MockUniswapNpm {
 
     function ownerOf(uint256 tokenId) external view returns (address) {
         return _ownerOf[tokenId];
+    }
+
+    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256 tokenId) {
+        tokenId = _ownedTokens[owner][index];
     }
 }
