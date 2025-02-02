@@ -58,7 +58,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
             // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
-                components.unitaryValue = totalPoolValue / components.totalSupply;
+                // TODO: verify why we missed decimals rescaling
+                // unitary value needs to be scaled by pool decimals (same as base token decimals)
+                components.unitaryValue = totalPoolValue * 10 ** components.decimals / components.totalSupply;
             } else {
                 return components;
             }
@@ -151,12 +153,12 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
             // convert wrapped native to native to potentially skip one or more conversions
             if (targetToken == wrappedNative) {
-                targetToken == _ZERO_ADDRESS;
+                targetToken = _ZERO_ADDRESS;
             }
 
             // base token is always appended at the end of the loop
             if (baseToken == wrappedNative) {
-                baseToken == _ZERO_ADDRESS;
+                baseToken = _ZERO_ADDRESS;
             }
 
             if (storedBalance < 0) {
@@ -168,7 +170,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // TODO: verify why we return 1 with mint in base token
         // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
-        return (poolValueInBaseToken > 0 ? uint256(poolValueInBaseToken) : 1);
+        return (uint256(poolValueInBaseToken) > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
     function _getBaseTokenValue(address token, uint256 amount, address baseToken) private view returns (uint256) {
