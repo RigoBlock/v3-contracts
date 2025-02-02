@@ -7,6 +7,7 @@ import "../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import "./MockUniswapNpm.sol";
 
 contract MockUniswapRouter {
+    string public constant requiredVersion = "4.0.0";
     address public immutable MOCK_UNISWAP_NPM_ADDRESS;
 
     constructor() {

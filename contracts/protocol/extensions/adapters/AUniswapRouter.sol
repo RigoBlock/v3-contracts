@@ -52,7 +52,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     error UniV4PositionsLimitExceeded();
 
-    string public override requiredVersion = "4.0.0";
+    string public constant override requiredVersion = "4.0.0";
 
     // transient storage slots
     // bytes32(uint256(keccak256("AUniswapRouter.lock")) - 1)
@@ -211,6 +211,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
+    // TODO: an older implementation accessing this block should be rejected, as eOracle call should fail?
     function _assertTokensOutHavePriceFeed(address[] memory tokensOut) private {
         // load active tokens from storage
         AddressSet storage values = activeTokensSet();
