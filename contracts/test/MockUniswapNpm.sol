@@ -20,12 +20,12 @@ contract MockUniswapNpm {
     }
 
     function mint(
-        INonfungiblePositionManager.MintParams memory
+        INonfungiblePositionManager.MintParams memory params
     ) external returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         tokenId = ++numPools;
-        uint256 index = _balances[msg.sender]++;
-        _ownerOf[tokenId] = msg.sender;
-        _ownedTokens[msg.sender][index];
+        uint256 index = _balances[params.recipient]++;
+        _ownerOf[tokenId] = params.recipient;
+        _ownedTokens[params.recipient][index];
         liquidity = 1;
         amount0 = 2;
         amount1 = 3;

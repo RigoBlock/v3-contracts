@@ -38,7 +38,7 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
     bytes4 private constant _EORACLE_ORACLE_ADDRESS_SELECTOR = IEOracle.getOracleAddress.selector;
     bytes4 private constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
-    bytes4 private constant _EORACLE_CROSS_PRICE_SELECTOR = IEOracle.getCrossSqrtPriceX96.selector;
+    bytes4 private constant _EORACLE_TICK_SELECTOR = IEOracle.getTick.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
 
@@ -68,7 +68,7 @@ contract ExtensionsMap is IExtensionsMap {
             _EORACLE_CONVERT_AMOUNT_SELECTOR ^
             _EORACLE_ORACLE_ADDRESS_SELECTOR ^
             _EORACLE_PRICE_FEED_SELECTOR ^
-            _EORACLE_CROSS_PRICE_SELECTOR == type(IEOracle).interfaceId);
+            _EORACLE_TICK_SELECTOR == type(IEOracle).interfaceId);
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
     }
 
@@ -94,7 +94,7 @@ contract ExtensionsMap is IExtensionsMap {
             selector == _EORACLE_CONVERT_AMOUNT_SELECTOR ||
             selector == _EORACLE_ORACLE_ADDRESS_SELECTOR ||
             selector == _EORACLE_PRICE_FEED_SELECTOR ||
-            selector == _EORACLE_CROSS_PRICE_SELECTOR
+            selector == _EORACLE_TICK_SELECTOR
         ) {
             extension = _EORACLE;
         } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {

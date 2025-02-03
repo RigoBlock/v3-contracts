@@ -34,10 +34,19 @@ interface IEOracle {
     ) external view returns (uint256 value);
 
     /// @notice Returns the address of the oracle hook stored in the bytecode
-    /// @return oracleAddress The address of the oracle hook
+    /// @return The address of the oracle hook
     function getOracleAddress() external view returns (address);
 
+    /// @notice Returns whether a token has a price feed.
+    /// @param token The address of the token.
+    /// @return Boolean the price feed exists.
     function hasPriceFeed(address token) external view returns (bool);
 
-    function getCrossSqrtPriceX96(address token0, address token1) external view returns (uint160 sqrtPriceX96);
+    // TODO: check return a TWAP instead of last stored tick, as price will be stored for later use
+    /// @notice Returns token tick aginst native currency and flag whether the price feed exists.
+    /// @param token The address of the token.
+    /// @return tick The token tick.
+    /// @return cardinality The max number of stored observations.
+    /// @dev Positive cardinality is flag for price feed existing.
+    function getTick(address token) external view returns (int24 tick, uint16 cardinality);
 }

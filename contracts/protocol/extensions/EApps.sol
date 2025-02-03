@@ -70,7 +70,10 @@ contract EApps is IEApps {
     }
 
     // TODO: maybe we could use a fixed-size bytes1[31]?
-    function getAppTokenBalances(uint256 packedApplications) external view override returns (ExternalApp[] memory) {
+    /// @inheritdoc IEApps
+    /// @notice Uses temporary storage to cache token prices, which can be used in MixinPoolValue.
+    /// @notice Requires delegatecall.
+    function getAppTokenBalances(uint256 packedApplications) external override returns (ExternalApp[] memory) {
         uint256 activeAppCount;
         Application[] memory apps = new Application[](uint256(Applications.COUNT));
 
@@ -106,7 +109,7 @@ contract EApps is IEApps {
     /// @notice Directly retrieve balances from target application contract.
     /// @dev A failure to get response from one application will revert the entire call.
     /// @dev This is ok as we do not want to produce an inaccurate nav.
-    function _handleApplication(Applications appType) private view returns (AppTokenBalance[] memory balances) {
+    function _handleApplication(Applications appType) private returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.GRG_STAKING) {
             balances = _getGrgStakingProxyBalances();
         } else if (appType == Applications.UNIV3_LIQUIDITY) {
@@ -127,19 +130,15 @@ contract EApps is IEApps {
     }
 
     /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)
-    function _getUniV3PmBalances() private view returns (AppTokenBalance[] memory) {
+    function _getUniV3PmBalances() private returns (AppTokenBalance[] memory) {
         uint256 numPositions = _uniV3NPM.balanceOf(address(this));
 
         // only get first 20 positions as no pool has more than that and we can save gas plus prevent DOS
         uint256 maxLength = numPositions < 20 ? numPositions * 2 : 40;
+        AppTokenBalance[] memory balances = new AppTokenBalance[](maxLength);
 
-        CacheParams memory params;
-        params.balances = new AppTokenBalance[](maxLength);
-
-        // TODO: we should check if we could cache prices in tstore, but this is an extension, and whether we want to
-        // return the cachedPrices against eth, as we are going to need them again to covert these values in MixinPoolValue
-        // cache prices.
-        params.prices = new uint160[](0);
+        // flag for storing balances in the right position
+        uint256 index;
 
         for (uint256 i = 0; i < maxLength / 2; i++) {
             uint256 tokenId = _uniV3NPM.tokenOfOwnerByIndex(address(this), i);
@@ -157,20 +156,13 @@ contract EApps is IEApps {
                 ,
 
             ) = _uniV3NPM.positions(tokenId);
-            params.token0 = token0;
-            params.token1 = token1;
 
-            // Compute balance index once
-            params.index = i * 2;
+            // minimizes oracle calls by caching value for token0 and token1
+            uint160 sqrtPriceX96 = _findCrossPrice(token0, token1);
 
-            // minimize oracle calls by caching value for pair and its reciprocal
-            uint160 sqrtPriceX96 = _findCachedPrice(params);
-            if (sqrtPriceX96 == 0) {
-                // If not cached, fetch from oracle and cache it
-                sqrtPriceX96 = IEOracle(address(this)).getCrossSqrtPriceX96(params.token0, params.token1);
-                params.prices = _appendCachedPrice(params.prices, sqrtPriceX96);
-            }
+            index = i * 2;
 
+            // TODO: check if we should try and convert only with a valid price. Also check if we really resort to v4 lib, or if we added to lib/univ3
             // we resort to v4 tests library, as PositionValue.sol and FullMath in v3 LiquidityAmounts require solc <0.8
             // for simplicity, as uni v3 liquidity is remove-only, we exclude unclaimed fees, which incentivizes migrating liquidity to v4.
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
@@ -180,48 +172,14 @@ contract EApps is IEApps {
                 liquidity
             );
 
-            params.balances[params.index].token = params.token0;
-            params.balances[params.index].amount = int256(amount0);
-            params.balances[params.index + 1].token = params.token1;
-            params.balances[params.index + 1].amount = int256(amount1);
+            // TODO: technically, we could convert balances to ETH so we wouldn' need to store many tokens in memory. We should check what works best.
+            balances[index].token = token0;
+            balances[index].amount = int256(amount0);
+            balances[index + 1].token = token1;
+            balances[index + 1].amount = int256(amount1);
         }
         // non-aggregated balances are returned
-        return params.balances;
-    }
-
-    struct CacheParams {
-        AppTokenBalance[] balances;
-        uint160[] prices;
-        uint256 index;
-        address token0;
-        address token1;
-    }
-
-    // Helper function to find if a price for a token pair is cached
-    function _findCachedPrice(CacheParams memory params) private pure returns (uint160) {
-        if (params.index != 0) {
-            for (uint256 i = 0; i < params.prices.length; i++) {
-                if (
-                    params.balances[params.index - 2].token == params.token0 &&
-                    params.balances[params.index - 1].token == params.token1
-                ) {
-                    return params.prices[i];
-                }
-            }
-        }
-        return 0;
-    }
-
-    // Helper function to append a new cached price
-    function _appendCachedPrice(uint160[] memory prices, uint160 price) private pure returns (uint160[] memory) {
-        // TODO: define length in memory to say storage reads
-        uint160[] memory newPrices = new uint160[](prices.length + 1);
-        for (uint256 i = 0; i < prices.length; i++) {
-            newPrices[i] = prices[i];
-        }
-        // TODO: modified to use newPrices.length, verify if prev using prices.length was a bug
-        newPrices[newPrices.length] = price;
-        return newPrices;
+        return balances;
     }
 
     struct TokenIdsSlot {
@@ -235,35 +193,29 @@ contract EApps is IEApps {
         }
     }
 
+    // TODO: modify to use tstore to preserve token price
     /// @dev Assumes a hook does not influence liquidity.
     /// @dev Value of fees can be inflated by pool operator https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
-    function _getUniV4PmBalances() private view returns (AppTokenBalance[] memory) {
+    function _getUniV4PmBalances() private returns (AppTokenBalance[] memory) {
         // access stored position ids
         uint256[] memory tokenIds = _uniV4TokenIdsSlot().tokenIds;
+        AppTokenBalance[] memory balances = new AppTokenBalance[](tokenIds.length);
 
-        CacheParams memory params;
-        params.balances = new AppTokenBalance[](tokenIds.length);
-        params.prices = new uint160[](0);
+        // flag for storing balances in the right position
+        uint256 index;
 
         // a maximum of 255 positons can be created, so this loop will not break memory or block limits
         for (uint256 i = 0; i < tokenIds.length; i++) {
             (PoolKey memory poolKey, PositionInfo info) = _uniV4Posm.getPoolAndPositionInfo(tokenIds[i]);
             (int24 tickLower, int24 tickUpper) = (info.tickLower(), info.tickUpper());
-            params.token0 = Currency.unwrap(poolKey.currency0);
-            params.token1 = Currency.unwrap(poolKey.currency1);
-
-            params.index = i * 2;
+            address token0 = Currency.unwrap(poolKey.currency0);
+            address token1 = Currency.unwrap(poolKey.currency1);
 
             (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128) = _uniV4Posm
                 .poolManager()
                 .getPositionInfo(poolKey.toId(), address(this), tickLower, tickUpper, bytes32(tokenIds[i]));
 
-            uint160 sqrtPriceX96 = _findCachedPrice(params);
-            if (sqrtPriceX96 == 0) {
-                // If not cached, fetch from oracle and cache it
-                sqrtPriceX96 = IEOracle(address(this)).getCrossSqrtPriceX96(params.token0, params.token1);
-                params.prices = _appendCachedPrice(params.prices, sqrtPriceX96);
-            }
+            uint160 sqrtPriceX96 = _findCrossPrice(token0, token1);
 
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
                 sqrtPriceX96,
@@ -271,6 +223,8 @@ contract EApps is IEApps {
                 TickMath.getSqrtPriceAtTick(tickUpper),
                 liquidity
             );
+
+            index = i * 2;
 
             // notice: `getFeeGrowthInside` uses `getFeeGrowthGlobals`, which can be inflated by donating to the position
             // https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
@@ -288,11 +242,62 @@ contract EApps is IEApps {
                 FixedPoint128.Q128
             );
 
-            params.balances[params.index].token = params.token0;
-            params.balances[params.index].amount = int256(amount0);
-            params.balances[params.index + 1].token = params.token1;
-            params.balances[params.index + 1].amount = int256(amount1);
+            balances[index].token = token0;
+            balances[index].amount = int256(amount0);
+            balances[index + 1].token = token1;
+            balances[index + 1].amount = int256(amount1);
         }
-        return params.balances;
+        return balances;
+    }
+
+    // TODO: can reuse temp mapping as lib?
+    function _findCrossPrice(address token0, address token1) private returns (uint160) {
+        bytes32 tick0SlotHash = keccak256(abi.encode("temp tick", token0));
+        bytes32 tick1SlotHash = keccak256(abi.encode("temp tick", token1));
+        // TODO: verify if store as constant
+        int24 outOfRangeFlag = -887273;
+
+        int24 tick0;
+        int24 tick1;
+        uint16 cardinality;
+
+        assembly ("memory-safe") {
+            tick0 := tload(tick0SlotHash)
+            tick1 := tload(tick1SlotHash)
+        }
+
+        if (tick0 == 0) {
+            // TODO: we should probably get a TWAP, and/or make some assertions
+            (tick0, cardinality) = IEOracle(address(this)).getTick(token0);
+
+            if (cardinality == 0) {
+                tick0 = outOfRangeFlag;
+            } else if (tick0 == 0) {
+                tick0 = 1;
+            }
+        }
+
+        if (tick1 == 0) {
+            (tick1, cardinality) = IEOracle(address(this)).getTick(token1);
+
+            if (cardinality == 0) {
+                tick1 = outOfRangeFlag;
+            } else if (tick1 == 0) {
+                tick1 = 1;
+            }
+        }
+
+        // store valid ticks
+        assembly ("memory-safe") {
+            tstore(tick0SlotHash, tick0)
+            tstore(tick1SlotHash, tick1)
+        }
+
+        if (tick0 == outOfRangeFlag || tick1 == outOfRangeFlag) {
+            return 0;
+        }
+
+        int24 crossTick = tick0 - tick1;
+        return TickMath.getSqrtPriceAtTick(crossTick);
     }
 }

@@ -1,23 +1,27 @@
 // SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >0.7.0 <0.9.0;
 
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IOracle} from "../protocol/interfaces/IOracle.sol";
 import {Observation} from "../protocol/types/Observation.sol";
 
 contract MockOracle {
     uint160 private constant ONE_X96 = 2 ** 96;
+    PoolId private immutable defaultPoolId;
 
-    IOracle.ObservationState private _state;
-    Observation[65535] _observations;
+    mapping(PoolId => Observation[65535]) public observations;
+    mapping(PoolId => IOracle.ObservationState) public states;
 
     constructor() {
-        _state = IOracle.ObservationState({index: 0, cardinality: 2, cardinalityNext: 2});
+        // TODO: check if should better define
+        defaultPoolId = PoolId.wrap(bytes32(uint256(1)));
+        states[defaultPoolId] = IOracle.ObservationState({index: 1, cardinality: 2, cardinalityNext: 2});
 
         uint32 initialTimestamp = uint32(block.timestamp);
         uint32 secondTimestamp = initialTimestamp + 1;
 
-        _observations[0] = Observation({
+        observations[defaultPoolId][0] = Observation({
             blockTimestamp: initialTimestamp,
             prevTick: int24(100),
             tickCumulative: int48(0),
@@ -25,25 +29,24 @@ contract MockOracle {
             initialized: true
         });
 
-        _observations[1] = Observation({
+        observations[defaultPoolId][1] = Observation({
             blockTimestamp: secondTimestamp,
             prevTick: int24(200),
             tickCumulative: int48(int24(100) * int32(1)),
             secondsPerLiquidityCumulativeX128: uint144(ONE_X96 * 1),
             initialized: true
         });
-        _state.index = 1;
     }
 
-    function getObservations(
+    function getObservation(
         PoolKey calldata /*key*/,
         uint256 index
     ) external view returns (Observation memory observation) {
-        observation = _observations[index];
+        observation = observations[defaultPoolId][index];
     }
 
-    function getState() external view returns (IOracle.ObservationState memory state) {
-        state = _state;
+    function getState(PoolKey calldata /*key*/) external view returns (IOracle.ObservationState memory state) {
+        state = states[defaultPoolId];
     }
 
     function observe(
@@ -59,14 +62,14 @@ contract MockOracle {
 
             // Find the closest observation before or at the target timestamp
             Observation memory closestObservation;
-            for (uint256 j = 0; j < _state.cardinality; j++) {
+            for (uint256 j = 0; j < states[defaultPoolId].cardinality; j++) {
                 if (
-                    _observations[j].blockTimestamp <= targetTimestamp &&
-                    (_observations[j].blockTimestamp == targetTimestamp ||
-                        j == _state.cardinality - 1 ||
-                        _observations[j + 1].blockTimestamp > targetTimestamp)
+                    observations[defaultPoolId][j].blockTimestamp <= targetTimestamp &&
+                    (observations[defaultPoolId][j].blockTimestamp == targetTimestamp ||
+                        j == states[defaultPoolId].cardinality - 1 ||
+                        observations[defaultPoolId][j + 1].blockTimestamp > targetTimestamp)
                 ) {
-                    closestObservation = _observations[j];
+                    closestObservation = observations[defaultPoolId][j];
                     break;
                 }
             }

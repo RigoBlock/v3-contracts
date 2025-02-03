@@ -18,6 +18,8 @@ describe("Proxy", async () => {
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
+        const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+        const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
         const { newPoolAddress } = await factory.callStatic.createPool(
             'testpool',
             'TEST',
@@ -31,7 +33,8 @@ describe("Proxy", async () => {
         return {
             authority: Authority.attach(AuthorityInstance.address),
             factory,
-            pool
+            pool,
+            uniswapV3Npm: UniswapV3Npm.attach(UniswapV3NpmInstance.address)
         }
     });
 
@@ -231,6 +234,37 @@ describe("Proxy", async () => {
             // a higher unitary value results in a lower amount of pool tokens
             expect(await pool.totalSupply()).to.be.eq(parseEther("0.02"))
             expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5"))
+        })
+
+        it('should include univ3npm position tokens', async () => {
+            const { pool, uniswapV3Npm } = await setupTests()
+            // mint univ3 position from user1, as univ3 will add tokenId to recipient. MockUniswapNpm does not use input params
+            // other than the recipient, and will return weth balance which will return 0 in oracle, as won't be able to find price feed?
+            // TODO: we could use mint params in mockuniv3npm
+            const mintParams = {
+                token0: AddressZero,
+                token1: AddressZero,
+                fee: 1,
+                tickLower: 1,
+                tickUpper: 1,
+                amount0Desired: 1,
+                amount1Desired: 1,
+                amount0Min: 1,
+                amount1Min: 1,
+                recipient: pool.address,
+                deadline: 1
+            }
+            await uniswapV3Npm.mint(mintParams)
+            const etherAmount = parseEther("11")
+            // TODO: first mint will only update storage with inintial value, second will loop through the calculations
+            // an update nav call will prompt going through position tokens, updating active tokens in storage, making a call to oracle extension
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // first mint will update storage with initial value and will use that one to calculate minted tokens
+            expect(await pool.totalSupply()).to.be.eq(etherAmount)
+            await pool.setUnitaryValue()
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // nav should be 1 + positions tokens value here, as we've sent weth and grg to the pool
+            // TODO: update nav and verify value has not changed
         })
     })
 

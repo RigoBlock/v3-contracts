@@ -25,5 +25,5 @@ interface IEApps {
     /// @notice Returns token balances owned in a set of external contracts.
     /// @param packedApplications The uint encoded bitmap flags of the active applications.
     /// @return appBalances The arrays of lists of token balances grouped by application type.
-    function getAppTokenBalances(uint256 packedApplications) external view returns (ExternalApp[] memory appBalances);
+    function getAppTokenBalances(uint256 packedApplications) external returns (ExternalApp[] memory appBalances);
 }
