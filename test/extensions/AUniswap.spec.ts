@@ -269,6 +269,52 @@ describe("AUniswap", async () => {
                 deadline: 1
             })
         })
+
+        // TODO: do not remove this test if we remove AUniswap, or move it to AUniswapRouter (also means we can keep AUniswap for uni v3 liquidity methods)
+        // TODO: assert that with null total supply nothing changes to unitary value even when app tokens are returned to EApps
+        // TODO: probably this test already works with new uniswap router adapter, which uses the MockUniswapRouter
+        it('should prompt eapps looping through uni position', async () => {
+            const { grgToken, newPoolAddress, eWhitelist } = await setupTests()
+            let Pool = await hre.ethers.getContractFactory("AUniswap")
+            let pool = Pool.attach(newPoolAddress)
+            const wethAddress = await pool.weth()
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            // token transfers will prompt also GRG balances to be returned to EApps, and unitary value to increase, plus EOracle to be called
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
+            // this is because old uniswap adapter uses the rb token whitelist. In new uni router adapter tests, we use an oracle
+            await eWhitelist.whitelistToken(grgToken.address)
+            await eWhitelist.whitelistToken(wethAddress)
+            let encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: wethAddress,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 0,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            Pool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            pool = Pool.attach(newPoolAddress)
+            // an update nav call will prompt going through position tokens, updating active tokens in storage, making a call to oracle extension
+            // TODO: this will fail with null total supply
+            const etherAmount = parseEther("10")
+            // TODO: first mint will only update storage with inintial value, second will loop through the calculations
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // nav will be 1 here
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // nav should be 1 + positions tokens value here, as we've sent weth and grg to the pool
+        })
     })
 
     describe("increaseLiquidity", async () => {

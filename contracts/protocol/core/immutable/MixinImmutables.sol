@@ -49,6 +49,9 @@ abstract contract MixinImmutables is MixinConstants {
 
         // initialize extensions mapping and assert it implements `getExtensionBySelector` method
         _extensionsMap = IExtensionsMap(extensionsMap);
+        // TODO: the following assertion will alway be true, as long as IExtensionsMap only implements 1 method. This means it protects
+        // against changes, but does not guarantee the input contract implements the interface. Only way would be for the contract
+        // to return the implented selectors, and then verify against the expected selectors.
         assert(IExtensionsMap.getExtensionBySelector.selector == type(IExtensionsMap).interfaceId);
     }
 }

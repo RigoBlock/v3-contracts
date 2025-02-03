@@ -206,6 +206,32 @@ describe("Proxy", async () => {
             // TODO: verify why we have a ≃ 1.2% difference in the following comparison
             //expect(await pool.balanceOf(user3.address)).to.be.eq(fee)
         })
+
+        it('should read from storage with previously burnt supply', async () => {
+            const { pool } = await setupTests()
+            let etherAmount = parseEther("0.1")
+            // we forward some ether to the pool, so we can test edge case where nav would be affected
+            await user1.sendTransaction({ to: pool.address, value: parseEther("0.4")})
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1"))
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            expect(await pool.totalSupply()).to.be.eq(etherAmount)
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1"))
+            let ethBalance = await hre.ethers.provider.getBalance(pool.address)
+            expect(ethBalance).to.be.eq(parseEther("0.5"))
+            await timeTravel({ seconds: 2592000, mine: true })
+            // initially minted pool tokens are same as ether amount
+            await pool.burn(etherAmount, 1)
+            ethBalance = await hre.ethers.provider.getBalance(pool.address)
+            expect(ethBalance).to.be.eq(0)
+            expect(await pool.totalSupply()).to.be.eq(0)
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5"))
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            ethBalance = await hre.ethers.provider.getBalance(pool.address)
+            expect(ethBalance).to.be.eq(parseEther("0.1"))
+            // a higher unitary value results in a lower amount of pool tokens
+            expect(await pool.totalSupply()).to.be.eq(parseEther("0.02"))
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5"))
+        })
     })
 
     describe("burn", async () => {
@@ -320,6 +346,19 @@ describe("Proxy", async () => {
                     pool.address,
                     parseEther("5")
                 )
+        })
+
+        it('should revert with previously burnt supply', async () => {
+            const { pool } = await setupTests()
+            let etherAmount = parseEther("0.1")
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            let ethBalance = await hre.ethers.provider.getBalance(pool.address)
+            expect(ethBalance).to.be.eq(etherAmount)
+            await timeTravel({ seconds: 2592000, mine: true })
+            await pool.burn(etherAmount, 1)
+            ethBalance = await hre.ethers.provider.getBalance(pool.address)
+            expect(ethBalance).to.be.eq(0)
+            await expect(pool.setUnitaryValue()).to.be.revertedWith('PoolSupplyIsNullOrDust()')
         })
     })
 
