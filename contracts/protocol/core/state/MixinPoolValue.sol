@@ -142,7 +142,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
             // the active tokens list contains unique addresses
             if (targetToken == _ZERO_ADDRESS) {
-                storedBalance += int256(address(this).balance);
+                storedBalance += int256(address(this).balance - msg.value);
             } else {
                 try IERC20(targetToken).balanceOf(address(this)) returns (uint256 _balance) {
                     storedBalance += int256(_balance);

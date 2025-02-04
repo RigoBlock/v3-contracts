@@ -282,10 +282,9 @@ describe("Proxy", async () => {
             )
             expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("196.731237768562534925"))
             // second mint will use the previously stored value
-            // TODO: the following expected amount is off by 1 ether, verify why
-            const newNav = parseEther("197.731237768562534925")
+            const newNav = parseEther("196.731237768562534925")
             const expectedAmount = etherAmount.mul(parseEther("1")).div(newNav)
-            expect(expectedAmount).to.be.deep.eq(parseEther("0.055631068333649503"))
+            expect(expectedAmount).to.be.deep.eq(parseEther("0.055913845329131505"))
             await expect(
                 pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
             )
@@ -294,11 +293,7 @@ describe("Proxy", async () => {
                     user1.address,
                     expectedAmount
                 )
-                .and.to.emit(pool, "NewNav").withArgs(
-                    user1.address,
-                    pool.address,
-                    newNav
-                )
+                .and.to.not.emit(pool, "NewNav")
             expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(newNav)
         })
     })

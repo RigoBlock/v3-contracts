@@ -93,6 +93,7 @@ abstract contract MixinOwnerActions is MixinActions {
             }
 
             if (!foundInApp) {
+                // TODO: should also handle native currency
                 try IERC20(set.addresses[i]).balanceOf(address(this)) returns (uint256 _balance) {
                     if (_balance <= 1) {
                         set.remove(set.addresses[i]);
