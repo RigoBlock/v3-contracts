@@ -127,11 +127,14 @@ contract EApps is IEApps {
         balances[0].amount = int256(_grgStakingProxy.getTotalStake(address(this)));
         bytes32 poolId = IStorage(address(_grgStakingProxy)).poolIdByRbPoolAccount(address(this));
         balances[0].amount += int256(_grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this)));
+
+        // TODO: we could push active app here if positive balance
     }
 
     /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)
     function _getUniV3PmBalances() private returns (AppTokenBalance[] memory) {
         uint256 numPositions = _uniV3NPM.balanceOf(address(this));
+        // TODO: we could push active app here if positive balance
 
         // only get first 20 positions as no pool has more than that and we can save gas plus prevent DOS
         uint256 maxLength = numPositions < 20 ? numPositions * 2 : 40;

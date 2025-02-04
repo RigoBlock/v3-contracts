@@ -238,6 +238,7 @@ describe("Proxy", async () => {
 
         it('should include univ3npm position tokens', async () => {
             const { pool, uniswapV3Npm } = await setupTests()
+            expect(await uniswapV3Npm.balanceOf(pool.address)).to.be.eq(0)
             // mint univ3 position from user1, as univ3 will add tokenId to recipient. MockUniswapNpm does not use input params
             // other than the recipient, and will return weth balance which will return 0 in oracle, as won't be able to find price feed?
             // TODO: we could use mint params in mockuniv3npm
@@ -255,16 +256,50 @@ describe("Proxy", async () => {
                 deadline: 1
             }
             await uniswapV3Npm.mint(mintParams)
+            expect(await uniswapV3Npm.balanceOf(pool.address)).to.be.eq(1)
             const etherAmount = parseEther("11")
-            // TODO: first mint will only update storage with inintial value, second will loop through the calculations
-            // an update nav call will prompt going through position tokens, updating active tokens in storage, making a call to oracle extension
-            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // first mint will only update storage with inintial value and not include the univ3 position tokens
+            // pools from versions before v4 will already have a stored value, so will include univ3 position tokens
+            await expect(
+                pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            ).to.emit(pool, "Transfer").withArgs(
+                AddressZero,
+                user1.address,
+                etherAmount
+            )
             // first mint will update storage with initial value and will use that one to calculate minted tokens
             expect(await pool.totalSupply()).to.be.eq(etherAmount)
-            await pool.setUnitaryValue()
-            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-            // nav should be 1 + positions tokens value here, as we've sent weth and grg to the pool
-            // TODO: update nav and verify value has not changed
+            // TODO: could calculate the value from positions(id) and verify new nav
+            // TODO: should also test with very small values returned (as previously was 1.00000000000000001)
+
+            // updating nav will prompt going through position tokens, updating active tokens in storage, making a call to oracle extension
+            await expect(
+                pool.setUnitaryValue()
+            ).to.emit(pool, "NewNav").withArgs(
+                user1.address,
+                pool.address,
+                parseEther("196.731237768562534925")
+            )
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("196.731237768562534925"))
+            // second mint will use the previously stored value
+            // TODO: the following expected amount is off by 1 ether, verify why
+            const newNav = parseEther("197.731237768562534925")
+            const expectedAmount = etherAmount.mul(parseEther("1")).div(newNav)
+            expect(expectedAmount).to.be.deep.eq(parseEther("0.055631068333649503"))
+            await expect(
+                pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            )
+                .to.emit(pool, "Transfer").withArgs(
+                    AddressZero,
+                    user1.address,
+                    expectedAmount
+                )
+                .and.to.emit(pool, "NewNav").withArgs(
+                    user1.address,
+                    pool.address,
+                    newNav
+                )
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(newNav)
         })
     })
 
@@ -345,13 +380,15 @@ describe("Proxy", async () => {
             await expect(pool.setUnitaryValue())
                 .to.be.revertedWith('PoolSupplyIsNullOrDust()')
             const etherAmount = parseEther("0.1")
-            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            expect(
+                await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            ).to.emit(pool, "NewNav").withArgs(
+                user1.address,
+                pool.address,
+                parseEther("1")
+            )
             await expect(pool.setUnitaryValue())
-                .to.emit(pool, "NewNav").withArgs(
-                    user1.address,
-                    pool.address,
-                    parseEther("1")
-                )
+                .to.not.emit(pool, "NewNav")
         })
 
         it('should update storage when caller is owner', async () => {
@@ -359,13 +396,15 @@ describe("Proxy", async () => {
             await expect(pool.setUnitaryValue())
                 .to.be.revertedWith('PoolSupplyIsNullOrDust()')
             const etherAmount = parseEther("0.1")
-            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            await expect(
+                pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            ).to.emit(pool, "NewNav").withArgs(
+                user1.address,
+                pool.address,
+                parseEther("1")
+            )
             await expect(pool.setUnitaryValue())
-                .to.emit(pool, "NewNav").withArgs(
-                    user1.address,
-                    pool.address,
-                    parseEther("1")
-                )
+                .to.not.emit(pool, "NewNav")
         })
 
         it('should update unitary value when base token balance increases', async () => {

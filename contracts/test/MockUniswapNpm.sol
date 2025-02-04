@@ -81,13 +81,13 @@ contract MockUniswapNpm {
         token0 = WETH9;
         token1 = WETH9;
         fee = 500;
-        tickLower = 100;
-        tickUpper = 1000;
-        liquidity = 400;
-        feeGrowthInside0LastX128 = 2;
-        feeGrowthInside1LastX128 = 3;
-        tokensOwed0 = 16;
-        tokensOwed1 = 15;
+        tickLower = -2000;
+        tickUpper = 3000;
+        liquidity = 9369142662522830710261;
+        feeGrowthInside0LastX128 = 2 * 1e16;
+        feeGrowthInside1LastX128 = 3 * 1e16;
+        tokensOwed0 = 16 * 1e16;
+        tokensOwed1 = 15 * 1e16;
     }
 
     function ownerOf(uint256 tokenId) external view returns (address) {

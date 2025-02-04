@@ -316,17 +316,27 @@ describe("BaseTokenProxy", async () => {
             await usdc.transfer(user2.address, 2000000)
             // TODO: use a different amount than unit to make sure it is not a coincidence
             // TODO: mint, then transfer, then mint again with higher price, ...
-            await poolUsdc.connect(user2).mint(user2.address, 100000, 1)
-            // second mint will prompt storing unitary value in storage, which was empty before
+            // first mint will store initial value in storage
             await expect(
-                poolUsdc.connect(user2).mint(user2.address, 100000, 0)
+                poolUsdc.connect(user2).mint(user2.address, 100000, 1)
             )
-                .to.emit(poolUsdc, "Transfer") //.withArgs(AddressZero, user2.address, 3800)
+                .to.emit(poolUsdc, "Transfer")
                 .and.to.emit(poolUsdc, "NewNav").withArgs(
                     user2.address,
                     poolUsdc.address, 
                     10**6 // this is true as long as pool as initial price 1
                 )
+            // second mint will calculate new value and store it in storage only if different
+            await expect(
+                poolUsdc.connect(user2).mint(user2.address, 100000, 0)
+            )
+                .to.emit(poolUsdc, "Transfer")
+                    .withArgs(
+                        AddressZero,
+                        user2.address,
+                        100000
+                    )
+                .and.to.not.emit(poolUsdc, "NewNav")
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 999, 0)
             ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
@@ -334,19 +344,17 @@ describe("BaseTokenProxy", async () => {
             /*await poolUsdc.setUnitaryValue()
             await poolUsdc.setUnitaryValue()
             await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
             // the following line undeflows minimum liquidity (99.96% loss with small decimals), which is ok
-            poolUsdc.setUnitaryValue(401)
-            // passes locally with 1 second time travel, fails in CI
+            poolUsdc.setUnitaryValue(401)*/
             // TODO: verify setting minimum period to 2 will set to 10?
             await timeTravel({ seconds: 2592000, mine: true })
             const burnAmount = 6000
             await expect(
                 poolUsdc.connect(user2).burn(burnAmount, 1)
-            ).to.emit(poolUsdc, "Transfer").withArgs(user2.address, AddressZero, burnAmount)*/
+            )
+                .to.emit(poolUsdc, "Transfer")
+                    .withArgs(user2.address, AddressZero, burnAmount)
+                .and.to.not.emit(poolUsdc, "NewNav")
         })
     })
 

@@ -56,6 +56,7 @@ abstract contract MixinOwnerActions is MixinActions {
         ApplicationsSlot storage appsBitmap = applications();
         uint256 packedApps = appsBitmap.packedApplications;
         ExternalApp[] memory activeApps;
+
         // TODO: test we get the correct balances, as fallback delegatecalls to extension in this case
         try IEApps(address(this)).getAppTokenBalances(packedApps) returns (ExternalApp[] memory apps) {
             for (uint256 i = 0; i < apps.length; i++) {

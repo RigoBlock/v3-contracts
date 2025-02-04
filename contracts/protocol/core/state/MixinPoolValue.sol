@@ -69,9 +69,11 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // unitary value cannot be null
         assert(components.unitaryValue > 0);
 
-        // TODO: verify as should probably update only if nav is different from stored?
-        poolTokens().unitaryValue = components.unitaryValue;
-        emit NewNav(msg.sender, address(this), components.unitaryValue);
+        // update storage only if different
+        if (components.unitaryValue != poolTokens().unitaryValue) {
+            poolTokens().unitaryValue = components.unitaryValue;
+            emit NewNav(msg.sender, address(this), components.unitaryValue);
+        }
     }
 
     /// @notice Updates the stored value with an updated one.
@@ -85,8 +87,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         int256 storedBalance;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
-        // TODO: test we get the correct balances, as fallback delegatecalls for this specific method
-        // TODO: should delegatecall to IEApps, as otherwise msg.sender is pool?
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
             // position balances can be negative, positive, or null (handled explicitly later)
             for (uint256 i = 0; i < apps.length; i++) {
@@ -121,6 +121,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // assert we can convert token values to base token. If there are no active tokens, all balance is in the base token
         if (length != 0) {
+            // TODO: we can simply require, as eOracle is known in advance
             // make sure we can convert token values in base token
             try IEOracle(address(this)).hasPriceFeed(baseToken) returns (bool hasFeed) {
                 require (hasFeed, BaseTokenPriceFeedError());
