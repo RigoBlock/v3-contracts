@@ -525,4 +525,48 @@ describe("Proxy", async () => {
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
         })
     })
+
+    describe("purgeInativeTokensAndApps", async () => {
+        it('should revert if caller is not pool owner', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.connect(user2).purgeInactiveTokensAndApps()
+            ).to.be.revertedWith('PoolCallerIsNotOwner()')
+        })
+
+        it('should not revert if nothing is found', async () => {
+            const { pool } = await setupTests()
+            await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
+        })
+
+        it('should not remove an active token', async () => {
+            const { pool, uniswapV3Npm } = await setupTests()
+            const mintParams = {
+                token0: AddressZero,
+                token1: AddressZero,
+                fee: 1,
+                tickLower: 1,
+                tickUpper: 1,
+                amount0Desired: 1,
+                amount1Desired: 1,
+                amount0Min: 1,
+                amount1Min: 1,
+                recipient: pool.address,
+                deadline: 1
+            }
+            await uniswapV3Npm.mint(mintParams)
+            const etherAmount = parseEther("12")
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // first mint does not prompt nav calculations, so lp tokens are not included in active tokens
+            let activeTokens = (await pool.getActiveTokens()).activeTokens
+            expect(activeTokens.length).to.be.eq(0)
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            activeTokens = (await pool.getActiveTokens()).activeTokens
+            // second mint will prompt nav calculations, so lp tokens are included in active tokens
+            expect(activeTokens.length).to.be.eq(1)
+            // will execute and not remove any token
+            await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
+            expect(activeTokens.length).to.be.eq(1)
+        })
+    })
 })
