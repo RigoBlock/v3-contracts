@@ -173,13 +173,15 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         address baseToken = pool().baseToken;
 
+        // TODO: maybe we could return netRevenue (in base currency) to parent method and simplify the following block
         // TODO: test how this could be exploited.
         if (tokenOut == _BASE_TOKEN_FLAG) {
             tokenOut = baseToken;
         } else if (tokenOut != baseToken) {
             // TODO: verify if we really want to allow this only if base token balance not enough
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
-            require(netRevenue > IERC20(baseToken).balanceOf(address(this)), BaseTokenBalance());
+            uint256 baseTokenBalance = baseToken == _ZERO_ADDRESS ? address(this).balance : IERC20(baseToken).balanceOf(address(this));
+            require(netRevenue > baseTokenBalance, BaseTokenBalance());
             try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
                 netRevenue = value;
             } catch Error(string memory reason) {

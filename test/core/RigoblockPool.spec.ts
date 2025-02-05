@@ -279,13 +279,13 @@ describe("Proxy", async () => {
             ).to.emit(pool, "NewNav").withArgs(
                 user1.address,
                 pool.address,
-                parseEther("196.731237768562534925")
+                parseEther("200.685071384723181610")
             )
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("196.731237768562534925"))
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("200.685071384723181610"))
             // second mint will use the previously stored value
-            const newNav = parseEther("196.731237768562534925")
+            const newNav = parseEther("200.685071384723181610")
             const expectedAmount = etherAmount.mul(parseEther("1")).div(newNav)
-            expect(expectedAmount).to.be.deep.eq(parseEther("0.055913845329131505"))
+            expect(expectedAmount).to.be.deep.eq(parseEther("0.054812248485152427"))
             await expect(
                 pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
             )
@@ -568,8 +568,9 @@ describe("Proxy", async () => {
 
         it('should not remove an active token', async () => {
             const { pool, uniswapV3Npm } = await setupTests()
+            const wethAddress = await uniswapV3Npm.WETH9()
             const mintParams = {
-                token0: AddressZero,
+                token0: wethAddress,
                 token1: AddressZero,
                 fee: 1,
                 tickLower: 1,

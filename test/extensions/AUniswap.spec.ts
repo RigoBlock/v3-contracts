@@ -127,9 +127,9 @@ describe("AUniswap", async () => {
                     deadline: 1
                 })
             ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            const wethAddress = await pool.weth()
-            await eWhitelist.whitelistToken(wethAddress)
-            // the following transaction sets approval to WETH9 in TestUniswapNpm.sol as it reads positions(tokenId) but won't revert.
+            await eWhitelist.whitelistToken(grgToken.address)
+            // the following call will prompt call to mock univ3npm, which will return position tokens,
+            // which need to be whitelisted for the pool to be able to set token approvals.
             await pool.increaseLiquidity({
                 tokenId: 1,
                 amount0Desired: 100,

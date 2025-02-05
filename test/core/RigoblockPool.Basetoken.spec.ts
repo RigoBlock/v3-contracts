@@ -28,10 +28,17 @@ describe("BaseTokenProxy", async () => {
             "RigoblockV3Pool",
             newPoolAddress
         )
+        const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+        const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+        const uniswapV3Npm = UniswapV3Npm.attach(UniswapV3NpmInstance.address)
+        const wethAddress = await uniswapV3Npm.WETH9()
+        const Weth = await hre.ethers.getContractFactory("WETH9")
         return {
             pool,
             factory,
-            grgToken: GrgToken.attach(GrgTokenInstance.address)
+            grgToken: GrgToken.attach(GrgTokenInstance.address),
+            uniswapV3Npm,
+            weth: Weth.attach(wethAddress)
         }
     });
 
@@ -379,7 +386,7 @@ describe("BaseTokenProxy", async () => {
 
     describe("initializePool", async () => {
         it('should revert when already initialized', async () => {
-            const { pool, grgToken } = await setupTests()
+            const { pool } = await setupTests()
             let symbol = utils.formatBytes32String("TEST")
             symbol = utils.hexDataSlice(symbol, 0, 8)
             await expect(pool.initializePool())
@@ -399,15 +406,12 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should burn if token is active and base token balance small enough', async () => {
-            const { pool, grgToken } = await setupTests()
-            const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
-            const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
-            const uniswapV3Npm = UniswapV3Npm.attach(UniswapV3NpmInstance.address)
+            const { pool, grgToken, uniswapV3Npm, weth } = await setupTests()
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
             // we need to mint an lp position to activate token
             const mintParams = {
-                token0: AddressZero,
+                token0: weth.address,
                 token1: AddressZero,
                 fee: 1,
                 tickLower: 1,
@@ -422,48 +426,43 @@ describe("BaseTokenProxy", async () => {
             await uniswapV3Npm.mint(mintParams)
             // minting again will activate token (a burn would also activate token)
             await pool.mint(user1.address, parseEther("10"), 0)
-            const wethAddress = await uniswapV3Npm.WETH9()
-            await expect(pool.burnForToken(0, 0, wethAddress)).to.be.revertedWith('PoolBurnNullAmount()')
-            await expect(pool.burnForToken(parseEther("1"), 0, wethAddress)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
+            await expect(pool.burnForToken(0, 0, weth.address)).to.be.revertedWith('PoolBurnNullAmount()')
+            await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
             await timeTravel({ seconds: 2592000, mine: true })
-            await expect(pool.burnForToken(parseEther("1"), 0, wethAddress)).to.be.revertedWith('PoolTransferFailed()')
-            const Weth = await hre.ethers.getContractFactory("WETH9")
-            const wethContract = Weth.attach(wethAddress)
+            await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('PoolTransferFailed()')
             // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
-            await wethContract.deposit({ value: parseEther("100") })
-            await wethContract.transfer(pool.address, parseEther("100"))
+            await weth.deposit({ value: parseEther("100") })
+            await weth.transfer(pool.address, parseEther("100"))
             // NOTICE: if weth amount is smaller or values returned by univ3npm are changed, the amounts will need to be adjusted
             // pool has enough tokens to pay with base token
-            await expect(pool.burnForToken(parseEther("0.08"), 0, wethAddress)).to.be.revertedWith('BaseTokenBalance()')
+            await expect(pool.burnForToken(parseEther("0.08"), 0, weth.address)).to.be.revertedWith('BaseTokenBalance()')
             // TODO: test with more granular amounts, maybe by just activating a token via a swap
             // nav is higher after lp mint, so the pool does not have enough base token to pay
             // this reverts because the pool does not have enough target token
-            await expect(pool.burnForToken(parseEther("5"), 0, wethAddress)).to.be.revertedWith('PoolTransferFailed()')
+            await expect(pool.burnForToken(parseEther("5"), 0, weth.address)).to.be.revertedWith('PoolTransferFailed()')
             await expect(
-                pool.burnForToken(parseEther("0.09"), 0, wethAddress)
+                pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
                 .to.emit(pool, "Transfer").withArgs(
                     user1.address,
                     AddressZero,
                     parseEther("0.09")
                 )
-                .and.to.emit(wethContract, "Transfer").withArgs(
+                .and.to.emit(weth, "Transfer").withArgs(
                     pool.address,
                     user1.address,
-                    parseEther("20.754761676968940445")
+                    parseEther("21.017444013240795913")
                 )
                 .and.to.not.emit(grgToken, "Transfer")
         })
 
-        it('should apply spread if user not only holder', async () => {
-            const { pool, grgToken } = await setupTests()
-            // TODO: find a simpler way to activate target token
-            const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
-            const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
-            const uniswapV3Npm = UniswapV3Npm.attach(UniswapV3NpmInstance.address)
+        it('should burn if ETH is input token', async () => {
+            const { pool, grgToken, uniswapV3Npm, weth } = await setupTests()
+            await grgToken.approve(pool.address, parseEther("20"))
+            await pool.mint(user1.address, parseEther("10"), 0)
             // we need to mint an lp position to activate token
             const mintParams = {
-                token0: AddressZero,
+                token0: weth.address,
                 token1: AddressZero,
                 fee: 1,
                 tickLower: 1,
@@ -476,26 +475,60 @@ describe("BaseTokenProxy", async () => {
                 deadline: 1
             }
             await uniswapV3Npm.mint(mintParams)
-            const wethAddress = await uniswapV3Npm.WETH9()
-            const Weth = await hre.ethers.getContractFactory("WETH9")
-            const wethContract = Weth.attach(wethAddress)
+            // minting again will activate token (a burn would also activate token)
+            await pool.mint(user1.address, parseEther("10"), 0)
+            await expect(pool.burnForToken(0, 0, AddressZero)).to.be.revertedWith('PoolBurnNullAmount()')
+            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
+            await timeTravel({ seconds: 2592000, mine: true })
+            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('PoolTransferFailed()')
+            await user1.sendTransaction({ to: pool.address, value: parseEther("98")})
+            await expect(pool.burnForToken(parseEther("0.08"), 0, AddressZero)).to.be.revertedWith('BaseTokenBalance()')
+            await expect(pool.burnForToken(parseEther("5"), 0, AddressZero)).to.be.revertedWith('PoolTransferFailed()')
+            await expect(
+                pool.burnForToken(parseEther("0.09"), 0, AddressZero)
+            )
+                .to.emit(pool, "Transfer").withArgs(
+                    user1.address,
+                    AddressZero,
+                    parseEther("0.09")
+                )
+                .and.to.not.emit(grgToken, "Transfer")
+        })
+
+        it('should apply spread if user not only holder', async () => {
+            const { pool, grgToken, uniswapV3Npm, weth } = await setupTests()
+            const mintParams = {
+                token0: weth.address,
+                token1: AddressZero,
+                fee: 1,
+                tickLower: 1,
+                tickUpper: 1,
+                amount0Desired: 1,
+                amount1Desired: 1,
+                amount0Min: 1,
+                amount1Min: 1,
+                recipient: pool.address,
+                deadline: 1
+            }
+            await uniswapV3Npm.mint(mintParams)
             // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
-            await wethContract.deposit({ value: parseEther("100") })
-            await wethContract.transfer(pool.address, parseEther("100"))
+            await weth.deposit({ value: parseEther("100") })
+            await weth.transfer(pool.address, parseEther("100"))
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
             // minting again to activate token via nav calculations
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool, but includes lp token balances and weth balance
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("230.653578523195499771"))
+            const poolTokens = await pool.getPoolTokens()
+            expect(poolTokens.unitaryValue).to.be.eq(parseEther("233.571684913933075816"))
             await timeTravel({ seconds: 2592000, mine: true })
             await expect(
-                pool.burnForToken(parseEther("0.09"), 0, wethAddress)
+                pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
                 // TODO: verify why we have a small difference in nav (possibly due to rounding)
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("230.678527144867143011"))
-                .and.to.emit(wethContract, "Transfer").withArgs(pool.address, user1.address, parseEther("19.723014070886140726"))
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("233.596634176192422210"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.972512222064452097"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })
