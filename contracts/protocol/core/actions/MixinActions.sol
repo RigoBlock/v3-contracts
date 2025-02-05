@@ -11,6 +11,7 @@ import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     // TODO: check if we can unify some errors, and log info with them.
+    error BaseTokenBalance();
     error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
     error PoolBurnNotEnough();
     error PoolBurnNullAmount();
@@ -176,8 +177,9 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         if (tokenOut == _BASE_TOKEN_FLAG) {
             tokenOut = baseToken;
         } else if (tokenOut != baseToken) {
+            // TODO: verify if we really want to allow this only if base token balance not enough
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
-            require(netRevenue > IERC20(baseToken).balanceOf(address(this)), PoolBurnOutputAmount());
+            require(netRevenue > IERC20(baseToken).balanceOf(address(this)), BaseTokenBalance());
             try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
                 netRevenue = value;
             } catch Error(string memory reason) {
