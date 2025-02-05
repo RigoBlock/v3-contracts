@@ -288,9 +288,28 @@ describe("BaseTokenProxy", async () => {
             expect(userPoolBalance - revenue).to.be.eq(0)
             expect(Number(netRevenue)).to.be.deep.eq(revenue)
         })
+
+        it('should apply spread if user not only holder', async () => {
+            const { pool, grgToken } = await setupTests()
+            await grgToken.approve(pool.address, parseEther("20"))
+            await pool.mint(user1.address, parseEther("10"), 0)
+            await pool.mint(user2.address, parseEther("5"), 0)
+            // unitary value does not include spread to pool
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1"))
+            await timeTravel({ seconds: 2592000, mine: true })
+            // spread is now included in calculations
+            await expect(
+                pool.burn(parseEther("1"), 0)
+            )
+                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("1"))
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("1.016949152542372881"))
+                // TODO: verify we are correctly applying spread, as amount is divided by nav, but then a further haircut is applied
+                .and.to.emit(grgToken, "Transfer").withArgs(pool.address, user1.address, parseEther("0.966101694915254236"))
+        })
     })
 
-    describe("burn", async () => {
+    // TODO: also make assertions with correct values of minimum amount out
+    describe("burn 6-decimals pool", async () => {
         it('should burn tokens with 6-decimal base token', async () => {
             const { pool, factory } = await setupTests()
             const source = `
@@ -368,6 +387,7 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
+    // TODO: also make assertions with correct values of minimum amount out
     describe("burnForToken", async () => {
         it('should revert when token is not active', async () => {
             const { pool, grgToken } = await setupTests()
@@ -432,6 +452,50 @@ describe("BaseTokenProxy", async () => {
                     user1.address,
                     parseEther("20.754761676968940445")
                 )
+                .and.to.not.emit(grgToken, "Transfer")
+        })
+
+        it('should apply spread if user not only holder', async () => {
+            const { pool, grgToken } = await setupTests()
+            // TODO: find a simpler way to activate target token
+            const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+            const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+            const uniswapV3Npm = UniswapV3Npm.attach(UniswapV3NpmInstance.address)
+            // we need to mint an lp position to activate token
+            const mintParams = {
+                token0: AddressZero,
+                token1: AddressZero,
+                fee: 1,
+                tickLower: 1,
+                tickUpper: 1,
+                amount0Desired: 1,
+                amount1Desired: 1,
+                amount0Min: 1,
+                amount1Min: 1,
+                recipient: pool.address,
+                deadline: 1
+            }
+            await uniswapV3Npm.mint(mintParams)
+            const wethAddress = await uniswapV3Npm.WETH9()
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const wethContract = Weth.attach(wethAddress)
+            // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
+            await wethContract.deposit({ value: parseEther("100") })
+            await wethContract.transfer(pool.address, parseEther("100"))
+            await grgToken.approve(pool.address, parseEther("20"))
+            await pool.mint(user1.address, parseEther("10"), 0)
+            // minting again to activate token via nav calculations
+            await pool.mint(user2.address, parseEther("5"), 0)
+            // unitary value does not include spread to pool, but includes lp token balances and weth balance
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("230.653578523195499771"))
+            await timeTravel({ seconds: 2592000, mine: true })
+            await expect(
+                pool.burnForToken(parseEther("0.09"), 0, wethAddress)
+            )
+                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
+                // TODO: verify why we have a small difference in nav (possibly due to rounding)
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("230.678527144867143011"))
+                .and.to.emit(wethContract, "Transfer").withArgs(pool.address, user1.address, parseEther("19.723014070886140726"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })

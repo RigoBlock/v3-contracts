@@ -7,6 +7,7 @@ import { BigNumber, Contract, utils } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { deployContract, timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
+import { time } from "console";
 
 describe("Proxy", async () => {
     const [ user1, user2, user3 ] = waffle.provider.getWallets()
@@ -355,6 +356,32 @@ describe("Proxy", async () => {
                 .to.emit(pool, "Transfer").withArgs(user1.address, feeCollector, fee)
                 .and.to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, burntAmount)
         })
+    })
+
+    it('should revert without enough base token balance', async () => {
+        const { pool, uniswapV3Npm } = await setupTests()
+        // mint univ3 position, so nav will be higher and pool won't have enough base currency
+        const mintParams = {
+            token0: AddressZero,
+            token1: AddressZero,
+            fee: 1,
+            tickLower: 1,
+            tickUpper: 1,
+            amount0Desired: 1,
+            amount1Desired: 1,
+            amount0Min: 1,
+            amount1Min: 1,
+            recipient: pool.address,
+            deadline: 1
+        }
+        await uniswapV3Npm.mint(mintParams)
+        const etherAmount = parseEther("11")
+        await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+        await timeTravel({ seconds: 2592000, mine: true })
+        // TODO: verify use InsufficientBaseTokenBalance() instead of PoolTransferFailed()
+        await expect(
+            pool.burn(parseEther("1"), 1)
+        ).to.be.revertedWith('PoolTransferFailed()')
     })
 
     describe("initializePool", async () => {
