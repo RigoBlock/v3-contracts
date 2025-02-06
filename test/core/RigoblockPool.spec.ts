@@ -378,10 +378,9 @@ describe("Proxy", async () => {
         const etherAmount = parseEther("11")
         await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
         await timeTravel({ seconds: 2592000, mine: true })
-        // TODO: verify use InsufficientBaseTokenBalance() instead of PoolTransferFailed()
         await expect(
             pool.burn(parseEther("1"), 1)
-        ).to.be.revertedWith('PoolTransferFailed()')
+        ).to.be.revertedWith('ETHTransferFailed()')
     })
 
     describe("initializePool", async () => {

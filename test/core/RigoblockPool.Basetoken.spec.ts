@@ -184,7 +184,7 @@ describe("BaseTokenProxy", async () => {
             const tokenAmountIn = parseEther("1")
             await expect(
                 pool.mint(user1.address, tokenAmountIn, 0)
-            ).to.be.revertedWith('PoolTransferFromFailed()')
+            ).to.be.revertedWith('TokenTransferFromFailed()')
             await grgToken.approve(pool.address, tokenAmountIn)
             expect(
                 await grgToken.allowance(user1.address, pool.address)
@@ -257,7 +257,7 @@ describe("BaseTokenProxy", async () => {
             // would be to move tokens via an adapter.
             //await expect(
             //    pool.burn(userPoolBalance, 0)
-            //).to.be.revertedWith('PoolTransferFailed()')
+            //).to.be.revertedWith('TokenTransferFailed()')
             //await expect(
             //    pool.burn(userPoolBalance, userPoolBalance)
             //).to.be.revertedWith('PoolBurnOutputAmount()')
@@ -429,7 +429,7 @@ describe("BaseTokenProxy", async () => {
             await expect(pool.burnForToken(0, 0, weth.address)).to.be.revertedWith('PoolBurnNullAmount()')
             await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
             await timeTravel({ seconds: 2592000, mine: true })
-            await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('PoolTransferFailed()')
+            await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
             // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
             await weth.deposit({ value: parseEther("100") })
             await weth.transfer(pool.address, parseEther("100"))
@@ -439,7 +439,7 @@ describe("BaseTokenProxy", async () => {
             // TODO: test with more granular amounts, maybe by just activating a token via a swap
             // nav is higher after lp mint, so the pool does not have enough base token to pay
             // this reverts because the pool does not have enough target token
-            await expect(pool.burnForToken(parseEther("5"), 0, weth.address)).to.be.revertedWith('PoolTransferFailed()')
+            await expect(pool.burnForToken(parseEther("5"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
@@ -480,10 +480,10 @@ describe("BaseTokenProxy", async () => {
             await expect(pool.burnForToken(0, 0, AddressZero)).to.be.revertedWith('PoolBurnNullAmount()')
             await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
             await timeTravel({ seconds: 2592000, mine: true })
-            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('PoolTransferFailed()')
+            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('ETHTransferFailed()')
             await user1.sendTransaction({ to: pool.address, value: parseEther("98")})
             await expect(pool.burnForToken(parseEther("0.08"), 0, AddressZero)).to.be.revertedWith('BaseTokenBalance()')
-            await expect(pool.burnForToken(parseEther("5"), 0, AddressZero)).to.be.revertedWith('PoolTransferFailed()')
+            await expect(pool.burnForToken(parseEther("5"), 0, AddressZero)).to.be.revertedWith('ETHTransferFailed()')
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, AddressZero)
             )

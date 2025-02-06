@@ -29,6 +29,7 @@ import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
+import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {Applications} from "../../types/Applications.sol";
 
 interface IUniswapRouter {
@@ -49,6 +50,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     using SlotDerivation for bytes32;
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
+    using SafeTransferLib for address;
 
     error UniV4PositionsLimitExceeded();
 
@@ -222,23 +224,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    function _safeApprove(address token, address spender, uint256 amount) private {
-        try IERC20(token).approve(spender, amount) returns (bool success) {
-            assert(success);
-        } catch {
-            try IERC20(token).approve(spender, amount) {} catch {
-                // USDT on mainnet requires approval to be set to 0 before being reset again
-                try IERC20(token).approve(spender, 0) {
-                    IERC20(token).approve(spender, amount);
-                } catch {
-                    // TODO: assert we end up here when `tokenIn` is an EOA
-                    // it will end here in any other failure and if it is an EOA
-                    revert ApprovalFailed(token);
-                }
-            }
-        }
-    }
-
+    // TODO: approvals are required only to settle deltas, therefore we do not need to care about
+    // approving intermediary tokens. In univ4, multiple swaps can be batched and only net delta settled before conclusion.
     // TODO: verify logic is correct when 1. wrapping/unwrapping eth 2. adding to a liquidity position 3. removing from liquidity
     // adding to liquidity should be ok
     // removing liquidity should instead add token, they should enter the tokensOut checks
@@ -247,11 +234,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     function _safeApproveTokensIn(address[] memory tokensIn, address spender, uint256 amount) private {
         for (uint256 i = 0; i < tokensIn.length; i++) {
             // cannot approve base currency, early return
-            if (tokensIn[i] == ZERO_ADDRESS) {
+            if (tokensIn[i].isAddressZero()) {
                 continue;
             }
 
-            _safeApprove(tokensIn[i], spender, amount);
+            tokensIn[i].safeApprove(spender, amount);
 
             // assert no approval inflation exists after removing approval
             if (amount == 1) {

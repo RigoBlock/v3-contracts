@@ -7,10 +7,12 @@ import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
 import {IRigoblockV3PoolActions} from "../../interfaces/pool/IRigoblockV3PoolActions.sol";
+import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
-    // TODO: check if we can unify some errors, and log info with them.
+    using SafeTransferLib for address;
+
     error BaseTokenBalance();
     error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
     error PoolBurnNotEnough();
@@ -22,8 +24,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolMintOutputAmount();
     error PoolSupplyIsNullOrDust();
     error PoolTokenNotActive();
-    error PoolTransferFailed();
-    error PoolTransferFromFailed();
 
     /*
      * EXTERNAL METHODS
@@ -38,16 +38,16 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         address kycProvider = poolParams().kycProvider;
 
         // require whitelisted user if kyc is enforced
-        if (kycProvider != _ZERO_ADDRESS) {
+        if (!kycProvider.isAddressZero()) {
             require(IKyc(kycProvider).isWhitelistedUser(recipient), PoolCallerNotWhitelisted());
         }
 
         _assertBiggerThanMinimum(amountIn);
 
-        if (components.baseToken == _ZERO_ADDRESS) {
+        if (components.baseToken.isAddressZero()) {
             require(msg.value == amountIn, PoolMintAmountIn());
         } else {
-            _safeTransferFrom(components.baseToken, msg.sender, address(this), amountIn);
+            components.baseToken.safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
         bool isOnlyHolder = components.totalSupply == accounts().userAccounts[recipient].userBalance;
@@ -173,14 +173,13 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         address baseToken = pool().baseToken;
 
-        // TODO: maybe we could return netRevenue (in base currency) to parent method and simplify the following block
         // TODO: test how this could be exploited.
         if (tokenOut == _BASE_TOKEN_FLAG) {
             tokenOut = baseToken;
         } else if (tokenOut != baseToken) {
             // TODO: verify if we really want to allow this only if base token balance not enough
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
-            uint256 baseTokenBalance = baseToken == _ZERO_ADDRESS ? address(this).balance : IERC20(baseToken).balanceOf(address(this));
+            uint256 baseTokenBalance = baseToken.isAddressZero() ? address(this).balance : IERC20(baseToken).balanceOf(address(this));
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
             try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
                 netRevenue = value;
@@ -191,11 +190,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());
 
-        if (tokenOut == _ZERO_ADDRESS) {
-            require(address(this).balance >= netRevenue, PoolTransferFailed());
-            payable(msg.sender).transfer(netRevenue);
+        if (tokenOut.isAddressZero()) {
+            msg.sender.safeTransferNative(netRevenue);
         } else {
-            _safeTransfer(tokenOut, msg.sender, netRevenue);
+            tokenOut.safeTransfer(msg.sender, netRevenue);
         }
     }
 
@@ -236,21 +234,5 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             amount >= 10 ** decimals() / _MINIMUM_ORDER_DIVISOR,
             PoolAmountSmallerThanMinumum(_MINIMUM_ORDER_DIVISOR)
         );
-    }
-
-    // TODO: use try/catch implementation
-    function _safeTransfer(address token, address to, uint256 amount) private {
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.transfer, (to, amount)));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFailed());
-    }
-
-    // TODO: use our try/catch implementation
-    function _safeTransferFrom(address token, address from, address to, uint256 amount) private {
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = token.call(
-            abi.encodeCall(IERC20.transferFrom, (from, to, amount))
-        );
-        require(success && (data.length == 0 || abi.decode(data, (bool))), PoolTransferFromFailed());
     }
 }
