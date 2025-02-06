@@ -23,11 +23,6 @@ library SafeTransferLib {
         (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.transfer, (to, amount)));
         require(success && (data.length == 0 || abi.decode(data, (bool))), TokenTransferFailed());
     }
-    function safeTransfer(address token, address to, uint256 amount) internal {
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.transfer, (to, amount)));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), TokenTransferFailed());
-    }
 
     function safeTransferFrom(address token, address from, address to, uint256 amount) internal {
         // solhint-disable-next-line avoid-low-level-calls
