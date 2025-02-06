@@ -60,9 +60,6 @@ abstract contract MixinOwnerActions is MixinActions {
         // TODO: test we get the correct balances, as fallback delegatecalls to extension in this case
         try IEApps(address(this)).getAppTokenBalances(packedApps) returns (ExternalApp[] memory apps) {
             for (uint256 i = 0; i < apps.length; i++) {
-                activeApps = apps;
-
-                // update storage if the specific app is stored as active
                 if (
                     apps[i].balances.length == 0 &&
                     ApplicationsLib.isActiveApplication(packedApps, uint256(apps[i].appType))
@@ -70,29 +67,29 @@ abstract contract MixinOwnerActions is MixinActions {
                     appsBitmap.removeApplication(apps[i].appType);
                 }
             }
+            activeApps = apps;
         } catch Error(string memory reason) {
             // do not allow removing tokens if the apps do not return their tokens correctly
             revert(reason);
         }
 
-        bool foundInApp;
-
         // base token is never pushed to active list for gas savings, we can safely remove any unactive token
         for (uint256 i = 0; i < set.addresses.length; i++) {
+            bool shouldRemove = true;
             // skip removal if a token is active in an application
             for (uint256 j = 0; j < activeApps.length; j++) {
-                for (uint256 k = 0; k < activeApps[i].balances.length; k++) {
+                for (uint256 k = 0; k < activeApps[j].balances.length; k++) {
                     if (activeApps[j].balances[k].token == set.addresses[i]) {
-                        foundInApp = true;
+                        shouldRemove = false;
                         break; // Exit k loop
                     }
                 }
-                if (foundInApp) {
+                if (!shouldRemove) {
                     break; // Exit j loop if token found in any app
                 }
             }
 
-            if (!foundInApp) {
+            if (shouldRemove) {
                 // TODO: should also handle native currency
                 try IERC20(set.addresses[i]).balanceOf(address(this)) returns (uint256 _balance) {
                     if (_balance <= 1) {
@@ -101,8 +98,6 @@ abstract contract MixinOwnerActions is MixinActions {
                 } catch {
                     continue;
                 }
-            } else {
-                foundInApp = false;
             }
         }
     }

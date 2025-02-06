@@ -144,8 +144,13 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  // TODO: replace with deployed address (different by chain).
-  const univ4Posm = univ3Npm
+  const univ4Posm = await deploy("MockUniswapPosm", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [stakingProxy.address, univ3Npm.address, univ4Posm.address],

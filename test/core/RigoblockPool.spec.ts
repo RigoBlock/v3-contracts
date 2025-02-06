@@ -21,6 +21,8 @@ describe("Proxy", async () => {
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
         const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+        const UniswapV4PosmInstance = await deployments.get("MockUniswapPosm")
+        const UniswapV4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
         const { newPoolAddress } = await factory.callStatic.createPool(
             'testpool',
             'TEST',
@@ -35,7 +37,8 @@ describe("Proxy", async () => {
             authority: Authority.attach(AuthorityInstance.address),
             factory,
             pool,
-            uniswapV3Npm: UniswapV3Npm.attach(UniswapV3NpmInstance.address)
+            uniswapV3Npm: UniswapV3Npm.attach(UniswapV3NpmInstance.address),
+            uniswapV4Posm: UniswapV4Posm.attach(UniswapV4PosmInstance.address)
         }
     });
 
@@ -587,13 +590,69 @@ describe("Proxy", async () => {
             // first mint does not prompt nav calculations, so lp tokens are not included in active tokens
             let activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(0)
+            let isWethInActiveTokens = activeTokens.includes(wethAddress)
+            expect(isWethInActiveTokens).to.be.false
             await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
             activeTokens = (await pool.getActiveTokens()).activeTokens
             // second mint will prompt nav calculations, so lp tokens are included in active tokens
             expect(activeTokens.length).to.be.eq(1)
+            // TODO: assert that wethAddress is in activeTokens
+            isWethInActiveTokens = activeTokens.includes(wethAddress)
+            expect(isWethInActiveTokens).to.be.true
             // will execute and not remove any token
             await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
+            // TODO: active token is removed, while it shouldn't?
+            activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(1)
+        })
+
+        it('should not remove an active applications', async () => {
+            const { pool, uniswapV3Npm, uniswapV4Posm } = await setupTests()
+            const wethAddress = await uniswapV3Npm.WETH9()
+            // must fix typechain error to import from uni shared/v4Helpers
+            const MAX_UINT128 = '0xffffffffffffffffffffffffffffffff'
+            const USDC_WETH = {
+                poolKey: {
+                  currency0: wethAddress,
+                  currency1: AddressZero,
+                  fee: 500,
+                  tickSpacing: 10,
+                  hooks: AddressZero,
+                },
+                price: BigNumber.from('1282621508889261311518273674430423'),
+                tickLower: 193800,
+                tickUpper: 193900,
+            }
+            // mint in v4 Posm is a mock method
+            await uniswapV4Posm.mint(
+                USDC_WETH.poolKey,
+                USDC_WETH.tickLower,
+                USDC_WETH.tickUpper,
+                1, // liquidity
+                MAX_UINT128,
+                MAX_UINT128,
+                pool.address,
+                '0x' // hookData
+            )
+            const etherAmount = parseEther("12")
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // first mint does not prompt nav calculations, so lp tokens are not included in active tokens
+            let activeTokens = (await pool.getActiveTokens()).activeTokens
+            expect(activeTokens.length).to.be.eq(0)
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            activeTokens = (await pool.getActiveTokens()).activeTokens
+            // second mint will prompt nav calculations, so lp tokens are included in active tokens
+            expect(activeTokens.length).to.be.eq(0)
+            // TODO: must verify if Posm actually adds a tokenId to owner mapping, but we still need to use
+            // the internal tokenIds array to get the active positions.
+            // TODO: verify if we need an enumerable mapping instead of simple array
+            expect(await uniswapV4Posm.nextTokenId()).to.be.eq(2)
+            expect(await uniswapV4Posm.balanceOf(pool.address)).to.be.eq(1)
+            // will execute and not remove any token
+            await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
+            activeTokens = (await pool.getActiveTokens()).activeTokens
+            expect(activeTokens.length).to.be.eq(0)
+            // TODO: need to push a new position by minting a new one via pool
         })
     })
 })
