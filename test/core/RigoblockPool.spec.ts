@@ -609,6 +609,7 @@ describe("Proxy", async () => {
         it('should not remove an active applications', async () => {
             const { pool, uniswapV3Npm, uniswapV4Posm } = await setupTests()
             const wethAddress = await uniswapV3Npm.WETH9()
+            // TODO: move definitions to constants file
             // must fix typechain error to import from uni shared/v4Helpers
             const MAX_UINT128 = '0xffffffffffffffffffffffffffffffff'
             const USDC_WETH = {

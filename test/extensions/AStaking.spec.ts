@@ -121,4 +121,52 @@ describe("AStaking", async () => {
             expect(grgPoolBalanceBeforeReward).to.be.lt(grgPoolBalanceAfterReward)
         })
     })
+
+    describe("stake-unstake and sync tokens", async () => {
+        it('should add grg to active tokens when positive stake', async () => {
+            const { stakingProxy, grgToken, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            const FullPool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            const fullPool = FullPool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            // returned active tokens are active tokens array and the base token
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            await pool.stake(amount)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            // TODO: we can also assert that token is active before the end of the epoch
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            // first mint only initialized value in storage, need to mint again to update active tokens
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            const activeTokens = (await fullPool.getActiveTokens()).activeTokens
+            expect(activeTokens.length).to.be.eq(1)
+            expect(activeTokens[0]).to.be.eq(grgToken.address)
+        })
+
+        it('should remove grg from active tokens when null stake', async () => {
+            const { stakingProxy, grgToken, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            const FullPool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            const fullPool = FullPool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.stake(amount)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await pool.undelegateStake(amount)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await pool.unstake(amount)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await fullPool.setUnitaryValue()
+            // TODO: this should prompt the pool to remove the inactive token, but it does not
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+        })
+    })
 })

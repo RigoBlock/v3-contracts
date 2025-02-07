@@ -86,7 +86,7 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    function applications() internal pure returns (ApplicationsSlot storage s) {
+    function activeApplications() internal pure returns (ApplicationsSlot storage s) {
         assembly {
             s.slot := _APPLICATIONS_SLOT
         }

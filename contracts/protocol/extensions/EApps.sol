@@ -130,14 +130,18 @@ contract EApps is IEApps {
         }
     }
 
+    /// @dev Will return an empty array in case no stake found but unclaimed rewards (which are earned in the undelegate epoch).
+    /// @dev This is fine as the amount is very small and saves several storage reads.
     function _getGrgStakingProxyBalances() private view returns (AppTokenBalance[] memory balances) {
-        balances = new AppTokenBalance[](1);
-        balances[0].token = address(_grgStakingProxy.getGrgContract());
-        balances[0].amount = int256(_grgStakingProxy.getTotalStake(address(this)));
-        bytes32 poolId = IStorage(address(_grgStakingProxy)).poolIdByRbPoolAccount(address(this));
-        balances[0].amount += int256(_grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this)));
+        uint256 stakingBalance = _grgStakingProxy.getTotalStake(address(this));
 
-        // TODO: we could push active app here if positive balance
+        // continue querying unclaimed rewards only with positive balance
+        if (stakingBalance > 0) {
+            balances = new AppTokenBalance[](1);
+            balances[0].token = address(_grgStakingProxy.getGrgContract());
+            bytes32 poolId = IStorage(address(_grgStakingProxy)).poolIdByRbPoolAccount(address(this));
+            balances[0].amount += int256(stakingBalance + _grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this)));
+        }
     }
 
     /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)

@@ -119,12 +119,7 @@ abstract contract MixinPoolState is MixinPoolValue {
      * INTERNAL VIEW METHODS
      */
     function _getActiveApplications() internal view override returns (uint256) {
-        return applications().packedApplications;
-    }
-
-    function _getActiveTokens() internal view override returns (ActiveTokens memory tokens) {
-        tokens.activeTokens = activeTokensSet().addresses;
-        tokens.baseToken = pool().baseToken;
+        return activeApplications().packedApplications;
     }
 
     function _getFeeCollector() internal view override returns (address) {
@@ -140,5 +135,10 @@ abstract contract MixinPoolState is MixinPoolValue {
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
         return spread != 0 ? spread : _MAX_SPREAD;
+    }
+
+    function _getActiveTokens() private view returns (ActiveTokens memory tokens) {
+        tokens.activeTokens = activeTokensSet().addresses;
+        tokens.baseToken = pool().baseToken;
     }
 }

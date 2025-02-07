@@ -53,7 +53,7 @@ abstract contract MixinOwnerActions is MixinActions {
     function purgeInactiveTokensAndApps() external override onlyOwner {
         // retrieve the list and mapping of stored tokens
         AddressSet storage set = activeTokensSet();
-        ApplicationsSlot storage appsBitmap = applications();
+        ApplicationsSlot storage appsBitmap = activeApplications();
         uint256 packedApps = appsBitmap.packedApplications;
         ExternalApp[] memory activeApps;
 

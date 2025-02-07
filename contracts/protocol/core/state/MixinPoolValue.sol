@@ -24,6 +24,7 @@ import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
+import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 import {Int256, TransientBalance} from "../../types/TransientBalance.sol";
@@ -33,6 +34,7 @@ import {Int256, TransientBalance} from "../../types/TransientBalance.sol";
 //  General idea is if the component is simple and not requires revisit of logic, implement as library, otherwise
 //  implement as extension.
 abstract contract MixinPoolValue is MixinOwnerActions {
+    using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
     using TransientBalance for Int256;
 
@@ -86,12 +88,20 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         AddressSet storage values = activeTokensSet();
         int256 storedBalance;
 
+        ApplicationsSlot storage appsBitmap = activeApplications();
+        uint256 packedApps = appsBitmap.packedApplications;
+
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
             // position balances can be negative, positive, or null (handled explicitly later)
             for (uint256 i = 0; i < apps.length; i++) {
                 // active positions tokens are a subset of active tokens
                 for (uint256 j = 0; j < apps[i].balances.length; j++) {
+                    // push application if not active but tokens are returned from it (as with GRG staking and univ3 liquidity)
+                    if (!ApplicationsLib.isActiveApplication(packedApps, uint256(apps[i].appType))) {
+                        activeApplications().storeApplication(apps[i].appType);
+                    }
+
                     // Always add or update the balance from positions
                     if (apps[i].balances[j].amount != 0) {
                         storedBalance = Int256.wrap(_TRANSIENT_BALANCE_SLOT).get(apps[i].balances[j].token);
@@ -189,5 +199,4 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
     /// virtual methods
     function _getActiveApplications() internal view virtual returns (uint256);
-    function _getActiveTokens() internal view virtual returns (ActiveTokens memory);
 }
