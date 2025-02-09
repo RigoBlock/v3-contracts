@@ -24,13 +24,17 @@ import {SlotDerivation} from "@openzeppelin/contracts/utils/SlotDerivation.sol";
 import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";
-import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
+import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {Applications} from "../../types/Applications.sol";
+
+interface IERC721 {
+    function ownerOf(uint256 id) external view returns (address owner);
+}
 
 interface IUniswapRouter {
     function execute(bytes calldata commands, bytes[] calldata inputs) external payable;
@@ -75,13 +79,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     // TODO: check store as inintiate instances
     address private immutable _uniswapRouter;
-    address private immutable _positionManager;
+    IPositionManager private immutable _positionManager;
 
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
 
-    /// @notice Thrown when attempting to execute commands and an incorrect number of inputs are provided
-    error LengthMismatch();
     error RecipientIsNotSmartPool();
     error ApprovalFailed(address target);
     error TargetIsNotContract();
@@ -91,9 +93,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     // TODO: should verify that it is ok to make direct calls, as they could potentially modify state of the adapter
     // either we make sure that a constructor value prevents setting, or we require delegatecall, which would prevent
     // view methods from msg.sender other than the pool operator.
-    constructor(address _universalRouter, address _v4PositionManager) {
+    constructor(address _universalRouter, address _v4Posm) {
         _uniswapRouter = _universalRouter;
-        _positionManager = _v4PositionManager;
+        _positionManager = IPositionManager(_v4Posm);
     }
 
     modifier checkDeadline(uint256 deadline) {
@@ -144,12 +146,12 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         bytes calldata commands,
         bytes[] calldata inputs
     ) public override nonReentrant returns (Parameters memory params) {
+        assert(commands.length == inputs.length);
+
         // loop through all given commands, verify their inputs and pass along outputs as defined
         for (uint256 i = 0; i < commands.length; i++) {
-            bytes calldata input = inputs[i];
-
             // input sanity check and parameters return
-            params = _decodeInput(commands[i], input, params);
+            params = _decodeInput(commands[i], inputs[i], params);
         }
 
         // only execute when finished decoding inputs
@@ -166,19 +168,43 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             try IUniswapRouter(uniswapRouter()).execute{value: params.value}(commands, inputs) {
                 // we remove allowance without clearing storage
                 _safeApproveTokensIn(params.tokensIn, uniswapRouter(), 1);
-
-                // update liquidity tokenIds in storage
-                _processTokenIds(params.tokenIds);
+                return params;
             } catch Error(string memory reason) {
                 revert(reason);
-            } catch (bytes memory lowLevelData) {
-                revert(string(lowLevelData));
             }
         }
     }
 
+    /// @notice Can be not reentrancy-protected, as will revert in PositionManager
+    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external {
+        (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
+        assert(actions.length == params.length);
+        Parameters memory newParams;
+
+        for (uint256 actionIndex = 0; actionIndex < actions.length; actionIndex++) {
+            newParams = _decodePosmAction(uint8(actions[actionIndex]), params[actionIndex], newParams);
+        }
+
+        _processRecipients(newParams.recipients);
+        _assertTokensOutHavePriceFeed(newParams.tokensOut);
+        _safeApproveTokensIn(newParams.tokensIn, address(uniV4Posm()), type(uint256).max);
+
+        try uniV4Posm().modifyLiquidities{value: newParams.value}(unlockData, deadline) {
+            _safeApproveTokensIn(newParams.tokensIn, address(uniV4Posm()), 1);
+            _processTokenIds(newParams.tokenIds);
+            return;
+        } catch Error(string memory reason) {
+            revert(reason);
+        }
+    }
+
+    //based on tokens we need to settle, take, we can decide to setApproval or require token price feed
+    //(set approval for tokenIn, require price feed for tokenOut, push tokenOut to tracked tokens)
+    //potential abuse: token0 amount is null for a non-tracked token, therefore we need to make sure both
+    //tokens have a price feed, unless they are already active (which they should be?)
+
     /// @inheritdoc IAUniswapRouter
-    function positionManager() public view override(IAUniswapRouter, AUniswapDecoder) returns (address) {
+    function uniV4Posm() public view override(IAUniswapRouter, AUniswapDecoder) returns (IPositionManager) {
         return _positionManager;
     }
 
@@ -254,14 +280,24 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             TokenIdSlot storage idsSlot = uniV4TokenIds();
 
             for (uint256 i = 0; i < tokenIds.length; i++) {
-                // negative value is a sentinel for burn
+                // positive value is a sentinel for mint
                 if (idsSlot.tokenIds[i] > 0) {
+                    // by using the enumerable set, we can make sure it is unique, even though it will be expensive
                     idsSlot.tokenIds.push(uint256(tokenIds[i]));
                     continue;
                 } else {
-                    idsSlot.tokenIds[i] = idsSlot.tokenIds[idsSlot.tokenIds.length];
-                    idsSlot.tokenIds.pop();
-                    continue;
+                    // negative value is flag for burn or increase liquidity
+                    if (uniV4Posm().getPositionLiquidity(uint256(-tokenIds[i])) > 0) {
+                        assert(IERC721(address(uniV4Posm())).ownerOf(uint256(-tokenIds[i])) == address(this));
+                        continue;
+                    } else {
+                        // if liquidity is null, we are burning
+                        // TODO: this is incorrect, we must locate the id in the storage array. i.e. we should also store a mapping for
+                        // gas efficiency. We can use the EnumerableSet
+                        idsSlot.tokenIds[i] = idsSlot.tokenIds[idsSlot.tokenIds.length];
+                        idsSlot.tokenIds.pop();
+                        continue;
+                    }
                 }
             }
 

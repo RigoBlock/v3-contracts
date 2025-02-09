@@ -19,6 +19,7 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IMinimumVersion} from "./IMinimumVersion.sol";
 
 /// @notice Implements IMinimumVersion.requiredVersion()
@@ -49,9 +50,9 @@ interface IAUniswapRouter is IMinimumVersion {
     /// @dev Only mint call has access to state, will revert with direct calls unless recipient is explicitly set to this.
     function execute(bytes calldata commands, bytes[] calldata inputs) external returns (Parameters memory params);
 
-    /// @notice The address of the Uniswap liquidity position manager contract.
-    /// @return positionManager The address of the UniswapV4 Posm.
-    function positionManager() external view returns (address positionManager);
+    /// @notice The Uniswap V4 liquidity position manager contract.
+    /// @return The address of the UniswapV4 Posm.
+    function uniV4Posm() external view returns (IPositionManager);
 
     /// @notice The address of the Uniswap universal router contract.
     /// @return uniswapRouter The address of the Uniswap universal router.
