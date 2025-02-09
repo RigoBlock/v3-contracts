@@ -19,7 +19,6 @@
 
 pragma solidity 0.8.28;
 
-import {FixedPoint128} from "@uniswap/v3-core/contracts/libraries/FixedPoint128.sol";
 import {INonfungiblePositionManager} from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
@@ -39,6 +38,13 @@ import {Applications, TokenIdsSlot} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {Int256, TransientBalance} from "../types/TransientBalance.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
+
+// TODO: check substitute this, which comes from uni c3-core
+/// @title FixedPoint128
+/// @notice A library for handling binary fixed point numbers, see https://en.wikipedia.org/wiki/Q_(number_format)
+library FixedPoint128 {
+    uint256 internal constant Q128 = 0x100000000000000000000000000000000;
+}
 
 /// @notice A universal aggregator for external contracts positions.
 /// @dev External positions are consolidating into a single view contract. As more apps are connected, can be split into multiple mixing.
@@ -217,6 +223,8 @@ contract EApps is IEApps {
                 liquidity
             );
 
+            // TODO: verify if we are willing to accept nav error by not including unclaimed fees, which are going to be relatively small
+            // because we will save a few storage reads
             // notice: `getFeeGrowthInside` uses `getFeeGrowthGlobals`, which can be inflated by donating to the position
             // https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
             (uint256 poolFeeGrowthInside0X128, uint256 poolFeeGrowthInside1X128) = _uniV4Posm
