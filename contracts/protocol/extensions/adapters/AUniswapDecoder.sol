@@ -20,8 +20,8 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
-import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -31,13 +31,15 @@ import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 // TODO: verify git submodule updated, as Actions library has changed
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
-// TODO: verify we want to import from here, as univ4Npm does not implement it in its interface
-import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
-//import {BytesLib} from "./lib/uni-v3/BytesLib.sol";
+import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from '@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol';
+import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
+
+interface IHook {
+    function getHookPermissions() external pure returns (Hooks.Permissions memory);
+}
 
 abstract contract AUniswapDecoder {
-    // TODO: verify if we are using this BytesLib, and remove otherwise (we now decode uni liquidity calls differently)
     using BytesLib for bytes;
     using TransientStateLibrary for IPoolManager;
     using CalldataDecoder for bytes;
@@ -49,10 +51,6 @@ abstract contract AUniswapDecoder {
     error LiquidityMintHookError(address hook);
 
     address internal constant ZERO_ADDRESS = address(0);
-
-    // TODO: check what the skip flag is used for
-    // if seems we should pass it to input state when we do not have to store?
-    address internal constant SKIP_FLAG = address(1);
 
     function uniV4Posm() public view virtual returns (IPositionManager);
 
@@ -67,7 +65,6 @@ abstract contract AUniswapDecoder {
     ) internal returns (IAUniswapRouter.Parameters memory) {
         uint256 command = uint8(commandType & Commands.COMMAND_TYPE_MASK);
 
-        // TODO: try use uni library decoding, as more type-safe
         // 0x00 <= command < 0x21
         if (command < Commands.EXECUTE_SUB_PLAN) {
             // 0x00 <= command < 0x10
@@ -77,17 +74,17 @@ abstract contract AUniswapDecoder {
                     if (command == Commands.V3_SWAP_EXACT_IN) {
                         // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser
                         (address recipient,,,,) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
-                        params.recipients = _addUnique(params.recipients, recipient);
                         bytes calldata path = inputs.toBytes(3);
+                        params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
                         params.tokensOut = _addUnique(params.tokensOut, path.toBytes(path.length - 20).toAddress());
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
-                        (address recipient,,,, ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
-                        params.recipients = _addUnique(params.recipients, recipient);
+                        (address recipient,,,,) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         bytes calldata path = inputs.toBytes(3);
+                        params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, path.toAddress());
                         params.tokensIn = _addUnique(params.tokensIn, path.toBytes(path.length - 20).toAddress());
                         params.recipients = _addUnique(params.recipients, recipient);
@@ -267,11 +264,13 @@ abstract contract AUniswapDecoder {
                 // PoolKey calldata poolKey, int24 tickLower, int24 tickUpper, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, address owner, bytes calldata hookData
                 (PoolKey calldata poolKey,,,,,, address owner,) = actionParams.decodeMintParams();
 
-                // TODO: check if this works or not
                 // Assert hook does not have access to deltas
-                //if (address(poolKey.hooks) != 0) {
-                //    require(!poolKey.hooks.afterRemoveLiquidityReturnDelta(), LiquidityMintHookError(address(poolKey.hooks)));
-                //}
+                if (address(poolKey.hooks) != ZERO_ADDRESS) {
+                    require(
+                        !IHook(address(poolKey.hooks)).getHookPermissions().afterRemoveLiquidityReturnDelta,
+                        LiquidityMintHookError(address(poolKey.hooks))
+                    );
+                }
 
                 // as an amount could be null, we want to assert here that both tokens have a price feed
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));

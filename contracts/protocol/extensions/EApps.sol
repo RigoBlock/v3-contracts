@@ -31,15 +31,14 @@ import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol
 import {NativeWrapper} from "@uniswap/v4-periphery/src/base/NativeWrapper.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
-
-import {IEApps} from "./adapters/interfaces/IEApps.sol";
-import {Applications} from "../types/Applications.sol";
-import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
-import {Int256, TransientBalance} from "../types/TransientBalance.sol";
 import {IEOracle} from "../../protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ApplicationsLib} from "../../protocol/libraries/ApplicationsLib.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
+import {Applications, TokenIdsSlot} from "../types/Applications.sol";
+import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
+import {Int256, TransientBalance} from "../types/TransientBalance.sol";
+import {IEApps} from "./adapters/interfaces/IEApps.sol";
 
 /// @notice A universal aggregator for external contracts positions.
 /// @dev External positions are consolidating into a single view contract. As more apps are connected, can be split into multiple mixing.
@@ -71,7 +70,7 @@ contract EApps is IEApps {
         _uniV3NPM = INonfungiblePositionManager(univ3Npm);
         _uniV4Posm = IPositionManager(univ4Posm);
 
-        _TRANSIENT_TICK_SLOT = keccak256(abi.encode("transient tick slot"));
+        _TRANSIENT_TICK_SLOT = keccak256(abi.encode("transient.tick.slot"));
     }
 
     struct Application {
@@ -186,10 +185,6 @@ contract EApps is IEApps {
             balances[i * 2 + 1].token = token1;
             balances[i * 2 + 1].amount = int256(amount1);
         }
-    }
-
-    struct TokenIdsSlot {
-        uint256[] tokenIds;
     }
 
     // TODO: we reuse this one in uniswap adapter, should import from library

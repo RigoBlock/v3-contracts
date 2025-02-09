@@ -10,3 +10,8 @@ enum Applications {
     // append new applications here, up to a total of 31
     COUNT
 }
+
+struct TokenIdsSlot {
+    uint256[] tokenIds;
+    mapping(uint256 tokenId => uint256 index) positions;
+}

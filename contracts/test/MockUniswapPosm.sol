@@ -4,19 +4,47 @@ pragma solidity >0.8.0 <0.9.0;
 
 import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
+import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 
 /// @dev In uniswap Posm, calls must be calldata encoded to execute. We expose some methods for testing. 
 contract MockUniswapPosm {
     using PositionInfoLibrary for PositionInfo;
+    using CalldataDecoder for bytes;
+
     uint256 public nextTokenId = 1;
 
-    mapping(address => uint256) private _balances;
+    mapping(uint256 => address) internal _ownerOf;
+    mapping(address => uint256) internal _balanceOf;
 
     mapping(uint256 tokenId => PositionInfo info) public positionInfo;
     mapping(bytes25 poolId => PoolKey poolKey) public poolKeys;
 
-    //function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external payable {}
+    /// universal router needs to retrieve ownerOf
+    function modifyLiquidities(bytes calldata unlockData, uint256 /*deadline*/) external payable {
+        (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
+        uint256 numActions = actions.length;
+        assert(numActions == params.length);
+
+        for (uint256 actionIndex = 0; actionIndex < numActions; actionIndex++) {
+            uint256 action = uint8(actions[actionIndex]);
+
+            if (action == Actions.MINT_POSITION) {
+                (
+                    PoolKey memory poolKey,
+                    int24 tickLower,
+                    int24 tickUpper,
+                    uint256 liquidity,
+                    uint128 amount0Max,
+                    uint128 amount1Max,
+                    address owner,
+                    bytes memory hookData
+                ) = params[actionIndex].decodeMintParams();
+                mint(poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, owner, hookData);
+            }
+        }
+    }
 
     function getPoolAndPositionInfo(uint256 tokenId) public view returns (PoolKey memory poolKey, PositionInfo info) {
         info = positionInfo[tokenId];
@@ -39,20 +67,22 @@ contract MockUniswapPosm {
         liquidity = 0;
     }
 
-    /// methods for testing
+    // TODO: we use memory, but prev. used calldata, check if ok. Alt, we could pass calldata params and decode, use this as internal
+    /// @notice A mock method for creating positions for testing nav calculations
     function mint(
-        PoolKey calldata poolKey,
+        PoolKey memory poolKey,
         int24 tickLower,
         int24 tickUpper,
         uint256 /*liquidity*/,
         uint128 /*amount0Max*/,
         uint128 /*amount1Max*/,
         address owner,
-        bytes calldata /*hookData*/
+        bytes memory /*hookData*/
     ) public {
         // mint receipt token
         uint256 tokenId = nextTokenId++;
-        _balances[owner]++;
+        _balanceOf[owner]++;
+        _ownerOf[tokenId] = owner;
 
         // Initialize the position info
         PositionInfo info = PositionInfoLibrary.initialize(poolKey, tickLower, tickUpper);
@@ -72,6 +102,10 @@ contract MockUniswapPosm {
     }
 
     function balanceOf(address owner) public view returns (uint256) {
-        return _balances[owner];
+        return _balanceOf[owner];
+    }
+
+    function ownerOf(uint256 tokenId) public view returns (address) {
+        return _ownerOf[tokenId];
     }
 }

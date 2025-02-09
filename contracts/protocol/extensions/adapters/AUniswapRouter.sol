@@ -23,14 +23,14 @@ pragma solidity 0.8.28;
 import {SlotDerivation} from "@openzeppelin/contracts/utils/SlotDerivation.sol";
 import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
-import {AUniswapDecoder} from "./AUniswapDecoder.sol";
-import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
-import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
-import {Applications} from "../../types/Applications.sol";
+import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
+import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
+import {IEOracle} from "./interfaces/IEOracle.sol";
+import {AUniswapDecoder} from "./AUniswapDecoder.sol";
 
 interface IERC721 {
     function ownerOf(uint256 id) external view returns (address owner);
@@ -67,7 +67,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     bytes32 private constant _REENTRANCY_DEPTH_SLOT =
         0x3921e0fb5d7436d70b7041cccb0d0f543e6b643f41e09aa71450d5e1c5767376;
 
-    // TODO: verify import from common library as EApps uses the same slot
+    // TODO: verify import from common library as EApps uses the same slots
     // persistent storage slots
     bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
@@ -213,19 +213,12 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         return _uniswapRouter;
     }
 
-    // TODO: must make sure we are writing to the proxy storage, not the adapter storage
-    // active applications are stored as a packed single uint256, without length
-    struct TokenIdSlot {
-        uint256[] tokenIds;
-    }
-
-    function uniV4TokenIds() internal pure returns (TokenIdSlot storage s) {
+    function uniV4TokenIds() internal pure returns (TokenIdsSlot storage s) {
         assembly {
             s.slot := _UNIV4_TOKEN_IDS_SLOT
         }
     }
 
-    // TODO: added slot to purge application, but can do in future release
     function activeApplications() internal pure returns (ApplicationsSlot storage s) {
         assembly {
             s.slot := _APPLICATIONS_SLOT
@@ -239,7 +232,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // TODO: an older implementation accessing this block should be rejected, as eOracle call should fail?
+    /// @notice An implementation before v4 will be rejected here
     function _assertTokensOutHavePriceFeed(address[] memory tokensOut) private {
         // load active tokens from storage
         AddressSet storage values = activeTokensSet();
@@ -250,13 +243,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // TODO: approvals are required only to settle deltas, therefore we do not need to care about
-    // approving intermediary tokens. In univ4, multiple swaps can be batched and only net delta settled before conclusion.
-    // TODO: verify logic is correct when 1. wrapping/unwrapping eth 2. adding to a liquidity position 3. removing from liquidity
-    // adding to liquidity should be ok
-    // removing liquidity should instead add token, they should enter the tokensOut checks
-    // wrapping should remove, but we could accept if does not (as it's eth)
-    // TODO: check this condition is correct, as otherwise it could fail for eth
     function _safeApproveTokensIn(address[] memory tokensIn, address spender, uint256 amount) private {
         for (uint256 i = 0; i < tokensIn.length; i++) {
             // cannot approve base currency, early return
@@ -277,24 +263,27 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         // do not load values unless we are writing to storage
         if (tokenIds.length > 0) {
             // update tokenIds in proxy persistent storage.
-            TokenIdSlot storage idsSlot = uniV4TokenIds();
+            TokenIdsSlot storage idsSlot = uniV4TokenIds();
 
             for (uint256 i = 0; i < tokenIds.length; i++) {
                 // positive value is a sentinel for mint
-                if (idsSlot.tokenIds[i] > 0) {
-                    // by using the enumerable set, we can make sure it is unique, even though it will be expensive
+                if (tokenIds[i] > 0) {
+                    // mint reverts if tokenId exists, so we can be sure it is unique
                     idsSlot.tokenIds.push(uint256(tokenIds[i]));
+                    idsSlot.positions[uint256(tokenIds[i])] = idsSlot.tokenIds.length;
                     continue;
                 } else {
-                    // negative value is flag for burn or increase liquidity
-                    if (uniV4Posm().getPositionLiquidity(uint256(-tokenIds[i])) > 0) {
-                        assert(IERC721(address(uniV4Posm())).ownerOf(uint256(-tokenIds[i])) == address(this));
+                    // invert sign. Negative value is flag for increase liquidity or burn
+                    uint256 tokenId = uint256(-tokenIds[i]);
+
+                    if (uniV4Posm().getPositionLiquidity(tokenId) > 0) {
+                        // we do not allow delegating liquidity actions on behalf of pool
+                        assert(IERC721(address(uniV4Posm())).ownerOf(tokenId) == address(this));
                         continue;
                     } else {
                         // if liquidity is null, we are burning
-                        // TODO: this is incorrect, we must locate the id in the storage array. i.e. we should also store a mapping for
-                        // gas efficiency. We can use the EnumerableSet
-                        idsSlot.tokenIds[i] = idsSlot.tokenIds[idsSlot.tokenIds.length];
+                        // TODO: should we implement as a library instead?
+                        idsSlot.positions[tokenId] = idsSlot.tokenIds[idsSlot.tokenIds.length];
                         idsSlot.tokenIds.pop();
                         continue;
                     }
