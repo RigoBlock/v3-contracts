@@ -252,9 +252,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // TODO: remove when done debugging
-    error Balance(uint256 amount);
-
+    /// @dev This is executed after the uniswap Posm deltas have been settled.
     function _processTokenIds(int256[] memory tokenIds) private {
         // do not load values unless we are writing to storage
         if (tokenIds.length > 0) {
@@ -272,9 +270,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                     // invert sign. Negative value is flag for increase liquidity or burn
                     uint256 tokenId = uint256(-tokenIds[i]);
 
-                    // TODO: not sure why returned liquidity is 0?
+                    // after increasing position, liquidity must be non-nil
                     if (uniV4Posm().getPositionLiquidity(tokenId) > 0) {
-                        //if (IERC721(address(uniV4Posm())).balanceOf(address(this)) > 0) {
                         // we do not allow delegating liquidity actions on behalf of pool
                         require(
                             IERC721(address(uniV4Posm())).ownerOf(tokenId) == address(this),
@@ -282,11 +279,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                         );
                         continue;
                     } else {
-                        // if liquidity is null, we are burning
+                        // after we burned, liquidity must be nil, so it is safe to remove position from tracked
                         // TODO: should we implement as a library instead?
-                        //idsSlot.positions[tokenId] = idsSlot.tokenIds[idsSlot.tokenIds.length];
-                        //idsSlot.tokenIds.pop();
-                        //continue;
+                        idsSlot.positions[tokenId] = idsSlot.tokenIds[idsSlot.tokenIds.length];
+                        idsSlot.tokenIds.pop();
+                        continue;
                     }
                 }
             }

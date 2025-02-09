@@ -254,10 +254,10 @@ abstract contract AUniswapDecoder {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
                 (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
-                params.tokenIds = _addUniqueTokenId(params.tokenIds, tokenId, false);
+                params.tokenIds = _addUniqueTokenId(params.tokenIds, -int256(tokenId));
                 return params;
-            //} else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
-            //    revert UnsupportedAction(action);
+            } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
+                revert UnsupportedAction(action);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
                 // no further assertion needed when removing liquidity
                 return params;
@@ -277,14 +277,14 @@ abstract contract AUniswapDecoder {
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                 params.recipients = _addUnique(params.recipients, owner);
-                params.tokenIds = _addUniqueTokenId(params.tokenIds, uniV4Posm().nextTokenId(), true);
+                params.tokenIds = _addUniqueTokenId(params.tokenIds, int256(uniV4Posm().nextTokenId()));
                 return params;
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
                 revert UnsupportedAction(action);
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId,,,) = actionParams.decodeBurnParams();
-                params.tokenIds = _addUniqueTokenId(params.tokenIds, tokenId, false);
+                params.tokenIds = _addUniqueTokenId(params.tokenIds, -int256(tokenId));
                 return params;
             }
         } else {
@@ -352,9 +352,10 @@ abstract contract AUniswapDecoder {
         return newArray;
     }
 
-    function _addUniqueTokenId(int256[] memory array, uint256 id, bool isMint) private pure returns (int256[] memory) {
+    // TODO: verify we are appending correctly, as we could be appending MINT + INCREASE, meaning same id would be stored twice, but with opposite sign
+    function _addUniqueTokenId(int256[] memory array, int256 id) private pure returns (int256[] memory) {
         for (uint256 i = 0; i < array.length; i++) {
-            if (array[i] == int256(id)) {
+            if (array[i] == id) {
                 return array; // Already exists, return unchanged array
             }
         }
@@ -363,8 +364,7 @@ abstract contract AUniswapDecoder {
             newArray[i] = array[i];
         }
 
-        // negative value is sentinel for closed position
-        newArray[array.length] = isMint ? int256(id) : -int256(id);
+        newArray[array.length] = id;
         return newArray;
     }
 }

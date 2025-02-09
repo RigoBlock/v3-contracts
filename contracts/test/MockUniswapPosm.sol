@@ -45,6 +45,10 @@ contract MockUniswapPosm {
                     bytes memory hookData
                 ) = params[actionIndex].decodeMintParams();
                 mint(poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, owner, hookData);
+            } else if (action == Actions.INCREASE_LIQUIDITY) {
+                (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
+                    params[actionIndex].decodeModifyLiquidityParams();
+                _increase(tokenId, liquidity, amount0Max, amount1Max, hookData);
             }
         }
     }
@@ -57,8 +61,7 @@ contract MockUniswapPosm {
     function getPositionLiquidity(uint256 tokenId) external view returns (uint128 liquidity) {
         //(PoolKey memory poolKey, PositionInfo info) = getPoolAndPositionInfo(tokenId);
         //liquidity = _getLiquidity(tokenId, poolKey, info.tickLower(), info.tickUpper());
-        // TODO: verify why empty storage is returned, could be we are not decoding mint, just increase liquidity from AUniswapRouter.test.ts
-        return uint128(_liquidities[tokenId]) != 0 ? uint128(_liquidities[tokenId]) : 101;
+        return uint128(_liquidities[tokenId]);
     }
 
     function _getLiquidity(uint256 tokenId, PoolKey memory /*poolKey*/, int24 /*tickLower*/, int24 /*tickUpper*/)
@@ -104,6 +107,16 @@ contract MockUniswapPosm {
         //(BalanceDelta liquidityDelta,) =
         //    _modifyLiquidity(info, poolKey, liquidity.toInt256(), bytes32(tokenId), hookData);
         //liquidityDelta.validateMaxIn(amount0Max, amount1Max);
+    }
+
+    function _increase(
+        uint256 tokenId,
+        uint256 liquidity,
+        uint128 /*amount0Max*/,
+        uint128 /*amount1Max*/,
+        bytes calldata /*hookData*/
+    ) private {
+        _liquidities[tokenId] += liquidity;
     }
 
     function balanceOf(address owner) public view returns (uint256) {

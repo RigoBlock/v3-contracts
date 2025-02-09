@@ -174,6 +174,10 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       // TODO: we can record event
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      expect(await univ4Posm.nextTokenId()).to.be.eq(2)
+      expect(await univ4Posm.balanceOf(pool.address)).to.be.eq(1)
+      expect(await univ4Posm.ownerOf(expectedTokenId)).to.be.eq(pool.address)
+      expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(10001 + 6000000)
     })
 
     it.skip('should remove liquidity', async () => {
