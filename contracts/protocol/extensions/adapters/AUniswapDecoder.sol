@@ -278,8 +278,8 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, owner);
                 params.tokenIds = _addUniqueTokenId(params.tokenIds, uniV4Posm().nextTokenId(), true);
                 return params;
-            //} else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
-            //    revert UnsupportedAction(action);
+            } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
+                revert UnsupportedAction(action);
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId,,,) = actionParams.decodeBurnParams();

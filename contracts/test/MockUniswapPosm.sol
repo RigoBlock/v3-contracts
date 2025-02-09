@@ -15,6 +15,9 @@ contract MockUniswapPosm {
 
     uint256 public nextTokenId = 1;
 
+    // a mock method to store and retrieve a position's liquidity without having to use PoolManager
+    mapping(uint256 tokenId => uint256 liquidity) _liquidities;
+
     mapping(uint256 => address) internal _ownerOf;
     mapping(address => uint256) internal _balanceOf;
 
@@ -52,19 +55,17 @@ contract MockUniswapPosm {
     }
 
     function getPositionLiquidity(uint256 tokenId) external view returns (uint128 liquidity) {
-        (PoolKey memory poolKey, PositionInfo info) = getPoolAndPositionInfo(tokenId);
-        liquidity = _getLiquidity(tokenId, poolKey, info.tickLower(), info.tickUpper());
+        //(PoolKey memory poolKey, PositionInfo info) = getPoolAndPositionInfo(tokenId);
+        //liquidity = _getLiquidity(tokenId, poolKey, info.tickLower(), info.tickUpper());
+        return uint128(_liquidities[tokenId]);
     }
 
-    function _getLiquidity(uint256 tokenId, PoolKey memory /*poolKey*/, int24 tickLower, int24 tickUpper)
+    function _getLiquidity(uint256 tokenId, PoolKey memory /*poolKey*/, int24 /*tickLower*/, int24 /*tickUpper*/)
         internal
         view
-        returns (uint128 liquidity)
+        returns (uint128)
     {
-        bytes32 positionId = Position.calculatePositionKey(address(this), tickLower, tickUpper, bytes32(tokenId));
-        // TODO: should return based on positionId
-        assert(positionId != keccak256(abi.encode(1)));
-        liquidity = 0;
+        //bytes32 positionId = Position.calculatePositionKey(address(this), tickLower, tickUpper, bytes32(tokenId));
     }
 
     // TODO: we use memory, but prev. used calldata, check if ok. Alt, we could pass calldata params and decode, use this as internal
@@ -73,7 +74,7 @@ contract MockUniswapPosm {
         PoolKey memory poolKey,
         int24 tickLower,
         int24 tickUpper,
-        uint256 /*liquidity*/,
+        uint256 liquidity,
         uint128 /*amount0Max*/,
         uint128 /*amount1Max*/,
         address owner,
@@ -83,6 +84,9 @@ contract MockUniswapPosm {
         uint256 tokenId = nextTokenId++;
         _balanceOf[owner]++;
         _ownerOf[tokenId] = owner;
+
+        // mock to retrieve liquidity by position
+        _liquidities[tokenId] = liquidity;
 
         // Initialize the position info
         PositionInfo info = PositionInfoLibrary.initialize(poolKey, tickLower, tickUpper);

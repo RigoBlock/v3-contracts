@@ -33,7 +33,8 @@ import {IEOracle} from "./interfaces/IEOracle.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";
 
 interface IERC721 {
-    function ownerOf(uint256 id) external view returns (address owner);
+    function ownerOf(uint256 id) external view returns (address);
+    function balanceOf(address owner) external view returns (uint256);
 }
 
 interface IUniswapRouter {
@@ -198,11 +199,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    //based on tokens we need to settle, take, we can decide to setApproval or require token price feed
-    //(set approval for tokenIn, require price feed for tokenOut, push tokenOut to tracked tokens)
-    //potential abuse: token0 amount is null for a non-tracked token, therefore we need to make sure both
-    //tokens have a price feed, unless they are already active (which they should be?)
-
     /// @inheritdoc IAUniswapRouter
     function uniV4Posm() public view override(IAUniswapRouter, AUniswapDecoder) returns (IPositionManager) {
         return _positionManager;
@@ -259,6 +255,8 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
+    error Balance(uint256 amount);
+
     function _processTokenIds(int256[] memory tokenIds) private {
         // do not load values unless we are writing to storage
         if (tokenIds.length > 0) {
@@ -276,16 +274,21 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                     // invert sign. Negative value is flag for increase liquidity or burn
                     uint256 tokenId = uint256(-tokenIds[i]);
 
-                    if (uniV4Posm().getPositionLiquidity(tokenId) > 0) {
+                    //if (uniV4Posm().getPositionLiquidity(tokenId) > 0) {
+                    //if (IERC721(address(uniV4Posm())).balanceOf(address(this)) > 0) {
+                    uint256 balanc = IERC721(address(uniV4Posm())).balanceOf(address(this));
+                    //require(balanc == 501, Balance(balanc));
+                    if (balanc > 0) {
                         // we do not allow delegating liquidity actions on behalf of pool
-                        assert(IERC721(address(uniV4Posm())).ownerOf(tokenId) == address(this));
+                        //assert(IERC721(address(uniV4Posm())).ownerOf(tokenId) == address(this));
                         continue;
                     } else {
+                        revert Balance(tokenIds.length);
                         // if liquidity is null, we are burning
                         // TODO: should we implement as a library instead?
-                        idsSlot.positions[tokenId] = idsSlot.tokenIds[idsSlot.tokenIds.length];
-                        idsSlot.tokenIds.pop();
-                        continue;
+                        //idsSlot.positions[tokenId] = idsSlot.tokenIds[idsSlot.tokenIds.length];
+                        //idsSlot.tokenIds.pop();
+                        //continue;
                     }
                 }
             }

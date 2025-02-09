@@ -134,5 +134,51 @@ describe("AUniswapRouter", async () => {
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       ).to.be.revertedWith('RecipientIsNotSmartPool()')
     })
+
+    it('should not be able to increase liquidity of non-owned position', async () => {
+      const { pool, univ3Npm, univ4Posm } = await setupTests()
+      // TODO: verify we are using the same WETH9 for Posm initialization
+      const wethAddress = await univ3Npm.WETH9()
+      PAIR.poolKey.currency1 = wethAddress
+      const expectedTokenId = await univ4Posm.nextTokenId()
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, '6000000', MAX_UINT128, MAX_UINT128, '0x'])
+      // tokens are taken from the pool, so value is always 0
+      const value = ethers.utils.parseEther("0")
+      // the mock posm does not move funds from the pool, so we can send before pool has balance
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // adding liquidity to a non-owned position reverts without error, just a simple assertion is implemented
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      ).to.be.revertedWith('pippo')
+    })
+
+    it('should increase liquidity', async () => {
+      const { pool, univ3Npm, univ4Posm } = await setupTests()
+      // TODO: verify we are using the same WETH9 for Posm initialization
+      const wethAddress = await univ3Npm.WETH9()
+      PAIR.poolKey.currency1 = wethAddress
+      const expectedTokenId = await univ4Posm.nextTokenId()
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower,
+        PAIR.tickUpper,
+        1, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, '6000000', MAX_UINT128, MAX_UINT128, '0x'])
+      // tokens are taken from the pool, so value is always 0
+      const value = ethers.utils.parseEther("0")
+      // the mock posm does not move funds from the pool, so we can send before pool has balance
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // TODO: we can record event
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+    })
   })
 });
