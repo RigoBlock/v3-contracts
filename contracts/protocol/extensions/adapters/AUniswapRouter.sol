@@ -20,13 +20,13 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
-import {SlotDerivation} from "@openzeppelin/contracts/utils/SlotDerivation.sol";
-import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
+import {TransientSlot} from "../../libraries/TransientSlot.sol";
 import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
 import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
@@ -57,6 +57,12 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
 
+    /// @notice Thrown when executing commands with an expired deadline
+    error TransactionDeadlinePassed();
+    error PositionOwner();
+    error RecipientIsNotSmartPool();
+    error ReentrantCall();
+    error NestedSubPlan();
     error UniV4PositionsLimitExceeded();
 
     string public constant override requiredVersion = "4.0.0";
@@ -82,19 +88,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     address private immutable _uniswapRouter;
     IPositionManager private immutable _positionManager;
 
-    /// @notice Thrown when executing commands with an expired deadline
-    error TransactionDeadlinePassed();
-
-    error RecipientIsNotSmartPool();
-    error ApprovalFailed(address target);
-    error TargetIsNotContract();
-    error ReentrantCall();
-    error NestedSubPlan();
-
     // TODO: should verify that it is ok to make direct calls, as they could potentially modify state of the adapter
     // either we make sure that a constructor value prevents setting, or we require delegatecall, which would prevent
     // view methods from msg.sender other than the pool operator.
-    constructor(address _universalRouter, address _v4Posm) {
+    constructor(address _universalRouter, address _v4Posm, address weth) AUniswapDecoder(weth) {
         _uniswapRouter = _universalRouter;
         _positionManager = IPositionManager(_v4Posm);
     }
@@ -255,6 +252,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
+    // TODO: remove when done debugging
     error Balance(uint256 amount);
 
     function _processTokenIds(int256[] memory tokenIds) private {
@@ -274,16 +272,16 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                     // invert sign. Negative value is flag for increase liquidity or burn
                     uint256 tokenId = uint256(-tokenIds[i]);
 
-                    //if (uniV4Posm().getPositionLiquidity(tokenId) > 0) {
-                    //if (IERC721(address(uniV4Posm())).balanceOf(address(this)) > 0) {
-                    uint256 balanc = IERC721(address(uniV4Posm())).balanceOf(address(this));
-                    //require(balanc == 501, Balance(balanc));
-                    if (balanc > 0) {
+                    // TODO: not sure why returned liquidity is 0?
+                    if (uniV4Posm().getPositionLiquidity(tokenId) > 0) {
+                        //if (IERC721(address(uniV4Posm())).balanceOf(address(this)) > 0) {
                         // we do not allow delegating liquidity actions on behalf of pool
-                        //assert(IERC721(address(uniV4Posm())).ownerOf(tokenId) == address(this));
+                        require(
+                            IERC721(address(uniV4Posm())).ownerOf(tokenId) == address(this),
+                            PositionOwner()
+                        );
                         continue;
                     } else {
-                        revert Balance(tokenIds.length);
                         // if liquidity is null, we are burning
                         // TODO: should we implement as a library instead?
                         //idsSlot.positions[tokenId] = idsSlot.tokenIds[idsSlot.tokenIds.length];

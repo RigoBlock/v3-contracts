@@ -25,7 +25,6 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {NativeWrapper} from "@uniswap/v4-periphery/src/base/NativeWrapper.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 // TODO: verify git submodule updated, as Actions library has changed
@@ -51,6 +50,11 @@ abstract contract AUniswapDecoder {
     error LiquidityMintHookError(address hook);
 
     address internal constant ZERO_ADDRESS = address(0);
+    address private immutable _wrappedNative;
+
+    constructor(address wrappedNative) {
+        _wrappedNative = wrappedNative;
+    }
 
     function uniV4Posm() public view virtual returns (IPositionManager);
 
@@ -145,10 +149,7 @@ abstract contract AUniswapDecoder {
                     } else if (command == Commands.WRAP_ETH) {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
-                        params.tokensOut = _addUnique(
-                            params.tokensOut,
-                            address(NativeWrapper(payable(address(uniV4Posm()))).WETH9())
-                        );
+                        params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
                         params.value += amount;
                         return params;
                     } else if (command == Commands.UNWRAP_WETH) {
@@ -326,7 +327,7 @@ abstract contract AUniswapDecoder {
                 return params;
             } else if (action == Actions.WRAP) {
                 uint256 amount = actionParams.decodeUint256();
-                params.tokensOut = _addUnique(params.tokensOut, address(NativeWrapper(payable(address(uniV4Posm()))).WETH9()));
+                params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
                 params.value += amount;
                 return params;
             } else if (action == Actions.UNWRAP) {

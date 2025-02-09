@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
 import {IRigoblockV3PoolActions} from "../../interfaces/pool/IRigoblockV3PoolActions.sol";
+import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 

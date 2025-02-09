@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.24;
 
-import {SlotDerivation} from "@openzeppelin/contracts/utils/SlotDerivation.sol";
-import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
+import {SlotDerivation} from "../libraries/SlotDerivation.sol";
+import {TransientSlot} from "../libraries/TransientSlot.sol";
 
 type Int256 is bytes32;
 

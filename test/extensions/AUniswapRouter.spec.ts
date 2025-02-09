@@ -42,10 +42,12 @@ describe("AUniswapRouter", async () => {
     const Univ4PosmInstance = await deployments.get("MockUniswapPosm");
     const Univ4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
     const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter");
-    const uniRouter = await MockUniUniversalRouter.deploy(Univ3NpmInstance.address, Univ4PosmInstance.address);
-    const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter");
-    // TODO: not sure we need univ4Posm as input, as can be retrieved from universalrouter?
-    const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address);
+    const uniRouter = await MockUniUniversalRouter.deploy(Univ3NpmInstance.address, Univ4PosmInstance.address)
+    const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter")
+    // TODO: verify we are using the same WETH9 for Posm initialization
+    const univ3Npm = Univ3Npm.attach(Univ3NpmInstance.address)
+    const wethAddress = await univ3Npm.WETH9()
+    const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address, wethAddress)
     await authority.setAdapter(aUniswapRouter.address, true)
     // "3593564c": "execute(bytes calldata, bytes[] calldata, uint256)"
     // "24856bc3": "execute(bytes calldata, bytes[] calldata)"
@@ -59,8 +61,9 @@ describe("AUniswapRouter", async () => {
       pool: Pool.attach(newPoolAddress),
       newPoolAddress,
       poolId,
-      univ3Npm: Univ3Npm.attach(Univ3NpmInstance.address),
+      univ3Npm,
       univ4Posm: Univ4Posm.attach(Univ4PosmInstance.address),
+      wethAddress,
       aUniswapRouter
     }
   });
@@ -68,9 +71,7 @@ describe("AUniswapRouter", async () => {
   // TODO: verify if should avoid direct calls to aUniswapRouter, or there are no side-effects (has write access to storage)
   describe("modifyLiquidities", async () => {
     it('should route to uniV4Posm', async () => {
-      const { pool, univ3Npm, univ4Posm } = await setupTests()
-      // TODO: verify we are using the same WETH9 for Posm initialization
-      const wethAddress = await univ3Npm.WETH9()
+      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION, [
@@ -110,9 +111,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should revert if position recipient is not pool', async () => {
-      const { pool, univ3Npm, univ4Posm } = await setupTests()
-      // TODO: verify we are using the same WETH9 for Posm initialization
-      const wethAddress = await univ3Npm.WETH9()
+      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION, [
@@ -136,9 +135,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should not be able to increase liquidity of non-owned position', async () => {
-      const { pool, univ3Npm, univ4Posm } = await setupTests()
-      // TODO: verify we are using the same WETH9 for Posm initialization
-      const wethAddress = await univ3Npm.WETH9()
+      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       const expectedTokenId = await univ4Posm.nextTokenId()
       let v4Planner: V4Planner = new V4Planner()
@@ -151,13 +148,36 @@ describe("AUniswapRouter", async () => {
       // adding liquidity to a non-owned position reverts without error, just a simple assertion is implemented
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('pippo')
+      ).to.be.revertedWith('PositionOwner()')
     })
 
     it('should increase liquidity', async () => {
-      const { pool, univ3Npm, univ4Posm } = await setupTests()
-      // TODO: verify we are using the same WETH9 for Posm initialization
-      const wethAddress = await univ3Npm.WETH9()
+      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      const expectedTokenId = await univ4Posm.nextTokenId()
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower,
+        PAIR.tickUpper,
+        10001, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, '6000000', MAX_UINT128, MAX_UINT128, '0x'])
+      // tokens are taken from the pool, so value is always 0
+      const value = ethers.utils.parseEther("0")
+      // the mock posm does not move funds from the pool, so we can send before pool has balance
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // TODO: we can record event
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+    })
+
+    it.skip('should remove liquidity', async () => {
+      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       const expectedTokenId = await univ4Posm.nextTokenId()
       let v4Planner: V4Planner = new V4Planner()

@@ -19,7 +19,6 @@
 
 pragma solidity 0.8.28;
 
-import {INonfungiblePositionManager} from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
@@ -27,13 +26,14 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
-import {NativeWrapper} from "@uniswap/v4-periphery/src/base/NativeWrapper.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
+import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {IEOracle} from "../../protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ApplicationsLib} from "../../protocol/libraries/ApplicationsLib.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
+import {INonfungiblePositionManager} from "../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 import {Applications, TokenIdsSlot} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {Int256, TransientBalance} from "../types/TransientBalance.sol";
@@ -151,7 +151,7 @@ contract EApps is IEApps {
 
     /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)
     function _getUniV3PmBalances() private returns (AppTokenBalance[] memory balances) {
-        uint256 numPositions = _uniV3NPM.balanceOf(address(this));
+        uint256 numPositions = IERC721(address(_uniV3NPM)).balanceOf(address(this));
         // TODO: we could push active app here if positive balance
 
         // only get first 20 positions as no pool has more than that and we can save gas plus prevent DOS
@@ -159,21 +159,9 @@ contract EApps is IEApps {
         balances = new AppTokenBalance[](maxLength);
 
         for (uint256 i = 0; i < maxLength / 2; i++) {
-            uint256 tokenId = _uniV3NPM.tokenOfOwnerByIndex(address(this), i);
-            (
-                ,
-                ,
-                address token0,
-                address token1,
-                ,
-                int24 tickLower,
-                int24 tickUpper,
-                uint128 liquidity,
-                ,
-                ,
-                ,
-
-            ) = _uniV3NPM.positions(tokenId);
+            uint256 tokenId = IERC721(address(_uniV3NPM)).tokenOfOwnerByIndex(address(this), i);
+            (,, address token0, address token1, , int24 tickLower, int24 tickUpper, uint128 liquidity, , , ,) =
+                _uniV3NPM.positions(tokenId);
 
             // TODO: check if we should try and convert only with a valid price. Also check if we really resort to v4 lib, or if we added to lib/univ3
             // we resort to v4 tests library, as PositionValue.sol and FullMath in v3 LiquidityAmounts require solc <0.8

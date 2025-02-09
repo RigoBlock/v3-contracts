@@ -1,5 +1,8 @@
+forget-std/=lib/forget-std
 solmate/=lib/solmate
 permit2/=lib/permit2
 @uniswap/universal-router/=lib/universal-router/
+@uniswap/v3-periphery/=lib/universal-router/lib/v3-periphery/
 @uniswap/v4-periphery/=lib/universal-router/lib/v4-periphery/
 @uniswap/v4-core/=lib/universal-router/lib/v4-periphery/lib/v4-core
+@uniswap/swap-router-contracts/=node_modules/@uniswap/swap-router-contracts/
