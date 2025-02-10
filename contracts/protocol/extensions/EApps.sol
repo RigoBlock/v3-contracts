@@ -21,7 +21,6 @@ pragma solidity 0.8.28;
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
-import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -31,6 +30,7 @@ import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libra
 import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {IEOracle} from "../../protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ApplicationsLib} from "../../protocol/libraries/ApplicationsLib.sol";
+import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {INonfungiblePositionManager} from "../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
@@ -38,13 +38,6 @@ import {Applications, TokenIdsSlot} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {Int256, TransientBalance} from "../types/TransientBalance.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
-
-// TODO: check substitute this, which comes from uni c3-core
-/// @title FixedPoint128
-/// @notice A library for handling binary fixed point numbers, see https://en.wikipedia.org/wiki/Q_(number_format)
-library FixedPoint128 {
-    uint256 internal constant Q128 = 0x100000000000000000000000000000000;
-}
 
 /// @notice A universal aggregator for external contracts positions.
 /// @dev External positions are consolidating into a single view contract. As more apps are connected, can be split into multiple mixing.
@@ -61,10 +54,6 @@ contract EApps is IEApps {
     IStaking private immutable _grgStakingProxy;
     INonfungiblePositionManager private immutable _uniV3NPM;
     IPositionManager private immutable _uniV4Posm;
-
-    // persistent storage slots, used to read from proxy storage without having to update implementation
-    // bytes32(uint256(keccak256("Eapps.uniV4.tokenIds")) - 1)
-    bytes32 private constant _UNIV4_TOKEN_IDS_SLOT = 0x27616b43efe6cac399303df84ec58b87084277217488937eeb864ace11507167;
 
     // TODO: define immutable storage slot
     bytes32 private immutable _TRANSIENT_TICK_SLOT;
@@ -164,7 +153,7 @@ contract EApps is IEApps {
                 _uniV3NPM.positions(tokenId);
 
             // TODO: check if we should try and convert only with a valid price. Also check if we really resort to v4 lib, or if we added to lib/univ3
-            // we resort to v4 tests library, as PositionValue.sol and FullMath in v3 LiquidityAmounts require solc <0.8
+            // we resort to v4 LiquidityAmounts library, as PositionValue and FullMath in v3's LiquidityAmounts lib require solc <0.8
             // for simplicity, as uni v3 liquidity is remove-only, we exclude unclaimed fees, which incentivizes migrating liquidity to v4.
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
                 _findCrossPrice(token0, token1),
@@ -181,52 +170,22 @@ contract EApps is IEApps {
         }
     }
 
-    // TODO: we reuse this one in uniswap adapter, should import from library
-    function _uniV4TokenIdsSlot() internal pure returns (TokenIdsSlot storage s) {
-        assembly {
-            s.slot := _UNIV4_TOKEN_IDS_SLOT 
-        }
-    }
-
-    // TODO: verify if there are better ways to calculate position value
-    /// @dev Assumes a hook does not influence liquidity.
-    /// @dev Value of fees can be inflated by pool operator https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
+    /// @dev Assumes a hook does not influence liquidity. This is true as long as it cannot access after remove liquidity deltas.
     function _getUniV4PmBalances() private returns (AppTokenBalance[] memory balances) {
         // access stored position ids
-        uint256[] memory tokenIds = _uniV4TokenIdsSlot().tokenIds;
+        uint256[] memory tokenIds = StorageLib.uniV4TokenIdsSlot().tokenIds;
         balances = new AppTokenBalance[](tokenIds.length);
 
         // a maximum of 255 positons can be created, so this loop will not break memory or block limits
         for (uint256 i = 0; i < tokenIds.length; i++) {
             (PoolKey memory poolKey, PositionInfo info) = _uniV4Posm.getPoolAndPositionInfo(tokenIds[i]);
 
-            (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128) = _uniV4Posm
-                .poolManager()
-                .getPositionInfo(poolKey.toId(), address(this), info.tickLower(), info.tickUpper(), bytes32(tokenIds[i]));
-
+            // we accept an evaluation error by excluding unclaimed fees, which can be inflated arbitrarily
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
                 _findCrossPrice(Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1)),
                 TickMath.getSqrtPriceAtTick(info.tickLower()),
                 TickMath.getSqrtPriceAtTick(info.tickUpper()),
-                liquidity
-            );
-
-            // TODO: verify if we are willing to accept nav error by not including unclaimed fees, which are going to be relatively small
-            // because we will save a few storage reads
-            // notice: `getFeeGrowthInside` uses `getFeeGrowthGlobals`, which can be inflated by donating to the position
-            // https://github.com/Uniswap/v4-core/blob/a22414e4d7c0d0b0765827fe0a6c20dfd7f96291/src/libraries/StateLibrary.sol#L153
-            (uint256 poolFeeGrowthInside0X128, uint256 poolFeeGrowthInside1X128) = _uniV4Posm
-                .poolManager()
-                .getFeeGrowthInside(poolKey.toId(), info.tickLower(), info.tickUpper());
-            amount0 += FullMath.mulDiv(
-                poolFeeGrowthInside0X128 - feeGrowthInside0LastX128,
-                liquidity,
-                FixedPoint128.Q128
-            );
-            amount1 += FullMath.mulDiv(
-                poolFeeGrowthInside1X128 - feeGrowthInside1LastX128,
-                liquidity,
-                FixedPoint128.Q128
+                _uniV4Posm.getPositionLiquidity(tokenIds[i])
             );
 
             balances[i * 2].token = Currency.unwrap(poolKey.currency0);

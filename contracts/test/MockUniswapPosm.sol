@@ -49,6 +49,14 @@ contract MockUniswapPosm {
                 (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
                     params[actionIndex].decodeModifyLiquidityParams();
                 _increase(tokenId, liquidity, amount0Max, amount1Max, hookData);
+            } else if (action == Actions.DECREASE_LIQUIDITY) {
+                (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
+                    params[actionIndex].decodeModifyLiquidityParams();
+                _decrease(tokenId, liquidity, amount0Max, amount1Max, hookData);
+            } else if (action == Actions.BURN_POSITION) {
+                (uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData) =
+                    params[actionIndex].decodeBurnParams();
+                _burn(tokenId, amount0Min, amount1Min, hookData);
             }
         }
     }
@@ -72,6 +80,7 @@ contract MockUniswapPosm {
         //bytes32 positionId = Position.calculatePositionKey(address(this), tickLower, tickUpper, bytes32(tokenId));
     }
 
+    // TODO: maybe we could inherit solmate ERC721 to use correct mint/burn?
     // TODO: we use memory, but prev. used calldata, check if ok. Alt, we could pass calldata params and decode, use this as internal
     /// @notice A mock method for creating positions for testing nav calculations
     function mint(
@@ -117,6 +126,29 @@ contract MockUniswapPosm {
         bytes calldata /*hookData*/
     ) private {
         _liquidities[tokenId] += liquidity;
+    }
+
+    function _decrease(
+        uint256 tokenId,
+        uint256 liquidity,
+        uint128 /*amount0Max*/,
+        uint128 /*amount1Max*/,
+        bytes calldata /*hookData*/
+    ) private {
+        _liquidities[tokenId] -= liquidity;
+    }
+
+    function _burn(uint256 tokenId, uint128 /*amount0Min*/, uint128 /*amount1Min*/, bytes calldata /*hookData*/)
+        private
+    {
+        address owner = ownerOf(tokenId);
+        _balanceOf[owner]--;
+        _ownerOf[tokenId] = address(0);
+
+        // burn will prompt removing liquidity to 0 in Posm
+        // https://github.com/Uniswap/v4-periphery/blob/4d85e047e321d0c02134fec9044879c0cd00ea7d/src/PositionManager.sol#L237
+        _liquidities[tokenId] = 0;
+        positionInfo[tokenId] = PositionInfoLibrary.EMPTY_POSITION_INFO;
     }
 
     function balanceOf(address owner) public view returns (uint256) {

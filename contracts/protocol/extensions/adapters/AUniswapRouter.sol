@@ -26,6 +26,7 @@ import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
+import {StorageLib} from "../../libraries/StorageLib.sol";
 import {TransientSlot} from "../../libraries/TransientSlot.sol";
 import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
 import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
@@ -67,21 +68,14 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     string public constant override requiredVersion = "4.0.0";
 
-    // transient storage slots
+    // transient storage slots, only used by this contract
     // bytes32(uint256(keccak256("AUniswapRouter.lock")) - 1)
     bytes32 private constant _LOCK_SLOT = 0x1e2a0e74e761035cb113c1bf11b7fbac06ae91f3a03ce360dda726ba116c216f;
     // bytes32(uint256(keccak256("AUniswapRouter.reentrancy.depth")) - 1)
     bytes32 private constant _REENTRANCY_DEPTH_SLOT =
         0x3921e0fb5d7436d70b7041cccb0d0f543e6b643f41e09aa71450d5e1c5767376;
 
-    // TODO: verify import from common library as EApps uses the same slots
-    // persistent storage slots
-    bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
-    bytes32 private constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
-    // bytes32(uint256(keccak256("pool.proxy.uniV4.tokenIds")) - 1)
-    bytes32 private constant _UNIV4_TOKEN_IDS_SLOT = 0xd87266b00c1e82928c0b0200ad56e2ee648a35d4e9b273d2ac9533471e3b5d3c;
-
+    // TODO: can import?
     uint256 private constant NIL_VALUE = 0;
 
     // TODO: check store as inintiate instances
@@ -121,13 +115,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
     function _reentrancyDepthSlot() private pure returns (bytes32) {
         return _REENTRANCY_DEPTH_SLOT;
-    }
-
-    // TODO: same as in constants. Check if can move to library and use from there
-    function pool() private pure returns (Pool storage s) {
-        assembly {
-            s.slot := _POOL_INIT_SLOT
-        }
     }
 
     /// @inheritdoc IAUniswapRouter
@@ -206,33 +193,14 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         return _uniswapRouter;
     }
 
-    function uniV4TokenIds() internal pure returns (TokenIdsSlot storage s) {
-        assembly {
-            s.slot := _UNIV4_TOKEN_IDS_SLOT
-        }
-    }
-
-    function activeApplications() internal pure returns (ApplicationsSlot storage s) {
-        assembly {
-            s.slot := _APPLICATIONS_SLOT
-        }
-    }
-
-    // TODO: by using a shared library, we can avoid type errors
-    function activeTokensSet() internal pure returns (AddressSet storage s) {
-        assembly {
-            s.slot := _TOKEN_REGISTRY_SLOT
-        }
-    }
-
     /// @notice An implementation before v4 will be rejected here
     function _assertTokensOutHavePriceFeed(address[] memory tokensOut) private {
         // load active tokens from storage
-        AddressSet storage values = activeTokensSet();
+        AddressSet storage values = StorageLib.activeTokensSet();
 
         for (uint256 i = 0; i < tokensOut.length; i++) {
             // update storage with new token
-            values.addUnique(IEOracle(address(this)), tokensOut[i], pool().baseToken);
+            values.addUnique(IEOracle(address(this)), tokensOut[i], StorageLib.pool().baseToken);
         }
     }
 
@@ -257,7 +225,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         // do not load values unless we are writing to storage
         if (tokenIds.length > 0) {
             // update tokenIds in proxy persistent storage.
-            TokenIdsSlot storage idsSlot = uniV4TokenIds();
+            TokenIdsSlot storage idsSlot = StorageLib.uniV4TokenIdsSlot();
 
             for (uint256 i = 0; i < tokenIds.length; i++) {
                 // positive value is a sentinel for mint
@@ -280,8 +248,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                         continue;
                     } else {
                         // after we burned, liquidity must be nil, so it is safe to remove position from tracked
-                        // TODO: should we implement as a library instead?
-                        idsSlot.positions[tokenId] = idsSlot.tokenIds[idsSlot.tokenIds.length];
+                        idsSlot.positions[tokenId] = 0;
                         idsSlot.tokenIds.pop();
                         continue;
                     }
@@ -289,22 +256,26 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             }
 
             // activate/remove application in proxy persistent storage.
-            uint256 appsBitmap = activeApplications().packedApplications;
+            uint256 appsBitmap = StorageLib.activeApplications().packedApplications;
             uint256 appFlag = uint256(Applications.UNIV4_LIQUIDITY);
             bool isActiveApp = ApplicationsLib.isActiveApplication(appsBitmap, appFlag);
-            if (uniV4TokenIds().tokenIds.length > 0) {
+
+            // TODO: we are reading from storage again, but also asserting tokenIds length even in case of burn?
+            // TODO: we should probably update the application when we are either pushing or popping a tokenId?
+            if (StorageLib.uniV4TokenIdsSlot().tokenIds.length > 0) {
                 require(tokenIds.length < 255, UniV4PositionsLimitExceeded());
 
                 // TODO: pass correct Enum
                 // activate uniV4 liquidity application
-                if (!isActiveApp) {
-                    activeApplications().storeApplication(appFlag);
-                }
+                //if (!isActiveApp) {
+                    // TODO; this one reverts with negative index
+                //    StorageLib.activeApplications().storeApplication(appFlag);
+                //}
             } else {
                 // remove uniV4 liquidity application
-                if (isActiveApp) {
-                    activeApplications().removeApplication(appFlag);
-                }
+                //if (isActiveApp) {
+                //    StorageLib.activeApplications().removeApplication(appFlag);
+                //}
             }
         }
     }

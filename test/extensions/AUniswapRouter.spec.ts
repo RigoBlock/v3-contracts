@@ -4,6 +4,7 @@ import { AddressZero } from "@ethersproject/constants";
 import { Contract, BigNumber } from "ethers";
 import { MAX_UINT128, MAX_UINT160 } from "../shared/constants";
 import { Actions, V4Planner } from '../shared/v4Planner'
+import { parse } from "path";
 
 describe("AUniswapRouter", async () => {
   const [ user1, user2 ] = waffle.provider.getWallets()
@@ -180,8 +181,8 @@ describe("AUniswapRouter", async () => {
       expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(10001 + 6000000)
     })
 
-    it.skip('should remove liquidity', async () => {
-      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
+    it('should remove liquidity', async () => {
+      const { pool, univ4Posm, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       const expectedTokenId = await univ4Posm.nextTokenId()
       let v4Planner: V4Planner = new V4Planner()
@@ -189,7 +190,7 @@ describe("AUniswapRouter", async () => {
         PAIR.poolKey,
         PAIR.tickLower,
         PAIR.tickUpper,
-        1, // liquidity
+        10001, // liquidity
         MAX_UINT128,
         MAX_UINT128,
         pool.address,
@@ -203,6 +204,74 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       // TODO: we can record event
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      // clear state for actions
+      v4Planner = new V4Planner()
+      v4Planner.addAction(Actions.DECREASE_LIQUIDITY, [expectedTokenId, '1200000', MAX_UINT128, MAX_UINT128, '0x'])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(10001 + 6000000 - 1200000)
+      // TODO: should verify that tokenIds storage is unchanged
+    })
+
+    it('should burn owned position', async () => {
+      const { pool, univ4Posm, wethAddress } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      const expectedTokenId = await univ4Posm.nextTokenId()
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower,
+        PAIR.tickUpper,
+        10001, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, '6000000', MAX_UINT128, MAX_UINT128, '0x'])
+      // tokens are taken from the pool, so value is always 0
+      const value = ethers.utils.parseEther("0")
+      // the mock posm does not move funds from the pool, so we can send before pool has balance
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      // clear state for actions
+      v4Planner = new V4Planner()
+      // burn will remove any position liquidity in Posm
+      v4Planner.addAction(Actions.BURN_POSITION, [expectedTokenId, MAX_UINT128, MAX_UINT128, '0x'])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      //expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(0)
+      // TODO: should verify that tokenIds storage is modified
+    })
+
+    it('position should be included in nav calculations', async () => {
+      const { pool, univ4Posm, wethAddress } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      const expectedTokenId = await univ4Posm.nextTokenId()
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower,
+        PAIR.tickUpper,
+        10001, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, '6000000', MAX_UINT128, MAX_UINT128, '0x'])
+      // tokens are taken from the pool, so value is always 0
+      const value = ethers.utils.parseEther("0")
+      // the mock posm does not move funds from the pool, so we can send before pool has balance
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      const etherAmount = ethers.utils.parseEther("12")
+      await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      const unitaryValue = (await pool.getPoolTokens()).unitaryValue
+      await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+      // TODO: verify why unitary value is not increased by lp tokens value (could also be calc amounts cannot be converted?)
+      //expect((await pool.getPoolTokens()).unitaryValue).to.be.gt(unitaryValue)
     })
   })
 });
