@@ -144,10 +144,10 @@ contract EApps is IEApps {
         // TODO: we could push active app here if positive balance
 
         // only get first 20 positions as no pool has more than that and we can save gas plus prevent DOS
-        uint256 maxLength = numPositions < 20 ? numPositions * 2 : 40;
-        balances = new AppTokenBalance[](maxLength);
+        uint256 maxLength = numPositions < 20 ? numPositions : 20;
+        balances = new AppTokenBalance[](maxLength * 2);
 
-        for (uint256 i = 0; i < maxLength / 2; i++) {
+        for (uint256 i = 0; i < maxLength; i++) {
             uint256 tokenId = IERC721(address(_uniV3NPM)).tokenOfOwnerByIndex(address(this), i);
             (,, address token0, address token1, , int24 tickLower, int24 tickUpper, uint128 liquidity, , , ,) =
                 _uniV3NPM.positions(tokenId);
@@ -174,10 +174,11 @@ contract EApps is IEApps {
     function _getUniV4PmBalances() private returns (AppTokenBalance[] memory balances) {
         // access stored position ids
         uint256[] memory tokenIds = StorageLib.uniV4TokenIdsSlot().tokenIds;
-        balances = new AppTokenBalance[](tokenIds.length);
+        uint256 length = tokenIds.length;
+        balances = new AppTokenBalance[](length * 2);
 
         // a maximum of 255 positons can be created, so this loop will not break memory or block limits
-        for (uint256 i = 0; i < tokenIds.length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             (PoolKey memory poolKey, PositionInfo info) = _uniV4Posm.getPoolAndPositionInfo(tokenIds[i]);
 
             // we accept an evaluation error by excluding unclaimed fees, which can be inflated arbitrarily
@@ -188,6 +189,7 @@ contract EApps is IEApps {
                 _uniV4Posm.getPositionLiquidity(tokenIds[i])
             );
 
+            // TODO: it seems we are not returning any balances here?
             balances[i * 2].token = Currency.unwrap(poolKey.currency0);
             balances[i * 2].amount = int256(amount0);
             balances[i * 2 + 1].token = Currency.unwrap(poolKey.currency1);

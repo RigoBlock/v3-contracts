@@ -231,8 +231,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
                 // positive value is a sentinel for mint
                 if (tokenIds[i] > 0) {
                     // mint reverts if tokenId exists, so we can be sure it is unique
+                    uint256 storedLength = idsSlot.tokenIds.length;
+                    require(storedLength < 255, UniV4PositionsLimitExceeded());
                     idsSlot.tokenIds.push(uint256(tokenIds[i]));
-                    idsSlot.positions[uint256(tokenIds[i])] = idsSlot.tokenIds.length;
+                    idsSlot.positions[uint256(tokenIds[i])] = storedLength;
                     continue;
                 } else {
                     // invert sign. Negative value is flag for increase liquidity or burn
@@ -263,19 +265,15 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             // TODO: we are reading from storage again, but also asserting tokenIds length even in case of burn?
             // TODO: we should probably update the application when we are either pushing or popping a tokenId?
             if (StorageLib.uniV4TokenIdsSlot().tokenIds.length > 0) {
-                require(tokenIds.length < 255, UniV4PositionsLimitExceeded());
-
-                // TODO: pass correct Enum
                 // activate uniV4 liquidity application
-                //if (!isActiveApp) {
-                    // TODO; this one reverts with negative index
-                //    StorageLib.activeApplications().storeApplication(appFlag);
-                //}
+                if (!isActiveApp) {
+                    StorageLib.activeApplications().storeApplication(appFlag);
+                }
             } else {
                 // remove uniV4 liquidity application
-                //if (isActiveApp) {
-                //    StorageLib.activeApplications().removeApplication(appFlag);
-                //}
+                if (isActiveApp) {
+                    StorageLib.activeApplications().removeApplication(appFlag);
+                }
             }
         }
     }

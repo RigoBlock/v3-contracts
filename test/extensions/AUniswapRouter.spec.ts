@@ -107,8 +107,7 @@ describe("AUniswapRouter", async () => {
       await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
       activeTokens = (await pool.getActiveTokens()).activeTokens
       // token is not removed, as it is returned by the posm
-      // TODO: verify why here token is removed from active tokens, as it should be returned by the posm?
-      expect(activeTokens.length).to.be.eq(0)
+      expect(activeTokens.length).to.be.eq(1)
     })
 
     it('should revert if position recipient is not pool', async () => {
@@ -270,7 +269,8 @@ describe("AUniswapRouter", async () => {
       const unitaryValue = (await pool.getPoolTokens()).unitaryValue
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(1)
-      // TODO: verify why unitary value is not increased by lp tokens value (could also be calc amounts cannot be converted?)
+      // TODO: verify why unitary value is not increased by lp tokens value
+      // TODO: liquidity amounts are (1, 0), probably can't find price feed and returns 0 in base token, 1 in other token
       //expect((await pool.getPoolTokens()).unitaryValue).to.be.gt(unitaryValue)
     })
   })
