@@ -262,16 +262,15 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             uint256 appFlag = uint256(Applications.UNIV4_LIQUIDITY);
             bool isActiveApp = ApplicationsLib.isActiveApplication(appsBitmap, appFlag);
 
-            // TODO: we are reading from storage again, but also asserting tokenIds length even in case of burn?
-            // TODO: we should probably update the application when we are either pushing or popping a tokenId?
+            // we update application status after all tokenIds have been processed
             if (StorageLib.uniV4TokenIdsSlot().tokenIds.length > 0) {
-                // activate uniV4 liquidity application
                 if (!isActiveApp) {
+                    // activate uniV4 liquidity application
                     StorageLib.activeApplications().storeApplication(appFlag);
                 }
             } else {
-                // remove uniV4 liquidity application
                 if (isActiveApp) {
+                    // remove uniV4 liquidity application
                     StorageLib.activeApplications().removeApplication(appFlag);
                 }
             }

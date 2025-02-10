@@ -5,6 +5,7 @@ import { Contract, BigNumber } from "ethers";
 import { MAX_UINT128, MAX_UINT160 } from "../shared/constants";
 import { Actions, V4Planner } from '../shared/v4Planner'
 import { parse } from "path";
+import { parseEther } from "ethers/lib/utils";
 
 describe("AUniswapRouter", async () => {
   const [ user1, user2 ] = waffle.provider.getWallets()
@@ -257,7 +258,9 @@ describe("AUniswapRouter", async () => {
         pool.address,
         '0x', // hookData
       ])
-      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, '6000000', MAX_UINT128, MAX_UINT128, '0x'])
+      // TODO: verify if it is correct that small numbers of liquidity are not affecting nav calculations
+      // we must add enough liquidity, otherwise the position will be too small to affect nav calculations
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, ethers.utils.parseEther("2"), MAX_UINT128, MAX_UINT128, '0x'])
       // tokens are taken from the pool, so value is always 0
       const value = ethers.utils.parseEther("0")
       // the mock posm does not move funds from the pool, so we can send before pool has balance
@@ -269,9 +272,10 @@ describe("AUniswapRouter", async () => {
       const unitaryValue = (await pool.getPoolTokens()).unitaryValue
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(1)
-      // TODO: verify why unitary value is not increased by lp tokens value
-      // TODO: liquidity amounts are (1, 0), probably can't find price feed and returns 0 in base token, 1 in other token
-      //expect((await pool.getPoolTokens()).unitaryValue).to.be.gt(unitaryValue)
+      // technically, this does not happen in real world, where pool tokens are used and should not inflate it. But we return mock values from the test posm.
+      const poolPrice = (await pool.getPoolTokens()).unitaryValue
+      expect(poolPrice).to.be.gt(unitaryValue)
+      expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000051476461117"))
     })
   })
 });

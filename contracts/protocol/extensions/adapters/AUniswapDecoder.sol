@@ -27,16 +27,12 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
-// TODO: verify git submodule updated, as Actions library has changed
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
+import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from '@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol';
 import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
-
-interface IHook {
-    function getHookPermissions() external pure returns (Hooks.Permissions memory);
-}
 
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
@@ -265,10 +261,14 @@ abstract contract AUniswapDecoder {
                 // PoolKey calldata poolKey, int24 tickLower, int24 tickUpper, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, address owner, bytes calldata hookData
                 (PoolKey calldata poolKey,,,,,, address owner,) = actionParams.decodeMintParams();
 
+                // TODO: verify if we want to return the hook address back, so we can move the assertion out of the decoder 
                 // Assert hook does not have access to deltas
                 if (address(poolKey.hooks) != ZERO_ADDRESS) {
+                    Hooks.Permissions memory permissions = BaseHook(address(poolKey.hooks)).getHookPermissions();
+
+                    // we prevent minting tokens that can access to pool liquidity
                     require(
-                        !IHook(address(poolKey.hooks)).getHookPermissions().afterRemoveLiquidityReturnDelta,
+                        !permissions.afterAddLiquidityReturnDelta && !permissions.afterRemoveLiquidityReturnDelta,
                         LiquidityMintHookError(address(poolKey.hooks))
                     );
                 }
