@@ -21,7 +21,6 @@
 pragma solidity 0.8.28;
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -29,7 +28,6 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
-import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from '@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol';
 import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
@@ -241,53 +239,51 @@ abstract contract AUniswapDecoder {
         return params;
     }
 
+    /// @notice Each liquidity position has its associated hook address, which can be null if no hook is used.
+    struct Position {
+        address hook;
+        uint256 tokenId;
+        uint256 action;
+    }
+
     function _decodePosmAction(
         uint256 action,
         bytes calldata actionParams,
-        IAUniswapRouter.Parameters memory params
-    ) internal view returns (IAUniswapRouter.Parameters memory) {
+        IAUniswapRouter.Parameters memory params,
+        Position[] memory positions
+    ) internal view returns (IAUniswapRouter.Parameters memory, Position[] memory) {
         if (action < Actions.SETTLE) {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
                 (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
-                params.tokenIds = _addUniqueTokenId(params.tokenIds, -int256(tokenId));
-                return params;
+                positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.INCREASE_LIQUIDITY));
+                return (params, positions);
             } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
                 revert UnsupportedAction(action);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
-                // no further assertion needed when removing liquidity
-                return params;
+                (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
+                positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.DECREASE_LIQUIDITY));
+                return (params, positions);
             } else if (action == Actions.MINT_POSITION) {
                 // PoolKey calldata poolKey, int24 tickLower, int24 tickUpper, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, address owner, bytes calldata hookData
                 (PoolKey calldata poolKey,,,,,, address owner,) = actionParams.decodeMintParams();
-
-                // TODO: verify if we want to return the hook address back, so we can move the assertion out of the decoder 
-                // Assert hook does not have access to deltas
-                if (address(poolKey.hooks) != ZERO_ADDRESS) {
-                    Hooks.Permissions memory permissions = BaseHook(address(poolKey.hooks)).getHookPermissions();
-
-                    // we prevent minting tokens that can access to pool liquidity
-                    require(
-                        !permissions.afterAddLiquidityReturnDelta && !permissions.afterRemoveLiquidityReturnDelta,
-                        LiquidityMintHookError(address(poolKey.hooks))
-                    );
-                }
 
                 // as an amount could be null, we want to assert here that both tokens have a price feed
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                 params.recipients = _addUnique(params.recipients, owner);
-                params.tokenIds = _addUniqueTokenId(params.tokenIds, int256(uniV4Posm().nextTokenId()));
-                return params;
+                positions = _addUniquePosition(positions, Position(address(poolKey.hooks), uniV4Posm().nextTokenId(), Actions.MINT_POSITION));
+                return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
                 revert UnsupportedAction(action);
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId,,,) = actionParams.decodeBurnParams();
-                params.tokenIds = _addUniqueTokenId(params.tokenIds, -int256(tokenId));
-                return params;
+                positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
+                return (params, positions);
             }
         } else {
+            // TODO: verify if should revert following 2 methods, as prob used for migrations only?
             if (action == Actions.SETTLE_PAIR) {
                 // settlement eth value must be retrieved in previous actions
                 (Currency currency0, Currency currency1) = actionParams.decodeCurrencyPair();
@@ -295,23 +291,23 @@ abstract contract AUniswapDecoder {
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency1));
                 // TODO: how do we get value for pair here?
                 //params.value += Currency.unwrap(currency0) == ZERO_ADDRESS ? amount : 0;
-                return params;
+                return (params, positions);
             } else if (action == Actions.TAKE_PAIR) {
                 (Currency currency0, Currency currency1, address recipient) = actionParams.decodeCurrencyPairAndAddress();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency0));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency1));
                 params.recipients = _addUnique(params.recipients, recipient);
-                return params;
+                return (params, positions);
             } else if (action == Actions.SETTLE) {
                 (Currency currency, uint256 amount,) = actionParams.decodeCurrencyUint256AndBool();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                 params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
-                return params;
+                return (params, positions);
             } else if (action == Actions.TAKE) {
                 (Currency currency, address recipient, /*uint256 amount*/) = actionParams.decodeCurrencyAddressAndUint256();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 params.recipients = _addUnique(params.recipients, recipient);
-                return params;
+                return (params, positions);
             } else if (action == Actions.CLOSE_CURRENCY) {
                 // TODO: verify
                 revert UnsupportedAction(action);
@@ -319,20 +315,20 @@ abstract contract AUniswapDecoder {
                 // no further assertion needed
                 (Currency currency,) = actionParams.decodeCurrencyAndUint256();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                return params;
+                return (params, positions);
             } else if (action == Actions.SWEEP) {
                 (Currency currency, address to) = actionParams.decodeCurrencyAndAddress();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 params.recipients = _addUnique(params.recipients, to);
-                return params;
+                return (params, positions);
             } else if (action == Actions.WRAP) {
                 uint256 amount = actionParams.decodeUint256();
                 params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
                 params.value += amount;
-                return params;
+                return (params, positions);
             } else if (action == Actions.UNWRAP) {
                 params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
-                return params;
+                return (params, positions);
             }
         }
         revert UnsupportedAction(action);
@@ -352,19 +348,19 @@ abstract contract AUniswapDecoder {
         return newArray;
     }
 
-    // TODO: verify we are appending correctly, as we could be appending MINT + INCREASE, meaning same id would be stored twice, but with opposite sign
-    function _addUniqueTokenId(int256[] memory array, int256 id) private pure returns (int256[] memory) {
+    /// @dev Multiple actions can be executed on the same tokenId, so we add a new position if same tokenId but different action
+    function _addUniquePosition(Position[] memory array, Position memory pos) private pure returns (Position[] memory) {
         for (uint256 i = 0; i < array.length; i++) {
-            if (array[i] == id) {
+            if (array[i].tokenId == pos.tokenId && array[i].action == pos.action) {
                 return array; // Already exists, return unchanged array
             }
         }
-        int256[] memory newArray = new int256[](array.length + 1);
+        Position[] memory newArray = new Position[](array.length + 1);
         for (uint256 i = 0; i < array.length; i++) {
             newArray[i] = array[i];
         }
 
-        newArray[array.length] = id;
+        newArray[array.length] = pos;
         return newArray;
     }
 }

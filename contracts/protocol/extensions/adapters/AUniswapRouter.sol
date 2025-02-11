@@ -20,6 +20,9 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
+import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
@@ -160,14 +163,18 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
+    // TODO: add non-reentrant modifier (can be used as can only be reentered by itself, which it won't)
+    /// @inheritdoc IAUniswapRouter
     /// @notice Can be not reentrancy-protected, as will revert in PositionManager
-    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external {
+    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external override {
         (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
         assert(actions.length == params.length);
         Parameters memory newParams;
+        Position[] memory positions;
 
         for (uint256 actionIndex = 0; actionIndex < actions.length; actionIndex++) {
-            newParams = _decodePosmAction(uint8(actions[actionIndex]), params[actionIndex], newParams);
+            (newParams, positions) =
+                _decodePosmAction(uint8(actions[actionIndex]), params[actionIndex], newParams, positions);
         }
 
         _processRecipients(newParams.recipients);
@@ -176,7 +183,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
 
         try uniV4Posm().modifyLiquidities{value: newParams.value}(unlockData, deadline) {
             _safeApproveTokensIn(newParams.tokensIn, address(uniV4Posm()), 1);
-            _processTokenIds(newParams.tokenIds);
+            _processTokenIds(positions);
             return;
         } catch Error(string memory reason) {
             revert(reason);
@@ -221,36 +228,43 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     }
 
     /// @dev This is executed after the uniswap Posm deltas have been settled.
-    function _processTokenIds(int256[] memory tokenIds) private {
+    function _processTokenIds(Position[] memory positions) private {
         // do not load values unless we are writing to storage
-        if (tokenIds.length > 0) {
+        if (positions.length > 0) {
             // update tokenIds in proxy persistent storage.
             TokenIdsSlot storage idsSlot = StorageLib.uniV4TokenIdsSlot();
 
-            for (uint256 i = 0; i < tokenIds.length; i++) {
-                // positive value is a sentinel for mint
-                if (tokenIds[i] > 0) {
+            for (uint256 i = 0; i < positions.length; i++) {
+                if (positions[i].action == Actions.MINT_POSITION) {
+                    // Assert hook does not have access to deltas. Hook address is returned for mint ops only.
+                    // If moving the following block to protect all actions, make sure hook address is appended.
+                    if (positions[i].hook != ZERO_ADDRESS) {
+                        Hooks.Permissions memory permissions = BaseHook(positions[i].hook).getHookPermissions();
+
+                        // we prevent hooks to that can access pool liquidity
+                        require(
+                            !permissions.afterAddLiquidityReturnDelta && !permissions.afterRemoveLiquidityReturnDelta,
+                            LiquidityMintHookError(positions[i].hook)
+                        );
+                    }
+
                     // mint reverts if tokenId exists, so we can be sure it is unique
                     uint256 storedLength = idsSlot.tokenIds.length;
                     require(storedLength < 255, UniV4PositionsLimitExceeded());
-                    idsSlot.tokenIds.push(uint256(tokenIds[i]));
-                    idsSlot.positions[uint256(tokenIds[i])] = storedLength;
+            
+                    // position 0 is flag for removed
+                    idsSlot.positions[positions[i].tokenId] = ++storedLength;
+                    idsSlot.tokenIds.push(positions[i].tokenId);
                     continue;
                 } else {
-                    // invert sign. Negative value is flag for increase liquidity or burn
-                    uint256 tokenId = uint256(-tokenIds[i]);
+                    // position must be active in pool storage. This means pool cannot modify liquidity created on its behalf.
+                    // This is helpful for position retrieval for nav calculations, otherwise we'd have to push it to storage.
+                    // If we remove this assertion, we must make sure that the non-nil hook address is appended, as it would
+                    // allow action on a potentially malicious hook minted to the pool, and we must make sure pool is position owner.
+                    require(idsSlot.positions[positions[i].tokenId] != 0, PositionOwner());
 
-                    // after increasing position, liquidity must be non-nil
-                    if (uniV4Posm().getPositionLiquidity(tokenId) > 0) {
-                        // we do not allow delegating liquidity actions on behalf of pool
-                        require(
-                            IERC721(address(uniV4Posm())).ownerOf(tokenId) == address(this),
-                            PositionOwner()
-                        );
-                        continue;
-                    } else {
-                        // after we burned, liquidity must be nil, so it is safe to remove position from tracked
-                        idsSlot.positions[tokenId] = 0;
+                    if (positions[i].action == Actions.BURN_POSITION) {
+                        idsSlot.positions[positions[i].tokenId] = 0;
                         idsSlot.tokenIds.pop();
                         continue;
                     }

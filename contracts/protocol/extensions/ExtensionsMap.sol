@@ -20,7 +20,7 @@
 pragma solidity 0.8.28;
 
 import {IAuthority} from "../interfaces/IAuthority.sol";
-import {Pool} from "../libraries/EnumerableSet.sol";
+import {StorageLib} from "../libraries/StorageLib.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEUpgrade} from "./adapters/interfaces/IEUpgrade.sol";
@@ -30,17 +30,15 @@ import "./IExtensionsMap.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 /// @notice Its deployed address will be different on different chains and if either selectors or mapped addresses change.
 contract ExtensionsMap is IExtensionsMap {
-    // the slot used by the pool for storing initialization parameters
-    bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-
     // mapped selectors
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
+    bytes4 private constant _EAPPS_TOKEN_IDS_SELECTOR = IEApps.getUniV4TokenIds.selector;
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
     bytes4 private constant _EORACLE_ORACLE_ADDRESS_SELECTOR = IEOracle.getOracleAddress.selector;
     bytes4 private constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
     bytes4 private constant _EORACLE_TICK_SELECTOR = IEOracle.getTick.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
-    bytes4 private constant _EUPGRADE_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
+    bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
 
     // mapped extensions
     address private immutable _EAPPS;
@@ -63,20 +61,13 @@ contract ExtensionsMap is IExtensionsMap {
         _EUPGRADE = extensions.eUpgrade;
 
         // validate immutable constants. Assumes deps are correctly initialized
-        assert(_EAPPS_BALANCES_SELECTOR == type(IEApps).interfaceId);
+        assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_TOKEN_IDS_SELECTOR == type(IEApps).interfaceId);
         assert(
             _EORACLE_CONVERT_AMOUNT_SELECTOR ^
             _EORACLE_ORACLE_ADDRESS_SELECTOR ^
             _EORACLE_PRICE_FEED_SELECTOR ^
             _EORACLE_TICK_SELECTOR == type(IEOracle).interfaceId);
-        assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
-    }
-
-    /// helper method to access msg.sender storage
-    function pool() internal pure returns (Pool storage s) {
-        assembly {
-            s.slot := _POOL_INIT_SLOT
-        }
+        assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
     }
 
     /// @inheritdoc IExtensionsMap
@@ -99,8 +90,8 @@ contract ExtensionsMap is IExtensionsMap {
             extension = _EORACLE;
         } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {
             extension = _EUPGRADE;
-            shouldDelegatecall = msg.sender == pool().owner;
-        } else if (selector == _EUPGRADE_BEACON_SELECTOR) {
+            shouldDelegatecall = msg.sender == StorageLib.pool().owner;
+        } else if (selector == _EUPGRADE_GET_BEACON_SELECTOR) {
             extension = _EUPGRADE;
         } else {
             return (address(0), false);

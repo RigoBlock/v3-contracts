@@ -29,7 +29,6 @@ interface IAUniswapRouter is IMinimumVersion {
         address[] recipients;
         address[] tokensIn;
         address[] tokensOut;
-        int256[] tokenIds;
     }
 
     /// @notice Executes encoded commands along with provided inputs. Reverts if deadline has expired.
@@ -49,6 +48,8 @@ interface IAUniswapRouter is IMinimumVersion {
     /// @return params The decoded relevant parameters of the call.
     /// @dev Only mint call has access to state, will revert with direct calls unless recipient is explicitly set to this.
     function execute(bytes calldata commands, bytes[] calldata inputs) external returns (Parameters memory params);
+
+    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external;
 
     /// @notice The Uniswap V4 liquidity position manager contract.
     /// @return The address of the UniswapV4 Posm.

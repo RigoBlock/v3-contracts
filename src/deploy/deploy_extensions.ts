@@ -55,7 +55,7 @@ const deploy: DeployFunction = async function (
   // TODO: replace with deployed address (different by chain). Uncomment NativeWrapper(univ4).WETH9() or hardcode WETH9
   const stakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ3Npm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const univ4Posm = univ3Npm
+  const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   // TODO: this constructor will try to query WETH9 from univ4Posm, but we could hardcode in implementation and remove from constructor to save gas and simplify deployment
   const eApps = await deploy("EApps", {
     from: deployer,

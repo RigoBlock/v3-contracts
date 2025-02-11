@@ -72,7 +72,6 @@ contract EApps is IEApps {
         bool isActive;
     }
 
-    // TODO: maybe we could use a fixed-size bytes1[31]?
     /// @inheritdoc IEApps
     /// @notice Uses temporary storage to cache token prices, which can be used in MixinPoolValue.
     /// @notice Requires delegatecall.
@@ -106,6 +105,11 @@ contract EApps is IEApps {
             }
         }
         return nestedBalances;
+    }
+
+    /// @inheritdoc IEApps
+    function getUniV4TokenIds() external view override returns (uint256[] memory tokenIds) {
+        return StorageLib.uniV4TokenIdsSlot().tokenIds;
     }
 
     // TODO: uncomment applications after implementing univ4Posm in test pipeline
