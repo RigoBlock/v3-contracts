@@ -2,8 +2,9 @@ import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract, BigNumber } from "ethers";
-import { MAX_UINT128, MAX_UINT160 } from "../shared/constants";
+import { DEADLINE, MAX_UINT128, MAX_UINT160 } from "../shared/constants";
 import { Actions, V4Planner } from '../shared/v4Planner'
+import { CommandType, RoutePlanner } from '../shared/planner'
 import { parse } from "path";
 import { parseEther } from "ethers/lib/utils";
 
@@ -276,6 +277,65 @@ describe("AUniswapRouter", async () => {
       const poolPrice = (await pool.getPoolTokens()).unitaryValue
       expect(poolPrice).to.be.gt(unitaryValue)
       expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000051476461117"))
+    })
+
+    // this won't do much until we encode a settle, as we only return params with payments actions.
+    // TODO: flow could change as it could be harder to find eth amount later
+    it('should execute a v4 swap', async () => {
+      const { pool, wethAddress } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
+        {
+          poolKey: PAIR.poolKey,
+          zeroForOne: true,
+          amountIn: ethers.utils.parseEther("12"),
+          amountOutMinimum: ethers.utils.parseEther("22"),
+          hookData: '0x',
+        },
+      ])
+      let planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    })
+
+    it('should set approval with settle action', async () => {
+      const { pool, grgToken } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
+        {
+          poolKey: PAIR.poolKey,
+          zeroForOne: true,
+          amountIn: ethers.utils.parseEther("12"),
+          amountOutMinimum: ethers.utils.parseEther("22"),
+          hookData: '0x',
+        },
+      ])
+      v4Planner.addAction(Actions.SETTLE, [PAIR.poolKey.currency1, parseEther("12"), true])
+      let planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      //await expect(
+      //  extPool.execute(commands, inputs, DEADLINE)
+      //).to.be.revertedWith('PositionOwner()')
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      // rigoblock sets max approval, and then resets it to 1 to prevent clearing storage
+      // TODO: verify why we have not set allowance for grg token
+      expect(await grgToken.allowance(pool.address, extPool.address)).to.be.eq(1)
     })
   })
 });

@@ -17,4 +17,8 @@ contract MockUniUniversalRouter {
     function execute(bytes calldata /*commands*/, bytes[] calldata /*inputs*/, uint256 /*deadline*/) external payable {
         emit UniCallExecuted(msg.sender);
     }
+
+    function execute(bytes calldata /*commands*/, bytes[] calldata /*inputs*/) external payable {
+        emit UniCallExecuted(msg.sender);
+    }
 }
