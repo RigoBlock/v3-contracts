@@ -67,7 +67,8 @@ describe("AUniswapRouter", async () => {
       univ3Npm,
       univ4Posm: Univ4Posm.attach(Univ4PosmInstance.address),
       wethAddress,
-      aUniswapRouter
+      aUniswapRouter,
+      uniRouterAddress: uniRouter.address,
     }
   });
 
@@ -307,7 +308,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should set approval with settle action', async () => {
-      const { pool, grgToken } = await setupTests()
+      const { pool, grgToken, uniRouterAddress } = await setupTests()
       PAIR.poolKey.currency1 = grgToken.address
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
@@ -334,8 +335,7 @@ describe("AUniswapRouter", async () => {
       )
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       // rigoblock sets max approval, and then resets it to 1 to prevent clearing storage
-      // TODO: verify why we have not set allowance for grg token
-      expect(await grgToken.allowance(pool.address, extPool.address)).to.be.eq(1)
+      expect(await grgToken.allowance(pool.address, uniRouterAddress)).to.be.eq(1)
     })
   })
 });
