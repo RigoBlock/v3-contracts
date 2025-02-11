@@ -177,7 +177,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         if (tokenOut == _BASE_TOKEN_FLAG) {
             tokenOut = baseToken;
         } else if (tokenOut != baseToken) {
-            // TODO: verify if we really want to allow this only if base token balance not enough
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
             uint256 baseTokenBalance = baseToken.isAddressZero() ? address(this).balance : IERC20(baseToken).balanceOf(address(this));
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
@@ -209,8 +208,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             delete accounts().userAccounts[msg.sender];
         }
 
-        // TODO: define from constants
-        if (poolParams().transactionFee != uint256(0)) {
+        if (poolParams().transactionFee != 0) {
             address feeCollector = _getFeeCollector();
 
             if (msg.sender != feeCollector) {
@@ -224,7 +222,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             }
         }
 
-        // TODO: verify as this is inconsistent with mint, i.e. fee comes from user here, from null address in mint
         emit Transfer(msg.sender, _ZERO_ADDRESS, amountIn);
         return amountIn;
     }

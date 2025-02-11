@@ -14,7 +14,6 @@ contract MockOracle {
     mapping(PoolId => IOracle.ObservationState) public states;
 
     constructor() {
-        // TODO: check if should better define
         defaultPoolId = PoolId.wrap(bytes32(uint256(1)));
         states[defaultPoolId] = IOracle.ObservationState({index: 1, cardinality: 2, cardinalityNext: 2});
 

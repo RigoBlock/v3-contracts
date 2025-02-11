@@ -57,7 +57,6 @@ abstract contract MixinOwnerActions is MixinActions {
         uint256 packedApps = appsBitmap.packedApplications;
         ExternalApp[] memory activeApps;
 
-        // TODO: test we get the correct balances, as fallback delegatecalls to extension in this case
         try IEApps(address(this)).getAppTokenBalances(packedApps) returns (ExternalApp[] memory apps) {
             for (uint256 i = 0; i < apps.length; i++) {
                 if (
@@ -74,12 +73,18 @@ abstract contract MixinOwnerActions is MixinActions {
         }
 
         // base token is never pushed to active list for gas savings, we can safely remove any unactive token
-        for (uint256 i = 0; i < set.addresses.length; i++) {
+        uint256 activeTokenLength = set.addresses.length;
+        address activeToken;
+        uint256 activeTokenBalance;
+
+        for (uint256 i = 0; i < activeTokenLength; i++) {
+            activeToken = set.addresses[i];
             bool shouldRemove = true;
+
             // skip removal if a token is active in an application
             for (uint256 j = 0; j < activeApps.length; j++) {
                 for (uint256 k = 0; k < activeApps[j].balances.length; k++) {
-                    if (activeApps[j].balances[k].token == set.addresses[i]) {
+                    if (activeApps[j].balances[k].token == activeToken) {
                         shouldRemove = false;
                         break; // Exit k loop
                     }
@@ -90,13 +95,18 @@ abstract contract MixinOwnerActions is MixinActions {
             }
 
             if (shouldRemove) {
-                // TODO: should also handle native currency
-                try IERC20(set.addresses[i]).balanceOf(address(this)) returns (uint256 _balance) {
-                    if (_balance <= 1) {
-                        set.remove(set.addresses[i]);
+                if (activeToken == _ZERO_ADDRESS) {
+                    activeTokenBalance = address(this).balance;
+                } else {
+                    try IERC20(activeToken).balanceOf(address(this)) returns (uint256 _balance) {
+                        activeTokenBalance = _balance;
+                    } catch {
+                        continue;
                     }
-                } catch {
-                    continue;
+                }
+
+                if (activeTokenBalance <= 1) {
+                    set.remove(activeToken);
                 }
             }
         }

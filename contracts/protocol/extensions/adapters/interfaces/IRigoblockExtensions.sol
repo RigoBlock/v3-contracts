@@ -19,13 +19,13 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-// TODO: remove IEWhitelist, add IEApps, IEOracle
 import {IAGovernance} from "./IAGovernance.sol";
 import {IAMulticall} from "./IAMulticall.sol";
 import {IAStaking} from "./IAStaking.sol";
 import {IAUniswap} from "./IAUniswap.sol";
 import {IAUniswapV3NPM} from "./IAUniswapV3NPM.sol";
-import {IEUpgrade} from "./IEUpgrade.sol";
+import {IEApps} from "./IEApps.sol";
+import {IEOracle} from "./IEOracle.sol";import {IEUpgrade} from "./IEUpgrade.sol";
 import {IEWhitelist} from "./IEWhitelist.sol";
 
 /// @title Rigoblock Extensions Interface - Groups together the extensions' methods.
@@ -37,6 +37,8 @@ interface IRigoblockExtensions is
     IAStaking,
     IAUniswap,
     IAUniswapV3NPM,
+    IEApps,
+    IEOracle,
     IEUpgrade,
     IEWhitelist
 {}

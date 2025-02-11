@@ -56,7 +56,6 @@ library EnumerableSet {
     // flag for removed address
     uint256 private constant _REMOVED_ADDRESS_FLAG = type(uint256).max;
 
-    // TODO: check if should log, even though we already store in list so not strictly needed.
     /// @notice Base token is never pushed to active tokens, as already stored.
     /// @dev Skips and returns false for base token, which is already in storage.
     function addUnique(AddressSet storage set, IEOracle eOracle, address token, address baseToken) internal {

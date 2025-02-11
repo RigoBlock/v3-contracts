@@ -80,8 +80,7 @@ contract MockUniswapPosm {
         //bytes32 positionId = Position.calculatePositionKey(address(this), tickLower, tickUpper, bytes32(tokenId));
     }
 
-    // TODO: maybe we could inherit solmate ERC721 to use correct mint/burn?
-    // TODO: we use memory, but prev. used calldata, check if ok. Alt, we could pass calldata params and decode, use this as internal
+    // TODO: check make this method private and modify some of the remaining tests to use modifyLiquidities
     /// @notice A mock method for creating positions for testing nav calculations
     function mint(
         PoolKey memory poolKey,

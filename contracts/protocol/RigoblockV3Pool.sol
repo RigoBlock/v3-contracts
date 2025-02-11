@@ -28,7 +28,6 @@ import {MixinAbstract} from "./core/sys/MixinAbstract.sol";
 import {MixinInitializer} from "./core/sys/MixinInitializer.sol";
 import {MixinFallback} from "./core/sys/MixinFallback.sol";
 
-// TODO: rename to V4, in a seaprate PR
 /// @title RigoblockV3Pool - A set of rules for Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line

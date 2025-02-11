@@ -48,7 +48,6 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    // TODO: verify move storage methods to a library and import as using for *, so can re-use in adapters
     function pool() internal pure returns (Pool storage s) {
         assembly {
             s.slot := _POOL_INIT_SLOT

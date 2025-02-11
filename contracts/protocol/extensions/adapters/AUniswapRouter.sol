@@ -78,10 +78,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     bytes32 private constant _REENTRANCY_DEPTH_SLOT =
         0x3921e0fb5d7436d70b7041cccb0d0f543e6b643f41e09aa71450d5e1c5767376;
 
-    // TODO: can import?
-    uint256 private constant NIL_VALUE = 0;
-
-    // TODO: check store as inintiate instances
     address private immutable _uniswapRouter;
     IPositionManager private immutable _positionManager;
 

@@ -23,7 +23,6 @@ contract MockUniswapNpm {
     address public immutable WETH9;
 
     mapping(uint256 => address) private _ownerOf;
-    // TODO: verify correctly stored, and check upgrade solc
     mapping(address /*owner*/ => mapping(uint256 /*index*/ => uint256)) private _ownedTokens;
     mapping(address => uint256) private _balances;
 

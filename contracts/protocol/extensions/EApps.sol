@@ -112,7 +112,6 @@ contract EApps is IEApps {
         return StorageLib.uniV4TokenIdsSlot().tokenIds;
     }
 
-    // TODO: uncomment applications after implementing univ4Posm in test pipeline
     /// @notice Directly retrieve balances from target application contract.
     /// @dev A failure to get response from one application will revert the entire call.
     /// @dev This is ok as we do not want to produce an inaccurate nav.
@@ -145,7 +144,6 @@ contract EApps is IEApps {
     /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)
     function _getUniV3PmBalances() private returns (AppTokenBalance[] memory balances) {
         uint256 numPositions = IERC721(address(_uniV3NPM)).balanceOf(address(this));
-        // TODO: we could push active app here if positive balance
 
         // only get first 20 positions as no pool has more than that and we can save gas plus prevent DOS
         uint256 maxLength = numPositions < 20 ? numPositions : 20;
@@ -156,9 +154,8 @@ contract EApps is IEApps {
             (,, address token0, address token1, , int24 tickLower, int24 tickUpper, uint128 liquidity, , , ,) =
                 _uniV3NPM.positions(tokenId);
 
-            // TODO: check if we should try and convert only with a valid price. Also check if we really resort to v4 lib, or if we added to lib/univ3
-            // we resort to v4 LiquidityAmounts library, as PositionValue and FullMath in v3's LiquidityAmounts lib require solc <0.8
-            // for simplicity, as uni v3 liquidity is remove-only, we exclude unclaimed fees, which incentivizes migrating liquidity to v4.
+            // we use same v4 LiquidityAmounts library, as PositionValue and FullMath in v3's LiquidityAmounts lib require solc <0.8
+            // unclaimed fees are not included in nav calculations
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
                 _findCrossPrice(token0, token1),
                 TickMath.getSqrtPriceAtTick(tickLower),
@@ -193,7 +190,6 @@ contract EApps is IEApps {
                 _uniV4Posm.getPositionLiquidity(tokenIds[i])
             );
 
-            // TODO: it seems we are not returning any balances here?
             balances[i * 2].token = Currency.unwrap(poolKey.currency0);
             balances[i * 2].amount = int256(amount0);
             balances[i * 2 + 1].token = Currency.unwrap(poolKey.currency1);

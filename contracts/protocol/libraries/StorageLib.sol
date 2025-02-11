@@ -20,7 +20,6 @@ library StorageLib {
         }
     }
 
-    // TODO: by using a shared library, we can avoid type errors
     function activeTokensSet() internal pure returns (AddressSet storage s) {
         assembly {
             s.slot := _TOKEN_REGISTRY_SLOT
