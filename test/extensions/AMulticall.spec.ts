@@ -65,7 +65,7 @@ describe("AMulticall", async () => {
             // txn will always revert in fallback
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            ).to.be.revertedWith('PoolMethodNotAllowed()')
             // if a rogue adapter could be added by the governance, but that is part of the protocol rules.
             await authority.setAdapter(factory.address, true)
             // "d784d426": "setImplementation(address)"
@@ -83,11 +83,12 @@ describe("AMulticall", async () => {
 
         it('should prevent skipping owner check', async () => {
             const { factory, pool } = await setupTests()
+            // TODO: logic has slightly changed but concept is the same, change when fixed
             // when the method is called by a wallet other than the pool owner, the fallback forwards a `staticcall` to the
             //  extension. Therefore, instead of being executed in the context of the pool proxy, it gets executed in the
             //  EUpgrade contract and is thus reverted as a direct call is not allowed.
             await expect(pool.connect(user2).upgradeImplementation())
-                .to.be.revertedWith("EUPGRADE_DIRECT_CALL_ERROR")
+                .to.be.revertedWith('EUpgradeDirectCall()')
             await factory.setImplementation(factory.address)
             const encodedUpgradeData = pool.interface.encodeFunctionData('upgradeImplementation')
             const encodedMulticallData = pool.interface.encodeFunctionData(
@@ -105,7 +106,7 @@ describe("AMulticall", async () => {
         it('should allow owner to set a new owner', async () => {
             const { pool } = await setupTests()
             await expect(pool.connect(user2).setOwner(user2.address))
-                .to.be.revertedWith("POOL_CALLER_IS_NOT_OWNER_ERROR")
+                .to.be.revertedWith('PoolCallerIsNotOwner()')
             const encodedSetOwnerData = pool.interface.encodeFunctionData('setOwner', [user2.address])
             let encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(bytes[])',

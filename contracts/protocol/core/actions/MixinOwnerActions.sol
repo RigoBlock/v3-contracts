@@ -1,21 +1,27 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinActions.sol";
+import {MixinActions} from "./MixinActions.sol";
+import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {IRigoblockV3PoolOwnerActions} from "../../interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
+import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
+import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
+import {ExternalApp} from "../../types/ExternalApp.sol";
 
 abstract contract MixinOwnerActions is MixinActions {
-    /// @dev We keep this check to prevent accidental failure in Nav calculations.
-    modifier notPriceError(uint256 newUnitaryValue) {
-        /// @notice most typical error is adding/removing one 0, we check by a factory of 5 for safety.
-        require(
-            newUnitaryValue < _getUnitaryValue() * 5 && newUnitaryValue > _getUnitaryValue() / 5,
-            "POOL_INPUT_VALUE_ERROR"
-        );
-        _;
-    }
+    using ApplicationsLib for ApplicationsSlot;
+    using EnumerableSet for AddressSet;
+
+    error PoolCallerIsNotOwner();
+    error PoolFeeBiggerThanMax(uint16 maxFee);
+    error PoolInputIsNotContract();
+    error PoolLockupPeriodInvalid(uint48 minimum, uint48 maximum);
+    error PoolNullOwnerInput();
+    error PoolSpreadInvalid(uint16 maxSpread);
 
     modifier onlyOwner() {
-        require(msg.sender == pool().owner, "POOL_CALLER_IS_NOT_OWNER_ERROR");
+        require(msg.sender == pool().owner, PoolCallerIsNotOwner());
         _;
     }
 
@@ -28,69 +34,105 @@ abstract contract MixinOwnerActions is MixinActions {
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeMinPeriod(uint48 minPeriod) external override onlyOwner {
         /// @notice minimum period is always at least 1 to prevent flash txs.
-        require(minPeriod >= _MIN_LOCKUP && minPeriod <= _MAX_LOCKUP, "POOL_CHANGE_MIN_LOCKUP_PERIOD_ERROR");
+        require(
+            minPeriod >= _MIN_LOCKUP && minPeriod <= _MAX_LOCKUP,
+            PoolLockupPeriodInvalid(_MIN_LOCKUP, _MAX_LOCKUP)
+        );
         poolParams().minPeriod = minPeriod;
         emit MinimumPeriodChanged(address(this), minPeriod);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function changeSpread(uint16 newSpread) external override onlyOwner {
-        // new spread must always be != 0, otherwise default spread from immutable storage will be returned
-        require(newSpread > 0, "POOL_SPREAD_NULL_ERROR");
-        require(newSpread <= _MAX_SPREAD, "POOL_SPREAD_TOO_HIGH_ERROR");
+        // 0 value is sentinel for uninitialized spread, returning _MAX_SPREAD
+        require(newSpread > 0 && newSpread <= _MAX_SPREAD, PoolSpreadInvalid(_MAX_SPREAD));
         poolParams().spread = newSpread;
         emit SpreadChanged(address(this), newSpread);
     }
 
+    function purgeInactiveTokensAndApps() external override onlyOwner {
+        // retrieve the list and mapping of stored tokens
+        AddressSet storage set = activeTokensSet();
+        ApplicationsSlot storage appsBitmap = activeApplications();
+        uint256 packedApps = appsBitmap.packedApplications;
+        ExternalApp[] memory activeApps;
+
+        try IEApps(address(this)).getAppTokenBalances(packedApps) returns (ExternalApp[] memory apps) {
+            for (uint256 i = 0; i < apps.length; i++) {
+                if (
+                    apps[i].balances.length == 0 &&
+                    ApplicationsLib.isActiveApplication(packedApps, uint256(apps[i].appType))
+                ) {
+                    appsBitmap.removeApplication(apps[i].appType);
+                }
+            }
+            activeApps = apps;
+        } catch Error(string memory reason) {
+            // do not allow removing tokens if the apps do not return their tokens correctly
+            revert(reason);
+        }
+
+        // base token is never pushed to active list for gas savings, we can safely remove any unactive token
+        uint256 activeTokenLength = set.addresses.length;
+        address activeToken;
+        uint256 activeTokenBalance;
+
+        for (uint256 i = 0; i < activeTokenLength; i++) {
+            activeToken = set.addresses[i];
+            bool shouldRemove = true;
+
+            // skip removal if a token is active in an application
+            for (uint256 j = 0; j < activeApps.length; j++) {
+                for (uint256 k = 0; k < activeApps[j].balances.length; k++) {
+                    if (activeApps[j].balances[k].token == activeToken) {
+                        shouldRemove = false;
+                        break; // Exit k loop
+                    }
+                }
+                if (!shouldRemove) {
+                    break; // Exit j loop if token found in any app
+                }
+            }
+
+            if (shouldRemove) {
+                if (activeToken == _ZERO_ADDRESS) {
+                    activeTokenBalance = address(this).balance;
+                } else {
+                    try IERC20(activeToken).balanceOf(address(this)) returns (uint256 _balance) {
+                        activeTokenBalance = _balance;
+                    } catch {
+                        continue;
+                    }
+                }
+
+                if (activeTokenBalance <= 1) {
+                    set.remove(activeToken);
+                }
+            }
+        }
+    }
+
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setKycProvider(address kycProvider) external override onlyOwner {
-        require(_isContract(kycProvider), "POOL_INPUT_NOT_CONTRACT_ERROR");
+        require(_isContract(kycProvider), PoolInputIsNotContract());
         poolParams().kycProvider = kycProvider;
         emit KycProviderSet(address(this), kycProvider);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setTransactionFee(uint16 transactionFee) external override onlyOwner {
-        require(transactionFee <= _MAX_TRANSACTION_FEE, "POOL_FEE_HIGHER_THAN_ONE_PERCENT_ERROR"); //fee cannot be higher than 1%
+        require(transactionFee <= _MAX_TRANSACTION_FEE, PoolFeeBiggerThanMax(_MAX_TRANSACTION_FEE)); //fee cannot be higher than 1%
         poolParams().transactionFee = transactionFee;
         emit NewFee(msg.sender, address(this), transactionFee);
     }
 
     /// @inheritdoc IRigoblockV3PoolOwnerActions
-    function setUnitaryValue(uint256 unitaryValue) external override onlyOwner notPriceError(unitaryValue) {
-        // unitary value can be updated only after first mint. we require positive value as would
-        //  return to default value if storage cleared
-        require(poolTokens().totalSupply > 0, "POOL_SUPPLY_NULL_ERROR");
-
-        // This will underflow with small decimals tokens at some point, which is ok
-        uint256 minimumLiquidity = ((unitaryValue * totalSupply()) / 10**decimals() / 100) * 3;
-
-        if (pool().baseToken == address(0)) {
-            require(address(this).balance >= minimumLiquidity, "POOL_CURRENCY_BALANCE_TOO_LOW_ERROR");
-        } else {
-            require(
-                IERC20(pool().baseToken).balanceOf(address(this)) >= minimumLiquidity,
-                "POOL_TOKEN_BALANCE_TOO_LOW_ERROR"
-            );
-        }
-
-        poolTokens().unitaryValue = unitaryValue;
-        emit NewNav(msg.sender, address(this), unitaryValue);
-    }
-
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
     function setOwner(address newOwner) public override onlyOwner {
-        require(newOwner != address(0), "POOL_NULL_OWNER_INPUT_ERROR");
+        require(newOwner != _ZERO_ADDRESS, PoolNullOwnerInput());
         address oldOwner = pool().owner;
         pool().owner = newOwner;
         emit NewOwner(oldOwner, newOwner);
     }
-
-    function totalSupply() public view virtual override returns (uint256);
-
-    function decimals() public view virtual override returns (uint8);
-
-    function _getUnitaryValue() internal view virtual override returns (uint256);
 
     function _isContract(address target) private view returns (bool) {
         return target.code.length > 0;

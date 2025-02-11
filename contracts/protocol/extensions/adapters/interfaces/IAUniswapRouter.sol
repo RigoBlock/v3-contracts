@@ -19,23 +19,43 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "@uniswap/universal-router/contracts/interfaces/IUniversalRouter.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {IMinimumVersion} from "./IMinimumVersion.sol";
 
-interface IAUniswapRouter {
+/// @notice Implements IMinimumVersion.requiredVersion()
+interface IAUniswapRouter is IMinimumVersion {
+    struct Parameters {
+        uint256 value;
+        address[] recipients;
+        address[] tokensIn;
+        address[] tokensOut;
+    }
+
     /// @notice Executes encoded commands along with provided inputs. Reverts if deadline has expired.
-    /// @param commands A set of concatenated commands, each 1 byte in length
-    /// @param inputs An array of byte strings containing abi encoded inputs for each command
-    /// @param deadline The deadline by which the transaction must be executed
-    function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external returns (bytes memory returnData);
+    /// @param commands A set of concatenated commands, each 1 byte in length.
+    /// @param inputs An array of byte strings containing abi encoded inputs for each command.
+    /// @param deadline The deadline by which the transaction must be executed.
+    /// @return params The decoded relevant parameters of the call.
+    function execute(
+        bytes calldata commands,
+        bytes[] calldata inputs,
+        uint256 deadline
+    ) external returns (Parameters memory params);
 
     /// @notice Executes encoded commands along with provided inputs.
-    /// @param commands A set of concatenated commands, each 1 byte in length
-    /// @param inputs An array of byte strings containing abi encoded inputs for each command
-    function execute(bytes calldata commands, bytes[] calldata inputs) external payable returns (bytes memory returnData);
+    /// @param commands A set of concatenated commands, each 1 byte in length.
+    /// @param inputs An array of byte strings containing abi encoded inputs for each command.
+    /// @return params The decoded relevant parameters of the call.
+    /// @dev Only mint call has access to state, will revert with direct calls unless recipient is explicitly set to this.
+    function execute(bytes calldata commands, bytes[] calldata inputs) external returns (Parameters memory params);
 
-    /// @notice The address of the Uniswap liquidity position manager contract
-    function positionManager() external view returns (address positionManager);
+    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external;
 
-    /// @notice The address of the Uniswap universal router contract
+    /// @notice The Uniswap V4 liquidity position manager contract.
+    /// @return The address of the UniswapV4 Posm.
+    function uniV4Posm() external view returns (IPositionManager);
+
+    /// @notice The address of the Uniswap universal router contract.
+    /// @return uniswapRouter The address of the Uniswap universal router.
     function uniswapRouter() external view returns (address uniswapRouter);
 }

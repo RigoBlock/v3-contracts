@@ -19,13 +19,16 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../IRigoblockV3Pool.sol";
+import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
+import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.
 abstract contract MixinConstants is IRigoblockV3Pool {
     /// @inheritdoc IRigoblockV3PoolImmutable
-    string public constant override VERSION = "HF 3.1.2";
+    string public constant override VERSION = "4.0.0";
+
+    bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
 
     bytes32 internal constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
 
@@ -35,11 +38,19 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     bytes32 internal constant _POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
 
+    bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
+
+    // TODO: verify correctness
+    bytes32 internal constant _TRANSIENT_BALANCE_SLOT =
+        bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
+
+    address internal constant _ZERO_ADDRESS = address(0);
+
+    address internal constant _BASE_TOKEN_FLAG = address(1);
+
     uint16 internal constant _FEE_BASE = 10000;
 
-    uint16 internal constant _INITIAL_SPREAD = 500; // +-5%, in basis points
-
-    uint16 internal constant _MAX_SPREAD = 1000; // +-10%, in basis points
+    uint16 internal constant _MAX_SPREAD = 500; // +-5%, in basis points
 
     uint16 internal constant _MAX_TRANSACTION_FEE = 100; // maximum 1%
 
@@ -50,10 +61,5 @@ abstract contract MixinConstants is IRigoblockV3Pool {
 
     uint48 internal constant _MAX_LOCKUP = 30 days;
 
-    uint48 internal constant _MIN_LOCKUP = 2;
-
-    bytes4 internal constant _TRANSFER_FROM_SELECTOR =
-        bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
-
-    bytes4 internal constant _TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
+    uint48 internal constant _MIN_LOCKUP = 10;
 }

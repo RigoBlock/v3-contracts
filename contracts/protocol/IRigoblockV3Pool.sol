@@ -19,15 +19,15 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./interfaces/IERC20.sol";
-import "./interfaces/pool/IRigoblockV3PoolActions.sol";
-import "./interfaces/pool/IRigoblockV3PoolEvents.sol";
-import "./interfaces/pool/IRigoblockV3PoolFallback.sol";
-import "./interfaces/pool/IRigoblockV3PoolImmutable.sol";
-import "./interfaces/pool/IRigoblockV3PoolInitializer.sol";
-import "./interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
-import "./interfaces/pool/IRigoblockV3PoolState.sol";
-import "./interfaces/pool/IStorageAccessible.sol";
+import {IERC20} from "./interfaces/IERC20.sol";
+import {IRigoblockV3PoolActions} from "./interfaces/pool/IRigoblockV3PoolActions.sol";
+import {IRigoblockV3PoolEvents} from "./interfaces/pool/IRigoblockV3PoolEvents.sol";
+import {IRigoblockV3PoolFallback} from "./interfaces/pool/IRigoblockV3PoolFallback.sol";
+import {IRigoblockV3PoolImmutable} from "./interfaces/pool/IRigoblockV3PoolImmutable.sol";
+import {IRigoblockV3PoolInitializer} from "./interfaces/pool/IRigoblockV3PoolInitializer.sol";
+import {IRigoblockV3PoolOwnerActions} from "./interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
+import {IRigoblockV3PoolState} from "./interfaces/pool/IRigoblockV3PoolState.sol";
+import {IStorageAccessible} from "./interfaces/pool/IStorageAccessible.sol";
 
 /// @title Rigoblock V3 Pool Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -42,6 +42,4 @@ interface IRigoblockV3Pool is
     IRigoblockV3PoolOwnerActions,
     IRigoblockV3PoolState,
     IStorageAccessible
-{
-
-}
+{}

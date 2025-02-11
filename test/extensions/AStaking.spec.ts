@@ -7,6 +7,7 @@ import { BigNumber, Contract } from "ethers";
 import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { timeTravel } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
+import { time } from "console";
 
 describe("AStaking", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
@@ -119,6 +120,100 @@ describe("AStaking", async () => {
                 .withArgs(stakingProxy.address, newPoolAddress, reward)
             const grgPoolBalanceAfterReward = await grgToken.balanceOf(newPoolAddress)
             expect(grgPoolBalanceBeforeReward).to.be.lt(grgPoolBalanceAfterReward)
+        })
+    })
+
+    describe("stake-unstake and sync tokens", async () => {
+        it('should add grg to active tokens when positive stake', async () => {
+            const { stakingProxy, grgToken, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            const FullPool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            const fullPool = FullPool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            // returned active tokens are active tokens array and the base token
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            await pool.stake(amount)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            // TODO: we can also assert that token is active before the end of the epoch
+            await timeTravel({ days: 14, mine:true })
+            await stakingProxy.endEpoch()
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            // first mint only initialized value in storage, need to mint again to update active tokens
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            const activeTokens = (await fullPool.getActiveTokens()).activeTokens
+            expect(activeTokens.length).to.be.eq(1)
+            expect(activeTokens[0]).to.be.eq(grgToken.address)
+        })
+
+        it('should not remove grg from active tokens when null stake', async () => {
+            const { stakingProxy, grgToken, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            const FullPool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            const fullPool = FullPool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.stake(amount)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await pool.undelegateStake(amount)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await pool.unstake(amount)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await fullPool.setUnitaryValue()
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            // token is removed only with owner action, for gas optimization
+            await fullPool.purgeInactiveTokensAndApps()
+            // token is not removed because the token pool's balance is not null.
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            await timeTravel({ days: 30, mine:true })
+            // remove base token balance, so below grg value in base token, so we can burn for token. Nav is approx 1.98019965344058
+            await fullPool.burn(parseEther("150"), 1)
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576965"))
+            await fullPool.burnForToken(parseEther("49.500041661833943559"), 1, grgToken.address)
+            // must make sure token balance is null. There is an approximation error of 1 wei.
+            expect(await grgToken.balanceOf(pool.address)).to.be.eq(1)
+            await fullPool.purgeInactiveTokensAndApps()
+            // this time, token is removed because the token pool's balance is null or 1.
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+        })
+
+        it('should clear balances with total burn', async () => {
+            const { stakingProxy, grgToken, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AStaking")
+            const pool = Pool.attach(newPoolAddress)
+            const FullPool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            const fullPool = FullPool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.stake(amount)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            await pool.undelegateStake(amount)
+            await pool.unstake(amount)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            await timeTravel({ days: 30, mine:true })
+            // remove base token balance, so below grg value in base token, so we can burn for token. Nav is approx 1.98019965344058
+            await fullPool.burn(parseEther("150"), 1)
+            await fullPool.burnForToken(parseEther("49.500041661833943559"), 1, grgToken.address)
+            expect(await grgToken.balanceOf(pool.address)).to.be.eq(1)
+            const totalSupply = await fullPool.totalSupply()
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576966"))
+            await fullPool.burn(totalSupply, 1)
+            // small nav variation due to approximation error
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576968"))
+            expect(await fullPool.totalSupply()).to.be.eq(0)
+            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(2)
+            // assert pool value does not change (need to mint as supply is null)
+            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576968"))
         })
     })
 })

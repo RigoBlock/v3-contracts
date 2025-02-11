@@ -4,6 +4,20 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IRigoblockV3PoolState {
+    /// @notice Returns the active application flags.
+    /// @return packedApplications Packed value of bitmap encoded active flags.
+    function getActiveApplications() external view returns (uint256 packedApplications);
+
+    struct ActiveTokens {
+        address[] activeTokens;
+        address baseToken;
+    }
+
+    /// @notice Returns the list of active tokens and the base token.
+    /// @return tokens Tuple of active tokens list and base token.
+    /// @dev Base token is always active.
+    function getActiveTokens() external view returns (ActiveTokens memory tokens);
+
     /// @notice Returned pool initialization parameters.
     /// @dev Symbol is stored as bytes8 but returned as string to facilitating client view.
     /// @param name String of the pool name (max 32 characters).
@@ -52,6 +66,7 @@ interface IRigoblockV3PoolState {
 
     /// @notice Returns the struct containing pool tokens info.
     /// @return PoolTokens struct.
+    /// @notice Unitary value is the last stored unitary value.
     function getPoolTokens() external view returns (PoolTokens memory);
 
     /// @notice Returns the aggregate pool generic storage.
@@ -61,11 +76,7 @@ interface IRigoblockV3PoolState {
     function getPoolStorage()
         external
         view
-        returns (
-            ReturnedPool memory poolInitParams,
-            PoolParams memory poolVariables,
-            PoolTokens memory poolTokensInfo
-        );
+        returns (ReturnedPool memory poolInitParams, PoolParams memory poolVariables, PoolTokens memory poolTokensInfo);
 
     /// @notice Pool holder account.
     /// @param userBalance Number of tokens held by user.

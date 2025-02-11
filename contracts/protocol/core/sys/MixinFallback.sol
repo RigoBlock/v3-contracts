@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-//import "../actions/MixinActions.sol";
-import "../immutable/MixinImmutables.sol";
-import "../immutable/MixinStorage.sol";
-import "../../interfaces/IAuthority.sol";
+import {MixinImmutables} from "../immutable/MixinImmutables.sol";
+import {MixinStorage} from "../immutable/MixinStorage.sol";
+import {IMinimumVersion} from "../../extensions/adapters/interfaces/IMinimumVersion.sol";
+import {IAuthority} from "../../interfaces/IAuthority.sol";
+import {IRigoblockV3PoolFallback} from "../../interfaces/pool/IRigoblockV3PoolFallback.sol";
+import {VersionLib} from "../../libraries/VersionLib.sol";
 
 abstract contract MixinFallback is MixinImmutables, MixinStorage {
+    using VersionLib for string;
+
+    error ExtensionsMapCallFailed();
+    error PoolImplementationDirectCallNotAllowed();
+    error PoolMethodNotAllowed();
+    error PoolVersionNotSupported();
+
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
         _checkDelegateCall();
@@ -15,26 +24,42 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
 
     /* solhint-disable no-complex-fallback */
     /// @inheritdoc IRigoblockV3PoolFallback
-    fallback() external payable {
-        address adapter = _getApplicationAdapter(msg.sig);
-        // we check that the method is approved by governance
-        require(adapter != address(0), "POOL_METHOD_NOT_ALLOWED_ERROR");
+    /// @dev Extensions are persistent, while adapters are upgradable by the governance.
+    /// @dev uses shouldDelegatecall to flag selectors that should prompt a delegatecall.
+    fallback() external payable onlyDelegateCall {
+        // returns nil target if selector not mapped. Uses delegatecall to preserve context of msg.sender for shouldDelegatecall flag
+        (bool success, bytes memory returnData) = address(_extensionsMap).delegatecall(abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig)));
+        // TODO: we probably do now need to assert success, as ExtensionsMap is hardcoded
+        require(success, ExtensionsMapCallFailed());
+        (address target, bool shouldDelegatecall) = abi.decode(returnData, (address, bool));
 
-        // direct fallback to implementation will result in staticcall to extension as implementation owner is address(1)
-        address poolOwner = pool().owner;
+        if (target == _ZERO_ADDRESS) {
+            target = IAuthority(authority).getApplicationAdapter(msg.sig);
+
+            // we check that the method is approved by governance
+            require(target != _ZERO_ADDRESS, PoolMethodNotAllowed());
+
+            // use try statement, as previously deployed adapters do not implement the method and are supported
+            try IMinimumVersion(target).requiredVersion() returns (string memory required) {
+                require(VERSION.isVersionHigherOrEqual(required), PoolVersionNotSupported());
+            } catch {}
+
+            // adapter calls are aimed at pool operator use and for offchain inspection
+            shouldDelegatecall = pool().owner == msg.sender;
+        }
+
         assembly {
             calldatacopy(0, 0, calldatasize())
-            let success
-            // pool owner can execute a delegatecall to extension, any other caller will perform a staticcall
-            if eq(caller(), poolOwner) {
-                success := delegatecall(gas(), adapter, 0, calldatasize(), 0, 0)
+            //let success
+            if eq(shouldDelegatecall, 1) {
+                success := delegatecall(gas(), target, 0, calldatasize(), 0, 0)
                 returndatacopy(0, 0, returndatasize())
                 if eq(success, 0) {
                     revert(0, returndatasize())
                 }
                 return(0, returndatasize())
             }
-            success := staticcall(gas(), adapter, 0, calldatasize(), 0, 0)
+            success := staticcall(gas(), target, 0, calldatasize(), 0, 0)
             returndatacopy(0, 0, returndatasize())
             // we allow the staticcall to revert with rich error, should we want to add errors to extensions view methods
             if eq(success, 0) {
@@ -50,13 +75,6 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     receive() external payable onlyDelegateCall {}
 
     function _checkDelegateCall() private view {
-        require(address(this) != _implementation, "POOL_IMPLEMENTATION_DIRECT_CALL_NOT_ALLOWED_ERROR");
-    }
-
-    /// @dev Returns the address of the application adapter.
-    /// @param selector Hash of the method signature.
-    /// @return Address of the application adapter.
-    function _getApplicationAdapter(bytes4 selector) private view returns (address) {
-        return IAuthority(authority).getApplicationAdapter(selector);
+        require(address(this) != _implementation, PoolImplementationDirectCallNotAllowed());
     }
 }

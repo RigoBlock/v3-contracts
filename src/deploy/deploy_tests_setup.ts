@@ -1,6 +1,5 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { AddressZero } from "@ethersproject/constants"
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
@@ -34,15 +33,7 @@ const deploy: DeployFunction = async function (
   });
 
   const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  // as long as authority address is same on all chains, pool implementation will have same address
-  const poolImplementation = await deploy("RigoblockV3Pool", {
-    from: deployer,
-    args: [authority.address],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  // same as above
+  // same factory address on all chains guarantees same multichain proxy addresses
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
@@ -52,17 +43,6 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
-
-  const proxyFactoryInstance = await hre.ethers.getContractAt(
-    "RigoblockPoolProxyFactory",
-    proxyFactory.address
-  );
-  const currentImplementation = await proxyFactoryInstance.implementation()
-  if (currentImplementation !== poolImplementation.address) {
-    await proxyFactoryInstance.setImplementation(poolImplementation.address)
-  }
-
-  await authorityInstance.setFactory(proxyFactory.address, true)
 
   // same on altchains but different from one deployed on Ethereum
   const rigoToken = await deploy("RigoToken", {
@@ -136,6 +116,82 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const eUpgrade = await deploy("EUpgrade", {
+    from: deployer,
+    args: [proxyFactory.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const oracle = await deploy("MockOracle", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const eOracle = await deploy("EOracle", {
+    from: deployer,
+    args: [oracle.address],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const univ3Npm = await deploy("MockUniswapNpm", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const univ4Posm = await deploy("MockUniswapPosm", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const eApps = await deploy("EApps", {
+    from: deployer,
+    args: [stakingProxy.address, univ3Npm.address, univ4Posm.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
+  const extensionsMap = await deploy("ExtensionsMap", {
+    from: deployer,
+    args: [extensions],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const weth = await deploy("WETH9", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  // implementation address is different on each chain as extensionsMap is different, but proxies will have the same address
+  const poolImplementation = await deploy("RigoblockV3Pool", {
+    from: deployer,
+    args: [authority.address, extensionsMap.address, weth.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const proxyFactoryInstance = await hre.ethers.getContractAt(
+    "RigoblockPoolProxyFactory",
+    proxyFactory.address
+  );
+  const currentImplementation = await proxyFactoryInstance.implementation()
+  if (currentImplementation !== poolImplementation.address) {
+    await proxyFactoryInstance.setImplementation(poolImplementation.address)
+  }
+
+  await authorityInstance.setFactory(proxyFactory.address, true)
+
   const aStaking = await deploy("AStaking", {
     from: deployer,
     args: [
@@ -166,7 +222,7 @@ const deploy: DeployFunction = async function (
 
   await rigoTokenInstance.changeMintingAddress(inflation.address)
 
-  const inflationL2 = await deploy("InflationL2", {
+  await deploy("InflationL2", {
     from: deployer,
     args: [deployer],
     log: true,

@@ -13,11 +13,7 @@ contract TestLibFixedMath {
         c = LibFixedMath.div(a, b);
     }
 
-    function mulDiv(
-        int256 a,
-        int256 n,
-        int256 d
-    ) external pure returns (int256 c) {
+    function mulDiv(int256 a, int256 n, int256 d) external pure returns (int256 c) {
         c = LibFixedMath.mulDiv(a, n, d);
     }
 

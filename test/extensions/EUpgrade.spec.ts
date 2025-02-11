@@ -41,13 +41,13 @@ describe("EUpgrade", async () => {
         it('should revert if called directly', async () => {
             const { eUpgrade } = await setupTests()
             await expect(eUpgrade.upgradeImplementation())
-                .to.be.revertedWith("EUPGRADE_DIRECT_CALL_ERROR")
+                .to.be.revertedWith('EUpgradeDirectCall()')
         })
 
         it('should revert if new implementation is same as current', async () => {
             const { pool } = await setupTests()
             await expect(pool.upgradeImplementation())
-                .to.be.revertedWith("EUPGRADE_IMPLEMENTATION_SAME_AS_CURRENT_ERROR")
+                .to.be.revertedWith('EUpgradeImplementationIsSameAsCurrent()')
         })
 
         it('should upgrade implementation', async () => {

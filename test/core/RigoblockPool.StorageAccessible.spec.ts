@@ -3,17 +3,15 @@ import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
-import { getAddress } from "ethers/lib/utils";
 import { utils } from "ethers";
 
 describe("MixinStorageAccessible", async () => {
-    const [ user1, user2, user3 ] = waffle.provider.getWallets()
+    const [ user1, user2 ] = waffle.provider.getWallets()
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
         const AuthorityInstance = await deployments.get("Authority")
         const Authority = await hre.ethers.getContractFactory("Authority")
-        const authority = Authority.attach(AuthorityInstance.address)
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
@@ -37,15 +35,11 @@ describe("MixinStorageAccessible", async () => {
     // this method is not useful when reading non-null uninitialized params (implementation defaults are used),
     //  i.e. 'unitaryValue', 'spread', 'minPeriod', 'decimals'
     describe("getStorageAt", async () => {
-        it('can read beacon', async () => {
-            const { factory, pool, authority } = await setupTests()
+        it('can read beacon and upgrade implementation', async () => {
+            const { factory, pool } = await setupTests()
             const EPool = await hre.ethers.getContractFactory("EUpgrade")
-            const extension = await EPool.deploy(factory.address)
+            await EPool.deploy(factory.address)
             const ePool = EPool.attach(pool.address)
-            await expect(ePool.getBeacon()).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
-            await authority.setAdapter(extension.address, true)
-            // "2d6b3a6b": "getBeacon()"
-            authority.addMethod("0x2d6b3a6b", extension.address)
             const beacon = await ePool.callStatic.getBeacon()
             expect(beacon).to.be.eq(factory.address)
             const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
@@ -54,8 +48,6 @@ describe("MixinStorageAccessible", async () => {
             expect(encodedPack).to.be.eq((await factory.implementation()).toLowerCase())
             await factory.setImplementation(factory.address)
             expect(await factory.implementation()).to.be.eq(factory.address)
-            // "466f3dc3": "upgradeImplementation()"
-            await authority.addMethod("0x466f3dc3", extension.address)
             await expect(ePool.upgradeImplementation()).to.emit(ePool, "Upgraded").withArgs(factory.address)
         })
 
@@ -167,11 +159,10 @@ describe("MixinStorageAccessible", async () => {
             )
             expect(poolParams).to.be.eq(encodedPack)
             await pool.mint(user2.address, parseEther("10"), 1, { value: parseEther("10") })
-            await pool.setUnitaryValue(parseEther("1.1"))
             poolParams = await pool.getStorageAt(poolTokensSlot, 2)
             encodedPack = utils.solidityPack(
                 ['uint256', 'uint256'],
-                [parseEther("1.1"), parseEther("9.5")]
+                [parseEther("1"), parseEther("10")]
             )
             expect(poolParams).to.be.eq(encodedPack)
         })

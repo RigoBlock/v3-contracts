@@ -127,9 +127,9 @@ describe("AUniswap", async () => {
                     deadline: 1
                 })
             ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            const wethAddress = await pool.weth()
-            await eWhitelist.whitelistToken(wethAddress)
-            // the following transaction sets approval to WETH9 in TestUniswapNpm.sol as it reads positions(tokenId) but won't revert.
+            await eWhitelist.whitelistToken(grgToken.address)
+            // the following call will prompt call to mock univ3npm, which will return position tokens,
+            // which need to be whitelisted for the pool to be able to set token approvals.
             await pool.increaseLiquidity({
                 tokenId: 1,
                 amount0Desired: 100,
@@ -426,7 +426,7 @@ describe("AUniswap", async () => {
             await authority.removeMethod("0x12210e8a", aUniswap)
             await expect(
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            ).to.be.revertedWith('PoolMethodNotAllowed()')
         })
 
         it('should send multicall with deadline', async () => {
@@ -960,7 +960,7 @@ describe("AUniswap", async () => {
                 [grgToken.address, 50]
             )
             await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData}))
-                .to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+                .to.be.revertedWith('PoolMethodNotAllowed()')
             await authority.addMethod("0xe90a182f", aUniswap)
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedSweepData})
         })

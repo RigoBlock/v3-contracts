@@ -8,7 +8,7 @@ import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../
 import { timeTravel, ProposedAction, TimeType, VoteType } from "../utils/utils";
 import { getAddress } from "ethers/lib/utils";
 
-describe("AStaking", async () => {
+describe("AGovernance", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
     const description = 'gov proposal one'
 
@@ -94,10 +94,10 @@ describe("AStaking", async () => {
             const aGovernance = await AGovernance.deploy(governance)
             const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user2.address, amount])
             const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
-            await expect(pool.propose([action], description)).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            await expect(pool.propose([action], description)).to.be.revertedWith('PoolMethodNotAllowed()')
             // we add the adapter
             await authority.setAdapter(aGovernance.address, true)
-            await expect(pool.propose([action], description)).to.be.revertedWith("POOL_METHOD_NOT_ALLOWED_ERROR")
+            await expect(pool.propose([action], description)).to.be.revertedWith('PoolMethodNotAllowed()')
             // we whitelist the methods
             // "56781388": "castVote(uint256, VoteType)",
             // "fe0d94c1": "execute(uint256)",

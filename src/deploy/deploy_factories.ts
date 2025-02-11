@@ -26,19 +26,22 @@ const deploy: DeployFunction = async function (
   });
 
   const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const poolImplementation = await deploy("RigoblockV3Pool", {
-    from: deployer,
-    args: [authority.address],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
+  /*const proxyFactory =*/ await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
       originalImplementationAddress,
       registry.address
     ],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  // TODO: pool implementation requires deployed extensionsMap address (different by chain)
+  /*const extensionsMap = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  const weth = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  const poolImplementation = await deploy("RigoblockV3Pool", {
+    from: deployer,
+    args: [authority.address, extensionsMap, weth],
     log: true,
     deterministicDeployment: true,
   });
@@ -50,7 +53,7 @@ const deploy: DeployFunction = async function (
   const currentImplementation = await proxyFactoryInstance.implementation()
   if (currentImplementation !== poolImplementation.address) {
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
-  }
+  }*/
 };
 
 deploy.tags = ['factory', 'pool-deps', 'l2-suite', 'main-suite']

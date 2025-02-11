@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../actions/MixinOwnerActions.sol";
+import {MixinPoolValue} from "../state/MixinPoolValue.sol";
+import {IRigoblockV3PoolState} from "../../interfaces/pool/IRigoblockV3PoolState.sol";
+import {Pool} from "../../libraries/EnumerableSet.sol";
 
-abstract contract MixinPoolState is MixinOwnerActions {
+abstract contract MixinPoolState is MixinPoolValue {
     /*
      * EXTERNAL VIEW METHODS
      */
@@ -15,15 +17,22 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
+    /// @dev Grg staking and UniV3 positions will not be returned by default.
+    function getActiveApplications() external view override returns (uint256 packedApplications) {
+        return _getActiveApplications();
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function getActiveTokens() external view override returns (ActiveTokens memory tokens) {
+        return _getActiveTokens();
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
     function getPoolStorage()
         external
         view
         override
-        returns (
-            ReturnedPool memory poolInitParams,
-            PoolParams memory poolVariables,
-            PoolTokens memory poolTokensInfo
-        )
+        returns (ReturnedPool memory poolInitParams, PoolParams memory poolVariables, PoolTokens memory poolTokensInfo)
     {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
@@ -33,8 +42,18 @@ abstract contract MixinPoolState is MixinOwnerActions {
     }
 
     /// @inheritdoc IRigoblockV3PoolState
+    function name() external view override returns (string memory) {
+        return pool().name;
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
     function owner() external view override returns (address) {
         return pool().owner;
+    }
+
+    /// @inheritdoc IRigoblockV3PoolState
+    function totalSupply() external view override returns (uint256) {
+        return poolTokens().totalSupply;
     }
 
     /*
@@ -74,12 +93,12 @@ abstract contract MixinPoolState is MixinOwnerActions {
 
     /// @inheritdoc IRigoblockV3PoolState
     function getPoolTokens() public view override returns (PoolTokens memory) {
-        return PoolTokens({unitaryValue: _getUnitaryValue(), totalSupply: poolTokens().totalSupply});
-    }
-
-    /// @inheritdoc IRigoblockV3PoolState
-    function name() public view override returns (string memory) {
-        return pool().name;
+        uint256 unitaryValue = poolTokens().unitaryValue;
+        return
+            PoolTokens({
+                unitaryValue: unitaryValue != 0 ? unitaryValue : 10 ** pool().decimals,
+                totalSupply: poolTokens().totalSupply
+            });
     }
 
     /// @inheritdoc IRigoblockV3PoolState
@@ -96,31 +115,30 @@ abstract contract MixinPoolState is MixinOwnerActions {
         return string(bytesArray);
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
-    function totalSupply() public view override returns (uint256) {
-        return poolTokens().totalSupply;
-    }
-
     /*
      * INTERNAL VIEW METHODS
      */
+    function _getActiveApplications() internal view override returns (uint256) {
+        return activeApplications().packedApplications;
+    }
+
     function _getFeeCollector() internal view override returns (address) {
         address feeCollector = poolParams().feeCollector;
-        return feeCollector != address(0) ? feeCollector : pool().owner;
+        return feeCollector != _ZERO_ADDRESS ? feeCollector : pool().owner;
     }
 
     function _getMinPeriod() internal view override returns (uint48) {
         uint48 minPeriod = poolParams().minPeriod;
-        return minPeriod != 0 ? minPeriod : _MIN_LOCKUP;
+        return minPeriod != 0 ? minPeriod : _MAX_LOCKUP;
     }
 
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
-        return spread != 0 ? spread : _INITIAL_SPREAD;
+        return spread != 0 ? spread : _MAX_SPREAD;
     }
 
-    function _getUnitaryValue() internal view override returns (uint256) {
-        uint256 unitaryValue = poolTokens().unitaryValue;
-        return unitaryValue != 0 ? unitaryValue : 10**pool().decimals;
+    function _getActiveTokens() private view returns (ActiveTokens memory tokens) {
+        tokens.activeTokens = activeTokensSet().addresses;
+        tokens.baseToken = pool().baseToken;
     }
 }

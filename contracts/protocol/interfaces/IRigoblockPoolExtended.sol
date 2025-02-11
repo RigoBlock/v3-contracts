@@ -19,12 +19,10 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../IRigoblockV3Pool.sol";
-import "../extensions/adapters/interfaces/IRigoblockExtensions.sol";
+import {IRigoblockV3Pool} from "../IRigoblockV3Pool.sol";
+import {IRigoblockExtensions} from "../extensions/adapters/interfaces/IRigoblockExtensions.sol";
 
 /// @title Rigoblock Pool Extended Interface - Allows interaction with all the pool's supported methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IRigoblockPoolExtended is IRigoblockV3Pool, IRigoblockExtensions {
-
-}
+interface IRigoblockPoolExtended is IRigoblockV3Pool, IRigoblockExtensions {}

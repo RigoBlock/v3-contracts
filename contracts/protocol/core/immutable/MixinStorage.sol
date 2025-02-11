@@ -17,7 +17,9 @@
 
 */
 
-import "./MixinImmutables.sol";
+import {MixinImmutables} from "./MixinImmutables.sol";
+import {AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
+import {ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 
 pragma solidity >=0.8.0 <0.9.0;
 
@@ -30,6 +32,8 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
         assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
         assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
+        assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
+        assert(_APPLICATIONS_SLOT == bytes32(uint256(keccak256("pool.proxy.applications")) - 1));
     }
 
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
@@ -42,23 +46,6 @@ abstract contract MixinStorage is MixinImmutables {
         assembly {
             s.slot := _POOL_ACCOUNTS_SLOT
         }
-    }
-
-    /// @notice Pool initialization parameters.
-    /// @dev This struct is not visible externally and used to store/read pool init params.
-    /// @param name String of the pool name (max 32 characters).
-    /// @param symbol Bytes8 of the pool symbol (from 3 to 5 characters).
-    /// @param decimals Uint8 decimals.
-    /// @param owner Address of the pool operator.
-    /// @param unlocked Boolean the pool is locked for reentrancy check.
-    /// @param baseToken Address of the base token of the pool (0 for base currency).
-    struct Pool {
-        string name;
-        bytes8 symbol;
-        uint8 decimals;
-        address owner;
-        bool unlocked;
-        address baseToken;
     }
 
     function pool() internal pure returns (Pool storage s) {
@@ -89,6 +76,18 @@ abstract contract MixinStorage is MixinImmutables {
     function poolTokens() internal pure returns (PoolTokens storage s) {
         assembly {
             s.slot := _POOL_TOKENS_SLOT
+        }
+    }
+
+    function activeTokensSet() internal pure returns (AddressSet storage s) {
+        assembly {
+            s.slot := _TOKEN_REGISTRY_SLOT
+        }
+    }
+
+    function activeApplications() internal pure returns (ApplicationsSlot storage s) {
+        assembly {
+            s.slot := _APPLICATIONS_SLOT
         }
     }
 }
