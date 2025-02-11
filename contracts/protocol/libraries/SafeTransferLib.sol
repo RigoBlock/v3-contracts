@@ -9,13 +9,13 @@ type Currency is address;
 /// @dev This library allows for safe transfer of tokens without using assembly
 library SafeTransferLib {
     error ApprovalFailed(address token);
-    error ETHTransferFailed();
+    error NativeTransferFailed();
     error TokenTransferFailed();
     error TokenTransferFromFailed();
 
     function safeTransferNative(address to, uint256 amount) internal {
         (bool success, ) = to.call{gas: 2300, value: amount}("");
-        require(success, ETHTransferFailed());
+        require(success, NativeTransferFailed());
     }
 
     function safeTransfer(address token, address to, uint256 amount) internal {

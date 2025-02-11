@@ -383,7 +383,7 @@ describe("Proxy", async () => {
         await timeTravel({ seconds: 2592000, mine: true })
         await expect(
             pool.burn(parseEther("1"), 1)
-        ).to.be.revertedWith('ETHTransferFailed()')
+        ).to.be.revertedWith('NativeTransferFailed()')
     })
 
     describe("initializePool", async () => {

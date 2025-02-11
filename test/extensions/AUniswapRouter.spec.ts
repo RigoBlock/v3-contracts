@@ -326,16 +326,84 @@ describe("AUniswapRouter", async () => {
       const { commands, inputs } = planner
       const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
       const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      expect(await grgToken.allowance(pool.address, uniRouterAddress)).to.be.eq(0)
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      // rigoblock sets max approval, and then resets it to 1 to prevent clearing storage
+      expect(await grgToken.allowance(pool.address, uniRouterAddress)).to.be.eq(1)
+    })
+
+    it('should transfer eth to universal router with settle', async () => {
+      const { pool, grgToken, uniRouterAddress } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
+        {
+          poolKey: PAIR.poolKey,
+          zeroForOne: true,
+          amountIn: ethers.utils.parseEther("12"),
+          amountOutMinimum: ethers.utils.parseEther("22"),
+          hookData: '0x',
+        },
+      ])
+      v4Planner.addAction(Actions.SETTLE, [PAIR.poolKey.currency0, parseEther("12"), true])
+      let planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
+      // eth transfer reverts without a reason, so we can't check for a revert message
       //await expect(
-      //  extPool.execute(commands, inputs, DEADLINE)
-      //).to.be.revertedWith('PositionOwner()')
+      //  user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      //).to.be.revertedWith('NativeTransferFailed()')
+      await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      // expect universal router to have received eth
+      expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("12"))
+    })
+
+    it('should revert if recipient is not pool', async () => {
+      const { pool, grgToken, uniRouterAddress } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, user2.address, parseEther("12")])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('RecipientIsNotSmartPool()')
+    })
+
+    it('should take a currency', async () => {
+      const { pool, grgToken, uniRouterAddress } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
       const encodedSwapData = extPool.interface.encodeFunctionData(
         'execute(bytes,bytes[],uint256)',
         [commands, inputs, DEADLINE]
       )
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      // rigoblock sets max approval, and then resets it to 1 to prevent clearing storage
-      expect(await grgToken.allowance(pool.address, uniRouterAddress)).to.be.eq(1)
     })
   })
 });

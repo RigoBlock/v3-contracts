@@ -480,10 +480,10 @@ describe("BaseTokenProxy", async () => {
             await expect(pool.burnForToken(0, 0, AddressZero)).to.be.revertedWith('PoolBurnNullAmount()')
             await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
             await timeTravel({ seconds: 2592000, mine: true })
-            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('ETHTransferFailed()')
+            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('NativeTransferFailed()')
             await user1.sendTransaction({ to: pool.address, value: parseEther("98")})
             await expect(pool.burnForToken(parseEther("0.08"), 0, AddressZero)).to.be.revertedWith('BaseTokenBalance()')
-            await expect(pool.burnForToken(parseEther("5"), 0, AddressZero)).to.be.revertedWith('ETHTransferFailed()')
+            await expect(pool.burnForToken(parseEther("5"), 0, AddressZero)).to.be.revertedWith('NativeTransferFailed()')
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, AddressZero)
             )
