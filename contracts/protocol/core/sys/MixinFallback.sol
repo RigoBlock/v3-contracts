@@ -5,7 +5,7 @@ import {MixinImmutables} from "../immutable/MixinImmutables.sol";
 import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IMinimumVersion} from "../../extensions/adapters/interfaces/IMinimumVersion.sol";
 import {IAuthority} from "../../interfaces/IAuthority.sol";
-import {IRigoblockV3PoolFallback} from "../../interfaces/pool/IRigoblockV3PoolFallback.sol";
+import {ISmartPoolFallback} from "../../interfaces/pool/ISmartPoolFallback.sol";
 import {VersionLib} from "../../libraries/VersionLib.sol";
 
 abstract contract MixinFallback is MixinImmutables, MixinStorage {
@@ -23,7 +23,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     }
 
     /* solhint-disable no-complex-fallback */
-    /// @inheritdoc IRigoblockV3PoolFallback
+    /// @inheritdoc ISmartPoolFallback
     /// @dev Extensions are persistent, while adapters are upgradable by the governance.
     /// @dev uses shouldDelegatecall to flag selectors that should prompt a delegatecall.
     fallback() external payable onlyDelegateCall {
@@ -71,7 +71,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
 
     /* solhint-enable no-complex-fallback */
 
-    /// @inheritdoc IRigoblockV3PoolFallback
+    /// @inheritdoc ISmartPoolFallback
     receive() external payable onlyDelegateCall {}
 
     function _checkDelegateCall() private view {

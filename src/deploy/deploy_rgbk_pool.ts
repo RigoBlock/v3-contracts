@@ -78,7 +78,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await deploy("RigoblockV3Pool", {
+  await deploy("SmartPool", {
     from: deployer,
     args: [authority.address, extensionsMap.address, weth.address],
     log: true,

@@ -61,6 +61,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
 
+    // TODO: check move errors to interface?
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
     error PositionOwner();
@@ -68,8 +69,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     error ReentrantCall();
     error NestedSubPlan();
     error UniV4PositionsLimitExceeded();
+    error DirectCallNotAllowed();
 
     string public constant override requiredVersion = "4.0.0";
+    address private immutable _adapter;
 
     // transient storage slots, only used by this contract
     // bytes32(uint256(keccak256("AUniswapRouter.lock")) - 1)
@@ -87,6 +90,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     constructor(address _universalRouter, address _v4Posm, address weth) AUniswapDecoder(weth) {
         _uniswapRouter = _universalRouter;
         _positionManager = IPositionManager(_v4Posm);
+        _adapter = address(this);
     }
 
     modifier checkDeadline(uint256 deadline) {
@@ -106,6 +110,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         if (_reentrancyDepthSlot().asUint256().tload() == 0) {
             _lockSlot().asBoolean().tstore(false);
         }
+    }
+
+    modifier onlyDelegateCall() {
+        require(address(this) != _adapter, DirectCallNotAllowed());
+        _;
     }
 
     function _lockSlot() private pure returns (bytes32) {
@@ -159,10 +168,13 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         }
     }
 
-    // TODO: add non-reentrant modifier (can be used as can only be reentered by itself, which it won't)
     /// @inheritdoc IAUniswapRouter
-    /// @notice Can be not reentrancy-protected, as will revert in PositionManager
-    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external override {
+    /// @notice Is not reentrancy-protected, as will revert in PositionManager.
+    /// @dev Delegatecall-only for extra safety, to pervent accidental user liquidity locking.
+    function modifyLiquidities(
+        bytes calldata unlockData,
+        uint256 deadline
+    ) external onlyDelegateCall override {
         (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
         assert(actions.length == params.length);
         Parameters memory newParams;

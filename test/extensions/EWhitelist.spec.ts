@@ -51,7 +51,7 @@ describe("EWhitelist", async () => {
             const factory = Factory.attach(RigoblockPoolProxyFactory.address)
             const { newPoolAddress } = await factory.callStatic.createPool('testpool', 'TEST', AddressZero)
             await factory.createPool('testpool', 'TEST', AddressZero)
-            let pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            let pool = await hre.ethers.getContractAt("SmartPool", newPoolAddress)
             // slot0 = mapping(address => UserAccount) userAccounts
             // TODO: because first slot is a mapping, it could overwrite the UserAccounts storage if pool address = token address
             // this will happen if whitelisted token = pool, which should never happen unless pools can buy other pools
@@ -85,7 +85,7 @@ describe("EWhitelist", async () => {
             await authority.addMethod("0xab37f486", eWhitelist.address)
             // pool will be able to whitelist token in its own storage.
             expect(await pool.isWhitelistedToken(rigoToken.address)).to.be.eq(true)
-            pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            pool = await hre.ethers.getContractAt("SmartPool", newPoolAddress)
             // owner should never be affected
             expect(await pool.owner()).to.be.eq(user1.address)
             // slot0 is reserved for mapping and always empty

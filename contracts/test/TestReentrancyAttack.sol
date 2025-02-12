@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../protocol/IRigoblockV3Pool.sol";
+import "../protocol/ISmartPool.sol";
 
 contract TestReentrancyAttack {
     address private immutable RIGOBLOCK_POOL;
@@ -19,7 +19,7 @@ contract TestReentrancyAttack {
     function mintPool() public {
         count += 1;
         if (count <= maxLoopCount) {
-            try IRigoblockV3Pool(payable(RIGOBLOCK_POOL)).mint(address(this), 1e19, 1) {} catch Error(
+            try ISmartPool(payable(RIGOBLOCK_POOL)).mint(address(this), 1e19, 1) {} catch Error(
                 string memory reason
             ) {
                 revert(reason);

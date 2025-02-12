@@ -4,7 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {MixinActions} from "./MixinActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
-import {IRigoblockV3PoolOwnerActions} from "../../interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
+import {ISmartPoolOwnerActions} from "../../interfaces/pool/ISmartPoolOwnerActions.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
@@ -25,13 +25,13 @@ abstract contract MixinOwnerActions is MixinActions {
         _;
     }
 
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
+    /// @inheritdoc ISmartPoolOwnerActions
     function changeFeeCollector(address feeCollector) external override onlyOwner {
         poolParams().feeCollector = feeCollector;
         emit NewCollector(msg.sender, address(this), feeCollector);
     }
 
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
+    /// @inheritdoc ISmartPoolOwnerActions
     function changeMinPeriod(uint48 minPeriod) external override onlyOwner {
         /// @notice minimum period is always at least 1 to prevent flash txs.
         require(
@@ -42,7 +42,7 @@ abstract contract MixinOwnerActions is MixinActions {
         emit MinimumPeriodChanged(address(this), minPeriod);
     }
 
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
+    /// @inheritdoc ISmartPoolOwnerActions
     function changeSpread(uint16 newSpread) external override onlyOwner {
         // 0 value is sentinel for uninitialized spread, returning _MAX_SPREAD
         require(newSpread > 0 && newSpread <= _MAX_SPREAD, PoolSpreadInvalid(_MAX_SPREAD));
@@ -112,21 +112,21 @@ abstract contract MixinOwnerActions is MixinActions {
         }
     }
 
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
+    /// @inheritdoc ISmartPoolOwnerActions
     function setKycProvider(address kycProvider) external override onlyOwner {
         require(_isContract(kycProvider), PoolInputIsNotContract());
         poolParams().kycProvider = kycProvider;
         emit KycProviderSet(address(this), kycProvider);
     }
 
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
+    /// @inheritdoc ISmartPoolOwnerActions
     function setTransactionFee(uint16 transactionFee) external override onlyOwner {
         require(transactionFee <= _MAX_TRANSACTION_FEE, PoolFeeBiggerThanMax(_MAX_TRANSACTION_FEE)); //fee cannot be higher than 1%
         poolParams().transactionFee = transactionFee;
         emit NewFee(msg.sender, address(this), transactionFee);
     }
 
-    /// @inheritdoc IRigoblockV3PoolOwnerActions
+    /// @inheritdoc ISmartPoolOwnerActions
     function setOwner(address newOwner) public override onlyOwner {
         require(newOwner != _ZERO_ADDRESS, PoolNullOwnerInput());
         address oldOwner = pool().owner;

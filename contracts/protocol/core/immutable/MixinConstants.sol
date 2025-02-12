@@ -19,13 +19,13 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
-import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
+import {ISmartPool} from "../../ISmartPool.sol";
+import {ISmartPoolImmutable} from "../../interfaces/pool/ISmartPoolImmutable.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.
-abstract contract MixinConstants is IRigoblockV3Pool {
-    /// @inheritdoc IRigoblockV3PoolImmutable
+abstract contract MixinConstants is ISmartPool {
+    /// @inheritdoc ISmartPoolImmutable
     string public constant override VERSION = "4.0.0";
 
     bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;

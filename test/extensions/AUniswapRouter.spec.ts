@@ -58,7 +58,7 @@ describe("AUniswapRouter", async () => {
     await authority.addMethod("0x3593564c", aUniswapRouter.address)
     await authority.addMethod("0x24856bc3", aUniswapRouter.address)
     await authority.addMethod("0xdd46508f", aUniswapRouter.address)
-    const Pool = await hre.ethers.getContractFactory("RigoblockV3Pool")
+    const Pool = await hre.ethers.getContractFactory("SmartPool")
     return {
       grgToken: GrgToken.attach(GrgTokenInstance.address),
       pool: Pool.attach(newPoolAddress),

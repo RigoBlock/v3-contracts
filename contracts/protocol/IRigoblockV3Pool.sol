@@ -19,27 +19,10 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import {IERC20} from "./interfaces/IERC20.sol";
-import {IRigoblockV3PoolActions} from "./interfaces/pool/IRigoblockV3PoolActions.sol";
-import {IRigoblockV3PoolEvents} from "./interfaces/pool/IRigoblockV3PoolEvents.sol";
-import {IRigoblockV3PoolFallback} from "./interfaces/pool/IRigoblockV3PoolFallback.sol";
-import {IRigoblockV3PoolImmutable} from "./interfaces/pool/IRigoblockV3PoolImmutable.sol";
-import {IRigoblockV3PoolInitializer} from "./interfaces/pool/IRigoblockV3PoolInitializer.sol";
-import {IRigoblockV3PoolOwnerActions} from "./interfaces/pool/IRigoblockV3PoolOwnerActions.sol";
-import {IRigoblockV3PoolState} from "./interfaces/pool/IRigoblockV3PoolState.sol";
-import {IStorageAccessible} from "./interfaces/pool/IStorageAccessible.sol";
+import {ISmartPool} from "./ISmartPool.sol";
 
 /// @title Rigoblock V3 Pool Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
+/// @notice It is kept as imported by governance and staking, for backwards compatibility.
 // solhint-disable-next-line
-interface IRigoblockV3Pool is
-    IERC20,
-    IRigoblockV3PoolImmutable,
-    IRigoblockV3PoolEvents,
-    IRigoblockV3PoolFallback,
-    IRigoblockV3PoolInitializer,
-    IRigoblockV3PoolActions,
-    IRigoblockV3PoolOwnerActions,
-    IRigoblockV3PoolState,
-    IStorageAccessible
-{}
+interface IRigoblockV3Pool is ISmartPool {}

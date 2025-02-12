@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Rigoblock V3 Pool Events - Declares events of the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-interface IRigoblockV3PoolEvents {
+interface ISmartPoolEvents {
     /// @notice Emitted when a new pool is initialized.
     /// @dev Pool is initialized at new pool creation.
     /// @param group Address of the factory.

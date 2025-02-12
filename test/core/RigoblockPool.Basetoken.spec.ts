@@ -25,7 +25,7 @@ describe("BaseTokenProxy", async () => {
         )
         await factory.createPool('testpool','TEST',GrgTokenInstance.address)
         const pool = await hre.ethers.getContractAt(
-            "RigoblockV3Pool",
+            "SmartPool",
             newPoolAddress
         )
         const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
@@ -102,7 +102,7 @@ describe("BaseTokenProxy", async () => {
             poolData = await pool.getPoolTokens()
             // 5% default spread results in less token than amount in at initial price 1
             expect(poolData.totalSupply).to.be.eq(parseEther("19.5"))
-            await pool.setUnitaryValue()
+            await pool.updateUnitaryValue()
             poolData = await pool.getPoolTokens()
             // TODO: check it is ok to charge spread on mint (instead could do on burn only)
             // and verify root of approximations, as 20 eth balance is divided by 19.5 tokens
@@ -144,7 +144,7 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, parseEther("10"), 0)
             // TODO: storage should be updated after mint, this is probably not necessary. However, this one
             // goes through nav calculations, while first mint simply stores initial value
-            await pool.setUnitaryValue()
+            await pool.updateUnitaryValue()
             poolData = await pool.getPoolStorage()
             expect(poolData.poolTokensInfo.unitaryValue).to.be.eq(parseEther("1"))
             expect(poolData.poolTokensInfo.totalSupply).to.be.eq(parseEther("10"))
@@ -367,11 +367,11 @@ describe("BaseTokenProxy", async () => {
                 poolUsdc.connect(user2).mint(user2.address, 999, 0)
             ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
             // TODO: try burn, then set value again
-            /*await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
+            /*await poolUsdc.updateUnitaryValue()
+            await poolUsdc.updateUnitaryValue()
+            await poolUsdc.updateUnitaryValue()
             // the following line undeflows minimum liquidity (99.96% loss with small decimals), which is ok
-            poolUsdc.setUnitaryValue(401)*/
+            poolUsdc.updateUnitaryValue()*/
             // TODO: verify setting minimum period to 2 will set to 10?
             await timeTravel({ seconds: 2592000, mine: true })
             const burnAmount = 6000

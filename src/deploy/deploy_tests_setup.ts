@@ -174,7 +174,7 @@ const deploy: DeployFunction = async function (
   });
 
   // implementation address is different on each chain as extensionsMap is different, but proxies will have the same address
-  const poolImplementation = await deploy("RigoblockV3Pool", {
+  const poolImplementation = await deploy("SmartPool", {
     from: deployer,
     args: [authority.address, extensionsMap.address, weth.address],
     log: true,

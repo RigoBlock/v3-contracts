@@ -5,7 +5,7 @@ import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
-import {IRigoblockV3PoolActions} from "../../interfaces/pool/IRigoblockV3PoolActions.sol";
+import {ISmartPoolActions} from "../../interfaces/pool/ISmartPoolActions.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
@@ -28,7 +28,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /*
      * EXTERNAL METHODS
      */
-    /// @inheritdoc IRigoblockV3PoolActions
+    /// @inheritdoc ISmartPoolActions
     function mint(
         address recipient,
         uint256 amountIn,
@@ -65,7 +65,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         recipientAmount = _allocateMintTokens(recipient, mintedAmount);
     }
 
-    /// @inheritdoc IRigoblockV3PoolActions
+    /// @inheritdoc ISmartPoolActions
     function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant returns (uint256 netRevenue) {
         netRevenue = _burn(amountIn, amountOutMin, _BASE_TOKEN_FLAG);
     }
@@ -74,7 +74,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     // harm as a burn in any token. Considering burn must happen after a certain period, a pool opeartor has time to sell illiquid tokens.
     // technically, this could be used for exchanging big quantities of tokens at market rate. Which is not a big deal. prob should
     // allow only if user does not have enough base tokens
-    /// @inheritdoc IRigoblockV3PoolActions
+    /// @inheritdoc ISmartPoolActions
     function burnForToken(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -86,8 +86,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         netRevenue = _burn(amountIn, amountOutMin, tokenOut);
     }
 
-    /// @inheritdoc IRigoblockV3PoolActions
-    function setUnitaryValue() external override nonReentrant {
+    /// @inheritdoc ISmartPoolActions
+    function updateUnitaryValue() external override nonReentrant {
         NavComponents memory components = _updateNav();
 
         // unitary value is updated only with non-dust supply

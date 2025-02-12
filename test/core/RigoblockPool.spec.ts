@@ -30,7 +30,7 @@ describe("Proxy", async () => {
         )
         await factory.createPool('testpool','TEST',AddressZero)
         const pool = await hre.ethers.getContractAt(
-            "RigoblockV3Pool",
+            "SmartPool",
             newPoolAddress
         )
         return {
@@ -278,7 +278,7 @@ describe("Proxy", async () => {
 
             // updating nav will prompt going through position tokens, updating active tokens in storage, making a call to oracle extension
             await expect(
-                pool.setUnitaryValue()
+                pool.updateUnitaryValue()
             ).to.emit(pool, "NewNav").withArgs(
                 user1.address,
                 pool.address,
@@ -397,11 +397,11 @@ describe("Proxy", async () => {
     })
 
     // TODO: smart contract should be modified to update storage only if different from current value
-    describe("setUnitaryValue", async () => {
+    describe("updateUnitaryValue", async () => {
         it('should update storage when caller is any wallet', async () => {
             const { pool } = await setupTests()
             await pool.setOwner(user2.address)
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.be.revertedWith('PoolSupplyIsNullOrDust()')
             const etherAmount = parseEther("0.1")
             expect(
@@ -411,13 +411,13 @@ describe("Proxy", async () => {
                 pool.address,
                 parseEther("1")
             )
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
 
         it('should update storage when caller is owner', async () => {
             const { pool } = await setupTests()
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.be.revertedWith('PoolSupplyIsNullOrDust()')
             const etherAmount = parseEther("0.1")
             await expect(
@@ -427,7 +427,7 @@ describe("Proxy", async () => {
                 pool.address,
                 parseEther("1")
             )
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
 
@@ -437,7 +437,7 @@ describe("Proxy", async () => {
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             etherAmount = parseEther("0.4")
             await user1.sendTransaction({ to: pool.address, value: etherAmount})
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.emit(pool, "NewNav").withArgs(
                     user1.address,
                     pool.address,
@@ -455,7 +455,7 @@ describe("Proxy", async () => {
             await pool.burn(etherAmount, 1)
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
             expect(ethBalance).to.be.eq(0)
-            await expect(pool.setUnitaryValue()).to.be.revertedWith('PoolSupplyIsNullOrDust()')
+            await expect(pool.updateUnitaryValue()).to.be.revertedWith('PoolSupplyIsNullOrDust()')
         })
     })
 

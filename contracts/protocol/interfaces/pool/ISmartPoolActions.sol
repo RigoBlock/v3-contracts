@@ -22,7 +22,7 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @title Rigoblock V3 Pool Actions Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IRigoblockV3PoolActions {
+interface ISmartPoolActions {
     /// @notice Allows a user to mint pool tokens on behalf of an address.
     /// @param recipient Address receiving the tokens.
     /// @param amountIn Amount of base tokens.
@@ -52,5 +52,5 @@ interface IRigoblockV3PoolActions {
     ) external returns (uint256 netRevenue);
 
     /// @notice Allows anyone to store an up-to-date pool price.
-    function setUnitaryValue() external;
+    function updateUnitaryValue() external;
 }
