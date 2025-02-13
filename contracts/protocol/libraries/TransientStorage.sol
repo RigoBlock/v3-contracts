@@ -13,7 +13,7 @@ library TransientStorage {
     bytes32 internal constant _TRANSIENT_BALANCE_SLOT =
         bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
 
-    bytes32 internal constant _TRANSIENT_TICK_SLOT =
+    bytes32 internal constant _TRANSIENT_TWAP_TICK_SLOT =
         bytes32(uint256(keccak256("transient.tick.slot")) - 1);
 
     // Helper functions for tstore operations
@@ -35,10 +35,10 @@ library TransientStorage {
     }
 
     function storeTwap(address token, int24 twap) internal {
-        store(Int256.wrap(_TRANSIENT_TICK_SLOT), token, int256(twap));
+        store(Int256.wrap(_TRANSIENT_TWAP_TICK_SLOT), token, int256(twap));
     }
 
     function getTwap(address token) internal view returns (int24) {
-        return int24(get(Int256.wrap(_TRANSIENT_TICK_SLOT), token));
+        return int24(get(Int256.wrap(_TRANSIENT_TWAP_TICK_SLOT), token));
     }
 }

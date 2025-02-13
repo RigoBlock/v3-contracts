@@ -40,10 +40,6 @@ abstract contract MixinConstants is ISmartPool {
 
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
 
-    // TODO: verify correctness
-    bytes32 internal constant _TRANSIENT_BALANCE_SLOT =
-        bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
-
     address internal constant _ZERO_ADDRESS = address(0);
 
     address internal constant _BASE_TOKEN_FLAG = address(1);
