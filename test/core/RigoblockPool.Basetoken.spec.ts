@@ -421,7 +421,7 @@ describe("BaseTokenProxy", async () => {
                 amount0Min: 1,
                 amount1Min: 1,
                 recipient: pool.address,
-                deadline: 1
+                deadline: 1000000000000
             }
             await uniswapV3Npm.mint(mintParams)
             // minting again will activate token (a burn would also activate token)
@@ -451,7 +451,7 @@ describe("BaseTokenProxy", async () => {
                 .and.to.emit(weth, "Transfer").withArgs(
                     pool.address,
                     user1.address,
-                    parseEther("21.017444013240795913")
+                    parseEther("21.017614167737851312")
                 )
                 .and.to.not.emit(grgToken, "Transfer")
         })
@@ -508,7 +508,7 @@ describe("BaseTokenProxy", async () => {
                 amount0Min: 1,
                 amount1Min: 1,
                 recipient: pool.address,
-                deadline: 1
+                deadline: 1000000000000
             }
             await uniswapV3Npm.mint(mintParams)
             // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
@@ -519,16 +519,16 @@ describe("BaseTokenProxy", async () => {
             // minting again to activate token via nav calculations
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool, but includes lp token balances and weth balance
-            const poolTokens = await pool.getPoolTokens()
-            expect(poolTokens.unitaryValue).to.be.eq(parseEther("233.571684913933075816"))
+            const { unitaryValue } = await pool.getPoolTokens()
+            expect(unitaryValue).to.be.eq(parseEther("233.573575144654545834"))
             await timeTravel({ seconds: 2592000, mine: true })
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
                 // TODO: verify why we have a small difference in nav (possibly due to rounding)
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("233.596634176192422210"))
-                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.972512222064452097"))
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("233.598524407323662027"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.972673836826173103"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })

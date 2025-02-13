@@ -176,10 +176,9 @@ describe("AStaking", async () => {
             await timeTravel({ days: 30, mine:true })
             // remove base token balance, so below grg value in base token, so we can burn for token. Nav is approx 1.98019965344058
             await fullPool.burn(parseEther("150"), 1)
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576965"))
-            await fullPool.burnForToken(parseEther("49.500041661833943559"), 1, grgToken.address)
-            // must make sure token balance is null. There is an approximation error of 1 wei.
-            expect(await grgToken.balanceOf(pool.address)).to.be.eq(1)
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("2"))
+            await fullPool.burnForToken(parseEther("50"), 1, grgToken.address)
+            expect(await grgToken.balanceOf(pool.address)).to.be.eq(0)
             await fullPool.purgeInactiveTokensAndApps()
             // this time, token is removed because the token pool's balance is null or 1.
             expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
@@ -202,18 +201,16 @@ describe("AStaking", async () => {
             await timeTravel({ days: 30, mine:true })
             // remove base token balance, so below grg value in base token, so we can burn for token. Nav is approx 1.98019965344058
             await fullPool.burn(parseEther("150"), 1)
-            await fullPool.burnForToken(parseEther("49.500041661833943559"), 1, grgToken.address)
-            expect(await grgToken.balanceOf(pool.address)).to.be.eq(1)
+            await fullPool.burnForToken(parseEther("50"), 1, grgToken.address)
+            expect(await grgToken.balanceOf(pool.address)).to.be.eq(0)
             const totalSupply = await fullPool.totalSupply()
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576966"))
-            await fullPool.burn(totalSupply, 1)
-            // small nav variation due to approximation error
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576968"))
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("2"))
+            await expect(fullPool.burn(totalSupply, 1)).to.be.revertedWith('PoolBurnNullAmount()')
             expect(await fullPool.totalSupply()).to.be.eq(0)
-            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(2)
+            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(0)
             // assert pool value does not change (need to mint as supply is null)
             await fullPool.mint(user1.address, amount, 0, { value: amount })
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576968"))
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("2"))
         })
     })
 })

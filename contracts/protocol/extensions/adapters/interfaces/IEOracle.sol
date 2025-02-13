@@ -30,7 +30,8 @@ interface IEOracle {
     function convertTokenAmount(
         address token,
         uint256 amount,
-        address targetToken
+        address targetToken,
+        int24 ethToTargetTokenTick
     ) external view returns (uint256 value);
 
     /// @notice Returns the address of the oracle hook stored in the bytecode
@@ -42,11 +43,8 @@ interface IEOracle {
     /// @return Boolean the price feed exists.
     function hasPriceFeed(address token) external view returns (bool);
 
-    // TODO: check return a TWAP instead of last stored tick, as price will be stored for later use
-    /// @notice Returns token tick aginst native currency and flag whether the price feed exists.
+    /// @notice Returns token price aginst native currency.
     /// @param token The address of the token.
-    /// @return tick The token tick.
-    /// @return cardinality The max number of stored observations.
-    /// @dev Positive cardinality is flag for price feed existing.
-    function getTick(address token) external view returns (int24 tick, uint16 cardinality);
+    /// @return twap The time weighted average price.
+    function getTwap(address token) external view returns (int24 twap);
 }

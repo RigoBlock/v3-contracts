@@ -150,6 +150,13 @@ describe("Proxy", async () => {
             expect(netAmount.toString()).to.be.eq(etherAmount.toString())
         })
 
+        it('should revert with invalid recipient', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("0.00012")
+            await expect(pool.mint(AddressZero, etherAmount, 0, { value: etherAmount })
+            ).to.be.revertedWith('PoolMintInvalidRecipient()')
+        })
+
         it('should revert with order below minimum', async () => {
             const { pool } = await setupTests()
             const etherAmount = parseEther("0.00012")
@@ -394,7 +401,6 @@ describe("Proxy", async () => {
         })
     })
 
-    // TODO: smart contract should be modified to update storage only if different from current value
     describe("updateUnitaryValue", async () => {
         it('should update storage when caller is any wallet', async () => {
             const { pool } = await setupTests()
@@ -474,6 +480,13 @@ describe("Proxy", async () => {
                 .to.emit(pool, "KycProviderSet").withArgs(pool.address, pool.address)
             expect((await pool.getPoolParams()).kycProvider).to.be.eq(pool.address)
         })
+
+        it('should allow reset kyc provider', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getPoolParams()).kycProvider).to.be.eq(AddressZero)
+            await expect(pool.setKycProvider(AddressZero))
+                .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+        })
     })
 
     describe("changeFeeCollector", async () => {
@@ -492,6 +505,18 @@ describe("Proxy", async () => {
                 pool.changeFeeCollector(user2.address)
             ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
             expect((await pool.getPoolParams()).feeCollector).to.be.eq(user2.address)
+        })
+
+        it('should revert if new is same as current', async () => {
+            const { pool } = await setupTests()
+            const currentCollector = await pool.owner()
+            // first time we update storage
+            await expect(
+                pool.changeFeeCollector(currentCollector)
+            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, currentCollector)
+            await expect(
+                pool.changeFeeCollector(currentCollector)
+            ).to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
         })
     })
 
@@ -521,6 +546,16 @@ describe("Proxy", async () => {
                 .to.emit(pool, "SpreadChanged").withArgs(pool.address, 100)
             expect((await pool.getPoolParams()).spread).to.be.eq(100)
         })
+
+        it('should revert if same as current', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getPoolParams()).spread).to.be.eq(500)
+            // first time we update storage
+            await expect(pool.changeSpread(500))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
+            await expect(pool.changeSpread(500))
+                .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+        })
     })
 
     describe("changeMinPeriod", async () => {
@@ -546,9 +581,25 @@ describe("Proxy", async () => {
         it('should change spread', async () => {
             const { pool } = await setupTests()
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(2592000)
-            const newPeriod = 2592000
+            const newPeriod = 2592000 - 2591990
             await expect(pool.changeMinPeriod(newPeriod))
                 .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
+        })
+
+        it('will revert if spread same as current', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(2592000)
+            let newPeriod = 2592000 - 2591990
+            await expect(pool.changeMinPeriod(newPeriod))
+                .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
+            newPeriod = 2592000
+            await expect(pool.changeMinPeriod(newPeriod))
+                .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
+            await expect(pool.changeMinPeriod(newPeriod))
+                .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
         })
     })

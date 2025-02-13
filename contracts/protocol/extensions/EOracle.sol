@@ -32,6 +32,7 @@ contract EOracle is IEOracle {
     using TickMath for int24;
 
     address private constant _ZERO_ADDRESS = address(0);
+    uint256 private constant Q96 = 2**96;
 
     IOracle private immutable _oracle;
 
@@ -39,84 +40,44 @@ contract EOracle is IEOracle {
         _oracle = IOracle(oracleHookAddress);
     }
 
-    // TODO: check if good idea to use tload to read cached ticks
     /// @inheritdoc IEOracle
-    // TODO: as we will use a try statement in the calling method, we could avoid using try/catch statements here to save gas
-    // provided we do not need to return important information
     function convertTokenAmount(
         address token,
         uint256 amount,
-        address targetToken
+        address targetToken,
+        int24 ethToTargetTokenTick
     ) external view override returns (uint256 value) {
-        PoolKey memory key;
-        IOracle.ObservationState memory state;
-
-        // TODO: no need to use try/catch with known oracle contract
-        if (token == _ZERO_ADDRESS) {
-            (key, state) = _getPool(_ZERO_ADDRESS, targetToken, _getOracle());
-            try _getOracle().observe(key, _getSecondsAgos(state.cardinality)) returns (
-                int48[] memory tickCumulatives,
-                uint144[] memory
-            ) {
-                uint256 priceX128 = _getPriceX128(tickCumulatives, _getSecondsAgos(state.cardinality));
-                value = FullMath.mulDiv(amount, priceX128, 1 << 128); // convert native to token
-                return value;
-            } catch {
-                return value = 0; // Oracle failure or no pair available
+        if (token == address(0)) {
+            // Direct conversion from ETH to targetToken
+            return _convertUsingTick(amount, ethToTargetTokenTick);
+        } else if (targetToken == address(0)) {
+            // Direct conversion from token to ETH
+            return _convertUsingTick(amount, -ethToTargetTokenTick);
+        } else {
+            // Conversion through native (ETH)
+            int24 tokenToEthTick = getTwap(token);
+            int24 crossTick = tokenToEthTick - ethToTargetTokenTick; // Simplified cross tick calculation
+            
+            if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
+                return _convertUsingTick(amount, crossTick);
+            } else {
+                return 0;
             }
         }
+    }
 
-        if (targetToken == _ZERO_ADDRESS) {
-            // Convert directly to native
-            (key, state) = _getPool(_ZERO_ADDRESS, token, _getOracle());
-
-            try _getOracle().observe(key, _getSecondsAgos(state.cardinality)) returns (
-                int48[] memory tickCumulatives,
-                uint144[] memory
-            ) {
-                uint256 priceX128 = _getPriceX128(tickCumulatives, _getSecondsAgos(state.cardinality));
-                value = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to ETH
-                return value;
-            } catch {
-                return value = 0; // Oracle failure or no pair available
-            }
-        }
-
-        // try and convert token to chain currency
-        (key, state) = _getPool(_ZERO_ADDRESS, token, _getOracle());
-
-        try _getOracle().observe(key, _getSecondsAgos(state.cardinality)) returns (
-            int48[] memory tickCumulatives,
-            uint144[] memory
-        ) {
-            uint256 priceX128 = _getPriceX128(tickCumulatives, _getSecondsAgos(state.cardinality));
-            uint256 ethAmount = FullMath.mulDiv(amount, 1 << 128, priceX128); // convert token to native
-
-            // try and convert chain currency to the target token
-            (key, state) = _getPool(_ZERO_ADDRESS, targetToken, _getOracle());
-
-            // TODO: if base token does not have price feed, nav will be 0. Assert that.
-            // try to get first conversion
-            try _getOracle().observe(key, _getSecondsAgos(state.cardinality)) returns (
-                int48[] memory tickCumulativesTarget,
-                uint144[] memory
-            ) {
-                priceX128 = _getPriceX128(tickCumulativesTarget, _getSecondsAgos(state.cardinality));
-                value = FullMath.mulDiv(ethAmount, priceX128, 1 << 128); // convert native to base token
-                return value;
-            } catch {
-                return value = 0;
-            }
-        } catch {
-            return value = 0;
-        }
+    function _convertUsingTick(uint256 amount, int24 tick) internal pure returns (uint256) {
+        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
+        uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96); // Q96 * Q96 = Q192
+        return FullMath.mulDiv(amount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
     }
 
     /// @inheritdoc IEOracle
     function getOracleAddress() external view override returns (address) {
-        return address(_getOracle());
+        return address(_oracle);
     }
 
+    /// @inheritdoc IEOracle
     /// @dev This method will return true if the last stored observation has a non-nil timestamp.
     /// @dev Adding wrapped native token requires a price feed against navite, as otherwise must warm up EApps in order
     /// to have same contract address on all chains.
@@ -124,43 +85,32 @@ contract EOracle is IEOracle {
         if (token == _ZERO_ADDRESS) {
             return true;
         } else {
-            // TODO: if we just verify that the observations[0] exists, we can save 1 storage read for this assertion (need to modify internal getter)
-            (PoolKey memory key, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _getOracle());
+            (PoolKey memory key, IOracle.ObservationState memory state) =
+                _getPool(_ZERO_ADDRESS, token, _oracle);
 
             // try and get the last stored observation
-            try _getOracle().getObservation(key, state.index) returns (
-                Observation memory observation
-            ) {
-                return observation.blockTimestamp != 0;
-            } catch {
-                return false;
-            }
+            (Observation memory observation) = _oracle.getObservation(key, state.index);
+            return observation.blockTimestamp != 0;
         }
     }
 
-    /// @notice Returns positive values if token has price feed against chain currency
-    function getTick(address token) external view override returns (int24 tick, uint16 cardinality) {
+    // TODO: check if need to adjust for decimals, as per https://github.com/Uniswap/v4-periphery/blob/de15ed6da5400b3c877095ab05ff16bcda80385f/src/libraries/Descriptor.sol#L280
+    /// @inheritdoc IEOracle
+    function getTwap(address token) public view override returns (int24 twap) {
         PoolKey memory key;
         IOracle.ObservationState memory state;
 
         if (token == _ZERO_ADDRESS) {
             // tick = 0 implies price of 1
-            return (0, 1);
+            return 0;
         } else {
-            (key, state) = _getPool(_ZERO_ADDRESS, token, _getOracle());
+            (key, state) = _getPool(_ZERO_ADDRESS, token, _oracle);
 
-            // TODO: should we use a TWAP instead?
-            // get last stored observation from oracle
-            (Observation memory observation) = _getOracle().getObservation(key, state.index);
-
-            // TODO: a tick could be 0, but this does not mean it is a valid price
-            return (observation.prevTick, state.cardinality);
+            // get twap from oracle
+            uint32[] memory secondsAgos = _getSecondsAgos(state.cardinality);
+            (int48[] memory tickCumulatives, ) = _oracle.observe(key, secondsAgos);
+            return int24((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos[0])));
         }
-    }
-
-    /// @dev Private method to fetch the oracle address
-    function _getOracle() private view returns (IOracle) {
-        return _oracle;
     }
 
     function _getPool(
@@ -194,6 +144,7 @@ contract EOracle is IEOracle {
         // blocktime cannot be lower than 8 seconds on Ethereum, 1 seconds on any other chain
         uint16 blockTime = block.chainid == 1 ? 8 : 1;
         uint32 maxSecondsAgos = uint32(cardinality * blockTime);
+        // TODO: define as uint32[2] and return it
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
         secondsAgos[1] = 0;
