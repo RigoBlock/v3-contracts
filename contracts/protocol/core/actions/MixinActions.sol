@@ -21,6 +21,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolCallerNotWhitelisted();
     error PoolMinimumPeriodNotEnough();
     error PoolMintAmountIn();
+    error PoolMintInvalidRecipient();
     error PoolMintOutputAmount();
     error PoolSupplyIsNullOrDust();
     error PoolTokenNotActive();
@@ -34,6 +35,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 amountIn,
         uint256 amountOutMin
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
+        require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
         NavComponents memory components = _updateNav();
         address kycProvider = poolParams().kycProvider;
 

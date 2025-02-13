@@ -73,7 +73,7 @@ describe("EUpgrade", async () => {
             const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
             const multicallPool = MulticallPool.attach(newPoolAddress)
             const MulticallAdapterInstance = await deployments.get("AMulticall")
-            authority.setAdapter(MulticallAdapterInstance.address, true)
+            await authority.setAdapter(MulticallAdapterInstance.address, true)
             // "ac9650d8": "multicall(bytes[])"
             await authority.addMethod("0xac9650d8", MulticallAdapterInstance.address)
             const encodedMulticallData = multicallPool.interface.encodeFunctionData(

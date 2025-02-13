@@ -7,6 +7,7 @@ import { Actions, V4Planner } from '../shared/v4Planner'
 import { CommandType, RoutePlanner } from '../shared/planner'
 import { parse } from "path";
 import { parseEther } from "ethers/lib/utils";
+import { timeTravel } from "../utils/utils";
 
 describe("AUniswapRouter", async () => {
   const [ user1, user2 ] = waffle.provider.getWallets()
@@ -280,6 +281,91 @@ describe("AUniswapRouter", async () => {
       expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000051476461117"))
     })
 
+    it('returns gas cost for eth pool mint with 1 uni v4 liquidity position', async () => {
+      const { pool, univ4Posm, wethAddress, grgToken } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      const expectedTokenId = await univ4Posm.nextTokenId()
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower,
+        PAIR.tickUpper,
+        10001, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, ethers.utils.parseEther("2"), MAX_UINT128, MAX_UINT128, '0x'])
+      const value = ethers.utils.parseEther("0")
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      const etherAmount = ethers.utils.parseEther("12")
+      let txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      let result = await txReceipt.wait()
+      let gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'first mint gas cost')
+      txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'second mintgas cost,  with 1 position')
+      txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'third mint gas cost, with 1 position')
+      v4Planner = new V4Planner()
+      // mint a different tokenIds with same tokens
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower - 500,
+        PAIR.tickUpper - 500,
+        10001, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, ethers.utils.parseEther("2"), MAX_UINT128, MAX_UINT128, '0x'])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'4th mint gas cost, with 2 positions')
+      txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'5th mint gas cost, with 2 positions')
+      await timeTravel({ days: 30 })
+      txReceipt = await pool.burn(etherAmount, 1)
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'burn gas cost, with 2 positions')
+      v4Planner = new V4Planner()
+      // we add a new token on top of a new position
+      PAIR.poolKey.currency1 = grgToken.address
+      // mint a different tokenIds with same tokens
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower + 500,
+        PAIR.tickUpper + 500,
+        10001, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      // need to take currency1 to activate token in storage
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+      txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      // TODO: gas cost has not increased, but it should, as we have a new position and 1 more token
+      console.log(gasCost,'6th mint gas cost, with 3 positions and an additional token')
+    })
+  })
+
+  describe("execute", async () => {
     // this won't do much until we encode a settle, as we only return params with payments actions.
     // TODO: flow could change as it could be harder to find eth amount later
     it('should execute a v4 swap', async () => {
@@ -423,6 +509,97 @@ describe("AUniswapRouter", async () => {
       await expect(
         user1.sendTransaction({ to: aUniswapRouter.address, value: 0, data: encodedSwapData})
       ).to.be.revertedWith('DirectCallNotAllowed()')
+    })
+
+    it('logs gas costs for mint when pool has null balance of active tokens', async () => {
+      const { pool, wethAddress, grgToken } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+      let planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      let encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      // add first 2 mint
+      let txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      let result = await txReceipt.wait()
+      let gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'1st mint gas cost, with 1 active token (stores initial value)')
+      txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'2nd mint gas cost, with 1 active token (calculates nav)')
+      PAIR.poolKey.currency1 = grgToken.address
+      v4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+      planner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands: newCommands, inputs: newInputs } = planner
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [newCommands, newInputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'3rd mint gas cost, with 2 active token (calculates nav)')
+      expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(2)
+    })
+
+    // we could also have both tokens' positive balances by initiatin WETH instance and transferring, however WETH is early-converted to ETH
+    it('logs gas costs for mint when pool holds positive GRG balance', async () => {
+      const { pool, wethAddress, grgToken } = await setupTests()
+      await grgToken.transfer(pool.address, ethers.utils.parseEther("12"))
+      PAIR.poolKey.currency1 = wethAddress
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+      let planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      let encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      // add first 2 mint
+      let txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      let result = await txReceipt.wait()
+      let gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'1st mint gas cost, with 1 active token (stores initial value)')
+      txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'2nd mint gas cost, with 1 active token (calculates nav)')
+      PAIR.poolKey.currency1 = grgToken.address
+      v4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+      planner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands: newCommands, inputs: newInputs } = planner
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [newCommands, newInputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'3rd mint gas cost, with 2 active token (calculates nav)')
+      expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(2)
+      txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      result = await txReceipt.wait()
+      gasCost = result.cumulativeGasUsed.toNumber()
+      console.log(gasCost,'4th mint gas cost, with 2 active token (calculates nav but does not update storage)')
+      expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(2)
     })
   })
 });

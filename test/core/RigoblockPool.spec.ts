@@ -124,8 +124,6 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
             const etherAmount = parseEther("1")
-            const name = await pool.name()
-            const symbol = await pool.symbol()
             const amount = await pool.callStatic.mint(
                   user1.address,
                   etherAmount,
