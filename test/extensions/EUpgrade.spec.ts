@@ -66,15 +66,16 @@ describe("EUpgrade", async () => {
                 .to.be.revertedWith('EUpgradeDirectCall()')
         })
 
-        it('should now allow multicall to upgrade for non-owner', async () => {
+        it('should not allow multicall to upgrade for non-owner', async () => {
             const { authority, factory, pool, newPoolAddress } = await setupTests()
             //await factory.setImplementation(factory.address)
             const encodedUpgradeData = pool.interface.encodeFunctionData('upgradeImplementation')
             const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
             const multicallPool = MulticallPool.attach(newPoolAddress)
-            authority.setAdapter(multicallPool.address, true)
+            const MulticallAdapterInstance = await deployments.get("AMulticall")
+            authority.setAdapter(MulticallAdapterInstance.address, true)
             // "ac9650d8": "multicall(bytes[])"
-            await authority.addMethod("0xac9650d8", multicallPool.address)
+            await authority.addMethod("0xac9650d8", MulticallAdapterInstance.address)
             const encodedMulticallData = multicallPool.interface.encodeFunctionData(
                 'multicall(bytes[])',
                 [ [encodedUpgradeData] ]
