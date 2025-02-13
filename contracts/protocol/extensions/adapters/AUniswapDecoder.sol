@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2024 Rigo Intl.
+ Copyright 2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from '@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol';
-import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
@@ -52,6 +51,13 @@ abstract contract AUniswapDecoder {
 
     function uniV4Posm() public view virtual returns (IPositionManager);
 
+    struct Parameters {
+        uint256 value;
+        address[] recipients;
+        address[] tokensIn;
+        address[] tokensOut;
+    }
+
     /// @dev Decodes the input for a command.
     /// @param commandType The command type to decode.
     /// @param inputs The encoded input data.
@@ -59,8 +65,8 @@ abstract contract AUniswapDecoder {
     function _decodeInput(
         bytes1 commandType,
         bytes calldata inputs,
-        IAUniswapRouter.Parameters memory params
-    ) internal returns (IAUniswapRouter.Parameters memory) {
+        Parameters memory params
+    ) internal returns (Parameters memory) {
         uint256 command = uint8(commandType & Commands.COMMAND_TYPE_MASK);
 
         // 0x00 <= command < 0x21
@@ -232,8 +238,11 @@ abstract contract AUniswapDecoder {
         } else {
             // 0x21 <= command
             if (command == Commands.EXECUTE_SUB_PLAN) {
-                (bytes memory subCommands, bytes[] memory subInputs) = abi.decode(inputs, (bytes, bytes[]));
-                return IAUniswapRouter(address(this)).execute(subCommands, subInputs);
+                (bytes calldata _commands, bytes[] calldata _inputs) = inputs.decodeCommandsAndInputs();
+
+                for (uint256 j = 0; j < _commands.length; j++) {
+                    params = _decodeInput(_commands[j], _inputs[j], params);
+                }
             }
         }
         return params;
@@ -249,9 +258,9 @@ abstract contract AUniswapDecoder {
     function _decodePosmAction(
         uint256 action,
         bytes calldata actionParams,
-        IAUniswapRouter.Parameters memory params,
+        Parameters memory params,
         Position[] memory positions
-    ) internal view returns (IAUniswapRouter.Parameters memory, Position[] memory) {
+    ) internal view returns (Parameters memory, Position[] memory) {
         if (action < Actions.SETTLE) {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
