@@ -28,9 +28,9 @@ import "./IExtensionsMap.sol";
 
 /// @title ExtensionsMap - Wraps extensions selectors to addresses.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-/// @notice Its deployed address will be different on different chains and if either selectors or mapped addresses change.
+/// @notice Its deployed address will be different on different chains and change if selectors or mapped addresses change.
 contract ExtensionsMap is IExtensionsMap {
-    // mapped selectors
+    // mapped selectors. When adding a new selector, make sure its mapping to extension address is added below.
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
     bytes4 private constant _EAPPS_TOKEN_IDS_SELECTOR = IEApps.getUniV4TokenIds.selector;
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
@@ -51,8 +51,6 @@ contract ExtensionsMap is IExtensionsMap {
         address eUpgrade;
     }
 
-    // TODO: check this is correct
-    // TODO: verify how we can make sure when a user uses a new app, the implementation is use latest EApps
     /// @notice Assumes extensions have been correctly initialized.
     /// @dev When adding a new app, modify apps type and assert correct params are passed to the constructor.
     constructor(Extensions memory extensions) {
@@ -78,7 +76,7 @@ contract ExtensionsMap is IExtensionsMap {
         override
         returns (address extension, bool shouldDelegatecall)
     {
-        if (selector == _EAPPS_BALANCES_SELECTOR) {
+        if (selector == _EAPPS_BALANCES_SELECTOR || selector == _EAPPS_TOKEN_IDS_SELECTOR) {
             extension = _EAPPS;
             shouldDelegatecall = true;
         } else if (

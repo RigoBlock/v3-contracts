@@ -371,7 +371,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should revert if recipient is not pool', async () => {
-      const { pool, grgToken, uniRouterAddress } = await setupTests()
+      const { pool, grgToken } = await setupTests()
       PAIR.poolKey.currency1 = grgToken.address
       const v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, user2.address, parseEther("12")])
@@ -390,7 +390,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should take a currency', async () => {
-      const { pool, grgToken, uniRouterAddress } = await setupTests()
+      const { pool, grgToken } = await setupTests()
       PAIR.poolKey.currency1 = grgToken.address
       const v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
@@ -404,6 +404,25 @@ describe("AUniswapRouter", async () => {
         [commands, inputs, DEADLINE]
       )
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    })
+
+    it('a direct call should revert', async () => {
+      const { pool, grgToken, aUniswapRouter } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: aUniswapRouter.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('DirectCallNotAllowed()')
     })
   })
 });

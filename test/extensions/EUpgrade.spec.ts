@@ -33,7 +33,8 @@ describe("EUpgrade", async () => {
             EUpgrade,
             eUpgrade,
             pool,
-            factory
+            factory,
+            newPoolAddress
         }
     })
 
@@ -55,6 +56,33 @@ describe("EUpgrade", async () => {
             await factory.setImplementation(factory.address)
             await expect(pool.upgradeImplementation())
                 .to.emit(pool, "Upgraded").withArgs(factory.address)
+        })
+
+        // when a user who is not the pool owner tries to upgrade the implementation a staticcall is made to the extension, instead of a delegatecall
+        it('should revert if caller is not pool owner', async () => {
+            const { factory, pool } = await setupTests()
+            await factory.setImplementation(factory.address)
+            await expect(pool.connect(user2).upgradeImplementation())
+                .to.be.revertedWith('EUpgradeDirectCall()')
+        })
+
+        it('should now allow multicall to upgrade for non-owner', async () => {
+            const { authority, factory, pool, newPoolAddress } = await setupTests()
+            //await factory.setImplementation(factory.address)
+            const encodedUpgradeData = pool.interface.encodeFunctionData('upgradeImplementation')
+            const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
+            const multicallPool = MulticallPool.attach(newPoolAddress)
+            authority.setAdapter(multicallPool.address, true)
+            // "ac9650d8": "multicall(bytes[])"
+            await authority.addMethod("0xac9650d8", multicallPool.address)
+            const encodedMulticallData = multicallPool.interface.encodeFunctionData(
+                'multicall(bytes[])',
+                [ [encodedUpgradeData] ]
+            )
+            // multicall reverts without a reason
+            await expect(
+                user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
+            ).to.be.revertedWith('Transaction reverted without a reason')
         })
     })
 })
