@@ -282,6 +282,35 @@ describe("AUniswapRouter", async () => {
       expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000051476461117"))
     })
 
+    it('should revert when calling unsupported methods', async () => {
+      const { pool, grgToken } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.INCREASE_LIQUIDITY_FROM_DELTAS, [0, 0, 0, '0x'])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      ).to.be.revertedWith(`UnsupportedAction(${Actions.INCREASE_LIQUIDITY_FROM_DELTAS})`)
+      v4Planner = new V4Planner()
+      // TODO: we revert in adapter because we cannot settle if we do not know the amount, but should check if
+      // we already forwarded enough eth or approved token, so currency can be settled or taken?
+      v4Planner.addAction(Actions.MINT_POSITION_FROM_DELTAS, [
+        [AddressZero, AddressZero, 0, 0, AddressZero],
+        0, 0, 0, 0, AddressZero, '0x']
+      )
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value:  0 })
+      ).to.be.revertedWith(`UnsupportedAction(${Actions.MINT_POSITION_FROM_DELTAS})`)
+      v4Planner = new V4Planner()
+      // TODO: we revert because we cannot settle if we do not know the amount, but should check if
+      // we already forwarded enough eth or approved token, so currency can be settled or taken?
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [pool.address])
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      ).to.be.revertedWith(`UnsupportedAction(${Actions.CLOSE_CURRENCY})`)
+    })
+
     it('returns gas cost for eth pool mint with 1 uni v4 liquidity position', async () => {
       const { pool, univ4Posm, wethAddress, grgToken } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
@@ -540,6 +569,24 @@ describe("AUniswapRouter", async () => {
       ).to.be.revertedWith('DirectCallNotAllowed()')
     })
 
+    it('should execute a subplan', async () => {
+      const { pool, grgToken } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const subPlanner: RoutePlanner = new RoutePlanner()
+      subPlanner.addCommand(CommandType.EXECUTE_SUB_PLAN, [planner.commands, planner.inputs])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [subPlanner.commands, subPlanner.inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    })
+
     it('should revert when calling unsupported methods', async () => {
       const { pool, grgToken } = await setupTests()
       PAIR.poolKey.currency1 = grgToken.address
@@ -567,6 +614,19 @@ describe("AUniswapRouter", async () => {
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       ).to.be.revertedWith(`InvalidCommandType(${CommandType.PERMIT2_PERMIT_BATCH})`)
+      planner = new RoutePlanner()
+      planner.addCommand(CommandType.PERMIT2_PERMIT, [{
+        details: {token: grgToken.address, amount: 0, expiration: 0, nonce: 0},
+        spender: grgToken.address,
+        sigDeadline: 0,
+      }, '0x'])
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith(`InvalidCommandType(${CommandType.PERMIT2_PERMIT})`)
       planner = new RoutePlanner()
       planner.addCommand(CommandType.PERMIT2_TRANSFER_FROM_BATCH, [[{from: pool.address, to: pool.address, amount: 1, token: pool.address}]])
       encodedSwapData = extPool.interface.encodeFunctionData(
