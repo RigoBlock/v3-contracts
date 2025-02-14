@@ -97,7 +97,6 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             expect(poolData.totalSupply).to.be.eq(parseEther("10"))
-            // TODO: second mint will fail until EApps is correctly initialized
             await pool.mint(user2.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             // 5% default spread results in less token than amount in at initial price 1

@@ -57,7 +57,7 @@ contract EOracle is IEOracle {
             // Conversion through native (ETH)
             int24 tokenToEthTick = getTwap(token);
             int24 crossTick = tokenToEthTick - ethToTargetTokenTick; // Simplified cross tick calculation
-            
+
             if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
                 return _convertUsingTick(amount, crossTick);
             } else {
@@ -128,26 +128,12 @@ contract EOracle is IEOracle {
         state = oracle.getState(key);
     }
 
-    function _getPriceX128(
-        int48[] memory tickCumulatives,
-        uint32[] memory secondsAgos
-    ) private pure returns (uint256 priceX128) {
-        int56 tickCumulativesDelta = int56(tickCumulatives[1] - tickCumulatives[0]);
-        int24 twapTick = int24(tickCumulativesDelta / int56(int32(secondsAgos[0])));
-        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(int32(secondsAgos[0])) != 0)) twapTick--;
-
-        uint160 sqrtPriceX96 = twapTick.getSqrtPriceAtTick();
-        priceX128 = FullMath.mulDiv(sqrtPriceX96, sqrtPriceX96, 1 << 64);
-    }
-
-    function _getSecondsAgos(uint16 cardinality) private view returns (uint32[] memory) {
+    function _getSecondsAgos(uint16 cardinality) private view returns (uint32[] memory secondsAgos) {
         // blocktime cannot be lower than 8 seconds on Ethereum, 1 seconds on any other chain
         uint16 blockTime = block.chainid == 1 ? 8 : 1;
         uint32 maxSecondsAgos = uint32(cardinality * blockTime);
-        // TODO: define as uint32[2] and return it
-        uint32[] memory secondsAgos = new uint32[](2);
+        secondsAgos = new uint32[](2);
         secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
         secondsAgos[1] = 0;
-        return secondsAgos;
     }
 }
