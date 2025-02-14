@@ -61,6 +61,7 @@ describe("AUniswapRouter", async () => {
     await authority.addMethod("0x3593564c", aUniswapRouter.address)
     await authority.addMethod("0x24856bc3", aUniswapRouter.address)
     await authority.addMethod("0xdd46508f", aUniswapRouter.address)
+    const HookInstance = await deployments.get("MockOracle")
     const Pool = await hre.ethers.getContractFactory("SmartPool")
     return {
       grgToken: GrgToken.attach(GrgTokenInstance.address),
@@ -72,13 +73,14 @@ describe("AUniswapRouter", async () => {
       wethAddress,
       aUniswapRouter,
       uniRouterAddress: uniRouter.address,
+      hookAddress: HookInstance.address
     }
   });
 
   // TODO: verify if should avoid direct calls to aUniswapRouter, or there are no side-effects (has write access to storage)
   describe("modifyLiquidities", async () => {
     it('should route to uniV4Posm', async () => {
-      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
+      const { pool, univ4Posm, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION, [
@@ -117,7 +119,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should revert if position recipient is not pool', async () => {
-      const { pool, univ3Npm, univ4Posm, wethAddress } = await setupTests()
+      const { pool, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION, [
@@ -138,6 +140,34 @@ describe("AUniswapRouter", async () => {
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       ).to.be.revertedWith('RecipientIsNotSmartPool()')
+    })
+
+    it('should revert if hook can access liquidity deltas', async () => {
+      const { pool, wethAddress, hookAddress } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      PAIR.poolKey.hooks = hookAddress
+      console.log(hookAddress, "pippo")
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower,
+        PAIR.tickUpper,
+        1, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      const value = ethers.utils.parseEther("0")
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const etherAmount = ethers.utils.parseEther("12")
+      await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      ).to.be.revertedWith(`LiquidityMintHookError("${hookAddress}")`)
+      // reset hook to default state globally
+      PAIR.poolKey.hooks = AddressZero
     })
 
     it('should not be able to increase liquidity of non-owned position', async () => {
@@ -551,6 +581,45 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
     })
 
+    it('should decode v4 payment methods', async () => {
+      const { pool, grgToken } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [PAIR.poolKey.currency0])
+      // CLEAR_OR_TAKE (0x13) is not supported by uni v4Planner.ts
+      //v4Planner.addAction(Actions.CLEAR_OR_TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      v4Planner.addAction(Actions.SWEEP, [PAIR.poolKey.currency0, pool.address])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    })
+
+    it('should wrap/unwrap native', async () => {
+      const { pool, grgToken } = await setupTests()
+      PAIR.poolKey.currency1 = grgToken.address
+      const planner: RoutePlanner = new RoutePlanner()
+      // will revert if pool does not have enough eth
+      await pool.mint(user1.address, ethers.utils.parseEther("0.1"), 1, { value: ethers.utils.parseEther("0.1") })
+      planner.addCommand(CommandType.WRAP_ETH, [pool.address, 1000])
+      planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 0])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    })
+
     it('a direct call should revert', async () => {
       const { pool, grgToken, aUniswapRouter } = await setupTests()
       PAIR.poolKey.currency1 = grgToken.address
@@ -603,13 +672,28 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
     });
 
-    // TODO: can push commands for all v3 swaps with correct params, and do individual tests on failures
     it("should process v3 exactOut", async function () {
       const { pool, grgToken, wethAddress } = await setupTests()
       const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
       const planner: RoutePlanner = new RoutePlanner()
       // recipient, amountOut, amountInMax, path, payerIsUser
       planner.addCommand(CommandType.V3_SWAP_EXACT_OUT, [pool.address, 100, 1, path, true])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    });
+
+    it("should process sweep, transfer and pay v3 payment methods", async function () {
+      const { pool, grgToken, wethAddress } = await setupTests()
+      const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.SWEEP, [grgToken.address, pool.address, 1])
+      planner.addCommand(CommandType.TRANSFER, [grgToken.address, pool.address, 1])
+      planner.addCommand(CommandType.PAY_PORTION, [grgToken.address, pool.address, 1])
       const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
       const extPool = ExtPool.attach(pool.address)
       const encodedSwapData = extPool.interface.encodeFunctionData(

@@ -39,9 +39,6 @@ abstract contract AUniswapDecoder {
     error InvalidCommandType(uint256 commandType);
     error UnsupportedAction(uint256 action);
 
-    /// @dev Only pools that do not have access to liquidity at removal are supported
-    error LiquidityMintHookError(address hook);
-
     address internal constant ZERO_ADDRESS = address(0);
     address private immutable _wrappedNative;
 
@@ -200,6 +197,7 @@ abstract contract AUniswapDecoder {
                             //} else if (action == Actions.SWAP_EXACT_OUT) {
                             //} else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
                             //}
+                            continue;
                         } else {
                             if (action == Actions.SETTLE_PAIR) {
                                 revert UnsupportedAction(action);
@@ -211,29 +209,30 @@ abstract contract AUniswapDecoder {
                                     abi.decode(paramsAtIndex, (Currency, uint256, bool));
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                                 params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
-                                return params;
+                                continue;
                             } else if (action == Actions.TAKE) {
                                 // Currency currency, address recipient, uint256 amount
                                 (Currency currency, address recipient,) =
                                     abi.decode(paramsAtIndex, (Currency, address, uint256));
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, recipient);
-                                return params;
+                                continue;
                             } else if (action == Actions.CLOSE_CURRENCY) {
+                                // TODO: this won't be able to settle native, so need to make sure we forward ETH, i.e. eth must be added for single swaps
                                 // this will either settle or take, so we need to make sure the token is tracked
                                 (Currency currency) = paramsAtIndex.decodeCurrency();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                return params;
+                                continue;
                             } else if (action == Actions.CLEAR_OR_TAKE) {
                                 // Currency currency, uint256 amountMax
                                 (Currency currency,) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                return params;
+                                continue;
                             } else if (action == Actions.SWEEP) {
                                 (Currency currency, address to) = paramsAtIndex.decodeCurrencyAndAddress();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, to);
-                                return params;
+                                continue;
                             }
                         }
                     }
@@ -338,7 +337,6 @@ abstract contract AUniswapDecoder {
                 // TODO: verify
                 revert UnsupportedAction(action);
             } else if (action == Actions.CLEAR_OR_TAKE) {
-                // no further assertion needed
                 (Currency currency,) = actionParams.decodeCurrencyAndUint256();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 return (params, positions);

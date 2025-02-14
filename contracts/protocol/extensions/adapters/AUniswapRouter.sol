@@ -72,6 +72,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
     /// @notice Thrown when a call is made to the adapter directly
     error DirectCallNotAllowed();
 
+    /// @notice Only pools that do not have access to liquidity at removal are supported
+    error LiquidityMintHookError(address hook);
+
     string private constant _REQUIRED_VERSION = "4.0.0";
 
     address private immutable _adapter;

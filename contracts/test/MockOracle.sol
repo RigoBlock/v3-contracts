@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >0.7.0 <0.9.0;
 
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IOracle} from "../protocol/interfaces/IOracle.sol";
@@ -34,6 +35,25 @@ contract MockOracle {
             tickCumulative: int48(int24(100) * int32(1)),
             secondsPerLiquidityCumulativeX128: uint144(ONE_X96 * 1),
             initialized: true
+        });
+    }
+
+    function getHookPermissions() public pure returns (Hooks.Permissions memory) {
+        return Hooks.Permissions({
+            beforeInitialize: true,
+            afterInitialize: true,
+            beforeAddLiquidity: true,
+            afterAddLiquidity: false,
+            beforeRemoveLiquidity: true,
+            afterRemoveLiquidity: false,
+            beforeSwap: true,
+            afterSwap: true,
+            beforeDonate: false,
+            afterDonate: false,
+            beforeSwapReturnDelta: false,
+            afterSwapReturnDelta: true,
+            afterAddLiquidityReturnDelta: true,
+            afterRemoveLiquidityReturnDelta: false
         });
     }
 
