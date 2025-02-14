@@ -54,21 +54,17 @@ library EnumerableSet {
     uint256 private constant _MAX_UNIQUE_ADDRESSES = type(uint8).max;
 
     // flag for removed address
-    uint256 private constant _REMOVED_ADDRESS_FLAG = type(uint256).max;
+    uint256 private constant REMOVED_ADDRESS_FLAG = type(uint256).max;
 
     /// @notice Base token is never pushed to active tokens, as already stored.
     /// @dev Skips and returns false for base token, which is already in storage.
     function addUnique(AddressSet storage set, IEOracle eOracle, address token, address baseToken) internal {
         if (token != baseToken) {
-            if (set.positions[token] == 0 || set.positions[token] == _REMOVED_ADDRESS_FLAG) {
+            if (set.positions[token] == 0 || set.positions[token] == REMOVED_ADDRESS_FLAG) {
                 require(set.addresses.length < _MAX_UNIQUE_ADDRESSES, AddressListExceedsMaxLength());
 
-                // perform a staticcall to the oracle extension and assert new token has a price feed. Removed token as well
-                try eOracle.hasPriceFeed(token) returns (bool hasFeed) {
-                    require(hasFeed, TokenPriceFeedDoesNotExist(token));
-                } catch Error(string memory reason) {
-                    revert(reason);
-                }
+                // perform a staticcall to the oracle extension and assert token has a price feed
+                require(eOracle.hasPriceFeed(token), TokenPriceFeedDoesNotExist(token));
 
                 // update storage
                 set.addresses.push(token);
@@ -77,10 +73,10 @@ library EnumerableSet {
         }
     }
 
-    function remove(AddressSet storage set, address token) internal returns (bool) {
+    function remove(AddressSet storage set, address token) internal {
         uint256 position = set.positions[token];
 
-        if (position != 0) {
+        if (position != 0 && position != REMOVED_ADDRESS_FLAG) {
             // Copy last element at index position and pop last element
             uint256 tokenIndex = position - 1;
             uint256 lastIndex = set.addresses.length - 1;
@@ -98,11 +94,13 @@ library EnumerableSet {
             set.addresses.pop();
 
             // Delete the tracked position for the deleted slot without clearing storage
-            set.positions[token] = _REMOVED_ADDRESS_FLAG;
-
-            return true;
-        } else {
-            return false;
+            set.positions[token] = REMOVED_ADDRESS_FLAG;
+            return;
         }
+    }
+
+    function isActive(AddressSet storage set, address token) internal view returns (bool) {
+        uint256 position = set.positions[token];
+        return (position != 0 && position != REMOVED_ADDRESS_FLAG);
     }
 }

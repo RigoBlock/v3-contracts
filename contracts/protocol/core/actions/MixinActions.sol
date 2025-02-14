@@ -6,12 +6,14 @@ import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
 import {ISmartPoolActions} from "../../interfaces/pool/ISmartPoolActions.sol";
+import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeTransferLib for address;
+    using EnumerableSet for AddressSet;
 
     error BaseTokenBalance();
     error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
@@ -82,9 +84,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 amountOutMin,
         address tokenOut
     ) external override nonReentrant returns (uint256 netRevenue) {
-        // early revert if token does not have price feed, 0 is sentinel for token not being active. Removed token will revert later.
-        // TODO: we also use type(uint256).max as flag for removed token
-        require(activeTokensSet().positions[tokenOut] != 0, PoolTokenNotActive());
+        // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
+        require(activeTokensSet().isActive(tokenOut), PoolTokenNotActive());
         netRevenue = _burn(amountIn, amountOutMin, tokenOut);
     }
 
