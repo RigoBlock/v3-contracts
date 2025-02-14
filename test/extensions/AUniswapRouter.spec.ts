@@ -146,7 +146,6 @@ describe("AUniswapRouter", async () => {
       const { pool, wethAddress, hookAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
       PAIR.poolKey.hooks = hookAddress
-      console.log(hookAddress, "pippo")
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION, [
         PAIR.poolKey,
@@ -311,6 +310,35 @@ describe("AUniswapRouter", async () => {
       const poolPrice = (await pool.getPoolTokens()).unitaryValue
       expect(poolPrice).to.be.gt(unitaryValue)
       expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000051476461117"))
+    })
+
+    // TODO: when ETH is involved, payment methods decoding cannot return value, which must be processed when processing the liquidity actions
+    it('should decode payment methods', async () => {
+      const { pool, grgToken, wethAddress } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      let v4Planner: V4Planner = new V4Planner()
+      // commented methods are not supported by v4Planner yet
+      //v4Planner.addAction(Actions.SETTLE_PAIR, [grgToken.address, wethaddress])
+      //v4Planner.addAction(Actions.TAKE_PAIR, [grgToken.address, wethaddress, pool.address])
+      // TODO: verify why grg safe approval fails with panic error
+      //v4Planner.addAction(Actions.SETTLE, [grgToken.address, parseEther("12"), true])
+      v4Planner.addAction(Actions.TAKE, [wethAddress, pool.address, parseEther("12")])
+      //v4Planner.addAction(Actions.CLEAR_OR_TAKE, [pool.address, 0])
+      v4Planner.addAction(Actions.SWEEP, [wethAddress, pool.address])
+      v4Planner.addAction(Actions.WRAP, [parseEther("1")])
+      v4Planner.addAction(Actions.UNWRAP, [parseEther("1")])
+      // tokens are taken from the pool, so value is always 0
+      const value = ethers.utils.parseEther("0")
+      // the mock posm does not move funds from the pool, so we can send before pool has balance
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // ETH transfer fails without error when pool does not have enough balance
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      ).to.be.revertedWith('Transaction reverted without a reason')
+      const etherAmount = ethers.utils.parseEther("1")
+      await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
     })
 
     it('should revert when calling unsupported methods', async () => {
@@ -582,10 +610,15 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should decode v4 payment methods', async () => {
-      const { pool, grgToken } = await setupTests()
+      const { pool, grgToken, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = grgToken.address
       const v4Planner: V4Planner = new V4Planner()
+      // same as base token, won't be added to active tokens
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      // this will add a new token to the returned tokensOut array
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+      // new token, will be added to active tokens
+      v4Planner.addAction(Actions.TAKE, [wethAddress, pool.address, parseEther("1")])
       v4Planner.addAction(Actions.CLOSE_CURRENCY, [PAIR.poolKey.currency0])
       // CLEAR_OR_TAKE (0x13) is not supported by uni v4Planner.ts
       //v4Planner.addAction(Actions.CLEAR_OR_TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
@@ -600,6 +633,10 @@ describe("AUniswapRouter", async () => {
         [commands, inputs, DEADLINE]
       )
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      const activeTokens = await pool.getActiveTokens()
+      expect(activeTokens.length).to.be.eq(2)
+      expect(activeTokens.activeTokens[0]).to.be.eq(grgToken.address)
+      expect(activeTokens.activeTokens[1]).to.be.eq(wethAddress)
     })
 
     it('should wrap/unwrap native', async () => {
@@ -685,6 +722,41 @@ describe("AUniswapRouter", async () => {
         [planner.commands, planner.inputs, DEADLINE]
       )
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    });
+
+    it("should process v2 swap", async function () {
+      const { pool, grgToken, wethAddress } = await setupTests()
+      let path = [wethAddress, grgToken.address]
+      const planner: RoutePlanner = new RoutePlanner()
+      // recipient, amountOut, amountInMax, path, payerIsUser
+      planner.addCommand(CommandType.V2_SWAP_EXACT_IN, [pool.address, 100, 1, path, true])
+      planner.addCommand(CommandType.V2_SWAP_EXACT_OUT, [pool.address, 100, 1, path, true])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      let encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      path = [AddressZero, grgToken.address]
+      planner.addCommand(CommandType.V2_SWAP_EXACT_IN, [pool.address, 100, 1, path, true])
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.reverted
+      await pool.mint(user1.address, ethers.utils.parseEther("0.1"), 1, { value: ethers.utils.parseEther("0.1") })
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      planner.addCommand(CommandType.V2_SWAP_EXACT_IN, [user1.address, 100, 1, path, true])
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('RecipientIsNotSmartPool()')
     });
 
     it("should process sweep, transfer and pay v3 payment methods", async function () {
@@ -812,6 +884,7 @@ describe("AUniswapRouter", async () => {
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       ).to.be.revertedWith('InvalidCommandType(32)')
+      PAIR.poolKey.currency1 = grgToken.address
     })
 
     it('logs gas costs for mint when pool has null balance of active tokens', async () => {
