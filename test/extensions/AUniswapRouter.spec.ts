@@ -588,7 +588,7 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
     })
 
-    it.skip("should process v3 exactIn swap", async function () {
+    it("should process v3 exactIn swap", async function () {
       const { pool, grgToken, wethAddress } = await setupTests()
       const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
       const planner: RoutePlanner = new RoutePlanner()
@@ -604,7 +604,7 @@ describe("AUniswapRouter", async () => {
     });
 
     // TODO: can push commands for all v3 swaps with correct params, and do individual tests on failures
-    it.skip("should process v3 exactOut", async function () {
+    it("should process v3 exactOut", async function () {
       const { pool, grgToken, wethAddress } = await setupTests()
       const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
       const planner: RoutePlanner = new RoutePlanner()

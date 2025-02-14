@@ -81,7 +81,14 @@ abstract contract AUniswapDecoder {
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
-                        params.tokensOut = _addUnique(params.tokensOut, path.toBytes(path.length - 20).toAddress());
+                        // slice last 20 bytes from path to find tokenIn address
+                        bytes calldata lastTokenBytes;
+                        assembly ("memory-safe") {
+                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
+                            lastTokenBytes.length := 20
+                            lastTokenBytes.offset := lastTokenOffset
+                        }
+                        params.tokensOut = _addUnique(params.tokensOut, lastTokenBytes.toAddress());
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
@@ -90,7 +97,14 @@ abstract contract AUniswapDecoder {
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, path.toAddress());
-                        params.tokensIn = _addUnique(params.tokensIn, path.toBytes(path.length - 20).toAddress());
+                        // slice last 20 bytes from path to find tokenIn address
+                        bytes calldata lastTokenBytes;
+                        assembly ("memory-safe") {
+                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
+                            lastTokenBytes.length := 20
+                            lastTokenBytes.offset := lastTokenOffset
+                        }
+                        params.tokensIn = _addUnique(params.tokensIn, lastTokenBytes.toAddress());
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
