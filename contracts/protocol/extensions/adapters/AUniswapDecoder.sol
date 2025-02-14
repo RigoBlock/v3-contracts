@@ -38,6 +38,7 @@ abstract contract AUniswapDecoder {
 
     error InvalidCommandType(uint256 commandType);
     error UnsupportedAction(uint256 action);
+    error OnlyOneMintOrBurnPerAction();
 
     address internal constant ZERO_ADDRESS = address(0);
     address private immutable _wrappedNative;
@@ -173,6 +174,7 @@ abstract contract AUniswapDecoder {
                         revert InvalidCommandType(command);
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
                         // no further assertion needed as uni router uses staticcall
+                        return params;
                     } else {
                         // placeholder area for command 0x0f
                         revert InvalidCommandType(command);
@@ -375,9 +377,10 @@ abstract contract AUniswapDecoder {
     /// @dev Multiple actions can be executed on the same tokenId, so we add a new position if same tokenId but different action
     function _addUniquePosition(Position[] memory array, Position memory pos) private pure returns (Position[] memory) {
         for (uint256 i = 0; i < array.length; i++) {
-            if (array[i].tokenId == pos.tokenId && array[i].action == pos.action) {
-                return array; // Already exists, return unchanged array
-            }
+            require(
+                array[i].tokenId != pos.tokenId || array[i].action != pos.action,
+                OnlyOneMintOrBurnPerAction()
+            ); 
         }
         Position[] memory newArray = new Position[](array.length + 1);
         for (uint256 i = 0; i < array.length; i++) {

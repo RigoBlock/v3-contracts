@@ -118,6 +118,40 @@ describe("AUniswapRouter", async () => {
       expect(activeTokens.length).to.be.eq(1)
     })
 
+    it('should revert when trying to mint 2 positions in the same call', async () => {
+      const { pool, univ4Posm, wethAddress } = await setupTests()
+      PAIR.poolKey.currency1 = wethAddress
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower,
+        PAIR.tickUpper,
+        1, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      v4Planner.addAction(Actions.MINT_POSITION, [
+        PAIR.poolKey,
+        PAIR.tickLower + 1,
+        PAIR.tickUpper - 1,
+        1, // liquidity
+        MAX_UINT128,
+        MAX_UINT128,
+        pool.address,
+        '0x', // hookData
+      ])
+      // tokens are taken from the pool, so value is always 0
+      const value = ethers.utils.parseEther("0")
+      // the mock posm does not move funds from the pool, so we can send before pool has balance
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      ).to.be.revertedWith('OnlyOneMintOrBurnPerAction()')
+    })
+
     it('should revert if position recipient is not pool', async () => {
       const { pool, wethAddress } = await setupTests()
       PAIR.poolKey.currency1 = wethAddress
@@ -647,6 +681,7 @@ describe("AUniswapRouter", async () => {
       await pool.mint(user1.address, ethers.utils.parseEther("0.1"), 1, { value: ethers.utils.parseEther("0.1") })
       planner.addCommand(CommandType.WRAP_ETH, [pool.address, 1000])
       planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 0])
+      planner.addCommand(CommandType.BALANCE_CHECK_ERC20, [pool.address, grgToken.address, 1])
       const { commands, inputs } = planner
       const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
       const extPool = ExtPool.attach(pool.address)
@@ -740,6 +775,7 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       path = [AddressZero, grgToken.address]
       planner.addCommand(CommandType.V2_SWAP_EXACT_IN, [pool.address, 100, 1, path, true])
+      planner.addCommand(CommandType.V2_SWAP_EXACT_OUT, [pool.address, 100, 1, path, true])
       encodedSwapData = extPool.interface.encodeFunctionData(
         'execute(bytes,bytes[],uint256)',
         [planner.commands, planner.inputs, DEADLINE]
