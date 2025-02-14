@@ -7,6 +7,7 @@ import { Actions, V4Planner } from '../shared/v4Planner'
 import { CommandType, RoutePlanner } from '../shared/planner'
 import { parse } from "path";
 import { parseEther } from "ethers/lib/utils";
+import { encodePath, FeeAmount } from "../utils/path";
 import { timeTravel } from "../utils/utils";
 import { time } from "console";
 
@@ -587,6 +588,37 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
     })
 
+    it.skip("should process v3 exactIn swap", async function () {
+      const { pool, grgToken, wethAddress } = await setupTests()
+      const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
+      const planner: RoutePlanner = new RoutePlanner()
+      // recipient, amountIn, amountOutMin, path, payerIsUser
+      planner.addCommand(CommandType.V3_SWAP_EXACT_IN, [pool.address, 100, 1, path, true])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    });
+
+    // TODO: can push commands for all v3 swaps with correct params, and do individual tests on failures
+    it.skip("should process v3 exactOut", async function () {
+      const { pool, grgToken, wethAddress } = await setupTests()
+      const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
+      const planner: RoutePlanner = new RoutePlanner()
+      // recipient, amountOut, amountInMax, path, payerIsUser
+      planner.addCommand(CommandType.V3_SWAP_EXACT_OUT, [pool.address, 100, 1, path, true])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    });
+
     it('should revert when calling unsupported methods', async () => {
       const { pool, grgToken } = await setupTests()
       PAIR.poolKey.currency1 = grgToken.address
@@ -663,6 +695,39 @@ describe("AUniswapRouter", async () => {
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       ).to.be.revertedWith(`InvalidCommandType(${CommandType.V4_POSITION_MANAGER_CALL})`)
+
+      let rogueCommand = CommandType.EXECUTE_SUB_PLAN + 1
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [rogueCommand, [ethers.utils.hexlify(0x0)], DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('InvalidCommandType(34)')
+      rogueCommand = CommandType.V2_SWAP_EXACT_IN - 1
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [rogueCommand, [ethers.utils.hexlify(0x0)], DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('InvalidCommandType(7)')
+      rogueCommand = CommandType.V4_SWAP - 1
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [rogueCommand, [ethers.utils.hexlify(0x0)], DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('InvalidCommandType(15)')
+      rogueCommand = CommandType.EXECUTE_SUB_PLAN - 1
+      encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [rogueCommand, [ethers.utils.hexlify(0x0)], DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('InvalidCommandType(32)')
     })
 
     it('logs gas costs for mint when pool has null balance of active tokens', async () => {

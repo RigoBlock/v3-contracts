@@ -243,6 +243,9 @@ abstract contract AUniswapDecoder {
                 for (uint256 j = 0; j < _commands.length; j++) {
                     params = _decodeInput(_commands[j], _inputs[j], params);
                 }
+            } else {
+                // placeholder area for commands 0x22-0x3f
+                revert InvalidCommandType(command);
             }
         }
         return params;
