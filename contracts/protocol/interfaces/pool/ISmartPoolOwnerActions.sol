@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Rigoblock V3 Pool Owner Actions Interface - Interface of the owner methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-interface IRigoblockV3PoolOwnerActions {
+interface ISmartPoolOwnerActions {
     /// @notice Allows owner to decide where to receive the fee.
     /// @param feeCollector Address of the fee receiver.
     function changeFeeCollector(address feeCollector) external;

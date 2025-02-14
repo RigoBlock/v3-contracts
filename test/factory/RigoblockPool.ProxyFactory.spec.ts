@@ -103,7 +103,7 @@ describe("ProxyFactory", async () => {
                 AddressZero
             )
             const pool = await hre.ethers.getContractAt(
-                "RigoblockV3Pool",
+                "SmartPool",
                 newPoolAddress
             )
             const result = await txReceipt.wait()

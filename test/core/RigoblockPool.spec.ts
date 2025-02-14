@@ -30,7 +30,7 @@ describe("Proxy", async () => {
         )
         await factory.createPool('testpool','TEST',AddressZero)
         const pool = await hre.ethers.getContractAt(
-            "RigoblockV3Pool",
+            "SmartPool",
             newPoolAddress
         )
         return {
@@ -124,8 +124,6 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
             const etherAmount = parseEther("1")
-            const name = await pool.name()
-            const symbol = await pool.symbol()
             const amount = await pool.callStatic.mint(
                   user1.address,
                   etherAmount,
@@ -150,6 +148,13 @@ describe("Proxy", async () => {
             //const netAmount = amount / (1 - spread)
             const netAmount = amount
             expect(netAmount.toString()).to.be.eq(etherAmount.toString())
+        })
+
+        it('should revert with invalid recipient', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("0.00012")
+            await expect(pool.mint(AddressZero, etherAmount, 0, { value: etherAmount })
+            ).to.be.revertedWith('PoolMintInvalidRecipient()')
         })
 
         it('should revert with order below minimum', async () => {
@@ -278,7 +283,7 @@ describe("Proxy", async () => {
 
             // updating nav will prompt going through position tokens, updating active tokens in storage, making a call to oracle extension
             await expect(
-                pool.setUnitaryValue()
+                pool.updateUnitaryValue()
             ).to.emit(pool, "NewNav").withArgs(
                 user1.address,
                 pool.address,
@@ -396,12 +401,11 @@ describe("Proxy", async () => {
         })
     })
 
-    // TODO: smart contract should be modified to update storage only if different from current value
-    describe("setUnitaryValue", async () => {
+    describe("updateUnitaryValue", async () => {
         it('should update storage when caller is any wallet', async () => {
             const { pool } = await setupTests()
             await pool.setOwner(user2.address)
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.be.revertedWith('PoolSupplyIsNullOrDust()')
             const etherAmount = parseEther("0.1")
             expect(
@@ -411,13 +415,13 @@ describe("Proxy", async () => {
                 pool.address,
                 parseEther("1")
             )
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
 
         it('should update storage when caller is owner', async () => {
             const { pool } = await setupTests()
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.be.revertedWith('PoolSupplyIsNullOrDust()')
             const etherAmount = parseEther("0.1")
             await expect(
@@ -427,7 +431,7 @@ describe("Proxy", async () => {
                 pool.address,
                 parseEther("1")
             )
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
 
@@ -437,7 +441,7 @@ describe("Proxy", async () => {
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             etherAmount = parseEther("0.4")
             await user1.sendTransaction({ to: pool.address, value: etherAmount})
-            await expect(pool.setUnitaryValue())
+            await expect(pool.updateUnitaryValue())
                 .to.emit(pool, "NewNav").withArgs(
                     user1.address,
                     pool.address,
@@ -455,7 +459,7 @@ describe("Proxy", async () => {
             await pool.burn(etherAmount, 1)
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
             expect(ethBalance).to.be.eq(0)
-            await expect(pool.setUnitaryValue()).to.be.revertedWith('PoolSupplyIsNullOrDust()')
+            await expect(pool.updateUnitaryValue()).to.be.revertedWith('PoolSupplyIsNullOrDust()')
         })
     })
 
@@ -476,6 +480,13 @@ describe("Proxy", async () => {
                 .to.emit(pool, "KycProviderSet").withArgs(pool.address, pool.address)
             expect((await pool.getPoolParams()).kycProvider).to.be.eq(pool.address)
         })
+
+        it('should allow reset kyc provider', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getPoolParams()).kycProvider).to.be.eq(AddressZero)
+            await expect(pool.setKycProvider(AddressZero))
+                .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+        })
     })
 
     describe("changeFeeCollector", async () => {
@@ -494,6 +505,18 @@ describe("Proxy", async () => {
                 pool.changeFeeCollector(user2.address)
             ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
             expect((await pool.getPoolParams()).feeCollector).to.be.eq(user2.address)
+        })
+
+        it('should revert if new is same as current', async () => {
+            const { pool } = await setupTests()
+            const currentCollector = await pool.owner()
+            // first time we update storage
+            await expect(
+                pool.changeFeeCollector(currentCollector)
+            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, currentCollector)
+            await expect(
+                pool.changeFeeCollector(currentCollector)
+            ).to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
         })
     })
 
@@ -523,6 +546,16 @@ describe("Proxy", async () => {
                 .to.emit(pool, "SpreadChanged").withArgs(pool.address, 100)
             expect((await pool.getPoolParams()).spread).to.be.eq(100)
         })
+
+        it('should revert if same as current', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getPoolParams()).spread).to.be.eq(500)
+            // first time we update storage
+            await expect(pool.changeSpread(500))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
+            await expect(pool.changeSpread(500))
+                .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+        })
     })
 
     describe("changeMinPeriod", async () => {
@@ -548,9 +581,25 @@ describe("Proxy", async () => {
         it('should change spread', async () => {
             const { pool } = await setupTests()
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(2592000)
-            const newPeriod = 2592000
+            const newPeriod = 2592000 - 2591990
             await expect(pool.changeMinPeriod(newPeriod))
                 .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
+        })
+
+        it('will revert if spread same as current', async () => {
+            const { pool } = await setupTests()
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(2592000)
+            let newPeriod = 2592000 - 2591990
+            await expect(pool.changeMinPeriod(newPeriod))
+                .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
+            newPeriod = 2592000
+            await expect(pool.changeMinPeriod(newPeriod))
+                .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
+            expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
+            await expect(pool.changeMinPeriod(newPeriod))
+                .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
         })
     })

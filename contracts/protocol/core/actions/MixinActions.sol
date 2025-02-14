@@ -5,13 +5,15 @@ import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
-import {IRigoblockV3PoolActions} from "../../interfaces/pool/IRigoblockV3PoolActions.sol";
+import {ISmartPoolActions} from "../../interfaces/pool/ISmartPoolActions.sol";
+import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeTransferLib for address;
+    using EnumerableSet for AddressSet;
 
     error BaseTokenBalance();
     error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
@@ -21,6 +23,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolCallerNotWhitelisted();
     error PoolMinimumPeriodNotEnough();
     error PoolMintAmountIn();
+    error PoolMintInvalidRecipient();
     error PoolMintOutputAmount();
     error PoolSupplyIsNullOrDust();
     error PoolTokenNotActive();
@@ -28,12 +31,13 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /*
      * EXTERNAL METHODS
      */
-    /// @inheritdoc IRigoblockV3PoolActions
+    /// @inheritdoc ISmartPoolActions
     function mint(
         address recipient,
         uint256 amountIn,
         uint256 amountOutMin
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
+        require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
         NavComponents memory components = _updateNav();
         address kycProvider = poolParams().kycProvider;
 
@@ -65,7 +69,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         recipientAmount = _allocateMintTokens(recipient, mintedAmount);
     }
 
-    /// @inheritdoc IRigoblockV3PoolActions
+    /// @inheritdoc ISmartPoolActions
     function burn(uint256 amountIn, uint256 amountOutMin) external override nonReentrant returns (uint256 netRevenue) {
         netRevenue = _burn(amountIn, amountOutMin, _BASE_TOKEN_FLAG);
     }
@@ -74,20 +78,19 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     // harm as a burn in any token. Considering burn must happen after a certain period, a pool opeartor has time to sell illiquid tokens.
     // technically, this could be used for exchanging big quantities of tokens at market rate. Which is not a big deal. prob should
     // allow only if user does not have enough base tokens
-    /// @inheritdoc IRigoblockV3PoolActions
+    /// @inheritdoc ISmartPoolActions
     function burnForToken(
         uint256 amountIn,
         uint256 amountOutMin,
         address tokenOut
     ) external override nonReentrant returns (uint256 netRevenue) {
-        // early revert if token does not have price feed, 0 is sentinel for token not being active. Removed token will revert later.
-        // TODO: we also use type(uint256).max as flag for removed token
-        require(activeTokensSet().positions[tokenOut] != 0, PoolTokenNotActive());
+        // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
+        require(activeTokensSet().isActive(tokenOut), PoolTokenNotActive());
         netRevenue = _burn(amountIn, amountOutMin, tokenOut);
     }
 
-    /// @inheritdoc IRigoblockV3PoolActions
-    function setUnitaryValue() external override nonReentrant {
+    /// @inheritdoc ISmartPoolActions
+    function updateUnitaryValue() external override nonReentrant {
         NavComponents memory components = _updateNav();
 
         // unitary value is updated only with non-dust supply
@@ -180,11 +183,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
             uint256 baseTokenBalance = baseToken.isAddressZero() ? address(this).balance : IERC20(baseToken).balanceOf(address(this));
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
-            try IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut) returns (uint256 value) {
-                netRevenue = value;
-            } catch Error(string memory reason) {
-                revert(reason);
-            }
+            // an active token must have a price feed, hence the oracle query will always return a converted value
+            netRevenue = IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut, components.ethToBaseTokenTwap);
         }
 
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());

@@ -83,10 +83,9 @@ describe("AMulticall", async () => {
 
         it('should prevent skipping owner check', async () => {
             const { factory, pool } = await setupTests()
-            // TODO: logic has slightly changed but concept is the same, change when fixed
-            // when the method is called by a wallet other than the pool owner, the fallback forwards a `staticcall` to the
-            //  extension. Therefore, instead of being executed in the context of the pool proxy, it gets executed in the
-            //  EUpgrade contract and is thus reverted as a direct call is not allowed.
+            // when the method is called by a wallet other than the pool owner, the ExtensionsMap prompts the fallback 
+            // to forward a `staticcall` to the target extension. Therefore, instead of being executed in the context
+            // of the pool proxy, it gets executed in the EUpgrade contract and is thus reverted as a direct call is not allowed.
             await expect(pool.connect(user2).upgradeImplementation())
                 .to.be.revertedWith('EUpgradeDirectCall()')
             await factory.setImplementation(factory.address)

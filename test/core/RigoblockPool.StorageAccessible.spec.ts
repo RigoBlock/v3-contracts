@@ -22,7 +22,7 @@ describe("MixinStorageAccessible", async () => {
         )
         await factory.createPool('testpool', 'TEST', AddressZero)
         const pool = await hre.ethers.getContractAt(
-            "RigoblockV3Pool",
+            "SmartPool",
             newPoolAddress
         )
         return {
@@ -55,7 +55,7 @@ describe("MixinStorageAccessible", async () => {
             const { factory, pool } = await setupTests()
             const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
             const implementation = await pool.getStorageAt(implementationSlot, 1)
-            const poolImplementation = await deployments.get("RigoblockV3Pool")
+            const poolImplementation = await deployments.get("SmartPool")
             const encodedPack = utils.solidityPack(['uint256'], [poolImplementation.address])
             expect(implementation).to.be.eq(encodedPack)
         })
@@ -106,7 +106,7 @@ describe("MixinStorageAccessible", async () => {
             const grgToken = (await deployments.get("RigoToken")).address
             const { newPoolAddress } = await factory.callStatic.createPool('test pool GRG', 'PDPG', grgToken)
             await factory.createPool('test pool GRG', 'PDPG', grgToken)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const pool = await hre.ethers.getContractAt("SmartPool", newPoolAddress)
             const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
             const poolStruct = await pool.getStorageAt(poolInitSlot, 3)
             // name stored in first struct slot with name length appended at last byte, when encoding we also must append length.
@@ -204,9 +204,9 @@ describe("MixinStorageAccessible", async () => {
             const grgToken = (await deployments.get("RigoToken")).address
             const { newPoolAddress } = await factory.callStatic.createPool('test pool GRG', 'PDPG', grgToken)
             await factory.createPool('test pool GRG', 'PDPG', grgToken)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const pool = await hre.ethers.getContractAt("SmartPool", newPoolAddress)
             const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
-            const implementationInstance = await deployments.get("RigoblockV3Pool")
+            const implementationInstance = await deployments.get("SmartPool")
             const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
             const baseTokenSlot = BigInt(poolInitSlot) + BigInt(2)
             const returnString = await pool.getStorageSlotsAt([implementationSlot, baseTokenSlot])
@@ -258,7 +258,7 @@ describe("MixinStorageAccessible", async () => {
             // we later want to check symbol length for 3-char symbol, creating new pool
             const { newPoolAddress } = await factory.callStatic.createPool('my new pool', 'PAL', AddressZero)
             await factory.createPool('my new pool', 'PAL', AddressZero)
-            const pool = await hre.ethers.getContractAt("RigoblockV3Pool", newPoolAddress)
+            const pool = await hre.ethers.getContractAt("SmartPool", newPoolAddress)
             const poolInitSlot = '0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8'
             const nameSlot = BigInt(poolInitSlot) + BigInt(0)
             const symbolSlot = BigInt(poolInitSlot) + BigInt(1)

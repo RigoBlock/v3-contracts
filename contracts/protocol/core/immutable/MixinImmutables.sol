@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2022 Rigo Intl.
+ Copyright 2022-2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinConstants} from "./MixinConstants.sol";
-import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
+import {ISmartPoolImmutable} from "../../interfaces/pool/ISmartPoolImmutable.sol";
 import {IExtensionsMap} from "../../extensions/IExtensionsMap.sol";
 
 /// @notice Immutables are not assigned a storage slot, can be safely added to this contract.
@@ -28,10 +28,10 @@ abstract contract MixinImmutables is MixinConstants {
     error InvalidAuthorityInput();
     error InvalidExtensionsMapInput();
 
-    /// @inheritdoc IRigoblockV3PoolImmutable
+    /// @inheritdoc ISmartPoolImmutable
     address public immutable override authority;
 
-    ///@inheritdoc IRigoblockV3PoolImmutable
+    ///@inheritdoc ISmartPoolImmutable
     address public immutable override wrappedNative;
 
     // EIP1967 standard, must be immutable to be compile-time constant.

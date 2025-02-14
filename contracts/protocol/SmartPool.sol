@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2022 Rigo Intl.
+ Copyright 2022-2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 
 pragma solidity 0.8.28;
 
-import {IRigoblockV3Pool} from "./IRigoblockV3Pool.sol";
+import {ISmartPool} from "./ISmartPool.sol";
 import {MixinImmutables} from "./core/immutable/MixinImmutables.sol";
 import {MixinStorage} from "./core/immutable/MixinStorage.sol";
 import {MixinPoolState} from "./core/state/MixinPoolState.sol";
@@ -28,11 +28,11 @@ import {MixinAbstract} from "./core/sys/MixinAbstract.sol";
 import {MixinInitializer} from "./core/sys/MixinInitializer.sol";
 import {MixinFallback} from "./core/sys/MixinFallback.sol";
 
-/// @title RigoblockV3Pool - A set of rules for Rigoblock pools.
+/// @title ISmartPool - A set of rules for Rigoblock pools.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-contract RigoblockV3Pool is
-    IRigoblockV3Pool,
+contract SmartPool is
+    ISmartPool,
     MixinStorage,
     MixinFallback,
     MixinInitializer,

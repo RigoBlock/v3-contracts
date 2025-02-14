@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
-import {IRigoblockV3PoolState} from "../../interfaces/pool/IRigoblockV3PoolState.sol";
+import {ISmartPoolState} from "../../interfaces/pool/ISmartPoolState.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
@@ -16,18 +16,18 @@ abstract contract MixinPoolState is MixinPoolValue {
         return accounts().userAccounts[who].userBalance;
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     /// @dev Grg staking and UniV3 positions will not be returned by default.
     function getActiveApplications() external view override returns (uint256 packedApplications) {
         return _getActiveApplications();
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function getActiveTokens() external view override returns (ActiveTokens memory tokens) {
         return _getActiveTokens();
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function getPoolStorage()
         external
         view
@@ -41,17 +41,17 @@ abstract contract MixinPoolState is MixinPoolValue {
         return accounts().userAccounts[who];
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function name() external view override returns (string memory) {
         return pool().name;
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function owner() external view override returns (address) {
         return pool().owner;
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function totalSupply() external view override returns (uint256) {
         return poolTokens().totalSupply;
     }
@@ -65,7 +65,7 @@ abstract contract MixinPoolState is MixinPoolValue {
         return pool().decimals;
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function getPool() public view override returns (ReturnedPool memory) {
         Pool memory pool = pool();
         // we return symbol as string, omit unlocked as always true
@@ -79,7 +79,7 @@ abstract contract MixinPoolState is MixinPoolValue {
             });
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function getPoolParams() public view override returns (PoolParams memory) {
         return
             PoolParams({
@@ -91,7 +91,7 @@ abstract contract MixinPoolState is MixinPoolValue {
             });
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function getPoolTokens() public view override returns (PoolTokens memory) {
         uint256 unitaryValue = poolTokens().unitaryValue;
         return
@@ -101,7 +101,7 @@ abstract contract MixinPoolState is MixinPoolValue {
             });
     }
 
-    /// @inheritdoc IRigoblockV3PoolState
+    /// @inheritdoc ISmartPoolState
     function symbol() public view override returns (string memory) {
         bytes8 _symbol = pool().symbol;
         uint8 i = 0;

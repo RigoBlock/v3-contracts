@@ -27,6 +27,7 @@ import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecod
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
+import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
@@ -34,6 +35,7 @@ import {TransientSlot} from "../../libraries/TransientSlot.sol";
 import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
 import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
+import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";
 
 interface IERC721 {
@@ -49,44 +51,40 @@ interface IUniswapRouter {
 /// @notice This contract is used as a bridge between a Rigoblock smart pool contract and the Uniswap universal router.
 /// @dev This contract ensures that tokens approvals are set and removed correctly, and that recipient and tokens are validated.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
-    type Uint256Slot is bytes32;
-    type AddressSlot is bytes32;
-    type BooleanSlot is bytes32;
-
+contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTransient {
     using CalldataDecoder for bytes;
-    using TransientSlot for *;
-    using SlotDerivation for bytes32;
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
 
     /// @notice Thrown when executing commands with an expired deadline
     error TransactionDeadlinePassed();
+
+    /// @notice Thrown when the pool is not the position owner
     error PositionOwner();
+
+    /// @notice Thrown when the pool is not the recipient
     error RecipientIsNotSmartPool();
-    error ReentrantCall();
-    error NestedSubPlan();
+
+    /// @notice Thrown when the pool reached maximum number of liquidity positions
     error UniV4PositionsLimitExceeded();
 
-    string public constant override requiredVersion = "4.0.0";
+    /// @notice Thrown when a call is made to the adapter directly
+    error DirectCallNotAllowed();
 
-    // transient storage slots, only used by this contract
-    // bytes32(uint256(keccak256("AUniswapRouter.lock")) - 1)
-    bytes32 private constant _LOCK_SLOT = 0x1e2a0e74e761035cb113c1bf11b7fbac06ae91f3a03ce360dda726ba116c216f;
-    // bytes32(uint256(keccak256("AUniswapRouter.reentrancy.depth")) - 1)
-    bytes32 private constant _REENTRANCY_DEPTH_SLOT =
-        0x3921e0fb5d7436d70b7041cccb0d0f543e6b643f41e09aa71450d5e1c5767376;
+    /// @notice Only pools that do not have access to liquidity at removal are supported
+    error LiquidityMintHookError(address hook);
 
+    string private constant _REQUIRED_VERSION = "4.0.0";
+
+    address private immutable _adapter;
     address private immutable _uniswapRouter;
     IPositionManager private immutable _positionManager;
 
-    // TODO: should verify that it is ok to make direct calls, as they could potentially modify state of the adapter
-    // either we make sure that a constructor value prevents setting, or we require delegatecall, which would prevent
-    // view methods from msg.sender other than the pool operator.
     constructor(address _universalRouter, address _v4Posm, address weth) AUniswapDecoder(weth) {
         _uniswapRouter = _universalRouter;
         _positionManager = IPositionManager(_v4Posm);
+        _adapter = address(this);
     }
 
     modifier checkDeadline(uint256 deadline) {
@@ -94,26 +92,14 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         _;
     }
 
-    modifier nonReentrant() {
-        if (!_lockSlot().asBoolean().tload()) {
-            _lockSlot().asBoolean().tstore(true);
-        } else {
-            require(msg.sender == address(this), ReentrantCall());
-        }
-        _reentrancyDepthSlot().asUint256().tstore(_reentrancyDepthSlot().asUint256().tload() + 1);
+    modifier onlyDelegateCall() {
+        require(address(this) != _adapter, DirectCallNotAllowed());
         _;
-        _reentrancyDepthSlot().asUint256().tstore(_reentrancyDepthSlot().asUint256().tload() - 1);
-        if (_reentrancyDepthSlot().asUint256().tload() == 0) {
-            _lockSlot().asBoolean().tstore(false);
-        }
     }
 
-    function _lockSlot() private pure returns (bytes32) {
-        return _LOCK_SLOT;
-    }
-
-    function _reentrancyDepthSlot() private pure returns (bytes32) {
-        return _REENTRANCY_DEPTH_SLOT;
+    /// @inheritdoc IMinimumVersion
+    function requiredVersion() external pure override returns (string memory) {
+        return _REQUIRED_VERSION;
     }
 
     /// @inheritdoc IAUniswapRouter
@@ -121,7 +107,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
         bytes calldata commands,
         bytes[] calldata inputs,
         uint256 deadline
-    ) external override checkDeadline(deadline) returns (Parameters memory params) {
+    ) external override checkDeadline(deadline) {
         return execute(commands, inputs);
     }
 
@@ -129,8 +115,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
     function execute(
         bytes calldata commands,
         bytes[] calldata inputs
-    ) public override nonReentrant returns (Parameters memory params) {
+    ) public override nonReentrant onlyDelegateCall {
         assert(commands.length == inputs.length);
+        Parameters memory params;
 
         // loop through all given commands, verify their inputs and pass along outputs as defined
         for (uint256 i = 0; i < commands.length; i++) {
@@ -138,31 +125,27 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder {
             params = _decodeInput(commands[i], inputs[i], params);
         }
 
-        // only execute when finished decoding inputs
-        if (_reentrancyDepthSlot().asUint256().tload() == 1) {
-            // early return if recipient is not the caller
-            _processRecipients(params.recipients);
+        _processRecipients(params.recipients);
+        _assertTokensOutHavePriceFeed(params.tokensOut);
+        _safeApproveTokensIn(params.tokensIn, uniswapRouter(), type(uint256).max);
 
-            _assertTokensOutHavePriceFeed(params.tokensOut);
-
-            // we approve all the tokens that are exiting the smart pool
-            _safeApproveTokensIn(params.tokensIn, uniswapRouter(), type(uint256).max);
-
-            // forward the inputs to the Uniswap universal router
-            try IUniswapRouter(uniswapRouter()).execute{value: params.value}(commands, inputs) {
-                // we remove allowance without clearing storage
-                _safeApproveTokensIn(params.tokensIn, uniswapRouter(), 1);
-                return params;
-            } catch Error(string memory reason) {
-                revert(reason);
-            }
+        // forward the inputs to the Uniswap universal router
+        try IUniswapRouter(uniswapRouter()).execute{value: params.value}(commands, inputs) {
+            // we remove allowance without clearing storage
+            _safeApproveTokensIn(params.tokensIn, uniswapRouter(), 1);
+            return;
+        } catch Error(string memory reason) {
+            revert(reason);
         }
     }
 
-    // TODO: add non-reentrant modifier (can be used as can only be reentered by itself, which it won't)
     /// @inheritdoc IAUniswapRouter
-    /// @notice Can be not reentrancy-protected, as will revert in PositionManager
-    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external override {
+    /// @notice Is not reentrancy-protected, as will revert in PositionManager.
+    /// @dev Delegatecall-only for extra safety, to pervent accidental user liquidity locking.
+    function modifyLiquidities(
+        bytes calldata unlockData,
+        uint256 deadline
+    ) external onlyDelegateCall override {
         (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
         assert(actions.length == params.length);
         Parameters memory newParams;

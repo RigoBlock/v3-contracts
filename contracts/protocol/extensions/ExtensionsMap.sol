@@ -28,15 +28,15 @@ import "./IExtensionsMap.sol";
 
 /// @title ExtensionsMap - Wraps extensions selectors to addresses.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-/// @notice Its deployed address will be different on different chains and if either selectors or mapped addresses change.
+/// @notice Its deployed address will be different on different chains and change if selectors or mapped addresses change.
 contract ExtensionsMap is IExtensionsMap {
-    // mapped selectors
+    // mapped selectors. When adding a new selector, make sure its mapping to extension address is added below.
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
     bytes4 private constant _EAPPS_TOKEN_IDS_SELECTOR = IEApps.getUniV4TokenIds.selector;
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
     bytes4 private constant _EORACLE_ORACLE_ADDRESS_SELECTOR = IEOracle.getOracleAddress.selector;
     bytes4 private constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
-    bytes4 private constant _EORACLE_TICK_SELECTOR = IEOracle.getTick.selector;
+    bytes4 private constant _EORACLE_TWAP_SELECTOR = IEOracle.getTwap.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
 
@@ -51,8 +51,6 @@ contract ExtensionsMap is IExtensionsMap {
         address eUpgrade;
     }
 
-    // TODO: check this is correct
-    // TODO: verify how we can make sure when a user uses a new app, the implementation is use latest EApps
     /// @notice Assumes extensions have been correctly initialized.
     /// @dev When adding a new app, modify apps type and assert correct params are passed to the constructor.
     constructor(Extensions memory extensions) {
@@ -66,7 +64,7 @@ contract ExtensionsMap is IExtensionsMap {
             _EORACLE_CONVERT_AMOUNT_SELECTOR ^
             _EORACLE_ORACLE_ADDRESS_SELECTOR ^
             _EORACLE_PRICE_FEED_SELECTOR ^
-            _EORACLE_TICK_SELECTOR == type(IEOracle).interfaceId);
+            _EORACLE_TWAP_SELECTOR == type(IEOracle).interfaceId);
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
     }
 
@@ -78,14 +76,14 @@ contract ExtensionsMap is IExtensionsMap {
         override
         returns (address extension, bool shouldDelegatecall)
     {
-        if (selector == _EAPPS_BALANCES_SELECTOR) {
+        if (selector == _EAPPS_BALANCES_SELECTOR || selector == _EAPPS_TOKEN_IDS_SELECTOR) {
             extension = _EAPPS;
             shouldDelegatecall = true;
         } else if (
             selector == _EORACLE_CONVERT_AMOUNT_SELECTOR ||
             selector == _EORACLE_ORACLE_ADDRESS_SELECTOR ||
             selector == _EORACLE_PRICE_FEED_SELECTOR ||
-            selector == _EORACLE_TICK_SELECTOR
+            selector == _EORACLE_TWAP_SELECTOR
         ) {
             extension = _EORACLE;
         } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {

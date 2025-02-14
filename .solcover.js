@@ -2,7 +2,10 @@ module.exports = {
     skipFiles: [
         './examples',
         './tokens',
-        './utils'
+        './utils',
+        './protocol/libraries/SlotDerivation.sol',
+        './protocol/libraries/ReentrancyGuardTransient.sol',
+        './protocol/libraries/TransientSlot.sol'
     ],
     mocha: {
         grep: "@skip-on-coverage", // Find everything with this tag

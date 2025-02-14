@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-interface IRigoblockV3PoolState {
+interface ISmartPoolState {
     /// @notice Returns the active application flags.
     /// @return packedApplications Packed value of bitmap encoded active flags.
     function getActiveApplications() external view returns (uint256 packedApplications);

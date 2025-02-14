@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2022 Rigo Intl.
+ Copyright 2022-2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
-import {IRigoblockV3PoolImmutable} from "../../interfaces/pool/IRigoblockV3PoolImmutable.sol";
+import {ISmartPool} from "../../ISmartPool.sol";
+import {ISmartPoolImmutable} from "../../interfaces/pool/ISmartPoolImmutable.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.
-abstract contract MixinConstants is IRigoblockV3Pool {
-    /// @inheritdoc IRigoblockV3PoolImmutable
+abstract contract MixinConstants is ISmartPool {
+    /// @inheritdoc ISmartPoolImmutable
     string public constant override VERSION = "4.0.0";
 
     bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
@@ -39,10 +39,6 @@ abstract contract MixinConstants is IRigoblockV3Pool {
     bytes32 internal constant _POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
 
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
-
-    // TODO: verify correctness
-    bytes32 internal constant _TRANSIENT_BALANCE_SLOT =
-        bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
 
     address internal constant _ZERO_ADDRESS = address(0);
 

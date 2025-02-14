@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2022 Rigo Intl.
+ Copyright 2022-2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import {IRigoblockV3Pool} from "../IRigoblockV3Pool.sol";
+import {ISmartPool} from "../ISmartPool.sol";
 import {IRigoblockExtensions} from "../extensions/adapters/interfaces/IRigoblockExtensions.sol";
 
 /// @title Rigoblock Pool Extended Interface - Allows interaction with all the pool's supported methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
-interface IRigoblockPoolExtended is IRigoblockV3Pool, IRigoblockExtensions {}
+interface IRigoblockPoolExtended is ISmartPool, IRigoblockExtensions {}

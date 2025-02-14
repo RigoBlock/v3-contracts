@@ -25,7 +25,7 @@ describe("BaseTokenProxy", async () => {
         )
         await factory.createPool('testpool','TEST',GrgTokenInstance.address)
         const pool = await hre.ethers.getContractAt(
-            "RigoblockV3Pool",
+            "SmartPool",
             newPoolAddress
         )
         const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
@@ -97,12 +97,11 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             expect(poolData.totalSupply).to.be.eq(parseEther("10"))
-            // TODO: second mint will fail until EApps is correctly initialized
             await pool.mint(user2.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             // 5% default spread results in less token than amount in at initial price 1
             expect(poolData.totalSupply).to.be.eq(parseEther("19.5"))
-            await pool.setUnitaryValue()
+            await pool.updateUnitaryValue()
             poolData = await pool.getPoolTokens()
             // TODO: check it is ok to charge spread on mint (instead could do on burn only)
             // and verify root of approximations, as 20 eth balance is divided by 19.5 tokens
@@ -144,7 +143,7 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, parseEther("10"), 0)
             // TODO: storage should be updated after mint, this is probably not necessary. However, this one
             // goes through nav calculations, while first mint simply stores initial value
-            await pool.setUnitaryValue()
+            await pool.updateUnitaryValue()
             poolData = await pool.getPoolStorage()
             expect(poolData.poolTokensInfo.unitaryValue).to.be.eq(parseEther("1"))
             expect(poolData.poolTokensInfo.totalSupply).to.be.eq(parseEther("10"))
@@ -367,11 +366,11 @@ describe("BaseTokenProxy", async () => {
                 poolUsdc.connect(user2).mint(user2.address, 999, 0)
             ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
             // TODO: try burn, then set value again
-            /*await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
-            await poolUsdc.setUnitaryValue()
+            /*await poolUsdc.updateUnitaryValue()
+            await poolUsdc.updateUnitaryValue()
+            await poolUsdc.updateUnitaryValue()
             // the following line undeflows minimum liquidity (99.96% loss with small decimals), which is ok
-            poolUsdc.setUnitaryValue(401)*/
+            poolUsdc.updateUnitaryValue()*/
             // TODO: verify setting minimum period to 2 will set to 10?
             await timeTravel({ seconds: 2592000, mine: true })
             const burnAmount = 6000
@@ -421,7 +420,7 @@ describe("BaseTokenProxy", async () => {
                 amount0Min: 1,
                 amount1Min: 1,
                 recipient: pool.address,
-                deadline: 1
+                deadline: 1000000000000
             }
             await uniswapV3Npm.mint(mintParams)
             // minting again will activate token (a burn would also activate token)
@@ -451,7 +450,7 @@ describe("BaseTokenProxy", async () => {
                 .and.to.emit(weth, "Transfer").withArgs(
                     pool.address,
                     user1.address,
-                    parseEther("21.017444013240795913")
+                    parseEther("21.017614167737851312")
                 )
                 .and.to.not.emit(grgToken, "Transfer")
         })
@@ -508,7 +507,7 @@ describe("BaseTokenProxy", async () => {
                 amount0Min: 1,
                 amount1Min: 1,
                 recipient: pool.address,
-                deadline: 1
+                deadline: 1000000000000
             }
             await uniswapV3Npm.mint(mintParams)
             // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
@@ -519,16 +518,16 @@ describe("BaseTokenProxy", async () => {
             // minting again to activate token via nav calculations
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool, but includes lp token balances and weth balance
-            const poolTokens = await pool.getPoolTokens()
-            expect(poolTokens.unitaryValue).to.be.eq(parseEther("233.571684913933075816"))
+            const { unitaryValue } = await pool.getPoolTokens()
+            expect(unitaryValue).to.be.eq(parseEther("233.573575144654545834"))
             await timeTravel({ seconds: 2592000, mine: true })
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
                 // TODO: verify why we have a small difference in nav (possibly due to rounding)
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("233.596634176192422210"))
-                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.972512222064452097"))
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("233.598524407323662027"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.972673836826173103"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })

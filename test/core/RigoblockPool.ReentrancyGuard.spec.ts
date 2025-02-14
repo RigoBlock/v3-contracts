@@ -60,7 +60,7 @@ describe("ReentrancyGuard", async () => {
                 rogueToken.address
             )
             await factory.createPool('testpool', 'TEST', rogueToken.address)
-            const PoolInterface = await hre.ethers.getContractFactory("RigoblockV3Pool")
+            const PoolInterface = await hre.ethers.getContractFactory("SmartPool")
             const pool = PoolInterface.attach(newPoolAddress)
             const TestReentrancyAttack = await hre.ethers.getContractFactory("TestReentrancyAttack")
             const testReentrancyAttack = await TestReentrancyAttack.deploy(newPoolAddress)

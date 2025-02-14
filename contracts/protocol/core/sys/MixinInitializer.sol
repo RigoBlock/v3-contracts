@@ -5,7 +5,7 @@ import {MixinImmutables} from "../immutable/MixinImmutables.sol";
 import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IRigoblockPoolProxyFactory} from "../../interfaces/IRigoblockPoolProxyFactory.sol";
-import {IRigoblockV3PoolInitializer} from "../../interfaces/pool/IRigoblockV3PoolInitializer.sol";
+import {ISmartPoolInitializer} from "../../interfaces/pool/ISmartPoolInitializer.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {
@@ -19,7 +19,7 @@ abstract contract MixinInitializer is MixinImmutables, MixinStorage {
         _;
     }
 
-    /// @inheritdoc IRigoblockV3PoolInitializer
+    /// @inheritdoc ISmartPoolInitializer
     /// @dev Cannot be reentered as no non-view call is performed to external contracts. Unlocked is kept for backwards compatibility.
     function initializePool() external override onlyUninitialized {
         IRigoblockPoolProxyFactory.Parameters memory initParams = IRigoblockPoolProxyFactory(msg.sender).parameters();

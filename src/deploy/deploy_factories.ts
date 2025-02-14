@@ -39,7 +39,7 @@ const deploy: DeployFunction = async function (
   // TODO: pool implementation requires deployed extensionsMap address (different by chain)
   /*const extensionsMap = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const weth = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const poolImplementation = await deploy("RigoblockV3Pool", {
+  const poolImplementation = await deploy("SmartPool", {
     from: deployer,
     args: [authority.address, extensionsMap, weth],
     log: true,

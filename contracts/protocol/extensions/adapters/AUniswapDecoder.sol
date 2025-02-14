@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 /*
 
- Copyright 2024 Rigo Intl.
+ Copyright 2025 Rigo Intl.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from '@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol';
-import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
@@ -39,9 +38,7 @@ abstract contract AUniswapDecoder {
 
     error InvalidCommandType(uint256 commandType);
     error UnsupportedAction(uint256 action);
-
-    /// @dev Only pools that do not have access to liquidity at removal are supported
-    error LiquidityMintHookError(address hook);
+    error OnlyOneMintOrBurnPerAction();
 
     address internal constant ZERO_ADDRESS = address(0);
     address private immutable _wrappedNative;
@@ -52,6 +49,13 @@ abstract contract AUniswapDecoder {
 
     function uniV4Posm() public view virtual returns (IPositionManager);
 
+    struct Parameters {
+        uint256 value;
+        address[] recipients;
+        address[] tokensIn;
+        address[] tokensOut;
+    }
+
     /// @dev Decodes the input for a command.
     /// @param commandType The command type to decode.
     /// @param inputs The encoded input data.
@@ -59,8 +63,8 @@ abstract contract AUniswapDecoder {
     function _decodeInput(
         bytes1 commandType,
         bytes calldata inputs,
-        IAUniswapRouter.Parameters memory params
-    ) internal returns (IAUniswapRouter.Parameters memory) {
+        Parameters memory params
+    ) internal returns (Parameters memory) {
         uint256 command = uint8(commandType & Commands.COMMAND_TYPE_MASK);
 
         // 0x00 <= command < 0x21
@@ -75,7 +79,14 @@ abstract contract AUniswapDecoder {
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
-                        params.tokensOut = _addUnique(params.tokensOut, path.toBytes(path.length - 20).toAddress());
+                        // slice last 20 bytes from path to find tokenIn address
+                        bytes calldata lastTokenBytes;
+                        assembly ("memory-safe") {
+                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
+                            lastTokenBytes.length := 20
+                            lastTokenBytes.offset := lastTokenOffset
+                        }
+                        params.tokensOut = _addUnique(params.tokensOut, lastTokenBytes.toAddress());
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
@@ -84,7 +95,14 @@ abstract contract AUniswapDecoder {
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, path.toAddress());
-                        params.tokensIn = _addUnique(params.tokensIn, path.toBytes(path.length - 20).toAddress());
+                        // slice last 20 bytes from path to find tokenIn address
+                        bytes calldata lastTokenBytes;
+                        assembly ("memory-safe") {
+                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
+                            lastTokenBytes.length := 20
+                            lastTokenBytes.offset := lastTokenOffset
+                        }
+                        params.tokensIn = _addUnique(params.tokensIn, lastTokenBytes.toAddress());
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
@@ -156,6 +174,7 @@ abstract contract AUniswapDecoder {
                         revert InvalidCommandType(command);
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
                         // no further assertion needed as uni router uses staticcall
+                        return params;
                     } else {
                         // placeholder area for command 0x0f
                         revert InvalidCommandType(command);
@@ -180,6 +199,7 @@ abstract contract AUniswapDecoder {
                             //} else if (action == Actions.SWAP_EXACT_OUT) {
                             //} else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
                             //}
+                            continue;
                         } else {
                             if (action == Actions.SETTLE_PAIR) {
                                 revert UnsupportedAction(action);
@@ -191,29 +211,30 @@ abstract contract AUniswapDecoder {
                                     abi.decode(paramsAtIndex, (Currency, uint256, bool));
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                                 params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
-                                return params;
+                                continue;
                             } else if (action == Actions.TAKE) {
                                 // Currency currency, address recipient, uint256 amount
                                 (Currency currency, address recipient,) =
                                     abi.decode(paramsAtIndex, (Currency, address, uint256));
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, recipient);
-                                return params;
+                                continue;
                             } else if (action == Actions.CLOSE_CURRENCY) {
+                                // TODO: this won't be able to settle native, so need to make sure we forward ETH, i.e. eth must be added for single swaps
                                 // this will either settle or take, so we need to make sure the token is tracked
                                 (Currency currency) = paramsAtIndex.decodeCurrency();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                return params;
+                                continue;
                             } else if (action == Actions.CLEAR_OR_TAKE) {
                                 // Currency currency, uint256 amountMax
                                 (Currency currency,) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                return params;
+                                continue;
                             } else if (action == Actions.SWEEP) {
                                 (Currency currency, address to) = paramsAtIndex.decodeCurrencyAndAddress();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, to);
-                                return params;
+                                continue;
                             }
                         }
                     }
@@ -232,8 +253,14 @@ abstract contract AUniswapDecoder {
         } else {
             // 0x21 <= command
             if (command == Commands.EXECUTE_SUB_PLAN) {
-                (bytes memory subCommands, bytes[] memory subInputs) = abi.decode(inputs, (bytes, bytes[]));
-                return IAUniswapRouter(address(this)).execute(subCommands, subInputs);
+                (bytes calldata _commands, bytes[] calldata _inputs) = inputs.decodeCommandsAndInputs();
+
+                for (uint256 j = 0; j < _commands.length; j++) {
+                    params = _decodeInput(_commands[j], _inputs[j], params);
+                }
+            } else {
+                // placeholder area for commands 0x22-0x3f
+                revert InvalidCommandType(command);
             }
         }
         return params;
@@ -249,9 +276,9 @@ abstract contract AUniswapDecoder {
     function _decodePosmAction(
         uint256 action,
         bytes calldata actionParams,
-        IAUniswapRouter.Parameters memory params,
+        Parameters memory params,
         Position[] memory positions
-    ) internal view returns (IAUniswapRouter.Parameters memory, Position[] memory) {
+    ) internal view returns (Parameters memory, Position[] memory) {
         if (action < Actions.SETTLE) {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
@@ -312,7 +339,6 @@ abstract contract AUniswapDecoder {
                 // TODO: verify
                 revert UnsupportedAction(action);
             } else if (action == Actions.CLEAR_OR_TAKE) {
-                // no further assertion needed
                 (Currency currency,) = actionParams.decodeCurrencyAndUint256();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 return (params, positions);
@@ -351,9 +377,10 @@ abstract contract AUniswapDecoder {
     /// @dev Multiple actions can be executed on the same tokenId, so we add a new position if same tokenId but different action
     function _addUniquePosition(Position[] memory array, Position memory pos) private pure returns (Position[] memory) {
         for (uint256 i = 0; i < array.length; i++) {
-            if (array[i].tokenId == pos.tokenId && array[i].action == pos.action) {
-                return array; // Already exists, return unchanged array
-            }
+            require(
+                array[i].tokenId != pos.tokenId || array[i].action != pos.action,
+                OnlyOneMintOrBurnPerAction()
+            ); 
         }
         Position[] memory newArray = new Position[](array.length + 1);
         for (uint256 i = 0; i < array.length; i++) {
