@@ -34,9 +34,9 @@ library SafeTransferLib {
 
     /// @dev Allows approving all ERC20 tokens, forcing approvals when needed.
     function safeApprove(address token, address spender, uint256 amount) internal {
-        /*try IERC20(token).approve(spender, amount) returns (bool success) {
+        try IERC20(token).approve(spender, amount) returns (bool success) {
             // will revert in case of silent failure (i.e. an address without code)
-            assert(success);
+            require(success, ApprovalFailed(token));
         } catch {
             // USDT on mainnet requires approval to be set to 0 before being reset again
             try IERC20(token).approve(spender, 0) {
@@ -44,17 +44,6 @@ library SafeTransferLib {
             } catch {
                 revert ApprovalFailed(token);
             }
-        }*/
-        // TODO: test this alternative with try/catch. make sure legacy ERC20 calls enter the catch statement
-        // notice: the following implementation is more gas efficient for the first legacy ERC20 approval.
-        (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.approve, (spender, amount)));
-    
-        if (!success || (data.length != 0 && !abi.decode(data, (bool)))) {
-            // force approval
-            (success, data) = token.call(abi.encodeCall(IERC20.approve, (spender, 0)));
-            (success, data) = token.call(abi.encodeCall(IERC20.approve, (spender, amount)));
-
-            require(success && ((data.length == 0 && token.code.length > 0) || abi.decode(data, (bool))), ApprovalFailed(token));
         }
     }
 

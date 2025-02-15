@@ -94,6 +94,7 @@ describe("AUniswapRouter", async () => {
         pool.address,
         '0x', // hookData
       ])
+      v4Planner.addAction(Actions.SETTLE_PAIR, [PAIR.poolKey.currency0, PAIR.poolKey.currency1])
       // tokens are taken from the pool, so value is always 0
       const value = ethers.utils.parseEther("0")
       // the mock posm does not move funds from the pool, so we can send before pool has balance
@@ -361,13 +362,11 @@ describe("AUniswapRouter", async () => {
       const PAIR = { ...DEFAULT_PAIR }
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
-      // commented methods are not supported by v4Planner yet
-      //v4Planner.addAction(Actions.SETTLE_PAIR, [grgToken.address, wethaddress])
-      //v4Planner.addAction(Actions.TAKE_PAIR, [grgToken.address, wethaddress, pool.address])
-      // TODO: verify why grg safe approval fails with panic error
-      //v4Planner.addAction(Actions.SETTLE, [grgToken.address, parseEther("12"), true])
+      v4Planner.addAction(Actions.SETTLE_PAIR, [grgToken.address, wethAddress])
+      v4Planner.addAction(Actions.TAKE_PAIR, [grgToken.address, wethAddress, pool.address])
+      v4Planner.addAction(Actions.SETTLE, [grgToken.address, parseEther("12"), true])
       v4Planner.addAction(Actions.TAKE, [wethAddress, pool.address, parseEther("12")])
-      //v4Planner.addAction(Actions.CLEAR_OR_TAKE, [pool.address, 0])
+      v4Planner.addAction(Actions.CLEAR_OR_TAKE, [grgToken.address, 0])
       v4Planner.addAction(Actions.SWEEP, [wethAddress, pool.address])
       v4Planner.addAction(Actions.WRAP, [parseEther("1")])
       v4Planner.addAction(Actions.UNWRAP, [parseEther("1")])

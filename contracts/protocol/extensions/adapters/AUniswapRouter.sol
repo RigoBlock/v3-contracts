@@ -212,7 +212,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
 
             // assert no approval inflation exists after removing approval
             if (amount == 1) {
-                assert(IERC20(tokensIn[i]).allowance(address(this), uniswapRouter()) == 1);
+                assert(IERC20(tokensIn[i]).allowance(address(this), spender) == 1);
             }
         }
     }
