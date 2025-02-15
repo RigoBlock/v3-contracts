@@ -148,7 +148,7 @@ describe("AUniswap", async () => {
                     amount1Min: 0,
                     deadline: 1
                 })
-            ).to.be.reverted
+            ).to.be.revertedWith('reverted with panic code 0x1')
             await pool.decreaseLiquidity({
                 tokenId: 1,
                 liquidity: 25,
@@ -354,7 +354,7 @@ describe("AUniswap", async () => {
                     amount1Min: 0,
                     deadline: 1
               })
-            ).to.be.reverted
+            ).to.be.revertedWith('reverted with panic code 0x1 (Assertion error)')
         })
     })
 

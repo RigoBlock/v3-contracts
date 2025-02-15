@@ -193,7 +193,7 @@ abstract contract AUniswapDecoder {
                         bytes calldata paramsAtIndex = encodedParams[actionIndex];
 
                         if (action < Actions.SETTLE) {
-                            // no further assertion needed
+                            // no further decoding is needed, as we retrieve net values in payments actions
                             //if (action == Actions.SWAP_EXACT_IN) {
                             //} else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
                             //} else if (action == Actions.SWAP_EXACT_OUT) {
@@ -201,39 +201,29 @@ abstract contract AUniswapDecoder {
                             //}
                             continue;
                         } else {
-                            if (action == Actions.SETTLE_PAIR) {
-                                revert UnsupportedAction(action);
-                            } else if (action == Actions.TAKE_PAIR) {
-                                revert UnsupportedAction(action);
-                            } else if (action == Actions.SETTLE) {
-                                // Currency currency, uint256 amount, bool payerIsUser
-                                (Currency currency, uint256 amount,) =
-                                    abi.decode(paramsAtIndex, (Currency, uint256, bool));
+                            if (action == Actions.SETTLE_ALL) {
+                                (Currency currency, uint256 maxAmount) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
+                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? maxAmount : 0;
                                 continue;
-                            } else if (action == Actions.TAKE) {
-                                // Currency currency, address recipient, uint256 amount
-                                (Currency currency, address recipient,) =
-                                    abi.decode(paramsAtIndex, (Currency, address, uint256));
-                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                params.recipients = _addUnique(params.recipients, recipient);
-                                continue;
-                            } else if (action == Actions.CLOSE_CURRENCY) {
-                                // TODO: this won't be able to settle native, so need to make sure we forward ETH, i.e. eth must be added for single swaps
-                                // this will either settle or take, so we need to make sure the token is tracked
-                                (Currency currency) = paramsAtIndex.decodeCurrency();
-                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                continue;
-                            } else if (action == Actions.CLEAR_OR_TAKE) {
-                                // Currency currency, uint256 amountMax
+                            } else if (action == Actions.TAKE_ALL) {
                                 (Currency currency,) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 continue;
-                            } else if (action == Actions.SWEEP) {
-                                (Currency currency, address to) = paramsAtIndex.decodeCurrencyAndAddress();
+                            } else if (action == Actions.SETTLE) {
+                                (Currency currency, uint256 amount, bool payerIsUser) = paramsAtIndex.decodeCurrencyUint256AndBool();
+                                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
+                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? (payerIsUser ? amount : 0) : 0;
+                                continue;
+                            } else if (action == Actions.TAKE) {
+                                (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                params.recipients = _addUnique(params.recipients, to);
+                                params.recipients = _addUnique(params.recipients, recipient);
+                                continue;
+                            } else if (action == Actions.TAKE_PORTION) {
+                                (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
+                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
+                                params.recipients = _addUnique(params.recipients, recipient);
                                 continue;
                             }
                         }
@@ -310,14 +300,10 @@ abstract contract AUniswapDecoder {
                 return (params, positions);
             }
         } else {
-            // TODO: verify if should revert following 2 methods, as prob used for migrations only?
             if (action == Actions.SETTLE_PAIR) {
-                // settlement eth value must be retrieved in previous actions
                 (Currency currency0, Currency currency1) = actionParams.decodeCurrencyPair();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency0));
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency1));
-                // TODO: how do we get value for pair here?
-                //params.value += Currency.unwrap(currency0) == ZERO_ADDRESS ? amount : 0;
                 return (params, positions);
             } else if (action == Actions.TAKE_PAIR) {
                 (Currency currency0, Currency currency1, address recipient) = actionParams.decodeCurrencyPairAndAddress();
@@ -326,20 +312,25 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.SETTLE) {
-                (Currency currency, uint256 amount,) = actionParams.decodeCurrencyUint256AndBool();
+                // native must be forwarded via this action. When swap requires native, must append settle value action as well.
+                (Currency currency, uint256 amount, bool payerIsUser) = actionParams.decodeCurrencyUint256AndBool();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
+                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? (payerIsUser ? amount : 0) : 0;
                 return (params, positions);
             } else if (action == Actions.TAKE) {
-                (Currency currency, address recipient, /*uint256 amount*/) = actionParams.decodeCurrencyAddressAndUint256();
+                (Currency currency, address recipient,) = actionParams.decodeCurrencyAddressAndUint256();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.CLOSE_CURRENCY) {
-                // TODO: verify
-                revert UnsupportedAction(action);
+                Currency currency = actionParams.decodeCurrency();
+                // TODO: verify if need to decode tokens, as tokenOut is verified at mint
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
+                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
             } else if (action == Actions.CLEAR_OR_TAKE) {
                 (Currency currency,) = actionParams.decodeCurrencyAndUint256();
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
+                // TODO: verify if need to decode tokens, as tokenOut is verified at mint
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 return (params, positions);
             } else if (action == Actions.SWEEP) {

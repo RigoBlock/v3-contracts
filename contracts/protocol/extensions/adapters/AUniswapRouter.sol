@@ -72,8 +72,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
     /// @notice Thrown when a call is made to the adapter directly
     error DirectCallNotAllowed();
 
-    /// @notice Only pools that do not have access to liquidity at removal are supported
+    /// @notice Thrown when a pool hook can access liquidity deltas
     error LiquidityMintHookError(address hook);
+
+    /// @notice Thrown when the pool does not hold enough balance
+    error InsufficientNativeBalance();
 
     string private constant _REQUIRED_VERSION = "4.0.0";
 
@@ -136,6 +139,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
             return;
         } catch Error(string memory reason) {
             revert(reason);
+        } catch {
+            if (params.value > address(this).balance) {
+                revert InsufficientNativeBalance();
+            }
         }
     }
 
@@ -166,6 +173,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
             return;
         } catch Error(string memory reason) {
             revert(reason);
+        } catch {
+            if (newParams.value > address(this).balance) {
+                revert InsufficientNativeBalance();
+            }
         }
     }
 
