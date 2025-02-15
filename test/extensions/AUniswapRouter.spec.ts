@@ -365,6 +365,8 @@ describe("AUniswapRouter", async () => {
       v4Planner.addAction(Actions.SETTLE_PAIR, [grgToken.address, wethAddress])
       v4Planner.addAction(Actions.TAKE_PAIR, [grgToken.address, wethAddress, pool.address])
       v4Planner.addAction(Actions.SETTLE, [grgToken.address, parseEther("12"), true])
+      v4Planner.addAction(Actions.SETTLE, [AddressZero, parseEther("12"), false])
+      v4Planner.addAction(Actions.SETTLE, [AddressZero, parseEther("0.1"), true])
       v4Planner.addAction(Actions.TAKE, [wethAddress, pool.address, parseEther("12")])
       v4Planner.addAction(Actions.CLEAR_OR_TAKE, [grgToken.address, 0])
       v4Planner.addAction(Actions.SWEEP, [wethAddress, pool.address])
@@ -380,7 +382,7 @@ describe("AUniswapRouter", async () => {
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       ).to.be.revertedWith('InsufficientNativeBalance()')
-      const etherAmount = ethers.utils.parseEther("1")
+      const etherAmount = ethers.utils.parseEther("2")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
     })

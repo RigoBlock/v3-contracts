@@ -194,12 +194,15 @@ abstract contract AUniswapDecoder {
 
                         if (action < Actions.SETTLE) {
                             // no further decoding is needed, as we retrieve net values in payments actions
-                            //if (action == Actions.SWAP_EXACT_IN) {
-                            //} else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
-                            //} else if (action == Actions.SWAP_EXACT_OUT) {
-                            //} else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
-                            //}
-                            continue;
+                            if (action == Actions.SWAP_EXACT_IN) {
+                                continue;
+                            } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
+                                continue;
+                            } else if (action == Actions.SWAP_EXACT_OUT) {
+                                continue;
+                            } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
+                                continue;
+                            }
                         } else {
                             if (action == Actions.SETTLE_ALL) {
                                 (Currency currency, uint256 maxAmount) = paramsAtIndex.decodeCurrencyAndUint256();
@@ -225,9 +228,10 @@ abstract contract AUniswapDecoder {
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, recipient);
                                 continue;
+                            } else {
+                                revert UnsupportedAction(action);
                             }
                         }
-                        revert UnsupportedAction(action);
                     }
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
                     revert InvalidCommandType(command);
@@ -299,8 +303,9 @@ abstract contract AUniswapDecoder {
                 (uint256 tokenId,,,) = actionParams.decodeBurnParams();
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
                 return (params, positions);
+            } else {
+                revert UnsupportedAction(action);
             }
-            revert UnsupportedAction(action);
         } else {
             if (action == Actions.SETTLE_PAIR) {
                 (Currency currency0, Currency currency1) = actionParams.decodeCurrencyPair();
