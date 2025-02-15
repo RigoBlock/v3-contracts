@@ -227,6 +227,7 @@ abstract contract AUniswapDecoder {
                                 continue;
                             }
                         }
+                        revert UnsupportedAction(action);
                     }
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
                     revert InvalidCommandType(command);
@@ -299,6 +300,7 @@ abstract contract AUniswapDecoder {
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
                 return (params, positions);
             }
+            revert UnsupportedAction(action);
         } else {
             if (action == Actions.SETTLE_PAIR) {
                 (Currency currency0, Currency currency1) = actionParams.decodeCurrencyPair();
@@ -346,6 +348,8 @@ abstract contract AUniswapDecoder {
             } else if (action == Actions.UNWRAP) {
                 params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
                 return (params, positions);
+            } else {
+                revert UnsupportedAction(action);
             }
         }
         revert UnsupportedAction(action);
