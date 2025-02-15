@@ -676,10 +676,10 @@ describe("AUniswapRouter", async () => {
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
       // new token, will be added to active tokens
       v4Planner.addAction(Actions.TAKE, [wethAddress, pool.address, parseEther("1")])
-      v4Planner.addAction(Actions.CLOSE_CURRENCY, [PAIR.poolKey.currency0])
-      // CLEAR_OR_TAKE (0x13) is not supported by uni v4Planner.ts
-      //v4Planner.addAction(Actions.CLEAR_OR_TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
-      v4Planner.addAction(Actions.SWEEP, [PAIR.poolKey.currency0, pool.address])
+      // TODO: add positive value and make sure pool has eth
+      v4Planner.addAction(Actions.SETTLE_ALL, [PAIR.poolKey.currency0, 0])
+      v4Planner.addAction(Actions.TAKE_ALL, [PAIR.poolKey.currency0, parseEther("12")])
+      v4Planner.addAction(Actions.TAKE_PORTION, [PAIR.poolKey.currency0, pool.address, 0])
       const planner: RoutePlanner = new RoutePlanner()
       planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
       const { commands, inputs } = planner
