@@ -78,6 +78,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
     /// @notice Thrown when the pool does not hold enough balance
     error InsufficientNativeBalance();
 
+    /// @notice Thrown when the calldata contains both mint and increase for the same tokenId
+    error MintAndIncreaseInSameTransaction();
+
     string private constant _REQUIRED_VERSION = "4.0.0";
 
     address private immutable _adapter;
@@ -164,12 +167,12 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
         }
 
         _processRecipients(newParams.recipients);
+        _processTokenIds(positions);
         _assertTokensOutHavePriceFeed(newParams.tokensOut);
         _safeApproveTokensIn(newParams.tokensIn, address(uniV4Posm()), type(uint256).max);
 
         try uniV4Posm().modifyLiquidities{value: newParams.value}(unlockData, deadline) {
             _safeApproveTokensIn(newParams.tokensIn, address(uniV4Posm()), 1);
-            _processTokenIds(positions);
             return;
         } catch Error(string memory reason) {
             revert(reason);
@@ -217,7 +220,6 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
         }
     }
 
-    /// @dev This is executed after the uniswap Posm deltas have been settled.
     function _processTokenIds(Position[] memory positions) private {
         // do not load values unless we are writing to storage
         if (positions.length > 0) {
@@ -241,7 +243,7 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
                     // mint reverts if tokenId exists, so we can be sure it is unique
                     uint256 storedLength = idsSlot.tokenIds.length;
                     require(storedLength < 255, UniV4PositionsLimitExceeded());
-            
+
                     // position 0 is flag for removed
                     idsSlot.positions[positions[i].tokenId] = ++storedLength;
                     idsSlot.tokenIds.push(positions[i].tokenId);
@@ -253,7 +255,11 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
                     // allow action on a potentially malicious hook minted to the pool, and we must make sure pool is position owner.
                     require(idsSlot.positions[positions[i].tokenId] != 0, PositionOwner());
 
-                    if (positions[i].action == Actions.BURN_POSITION) {
+                    if (positions[i].action == Actions.INCREASE_LIQUIDITY) {
+                        // must use mint to add desired liquidity, cannot increase in same call
+                        require(positions[i].hook != MINT_AND_INCREASE_FLAG, MintAndIncreaseInSameTransaction());
+                        continue;
+                    } else if (positions[i].action == Actions.BURN_POSITION) {
                         idsSlot.positions[positions[i].tokenId] = 0;
                         idsSlot.tokenIds.pop();
                         continue;

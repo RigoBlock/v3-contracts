@@ -41,6 +41,7 @@ abstract contract AUniswapDecoder {
     error OnlyOneMintOrBurnPerAction();
 
     address internal constant ZERO_ADDRESS = address(0);
+    address internal constant MINT_AND_INCREASE_FLAG = address(1);
     address private immutable _wrappedNative;
 
     constructor(address wrappedNative) {
@@ -268,6 +269,8 @@ abstract contract AUniswapDecoder {
         uint256 action;
     }
 
+    /// @dev It cannot handle minting and increasing liquidity in the same call, as we run decoding before forwarding the call, hence the position is not
+    /// stored, and cannot return pool and position info, which are necessary to append value
     function _decodePosmAction(
         uint256 action,
         bytes calldata actionParams,
@@ -277,23 +280,36 @@ abstract contract AUniswapDecoder {
         if (action < Actions.SETTLE) {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
-                (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
-                positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.INCREASE_LIQUIDITY));
+                (uint256 tokenId,, uint128 amount0Max,,) = actionParams.decodeModifyLiquidityParams();
+                (PoolKey memory poolKey,) = uniV4Posm().getPoolAndPositionInfo(tokenId);
+                params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
+                // address(1) is used as a flag for when trying to increase liquidity on a non-minted pool
+                positions = _addUniquePosition(
+                    positions,
+                    Position(
+                        Currency.unwrap(poolKey.currency1) != ZERO_ADDRESS ? address(poolKey.hooks) : MINT_AND_INCREASE_FLAG,
+                        tokenId,
+                        Actions.INCREASE_LIQUIDITY
+                    )
+                );
                 return (params, positions);
             } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
                 revert UnsupportedAction(action);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
+                // uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
+                // hook address is not relevant for decrease, use ZERO_ADDRESS instead to save gas
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.DECREASE_LIQUIDITY));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION) {
                 // PoolKey calldata poolKey, int24 tickLower, int24 tickUpper, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, address owner, bytes calldata hookData
-                (PoolKey calldata poolKey,,,,,, address owner,) = actionParams.decodeMintParams();
+                (PoolKey calldata poolKey,,,, uint128 amount0Max,, address owner,) = actionParams.decodeMintParams();
 
                 // as an amount could be null, we want to assert here that both tokens have a price feed
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                 params.recipients = _addUnique(params.recipients, owner);
+                params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
                 positions = _addUniquePosition(positions, Position(address(poolKey.hooks), uniV4Posm().nextTokenId(), Actions.MINT_POSITION));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
@@ -301,6 +317,7 @@ abstract contract AUniswapDecoder {
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId,,,) = actionParams.decodeBurnParams();
+                // hook address is not relevant for burn, use ZERO_ADDRESS instead to save gas
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
                 return (params, positions);
             } else {
@@ -319,7 +336,7 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.SETTLE) {
-                // native must be forwarded via this action. When swap requires native, must append settle value action as well.
+                // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0)
                 (Currency currency, uint256 amount, bool payerIsUser) = actionParams.decodeCurrencyUint256AndBool();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                 params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? (payerIsUser ? amount : 0) : 0;
@@ -331,13 +348,11 @@ abstract contract AUniswapDecoder {
                 return (params, positions);
             } else if (action == Actions.CLOSE_CURRENCY) {
                 Currency currency = actionParams.decodeCurrency();
-                // TODO: verify if need to decode tokens, as tokenOut is verified at mint
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
             } else if (action == Actions.CLEAR_OR_TAKE) {
                 (Currency currency,) = actionParams.decodeCurrencyAndUint256();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
-                // TODO: verify if need to decode tokens, as tokenOut is verified at mint
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 return (params, positions);
             } else if (action == Actions.SWEEP) {
