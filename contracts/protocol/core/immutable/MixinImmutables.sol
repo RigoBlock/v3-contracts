@@ -21,7 +21,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinConstants} from "./MixinConstants.sol";
 import {ISmartPoolImmutable} from "../../interfaces/pool/ISmartPoolImmutable.sol";
-import {IExtensionsMap} from "../../extensions/IExtensionsMap.sol";
+import {IExtensionsMap} from "../../interfaces/IExtensionsMap.sol";
 
 /// @notice Immutables are not assigned a storage slot, can be safely added to this contract.
 abstract contract MixinImmutables is MixinConstants {

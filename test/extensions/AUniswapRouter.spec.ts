@@ -822,6 +822,31 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
     })
 
+    // TODO: can move this to new file EApps.spec.ts
+    it('should remove 1 token from active tokens', async () => {
+      const { newPoolAddress, pool, grgToken, wethAddress } = await setupTests()
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey.currency0 = wethAddress
+      PAIR.poolKey.currency1 = grgToken.address
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(2)
+      // transfer grg to pool, so it cannot be purged, while weth will be, as its balance is 0
+      await grgToken.transfer(newPoolAddress, parseEther("12"))
+      await pool.purgeInactiveTokensAndApps()
+      expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+    })
+
     it("should process v3 exactIn swap", async function () {
       const { pool, grgToken, wethAddress } = await setupTests()
       const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
