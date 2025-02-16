@@ -78,40 +78,34 @@ abstract contract MixinOwnerActions is MixinActions {
         }
 
         // base token is never pushed to active list for gas savings, we can safely remove any unactive token
-        uint256 activeTokenLength = set.addresses.length;
-        address activeToken;
+        address[] memory activeTokens = set.addresses;
         uint256 activeTokenBalance;
 
-        for (uint256 i = 0; i < activeTokenLength; i++) {
-            activeToken = set.addresses[i];
-            bool shouldRemove = true;
+        for (uint256 i = 0; i < activeTokens.length; i++) {
+            bool inApp;
 
             // skip removal if a token is active in an application
             for (uint256 j = 0; j < activeApps.length; j++) {
                 for (uint256 k = 0; k < activeApps[j].balances.length; k++) {
-                    if (activeApps[j].balances[k].token == activeToken) {
-                        shouldRemove = false;
+                    if (activeApps[j].balances[k].token == activeTokens[i]) {
+                        inApp = true;
                         break; // Exit k loop
                     }
                 }
-                if (!shouldRemove) {
+                if (inApp) {
                     break; // Exit j loop if token found in any app
                 }
             }
 
-            if (shouldRemove) {
-                if (activeToken == _ZERO_ADDRESS) {
+            if (!inApp) {
+                if (activeTokens[i] == _ZERO_ADDRESS) {
                     activeTokenBalance = address(this).balance;
                 } else {
-                    try IERC20(activeToken).balanceOf(address(this)) returns (uint256 _balance) {
-                        activeTokenBalance = _balance;
-                    } catch {
-                        continue;
-                    }
+                    activeTokenBalance = IERC20(activeTokens[i]).balanceOf(address(this));
                 }
 
                 if (activeTokenBalance <= 1) {
-                    set.remove(activeToken);
+                    set.remove(activeTokens[i]);
                 }
             }
         }
