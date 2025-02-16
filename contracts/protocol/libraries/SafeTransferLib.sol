@@ -34,16 +34,14 @@ library SafeTransferLib {
 
     /// @dev Allows approving all ERC20 tokens, forcing approvals when needed.
     function safeApprove(address token, address spender, uint256 amount) internal {
-        try IERC20(token).approve(spender, amount) returns (bool success) {
-            // will revert in case of silent failure (i.e. an address without code)
-            require(success, ApprovalFailed(token));
-        } catch {
-            // USDT on mainnet requires approval to be set to 0 before being reset again
-            try IERC20(token).approve(spender, 0) {
-                IERC20(token).approve(spender, amount);
-            } catch {
-                revert ApprovalFailed(token);
-            }
+        (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.approve, (spender, amount)));
+    
+        if (!success || (data.length != 0 && !abi.decode(data, (bool)))) {
+            // force approval
+            (success, data) = token.call(abi.encodeCall(IERC20.approve, (spender, 0)));
+            (success, data) = token.call(abi.encodeCall(IERC20.approve, (spender, amount)));
+
+            require(success && ((data.length == 0 && token.code.length > 0) || abi.decode(data, (bool))), ApprovalFailed(token));
         }
     }
 
