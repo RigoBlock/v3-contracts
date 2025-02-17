@@ -310,6 +310,7 @@ abstract contract AUniswapDecoder {
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                 params.recipients = _addUnique(params.recipients, owner);
                 params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
+                // can only mint 1 liquidity position per modifyLiquidities transaction
                 positions = _addUniquePosition(positions, Position(address(poolKey.hooks), uniV4Posm().nextTokenId(), Actions.MINT_POSITION));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
