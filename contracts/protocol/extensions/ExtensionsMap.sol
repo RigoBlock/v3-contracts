@@ -20,11 +20,11 @@
 pragma solidity 0.8.28;
 
 import {IAuthority} from "../interfaces/IAuthority.sol";
+import {IExtensionsMap} from "../interfaces/IExtensionsMap.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEUpgrade} from "./adapters/interfaces/IEUpgrade.sol";
-import "./IExtensionsMap.sol";
 
 /// @title ExtensionsMap - Wraps extensions selectors to addresses.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

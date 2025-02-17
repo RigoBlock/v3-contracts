@@ -11,11 +11,11 @@ import {VersionLib} from "../../libraries/VersionLib.sol";
 abstract contract MixinFallback is MixinImmutables, MixinStorage {
     using VersionLib for string;
 
-    error ExtensionsMapCallFailed();
     error PoolImplementationDirectCallNotAllowed();
     error PoolMethodNotAllowed();
     error PoolVersionNotSupported();
 
+    // TODO: verify if this should be delegatecall restricted, as could be a repeated check in extensions/adapters
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
         _checkDelegateCall();
@@ -28,9 +28,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     /// @dev uses shouldDelegatecall to flag selectors that should prompt a delegatecall.
     fallback() external payable onlyDelegateCall {
         // returns nil target if selector not mapped. Uses delegatecall to preserve context of msg.sender for shouldDelegatecall flag
-        (bool success, bytes memory returnData) = address(_extensionsMap).delegatecall(abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig)));
-        // TODO: we probably do now need to assert success, as ExtensionsMap is hardcoded
-        require(success, ExtensionsMapCallFailed());
+        (, bytes memory returnData) = address(_extensionsMap).delegatecall(abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig)));
         (address target, bool shouldDelegatecall) = abi.decode(returnData, (address, bool));
 
         if (target == _ZERO_ADDRESS) {
@@ -44,13 +42,13 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
                 require(VERSION.isVersionHigherOrEqual(required), PoolVersionNotSupported());
             } catch {}
 
-            // adapter calls are aimed at pool operator use and for offchain inspection
-            shouldDelegatecall = pool().owner == msg.sender;
+            // adapter calls are for owner in write mode, and read mode for everyone else (including this)
+            shouldDelegatecall = msg.sender == pool().owner;
         }
 
         assembly {
             calldatacopy(0, 0, calldatasize())
-            //let success
+            let success
             if eq(shouldDelegatecall, 1) {
                 success := delegatecall(gas(), target, 0, calldatasize(), 0, 0)
                 returndatacopy(0, 0, returndatasize())

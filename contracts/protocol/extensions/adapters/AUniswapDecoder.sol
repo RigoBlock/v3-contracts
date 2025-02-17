@@ -41,6 +41,7 @@ abstract contract AUniswapDecoder {
     error OnlyOneMintOrBurnPerAction();
 
     address internal constant ZERO_ADDRESS = address(0);
+    address internal constant MINT_AND_INCREASE_FLAG = address(1);
     address private immutable _wrappedNative;
 
     constructor(address wrappedNative) {
@@ -193,48 +194,43 @@ abstract contract AUniswapDecoder {
                         bytes calldata paramsAtIndex = encodedParams[actionIndex];
 
                         if (action < Actions.SETTLE) {
-                            // no further assertion needed
-                            //if (action == Actions.SWAP_EXACT_IN) {
-                            //} else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
-                            //} else if (action == Actions.SWAP_EXACT_OUT) {
-                            //} else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
-                            //}
-                            continue;
+                            // no further decoding is needed, as we retrieve net values in payments actions
+                            if (action == Actions.SWAP_EXACT_IN) {
+                                continue;
+                            } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
+                                continue;
+                            } else if (action == Actions.SWAP_EXACT_OUT) {
+                                continue;
+                            } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
+                                continue;
+                            }
                         } else {
-                            if (action == Actions.SETTLE_PAIR) {
-                                revert UnsupportedAction(action);
-                            } else if (action == Actions.TAKE_PAIR) {
-                                revert UnsupportedAction(action);
-                            } else if (action == Actions.SETTLE) {
-                                // Currency currency, uint256 amount, bool payerIsUser
-                                (Currency currency, uint256 amount,) =
-                                    abi.decode(paramsAtIndex, (Currency, uint256, bool));
+                            if (action == Actions.SETTLE_ALL) {
+                                (Currency currency, uint256 maxAmount) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
+                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? maxAmount : 0;
                                 continue;
-                            } else if (action == Actions.TAKE) {
-                                // Currency currency, address recipient, uint256 amount
-                                (Currency currency, address recipient,) =
-                                    abi.decode(paramsAtIndex, (Currency, address, uint256));
-                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                params.recipients = _addUnique(params.recipients, recipient);
-                                continue;
-                            } else if (action == Actions.CLOSE_CURRENCY) {
-                                // TODO: this won't be able to settle native, so need to make sure we forward ETH, i.e. eth must be added for single swaps
-                                // this will either settle or take, so we need to make sure the token is tracked
-                                (Currency currency) = paramsAtIndex.decodeCurrency();
-                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                continue;
-                            } else if (action == Actions.CLEAR_OR_TAKE) {
-                                // Currency currency, uint256 amountMax
+                            } else if (action == Actions.TAKE_ALL) {
                                 (Currency currency,) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 continue;
-                            } else if (action == Actions.SWEEP) {
-                                (Currency currency, address to) = paramsAtIndex.decodeCurrencyAndAddress();
-                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
-                                params.recipients = _addUnique(params.recipients, to);
+                            } else if (action == Actions.SETTLE) {
+                                (Currency currency, uint256 amount, bool payerIsUser) = paramsAtIndex.decodeCurrencyUint256AndBool();
+                                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
+                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? (payerIsUser ? amount : 0) : 0;
                                 continue;
+                            } else if (action == Actions.TAKE) {
+                                (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
+                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
+                                params.recipients = _addUnique(params.recipients, recipient);
+                                continue;
+                            } else if (action == Actions.TAKE_PORTION) {
+                                (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
+                                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
+                                params.recipients = _addUnique(params.recipients, recipient);
+                                continue;
+                            } else {
+                                revert UnsupportedAction(action);
                             }
                         }
                     }
@@ -273,6 +269,8 @@ abstract contract AUniswapDecoder {
         uint256 action;
     }
 
+    /// @dev It cannot handle minting and increasing liquidity in the same call, as we run decoding before forwarding the call, hence the position is not
+    /// stored, and cannot return pool and position info, which are necessary to append value
     function _decodePosmAction(
         uint256 action,
         bytes calldata actionParams,
@@ -282,23 +280,37 @@ abstract contract AUniswapDecoder {
         if (action < Actions.SETTLE) {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
-                (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
-                positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.INCREASE_LIQUIDITY));
+                (uint256 tokenId,, uint128 amount0Max,,) = actionParams.decodeModifyLiquidityParams();
+                (PoolKey memory poolKey,) = uniV4Posm().getPoolAndPositionInfo(tokenId);
+                params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
+                // address(1) is used as a flag for when trying to increase liquidity on a non-minted pool
+                positions = _addUniquePosition(
+                    positions,
+                    Position(
+                        Currency.unwrap(poolKey.currency1) != ZERO_ADDRESS ? address(poolKey.hooks) : MINT_AND_INCREASE_FLAG,
+                        tokenId,
+                        Actions.INCREASE_LIQUIDITY
+                    )
+                );
                 return (params, positions);
             } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
                 revert UnsupportedAction(action);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
+                // uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
+                // hook address is not relevant for decrease, use ZERO_ADDRESS instead to save gas
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.DECREASE_LIQUIDITY));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION) {
                 // PoolKey calldata poolKey, int24 tickLower, int24 tickUpper, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, address owner, bytes calldata hookData
-                (PoolKey calldata poolKey,,,,,, address owner,) = actionParams.decodeMintParams();
+                (PoolKey calldata poolKey,,,, uint128 amount0Max,, address owner,) = actionParams.decodeMintParams();
 
                 // as an amount could be null, we want to assert here that both tokens have a price feed
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                 params.recipients = _addUnique(params.recipients, owner);
+                params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
+                // can only mint 1 liquidity position per modifyLiquidities transaction
                 positions = _addUniquePosition(positions, Position(address(poolKey.hooks), uniV4Posm().nextTokenId(), Actions.MINT_POSITION));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
@@ -306,18 +318,17 @@ abstract contract AUniswapDecoder {
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId,,,) = actionParams.decodeBurnParams();
+                // hook address is not relevant for burn, use ZERO_ADDRESS instead to save gas
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
                 return (params, positions);
+            } else {
+                revert UnsupportedAction(action);
             }
         } else {
-            // TODO: verify if should revert following 2 methods, as prob used for migrations only?
             if (action == Actions.SETTLE_PAIR) {
-                // settlement eth value must be retrieved in previous actions
                 (Currency currency0, Currency currency1) = actionParams.decodeCurrencyPair();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency0));
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency1));
-                // TODO: how do we get value for pair here?
-                //params.value += Currency.unwrap(currency0) == ZERO_ADDRESS ? amount : 0;
                 return (params, positions);
             } else if (action == Actions.TAKE_PAIR) {
                 (Currency currency0, Currency currency1, address recipient) = actionParams.decodeCurrencyPairAndAddress();
@@ -326,20 +337,23 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.SETTLE) {
-                (Currency currency, uint256 amount,) = actionParams.decodeCurrencyUint256AndBool();
+                // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0)
+                (Currency currency, uint256 amount, bool payerIsUser) = actionParams.decodeCurrencyUint256AndBool();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
+                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? (payerIsUser ? amount : 0) : 0;
                 return (params, positions);
             } else if (action == Actions.TAKE) {
-                (Currency currency, address recipient, /*uint256 amount*/) = actionParams.decodeCurrencyAddressAndUint256();
+                (Currency currency, address recipient,) = actionParams.decodeCurrencyAddressAndUint256();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.CLOSE_CURRENCY) {
-                // TODO: verify
-                revert UnsupportedAction(action);
+                Currency currency = actionParams.decodeCurrency();
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
+                params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
             } else if (action == Actions.CLEAR_OR_TAKE) {
                 (Currency currency,) = actionParams.decodeCurrencyAndUint256();
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 return (params, positions);
             } else if (action == Actions.SWEEP) {
@@ -355,6 +369,8 @@ abstract contract AUniswapDecoder {
             } else if (action == Actions.UNWRAP) {
                 params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
                 return (params, positions);
+            } else {
+                revert UnsupportedAction(action);
             }
         }
         revert UnsupportedAction(action);

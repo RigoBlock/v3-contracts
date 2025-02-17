@@ -46,6 +46,7 @@ struct Pool {
     address baseToken;
 }
 
+/// @notice Adapted from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/structs/EnumerableSet.sol
 library EnumerableSet {
     error AddressListExceedsMaxLength();
     error TokenPriceFeedDoesNotExist(address token);
@@ -77,17 +78,17 @@ library EnumerableSet {
         uint256 position = set.positions[token];
 
         if (position != 0 && position != REMOVED_ADDRESS_FLAG) {
-            // Copy last element at index position and pop last element
-            uint256 tokenIndex = position - 1;
+            // Copy last element at position and pop last element
+            uint256 addressIndex = position - 1;
             uint256 lastIndex = set.addresses.length - 1;
 
-            if (tokenIndex != lastIndex) {
-                address lastToken = set.addresses[lastIndex];
+            if (addressIndex != lastIndex) {
+                address lastAddress = set.addresses[lastIndex];
 
                 // Move the lastToken to the index where the token to delete is
-                set.addresses[tokenIndex] = lastToken;
+                set.addresses[addressIndex] = lastAddress;
                 // Update the tracked position of the lastToken (that was just moved)
-                set.positions[lastToken] = position;
+                set.positions[lastAddress] = position;
             }
 
             // Delete the slot where the moved token was stored
