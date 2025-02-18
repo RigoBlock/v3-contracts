@@ -44,6 +44,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  // registry uses IRigoblockV3Pool, which inherits ISmartPool and results in a different deployed address.
+  // Prevent re-deploy by passing deployed registry address. Deploy with V3 package if want to have
+  // same registery address on newly supported chains.
   const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
@@ -86,7 +89,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const inflation = await deploy("Inflation", {
+  /*const inflation = await deploy("Inflation", {
     from: deployer,
     args: [
       rigoToken.address,
@@ -101,7 +104,7 @@ const deploy: DeployFunction = async function (
     args: [stakingProxy.address],
     log: true,
     deterministicDeployment: true,
-  });
+  });*/
 };
 
 deploy.tags = ['staking', 'l2-suite', 'main-suite']

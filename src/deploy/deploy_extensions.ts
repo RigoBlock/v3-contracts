@@ -43,8 +43,8 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: replace with deployed oracle address (same on all chains)
-  const oracle = "0x8A753747A1Fa494EC906cE90E9f37563A8AF630e"
+  // Notice: replace with deployed oracle address (uni hooks depends on PoolManager address, diff on each chains)
+  const oracle = "0x813DADC6bfA14cA9f294f6341B15B530476C7ac4"
   const eOracle = await deploy("EOracle", {
     from: deployer,
     args: [oracle],
@@ -52,11 +52,10 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  // TODO: replace with deployed address (different by chain). Uncomment NativeWrapper(univ4).WETH9() or hardcode WETH9
-  const stakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const univ3Npm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  // TODO: this constructor will try to query WETH9 from univ4Posm, but we could hardcode in implementation and remove from constructor to save gas and simplify deployment
+  // Notice: replace with deployed address (different by chain).
+  const stakingProxy = "0x73f92F71544578BCC1D9F3B7dfce18859Bc20261"
+  const univ3Npm = "0x1238536071E1c677A632429e3655c799b22cDA52"
+  const univ4Posm = "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4"
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [stakingProxy, univ3Npm, univ4Posm],
@@ -72,16 +71,11 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const weth = await deploy("WETH9", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
+  const weth = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
 
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMap.address, weth.address],
+    args: [authority.address, extensionsMap.address, weth],
     log: true,
     deterministicDeployment: true,
   });
@@ -95,14 +89,14 @@ const deploy: DeployFunction = async function (
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
   }
 
-  /*const uniswapRouter2 = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
+  const universalRouter = "0x3a9d48ab9751398bbfa63ad67599bb04e4bdf98b"
 
-  await deploy("AUniswap", {
+  await deploy("AUniswapRouter", {
     from: deployer,
-    args: [uniswapRouter2],
+    args: [universalRouter, univ4Posm, weth],
     log: true,
     deterministicDeployment: true,
-  });*/
+  });
 
   await deploy("AMulticall", {
     from: deployer,
