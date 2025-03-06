@@ -24,6 +24,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
+import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
@@ -37,11 +38,6 @@ import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.so
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";
-
-interface IERC721 {
-    function ownerOf(uint256 id) external view returns (address);
-    function balanceOf(address owner) external view returns (uint256);
-}
 
 interface IUniswapRouter {
     function execute(bytes calldata commands, bytes[] calldata inputs) external payable;

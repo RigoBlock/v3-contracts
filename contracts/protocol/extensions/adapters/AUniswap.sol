@@ -18,15 +18,19 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.8.17;
+pragma solidity 0.8.28;
 
-import "./AUniswapV3NPM.sol";
-import "./interfaces/IAUniswap.sol";
-import "./interfaces/IEWhitelist.sol";
-import "../../interfaces/IWETH9.sol";
-import "../../IRigoblockV3Pool.sol";
-import "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
-import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
+import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
+import {BytesLib} from "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
+import {ISwapRouter02, IV3SwapRouter} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
+import {IWETH9} from "../../interfaces/IWETH9.sol";
+import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
+import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
+import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {StorageLib} from "../../libraries/StorageLib.sol";
+import {IAUniswap} from "./interfaces/IAUniswap.sol";
+import {IEOracle} from "./interfaces/IEOracle.sol";
+import {AUniswapV3NPM} from "./AUniswapV3NPM.sol";
 
 /// @title AUniswap - Allows interactions with the Uniswap contracts.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -35,6 +39,8 @@ import "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 //  This allows to avoid clasing signatures and correctly reach target address for payment methods.
 contract AUniswap is IAUniswap, AUniswapV3NPM {
     using BytesLib for bytes;
+    using EnumerableSet for AddressSet;
+    using SafeTransferLib for address;
 
     // storage must be immutable as needs to be rutime consistent
     // 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks
@@ -74,7 +80,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(path[0], uniswapRouter, uint256(1));
+        path[0].safeApprove(uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -94,7 +100,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(path[0], uniswapRouter, uint256(1));
+        path[0].safeApprove(uniswapRouter, uint256(1));
     }
 
     /*
@@ -122,7 +128,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.tokenIn, uniswapRouter, uint256(1));
+        params.tokenIn.safeApprove(uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -143,7 +149,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(tokenIn, uniswapRouter, uint256(1));
+        tokenIn.safeApprove(uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -168,7 +174,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(params.tokenIn, uniswapRouter, uint256(1));
+        params.tokenIn.safeApprove(uniswapRouter, uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -189,7 +195,7 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        _safeApprove(tokenIn, uniswapRouter, uint256(1));
+        tokenIn.safeApprove(uniswapRouter, uint256(1));
     }
 
     /*
@@ -260,34 +266,19 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function refundETH() external virtual override {}
 
-    function _safeApprove(
-        address token,
-        address spender,
-        uint256 value
-    ) internal override {
-        // 0x095ea7b3 = bytes4(keccak256(bytes("approve(address,uint256)")))
-        // solhint-disable-next-line avoid-low-level-calls
-        (, bytes memory data) = token.call(abi.encodeWithSelector(0x095ea7b3, spender, value));
-        // approval never fails unless rogue token
-        assert(data.length == 0 || abi.decode(data, (bool)));
-    }
-
     function _preSwap(address tokenIn, address tokenOut) private returns (address uniswapRouter) {
-        _assertTokenWhitelisted(tokenOut);
-
-        // we require target to being contract to prevent call being executed to EOA
-        require(_isContract(tokenIn), "AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR");
+        _assertTokenOwnable(tokenOut);
         uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
-        _safeApprove(tokenIn, uniswapRouter, type(uint256).max);
+        tokenIn.safeApprove(uniswapRouter, type(uint256).max);
     }
 
-    function _assertTokenWhitelisted(address token) internal view override {
-        // we allow swapping to base token even if not whitelisted token
-        if (token != IRigoblockV3Pool(payable(address(this))).getPool().baseToken) {
-            require(IEWhitelist(address(this)).isWhitelistedToken(token), "AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR");
-        }
+    function _assertTokenOwnable(address token) internal override {
+        AddressSet storage values = StorageLib.activeTokensSet();
+
+        // update storage with new token
+        values.addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
     }
 
     function _getUniswapNpm() internal view override returns (address) {
@@ -300,9 +291,5 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _getWeth() private view returns (address) {
         return weth;
-    }
-
-    function _isContract(address target) private view returns (bool) {
-        return target.code.length > 0;
     }
 }

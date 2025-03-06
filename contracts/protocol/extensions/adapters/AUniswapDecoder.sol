@@ -215,9 +215,10 @@ abstract contract AUniswapDecoder {
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 continue;
                             } else if (action == Actions.SETTLE) {
-                                (Currency currency, uint256 amount, bool payerIsUser) = paramsAtIndex.decodeCurrencyUint256AndBool();
+                                // Currency currency, uint256 amount, bool payerIsUser
+                                (Currency currency, uint256 amount,) = paramsAtIndex.decodeCurrencyUint256AndBool();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? (payerIsUser ? amount : 0) : 0;
+                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
                                 continue;
                             } else if (action == Actions.TAKE) {
                                 (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
@@ -338,9 +339,10 @@ abstract contract AUniswapDecoder {
                 return (params, positions);
             } else if (action == Actions.SETTLE) {
                 // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0)
-                (Currency currency, uint256 amount, bool payerIsUser) = actionParams.decodeCurrencyUint256AndBool();
+                // (Currency currency, uint256 amount, bool payerIsUser)
+                (Currency currency, uint256 amount,) = actionParams.decodeCurrencyUint256AndBool();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? (payerIsUser ? amount : 0) : 0;
+                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
                 return (params, positions);
             } else if (action == Actions.TAKE) {
                 (Currency currency, address recipient,) = actionParams.decodeCurrencyAddressAndUint256();
