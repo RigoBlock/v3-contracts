@@ -24,7 +24,6 @@ import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INon
 import {BytesLib} from "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 import {ISwapRouter02, IV3SwapRouter} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
-import {IRigoblockV3Pool} from "../../IRigoblockV3Pool.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
