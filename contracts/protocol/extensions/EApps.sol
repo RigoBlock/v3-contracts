@@ -146,7 +146,6 @@ contract EApps is IEApps {
         uint256[] memory tokenIds = StorageLib.uniV3TokenIdsSlot().tokenIds;
         uint256 length = tokenIds.length;
 
-        // TODO: in case a new position is created before smart pool mint/burn, pre-existing positions won't be synced
         // sync up to the first 100 pre-existing uni v3 positions
         if (length == 0) {
             length = IERC721(address(_uniV3NPM)).balanceOf(address(this));
