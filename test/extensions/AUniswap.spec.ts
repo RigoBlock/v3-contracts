@@ -71,6 +71,11 @@ describe("AUniswap", async () => {
         await factory.createPool('grgBasedPool','GRGP',GrgTokenInstance.address)
         const HookInstance = await deployments.get("MockOracle")
         const Hook = await hre.ethers.getContractFactory("MockOracle")
+        const Univ3RouterInstance = await deployments.get("MockUniswapRouter");
+        const Univ3Router = await hre.ethers.getContractFactory("MockUniswapRouter")
+        const univ3Router = Univ3Router.attach(Univ3RouterInstance.address)
+        const Univ3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+        const univ3NpmAddress = await univ3Router.positionManager()
         return {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
             aUniswap: AUniswapInstance.address,
@@ -78,6 +83,7 @@ describe("AUniswap", async () => {
             newPoolAddress,
             baseTokenPool,
             oracle: Hook.attach(HookInstance.address),
+            univ3Npm: Univ3Npm.attach(univ3NpmAddress),
         }
     })
 
@@ -113,7 +119,7 @@ describe("AUniswap", async () => {
             const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
-            // the following call will prompt call to mock univ3npm, which will return position tokens,
+            // the following call will prompt call to mock univ3Npm, which will return position tokens,
             // which need to be smart contracts for the pool to be able to set token approvals.
             await pool.increaseLiquidity({
                 tokenId: 1,
@@ -255,6 +261,48 @@ describe("AUniswap", async () => {
                 amount1Min: 0,
                 deadline: 1
             })
+        })
+
+        it('should sync a pre-existing position', async () => {
+            const { grgToken, univ3Npm, newPoolAddress, oracle } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.createAndInitializePoolIfNecessary(grgToken.address, grgToken.address, 1, 1)
+            const wethAddress = await pool.weth()
+            // hardhat does not understand that this mint method has different selector than rigoblock pool mint, therefore we encode it.
+            const encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: wethAddress,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            expect(await univ3Npm.balanceOf(pool.address)).to.be.deep.equal(0)
+            await user1.sendTransaction({ to: univ3Npm.address, value: 0, data: encodedMintData})
+            const PositionPool = await hre.ethers.getContractFactory("EApps")
+            const positionPool = PositionPool.attach(pool.address)
+            expect((await positionPool.getUniV3TokenIds()).length).to.be.deep.equal(0)
+            expect(await univ3Npm.balanceOf(newPoolAddress)).to.be.deep.equal(1)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            expect(await univ3Npm.balanceOf(newPoolAddress)).to.be.deep.equal(2)
+            expect((await positionPool.getUniV3TokenIds()).length).to.be.deep.equal(2)
         })
     })
 

@@ -197,10 +197,10 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 storedLength = idsSlot.tokenIds.length;
             require(storedLength < 256, UniV3PositionsLimitExceeded());
 
-            // sync up to 100 pre-existing positions
+            // sync up to 32 pre-existing positions
             if (storedLength == 0) {
                 uint256 numPositions = IERC721(_getUniswapNpm()).balanceOf(address(this));
-                numPositions = numPositions < 100 ? numPositions : 100;
+                numPositions = numPositions < 32 ? numPositions : 32;
 
                 for (uint256 i = 0; i < numPositions; i++) {
                     uint256 existingTokenId = IERC721(_getUniswapNpm()).tokenOfOwnerByIndex(address(this), i);
@@ -218,7 +218,6 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             // position 0 is flag for removed
             idsSlot.positions[tokenId] = ++storedLength;
             idsSlot.tokenIds.push(tokenId);
-            return;
         } else {
             if (opType == OperationType.Increase) {
                 require(idsSlot.positions[tokenId] != 0, PositionOwner());
@@ -227,7 +226,6 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
                 if (idsSlot.positions[tokenId] != 0) {
                     idsSlot.positions[tokenId] = 0;
                     idsSlot.tokenIds.pop();
-                    return;
                 }
             }
         }

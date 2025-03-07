@@ -146,10 +146,10 @@ contract EApps is IEApps {
         uint256[] memory tokenIds = StorageLib.uniV3TokenIdsSlot().tokenIds;
         uint256 length = tokenIds.length;
 
-        // sync up to the first 100 pre-existing uni v3 positions
+        // sync up to the first 32 pre-existing uni v3 positions
         if (length == 0) {
             length = IERC721(address(_uniV3NPM)).balanceOf(address(this));
-            length = length < 100 ? length : 100;
+            length = length < 32 ? length : 32;
             tokenIds = new uint256[](length);
             for (uint256 i = 0; i < length; i++) {
                 tokenIds[i] = IERC721(address(_uniV3NPM)).tokenOfOwnerByIndex(address(this), i);
