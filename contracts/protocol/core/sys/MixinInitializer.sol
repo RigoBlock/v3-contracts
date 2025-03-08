@@ -5,7 +5,7 @@ import {MixinImmutables} from "../immutable/MixinImmutables.sol";
 import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IRigoblockPoolProxyFactory} from "../../interfaces/IRigoblockPoolProxyFactory.sol";
-import {ISmartPoolInitializer} from "../../interfaces/pool/ISmartPoolInitializer.sol";
+import {ISmartPoolInitializer} from "../../interfaces/v4/pool/ISmartPoolInitializer.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
 
 abstract contract MixinInitializer is MixinImmutables, MixinStorage {

@@ -10,6 +10,7 @@ import { getAddress } from "ethers/lib/utils";
 
 describe("BaseTokenProxy", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
+    const MAX_TICK_SPACING = 32767
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -33,12 +34,15 @@ describe("BaseTokenProxy", async () => {
         const uniswapV3Npm = UniswapV3Npm.attach(UniswapV3NpmInstance.address)
         const wethAddress = await uniswapV3Npm.WETH9()
         const Weth = await hre.ethers.getContractFactory("WETH9")
+        const HookInstance = await deployments.get("MockOracle")
+        const Hook = await hre.ethers.getContractFactory("MockOracle")
         return {
             pool,
             factory,
             grgToken: GrgToken.attach(GrgTokenInstance.address),
             uniswapV3Npm,
-            weth: Weth.attach(wethAddress)
+            weth: Weth.attach(wethAddress),
+            oracle: Hook.attach(HookInstance.address),
         }
     });
 
@@ -87,7 +91,7 @@ describe("BaseTokenProxy", async () => {
 
     describe("getPoolTokens", async () => {
         it('should return pool tokens struct', async () => {
-            const { pool, grgToken } = await setupTests()
+            const { pool, grgToken, oracle } = await setupTests()
             let poolData = await pool.getPoolTokens()
             const decimals = await pool.decimals()
             const initialUnitaryValue = 1 * 10**decimals
@@ -97,6 +101,12 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             expect(poolData.totalSupply).to.be.eq(parseEther("10"))
+            // on second mint (or any op that requires nav calculation), the base token price feed existance is asserted
+            await expect(
+                pool.mint(user1.address, parseEther("10"), 0)
+            ).to.be.revertedWith('BaseTokenPriceFeedError()')
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.mint(user2.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             // 5% default spread results in less token than amount in at initial price 1
@@ -135,7 +145,7 @@ describe("BaseTokenProxy", async () => {
 
         it('should return pool tokens struct', async () => {
             // this test should always return 18 with any token but special tokens (i.e. 6 decimals tokens)
-            const { pool, grgToken } = await setupTests()
+            const { pool, grgToken, oracle } = await setupTests()
             let poolData = await pool.getPoolStorage()
             expect(poolData.poolTokensInfo.unitaryValue).to.be.eq(parseEther("1"))
             expect(poolData.poolTokensInfo.totalSupply).to.be.eq(0)
@@ -143,6 +153,8 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, parseEther("10"), 0)
             // TODO: storage should be updated after mint, this is probably not necessary. However, this one
             // goes through nav calculations, while first mint simply stores initial value
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.updateUnitaryValue()
             poolData = await pool.getPoolStorage()
             expect(poolData.poolTokensInfo.unitaryValue).to.be.eq(parseEther("1"))
@@ -217,7 +229,7 @@ describe("BaseTokenProxy", async () => {
 
     describe("burn", async () => {
         it('should burn tokens with input tokens', async () => {
-            const { pool, grgToken } = await setupTests()
+            const { pool, grgToken, oracle } = await setupTests()
             const tokenAmountIn = parseEther("1")
             await grgToken.approve(pool.address, tokenAmountIn)
             const userTokens = await pool.callStatic.mint(user1.address, tokenAmountIn, 0)
@@ -243,6 +255,8 @@ describe("BaseTokenProxy", async () => {
                 pool.burn(tokenAmountIn, BigNumber.from(tokenAmountIn).add(1))
             ).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
             await timeTravel({ seconds: 1, mine: false })
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(
                 pool.burn(tokenAmountIn, BigNumber.from(tokenAmountIn).add(1))
             ).to.be.revertedWith('PoolBurnOutputAmount()')
@@ -296,9 +310,11 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should apply spread if user not only holder', async () => {
-            const { pool, grgToken } = await setupTests()
+            const { pool, grgToken, oracle } = await setupTests()
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool
             expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1"))
@@ -317,7 +333,7 @@ describe("BaseTokenProxy", async () => {
     // TODO: also make assertions with correct values of minimum amount out
     describe("burn 6-decimals pool", async () => {
         it('should burn tokens with 6-decimal base token', async () => {
-            const { pool, factory } = await setupTests()
+            const { pool, factory, oracle } = await setupTests()
             const source = `
             contract USDC {
                 uint256 public totalSupply = 1e16;
@@ -352,6 +368,8 @@ describe("BaseTokenProxy", async () => {
                     10**6 // this is true as long as pool as initial price 1
                 )
             // second mint will calculate new value and store it in storage only if different
+            const poolKey = { currency0: AddressZero, currency1: usdc.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 100000, 0)
             )
@@ -405,7 +423,7 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should burn if token is active and base token balance small enough', async () => {
-            const { pool, grgToken, uniswapV3Npm, weth } = await setupTests()
+            const { pool, grgToken, uniswapV3Npm, weth, oracle } = await setupTests()
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
             // we need to mint an lp position to activate token
@@ -424,6 +442,19 @@ describe("BaseTokenProxy", async () => {
             }
             await uniswapV3Npm.mint(mintParams)
             // minting again will activate token (a burn would also activate token)
+            // TODO: verify if it would be possible for someone to add a position with a token that does not have a price feed, which would then
+            // result in a failed nav estimate.
+            // nav calculations will sync uni v4 positions, but require a token to have a price feed
+            await expect(
+                pool.mint(user1.address, parseEther("10"), 0)
+            ).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${weth.address}")`)
+            let poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            await expect(
+                pool.mint(user1.address, parseEther("10"), 0)
+            ).to.be.revertedWith(`BaseTokenPriceFeedError()`)
+            poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.mint(user1.address, parseEther("10"), 0)
             await expect(pool.burnForToken(0, 0, weth.address)).to.be.revertedWith('PoolBurnNullAmount()')
             await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
@@ -439,6 +470,8 @@ describe("BaseTokenProxy", async () => {
             // nav is higher after lp mint, so the pool does not have enough base token to pay
             // this reverts because the pool does not have enough target token
             await expect(pool.burnForToken(parseEther("5"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
+            poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
@@ -456,7 +489,7 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should burn if ETH is input token', async () => {
-            const { pool, grgToken, uniswapV3Npm, weth } = await setupTests()
+            const { pool, grgToken, uniswapV3Npm, weth, oracle } = await setupTests()
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
             // we need to mint an lp position to activate token
@@ -475,6 +508,10 @@ describe("BaseTokenProxy", async () => {
             }
             await uniswapV3Npm.mint(mintParams)
             // minting again will activate token (a burn would also activate token)
+            let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.mint(user1.address, parseEther("10"), 0)
             await expect(pool.burnForToken(0, 0, AddressZero)).to.be.revertedWith('PoolBurnNullAmount()')
             await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
@@ -495,7 +532,7 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should apply spread if user not only holder', async () => {
-            const { pool, grgToken, uniswapV3Npm, weth } = await setupTests()
+            const { pool, grgToken, uniswapV3Npm, weth, oracle } = await setupTests()
             const mintParams = {
                 token0: weth.address,
                 token1: AddressZero,
@@ -516,6 +553,10 @@ describe("BaseTokenProxy", async () => {
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
             // minting again to activate token via nav calculations
+            let poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool, but includes lp token balances and weth balance
             const { unitaryValue } = await pool.getPoolTokens()

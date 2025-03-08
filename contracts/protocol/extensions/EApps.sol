@@ -103,6 +103,11 @@ contract EApps is IEApps {
     }
 
     /// @inheritdoc IEApps
+    function getUniV3TokenIds() external view override returns (uint256 [] memory tokenIds) {
+        return StorageLib.uniV3TokenIdsSlot().tokenIds;
+    }
+
+    /// @inheritdoc IEApps
     function getUniV4TokenIds() external view override returns (uint256[] memory tokenIds) {
         return StorageLib.uniV4TokenIdsSlot().tokenIds;
     }
@@ -138,16 +143,24 @@ contract EApps is IEApps {
 
     /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)
     function _getUniV3PmBalances() private returns (AppTokenBalance[] memory balances) {
-        uint256 numPositions = IERC721(address(_uniV3NPM)).balanceOf(address(this));
+        uint256[] memory tokenIds = StorageLib.uniV3TokenIdsSlot().tokenIds;
+        uint256 length = tokenIds.length;
 
-        // only get first 20 positions as no pool has more than that and we can save gas plus prevent DOS
-        uint256 maxLength = numPositions < 20 ? numPositions : 20;
-        balances = new AppTokenBalance[](maxLength * 2);
+        // sync up to the first 32 pre-existing uni v3 positions
+        if (length == 0) {
+            length = IERC721(address(_uniV3NPM)).balanceOf(address(this));
+            length = length < 32 ? length : 32;
+            tokenIds = new uint256[](length);
+            for (uint256 i = 0; i < length; i++) {
+                tokenIds[i] = IERC721(address(_uniV3NPM)).tokenOfOwnerByIndex(address(this), i);
+            }
+        }
 
-        for (uint256 i = 0; i < maxLength; i++) {
-            uint256 tokenId = IERC721(address(_uniV3NPM)).tokenOfOwnerByIndex(address(this), i);
+        balances = new AppTokenBalance[](length * 2);
+
+        for (uint256 i = 0; i < length; i++) {
             (,, address token0, address token1, , int24 tickLower, int24 tickUpper, uint128 liquidity, , , ,) =
-                _uniV3NPM.positions(tokenId);
+                _uniV3NPM.positions(tokenIds[i]);
 
             // we use same v4 LiquidityAmounts library, as PositionValue and FullMath in v3's LiquidityAmounts lib require solc <0.8
             // unclaimed fees are not included in nav calculations

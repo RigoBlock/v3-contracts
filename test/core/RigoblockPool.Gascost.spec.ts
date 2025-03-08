@@ -9,6 +9,7 @@ import { getAddress } from "ethers/lib/utils";
 
 describe("ProxyGasCost", async () => {
     const [ user1 ] = waffle.provider.getWallets()
+    const MAX_TICK_SPACING = 32767
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -16,9 +17,12 @@ describe("ProxyGasCost", async () => {
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const RigoTokenInstance = await deployments.get("RigoToken")
         const RigoToken = await hre.ethers.getContractFactory("RigoToken")
+        const HookInstance = await deployments.get("MockOracle")
+        const Hook = await hre.ethers.getContractFactory("MockOracle")
         return {
             factory: Factory.attach(RigoblockPoolProxyFactory.address),
-            grgToken: RigoToken.attach(RigoTokenInstance.address)
+            grgToken: RigoToken.attach(RigoTokenInstance.address),
+            oracle: Hook.attach(HookInstance.address),
         }
     });
 
@@ -85,7 +89,7 @@ describe("ProxyGasCost", async () => {
         })
 
         it('logs gas cost for token pool mint', async () => {
-            const { factory, grgToken } = await setupTests()
+            const { factory, grgToken, oracle } = await setupTests()
             const { newPoolAddress } = await factory.callStatic.createPool(
                 'testpool',
                 'TEST',
@@ -107,6 +111,8 @@ describe("ProxyGasCost", async () => {
             let result = await txReceipt.wait()
             let gasCost = result.cumulativeGasUsed.toNumber()
             console.log(gasCost,'first token pool mint')
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             txReceipt = await pool.mint(
                 user1.address,
                 etherAmount,

@@ -38,6 +38,28 @@ contract MockOracle {
         });
     }
 
+    // we preserve same state as default pool id, so we get same results
+    function initializeObservations(PoolKey calldata poolKey) external {
+        uint32 initialTimestamp = uint32(block.timestamp);
+        uint32 secondTimestamp = initialTimestamp + 1;
+        PoolId id = poolKey.toId();
+        observations[id][0] = Observation({
+            blockTimestamp: initialTimestamp,
+            prevTick: int24(100),
+            tickCumulative: int48(0),
+            secondsPerLiquidityCumulativeX128: uint144(0),
+            initialized: true
+        });
+
+        observations[id][1] = Observation({
+            blockTimestamp: secondTimestamp,
+            prevTick: int24(200),
+            tickCumulative: int48(int24(100) * int32(1)),
+            secondsPerLiquidityCumulativeX128: uint144(ONE_X96 * 1),
+            initialized: true
+        });
+    }
+
     function getHookPermissions() public pure returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
             beforeInitialize: true,
@@ -58,16 +80,17 @@ contract MockOracle {
     }
 
     function getObservation(
-        PoolKey calldata /*key*/,
+        PoolKey calldata key,
         uint256 index
     ) external view returns (Observation memory observation) {
-        observation = observations[defaultPoolId][index];
+        observation = observations[key.toId()][index];
     }
 
     function getState(PoolKey calldata /*key*/) external view returns (IOracle.ObservationState memory state) {
         state = states[defaultPoolId];
     }
 
+    // TODO: verify if should use pool key
     function observe(
         PoolKey calldata /*key*/,
         uint32[] calldata secondsAgos
