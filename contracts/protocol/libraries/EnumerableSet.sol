@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.28;
 
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 

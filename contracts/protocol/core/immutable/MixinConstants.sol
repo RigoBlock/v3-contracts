@@ -20,7 +20,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ISmartPool} from "../../ISmartPool.sol";
-import {ISmartPoolImmutable} from "../../interfaces/pool/ISmartPoolImmutable.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.

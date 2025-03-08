@@ -11,6 +11,7 @@ import { time } from "console";
 
 describe("Proxy", async () => {
     const [ user1, user2, user3 ] = waffle.provider.getWallets()
+    const MAX_TICK_SPACING = 32767
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -33,12 +34,15 @@ describe("Proxy", async () => {
             "SmartPool",
             newPoolAddress
         )
+        const HookInstance = await deployments.get("MockOracle")
+        const Hook = await hre.ethers.getContractFactory("MockOracle")
         return {
             authority: Authority.attach(AuthorityInstance.address),
             factory,
             pool,
             uniswapV3Npm: UniswapV3Npm.attach(UniswapV3NpmInstance.address),
-            uniswapV4Posm: UniswapV4Posm.attach(UniswapV4PosmInstance.address)
+            uniswapV4Posm: UniswapV4Posm.attach(UniswapV4PosmInstance.address),
+            oracle: Hook.attach(HookInstance.address),
         }
     });
 
@@ -618,7 +622,7 @@ describe("Proxy", async () => {
         })
 
         it('should not remove an active token', async () => {
-            const { pool, uniswapV3Npm } = await setupTests()
+            const { pool, uniswapV3Npm, oracle } = await setupTests()
             const wethAddress = await uniswapV3Npm.WETH9()
             const mintParams = {
                 token0: wethAddress,
@@ -641,6 +645,8 @@ describe("Proxy", async () => {
             expect(activeTokens.length).to.be.eq(0)
             let isWethInActiveTokens = activeTokens.includes(wethAddress)
             expect(isWethInActiveTokens).to.be.false
+            const poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
             activeTokens = (await pool.getActiveTokens()).activeTokens
             // second mint will prompt nav calculations, so lp tokens are included in active tokens

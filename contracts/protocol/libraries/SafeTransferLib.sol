@@ -12,6 +12,7 @@ library SafeTransferLib {
     error NativeTransferFailed();
     error TokenTransferFailed();
     error TokenTransferFromFailed();
+    error ApprovalTargetIsNotContract(address token);
 
     function safeTransferNative(address to, uint256 amount) internal {
         (bool success, ) = to.call{gas: 2300, value: amount}("");
@@ -34,6 +35,9 @@ library SafeTransferLib {
 
     /// @dev Allows approving all ERC20 tokens, forcing approvals when needed.
     function safeApprove(address token, address spender, uint256 amount) internal {
+        // token address sanity check
+        bool isContract = token.code.length > 0;
+        require(isContract, ApprovalTargetIsNotContract(token));
         (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.approve, (spender, amount)));
     
         if (!success || (data.length != 0 && !abi.decode(data, (bool)))) {
@@ -41,7 +45,7 @@ library SafeTransferLib {
             (success, data) = token.call(abi.encodeCall(IERC20.approve, (spender, 0)));
             (success, data) = token.call(abi.encodeCall(IERC20.approve, (spender, amount)));
 
-            require(success && ((data.length == 0 && token.code.length > 0) || abi.decode(data, (bool))), ApprovalFailed(token));
+            require(success && ((data.length == 0 && isContract) || abi.decode(data, (bool))), ApprovalFailed(token));
         }
     }
 
