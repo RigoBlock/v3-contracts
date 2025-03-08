@@ -46,8 +46,16 @@ describe("AStaking", async () => {
         )
         await factory.createPool('testpool','TEST',AddressZero)
         const stakingProxy = Staking.attach(StakingProxyInstance.address)
+        const HookInstance = await deployments.get("MockOracle")
+        const Hook = await hre.ethers.getContractFactory("MockOracle")
+        const hook = Hook.attach(HookInstance.address)
+        // GRG being ownable is a pre-condition, otherwise won't be able to use staking proxy
+        const grgToken = GrgToken.attach(GrgTokenInstance.address)
+        const MAX_TICK_SPACING = 32767
+        const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: hook.address }
+        await hook.initializeObservations(poolKey)
         return {
-            grgToken: GrgToken.attach(GrgTokenInstance.address),
+            grgToken,
             grgVault: GrgVault.attach(GrgVaultInstance.address),
             pop: Pop.attach(PopInstance.address),
             stakingProxy,

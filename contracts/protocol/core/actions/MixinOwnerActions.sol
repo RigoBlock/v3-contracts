@@ -4,7 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {MixinActions} from "./MixinActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
-import {ISmartPoolOwnerActions} from "../../interfaces/pool/ISmartPoolOwnerActions.sol";
+import {ISmartPoolOwnerActions} from "../../interfaces/v4/pool/ISmartPoolOwnerActions.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";

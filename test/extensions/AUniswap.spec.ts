@@ -10,6 +10,7 @@ import { getAddress } from "ethers/lib/utils";
 
 describe("AUniswap", async () => {
     const [ user1, user2, user3 ] = waffle.provider.getWallets()
+    const MAX_TICK_SPACING = 32767
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -55,12 +56,6 @@ describe("AUniswap", async () => {
         await authority.addMethod("0x5ae401dc", AMulticallInstance.address)
         // "1f0464d1": "multicall(bytes32,bytes[])"
         await authority.addMethod("0x1f0464d1", AMulticallInstance.address)
-        // we also need to approve method in EWhitelist so that staticcall can be performed
-        const EWhitelist = await hre.ethers.getContractFactory("EWhitelist")
-        const eWhitelist = await EWhitelist.deploy(authority.address)
-        await authority.setAdapter(eWhitelist.address, true)
-        // "ab37f486": "isWhitelistedToken(address)"
-        await authority.addMethod("0xab37f486", eWhitelist.address)
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
         const { newPoolAddress } = await factory.callStatic.createPool(
             'testpool',
@@ -74,19 +69,27 @@ describe("AUniswap", async () => {
             GrgTokenInstance.address
         )
         await factory.createPool('grgBasedPool','GRGP',GrgTokenInstance.address)
+        const HookInstance = await deployments.get("MockOracle")
+        const Hook = await hre.ethers.getContractFactory("MockOracle")
+        const Univ3RouterInstance = await deployments.get("MockUniswapRouter");
+        const Univ3Router = await hre.ethers.getContractFactory("MockUniswapRouter")
+        const univ3Router = Univ3Router.attach(Univ3RouterInstance.address)
+        const Univ3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+        const univ3NpmAddress = await univ3Router.positionManager()
         return {
             grgToken: GrgToken.attach(GrgTokenInstance.address),
             aUniswap: AUniswapInstance.address,
             authority,
             newPoolAddress,
             baseTokenPool,
-            eWhitelist,
+            oracle: Hook.attach(HookInstance.address),
+            univ3Npm: Univ3Npm.attach(univ3NpmAddress),
         }
     })
 
     describe("mint", async () => {
         it('should mint an NFT', async () => {
-            const { grgToken, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             const amount = parseEther("100")
@@ -112,24 +115,12 @@ describe("AUniswap", async () => {
                 }]
             )
             await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData}))
-                .to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+                .to.be.revertedWith(`PriceFeedDoesNotExist`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
-            await eWhitelist.removeToken(grgToken.address)
-            // position must exist, the tokenId of the first position is 1
-            await expect(
-                pool.increaseLiquidity({
-                    tokenId: 1,
-                    amount0Desired: 100,
-                    amount1Desired: 100,
-                    amount0Min: 0,
-                    amount1Min: 0,
-                    deadline: 1
-                })
-            ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
-            // the following call will prompt call to mock univ3npm, which will return position tokens,
-            // which need to be whitelisted for the pool to be able to set token approvals.
+            // the following call will prompt call to mock univ3Npm, which will return position tokens,
+            // which need to be smart contracts for the pool to be able to set token approvals.
             await pool.increaseLiquidity({
                 tokenId: 1,
                 amount0Desired: 100,
@@ -201,11 +192,11 @@ describe("AUniswap", async () => {
             )
             await expect(
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
-            ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            ).to.be.revertedWith('TokenPriceFeedDoesNotExist')
         })
 
         it('should allow minting and adding 1-sided liquidity', async () => {
-            const { grgToken, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             //const Weth = await hre.ethers.getContractFactory("WETH9")
@@ -216,8 +207,10 @@ describe("AUniswap", async () => {
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await grgToken.transfer(newPoolAddress, amount)
             await pool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
-            await eWhitelist.whitelistToken(grgToken.address)
-            await eWhitelist.whitelistToken(wethAddress)
+            let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             let encodedMintData = pool.interface.encodeFunctionData(
                 'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
                 [{
@@ -269,11 +262,53 @@ describe("AUniswap", async () => {
                 deadline: 1
             })
         })
+
+        it('should sync a pre-existing position', async () => {
+            const { grgToken, univ3Npm, newPoolAddress, oracle } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: newPoolAddress, value: amount})
+            await grgToken.transfer(newPoolAddress, amount)
+            await pool.createAndInitializePoolIfNecessary(grgToken.address, grgToken.address, 1, 1)
+            const wethAddress = await pool.weth()
+            // hardhat does not understand that this mint method has different selector than rigoblock pool mint, therefore we encode it.
+            const encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: wethAddress,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            expect(await univ3Npm.balanceOf(pool.address)).to.be.deep.equal(0)
+            await user1.sendTransaction({ to: univ3Npm.address, value: 0, data: encodedMintData})
+            const PositionPool = await hre.ethers.getContractFactory("EApps")
+            const positionPool = PositionPool.attach(pool.address)
+            expect((await positionPool.getUniV3TokenIds()).length).to.be.deep.equal(0)
+            expect(await univ3Npm.balanceOf(newPoolAddress)).to.be.deep.equal(1)
+            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMintData})
+            expect(await univ3Npm.balanceOf(newPoolAddress)).to.be.deep.equal(2)
+            expect((await positionPool.getUniV3TokenIds()).length).to.be.deep.equal(2)
+        })
     })
 
     describe("increaseLiquidity", async () => {
         it('should allow adding liquidity to non-whitelisted base token', async () => {
-            const { grgToken, baseTokenPool, eWhitelist } = await setupTests()
+            const { grgToken, baseTokenPool, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(baseTokenPool)
             const amount = parseEther("100")
@@ -300,9 +335,10 @@ describe("AUniswap", async () => {
             )
             await expect(
                 user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
-            ).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            ).to.be.revertedWith("TokenPriceFeedDoesNotExist")
             // only 1 token gets whitelisted, the other is the base token
-            await eWhitelist.whitelistToken(wethAddress)
+            const poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
             await pool.increaseLiquidity({
                 tokenId: 1,
@@ -315,7 +351,7 @@ describe("AUniswap", async () => {
         })
 
         it('should not allow adding liquidity to non-owned position', async () => {
-            const { grgToken, newPoolAddress, baseTokenPool, eWhitelist } = await setupTests()
+            const { grgToken, newPoolAddress, baseTokenPool, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const etherPool = Pool.attach(newPoolAddress)
             const tokenPool = Pool.attach(baseTokenPool)
@@ -325,8 +361,10 @@ describe("AUniswap", async () => {
             await grgToken.transfer(baseTokenPool, amount)
             const wethAddress = await etherPool.weth()
             await etherPool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
-            await eWhitelist.whitelistToken(grgToken.address)
-            await eWhitelist.whitelistToken(wethAddress)
+            let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             // first pool mints position, second adds liquidity to same position
             const encodedMintData = etherPool.interface.encodeFunctionData(
                 'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
@@ -507,7 +545,7 @@ describe("AUniswap", async () => {
     // when we overwrite an input in adapter, bytes declaration must be memory, otherwise calldata if input passed to next function.
     describe("swapExactTokensForTokens", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x472b43f3", aUniswap)
@@ -518,14 +556,15 @@ describe("AUniswap", async () => {
                 100,
                 [grgToken.address, weth.address],
                 newPoolAddress
-            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(weth.address)
+            )).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${weth.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.swapExactTokensForTokens(
                 100,
                 100,
                 [user1.address, weth.address],
                 newPoolAddress
-            )).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            )).to.be.revertedWith(`ApprovalTargetIsNotContract("${user1.address}")`)
             await pool.swapExactTokensForTokens(
                 100,
                 100,
@@ -535,7 +574,7 @@ describe("AUniswap", async () => {
         })
 
         it('should allow swap for non-whitelisted base token', async () => {
-            const { grgToken, authority, aUniswap, baseTokenPool, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, baseTokenPool, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(baseTokenPool)
             await authority.addMethod("0x472b43f3", aUniswap)
@@ -546,8 +585,9 @@ describe("AUniswap", async () => {
                 100,
                 [grgToken.address, weth.address],
                 baseTokenPool
-            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(weth.address)
+            )).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${weth.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.swapExactTokensForTokens(
                 100,
                 100,
@@ -557,19 +597,20 @@ describe("AUniswap", async () => {
         })
 
         it('should allow multi-hop swap', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x472b43f3", aUniswap)
             const Weth = await hre.ethers.getContractFactory("WETH9")
             const weth = await Weth.deploy()
-            await eWhitelist.whitelistToken(weth.address)
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.swapExactTokensForTokens(
                 100,
                 100,
                 [grgToken.address, weth.address, newPoolAddress],
                 newPoolAddress
-            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            )).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${newPoolAddress}")`)
             await pool.swapExactTokensForTokens(
                 100,
                 100,
@@ -587,7 +628,7 @@ describe("AUniswap", async () => {
 
     describe("swapTokensForExactTokens", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x42712a67", aUniswap)
@@ -598,14 +639,15 @@ describe("AUniswap", async () => {
                 100,
                 [weth.address, grgToken.address],
                 newPoolAddress
-            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+            )).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.swapTokensForExactTokens(
                 100,
                 100,
                 [user1.address, grgToken.address],
                 newPoolAddress
-            )).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            )).to.be.revertedWith(`ApprovalTargetIsNotContract("${user1.address}")`)
             await pool.swapTokensForExactTokens(
                 100,
                 100,
@@ -615,19 +657,20 @@ describe("AUniswap", async () => {
         })
 
         it('should allow multi-hop swap', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x42712a67", aUniswap)
             const Weth = await hre.ethers.getContractFactory("WETH9")
             const weth = await Weth.deploy()
-            await eWhitelist.whitelistToken(grgToken.address)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.swapTokensForExactTokens(
                 100,
                 100,
                 [weth.address, grgToken.address, newPoolAddress],
                 newPoolAddress
-            )).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            )).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${newPoolAddress}")`)
             await pool.swapTokensForExactTokens(
                 100,
                 100,
@@ -643,13 +686,10 @@ describe("AUniswap", async () => {
         })
 
         it('should revert with rogue path', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { authority, aUniswap, newPoolAddress } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x42712a67", aUniswap)
-            const Weth = await hre.ethers.getContractFactory("WETH9")
-            const weth = await Weth.deploy()
-            await eWhitelist.whitelistToken(grgToken.address)
             // array decoding will fail when checking whitelisted token
             await expect(pool.swapTokensForExactTokens(
                 100,
@@ -663,7 +703,7 @@ describe("AUniswap", async () => {
     // tokenIn is the token that goes into the swap router, tokenOut is the token that is received
     describe("exactInputSingle", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x04e45aaf", aUniswap)
@@ -677,8 +717,9 @@ describe("AUniswap", async () => {
                 amountIn: 20,
                 amountOutMinimum: 1,
                 sqrtPriceLimitX96: 4
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(weth.address)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${weth.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.exactInputSingle({
                 tokenIn: user1.address,
                 tokenOut: weth.address,
@@ -687,7 +728,7 @@ describe("AUniswap", async () => {
                 amountIn: 20,
                 amountOutMinimum: 1,
                 sqrtPriceLimitX96: 4
-            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            })).to.be.revertedWith(`ApprovalTargetIsNotContract("${user1.address}")`)
             await pool.exactInputSingle({
                 tokenIn: grgToken.address,
                 tokenOut: weth.address,
@@ -702,7 +743,7 @@ describe("AUniswap", async () => {
 
     describe("exactInput", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0xb858183f", aUniswap)
@@ -713,14 +754,15 @@ describe("AUniswap", async () => {
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.exactInput({
                 path: encodePath([user1.address, grgToken.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
-            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            })).to.be.revertedWith(`ApprovalTargetIsNotContract("${user1.address}")`)
             // fee amount is irrelevant as long as we test on the mock router and do not query for the actual pool
             await pool.exactInput({
                 path: encodePath([weth.address, grgToken.address], [FeeAmount.MEDIUM]),
@@ -731,7 +773,7 @@ describe("AUniswap", async () => {
         })
 
         it('should pass checks with multi-hop swap', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0xb858183f", aUniswap)
@@ -743,8 +785,9 @@ describe("AUniswap", async () => {
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.exactInput({
                 path: encodePath([weth.address, user1.address, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
@@ -772,7 +815,7 @@ describe("AUniswap", async () => {
         })
 
         it('should revert multi-hop if tokenOut not whitelited but token1 is', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0xb858183f", aUniswap)
@@ -783,14 +826,15 @@ describe("AUniswap", async () => {
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${user1.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.exactInput({
                 path: encodePath([weth.address, grgToken.address, user1.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountIn: 20,
                 amountOutMinimum: 1
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${user1.address}")`)
             await pool.exactInput({
                 path: encodePath([weth.address, user1.address, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
@@ -803,7 +847,7 @@ describe("AUniswap", async () => {
     // hardhat does not recognize methods with same name but different signature/inputs
     describe("exactOutputSingle", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x5023b4df", aUniswap)
@@ -817,8 +861,9 @@ describe("AUniswap", async () => {
                 amountOut: 20,
                 amountInMaximum: 1,
                 sqrtPriceLimitX96: 4
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.exactOutputSingle({
                 tokenIn: user1.address,
                 tokenOut: grgToken.address,
@@ -827,7 +872,7 @@ describe("AUniswap", async () => {
                 amountOut: 20,
                 amountInMaximum: 1,
                 sqrtPriceLimitX96: 4
-            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            })).to.be.revertedWith(`ApprovalTargetIsNotContract("${user1.address}")`)
             await pool.exactOutputSingle({
                 tokenIn: weth.address,
                 tokenOut: grgToken.address,
@@ -843,7 +888,7 @@ describe("AUniswap", async () => {
     // exactOutput (multi-hop) has route inverted to exactInput, i.e. first token in path is tokenOut, last is tokenIn
     describe("exactOutput", async () => {
         it('should call uniswap router', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x09b81346", aUniswap)
@@ -854,14 +899,15 @@ describe("AUniswap", async () => {
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.exactOutput({
                 path: encodePath([grgToken.address, user1.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
-            })).to.be.revertedWith("AUNISWAP_APPROVE_TARGET_NOT_CONTRACT_ERROR")
+            })).to.be.revertedWith(`ApprovalTargetIsNotContract("${user1.address}")`)
             await pool.exactOutput({
                 path: encodePath([grgToken.address, weth.address], [FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
@@ -871,7 +917,7 @@ describe("AUniswap", async () => {
         })
 
         it('should succeed if multi-hop token1 not whitelisted', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x09b81346", aUniswap)
@@ -882,8 +928,9 @@ describe("AUniswap", async () => {
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            await eWhitelist.whitelistToken(grgToken.address)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await pool.exactOutput({
                 path: encodePath([grgToken.address, user1.address, weth.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
@@ -911,7 +958,7 @@ describe("AUniswap", async () => {
         })
 
         it('should revert multi-hop if tokenOut not whitelited but token1 is', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress, eWhitelist } = await setupTests()
+            const { grgToken, authority, aUniswap, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             await authority.addMethod("0x09b81346", aUniswap)
@@ -922,17 +969,17 @@ describe("AUniswap", async () => {
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
-            // eWhitelist requires an address to be a contract
-            await eWhitelist.whitelistToken(newPoolAddress)
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(pool.exactOutput({
                 path: encodePath([grgToken.address, newPoolAddress, weth.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10
-            })).to.be.revertedWith("AUNISWAP_TOKEN_NOT_WHITELISTED_ERROR")
+            })).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
             await pool.exactOutput({
-                path: encodePath([newPoolAddress, weth.address, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
+                path: encodePath([weth.address, newPoolAddress, grgToken.address], [FeeAmount.MEDIUM, FeeAmount.MEDIUM]),
                 recipient: newPoolAddress,
                 amountOut: 20,
                 amountInMaximum: 10

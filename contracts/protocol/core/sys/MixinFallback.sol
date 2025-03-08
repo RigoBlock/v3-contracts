@@ -5,7 +5,7 @@ import {MixinImmutables} from "../immutable/MixinImmutables.sol";
 import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IMinimumVersion} from "../../extensions/adapters/interfaces/IMinimumVersion.sol";
 import {IAuthority} from "../../interfaces/IAuthority.sol";
-import {ISmartPoolFallback} from "../../interfaces/pool/ISmartPoolFallback.sol";
+import {ISmartPoolFallback} from "../../interfaces/v4/pool/ISmartPoolFallback.sol";
 import {VersionLib} from "../../libraries/VersionLib.sol";
 
 abstract contract MixinFallback is MixinImmutables, MixinStorage {

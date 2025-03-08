@@ -5,7 +5,7 @@ import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
-import {ISmartPoolActions} from "../../interfaces/pool/ISmartPoolActions.sol";
+import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";

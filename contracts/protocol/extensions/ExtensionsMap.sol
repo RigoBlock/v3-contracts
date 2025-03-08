@@ -32,7 +32,8 @@ import {IEUpgrade} from "./adapters/interfaces/IEUpgrade.sol";
 contract ExtensionsMap is IExtensionsMap {
     // mapped selectors. When adding a new selector, make sure its mapping to extension address is added below.
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
-    bytes4 private constant _EAPPS_TOKEN_IDS_SELECTOR = IEApps.getUniV4TokenIds.selector;
+    bytes4 private constant _EAPPS_UNIV3_POSITIONS_SELECTOR = IEApps.getUniV3TokenIds.selector;
+    bytes4 private constant _EAPPS_UNIV4_POSITIONS_SELECTOR = IEApps.getUniV4TokenIds.selector;
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
     bytes4 private constant _EORACLE_ORACLE_ADDRESS_SELECTOR = IEOracle.getOracleAddress.selector;
     bytes4 private constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
@@ -59,12 +60,17 @@ contract ExtensionsMap is IExtensionsMap {
         _EUPGRADE = extensions.eUpgrade;
 
         // validate immutable constants. Assumes deps are correctly initialized
-        assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_TOKEN_IDS_SELECTOR == type(IEApps).interfaceId);
+        assert(
+            _EAPPS_BALANCES_SELECTOR ^
+            _EAPPS_UNIV3_POSITIONS_SELECTOR ^
+            _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId
+        );
         assert(
             _EORACLE_CONVERT_AMOUNT_SELECTOR ^
             _EORACLE_ORACLE_ADDRESS_SELECTOR ^
             _EORACLE_PRICE_FEED_SELECTOR ^
-            _EORACLE_TWAP_SELECTOR == type(IEOracle).interfaceId);
+            _EORACLE_TWAP_SELECTOR == type(IEOracle).interfaceId
+        );
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
     }
 
@@ -76,7 +82,11 @@ contract ExtensionsMap is IExtensionsMap {
         override
         returns (address extension, bool shouldDelegatecall)
     {
-        if (selector == _EAPPS_BALANCES_SELECTOR || selector == _EAPPS_TOKEN_IDS_SELECTOR) {
+        if (
+            selector == _EAPPS_BALANCES_SELECTOR ||
+            selector == _EAPPS_UNIV3_POSITIONS_SELECTOR ||
+            selector == _EAPPS_UNIV4_POSITIONS_SELECTOR
+        ) {
             extension = _EAPPS;
             shouldDelegatecall = true;
         } else if (
