@@ -25,7 +25,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516";
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
     args: [
@@ -44,18 +44,18 @@ const deploy: DeployFunction = async function (
   });
 
   // Notice: replace with deployed oracle address (uni hooks depends on PoolManager address, diff on each chains)
-  const oracle = "0x813DADC6bfA14cA9f294f6341B15B530476C7ac4"
+  const oracle = "0x813DADC6bfA14cA9f294f6341B15B530476C7ac4";
   const eOracle = await deploy("EOracle", {
     from: deployer,
     args: [oracle],
     log: true,
     deterministicDeployment: true,
-  })
+  });
 
   // Notice: replace with deployed address (different by chain).
-  const stakingProxy = "0x73f92F71544578BCC1D9F3B7dfce18859Bc20261"
-  const univ3Npm = "0x1238536071E1c677A632429e3655c799b22cDA52"
-  const univ4Posm = "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4"
+  const stakingProxy = "0x5367890E92b2c42c81A9A80E9bE8f2D807EF4548";
+  const univ3Npm = "0x1238536071E1c677A632429e3655c799b22cDA52";
+  const univ4Posm = "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4";
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [stakingProxy, univ3Npm, univ4Posm],
@@ -63,7 +63,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
+  const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address};
   const extensionsMap = await deploy("ExtensionsMap", {
     from: deployer,
     args: [extensions],
@@ -71,7 +71,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const weth = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+  const weth = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
 
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
@@ -84,12 +84,21 @@ const deploy: DeployFunction = async function (
     "RigoblockPoolProxyFactory",
     proxyFactory.address
   );
-  const currentImplementation = await proxyFactoryInstance.implementation()
+  const currentImplementation = await proxyFactoryInstance.implementation();
   if (currentImplementation !== poolImplementation.address) {
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
-  }
+  };
 
-  const universalRouter = "0x3a9d48ab9751398bbfa63ad67599bb04e4bdf98b"
+  const uniswapRouter2 = "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E";
+
+  await deploy("AUniswap", {
+    from: deployer,
+    args: [uniswapRouter2],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const universalRouter = "0x3a9d48ab9751398bbfa63ad67599bb04e4bdf98b";
 
   await deploy("AUniswapRouter", {
     from: deployer,
