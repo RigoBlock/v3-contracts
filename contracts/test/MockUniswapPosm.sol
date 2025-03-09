@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: Apache 2.0
 
-pragma solidity >0.8.0 <0.9.0;
+pragma solidity 0.8.24;
 
 import {Position} from "@uniswap/v4-core/src/libraries/Position.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
+import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 
 /// @dev In uniswap Posm, calls must be calldata encoded to execute. We expose some methods for testing. 
 contract MockUniswapPosm {
     using PositionInfoLibrary for PositionInfo;
     using CalldataDecoder for bytes;
+
+    IAllowanceTransfer public immutable permit2;
 
     uint256 public nextTokenId = 1;
 
@@ -23,6 +26,10 @@ contract MockUniswapPosm {
 
     mapping(uint256 tokenId => PositionInfo info) public positionInfo;
     mapping(bytes25 poolId => PoolKey poolKey) public poolKeys;
+
+    constructor(address _permit2) {
+        permit2 = IAllowanceTransfer(_permit2);
+    }
 
     /// universal router needs to retrieve ownerOf
     function modifyLiquidities(bytes calldata unlockData, uint256 /*deadline*/) external payable {

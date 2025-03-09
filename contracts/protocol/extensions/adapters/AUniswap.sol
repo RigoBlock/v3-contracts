@@ -53,6 +53,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     address public immutable override weth;
 
+    address private constant ADDRESS_ZERO = address(0);
+
     constructor(address newUniswapRouter02) {
         uniswapRouter02 = newUniswapRouter02;
         uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
@@ -229,15 +231,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external override {
-        IWETH9(_getWeth()).withdraw(amountMinimum);
+        _activateToken(ADDRESS_ZERO);
+        IWETH9(weth).withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
-    function unwrapWETH9(uint256 amountMinimum, address recipient) external override {
-        if (recipient != address(this)) {
-            recipient = address(this);
-        }
-        IWETH9(_getWeth()).withdraw(amountMinimum);
+    function unwrapWETH9(uint256 amountMinimum, address /*recipient*/) external override {
+        _activateToken(ADDRESS_ZERO);
+        IWETH9(weth).withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
@@ -258,7 +259,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external override {
         if (value > uint256(0)) {
-            IWETH9(_getWeth()).deposit{value: value}();
+            _activateToken(weth);
+            IWETH9(weth).deposit{value: value}();
         }
     }
 
@@ -266,14 +268,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     function refundETH() external virtual override {}
 
     function _preSwap(address tokenIn, address tokenOut) private returns (address uniswapRouter) {
-        _assertTokenOwnable(tokenOut);
+        _activateToken(tokenOut);
         uniswapRouter = _getUniswapRouter2();
 
         // we set the allowance to the uniswap router
         tokenIn.safeApprove(uniswapRouter, type(uint256).max);
     }
 
-    function _assertTokenOwnable(address token) internal override {
+    function _activateToken(address token) internal override {
         AddressSet storage values = StorageLib.activeTokensSet();
 
         // update storage with new token
@@ -286,9 +288,5 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     function _getUniswapRouter2() private view returns (address) {
         return uniswapRouter02;
-    }
-
-    function _getWeth() private view returns (address) {
-        return weth;
     }
 }

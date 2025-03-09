@@ -144,9 +144,16 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  const univ4Posm = await deploy("MockUniswapPosm", {
+  const permit2 = await deploy("MockPermit2", {
     from: deployer,
     args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const univ4Posm = await deploy("MockUniswapPosm", {
+    from: deployer,
+    args: [permit2.address],
     log: true,
     deterministicDeployment: true,
   })

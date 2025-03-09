@@ -25,6 +25,7 @@ import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
+import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
@@ -41,6 +42,10 @@ import {AUniswapDecoder} from "./AUniswapDecoder.sol";
 
 interface IUniswapRouter {
     function execute(bytes calldata commands, bytes[] calldata inputs) external payable;
+}
+
+interface IPermit2Forwarder {
+    function permit2() external view returns (IAllowanceTransfer);
 }
 
 /// @title AUniswapRouter - Allows interactions with the Uniswap universal router contracts.
@@ -129,18 +134,18 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
 
         _processRecipients(params.recipients);
         _assertTokensOutHavePriceFeed(params.tokensOut);
-        _safeApproveTokensIn(params.tokensIn, uniswapRouter(), type(uint256).max);
+        _safeApproveTokensIn(params.tokensIn);
 
         // forward the inputs to the Uniswap universal router
         try IUniswapRouter(uniswapRouter()).execute{value: params.value}(commands, inputs) {
-            // we remove allowance without clearing storage
-            _safeApproveTokensIn(params.tokensIn, uniswapRouter(), 1);
             return;
         } catch Error(string memory reason) {
             revert(reason);
-        } catch {
+        } catch (bytes memory returnData) {
             if (params.value > address(this).balance) {
                 revert InsufficientNativeBalance();
+            } else {
+                revert(string(returnData));
             }
         }
     }
@@ -165,10 +170,9 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
         _processRecipients(newParams.recipients);
         _processTokenIds(positions);
         _assertTokensOutHavePriceFeed(newParams.tokensOut);
-        _safeApproveTokensIn(newParams.tokensIn, address(uniV4Posm()), type(uint256).max);
+        _safeApproveTokensIn(newParams.tokensIn);
 
         try uniV4Posm().modifyLiquidities{value: newParams.value}(unlockData, deadline) {
-            _safeApproveTokensIn(newParams.tokensIn, address(uniV4Posm()), 1);
             return;
         } catch Error(string memory reason) {
             revert(reason);
@@ -200,18 +204,24 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
         }
     }
 
-    function _safeApproveTokensIn(address[] memory tokensIn, address spender, uint256 amount) private {
+    function _safeApproveTokensIn(address[] memory tokensIn) private {
         for (uint256 i = 0; i < tokensIn.length; i++) {
             // cannot approve base currency, early return
             if (tokensIn[i].isAddressZero()) {
                 continue;
             }
 
-            tokensIn[i].safeApprove(spender, amount);
+            address permit2 = address(IPermit2Forwarder(address(uniV4Posm())).permit2());
 
-            // assert no approval inflation exists after removing approval
-            if (amount == 1) {
-                assert(IERC20(tokensIn[i]).allowance(address(this), spender) == 1);
+            // only approve once, permit2 will handle transaction block approval
+            if (IERC20(tokensIn[i]).allowance(address(this), permit2) != type(uint256).max) {
+                tokensIn[i].safeApprove(permit2, type(uint256).max);
+                (uint160 permit2Approval,,) = IAllowanceTransfer(permit2).allowance(address(this), tokensIn[i], address(uniV4Posm()));
+
+                if (permit2Approval != type(uint160).max) {
+                    // expiration is set to 0 so that every transaction has an approval valid only for the transaction block
+                    IAllowanceTransfer(permit2).approve(tokensIn[i], address(uniV4Posm()), type(uint160).max, 0);
+                }
             }
         }
     }

@@ -56,8 +56,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         )
     {
         // we require both token being ownable
-        _assertTokenOwnable(params.token0);
-        _assertTokenOwnable(params.token1);
+        _activateToken(params.token0);
+        _activateToken(params.token1);
         address uniswapNpm = _getUniswapNpm();
 
         // we set the allowance to the uniswap position manager
@@ -105,8 +105,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we require both tokens being whitelisted
-        _assertTokenOwnable(token0);
-        _assertTokenOwnable(token1);
+        _activateToken(token0);
+        _activateToken(token1);
 
         // we first set the allowance to the uniswap position manager
         if (params.amount0Desired > 0) token0.safeApprove(uniswapNpm, type(uint256).max);
@@ -185,7 +185,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
     }
 
-    function _assertTokenOwnable(address token) internal virtual {}
+    function _activateToken(address token) internal virtual {}
 
     function _getUniswapNpm() internal view virtual returns (address) {}
 
