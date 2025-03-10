@@ -16,7 +16,7 @@ library Allowance {
     }
 }
 
-contract TestPermit2 {
+contract MockPermit2 {
     event Approval(
         address indexed owner, address indexed token, address indexed spender, uint160 amount, uint48 expiration
     );

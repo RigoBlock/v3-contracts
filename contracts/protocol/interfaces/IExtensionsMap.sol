@@ -22,6 +22,10 @@ pragma solidity 0.8.28;
 /// @title IExtensionsMap - Wraps extensions selectors to addresses.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IExtensionsMap {
+    function eApps() external view returns (address);
+    function eOracle() external view returns (address);
+    function eUpgrade() external view returns (address);
+    function wrappedNative() external view returns (address);
 
     /// @notice Returns the map of an extension's selector.
     /// @dev Stores all extensions selectors and addresses in its bytecode for gas efficiency.

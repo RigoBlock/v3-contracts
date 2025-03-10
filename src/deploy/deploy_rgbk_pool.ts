@@ -64,12 +64,6 @@ const deploy: DeployFunction = async function (
   });
 
   const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
-  const extensionsMap = await deploy("ExtensionsMap", {
-    from: deployer,
-    args: [extensions],
-    log: true,
-    deterministicDeployment: true,
-  });
 
   const weth = await deploy("WETH9", {
     from: deployer,
@@ -78,9 +72,29 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const extensionsMapDeployerInstance = await hre.ethers.getContractAt(
+    "ExtensionsMapDeployer",
+    extensionsMapDeployer.address
+  );
+
+  const params = {
+    extensions: extensions,
+    wrappedNative: weth.address
+  }
+  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
+  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
+  await tx.wait();
+
   await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMap.address, weth.address],
+    args: [authority.address, extensionsMapAddress],
     log: true,
     deterministicDeployment: true,
   });
