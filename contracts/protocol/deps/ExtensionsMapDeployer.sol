@@ -6,7 +6,7 @@ import {IExtensionsMapDeployer} from "../interfaces/IExtensionsMapDeployer.sol";
 import {DeploymentParams, Extensions} from "../types/DeploymentParams.sol";
 
 contract ExtensionsMapDeployer is IExtensionsMapDeployer {
-    uint24 public override version;
+    uint24 public override nonce;
     bytes4 private _paramsHash;
 
     address private transient _eApps;
@@ -23,14 +23,14 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
 
         bytes4 newParamsHash = bytes4(keccak256(abi.encode(params)));
 
-        // increase version counter if we are passing different params from last deployed. Will redeploy in case of a rollback, which is ok.
+        // increase nonce if we are passing different params from last deployed. Will redeploy in case of a rollback, which is ok.
         if (newParamsHash != _paramsHash) {
-            unchecked { ++version; }
+            unchecked { ++nonce; }
             _paramsHash = newParamsHash;
         }
 
         // Pre-compute the CREATE2 address
-        bytes32 salt = keccak256(abi.encode(msg.sender, version));
+        bytes32 salt = keccak256(abi.encode(msg.sender, nonce));
         address map = address(
             uint160(uint256(keccak256(abi.encodePacked(
                 bytes1(0xff),
