@@ -24,11 +24,9 @@ import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INon
 import {BytesLib} from "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 import {ISwapRouter02, IV3SwapRouter} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
-import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {IAUniswap} from "./interfaces/IAUniswap.sol";
-import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {AUniswapV3NPM} from "./AUniswapV3NPM.sol";
 
@@ -39,7 +37,6 @@ import {AUniswapV3NPM} from "./AUniswapV3NPM.sol";
 //  This allows to avoid clasing signatures and correctly reach target address for payment methods.
 contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     using BytesLib for bytes;
-    using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
 
     string private constant _REQUIRED_VERSION = "4.0.0";
@@ -49,19 +46,10 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     address public immutable override uniswapRouter02;
 
-    // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
-    /// @inheritdoc IAUniswap
-    address public immutable override uniswapv3Npm;
-
-    /// @inheritdoc IAUniswap
-    address public immutable override weth;
-
     address private constant ADDRESS_ZERO = address(0);
 
-    constructor(address newUniswapRouter02) {
+    constructor(address newUniswapRouter02) AUniswapV3NPM(newUniswapRouter02) {
         uniswapRouter02 = newUniswapRouter02;
-        uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
-        weth = payable(INonfungiblePositionManager(uniswapv3Npm).WETH9());
     }
 
     /// @inheritdoc IMinimumVersion
@@ -277,24 +265,9 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
 
     function _preSwap(address tokenIn, address tokenOut) private returns (address uniswapRouter) {
         _activateToken(tokenOut);
-        uniswapRouter = _getUniswapRouter2();
+        uniswapRouter = uniswapRouter02;
 
         // we set the allowance to the uniswap router
         tokenIn.safeApprove(uniswapRouter, type(uint256).max);
-    }
-
-    function _activateToken(address token) internal override {
-        AddressSet storage values = StorageLib.activeTokensSet();
-
-        // update storage with new token
-        values.addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
-    }
-
-    function _getUniswapNpm() internal view override returns (address) {
-        return uniswapv3Npm;
-    }
-
-    function _getUniswapRouter2() private view returns (address) {
-        return uniswapRouter02;
     }
 }
