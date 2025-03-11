@@ -111,7 +111,14 @@ describe("AGovernance", async () => {
             await expect(pool.castVote(1, VoteType.For)).to.emit(governanceInstance, "VoteCast")
                 .withArgs(pool.address, 1, VoteType.For, amount)
             await timeTravel({ days: 7, mine:true })
-            await expect(pool.execute(1)).to.emit(governanceInstance, "ProposalExecuted").withArgs(1)
+            // must encode call, as execute method is also present in AUniswapRouter and hardhat will not be able to differentiate
+            const encodedExecuteData = pool.interface.encodeFunctionData('execute(uint256)', [1])
+            
+            // txn will always revert in fallback
+            await expect(
+                user1.sendTransaction({ to: pool.address, value: 0, data: encodedExecuteData})
+            ).to.emit(governanceInstance, "ProposalExecuted").withArgs(1)
+            //await expect(pool.execute(1)).to.emit(governanceInstance, "ProposalExecuted").withArgs(1)
         })
     })
 })

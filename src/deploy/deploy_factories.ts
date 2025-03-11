@@ -36,7 +36,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: pool implementation requires deployed extensionsMap address (different by chain)
+  // TODO: pool implementation requires deployed extensionsMap address (same on all chains)
   /*const extensionsMap = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const weth = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const poolImplementation = await deploy("SmartPool", {

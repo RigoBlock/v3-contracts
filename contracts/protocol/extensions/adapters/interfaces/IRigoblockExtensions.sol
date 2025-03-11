@@ -23,9 +23,12 @@ import {IAGovernance} from "./IAGovernance.sol";
 import {IAMulticall} from "./IAMulticall.sol";
 import {IAStaking} from "./IAStaking.sol";
 import {IAUniswap} from "./IAUniswap.sol";
+import {IAUniswapRouter} from "./IAUniswapRouter.sol";
 import {IAUniswapV3NPM} from "./IAUniswapV3NPM.sol";
 import {IEApps} from "./IEApps.sol";
-import {IEOracle} from "./IEOracle.sol";import {IEUpgrade} from "./IEUpgrade.sol";
+import {IEOracle} from "./IEOracle.sol";
+import {IEUpgrade} from "./IEUpgrade.sol";
+import {IMinimumVersion} from "./IMinimumVersion.sol";
 
 /// @title Rigoblock Extensions Interface - Groups together the extensions' methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -35,8 +38,10 @@ interface IRigoblockExtensions is
     IAMulticall,
     IAStaking,
     IAUniswap,
+    IAUniswapRouter,
     IAUniswapV3NPM,
     IEApps,
     IEOracle,
-    IEUpgrade
+    IEUpgrade,
+    IMinimumVersion
 {}
