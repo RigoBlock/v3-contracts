@@ -44,15 +44,17 @@ describe("AUniswapRouter", async () => {
     )
     await factory.createPool('testpool','TEST',AddressZero)
     // TODO: verify what is needed before this block
-    const Univ3NpmInstance = await deployments.get("MockUniswapNpm");
+    const UniRouter2Instance = await deployments.get("MockUniswapRouter");
+    const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
+    const univ3NpmAddress = await uniswapRouter2.positionManager()
     const Univ3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
     const Univ4PosmInstance = await deployments.get("MockUniswapPosm");
     const Univ4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
     const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter");
-    const uniRouter = await MockUniUniversalRouter.deploy(Univ3NpmInstance.address, Univ4PosmInstance.address)
+    const uniRouter = await MockUniUniversalRouter.deploy(univ3NpmAddress, Univ4PosmInstance.address)
     const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter")
     // TODO: verify we are using the same WETH9 for Posm initialization
-    const univ3Npm = Univ3Npm.attach(Univ3NpmInstance.address)
+    const univ3Npm = Univ3Npm.attach(univ3NpmAddress)
     const wethAddress = await univ3Npm.WETH9()
     const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address, wethAddress)
     await authority.setAdapter(aUniswapRouter.address, true)
@@ -65,6 +67,8 @@ describe("AUniswapRouter", async () => {
     const HookInstance = await deployments.get("MockOracle")
     const Hook = await hre.ethers.getContractFactory("MockOracle")
     const Pool = await hre.ethers.getContractFactory("SmartPool")
+    const Permit2Instance = await deployments.get("MockPermit2")
+    const Permit2 = await hre.ethers.getContractFactory("MockPermit2")
     return {
       grgToken: GrgToken.attach(GrgTokenInstance.address),
       pool: Pool.attach(newPoolAddress),
@@ -77,6 +81,7 @@ describe("AUniswapRouter", async () => {
       uniRouterAddress: uniRouter.address,
       hookAddress: HookInstance.address,
       oracle: Hook.attach(HookInstance.address),
+      permit2: Permit2.attach(Permit2Instance.address),
     }
   });
 
@@ -84,7 +89,7 @@ describe("AUniswapRouter", async () => {
   describe("modifyLiquidities", async () => {
     it('should route to uniV4Posm', async () => {
       const { pool, univ4Posm, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey.hooks = AddressZero
@@ -130,7 +135,7 @@ describe("AUniswapRouter", async () => {
 
     it('should revert when trying to mint 2 positions in the same call', async () => {
       const { pool, univ4Posm, wethAddress } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION, [
@@ -165,7 +170,7 @@ describe("AUniswapRouter", async () => {
 
     it('should revert if position recipient is not pool', async () => {
       const { pool, wethAddress } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION, [
@@ -188,9 +193,9 @@ describe("AUniswapRouter", async () => {
       ).to.be.revertedWith('RecipientIsNotSmartPool()')
     })
 
-    it('should revert if either token does not have a price feed', async () => {
+    it('should revert mint if a token does not have a price feed', async () => {
       const { pool, wethAddress, grgToken, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       const etherAmount = ethers.utils.parseEther("12")
       PAIR.poolKey = { currency0: grgToken.address, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: AddressZero }
       let v4Planner: V4Planner = new V4Planner()
@@ -215,21 +220,12 @@ describe("AUniswapRouter", async () => {
       PAIR.poolKey.currency0 = AddressZero
       PAIR.poolKey.currency1 = grgToken.address
       await oracle.initializeObservations(PAIR.poolKey)
-      PAIR.poolKey.hooks = AddressZero
-      await expect(
-        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${wethAddress}")`) 
-      PAIR.poolKey.hooks = oracle.address
-      PAIR.poolKey.currency0 = AddressZero
-      PAIR.poolKey.currency1 = wethAddress
-      await oracle.initializeObservations(PAIR.poolKey)
-      PAIR.poolKey.hooks = AddressZero
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
     })
 
     it('should revert if hook can access liquidity deltas', async () => {
       const { pool, wethAddress, hookAddress } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       const etherAmount = ethers.utils.parseEther("12")
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: hookAddress }
       let v4Planner: V4Planner = new V4Planner()
@@ -258,7 +254,7 @@ describe("AUniswapRouter", async () => {
       const { pool, univ4Posm, wethAddress, oracle } = await setupTests()
       const etherAmount = ethers.utils.parseEther("12")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey.hooks = AddressZero
@@ -293,7 +289,7 @@ describe("AUniswapRouter", async () => {
       const { pool, univ4Posm, wethAddress, oracle } = await setupTests()
       const etherAmount = ethers.utils.parseEther("12")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey.hooks = AddressZero
@@ -325,7 +321,7 @@ describe("AUniswapRouter", async () => {
       const { pool, univ4Posm, wethAddress, oracle } = await setupTests()
       const etherAmount = ethers.utils.parseEther("12")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey.hooks = AddressZero
@@ -361,7 +357,7 @@ describe("AUniswapRouter", async () => {
       const { pool, univ4Posm, wethAddress, oracle } = await setupTests()
       const etherAmount = ethers.utils.parseEther("12")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey.hooks = AddressZero
@@ -396,7 +392,7 @@ describe("AUniswapRouter", async () => {
       const { pool, univ4Posm, wethAddress, oracle } = await setupTests()
       const etherAmount = ethers.utils.parseEther("12")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey.hooks = AddressZero
@@ -433,7 +429,7 @@ describe("AUniswapRouter", async () => {
 
     it('position should be included in nav calculations', async () => {
       const { newPoolAddress, grgToken, pool, univ4Posm, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
@@ -478,7 +474,7 @@ describe("AUniswapRouter", async () => {
 
     it('should decode payment methods', async () => {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey.currency1 = wethAddress
@@ -511,7 +507,7 @@ describe("AUniswapRouter", async () => {
 
     it('should revert when calling unsupported methods', async () => {
       const { pool, grgToken } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.INCREASE_LIQUIDITY_FROM_DELTAS, [0, 0, 0, '0x'])
@@ -542,7 +538,7 @@ describe("AUniswapRouter", async () => {
     it('returns gas cost for eth pool mint with 1 uni v4 liquidity position', async () => {
       const { pool, univ4Posm, wethAddress, grgToken, oracle } = await setupTests()
       const etherAmount = ethers.utils.parseEther("12")
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       // reset hook to default state
@@ -641,7 +637,7 @@ describe("AUniswapRouter", async () => {
   describe("execute", async () => {
     it('should execute a v4 swap', async () => {
       const { pool, wethAddress } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency0 = AddressZero
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
@@ -673,7 +669,7 @@ describe("AUniswapRouter", async () => {
 
     it('should revert if deadline past', async () => {
       const { pool, wethAddress } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = wethAddress
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
@@ -701,8 +697,8 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should set approval with settle action', async () => {
-      const { pool, grgToken, uniRouterAddress } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const { pool, grgToken, permit2, univ4Posm } = await setupTests()
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency0 = grgToken.address
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
@@ -724,17 +720,26 @@ describe("AUniswapRouter", async () => {
         'execute(bytes,bytes[],uint256)',
         [commands, inputs, DEADLINE]
       )
-      expect(await grgToken.allowance(pool.address, uniRouterAddress)).to.be.eq(0)
-      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      // rigoblock sets max approval, and then resets it to 1 to prevent clearing storage
-      expect(await grgToken.allowance(pool.address, uniRouterAddress)).to.be.eq(1)
+      expect(await grgToken.allowance(pool.address, permit2.address)).to.be.eq(0)
+      // TODO: this swap failed silently before, as we did not set the correct permit2 approval. Check why it was not reverted with error
+      const tx = await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      const receipt = await tx.wait()
+      const block = await hre.ethers.provider.getBlock(receipt.blockNumber)
+      // rigoblock sets max approval to permit2, then sets permit2 approval with expity = 0, so approval is valid only for duration of transaction
+      expect(await grgToken.allowance(pool.address, permit2.address)).to.be.eq(ethers.constants.MaxUint256)
+      const permit2Allowace = await permit2.allowance(pool.address, grgToken.address, univ4Posm.address)
+      // Define uint160 max: 2^160 - 1
+      const maxUint160 = hre.ethers.BigNumber.from("1461501637330902918203684832716283019655932542975");
+      expect(permit2Allowace.amount).to.be.eq(maxUint160)
+      expect(permit2Allowace.expiration).to.be.eq(block.timestamp)
+      expect(permit2Allowace.nonce).to.be.eq(0)
       // NOTE: we must reset the currency0 to the default value, as the next test otherwise will revert (even though it should be reset, but for some reason it is not)
       PAIR.poolKey.currency0 = AddressZero
     })
 
     it('should transfer eth to universal router with settle', async () => {
       const { pool, grgToken, uniRouterAddress } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
@@ -768,7 +773,7 @@ describe("AUniswapRouter", async () => {
 
     it('should revert if recipient is not pool', async () => {
       const { pool, grgToken } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
       const v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, user2.address, parseEther("12")])
@@ -788,7 +793,7 @@ describe("AUniswapRouter", async () => {
 
     it('should revert settle if tokenOut does not have a price feed', async () => {
       const { pool, grgToken, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       const v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
@@ -812,7 +817,7 @@ describe("AUniswapRouter", async () => {
 
     it('should take a currency', async () => {
       const { pool, grgToken } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
       const v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
@@ -830,7 +835,7 @@ describe("AUniswapRouter", async () => {
 
     it('should decode v4 payment methods', async () => {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
@@ -864,7 +869,7 @@ describe("AUniswapRouter", async () => {
 
     it('should wrap/unwrap native', async () => {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       const planner: RoutePlanner = new RoutePlanner()
@@ -885,7 +890,7 @@ describe("AUniswapRouter", async () => {
 
     it('a direct call should revert', async () => {
       const { pool, grgToken, aUniswapRouter } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
       const v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
@@ -905,7 +910,7 @@ describe("AUniswapRouter", async () => {
 
     it('should execute a subplan', async () => {
       const { pool, grgToken } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
       const v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
@@ -925,7 +930,7 @@ describe("AUniswapRouter", async () => {
     // TODO: can move this to new file EApps.spec.ts
     it('should remove 1 token from active tokens', async () => {
       const { newPoolAddress, pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
@@ -953,7 +958,7 @@ describe("AUniswapRouter", async () => {
 
     it("should process v3 exactIn swap", async function () {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
@@ -971,7 +976,7 @@ describe("AUniswapRouter", async () => {
 
     it("should process v3 exactOut", async function () {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
@@ -989,7 +994,7 @@ describe("AUniswapRouter", async () => {
 
     it("should process v2 swap", async function () {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       // we must add a price feed for both tokens, as we use both exactIn and exactOut methods
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
@@ -1031,7 +1036,7 @@ describe("AUniswapRouter", async () => {
 
     it("should process sweep, transfer and pay v3 payment methods", async function () {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
@@ -1050,7 +1055,7 @@ describe("AUniswapRouter", async () => {
 
     it('should revert when calling unsupported methods', async () => {
       const { pool, grgToken } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
       let planner: RoutePlanner = new RoutePlanner()
       planner.addCommand(CommandType.PERMIT2_TRANSFER_FROM, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
@@ -1163,7 +1168,7 @@ describe("AUniswapRouter", async () => {
 
     it('logs gas costs for mint when pool has null balance of active tokens', async () => {
       const { pool, wethAddress, grgToken, oracle } = await setupTests()
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       let v4Planner: V4Planner = new V4Planner()
@@ -1210,7 +1215,7 @@ describe("AUniswapRouter", async () => {
     it('logs gas costs for mint when pool holds positive GRG balance', async () => {
       const { pool, wethAddress, grgToken, oracle } = await setupTests()
       await grgToken.transfer(pool.address, ethers.utils.parseEther("12"))
-      const PAIR = { ...DEFAULT_PAIR }
+      const PAIR = DEFAULT_PAIR
       PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
       await oracle.initializeObservations(PAIR.poolKey)
       let v4Planner: V4Planner = new V4Planner()

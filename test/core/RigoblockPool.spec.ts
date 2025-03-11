@@ -20,7 +20,9 @@ describe("Proxy", async () => {
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
-        const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+        const UniRouter2Instance = await deployments.get("MockUniswapRouter");
+        const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
+        const uniswapV3NpmAddress = await uniswapRouter2.positionManager()
         const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
         const UniswapV4PosmInstance = await deployments.get("MockUniswapPosm")
         const UniswapV4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
@@ -40,7 +42,7 @@ describe("Proxy", async () => {
             authority: Authority.attach(AuthorityInstance.address),
             factory,
             pool,
-            uniswapV3Npm: UniswapV3Npm.attach(UniswapV3NpmInstance.address),
+            uniswapV3Npm: UniswapV3Npm.attach(uniswapV3NpmAddress),
             uniswapV4Posm: UniswapV4Posm.attach(UniswapV4PosmInstance.address),
             oracle: Hook.attach(HookInstance.address),
         }

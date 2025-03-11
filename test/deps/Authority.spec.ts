@@ -1,9 +1,7 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
+import hre, { deployments, waffle } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
-import { BigNumber, Contract } from "ethers";
-import { getAddress } from "ethers/lib/utils";
 
 describe("Authority", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()

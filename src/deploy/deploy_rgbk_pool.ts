@@ -56,6 +56,7 @@ const deploy: DeployFunction = async function (
   const grgStakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ3Npm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  const wethAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [grgStakingProxy, univ3Npm, univ4Posm],
@@ -64,23 +65,30 @@ const deploy: DeployFunction = async function (
   });
 
   const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
-  const extensionsMap = await deploy("ExtensionsMap", {
-    from: deployer,
-    args: [extensions],
-    log: true,
-    deterministicDeployment: true,
-  });
 
-  const weth = await deploy("WETH9", {
+  const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   });
 
+  const extensionsMapDeployerInstance = await hre.ethers.getContractAt(
+    "ExtensionsMapDeployer",
+    extensionsMapDeployer.address
+  );
+
+  const params = {
+    extensions: extensions,
+    wrappedNative: wethAddress
+  }
+  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
+  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
+  await tx.wait();
+
   await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMap.address, weth.address],
+    args: [authority.address, extensionsMapAddress],
     log: true,
     deterministicDeployment: true,
   });
