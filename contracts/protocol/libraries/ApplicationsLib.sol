@@ -8,7 +8,7 @@ struct ApplicationsSlot {
 library ApplicationsLib {
     error ApplicationIndexBitmaskRange();
 
-    uint256 private constant MAX_ALLOWED_APPLICATIONS = 31;
+    uint256 private constant MAX_ALLOWED_APPLICATIONS = 255;
 
     /// @notice Sets an application as active in the bitmask.
     /// @param self The storage slot where the packed applications are stored.
