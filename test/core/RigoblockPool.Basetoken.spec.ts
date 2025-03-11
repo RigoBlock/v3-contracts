@@ -111,15 +111,11 @@ describe("BaseTokenProxy", async () => {
             await oracle.initializeObservations(poolKey)
             await pool.mint(user2.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
-            // 5% default spread results in less token than amount in at initial price 1
-            expect(poolData.totalSupply).to.be.eq(parseEther("19.5"))
+            // 5% default spread is not applied on mint
+            expect(poolData.totalSupply).to.be.eq(parseEther("20"))
             await pool.updateUnitaryValue()
             poolData = await pool.getPoolTokens()
-            // TODO: check it is ok to charge spread on mint (instead could do on burn only)
-            // and verify root of approximations, as 20 eth balance is divided by 19.5 tokens
-            // which should result in a unitary value of 1.025641025641025641
-            // the applied spread results in less minted tokens, hence price increases
-            expect(poolData.unitaryValue).to.be.eq(parseEther("1.025641025641025641"))
+            expect(poolData.unitaryValue).to.be.eq(parseEther("1"))
         })
     })
 
@@ -326,9 +322,10 @@ describe("BaseTokenProxy", async () => {
                 pool.burn(parseEther("1"), 0)
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("1"))
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("1.016949152542372881"))
-                // TODO: verify we are correctly applying spread, as amount is divided by nav, but then a further haircut is applied
-                .and.to.emit(grgToken, "Transfer").withArgs(pool.address, user1.address, parseEther("0.966101694915254236"))
+                // 5% spread is applied on burn
+                .and.to.emit(grgToken, "Transfer").withArgs(pool.address, user1.address, parseEther("0.95"))
+                // spread will only result in unitary value increase after burn
+                .and.to.not.emit(pool, "NewNav")
         })
     })
 
@@ -571,8 +568,8 @@ describe("BaseTokenProxy", async () => {
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
                 // TODO: verify why we have a small difference in nav (possibly due to rounding)
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("235.413179189441325483"))
-                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("20.127826820697233328"))
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("235.388229536415812943"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("20.125693625363552006"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })
