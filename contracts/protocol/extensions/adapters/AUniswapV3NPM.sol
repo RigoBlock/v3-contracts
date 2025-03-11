@@ -22,26 +22,42 @@ pragma solidity 0.8.28;
 
 import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
+import {ISwapRouter02} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
+import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
 import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
 import {IAUniswapV3NPM} from "./interfaces/IAUniswapV3NPM.sol";
+import {IEOracle} from "./interfaces/IEOracle.sol";
 
 /// @title AUniswapV3NPM - Allows interactions with the Uniswap NPM contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     using ApplicationsLib for ApplicationsSlot;
+    using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
 
     error UniV3PositionsLimitExceeded();
     error PositionOwner();
 
+    // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
+    /// @inheritdoc IAUniswapV3NPM
+    address public immutable override uniswapv3Npm;
+
+    /// @inheritdoc IAUniswapV3NPM
+    address public immutable override weth;
+
     enum OperationType {
         Mint,
         Increase,
         Burn
+    }
+
+    constructor(address uniswapRouter02) {
+        uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
+        weth = payable(INonfungiblePositionManager(uniswapv3Npm).WETH9());
     }
 
     /// @inheritdoc IAUniswapV3NPM
@@ -56,16 +72,15 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         )
     {
         // we require both token being ownable
-        _assertTokenOwnable(params.token0);
-        _assertTokenOwnable(params.token1);
-        address uniswapNpm = _getUniswapNpm();
+        _activateToken(params.token0);
+        _activateToken(params.token1);
 
         // we set the allowance to the uniswap position manager
-        if (params.amount0Desired > 0) params.token0.safeApprove(uniswapNpm, type(uint256).max);
-        if (params.amount1Desired > 0) params.token1.safeApprove(uniswapNpm, type(uint256).max);
+        if (params.amount0Desired > 0) params.token0.safeApprove(uniswapv3Npm, type(uint256).max);
+        if (params.amount1Desired > 0) params.token1.safeApprove(uniswapv3Npm, type(uint256).max);
 
         // only then do we mint the liquidity token
-        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapNpm).mint(
+        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).mint(
             INonfungiblePositionManager.MintParams({
                 token0: params.token0,
                 token1: params.token1,
@@ -82,8 +97,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        if (params.amount0Desired > 0) params.token0.safeApprove(uniswapNpm, uint256(1));
-        if (params.amount1Desired > 0) params.token1.safeApprove(uniswapNpm, uint256(1));
+        if (params.amount0Desired > 0) params.token0.safeApprove(uniswapv3Npm, uint256(1));
+        if (params.amount1Desired > 0) params.token1.safeApprove(uniswapv3Npm, uint256(1));
 
         _processTokenId(tokenId, OperationType.Mint);
     }
@@ -98,22 +113,21 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 amount1
         )
     {
-        address uniswapNpm = _getUniswapNpm();
-        assert(INonfungiblePositionManager(uniswapNpm).ownerOf(params.tokenId) == address(this));
-        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(uniswapNpm).positions(
+        assert(INonfungiblePositionManager(uniswapv3Npm).ownerOf(params.tokenId) == address(this));
+        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(uniswapv3Npm).positions(
             params.tokenId
         );
 
         // we require both tokens being whitelisted
-        _assertTokenOwnable(token0);
-        _assertTokenOwnable(token1);
+        _activateToken(token0);
+        _activateToken(token1);
 
         // we first set the allowance to the uniswap position manager
-        if (params.amount0Desired > 0) token0.safeApprove(uniswapNpm, type(uint256).max);
-        if (params.amount1Desired > 0) token1.safeApprove(uniswapNpm, type(uint256).max);
+        if (params.amount0Desired > 0) token0.safeApprove(uniswapv3Npm, type(uint256).max);
+        if (params.amount1Desired > 0) token1.safeApprove(uniswapv3Npm, type(uint256).max);
 
         // finally, we add to the liquidity token
-        (liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapNpm).increaseLiquidity(
+        (liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).increaseLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
                 tokenId: params.tokenId,
                 amount0Desired: params.amount0Desired,
@@ -125,8 +139,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        if (params.amount0Desired > 0) token0.safeApprove(uniswapNpm, uint256(1));
-        if (params.amount1Desired > 0) token1.safeApprove(uniswapNpm, uint256(1));
+        if (params.amount0Desired > 0) token0.safeApprove(uniswapv3Npm, uint256(1));
+        if (params.amount1Desired > 0) token1.safeApprove(uniswapv3Npm, uint256(1));
 
         _processTokenId(params.tokenId, OperationType.Increase);
     }
@@ -137,7 +151,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         override
         returns (uint256 amount0, uint256 amount1)
     {
-        (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).decreaseLiquidity(
+        (amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).decreaseLiquidity(
             INonfungiblePositionManager.DecreaseLiquidityParams({
                 tokenId: params.tokenId,
                 liquidity: params.liquidity,
@@ -154,7 +168,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         override
         returns (uint256 amount0, uint256 amount1)
     {
-        (amount0, amount1) = INonfungiblePositionManager(_getUniswapNpm()).collect(
+        (amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: params.tokenId,
                 recipient: address(this), // this pool is always the recipient
@@ -166,7 +180,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
 
     /// @inheritdoc IAUniswapV3NPM
     function burn(uint256 tokenId) external override {
-        INonfungiblePositionManager(_getUniswapNpm()).burn(tokenId);
+        INonfungiblePositionManager(uniswapv3Npm).burn(tokenId);
         _processTokenId(tokenId, OperationType.Burn);
     }
 
@@ -177,7 +191,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         uint24 fee,
         uint160 sqrtPriceX96
     ) external override returns (address pool) {
-        pool = INonfungiblePositionManager(_getUniswapNpm()).createAndInitializePoolIfNecessary(
+        pool = INonfungiblePositionManager(uniswapv3Npm).createAndInitializePoolIfNecessary(
             token0,
             token1,
             fee,
@@ -185,9 +199,12 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
     }
 
-    function _assertTokenOwnable(address token) internal virtual {}
+    function _activateToken(address token) internal {
+        AddressSet storage values = StorageLib.activeTokensSet();
 
-    function _getUniswapNpm() internal view virtual returns (address) {}
+        // update storage with new token
+        values.addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
+    }
 
     function _processTokenId(uint256 tokenId, OperationType opType) private {
         TokenIdsSlot storage idsSlot = StorageLib.uniV3TokenIdsSlot();
@@ -199,11 +216,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
 
             // sync up to 32 pre-existing positions
             if (storedLength == 0) {
-                uint256 numPositions = IERC721(_getUniswapNpm()).balanceOf(address(this));
+                uint256 numPositions = IERC721(uniswapv3Npm).balanceOf(address(this));
                 numPositions = numPositions < 32 ? numPositions : 32;
 
                 for (uint256 i = 0; i < numPositions; i++) {
-                    uint256 existingTokenId = IERC721(_getUniswapNpm()).tokenOfOwnerByIndex(address(this), i);
+                    uint256 existingTokenId = IERC721(uniswapv3Npm).tokenOfOwnerByIndex(address(this), i);
 
                     // store positions and exit the loop if we are in sync
                     if (existingTokenId != tokenId) {

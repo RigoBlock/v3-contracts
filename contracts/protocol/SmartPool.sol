@@ -45,9 +45,8 @@ contract SmartPool is
     /// @notice ExtensionsMap validation is performed in MixinImmutables constructor.
     constructor(
         address authority,
-        address extensionsMap,
-        address wrappedNative
-    ) MixinImmutables(authority, extensionsMap, wrappedNative) {
+        address extensionsMap
+    ) MixinImmutables(authority, extensionsMap) {
         // we lock implementation at deploy
         pool().owner = _ZERO_ADDRESS;
         poolParams().kycProvider == _BASE_TOKEN_FLAG;

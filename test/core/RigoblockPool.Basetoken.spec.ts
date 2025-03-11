@@ -29,9 +29,11 @@ describe("BaseTokenProxy", async () => {
             "SmartPool",
             newPoolAddress
         )
-        const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+        const UniRouter2Instance = await deployments.get("MockUniswapRouter");
+        const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
+        const uniswapV3NpmAddress = await uniswapRouter2.positionManager()
         const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
-        const uniswapV3Npm = UniswapV3Npm.attach(UniswapV3NpmInstance.address)
+        const uniswapV3Npm = UniswapV3Npm.attach(uniswapV3NpmAddress)
         const wethAddress = await uniswapV3Npm.WETH9()
         const Weth = await hre.ethers.getContractFactory("WETH9")
         const HookInstance = await deployments.get("MockOracle")
@@ -109,15 +111,11 @@ describe("BaseTokenProxy", async () => {
             await oracle.initializeObservations(poolKey)
             await pool.mint(user2.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
-            // 5% default spread results in less token than amount in at initial price 1
-            expect(poolData.totalSupply).to.be.eq(parseEther("19.5"))
+            // 5% default spread is not applied on mint
+            expect(poolData.totalSupply).to.be.eq(parseEther("20"))
             await pool.updateUnitaryValue()
             poolData = await pool.getPoolTokens()
-            // TODO: check it is ok to charge spread on mint (instead could do on burn only)
-            // and verify root of approximations, as 20 eth balance is divided by 19.5 tokens
-            // which should result in a unitary value of 1.025641025641025641
-            // the applied spread results in less minted tokens, hence price increases
-            expect(poolData.unitaryValue).to.be.eq(parseEther("1.025641025641025641"))
+            expect(poolData.unitaryValue).to.be.eq(parseEther("1"))
         })
     })
 
@@ -324,9 +322,10 @@ describe("BaseTokenProxy", async () => {
                 pool.burn(parseEther("1"), 0)
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("1"))
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("1.016949152542372881"))
-                // TODO: verify we are correctly applying spread, as amount is divided by nav, but then a further haircut is applied
-                .and.to.emit(grgToken, "Transfer").withArgs(pool.address, user1.address, parseEther("0.966101694915254236"))
+                // 5% spread is applied on burn
+                .and.to.emit(grgToken, "Transfer").withArgs(pool.address, user1.address, parseEther("0.95"))
+                // spread will only result in unitary value increase after burn
+                .and.to.not.emit(pool, "NewNav")
         })
     })
 
@@ -423,9 +422,12 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should burn if token is active and base token balance small enough', async () => {
-            const { pool, grgToken, uniswapV3Npm, weth, oracle } = await setupTests()
+            const { pool, grgToken, uniswapV3Npm, oracle } = await setupTests()
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
+            // re-deploy weth, as otherwise transaction won't revert (weth is converted 1-1 to ETH)
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
             // we need to mint an lp position to activate token
             const mintParams = {
                 token0: weth.address,
@@ -552,23 +554,22 @@ describe("BaseTokenProxy", async () => {
             await weth.transfer(pool.address, parseEther("100"))
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
+            // we only need to create price feed for grg, as weth is converted 1-1 to eth
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             // minting again to activate token via nav calculations
-            let poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
-            await oracle.initializeObservations(poolKey)
-            poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
-            await oracle.initializeObservations(poolKey)
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool, but includes lp token balances and weth balance
             const { unitaryValue } = await pool.getPoolTokens()
-            expect(unitaryValue).to.be.eq(parseEther("233.573575144654545834"))
+            expect(unitaryValue).to.be.eq(parseEther("235.388229536415812922"))
             await timeTravel({ seconds: 2592000, mine: true })
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
                 // TODO: verify why we have a small difference in nav (possibly due to rounding)
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("233.598524407323662027"))
-                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.972673836826173103"))
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("235.388229536415812943"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("20.125693625363552006"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })

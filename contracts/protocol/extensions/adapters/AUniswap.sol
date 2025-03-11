@@ -24,11 +24,10 @@ import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INon
 import {BytesLib} from "../../../utils/exchanges/uniswap/v3-periphery/contracts/libraries/BytesLib.sol";
 import {ISwapRouter02, IV3SwapRouter} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
-import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {IAUniswap} from "./interfaces/IAUniswap.sol";
-import {IEOracle} from "./interfaces/IEOracle.sol";
+import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {AUniswapV3NPM} from "./AUniswapV3NPM.sol";
 
 /// @title AUniswap - Allows interactions with the Uniswap contracts.
@@ -36,27 +35,26 @@ import {AUniswapV3NPM} from "./AUniswapV3NPM.sol";
 // @notice We implement sweep token methods routed to uniswap router even though could be defined as virtual and not implemented,
 //  because we always wrap/unwrap ETH within the pool and never accidentally send tokens to uniswap router or npm contracts.
 //  This allows to avoid clasing signatures and correctly reach target address for payment methods.
-contract AUniswap is IAUniswap, AUniswapV3NPM {
+contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     using BytesLib for bytes;
-    using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
+
+    string private constant _REQUIRED_VERSION = "4.0.0";
 
     // storage must be immutable as needs to be rutime consistent
     // 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks
     /// @inheritdoc IAUniswap
     address public immutable override uniswapRouter02;
 
-    // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
-    /// @inheritdoc IAUniswap
-    address public immutable override uniswapv3Npm;
+    address private constant ADDRESS_ZERO = address(0);
 
-    /// @inheritdoc IAUniswap
-    address public immutable override weth;
-
-    constructor(address newUniswapRouter02) {
+    constructor(address newUniswapRouter02) AUniswapV3NPM(newUniswapRouter02) {
         uniswapRouter02 = newUniswapRouter02;
-        uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
-        weth = payable(INonfungiblePositionManager(uniswapv3Npm).WETH9());
+    }
+
+    /// @inheritdoc IMinimumVersion
+    function requiredVersion() external pure override returns (string memory) {
+        return _REQUIRED_VERSION;
     }
 
     /*
@@ -229,15 +227,14 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external override {
-        IWETH9(_getWeth()).withdraw(amountMinimum);
+        _activateToken(ADDRESS_ZERO);
+        IWETH9(weth).withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
-    function unwrapWETH9(uint256 amountMinimum, address recipient) external override {
-        if (recipient != address(this)) {
-            recipient = address(this);
-        }
-        IWETH9(_getWeth()).withdraw(amountMinimum);
+    function unwrapWETH9(uint256 amountMinimum, address /*recipient*/) external override {
+        _activateToken(ADDRESS_ZERO);
+        IWETH9(weth).withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
@@ -258,7 +255,8 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external override {
         if (value > uint256(0)) {
-            IWETH9(_getWeth()).deposit{value: value}();
+            _activateToken(weth);
+            IWETH9(weth).deposit{value: value}();
         }
     }
 
@@ -266,29 +264,10 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
     function refundETH() external virtual override {}
 
     function _preSwap(address tokenIn, address tokenOut) private returns (address uniswapRouter) {
-        _assertTokenOwnable(tokenOut);
-        uniswapRouter = _getUniswapRouter2();
+        _activateToken(tokenOut);
+        uniswapRouter = uniswapRouter02;
 
         // we set the allowance to the uniswap router
         tokenIn.safeApprove(uniswapRouter, type(uint256).max);
-    }
-
-    function _assertTokenOwnable(address token) internal override {
-        AddressSet storage values = StorageLib.activeTokensSet();
-
-        // update storage with new token
-        values.addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
-    }
-
-    function _getUniswapNpm() internal view override returns (address) {
-        return uniswapv3Npm;
-    }
-
-    function _getUniswapRouter2() private view returns (address) {
-        return uniswapRouter02;
-    }
-
-    function _getWeth() private view returns (address) {
-        return weth;
     }
 }

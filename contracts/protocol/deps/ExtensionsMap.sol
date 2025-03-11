@@ -19,12 +19,14 @@
 
 pragma solidity 0.8.28;
 
+import {IEApps} from "../extensions/adapters/interfaces/IEApps.sol";
+import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
+import {IEUpgrade} from "../extensions/adapters/interfaces/IEUpgrade.sol";
 import {IAuthority} from "../interfaces/IAuthority.sol";
 import {IExtensionsMap} from "../interfaces/IExtensionsMap.sol";
+import {IExtensionsMapDeployer} from "../interfaces/IExtensionsMapDeployer.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
-import {IEApps} from "./adapters/interfaces/IEApps.sol";
-import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
-import {IEUpgrade} from "./adapters/interfaces/IEUpgrade.sol";
+import {DeploymentParams, Extensions} from "../types/DeploymentParams.sol";
 
 /// @title ExtensionsMap - Wraps extensions selectors to addresses.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -41,23 +43,26 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
 
-    // mapped extensions
-    address private immutable _EAPPS;
-    address private immutable _EORACLE;
-    address private immutable _EUPGRADE;
+    /// @inheritdoc IExtensionsMap
+    address public immutable override eApps;
 
-    struct Extensions {
-        address eApps;
-        address eOracle;
-        address eUpgrade;
-    }
+    /// @inheritdoc IExtensionsMap
+    address public immutable override eOracle;
+
+    /// @inheritdoc IExtensionsMap
+    address public immutable override eUpgrade;
+
+    /// @inheritdoc IExtensionsMap
+    address public immutable override wrappedNative;
 
     /// @notice Assumes extensions have been correctly initialized.
     /// @dev When adding a new app, modify apps type and assert correct params are passed to the constructor.
-    constructor(Extensions memory extensions) {
-        _EAPPS = extensions.eApps;
-        _EORACLE = extensions.eOracle;
-        _EUPGRADE = extensions.eUpgrade;
+    constructor() {
+        DeploymentParams memory params = IExtensionsMapDeployer(msg.sender).parameters();
+        eApps = params.extensions.eApps;
+        eOracle = params.extensions.eOracle;
+        eUpgrade = params.extensions.eUpgrade;
+        wrappedNative = params.wrappedNative;
 
         // validate immutable constants. Assumes deps are correctly initialized
         assert(
@@ -87,7 +92,7 @@ contract ExtensionsMap is IExtensionsMap {
             selector == _EAPPS_UNIV3_POSITIONS_SELECTOR ||
             selector == _EAPPS_UNIV4_POSITIONS_SELECTOR
         ) {
-            extension = _EAPPS;
+            extension = eApps;
             shouldDelegatecall = true;
         } else if (
             selector == _EORACLE_CONVERT_AMOUNT_SELECTOR ||
@@ -95,12 +100,12 @@ contract ExtensionsMap is IExtensionsMap {
             selector == _EORACLE_PRICE_FEED_SELECTOR ||
             selector == _EORACLE_TWAP_SELECTOR
         ) {
-            extension = _EORACLE;
+            extension = eOracle;
         } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {
-            extension = _EUPGRADE;
+            extension = eUpgrade;
             shouldDelegatecall = msg.sender == StorageLib.pool().owner;
         } else if (selector == _EUPGRADE_GET_BEACON_SELECTOR) {
-            extension = _EUPGRADE;
+            extension = eUpgrade;
         } else {
             return (address(0), false);
         }

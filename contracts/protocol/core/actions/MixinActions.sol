@@ -54,13 +54,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             components.baseToken.safeTransferFrom(msg.sender, address(this), amountIn);
         }
 
-        bool isOnlyHolder = components.totalSupply == accounts().userAccounts[recipient].userBalance;
-
-        if (!isOnlyHolder) {
-            // apply markup
-            amountIn -= (amountIn * _getSpread()) / _SPREAD_BASE;
-        }
-
         uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
         require(mintedAmount > amountOutMin, PoolMintOutputAmount());
         poolTokens().totalSupply += mintedAmount;
