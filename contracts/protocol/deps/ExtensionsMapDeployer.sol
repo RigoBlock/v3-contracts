@@ -6,6 +6,7 @@ import {IExtensionsMapDeployer} from "../interfaces/IExtensionsMapDeployer.sol";
 import {DeploymentParams, Extensions} from "../types/DeploymentParams.sol";
 
 contract ExtensionsMapDeployer is IExtensionsMapDeployer {
+    /// @inheritdoc IExtensionsMapDeployer
     uint24 public override nonce;
     bytes4 private _paramsHash;
 

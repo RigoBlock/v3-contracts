@@ -43,11 +43,16 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
 
-    // mapped extensions
+    /// @inheritdoc IExtensionsMap
     address public immutable override eApps;
+
+    /// @inheritdoc IExtensionsMap
     address public immutable override eOracle;
+
+    /// @inheritdoc IExtensionsMap
     address public immutable override eUpgrade;
 
+    /// @inheritdoc IExtensionsMap
     address public immutable override wrappedNative;
 
     /// @notice Assumes extensions have been correctly initialized.
