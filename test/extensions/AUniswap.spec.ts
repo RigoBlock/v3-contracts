@@ -533,7 +533,7 @@ describe("AUniswap", async () => {
         })
 
         it('should send multicall with previous blockhash', async () => {
-            const { grgToken, aUniswap, authority, newPoolAddress } = await setupTests()
+            const { grgToken, newPoolAddress } = await setupTests()
             const pool = await hre.ethers.getContractAt("IRigoblockPoolExtended", newPoolAddress)
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool

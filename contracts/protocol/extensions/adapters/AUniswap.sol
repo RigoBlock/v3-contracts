@@ -29,6 +29,7 @@ import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {IAUniswap} from "./interfaces/IAUniswap.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
+import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {AUniswapV3NPM} from "./AUniswapV3NPM.sol";
 
 /// @title AUniswap - Allows interactions with the Uniswap contracts.
@@ -36,10 +37,12 @@ import {AUniswapV3NPM} from "./AUniswapV3NPM.sol";
 // @notice We implement sweep token methods routed to uniswap router even though could be defined as virtual and not implemented,
 //  because we always wrap/unwrap ETH within the pool and never accidentally send tokens to uniswap router or npm contracts.
 //  This allows to avoid clasing signatures and correctly reach target address for payment methods.
-contract AUniswap is IAUniswap, AUniswapV3NPM {
+contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     using BytesLib for bytes;
     using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
+
+    string private constant _REQUIRED_VERSION = "4.0.0";
 
     // storage must be immutable as needs to be rutime consistent
     // 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks
@@ -59,6 +62,11 @@ contract AUniswap is IAUniswap, AUniswapV3NPM {
         uniswapRouter02 = newUniswapRouter02;
         uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
         weth = payable(INonfungiblePositionManager(uniswapv3Npm).WETH9());
+    }
+
+    /// @inheritdoc IMinimumVersion
+    function requiredVersion() external pure override returns (string memory) {
+        return _REQUIRED_VERSION;
     }
 
     /*

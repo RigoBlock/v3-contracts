@@ -52,7 +52,7 @@ interface IPermit2Forwarder {
 /// @notice This contract is used as a bridge between a Rigoblock smart pool contract and the Uniswap universal router.
 /// @dev This contract ensures that tokens approvals are set and removed correctly, and that recipient and tokens are validated.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTransient {
+contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, ReentrancyGuardTransient {
     using CalldataDecoder for bytes;
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
