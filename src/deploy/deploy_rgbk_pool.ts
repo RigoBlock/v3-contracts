@@ -56,6 +56,7 @@ const deploy: DeployFunction = async function (
   const grgStakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ3Npm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  const wethAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [grgStakingProxy, univ3Npm, univ4Posm],
@@ -64,13 +65,6 @@ const deploy: DeployFunction = async function (
   });
 
   const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
-
-  const weth = await deploy("WETH9", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
@@ -86,7 +80,7 @@ const deploy: DeployFunction = async function (
 
   const params = {
     extensions: extensions,
-    wrappedNative: weth.address
+    wrappedNative: wethAddress
   }
   const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
   const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);

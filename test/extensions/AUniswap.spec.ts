@@ -3,10 +3,7 @@ import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
-import { BigNumber, Contract } from "ethers";
-import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
 import { encodePath, FeeAmount } from "../utils/path";
-import { getAddress } from "ethers/lib/utils";
 
 describe("AUniswap", async () => {
     const [ user1, user2, user3 ] = waffle.provider.getWallets()
@@ -199,8 +196,6 @@ describe("AUniswap", async () => {
             const { grgToken, newPoolAddress, oracle } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
-            //const Weth = await hre.ethers.getContractFactory("WETH9")
-            //const weth = await Weth.deploy()
             const wethAddress = await pool.weth()
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
@@ -315,6 +310,51 @@ describe("AUniswap", async () => {
             // we send both Ether and GRG to the pool
             await user1.sendTransaction({ to: baseTokenPool, value: amount})
             await grgToken.transfer(baseTokenPool, amount)
+            // we deploy a new Weth contract, as original weth is not required to have a price feed
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await pool.createAndInitializePoolIfNecessary(grgToken.address, weth.address, 1, 1)
+            const encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [{
+                    token0: grgToken.address,
+                    token1: weth.address,
+                    fee: 10,
+                    tickLower: 1,
+                    tickUpper: 200,
+                    amount0Desired: 100,
+                    amount1Desired: 100,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: pool.address,
+                    deadline: 1
+                }]
+            )
+            await expect(
+                user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
+            ).to.be.revertedWith("TokenPriceFeedDoesNotExist")
+            // only 1 token gets whitelisted, the other is the base token
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
+            await pool.increaseLiquidity({
+                tokenId: 1,
+                amount0Desired: 100,
+                amount1Desired: 100,
+                amount0Min: 0,
+                amount1Min: 0,
+                deadline: 1
+            })
+        })
+
+        it('should allow adding liquidity to weth pair without creating a price feed for ETH-WETH', async () => {
+            const { grgToken, baseTokenPool, oracle } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(baseTokenPool)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: baseTokenPool, value: amount})
+            await grgToken.transfer(baseTokenPool, amount)
             const wethAddress = await pool.weth()
             await pool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
             const encodedMintData = pool.interface.encodeFunctionData(
@@ -333,12 +373,6 @@ describe("AUniswap", async () => {
                     deadline: 1
                 }]
             )
-            await expect(
-                user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
-            ).to.be.revertedWith("TokenPriceFeedDoesNotExist")
-            // only 1 token gets whitelisted, the other is the base token
-            const poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
-            await oracle.initializeObservations(poolKey)
             await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
             await pool.increaseLiquidity({
                 tokenId: 1,
@@ -1042,7 +1076,7 @@ describe("AUniswap", async () => {
 
     describe("unwrapWETH9", async () => {
         it('should call WETH contract', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
+            const { authority, aUniswap, newPoolAddress, univ3Npm } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
             const amount = parseEther("100")

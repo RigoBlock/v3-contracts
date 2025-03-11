@@ -137,12 +137,19 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  const univ3Npm = await deploy("MockUniswapNpm", {
+  const uniswapRouter2 = await deploy("MockUniswapRouter", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   })
+
+  const uniRouter2Instance = await hre.ethers.getContractAt(
+    "MockUniswapRouter",
+    uniswapRouter2.address
+  );
+
+  const univ3NpmAddress = await uniRouter2Instance.positionManager()
 
   const permit2 = await deploy("MockPermit2", {
     from: deployer,
@@ -160,19 +167,18 @@ const deploy: DeployFunction = async function (
 
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [stakingProxy.address, univ3Npm.address, univ4Posm.address],
+    args: [stakingProxy.address, univ3NpmAddress, univ4Posm.address],
     log: true,
     deterministicDeployment: true,
   });
 
   const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
 
-  const weth = await deploy("WETH9", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
+  const univ3NpmInstance = await hre.ethers.getContractAt(
+    "MockUniswapNpm",
+    univ3NpmAddress
+  );
+  const wethAddress = await univ3NpmInstance.WETH9()
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
@@ -188,7 +194,7 @@ const deploy: DeployFunction = async function (
 
   const params = {
     extensions: extensions,
-    wrappedNative: weth.address
+    wrappedNative: wethAddress
   }
   const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
   const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
@@ -206,6 +212,7 @@ const deploy: DeployFunction = async function (
     "RigoblockPoolProxyFactory",
     proxyFactory.address
   );
+
   const currentImplementation = await proxyFactoryInstance.implementation()
   if (currentImplementation !== poolImplementation.address) {
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
@@ -258,16 +265,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const mockUniswapRouter = await deploy("MockUniswapRouter", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  })
-
   await deploy("AUniswap", {
     from: deployer,
-    args: [mockUniswapRouter.address],
+    args: [uniswapRouter2.address],
     log: true,
     deterministicDeployment: true,
   })
