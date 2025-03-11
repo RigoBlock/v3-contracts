@@ -26,6 +26,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
+import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {Observation} from "../types/Observation.sol";
 
 contract EOracle is IEOracle {
@@ -82,7 +83,7 @@ contract EOracle is IEOracle {
     /// @dev Adding wrapped native token requires a price feed against navite, as otherwise must warm up EApps in order
     /// to have same contract address on all chains.
     function hasPriceFeed(address token) external view returns (bool) {
-        if (token == _ZERO_ADDRESS) {
+        if (token == _ZERO_ADDRESS || token == ISmartPoolImmutable(msg.sender).wrappedNative()) {
             return true;
         } else {
             (PoolKey memory key, IOracle.ObservationState memory state) =

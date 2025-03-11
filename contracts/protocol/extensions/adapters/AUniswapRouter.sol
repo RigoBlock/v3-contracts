@@ -216,13 +216,10 @@ contract AUniswapRouter is IAUniswapRouter, AUniswapDecoder, ReentrancyGuardTran
             // only approve once, permit2 will handle transaction block approval
             if (IERC20(tokensIn[i]).allowance(address(this), permit2) != type(uint256).max) {
                 tokensIn[i].safeApprove(permit2, type(uint256).max);
-                (uint160 permit2Approval,,) = IAllowanceTransfer(permit2).allowance(address(this), tokensIn[i], address(uniV4Posm()));
-
-                if (permit2Approval != type(uint160).max) {
-                    // expiration is set to 0 so that every transaction has an approval valid only for the transaction block
-                    IAllowanceTransfer(permit2).approve(tokensIn[i], address(uniV4Posm()), type(uint160).max, 0);
-                }
             }
+
+            // expiration is set to 0 so that every transaction has an approval valid only for the transaction block
+            IAllowanceTransfer(permit2).approve(tokensIn[i], address(uniV4Posm()), type(uint160).max, 0);
         }
     }
 
