@@ -512,7 +512,7 @@ describe("AUniswap", async () => {
                 'wrapETH',
                 [parseEther("100")]
             )
-            const currentBlock = await ethers.provider.getBlock('latest');
+            let currentBlock = await ethers.provider.getBlock('latest');
             let timestamp = currentBlock.timestamp
             let encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(uint256,bytes[])',
@@ -520,7 +520,9 @@ describe("AUniswap", async () => {
             )
             await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData}))
                 .to.be.revertedWith("AMULTICALL_DEADLINE_PAST_ERROR")
-            timestamp += 1
+            // coverage in ci reverts here, probably adding 1 block before the encoded call is sent
+            currentBlock = await ethers.provider.getBlock('latest');
+            timestamp = currentBlock.timestamp + 1
             encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(uint256,bytes[])',
                 [ timestamp, [encodedWrapData, encodedCreateData] ]
