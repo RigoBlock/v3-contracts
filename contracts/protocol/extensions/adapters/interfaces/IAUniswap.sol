@@ -26,14 +26,6 @@ interface IAUniswap {
     /// @return Address of the uniswap router.
     function uniswapRouter02() external view returns (address);
 
-    /// @notice Returns the address of the Uniswap NPM contract.
-    /// @return Address of the Uniswap NPM contract.
-    function uniswapv3Npm() external view returns (address);
-
-    /// @notice Returns the address of the Weth contract.
-    /// @return Address of the Weth contract.
-    function weth() external view returns (address);
-
     /*
      * UNISWAP V2 METHODS
      */

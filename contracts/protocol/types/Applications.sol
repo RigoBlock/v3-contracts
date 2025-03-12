@@ -7,7 +7,7 @@ enum Applications {
     GRG_STAKING,
     UNIV3_LIQUIDITY,
     UNIV4_LIQUIDITY,
-    // append new applications here, up to a total of 31
+    // append new applications here, up to a total of 255 as a theoretical maximum
     COUNT
 }
 

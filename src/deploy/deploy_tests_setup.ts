@@ -137,7 +137,21 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  const univ3Npm = await deploy("MockUniswapNpm", {
+  const uniswapRouter2 = await deploy("MockUniswapRouter", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  const uniRouter2Instance = await hre.ethers.getContractAt(
+    "MockUniswapRouter",
+    uniswapRouter2.address
+  );
+
+  const univ3NpmAddress = await uniRouter2Instance.positionManager()
+
+  const permit2 = await deploy("MockPermit2", {
     from: deployer,
     args: [],
     log: true,
@@ -146,37 +160,50 @@ const deploy: DeployFunction = async function (
 
   const univ4Posm = await deploy("MockUniswapPosm", {
     from: deployer,
-    args: [],
+    args: [permit2.address],
     log: true,
     deterministicDeployment: true,
   })
 
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [stakingProxy.address, univ3Npm.address, univ4Posm.address],
+    args: [stakingProxy.address, univ3NpmAddress, univ4Posm.address],
     log: true,
     deterministicDeployment: true,
   });
 
   const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
-  const extensionsMap = await deploy("ExtensionsMap", {
-    from: deployer,
-    args: [extensions],
-    log: true,
-    deterministicDeployment: true,
-  });
 
-  const weth = await deploy("WETH9", {
+  const univ3NpmInstance = await hre.ethers.getContractAt(
+    "MockUniswapNpm",
+    univ3NpmAddress
+  );
+  const wethAddress = await univ3NpmInstance.WETH9()
+
+  const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   });
 
+  const extensionsMapDeployerInstance = await hre.ethers.getContractAt(
+    "ExtensionsMapDeployer",
+    extensionsMapDeployer.address
+  );
+
+  const params = {
+    extensions: extensions,
+    wrappedNative: wethAddress
+  }
+  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
+  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
+  await tx.wait();
+
   // implementation address is different on each chain as extensionsMap is different, but proxies will have the same address
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMap.address, weth.address],
+    args: [authority.address, extensionsMapAddress],
     log: true,
     deterministicDeployment: true,
   });
@@ -185,6 +212,7 @@ const deploy: DeployFunction = async function (
     "RigoblockPoolProxyFactory",
     proxyFactory.address
   );
+
   const currentImplementation = await proxyFactoryInstance.implementation()
   if (currentImplementation !== poolImplementation.address) {
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
@@ -237,16 +265,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const mockUniswapRouter = await deploy("MockUniswapRouter", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  })
-
   await deploy("AUniswap", {
     from: deployer,
-    args: [mockUniswapRouter.address],
+    args: [uniswapRouter2.address],
     log: true,
     deterministicDeployment: true,
   })

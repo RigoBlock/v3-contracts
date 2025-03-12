@@ -39,19 +39,25 @@ abstract contract MixinImmutables is MixinConstants {
 
     IExtensionsMap internal immutable _extensionsMap;
 
-    constructor(address _authority, address extensionsMap, address _wrappedNative) {
+    /// @notice The ExtensionsMap interface is required to implement the expected methods as sanity check.
+    constructor(address _authority, address extensionsMap) {
         require(_authority.code.length > 0, InvalidAuthorityInput());
         require(extensionsMap.code.length > 0, InvalidExtensionsMapInput());
         authority = _authority;
-        wrappedNative = _wrappedNative;
 
         _implementation = address(this);
 
         // initialize extensions mapping and assert it implements `getExtensionBySelector` method
         _extensionsMap = IExtensionsMap(extensionsMap);
-        // TODO: the following assertion will alway be true, as long as IExtensionsMap only implements 1 method. This means it protects
-        // against changes, but does not guarantee the input contract implements the interface. Only way would be for the contract
-        // to return the implented selectors, and then verify against the expected selectors.
-        assert(IExtensionsMap.getExtensionBySelector.selector == type(IExtensionsMap).interfaceId);
+        wrappedNative = _extensionsMap.wrappedNative();
+
+        // the following assertion will alway be true, as long as IExtensionsMap implements the expected methods.
+        assert(
+            IExtensionsMap.eApps.selector ^
+            IExtensionsMap.eOracle.selector ^
+            IExtensionsMap.eUpgrade.selector ^
+            IExtensionsMap.wrappedNative.selector ^
+            IExtensionsMap.getExtensionBySelector.selector == type(IExtensionsMap).interfaceId
+        );
     }
 }
