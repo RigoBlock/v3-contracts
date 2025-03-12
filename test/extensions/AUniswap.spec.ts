@@ -22,8 +22,6 @@ describe("AUniswap", async () => {
         const AUniswapInstance = await deployments.get("AUniswap")
         await authority.setAdapter(AUniswapInstance.address, true)
         // "88316456": "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
-        // "c391b77c": "uniswapv3Npm()",
-        // "3fc8cef3": "weth()"
         // "42966c68": "burn(uint256)",
         // "fc6f7865": "collect((uint256,address,uint128,uint128))",
         // "13ead562": "createAndInitializePoolIfNecessary(address,address,uint24,uint160)",
@@ -34,8 +32,6 @@ describe("AUniswap", async () => {
         // "49404b7c": "unwrapWETH9(uint256,address)",
         // "1c58db4f": "wrapETH(uint256)"
         await authority.addMethod("0x88316456", AUniswapInstance.address)
-        await authority.addMethod("0xc391b77c", AUniswapInstance.address)
-        await authority.addMethod("0x3fc8cef3", AUniswapInstance.address)
         await authority.addMethod("0x42966c68", AUniswapInstance.address)
         await authority.addMethod("0xfc6f7865", AUniswapInstance.address)
         await authority.addMethod("0x13ead562", AUniswapInstance.address)
@@ -193,10 +189,10 @@ describe("AUniswap", async () => {
         })
 
         it('should allow minting and adding 1-sided liquidity', async () => {
-            const { grgToken, newPoolAddress, oracle } = await setupTests()
+            const { grgToken, newPoolAddress, oracle, univ3Npm } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
-            const wethAddress = await pool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
@@ -267,7 +263,7 @@ describe("AUniswap", async () => {
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await grgToken.transfer(newPoolAddress, amount)
             await pool.createAndInitializePoolIfNecessary(grgToken.address, grgToken.address, 1, 1)
-            const wethAddress = await pool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             // hardhat does not understand that this mint method has different selector than rigoblock pool mint, therefore we encode it.
             const encodedMintData = pool.interface.encodeFunctionData(
                 'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
@@ -348,14 +344,14 @@ describe("AUniswap", async () => {
         })
 
         it('should allow adding liquidity to weth pair without creating a price feed for ETH-WETH', async () => {
-            const { grgToken, baseTokenPool, oracle } = await setupTests()
+            const { grgToken, baseTokenPool, univ3Npm } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(baseTokenPool)
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
             await user1.sendTransaction({ to: baseTokenPool, value: amount})
             await grgToken.transfer(baseTokenPool, amount)
-            const wethAddress = await pool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             await pool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
             const encodedMintData = pool.interface.encodeFunctionData(
                 'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
@@ -385,7 +381,7 @@ describe("AUniswap", async () => {
         })
 
         it('should not allow adding liquidity to non-owned position', async () => {
-            const { grgToken, newPoolAddress, baseTokenPool, oracle } = await setupTests()
+            const { grgToken, newPoolAddress, baseTokenPool, oracle, univ3Npm } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const etherPool = Pool.attach(newPoolAddress)
             const tokenPool = Pool.attach(baseTokenPool)
@@ -393,7 +389,7 @@ describe("AUniswap", async () => {
             // we send both Ether and GRG to the token-based pool
             await user1.sendTransaction({ to: baseTokenPool, value: amount})
             await grgToken.transfer(baseTokenPool, amount)
-            const wethAddress = await etherPool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             await etherPool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
             let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)

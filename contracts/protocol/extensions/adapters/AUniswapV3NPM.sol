@@ -42,12 +42,10 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     error UniV3PositionsLimitExceeded();
     error PositionOwner();
 
-    // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
-    /// @inheritdoc IAUniswapV3NPM
-    address public immutable override uniswapv3Npm;
+    IWETH9 internal immutable _weth;
 
-    /// @inheritdoc IAUniswapV3NPM
-    address public immutable override weth;
+    // 0xC36442b4a4522E871399CD717aBDD847Ab11FE88 on public networks
+    INonfungiblePositionManager private immutable _uniV3Npm;
 
     enum OperationType {
         Mint,
@@ -56,8 +54,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
     }
 
     constructor(address uniswapRouter02) {
-        uniswapv3Npm = payable(ISwapRouter02(uniswapRouter02).positionManager());
-        weth = payable(INonfungiblePositionManager(uniswapv3Npm).WETH9());
+        _uniV3Npm = INonfungiblePositionManager(payable(ISwapRouter02(uniswapRouter02).positionManager()));
+        _weth = IWETH9(payable(_uniV3Npm.WETH9()));
     }
 
     /// @inheritdoc IAUniswapV3NPM
@@ -76,11 +74,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         _activateToken(params.token1);
 
         // we set the allowance to the uniswap position manager
-        if (params.amount0Desired > 0) params.token0.safeApprove(uniswapv3Npm, type(uint256).max);
-        if (params.amount1Desired > 0) params.token1.safeApprove(uniswapv3Npm, type(uint256).max);
+        if (params.amount0Desired > 0) params.token0.safeApprove(address(_uniV3Npm), type(uint256).max);
+        if (params.amount1Desired > 0) params.token1.safeApprove(address(_uniV3Npm), type(uint256).max);
 
         // only then do we mint the liquidity token
-        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).mint(
+        (tokenId, liquidity, amount0, amount1) = _uniV3Npm.mint(
             INonfungiblePositionManager.MintParams({
                 token0: params.token0,
                 token1: params.token1,
@@ -97,8 +95,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        if (params.amount0Desired > 0) params.token0.safeApprove(uniswapv3Npm, uint256(1));
-        if (params.amount1Desired > 0) params.token1.safeApprove(uniswapv3Npm, uint256(1));
+        if (params.amount0Desired > 0) params.token0.safeApprove(address(_uniV3Npm), uint256(1));
+        if (params.amount1Desired > 0) params.token1.safeApprove(address(_uniV3Npm), uint256(1));
 
         _processTokenId(tokenId, OperationType.Mint);
     }
@@ -113,8 +111,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 amount1
         )
     {
-        assert(INonfungiblePositionManager(uniswapv3Npm).ownerOf(params.tokenId) == address(this));
-        (, , address token0, address token1, , , , , , , , ) = INonfungiblePositionManager(uniswapv3Npm).positions(
+        assert(_uniV3Npm.ownerOf(params.tokenId) == address(this));
+        (, , address token0, address token1, , , , , , , , ) = _uniV3Npm.positions(
             params.tokenId
         );
 
@@ -123,11 +121,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         _activateToken(token1);
 
         // we first set the allowance to the uniswap position manager
-        if (params.amount0Desired > 0) token0.safeApprove(uniswapv3Npm, type(uint256).max);
-        if (params.amount1Desired > 0) token1.safeApprove(uniswapv3Npm, type(uint256).max);
+        if (params.amount0Desired > 0) token0.safeApprove(address(_uniV3Npm), type(uint256).max);
+        if (params.amount1Desired > 0) token1.safeApprove(address(_uniV3Npm), type(uint256).max);
 
         // finally, we add to the liquidity token
-        (liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).increaseLiquidity(
+        (liquidity, amount0, amount1) = _uniV3Npm.increaseLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
                 tokenId: params.tokenId,
                 amount0Desired: params.amount0Desired,
@@ -139,8 +137,8 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        if (params.amount0Desired > 0) token0.safeApprove(uniswapv3Npm, uint256(1));
-        if (params.amount1Desired > 0) token1.safeApprove(uniswapv3Npm, uint256(1));
+        if (params.amount0Desired > 0) token0.safeApprove(address(_uniV3Npm), uint256(1));
+        if (params.amount1Desired > 0) token1.safeApprove(address(_uniV3Npm), uint256(1));
 
         _processTokenId(params.tokenId, OperationType.Increase);
     }
@@ -151,7 +149,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         override
         returns (uint256 amount0, uint256 amount1)
     {
-        (amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).decreaseLiquidity(
+        (amount0, amount1) = _uniV3Npm.decreaseLiquidity(
             INonfungiblePositionManager.DecreaseLiquidityParams({
                 tokenId: params.tokenId,
                 liquidity: params.liquidity,
@@ -168,7 +166,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         override
         returns (uint256 amount0, uint256 amount1)
     {
-        (amount0, amount1) = INonfungiblePositionManager(uniswapv3Npm).collect(
+        (amount0, amount1) = _uniV3Npm.collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: params.tokenId,
                 recipient: address(this), // this pool is always the recipient
@@ -180,7 +178,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
 
     /// @inheritdoc IAUniswapV3NPM
     function burn(uint256 tokenId) external override {
-        INonfungiblePositionManager(uniswapv3Npm).burn(tokenId);
+        _uniV3Npm.burn(tokenId);
         _processTokenId(tokenId, OperationType.Burn);
     }
 
@@ -191,7 +189,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
         uint24 fee,
         uint160 sqrtPriceX96
     ) external override returns (address pool) {
-        pool = INonfungiblePositionManager(uniswapv3Npm).createAndInitializePoolIfNecessary(
+        pool = _uniV3Npm.createAndInitializePoolIfNecessary(
             token0,
             token1,
             fee,
@@ -216,11 +214,11 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
 
             // sync up to 32 pre-existing positions
             if (storedLength == 0) {
-                uint256 numPositions = IERC721(uniswapv3Npm).balanceOf(address(this));
+                uint256 numPositions = IERC721(address(_uniV3Npm)).balanceOf(address(this));
                 numPositions = numPositions < 32 ? numPositions : 32;
 
                 for (uint256 i = 0; i < numPositions; i++) {
-                    uint256 existingTokenId = IERC721(uniswapv3Npm).tokenOfOwnerByIndex(address(this), i);
+                    uint256 existingTokenId = IERC721(address(_uniV3Npm)).tokenOfOwnerByIndex(address(this), i);
 
                     // store positions and exit the loop if we are in sync
                     if (existingTokenId != tokenId) {

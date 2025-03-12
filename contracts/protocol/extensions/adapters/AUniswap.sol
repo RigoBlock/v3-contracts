@@ -228,13 +228,13 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external override {
         _activateToken(ADDRESS_ZERO);
-        IWETH9(weth).withdraw(amountMinimum);
+        _weth.withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum, address /*recipient*/) external override {
         _activateToken(ADDRESS_ZERO);
-        IWETH9(weth).withdraw(amountMinimum);
+        _weth.withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
@@ -255,8 +255,8 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external override {
         if (value > uint256(0)) {
-            _activateToken(weth);
-            IWETH9(weth).deposit{value: value}();
+            _activateToken(address(_weth));
+            _weth.deposit{value: value}();
         }
     }
 
