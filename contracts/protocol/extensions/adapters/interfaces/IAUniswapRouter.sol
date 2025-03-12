@@ -42,12 +42,4 @@ interface IAUniswapRouter {
     /// @param unlockData Encoded calldata containing actions to be executed.
     /// @param deadline Deadline of the transaction.
     function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external;
-
-    /// @notice The Uniswap V4 liquidity position manager contract.
-    /// @return The address of the UniswapV4 Posm.
-    function uniV4Posm() external view returns (IPositionManager);
-
-    /// @notice The address of the Uniswap universal router contract.
-    /// @return uniswapRouter The address of the Uniswap universal router.
-    function uniswapRouter() external view returns (address uniswapRouter);
 }
