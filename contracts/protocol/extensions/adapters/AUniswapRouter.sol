@@ -85,12 +85,12 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     string private constant _REQUIRED_VERSION = "4.0.0";
 
     address private immutable _adapter;
-    address private immutable _uniswapRouter;
-    IPositionManager private immutable _positionManager;
+    IUniswapRouter private immutable _uniswapRouter;
+    IAllowanceTransfer private immutable _permit2;
 
-    constructor(address _universalRouter, address _v4Posm, address weth) AUniswapDecoder(weth) {
-        _uniswapRouter = _universalRouter;
-        _positionManager = IPositionManager(_v4Posm);
+    constructor(address universalRouter, address v4Posm, address weth) AUniswapDecoder(weth, v4Posm) {
+        _uniswapRouter = IUniswapRouter(universalRouter);
+        _permit2 = IPermit2Forwarder(v4Posm).permit2();
         _adapter = address(this);
     }
 
@@ -134,10 +134,10 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
 
         _processRecipients(params.recipients);
         _assertTokensOutHavePriceFeed(params.tokensOut);
-        _safeApproveTokensIn(params.tokensIn);
+        _safeApproveTokensIn(params.tokensIn, address(_uniswapRouter));
 
         // forward the inputs to the Uniswap universal router
-        try IUniswapRouter(uniswapRouter()).execute{value: params.value}(commands, inputs) {
+        try _uniswapRouter.execute{value: params.value}(commands, inputs) {
             return;
         } catch Error(string memory reason) {
             revert(reason);
@@ -170,9 +170,9 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         _processRecipients(newParams.recipients);
         _processTokenIds(positions);
         _assertTokensOutHavePriceFeed(newParams.tokensOut);
-        _safeApproveTokensIn(newParams.tokensIn);
+        _safeApproveTokensIn(newParams.tokensIn, address(_uniV4Posm));
 
-        try uniV4Posm().modifyLiquidities{value: newParams.value}(unlockData, deadline) {
+        try _uniV4Posm.modifyLiquidities{value: newParams.value}(unlockData, deadline) {
             return;
         } catch Error(string memory reason) {
             revert(reason);
@@ -181,16 +181,6 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                 revert InsufficientNativeBalance();
             }
         }
-    }
-
-    /// @inheritdoc IAUniswapRouter
-    function uniV4Posm() public view override(IAUniswapRouter, AUniswapDecoder) returns (IPositionManager) {
-        return _positionManager;
-    }
-
-    /// @inheritdoc IAUniswapRouter
-    function uniswapRouter() public view override returns (address universalRouter) {
-        return _uniswapRouter;
     }
 
     /// @notice An implementation before v4 will be rejected here
@@ -204,22 +194,20 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         }
     }
 
-    function _safeApproveTokensIn(address[] memory tokensIn) private {
+    function _safeApproveTokensIn(address[] memory tokensIn, address target) private {
         for (uint256 i = 0; i < tokensIn.length; i++) {
             // cannot approve base currency, early return
             if (tokensIn[i].isAddressZero()) {
                 continue;
             }
 
-            address permit2 = address(IPermit2Forwarder(address(uniV4Posm())).permit2());
-
             // only approve once, permit2 will handle transaction block approval
-            if (IERC20(tokensIn[i]).allowance(address(this), permit2) != type(uint256).max) {
-                tokensIn[i].safeApprove(permit2, type(uint256).max);
+            if (IERC20(tokensIn[i]).allowance(address(this), address(_permit2)) != type(uint256).max) {
+                tokensIn[i].safeApprove(address(_permit2), type(uint256).max);
             }
 
             // expiration is set to 0 so that every transaction has an approval valid only for the transaction block
-            IAllowanceTransfer(permit2).approve(tokensIn[i], address(uniV4Posm()), type(uint160).max, 0);
+            _permit2.approve(tokensIn[i], target, type(uint160).max, 0);
         }
     }
 

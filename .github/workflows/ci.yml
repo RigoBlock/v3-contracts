@@ -48,11 +48,6 @@ jobs:
       - run: yarn build
       - run: yarn test
       - run: yarn coverage
-      - name: Coveralls
-        if: github.actor != 'dependabot[bot]'
-        uses: coverallsapp/github-action@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload coverage to Codecov
         if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v5

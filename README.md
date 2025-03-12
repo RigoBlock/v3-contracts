@@ -5,7 +5,6 @@ Smart contracts of RigoBlock v3
 [![npm version](https://badge.fury.io/js/@rgbk%2Fv3-contracts.svg)](https://badge.fury.io/js/@rgbk%2Fv3-contracts)
 [![Build Status](https://github.com/rigoblock/v3-contracts/workflows/v3-contracts/badge.svg?branch=development)](https://github.com/rigoblock/v3-contracts/actions)
 [![Codecov Status](https://codecov.io/gh/RigoBlock/v3-contracts/graph/badge.svg?token=6W6HWC1DZP)](https://codecov.io/gh/RigoBlock/v3-contracts)
-[![Coverage Status](https://coveralls.io/repos/github/RigoBlock/v3-contracts/badge.svg?branch=development)](https://coveralls.io/github/RigoBlock/v3-contracts)
 
 
 Usage

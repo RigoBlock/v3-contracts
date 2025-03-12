@@ -697,7 +697,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should set approval with settle action', async () => {
-      const { pool, grgToken, permit2, univ4Posm } = await setupTests()
+      const { pool, grgToken, permit2, uniRouterAddress } = await setupTests()
       const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency0 = grgToken.address
       let v4Planner: V4Planner = new V4Planner()
@@ -727,7 +727,7 @@ describe("AUniswapRouter", async () => {
       const block = await hre.ethers.provider.getBlock(receipt.blockNumber)
       // rigoblock sets max approval to permit2, then sets permit2 approval with expity = 0, so approval is valid only for duration of transaction
       expect(await grgToken.allowance(pool.address, permit2.address)).to.be.eq(ethers.constants.MaxUint256)
-      const permit2Allowace = await permit2.allowance(pool.address, grgToken.address, univ4Posm.address)
+      const permit2Allowace = await permit2.allowance(pool.address, grgToken.address, uniRouterAddress)
       // Define uint160 max: 2^160 - 1
       const maxUint160 = hre.ethers.BigNumber.from("1461501637330902918203684832716283019655932542975");
       expect(permit2Allowace.amount).to.be.eq(maxUint160)

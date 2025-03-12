@@ -44,11 +44,12 @@ abstract contract AUniswapDecoder {
     address internal constant MINT_AND_INCREASE_FLAG = address(1);
     address private immutable _wrappedNative;
 
-    constructor(address wrappedNative) {
-        _wrappedNative = wrappedNative;
-    }
+    IPositionManager internal immutable _uniV4Posm;
 
-    function uniV4Posm() public view virtual returns (IPositionManager);
+    constructor(address wrappedNative, address v4Posm) {
+        _wrappedNative = wrappedNative;
+        _uniV4Posm = IPositionManager(v4Posm);
+    }
 
     struct Parameters {
         uint256 value;
@@ -282,7 +283,7 @@ abstract contract AUniswapDecoder {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
                 (uint256 tokenId,, uint128 amount0Max,,) = actionParams.decodeModifyLiquidityParams();
-                (PoolKey memory poolKey,) = uniV4Posm().getPoolAndPositionInfo(tokenId);
+                (PoolKey memory poolKey,) = _uniV4Posm.getPoolAndPositionInfo(tokenId);
                 params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
                 // address(1) is used as a flag for when trying to increase liquidity on a non-minted pool
                 positions = _addUniquePosition(
@@ -312,7 +313,7 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, owner);
                 params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
                 // can only mint 1 liquidity position per modifyLiquidities transaction
-                positions = _addUniquePosition(positions, Position(address(poolKey.hooks), uniV4Posm().nextTokenId(), Actions.MINT_POSITION));
+                positions = _addUniquePosition(positions, Position(address(poolKey.hooks), _uniV4Posm.nextTokenId(), Actions.MINT_POSITION));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
                 revert UnsupportedAction(action);
