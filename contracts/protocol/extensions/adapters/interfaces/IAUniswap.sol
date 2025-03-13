@@ -22,10 +22,6 @@ pragma solidity >=0.8.0 <0.9.0;
 import "../../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 
 interface IAUniswap {
-    /// @notice Returns the address of the Uniswap swap router contract.
-    /// @return Address of the uniswap router.
-    function uniswapRouter02() external view returns (address);
-
     /*
      * UNISWAP V2 METHODS
      */

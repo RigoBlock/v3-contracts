@@ -28,7 +28,6 @@ import {IAUniswapV3NPM} from "./IAUniswapV3NPM.sol";
 import {IEApps} from "./IEApps.sol";
 import {IEOracle} from "./IEOracle.sol";
 import {IEUpgrade} from "./IEUpgrade.sol";
-import {IMinimumVersion} from "./IMinimumVersion.sol";
 
 /// @title Rigoblock Extensions Interface - Groups together the extensions' methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -42,6 +41,5 @@ interface IRigoblockExtensions is
     IAUniswapV3NPM,
     IEApps,
     IEOracle,
-    IEUpgrade,
-    IMinimumVersion
+    IEUpgrade
 {}

@@ -22,8 +22,6 @@ describe("AUniswap", async () => {
         const AUniswapInstance = await deployments.get("AUniswap")
         await authority.setAdapter(AUniswapInstance.address, true)
         // "88316456": "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
-        // "c391b77c": "uniswapv3Npm()",
-        // "3fc8cef3": "weth()"
         // "42966c68": "burn(uint256)",
         // "fc6f7865": "collect((uint256,address,uint128,uint128))",
         // "13ead562": "createAndInitializePoolIfNecessary(address,address,uint24,uint160)",
@@ -34,8 +32,6 @@ describe("AUniswap", async () => {
         // "49404b7c": "unwrapWETH9(uint256,address)",
         // "1c58db4f": "wrapETH(uint256)"
         await authority.addMethod("0x88316456", AUniswapInstance.address)
-        await authority.addMethod("0xc391b77c", AUniswapInstance.address)
-        await authority.addMethod("0x3fc8cef3", AUniswapInstance.address)
         await authority.addMethod("0x42966c68", AUniswapInstance.address)
         await authority.addMethod("0xfc6f7865", AUniswapInstance.address)
         await authority.addMethod("0x13ead562", AUniswapInstance.address)
@@ -193,10 +189,10 @@ describe("AUniswap", async () => {
         })
 
         it('should allow minting and adding 1-sided liquidity', async () => {
-            const { grgToken, newPoolAddress, oracle } = await setupTests()
+            const { grgToken, newPoolAddress, oracle, univ3Npm } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(newPoolAddress)
-            const wethAddress = await pool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
@@ -267,7 +263,7 @@ describe("AUniswap", async () => {
             await user1.sendTransaction({ to: newPoolAddress, value: amount})
             await grgToken.transfer(newPoolAddress, amount)
             await pool.createAndInitializePoolIfNecessary(grgToken.address, grgToken.address, 1, 1)
-            const wethAddress = await pool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             // hardhat does not understand that this mint method has different selector than rigoblock pool mint, therefore we encode it.
             const encodedMintData = pool.interface.encodeFunctionData(
                 'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
@@ -348,14 +344,14 @@ describe("AUniswap", async () => {
         })
 
         it('should allow adding liquidity to weth pair without creating a price feed for ETH-WETH', async () => {
-            const { grgToken, baseTokenPool, oracle } = await setupTests()
+            const { grgToken, baseTokenPool, univ3Npm } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const pool = Pool.attach(baseTokenPool)
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
             await user1.sendTransaction({ to: baseTokenPool, value: amount})
             await grgToken.transfer(baseTokenPool, amount)
-            const wethAddress = await pool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             await pool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
             const encodedMintData = pool.interface.encodeFunctionData(
                 'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
@@ -385,7 +381,7 @@ describe("AUniswap", async () => {
         })
 
         it('should not allow adding liquidity to non-owned position', async () => {
-            const { grgToken, newPoolAddress, baseTokenPool, oracle } = await setupTests()
+            const { grgToken, newPoolAddress, baseTokenPool, oracle, univ3Npm } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
             const etherPool = Pool.attach(newPoolAddress)
             const tokenPool = Pool.attach(baseTokenPool)
@@ -393,7 +389,7 @@ describe("AUniswap", async () => {
             // we send both Ether and GRG to the token-based pool
             await user1.sendTransaction({ to: baseTokenPool, value: amount})
             await grgToken.transfer(baseTokenPool, amount)
-            const wethAddress = await etherPool.weth()
+            const wethAddress = await univ3Npm.WETH9()
             await etherPool.createAndInitializePoolIfNecessary(grgToken.address, wethAddress, 1, 1)
             let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)
@@ -427,6 +423,79 @@ describe("AUniswap", async () => {
                     deadline: 1
               })
             ).to.be.revertedWith('reverted with panic code 0x1 (Assertion error)')
+        })
+    })
+
+    describe("burn", async () => {
+        it('should call uniswap npm', async () => {
+            const { authority, aUniswap, newPoolAddress } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(newPoolAddress)
+            await expect(authority.addMethod("0x42966c68", aUniswap))
+                .to.be.revertedWith("SELECTOR_EXISTS_ERROR")
+            // the 'Not approved' error is thrown by the uniswap npm contract
+            await expect(pool.burn(100)).to.be.revertedWith('Not approved')
+        })
+
+        it('should burn a token at a specific position', async () => {
+            const { grgToken, baseTokenPool, oracle, univ3Npm } = await setupTests()
+            const Pool = await hre.ethers.getContractFactory("AUniswap")
+            const pool = Pool.attach(baseTokenPool)
+            const amount = parseEther("100")
+            // we send both Ether and GRG to the pool
+            await user1.sendTransaction({ to: baseTokenPool, value: amount})
+            await grgToken.transfer(baseTokenPool, amount)
+            // we deploy a new Weth contract, as original weth is not required to have a price feed
+            const Weth = await hre.ethers.getContractFactory("WETH9")
+            const weth = await Weth.deploy()
+            await pool.createAndInitializePoolIfNecessary(grgToken.address, weth.address, 1, 1)
+            let mintParams = {
+                token0: grgToken.address,
+                token1: weth.address,
+                fee: 10,
+                tickLower: 1,
+                tickUpper: 200,
+                amount0Desired: 100,
+                amount1Desired: 100,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: pool.address,
+                deadline: 1
+            }
+            let encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [mintParams]
+            )
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            const storagePool = await hre.ethers.getContractAt("IRigoblockPoolExtended", baseTokenPool)
+            expect((await storagePool.getUniV3TokenIds()).length).to.be.deep.equal(0)
+            await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
+            // mint a new position
+            mintParams.tickUpper = 201
+            encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [mintParams]
+            )
+            expect((await storagePool.getUniV3TokenIds()).length).to.be.deep.equal(1)
+            await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
+            mintParams.tickUpper = 202
+            encodedMintData = pool.interface.encodeFunctionData(
+                'mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))',
+                [mintParams]
+            )
+            expect((await storagePool.getUniV3TokenIds()).length).to.be.deep.equal(2)
+            await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedMintData})
+            expect(await univ3Npm.balanceOf(baseTokenPool)).to.be.deep.equal(3)
+            expect((await storagePool.getUniV3TokenIds()).length).to.be.deep.equal(3)
+            // burn the second position
+            const encodedBurnData = pool.interface.encodeFunctionData(
+                'burn(uint256)',
+                [2]
+            )
+            await user1.sendTransaction({ to: baseTokenPool, value: 0, data: encodedBurnData})
+            expect(await univ3Npm.balanceOf(baseTokenPool)).to.be.deep.equal(2)
+            expect((await storagePool.getUniV3TokenIds()).length).to.be.deep.equal(2)
         })
     })
 
@@ -502,7 +571,7 @@ describe("AUniswap", async () => {
         })
 
         it('should send multicall with deadline', async () => {
-            const { grgToken, aUniswap, authority, newPoolAddress } = await setupTests()
+            const { grgToken, newPoolAddress } = await setupTests()
             const pool = await hre.ethers.getContractAt("IRigoblockPoolExtended", newPoolAddress)
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
@@ -516,7 +585,7 @@ describe("AUniswap", async () => {
                 'wrapETH',
                 [parseEther("100")]
             )
-            const currentBlock = await ethers.provider.getBlock('latest');
+            let currentBlock = await ethers.provider.getBlock('latest');
             let timestamp = currentBlock.timestamp
             let encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(uint256,bytes[])',
@@ -524,7 +593,9 @@ describe("AUniswap", async () => {
             )
             await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData}))
                 .to.be.revertedWith("AMULTICALL_DEADLINE_PAST_ERROR")
-            timestamp += 1
+            // coverage in ci reverts here, probably adding 1 block before the encoded call is sent
+            currentBlock = await ethers.provider.getBlock('latest');
+            timestamp = currentBlock.timestamp + 2
             encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(uint256,bytes[])',
                 [ timestamp, [encodedWrapData, encodedCreateData] ]
@@ -562,17 +633,6 @@ describe("AUniswap", async () => {
             )
             await expect(user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData}))
                 .to.be.revertedWith("AMULTICALL_BLOCKHASH_ERROR")
-        })
-    })
-
-    describe("burn", async () => {
-        it('should call uniswap npm', async () => {
-            const { grgToken, authority, aUniswap, newPoolAddress } = await setupTests()
-            const Pool = await hre.ethers.getContractFactory("AUniswap")
-            const pool = Pool.attach(newPoolAddress)
-            await expect(authority.addMethod("0x42966c68", aUniswap))
-                .to.be.revertedWith("SELECTOR_EXISTS_ERROR")
-            await pool.burn(100)
         })
     })
 

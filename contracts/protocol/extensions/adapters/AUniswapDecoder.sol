@@ -38,17 +38,17 @@ abstract contract AUniswapDecoder {
 
     error InvalidCommandType(uint256 commandType);
     error UnsupportedAction(uint256 action);
-    error OnlyOneMintOrBurnPerAction();
 
     address internal constant ZERO_ADDRESS = address(0);
-    address internal constant MINT_AND_INCREASE_FLAG = address(1);
+    address internal constant NON_EXISTENT_POSITION_FLAG = address(1);
     address private immutable _wrappedNative;
 
-    constructor(address wrappedNative) {
-        _wrappedNative = wrappedNative;
-    }
+    IPositionManager internal immutable _uniV4Posm;
 
-    function uniV4Posm() public view virtual returns (IPositionManager);
+    constructor(address wrappedNative, address v4Posm) {
+        _wrappedNative = wrappedNative;
+        _uniV4Posm = IPositionManager(v4Posm);
+    }
 
     struct Parameters {
         uint256 value;
@@ -282,17 +282,18 @@ abstract contract AUniswapDecoder {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
                 (uint256 tokenId,, uint128 amount0Max,,) = actionParams.decodeModifyLiquidityParams();
-                (PoolKey memory poolKey,) = uniV4Posm().getPoolAndPositionInfo(tokenId);
-                params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
-                // address(1) is used as a flag for when trying to increase liquidity on a non-minted pool
-                positions = _addUniquePosition(
-                    positions,
-                    Position(
-                        Currency.unwrap(poolKey.currency1) != ZERO_ADDRESS ? address(poolKey.hooks) : MINT_AND_INCREASE_FLAG,
-                        tokenId,
-                        Actions.INCREASE_LIQUIDITY
-                    )
-                );
+                (PoolKey memory poolKey,) = _uniV4Posm.getPoolAndPositionInfo(tokenId);
+                address hook = address(poolKey.hooks);
+
+                if (Currency.unwrap(poolKey.currency1) == ZERO_ADDRESS) {
+                    hook = NON_EXISTENT_POSITION_FLAG;
+                } else {
+                    if (Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS) {
+                        params.value += amount0Max;
+                    }
+                }
+
+                positions = _addUniquePosition(positions, Position(hook, tokenId, Actions.INCREASE_LIQUIDITY));
                 return (params, positions);
             } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
                 revert UnsupportedAction(action);
@@ -311,8 +312,7 @@ abstract contract AUniswapDecoder {
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
                 params.recipients = _addUnique(params.recipients, owner);
                 params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
-                // can only mint 1 liquidity position per modifyLiquidities transaction
-                positions = _addUniquePosition(positions, Position(address(poolKey.hooks), uniV4Posm().nextTokenId(), Actions.MINT_POSITION));
+                positions = _addUniquePosition(positions, Position(address(poolKey.hooks), 0, Actions.MINT_POSITION));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
                 revert UnsupportedAction(action);
@@ -395,10 +395,9 @@ abstract contract AUniswapDecoder {
     /// @dev Multiple actions can be executed on the same tokenId, so we add a new position if same tokenId but different action
     function _addUniquePosition(Position[] memory array, Position memory pos) private pure returns (Position[] memory) {
         for (uint256 i = 0; i < array.length; i++) {
-            require(
-                array[i].tokenId != pos.tokenId || array[i].action != pos.action,
-                OnlyOneMintOrBurnPerAction()
-            ); 
+            if (array[i].hook == pos.hook && array[i].tokenId == pos.tokenId && array[i].action == pos.action) {
+                return array;
+            }
         }
         Position[] memory newArray = new Position[](array.length + 1);
         for (uint256 i = 0; i < array.length; i++) {
