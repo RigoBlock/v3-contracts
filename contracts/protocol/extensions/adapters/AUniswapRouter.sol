@@ -24,6 +24,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
+import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
@@ -80,7 +81,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     error InsufficientNativeBalance();
 
     /// @notice Thrown when the calldata contains both mint and increase for the same tokenId
-    error MintAndIncreaseInSameTransaction();
+    error PositionDoesNotExist();
 
     string private constant _REQUIRED_VERSION = "4.0.0";
 
@@ -168,11 +169,19 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         }
 
         _processRecipients(newParams.recipients);
-        _processTokenIds(positions);
         _assertTokensOutHavePriceFeed(newParams.tokensOut);
         _safeApproveTokensIn(newParams.tokensIn, address(_uniV4Posm));
 
+        // read nextTokenId from Posm only if one of the decoded actions is mint position
+        uint256 nextTokenIdBefore;
+        bool containsMint = _containsMintAction(positions);
+
+        if (containsMint) {
+            nextTokenIdBefore = _uniV4Posm.nextTokenId();
+        }
+
         try _uniV4Posm.modifyLiquidities{value: newParams.value}(unlockData, deadline) {
+            _processTokenIds(positions, nextTokenIdBefore, containsMint ? _uniV4Posm.nextTokenId() : nextTokenIdBefore);
             return;
         } catch Error(string memory reason) {
             revert(reason);
@@ -211,16 +220,38 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         }
     }
 
-    function _processTokenIds(Position[] memory positions) private {
-        // do not load values unless we are writing to storage
-        if (positions.length > 0) {
-            // update tokenIds in proxy persistent storage.
-            TokenIdsSlot storage idsSlot = StorageLib.uniV4TokenIdsSlot();
+    /// @dev Executed after the uniswap Posm call, so we can compare before and after state.
+    function _processTokenIds(Position[] memory positions, uint256 nextTokenIdBefore, uint256 nextTokenIdAfter) private {
+        TokenIdsSlot storage idsSlot = StorageLib.uniV4TokenIdsSlot();
 
+        // store new tokenIds if we have minted new positions
+        if (nextTokenIdAfter > nextTokenIdBefore) {
+            uint256 storedLength = idsSlot.tokenIds.length;
+
+            // on mint, decoder returns null tokenId, as we cannot reliably retrieve it from the Posm contract
+            for (uint256 i = nextTokenIdBefore; i < nextTokenIdAfter; i++) {
+                // update storage if it has not been burnt in the same transaction
+                if (PositionInfo.unwrap(_uniV4Posm.positionInfo(i)) != PositionInfo.unwrap(PositionInfoLibrary.EMPTY_POSITION_INFO)) {
+                    // increase counter. Position 0 is reserved flag for removed position
+                    if (storedLength++ == 0) {
+                        // activate uniV4 liquidity application
+                        StorageLib.activeApplications().storeApplication(uint256(Applications.UNIV4_LIQUIDITY));
+                    }
+
+                    idsSlot.positions[i] = storedLength;
+                    idsSlot.tokenIds.push(i);
+                }
+            }
+
+            // store the position. Mint reverts in uniswap if tokenId exists, so we can be sure it is unique
+            require(storedLength <= 256, UniV4PositionsLimitExceeded());
+        }
+
+        if (positions.length > 0) {
             for (uint256 i = 0; i < positions.length; i++) {
                 if (positions[i].action == Actions.MINT_POSITION) {
                     // Assert hook does not have access to deltas. Hook address is returned for mint ops only.
-                    // If moving the following block to protect all actions, make sure hook address is appended.
+                    // Notice: if moving the following block to protect all actions, make sure hook address is appended.
                     if (positions[i].hook != ZERO_ADDRESS) {
                         Hooks.Permissions memory permissions = BaseHook(positions[i].hook).getHookPermissions();
 
@@ -230,49 +261,38 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                             LiquidityMintHookError(positions[i].hook)
                         );
                     }
-
-                    // mint reverts if tokenId exists, so we can be sure it is unique
-                    uint256 storedLength = idsSlot.tokenIds.length;
-                    require(storedLength < 255, UniV4PositionsLimitExceeded());
-
-                    // position 0 is flag for removed
-                    idsSlot.positions[positions[i].tokenId] = ++storedLength;
-                    idsSlot.tokenIds.push(positions[i].tokenId);
                     continue;
                 } else {
-                    // position must be active in pool storage. This means pool cannot modify liquidity created on its behalf.
-                    // This is helpful for position retrieval for nav calculations, otherwise we'd have to push it to storage.
-                    // If we remove this assertion, we must make sure that the non-nil hook address is appended, as it would
-                    // allow action on a potentially malicious hook minted to the pool, and we must make sure pool is position owner.
+                    // position must be active in pool storage for all the following actions.
                     require(idsSlot.positions[positions[i].tokenId] != 0, PositionOwner());
 
                     if (positions[i].action == Actions.INCREASE_LIQUIDITY) {
-                        // must use mint to add desired liquidity, cannot increase in same call
-                        require(positions[i].hook != MINT_AND_INCREASE_FLAG, MintAndIncreaseInSameTransaction());
+                        // as we must append value for native pairs before forwarding the call, the position must exist in the Posm contract
+                        require(positions[i].hook != NON_EXISTENT_POSITION_FLAG, PositionDoesNotExist());
                         continue;
                     } else if (positions[i].action == Actions.BURN_POSITION) {
+                        uint256 position = idsSlot.positions[positions[i].tokenId];
+                        uint256 idIndex = position - 1;
+                        uint256 lastIndex = idsSlot.tokenIds.length - 1;
+
+                        if (idIndex != lastIndex) {
+                            idsSlot.tokenIds[idIndex] = lastIndex;
+                            idsSlot.positions[lastIndex] = position;
+                        }
+
                         idsSlot.positions[positions[i].tokenId] = 0;
                         idsSlot.tokenIds.pop();
+
+                        // remove application in proxy persistent storage. Application must be active after first position mint.
+                        if (lastIndex == 0) {
+                            // remove uniV4 liquidity application
+                            StorageLib.activeApplications().removeApplication(uint256(Applications.UNIV4_LIQUIDITY));
+                        }
+                        continue;
+                    } else {
+                        // Actions.DECREASE_LIQUIDITY
                         continue;
                     }
-                }
-            }
-
-            // activate/remove application in proxy persistent storage.
-            uint256 appsBitmap = StorageLib.activeApplications().packedApplications;
-            uint256 appFlag = uint256(Applications.UNIV4_LIQUIDITY);
-            bool isActiveApp = ApplicationsLib.isActiveApplication(appsBitmap, appFlag);
-
-            // we update application status after all tokenIds have been processed
-            if (StorageLib.uniV4TokenIdsSlot().tokenIds.length > 0) {
-                if (!isActiveApp) {
-                    // activate uniV4 liquidity application
-                    StorageLib.activeApplications().storeApplication(appFlag);
-                }
-            } else {
-                if (isActiveApp) {
-                    // remove uniV4 liquidity application
-                    StorageLib.activeApplications().removeApplication(appFlag);
                 }
             }
         }
@@ -281,6 +301,15 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     function _processRecipients(address[] memory recipients) private view {
         for (uint256 i = 0; i < recipients.length; i++) {
             require(recipients[i] == address(this), RecipientIsNotSmartPool());
+        }
+    }
+
+    function _containsMintAction(Position[] memory positions) private pure returns (bool isMint) {
+        for (uint i = 0; i < positions.length; i++) {
+            if (positions[i].action == Actions.MINT_POSITION) {
+                isMint = true;
+                break;
+            }
         }
     }
 }
