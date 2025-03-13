@@ -24,6 +24,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
+import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
@@ -219,22 +220,26 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         TokenIdsSlot storage idsSlot = StorageLib.uniV4TokenIdsSlot();
 
         // store new tokenIds if we have minted new positions
-        if (nextTokenIdAfter - nextTokenIdBefore > 0) {
+        if (nextTokenIdAfter > nextTokenIdBefore) {
             uint256 storedLength = idsSlot.tokenIds.length;
 
+            // on mint, decoder returns null tokenId, as we cannot reliably retrieve it from the Posm contract
             for (uint256 i = nextTokenIdBefore; i < nextTokenIdAfter; i++) {
-                // store the position. Mint reverts in uniswap if tokenId exists, so we can be sure it is unique
-                require(storedLength < 255, UniV4PositionsLimitExceeded());
+                // update storage if it has not been burnt in the same transaction
+                if (PositionInfo.unwrap(_uniV4Posm.positionInfo(i)) != PositionInfo.unwrap(PositionInfoLibrary.EMPTY_POSITION_INFO)) {
+                    // increase counter. Position 0 is reserved flag for removed position
+                    if (storedLength++ == 0) {
+                        // activate uniV4 liquidity application
+                        StorageLib.activeApplications().storeApplication(uint256(Applications.UNIV4_LIQUIDITY));
+                    }
 
-                if (storedLength++ == 0) {
-                    // activate uniV4 liquidity application
-                    StorageLib.activeApplications().storeApplication(uint256(Applications.UNIV4_LIQUIDITY));
+                    idsSlot.positions[i] = storedLength;
+                    idsSlot.tokenIds.push(i);
                 }
-
-                // position 0 is flag for removed
-                idsSlot.positions[i] = storedLength;
-                idsSlot.tokenIds.push(i);
             }
+
+            // store the position. Mint reverts in uniswap if tokenId exists, so we can be sure it is unique
+            require(storedLength <= 256, UniV4PositionsLimitExceeded());
         }
 
         if (positions.length > 0) {
@@ -250,21 +255,17 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                             !permissions.afterAddLiquidityReturnDelta && !permissions.afterRemoveLiquidityReturnDelta,
                             LiquidityMintHookError(positions[i].hook)
                         );
-                        continue;
                     }
+                    continue;
                 } else {
-                    // position must be active in pool storage. This means pool cannot modify liquidity created on its behalf.
-                    // This is helpful for position retrieval for nav calculations, otherwise we'd have to push it to storage.
-                    // If we remove this assertion, we must make sure that the non-nil hook address is appended, as it would
-                    // allow action on a potentially malicious hook minted to the pool, and we must make sure pool is position owner.
+                    // position must be active in pool storage for all the following actions.
                     require(idsSlot.positions[positions[i].tokenId] != 0, PositionOwner());
 
                     if (positions[i].action == Actions.INCREASE_LIQUIDITY) {
-                        // as we must append value for native pairs before forwarding the call, the position must exist
+                        // as we must append value for native pairs before forwarding the call, the position must exist in the Posm contract
                         require(positions[i].hook != NON_EXISTENT_POSITION_FLAG, PositionDoesNotExist());
                         continue;
                     } else if (positions[i].action == Actions.BURN_POSITION) {
-                        // position stored is asserted in previous block
                         uint256 position = idsSlot.positions[positions[i].tokenId];
                         uint256 idIndex = position - 1;
                         uint256 lastIndex = idsSlot.tokenIds.length - 1;
@@ -283,8 +284,10 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                             StorageLib.activeApplications().removeApplication(uint256(Applications.UNIV4_LIQUIDITY));
                         }
                         continue;
+                    } else {
+                        // Actions.DECREASE_LIQUIDITY
+                        continue;
                     }
-                    continue;
                 }
             }
         }

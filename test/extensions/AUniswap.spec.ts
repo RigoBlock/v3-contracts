@@ -498,7 +498,7 @@ describe("AUniswap", async () => {
         })
 
         it('should send multicall with deadline', async () => {
-            const { grgToken, aUniswap, authority, newPoolAddress } = await setupTests()
+            const { grgToken, newPoolAddress } = await setupTests()
             const pool = await hre.ethers.getContractAt("IRigoblockPoolExtended", newPoolAddress)
             const amount = parseEther("100")
             // we send both Ether and GRG to the pool
@@ -522,7 +522,7 @@ describe("AUniswap", async () => {
                 .to.be.revertedWith("AMULTICALL_DEADLINE_PAST_ERROR")
             // coverage in ci reverts here, probably adding 1 block before the encoded call is sent
             currentBlock = await ethers.provider.getBlock('latest');
-            timestamp = currentBlock.timestamp + 1
+            timestamp = currentBlock.timestamp + 2
             encodedMulticallData = pool.interface.encodeFunctionData(
                 'multicall(uint256,bytes[])',
                 [ timestamp, [encodedWrapData, encodedCreateData] ]

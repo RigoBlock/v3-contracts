@@ -212,6 +212,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 storedLength = idsSlot.tokenIds.length;
             require(storedLength < 256, UniV3PositionsLimitExceeded());
 
+            // if position is minted and burnt in the same call, storage is updated on both operations
             // sync up to 32 pre-existing positions
             if (storedLength == 0) {
                 // activate uniV3 liquidity application
@@ -225,6 +226,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
 
                     // store positions and exit the loop if we are in sync
                     if (existingTokenId != tokenId) {
+                        // increase counter. Position 0 is reserved flag for removed position
                         idsSlot.positions[existingTokenId] = ++storedLength;
                         idsSlot.tokenIds.push(existingTokenId);
                     } else {
@@ -233,7 +235,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
                 }
             }
 
-            // position 0 is flag for removed
+            // increase counter
             idsSlot.positions[tokenId] = ++storedLength;
             idsSlot.tokenIds.push(tokenId);
         } else {
