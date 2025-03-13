@@ -172,11 +172,16 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         _assertTokensOutHavePriceFeed(newParams.tokensOut);
         _safeApproveTokensIn(newParams.tokensIn, address(_uniV4Posm));
 
-        uint256 nextTokenIdBefore = _uniV4Posm.nextTokenId();
+        // read nextTokenId from Posm only if one of the decoded actions is mint position
+        uint256 nextTokenIdBefore;
+        bool containsMint = _containsMintAction(positions);
+
+        if (containsMint) {
+            nextTokenIdBefore = _uniV4Posm.nextTokenId();
+        }
 
         try _uniV4Posm.modifyLiquidities{value: newParams.value}(unlockData, deadline) {
-            uint256 nextTokenIdAfter = _uniV4Posm.nextTokenId();
-            _processTokenIds(positions, nextTokenIdBefore, nextTokenIdAfter);
+            _processTokenIds(positions, nextTokenIdBefore, containsMint ? _uniV4Posm.nextTokenId() : nextTokenIdBefore);
             return;
         } catch Error(string memory reason) {
             revert(reason);
@@ -296,6 +301,15 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     function _processRecipients(address[] memory recipients) private view {
         for (uint256 i = 0; i < recipients.length; i++) {
             require(recipients[i] == address(this), RecipientIsNotSmartPool());
+        }
+    }
+
+    function _containsMintAction(Position[] memory positions) private pure returns (bool isMint) {
+        for (uint i = 0; i < positions.length; i++) {
+            if (positions[i].action == Actions.MINT_POSITION) {
+                isMint = true;
+                break;
+            }
         }
     }
 }
