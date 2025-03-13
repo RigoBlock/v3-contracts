@@ -41,15 +41,14 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
 
     string private constant _REQUIRED_VERSION = "4.0.0";
 
-    // storage must be immutable as needs to be rutime consistent
-    // 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks
-    /// @inheritdoc IAUniswap
-    address public immutable override uniswapRouter02;
-
     address private constant ADDRESS_ZERO = address(0);
 
-    constructor(address newUniswapRouter02) AUniswapV3NPM(newUniswapRouter02) {
-        uniswapRouter02 = newUniswapRouter02;
+    // storage must be immutable as needs to be rutime consistent
+    // 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks
+    ISwapRouter02 private immutable _uniswapRouter02;
+
+    constructor(address uniswapRouter02) AUniswapV3NPM(uniswapRouter02) {
+        _uniswapRouter02 = ISwapRouter02(uniswapRouter02);
     }
 
     /// @inheritdoc IMinimumVersion
@@ -67,9 +66,9 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountOut) {
-        address uniswapRouter = _preSwap(path[0], path[path.length - 1]);
+        _preSwap(path[0], path[path.length - 1]);
 
-        amountOut = ISwapRouter02(uniswapRouter).swapExactTokensForTokens(
+        amountOut = _uniswapRouter02.swapExactTokensForTokens(
             amountIn,
             amountOutMin,
             path,
@@ -77,7 +76,7 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        path[0].safeApprove(uniswapRouter, uint256(1));
+        path[0].safeApprove(address(_uniswapRouter02), uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -87,9 +86,9 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         address[] calldata path,
         address to
     ) external override returns (uint256 amountIn) {
-        address uniswapRouter = _preSwap(path[0], path[path.length - 1]);
+        _preSwap(path[0], path[path.length - 1]);
 
-        amountIn = ISwapRouter02(uniswapRouter).swapTokensForExactTokens(
+        amountIn = _uniswapRouter02.swapTokensForExactTokens(
             amountOut,
             amountInMax,
             path,
@@ -97,7 +96,7 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        path[0].safeApprove(uniswapRouter, uint256(1));
+        path[0].safeApprove(address(_uniswapRouter02), uint256(1));
     }
 
     /*
@@ -109,10 +108,10 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         override
         returns (uint256 amountOut)
     {
-        address uniswapRouter = _preSwap(params.tokenIn, params.tokenOut);
+        _preSwap(params.tokenIn, params.tokenOut);
 
         // we swap the tokens
-        amountOut = ISwapRouter02(uniswapRouter).exactInputSingle(
+        amountOut = _uniswapRouter02.exactInputSingle(
             IV3SwapRouter.ExactInputSingleParams({
                 tokenIn: params.tokenIn,
                 tokenOut: params.tokenOut,
@@ -125,7 +124,7 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        params.tokenIn.safeApprove(uniswapRouter, uint256(1));
+        params.tokenIn.safeApprove(address(_uniswapRouter02), uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -133,10 +132,10 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         // tokenIn is the first address in the path, tokenOut the last
         address tokenIn = params.path.toAddress(0);
         address tokenOut = params.path.toAddress(params.path.length - 20);
-        address uniswapRouter = _preSwap(tokenIn, tokenOut);
+        _preSwap(tokenIn, tokenOut);
 
         // we swap the tokens
-        amountOut = ISwapRouter02(uniswapRouter).exactInput(
+        amountOut = _uniswapRouter02.exactInput(
             IV3SwapRouter.ExactInputParams({
                 path: params.path,
                 recipient: address(this), // this pool is always the recipient
@@ -146,7 +145,7 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        tokenIn.safeApprove(uniswapRouter, uint256(1));
+        tokenIn.safeApprove(address(_uniswapRouter02), uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -155,10 +154,10 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         override
         returns (uint256 amountIn)
     {
-        address uniswapRouter = _preSwap(params.tokenIn, params.tokenOut);
+        _preSwap(params.tokenIn, params.tokenOut);
 
         // we swap the tokens
-        amountIn = ISwapRouter02(uniswapRouter).exactOutputSingle(
+        amountIn = _uniswapRouter02.exactOutputSingle(
             IV3SwapRouter.ExactOutputSingleParams({
                 tokenIn: params.tokenIn,
                 tokenOut: params.tokenOut,
@@ -171,7 +170,7 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        params.tokenIn.safeApprove(uniswapRouter, uint256(1));
+        params.tokenIn.safeApprove(address(_uniswapRouter02), uint256(1));
     }
 
     /// @inheritdoc IAUniswap
@@ -179,10 +178,10 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         // tokenIn is the last address in the path, tokenOut the first
         address tokenOut = params.path.toAddress(0);
         address tokenIn = params.path.toAddress(params.path.length - 20);
-        address uniswapRouter = _preSwap(tokenIn, tokenOut);
+        _preSwap(tokenIn, tokenOut);
 
         // we swap the tokens
-        amountIn = ISwapRouter02(uniswapRouter).exactOutput(
+        amountIn = _uniswapRouter02.exactOutput(
             IV3SwapRouter.ExactOutputParams({
                 path: params.path,
                 recipient: address(this), // this pool is always the recipient
@@ -192,7 +191,7 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
         );
 
         // we make sure we do not clear storage
-        tokenIn.safeApprove(uniswapRouter, uint256(1));
+        tokenIn.safeApprove(address(_uniswapRouter02), uint256(1));
     }
 
     /*
@@ -228,13 +227,13 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum) external override {
         _activateToken(ADDRESS_ZERO);
-        IWETH9(weth).withdraw(amountMinimum);
+        _weth.withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
     function unwrapWETH9(uint256 amountMinimum, address /*recipient*/) external override {
         _activateToken(ADDRESS_ZERO);
-        IWETH9(weth).withdraw(amountMinimum);
+        _weth.withdraw(amountMinimum);
     }
 
     /// @inheritdoc IAUniswap
@@ -255,19 +254,18 @@ contract AUniswap is IAUniswap, IMinimumVersion, AUniswapV3NPM {
     /// @inheritdoc IAUniswap
     function wrapETH(uint256 value) external override {
         if (value > uint256(0)) {
-            _activateToken(weth);
-            IWETH9(weth).deposit{value: value}();
+            _activateToken(address(_weth));
+            _weth.deposit{value: value}();
         }
     }
 
     /// @inheritdoc IAUniswap
     function refundETH() external virtual override {}
 
-    function _preSwap(address tokenIn, address tokenOut) private returns (address uniswapRouter) {
+    function _preSwap(address tokenIn, address tokenOut) private {
         _activateToken(tokenOut);
-        uniswapRouter = uniswapRouter02;
 
         // we set the allowance to the uniswap router
-        tokenIn.safeApprove(uniswapRouter, type(uint256).max);
+        tokenIn.safeApprove(address(_uniswapRouter02), type(uint256).max);
     }
 }

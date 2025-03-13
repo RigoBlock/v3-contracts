@@ -87,7 +87,14 @@ contract MockUniswapNpm {
         INonfungiblePositionManager.CollectParams memory params
     ) external returns (uint256 amount0, uint256 amount1) {}
 
-    function burn(uint256 tokenId) external {}
+    function burn(uint256 tokenId) external {
+        delete _positions[tokenId];
+        address owner = _ownerOf[tokenId];
+        // technically could be an approve address, but in rigoblock we only allow transactions to be proxied by the pool
+        require(owner == msg.sender, 'Not approved');
+        _balances[owner]--;
+        delete _ownerOf[tokenId];
+    }
 
     function createAndInitializePoolIfNecessary(
         address token0,
