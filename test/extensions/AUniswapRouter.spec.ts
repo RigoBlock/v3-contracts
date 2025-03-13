@@ -432,6 +432,38 @@ describe("AUniswapRouter", async () => {
       expect((await positionPool.getUniV4TokenIds()).length).to.be.eq(0)
     })
 
+    it('should burn tokenId at a specific position', async () => {
+      const { pool, univ4Posm, wethAddress, oracle } = await setupTests()
+      const etherAmount = ethers.utils.parseEther("12")
+      await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+      const PAIR = DEFAULT_PAIR
+      PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      await oracle.initializeObservations(PAIR.poolKey)
+      PAIR.poolKey.hooks = AddressZero
+      const expectedTokenId = await univ4Posm.nextTokenId()
+      let v4Planner: V4Planner = new V4Planner()
+      let mintParams = [PAIR.poolKey, PAIR.tickLower, PAIR.tickUpper, 10001, etherAmount.div(3), MAX_UINT128, pool.address, '0x']
+      v4Planner.addAction(Actions.MINT_POSITION, mintParams)
+      mintParams = [PAIR.poolKey, PAIR.tickLower, PAIR.tickUpper - 1, 10001, etherAmount.div(3), MAX_UINT128, pool.address, '0x']
+      v4Planner.addAction(Actions.MINT_POSITION, mintParams)
+      mintParams = [PAIR.poolKey, PAIR.tickLower, PAIR.tickUpper - 2, 10001, etherAmount.div(3), MAX_UINT128, pool.address, '0x']
+      v4Planner.addAction(Actions.MINT_POSITION, mintParams)
+      const value = ethers.utils.parseEther("0")
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      const PositionPool = await hre.ethers.getContractFactory("EApps")
+      const positionPool = PositionPool.attach(pool.address)
+      expect((await positionPool.getUniV4TokenIds()).length).to.be.eq(3)
+      // clear state for actions
+      v4Planner = new V4Planner()
+      // burn will remove any position liquidity in Posm
+      v4Planner.addAction(Actions.BURN_POSITION, [expectedTokenId, MAX_UINT128, MAX_UINT128, '0x'])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(0)
+      expect((await positionPool.getUniV4TokenIds()).length).to.be.eq(2)
+    })
+
     it('position should be included in nav calculations', async () => {
       const { newPoolAddress, grgToken, pool, univ4Posm, wethAddress, oracle } = await setupTests()
       const PAIR = DEFAULT_PAIR
