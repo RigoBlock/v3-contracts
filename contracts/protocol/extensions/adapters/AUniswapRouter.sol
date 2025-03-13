@@ -220,24 +220,20 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
 
         // store new tokenIds if we have minted new positions
         if (nextTokenIdAfter - nextTokenIdBefore > 0) {
+            uint256 storedLength = idsSlot.tokenIds.length;
+
             for (uint256 i = nextTokenIdBefore; i < nextTokenIdAfter; i++) {
                 // store the position. Mint reverts in uniswap if tokenId exists, so we can be sure it is unique
-                uint256 storedLength = idsSlot.tokenIds.length;
                 require(storedLength < 255, UniV4PositionsLimitExceeded());
 
+                if (storedLength++ == 0) {
+                    // activate uniV4 liquidity application
+                    StorageLib.activeApplications().storeApplication(uint256(Applications.UNIV4_LIQUIDITY));
+                }
+
                 // position 0 is flag for removed
-                idsSlot.positions[i] = ++storedLength;
+                idsSlot.positions[i] = storedLength;
                 idsSlot.tokenIds.push(i);
-            }
-
-            // activate application in proxy persistent storage.
-            uint256 appsBitmap = StorageLib.activeApplications().packedApplications;
-            uint256 appFlag = uint256(Applications.UNIV4_LIQUIDITY);
-            bool isActiveApp = ApplicationsLib.isActiveApplication(appsBitmap, appFlag);
-
-            if (!isActiveApp) {
-                // activate uniV4 liquidity application
-                StorageLib.activeApplications().storeApplication(appFlag);
             }
         }
 
@@ -268,6 +264,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                         require(positions[i].hook != NON_EXISTENT_POSITION_FLAG, PositionDoesNotExist());
                         continue;
                     } else if (positions[i].action == Actions.BURN_POSITION) {
+                        // position stored is asserted in previous block
                         uint256 position = idsSlot.positions[positions[i].tokenId];
                         uint256 idIndex = position - 1;
                         uint256 lastIndex = idsSlot.tokenIds.length - 1;
