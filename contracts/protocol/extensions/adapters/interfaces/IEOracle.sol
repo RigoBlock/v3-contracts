@@ -21,21 +21,20 @@ pragma solidity >=0.8.0 <0.9.0;
 
 interface IEOracle {
     /// @notice Returns the token amount converted to a target token.
-    /// @param token The address of the token to be converted
-    /// @param amount The token amount to be converted
-    /// @param targetToken The address of the target token
-    /// @return value The converted amount in target token
     /// @dev Will first try to convert via crosses with chain currency, fallback to direct cross if not available.
     /// @dev Assumes token is always different from targetToken, which is the msg.sender's responsibility to verify.
+    /// @param token The address of the token to be converted.
+    /// @param amount The token amount to be converted.
+    /// @param targetToken The address of the target token.
+    /// @return value The converted amount in target token.
     function convertTokenAmount(
         address token,
         uint256 amount,
-        address targetToken,
-        int24 ethToTargetTokenTick
+        address targetToken
     ) external view returns (uint256 value);
 
-    /// @notice Returns the address of the oracle hook stored in the bytecode
-    /// @return The address of the oracle hook
+    /// @notice Returns the address of the oracle hook stored in the bytecode.
+    /// @return The address of the oracle hook.
     function getOracleAddress() external view returns (address);
 
     /// @notice Returns whether a token has a price feed.

@@ -38,7 +38,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using EnumerableSet for AddressSet;
     using TransientStorage for address;
 
-    error BaseTokenBalanceError();
     error BaseTokenPriceFeedError();
 
     // TODO: assert not possible to inflate total supply to manipulate pool price.
@@ -56,8 +55,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         } else if (components.totalSupply == 0) {
             return components;
         } else {
-            (uint256 totalPoolValue, int24 ethToBaseTokenTwap) = _computeTotalPoolValue(components.baseToken);
-            components.ethToBaseTokenTwap = ethToBaseTokenTwap;
+            uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
 
             // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
@@ -82,11 +80,10 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     /// @notice Updates the stored value with an updated one.
     /// @param baseToken The address of the base token.
     /// @return poolValue The total value of the pool in base token units.
-    /// @return ethToBaseTokenTwap The twap tick of native to base token.
     /// @dev Assumes the stored list contain unique elements.
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
-    function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue, int24 ethToBaseTokenTwap) {
+    function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue) {
         AddressSet storage values = activeTokensSet();
         int256 storedBalance;
 
@@ -168,29 +165,29 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             if (i == 0) {
                 // make sure we can convert token values in base token
                 require(IEOracle(address(this)).hasPriceFeed(baseToken), BaseTokenPriceFeedError());
-                ethToBaseTokenTwap = IEOracle(address(this)).getTwap(baseToken);
             }
 
+            // TODO: consider refining tokens and stored balances in memory array, and pass it all to eOracle with a single call for conversion for gas savings
             if (storedBalance < 0) {
-                poolValueInBaseToken -= int256(_getBaseTokenValue(targetToken, uint256(-storedBalance), baseToken, ethToBaseTokenTwap));
+                poolValueInBaseToken -= int256(_getBaseTokenValue(targetToken, uint256(-storedBalance), baseToken));
             } else {
-                poolValueInBaseToken += int256(_getBaseTokenValue(targetToken, uint256(storedBalance), baseToken, ethToBaseTokenTwap));
+                poolValueInBaseToken += int256(_getBaseTokenValue(targetToken, uint256(storedBalance), baseToken));
             }
         }
 
         // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
-        return (uint256(poolValueInBaseToken) > 0 ? uint256(poolValueInBaseToken) : 1, ethToBaseTokenTwap);
+        return (uint256(poolValueInBaseToken) > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
     /// @dev The eth to base token twap is stored in memory only when the base token is processed, which is always the last element in the loop (it won't be overwritten).
-    function _getBaseTokenValue(address token, uint256 amount, address baseToken, int24 ethToBaseTokenTwap) private view returns (uint256) {
+    function _getBaseTokenValue(address token, uint256 amount, address baseToken) private view returns (uint256) {
         if (token == baseToken || amount == 0) {
             return amount;
         }
 
         // TODO: can append cached twaps to save some warm storage reads, but 100 gas saving if cached, 100 extra gas if not, i.e. all tokens out of positions.
         // perform a staticcall to oracle extension
-        return IEOracle(address(this)).convertTokenAmount(token, amount, baseToken, ethToBaseTokenTwap);
+        return IEOracle(address(this)).convertTokenAmount(token, amount, baseToken);
     }
 
     /// virtual methods

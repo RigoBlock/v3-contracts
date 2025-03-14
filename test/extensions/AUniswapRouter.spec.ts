@@ -506,7 +506,7 @@ describe("AUniswapRouter", async () => {
       // technically, this does not happen in real world, where pool tokens are used and should not inflate it. But we return mock values from the test posm.
       const poolPrice = (await pool.getPoolTokens()).unitaryValue
       expect(poolPrice).to.be.gt(unitaryValue)
-      expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000051476461117"))
+      expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000050457209347"))
     })
 
     it('should decode payment methods', async () => {

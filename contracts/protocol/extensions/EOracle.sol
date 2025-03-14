@@ -45,20 +45,21 @@ contract EOracle is IEOracle {
     function convertTokenAmount(
         address token,
         uint256 amount,
-        address targetToken,
-        int24 ethToTargetTokenTick
+        address targetToken
     ) external view override returns (uint256 value) {
+        int24 ethToTargetTokenTwap = getTwap(targetToken);
+
         if (token == address(0)) {
             // Direct conversion from ETH to targetToken
-            return _convertUsingTick(amount, ethToTargetTokenTick);
+            return _convertUsingTick(amount, ethToTargetTokenTwap);
         } else {
-            int24 tokenToEthTick = -getTwap(token);
-            
+            int24 ethToTokenTwap = getTwap(token);
+
             if (targetToken == address(0)) {
                 // Direct conversion from token to ETH
-                return _convertUsingTick(amount, tokenToEthTick);
+                return _convertUsingTick(amount, -ethToTokenTwap);
             } else {
-                int24 crossTick = tokenToEthTick + ethToTargetTokenTick;
+                int24 crossTick = -(ethToTokenTwap - ethToTargetTokenTwap);
 
                 if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
                     return _convertUsingTick(amount, crossTick);
@@ -103,7 +104,7 @@ contract EOracle is IEOracle {
         PoolKey memory key;
         IOracle.ObservationState memory state;
 
-        if (token == _ZERO_ADDRESS) {
+        if (token == _ZERO_ADDRESS || token == ISmartPoolImmutable(msg.sender).wrappedNative()) {
             // tick = 0 implies price of 1
             return 0;
         } else {

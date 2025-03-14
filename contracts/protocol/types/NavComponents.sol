@@ -6,5 +6,4 @@ struct NavComponents {
     uint256 totalSupply;
     address baseToken;
     uint8 decimals;
-    int24 ethToBaseTokenTwap;
 }
