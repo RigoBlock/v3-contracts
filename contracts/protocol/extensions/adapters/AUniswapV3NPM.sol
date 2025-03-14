@@ -212,8 +212,12 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
             uint256 storedLength = idsSlot.tokenIds.length;
             require(storedLength < 256, UniV3PositionsLimitExceeded());
 
+            // if position is minted and burnt in the same call, storage is updated on both operations
             // sync up to 32 pre-existing positions
             if (storedLength == 0) {
+                // activate uniV3 liquidity application
+                StorageLib.activeApplications().storeApplication(uint256(Applications.UNIV3_LIQUIDITY));
+
                 uint256 numPositions = IERC721(address(_uniV3Npm)).balanceOf(address(this));
                 numPositions = numPositions < 32 ? numPositions : 32;
 
@@ -222,6 +226,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
 
                     // store positions and exit the loop if we are in sync
                     if (existingTokenId != tokenId) {
+                        // increase counter. Position 0 is reserved flag for removed position
                         idsSlot.positions[existingTokenId] = ++storedLength;
                         idsSlot.tokenIds.push(existingTokenId);
                     } else {
@@ -230,7 +235,7 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
                 }
             }
 
-            // position 0 is flag for removed
+            // increase counter
             idsSlot.positions[tokenId] = ++storedLength;
             idsSlot.tokenIds.push(tokenId);
         } else {
@@ -238,28 +243,26 @@ abstract contract AUniswapV3NPM is IAUniswapV3NPM {
                 require(idsSlot.positions[tokenId] != 0, PositionOwner());
                 return;
             } else if (opType == OperationType.Burn) {
-                if (idsSlot.positions[tokenId] != 0) {
+                uint256 position = idsSlot.positions[tokenId];
+
+                if (position != 0) {
+                    uint256 idIndex = position - 1;
+                    uint256 lastIndex = idsSlot.tokenIds.length - 1;
+
+                    if (idIndex != lastIndex) {
+                        idsSlot.tokenIds[idIndex] = lastIndex;
+                        idsSlot.positions[lastIndex] = position;
+                    }
+
                     idsSlot.positions[tokenId] = 0;
                     idsSlot.tokenIds.pop();
+
+                    // remove application in proxy persistent storage. Application must be active after first position mint.
+                    if (lastIndex == 0) {
+                        // remove uniV3 liquidity application
+                        StorageLib.activeApplications().removeApplication(uint256(Applications.UNIV3_LIQUIDITY));
+                    }
                 }
-            }
-        }
-
-        // activate/remove application in proxy persistent storage.
-        uint256 appsBitmap = StorageLib.activeApplications().packedApplications;
-        uint256 appFlag = uint256(Applications.UNIV3_LIQUIDITY);
-        bool isActiveApp = ApplicationsLib.isActiveApplication(appsBitmap, appFlag);
-
-        // we update application status after all tokenIds have been processed
-        if (StorageLib.uniV3TokenIdsSlot().tokenIds.length > 0) {
-            if (!isActiveApp) {
-                // activate uniV3 liquidity application
-                StorageLib.activeApplications().storeApplication(appFlag);
-            }
-        } else {
-            if (isActiveApp) {
-                // remove uniV4 liquidity application
-                StorageLib.activeApplications().removeApplication(appFlag);
             }
         }
     }
