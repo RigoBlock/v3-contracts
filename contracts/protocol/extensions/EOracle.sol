@@ -51,18 +51,20 @@ contract EOracle is IEOracle {
         if (token == address(0)) {
             // Direct conversion from ETH to targetToken
             return _convertUsingTick(amount, ethToTargetTokenTick);
-        } else if (targetToken == address(0)) {
-            // Direct conversion from token to ETH
-            return _convertUsingTick(amount, -ethToTargetTokenTick);
         } else {
-            // Conversion through native (ETH)
-            int24 tokenToEthTick = getTwap(token);
-            int24 crossTick = tokenToEthTick - ethToTargetTokenTick; // Simplified cross tick calculation
-
-            if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
-                return _convertUsingTick(amount, crossTick);
+            int24 tokenToEthTick = -getTwap(token);
+            
+            if (targetToken == address(0)) {
+                // Direct conversion from token to ETH
+                return _convertUsingTick(amount, tokenToEthTick);
             } else {
-                return 0;
+                int24 crossTick = tokenToEthTick + ethToTargetTokenTick;
+
+                if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
+                    return _convertUsingTick(amount, crossTick);
+                } else {
+                    return 0;
+                }
             }
         }
     }
