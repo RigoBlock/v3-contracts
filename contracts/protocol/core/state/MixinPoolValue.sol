@@ -84,6 +84,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
     function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue) {
+        // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
+        require(IEOracle(address(this)).hasPriceFeed(baseToken), BaseTokenPriceFeedError());
         AddressSet storage values = activeTokensSet();
 
         ApplicationsSlot storage appsBitmap = activeApplications();
@@ -122,23 +124,21 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             revert(reason);
         }
 
+        // initialize pool value as base token balances (wallet balance plus apps balances)
+        int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
+
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
-        uint256 length = activeTokens.length;
-        int256[] memory tokenAmounts = new int256[](length);
-        int256 poolValueInBaseToken;
+        int256[] memory tokenAmounts = new int256[](activeTokens.length);
 
         // base token is not stored in activeTokens array
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < activeTokens.length; i++) {
             tokenAmounts[i] = _getAndClearBalance(activeTokens[i]);
         }
-        poolValueInBaseToken = _getAndClearBalance(baseToken);
 
-        // make sure we can convert token values in base token. Asserted before conversion block to prevent potential holder burn failure.
-        require(IEOracle(address(this)).hasPriceFeed(baseToken), BaseTokenPriceFeedError());
-
-        if (length > 0) {
-            poolValueInBaseToken += IEOracle(address(this)).convertTokenAmounts(activeTokens, tokenAmounts, baseToken);
+        if (activeTokens.length > 0) {
+            poolValueInBaseToken += IEOracle(address(this))
+                .convertBatchTokenAmounts(activeTokens, tokenAmounts, baseToken);
         }
 
         // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool

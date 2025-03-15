@@ -34,7 +34,6 @@ contract EOracle is IEOracle {
 
     address private constant _ZERO_ADDRESS = address(0);
     uint256 private constant Q96 = 2**96;
-    int24 private constant UNINITIALIZED_TICK = TickMath.MIN_TICK;
 
     address private immutable _wrappedNative;
 
@@ -46,69 +45,68 @@ contract EOracle is IEOracle {
     }
 
     /// @inheritdoc IEOracle
-    /// @dev Assumes tokens and amounts arrays have same length, as the method is used by the smart pool implementation.
-    function convertTokenAmounts(
-        address[] memory tokens,
+    function convertBatchTokenAmounts(
+        address[] calldata tokens,
         int256[] calldata amounts,
         address targetToken
-    ) external view override returns (int256 convertedValue) {
+    ) external view returns (int256 totalConvertedAmount) {
+        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS) ? int24(0) : getTwap(targetToken);
+        for (uint256 i = 0; i < tokens.length; i++) {
+            totalConvertedAmount += _convertTokenAmount(tokens[i], amounts[i], targetToken, ethToTargetTokenTwap);
+        }
+    }
+
+    /// @inheritdoc IEOracle
+    function convertTokenAmount(
+        address token,
+        int256 amount,
+        address targetToken
+    ) external view override returns (int256 convertedAmount) {
+        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS) ? int24(0) : getTwap(targetToken);
+        convertedAmount =  _convertTokenAmount(token, amount, targetToken, ethToTargetTokenTwap);
+    }
+
+    function _convertTokenAmount(
+        address token,
+        int256 amount,
+        address targetToken,
+        int24 ethToTargetTokenTwap
+    ) private view returns (int256) {
         if (targetToken == _wrappedNative) {
             targetToken = _ZERO_ADDRESS;
         }
 
-        int24 ethToTargetTokenTwap = UNINITIALIZED_TICK;
-        uint256 convertedAmount;
-
-        for (uint256 i = 0; i < tokens.length; i++) {
-            if (tokens[i] == _wrappedNative) {
-                tokens[i] = _ZERO_ADDRESS;
-            }
-
-            if (amounts[i] == 0) {
-                continue;
-            } else if (tokens[i] == targetToken) {
-                // we need to run this block, as native token could be passed as active, with native as base
-                convertedValue += amounts[i];
-                continue;
-            }
-
-            uint256 absAmount = uint256(amounts[i] >= 0 ? amounts[i] : -amounts[i]);
-
-            if (tokens[i] == _ZERO_ADDRESS) {
-                if (ethToTargetTokenTwap == UNINITIALIZED_TICK) {
-                    ethToTargetTokenTwap = getTwap(targetToken);
-                }
-
-                // Direct conversion from ETH to targetToken
-                convertedAmount = _convertUsingTick(absAmount, ethToTargetTokenTwap);
-            } else {
-                int24 ethToTokenTwap = getTwap(tokens[i]);
-                if (targetToken == _ZERO_ADDRESS) {
-                    // Direct conversion from token to ETH
-                    convertedAmount = _convertUsingTick(absAmount, -ethToTokenTwap);
-                } else {
-                    if (ethToTargetTokenTwap == UNINITIALIZED_TICK) {
-                        ethToTargetTokenTwap = getTwap(targetToken);
-                    }
-
-                    int24 crossTick = -(ethToTokenTwap - ethToTargetTokenTwap);
-
-                    if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
-                        convertedAmount = _convertUsingTick(absAmount, crossTick);
-                    } else {
-                        return 0;
-                    }
-                }
-            }
-
-            convertedValue += amounts[i] >= 0 ? int256(convertedAmount) : -int256(convertedAmount);
+        if (token == _wrappedNative) {
+            token = _ZERO_ADDRESS;
         }
-    }
 
-    function _convertUsingTick(uint256 amount, int24 tick) internal pure returns (uint256) {
-        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
+        if (amount == 0 || token == targetToken) {
+            return amount;
+        }
+
+        uint256 absAmount = uint256(amount >= 0 ? amount : -amount);
+        int24 conversionTick;
+
+        if (token == _ZERO_ADDRESS) {
+            // Direct conversion from ETH to targetToken
+            conversionTick = ethToTargetTokenTwap;
+        } else {
+            if (targetToken == _ZERO_ADDRESS) {
+                // Direct conversion from token to ETH
+                conversionTick = -getTwap(token);
+            } else {
+                conversionTick = -(getTwap(token) - ethToTargetTokenTwap);
+
+                if (conversionTick < TickMath.MIN_TICK || conversionTick > TickMath.MAX_TICK) {
+                    return 0;
+                }
+            }
+        }
+
+        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(conversionTick);
         uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96); // Q96 * Q96 = Q192
-        return FullMath.mulDiv(amount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
+        uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
+        return amount >= 0 ? int256(tokenAmount) : -int256(tokenAmount);
     }
 
     /// @inheritdoc IEOracle
