@@ -176,8 +176,13 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
             uint256 baseTokenBalance = baseToken.isAddressZero() ? address(this).balance : IERC20(baseToken).balanceOf(address(this));
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
+
+            address[] memory tokens = new address[](1);
+            int256[] memory amounts = new int256[](1);
+            tokens[0] = baseToken;
+            amounts[0] = int256(netRevenue);
             // an active token must have a price feed, hence the oracle query will always return a converted value
-            netRevenue = IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue, tokenOut);
+            netRevenue = uint256(IEOracle(address(this)).convertTokenAmounts(tokens, amounts, tokenOut));
         }
 
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());

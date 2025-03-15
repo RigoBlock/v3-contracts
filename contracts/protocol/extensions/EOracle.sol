@@ -34,39 +34,74 @@ contract EOracle is IEOracle {
 
     address private constant _ZERO_ADDRESS = address(0);
     uint256 private constant Q96 = 2**96;
+    int24 private constant UNINITIALIZED_TICK = TickMath.MIN_TICK;
+
+    address private immutable _wrappedNative;
 
     IOracle private immutable _oracle;
 
-    constructor(address oracleHookAddress) {
+    constructor(address oracleHookAddress, address wrappedNative) {
+        _wrappedNative = wrappedNative;
         _oracle = IOracle(oracleHookAddress);
     }
 
     /// @inheritdoc IEOracle
-    function convertTokenAmount(
-        address token,
-        uint256 amount,
+    /// @dev Assumes tokens and amounts arrays have same length, as the method is used by the smart pool implementation.
+    function convertTokenAmounts(
+        address[] memory tokens,
+        int256[] calldata amounts,
         address targetToken
-    ) external view override returns (uint256 value) {
-        int24 ethToTargetTokenTwap = getTwap(targetToken);
+    ) external view override returns (int256 convertedValue) {
+        if (targetToken == _wrappedNative) {
+            targetToken = _ZERO_ADDRESS;
+        }
 
-        if (token == address(0)) {
-            // Direct conversion from ETH to targetToken
-            return _convertUsingTick(amount, ethToTargetTokenTwap);
-        } else {
-            int24 ethToTokenTwap = getTwap(token);
+        int24 ethToTargetTokenTwap = UNINITIALIZED_TICK;
+        uint256 convertedAmount;
 
-            if (targetToken == address(0)) {
-                // Direct conversion from token to ETH
-                return _convertUsingTick(amount, -ethToTokenTwap);
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokens[i] == _wrappedNative) {
+                tokens[i] = _ZERO_ADDRESS;
+            }
+
+            if (amounts[i] == 0) {
+                continue;
+            } else if (tokens[i] == targetToken) {
+                // we need to run this block, as native token could be passed as active, with native as base
+                convertedValue += amounts[i];
+                continue;
+            }
+
+            uint256 absAmount = uint256(amounts[i] >= 0 ? amounts[i] : -amounts[i]);
+
+            if (tokens[i] == _ZERO_ADDRESS) {
+                if (ethToTargetTokenTwap == UNINITIALIZED_TICK) {
+                    ethToTargetTokenTwap = getTwap(targetToken);
+                }
+
+                // Direct conversion from ETH to targetToken
+                convertedAmount = _convertUsingTick(absAmount, ethToTargetTokenTwap);
             } else {
-                int24 crossTick = -(ethToTokenTwap - ethToTargetTokenTwap);
-
-                if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
-                    return _convertUsingTick(amount, crossTick);
+                int24 ethToTokenTwap = getTwap(tokens[i]);
+                if (targetToken == _ZERO_ADDRESS) {
+                    // Direct conversion from token to ETH
+                    convertedAmount = _convertUsingTick(absAmount, -ethToTokenTwap);
                 } else {
-                    return 0;
+                    if (ethToTargetTokenTwap == UNINITIALIZED_TICK) {
+                        ethToTargetTokenTwap = getTwap(targetToken);
+                    }
+
+                    int24 crossTick = -(ethToTokenTwap - ethToTargetTokenTwap);
+
+                    if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
+                        convertedAmount = _convertUsingTick(absAmount, crossTick);
+                    } else {
+                        return 0;
+                    }
                 }
             }
+
+            convertedValue += amounts[i] >= 0 ? int256(convertedAmount) : -int256(convertedAmount);
         }
     }
 
@@ -77,16 +112,11 @@ contract EOracle is IEOracle {
     }
 
     /// @inheritdoc IEOracle
-    function getOracleAddress() external view override returns (address) {
-        return address(_oracle);
-    }
-
-    /// @inheritdoc IEOracle
     /// @dev This method will return true if the last stored observation has a non-nil timestamp.
     /// @dev Adding wrapped native token requires a price feed against navite, as otherwise must warm up EApps in order
     /// to have same contract address on all chains.
     function hasPriceFeed(address token) external view returns (bool) {
-        if (token == _ZERO_ADDRESS || token == ISmartPoolImmutable(msg.sender).wrappedNative()) {
+        if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
             (PoolKey memory key, IOracle.ObservationState memory state) =
@@ -104,7 +134,7 @@ contract EOracle is IEOracle {
         PoolKey memory key;
         IOracle.ObservationState memory state;
 
-        if (token == _ZERO_ADDRESS || token == ISmartPoolImmutable(msg.sender).wrappedNative()) {
+        if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             // tick = 0 implies price of 1
             return 0;
         } else {

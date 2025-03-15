@@ -36,8 +36,7 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
     bytes4 private constant _EAPPS_UNIV3_POSITIONS_SELECTOR = IEApps.getUniV3TokenIds.selector;
     bytes4 private constant _EAPPS_UNIV4_POSITIONS_SELECTOR = IEApps.getUniV4TokenIds.selector;
-    bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
-    bytes4 private constant _EORACLE_ORACLE_ADDRESS_SELECTOR = IEOracle.getOracleAddress.selector;
+    bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmounts.selector;
     bytes4 private constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
     bytes4 private constant _EORACLE_TWAP_SELECTOR = IEOracle.getTwap.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
@@ -72,7 +71,6 @@ contract ExtensionsMap is IExtensionsMap {
         );
         assert(
             _EORACLE_CONVERT_AMOUNT_SELECTOR ^
-            _EORACLE_ORACLE_ADDRESS_SELECTOR ^
             _EORACLE_PRICE_FEED_SELECTOR ^
             _EORACLE_TWAP_SELECTOR == type(IEOracle).interfaceId
         );
@@ -96,7 +94,6 @@ contract ExtensionsMap is IExtensionsMap {
             shouldDelegatecall = true;
         } else if (
             selector == _EORACLE_CONVERT_AMOUNT_SELECTOR ||
-            selector == _EORACLE_ORACLE_ADDRESS_SELECTOR ||
             selector == _EORACLE_PRICE_FEED_SELECTOR ||
             selector == _EORACLE_TWAP_SELECTOR
         ) {
