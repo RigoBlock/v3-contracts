@@ -220,7 +220,7 @@ contract EApps is IEApps {
         }
 
         if (twap1 == 0) {
-            if (!IEOracle(address(this)).hasPriceFeed(token0)) {
+            if (!IEOracle(address(this)).hasPriceFeed(token1)) {
                 twap1 = OUT_OF_RANGE_FLAG;
             } else {
                 twap1 = IEOracle(address(this)).getTwap(token1);
@@ -234,6 +234,6 @@ contract EApps is IEApps {
             return 0;
         }
 
-        return TickMath.getSqrtPriceAtTick(twap0 - twap1);
+        return TickMath.getSqrtPriceAtTick(twap1 - twap0);
     }
 }

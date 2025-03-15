@@ -38,7 +38,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using EnumerableSet for AddressSet;
     using TransientStorage for address;
 
-    error BaseTokenBalanceError();
     error BaseTokenPriceFeedError();
 
     // TODO: assert not possible to inflate total supply to manipulate pool price.
@@ -56,8 +55,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         } else if (components.totalSupply == 0) {
             return components;
         } else {
-            (uint256 totalPoolValue, int24 ethToBaseTokenTwap) = _computeTotalPoolValue(components.baseToken);
-            components.ethToBaseTokenTwap = ethToBaseTokenTwap;
+            uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
 
             // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
@@ -82,13 +80,13 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     /// @notice Updates the stored value with an updated one.
     /// @param baseToken The address of the base token.
     /// @return poolValue The total value of the pool in base token units.
-    /// @return ethToBaseTokenTwap The twap tick of native to base token.
     /// @dev Assumes the stored list contain unique elements.
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
-    function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue, int24 ethToBaseTokenTwap) {
+    function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue) {
+        // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
+        require(IEOracle(address(this)).hasPriceFeed(baseToken), BaseTokenPriceFeedError());
         AddressSet storage values = activeTokensSet();
-        int256 storedBalance;
 
         ApplicationsSlot storage appsBitmap = activeApplications();
         uint256 packedApps = appsBitmap.packedApplications;
@@ -107,7 +105,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                     // Always add or update the balance from positions
                     if (apps[i].balances[j].amount != 0) {
                         // cache balances in temporary storage
-                        storedBalance = apps[i].balances[j].token.getBalance();
+                        int256 storedBalance = apps[i].balances[j].token.getBalance();
 
                         // verify token in active tokens set, add it otherwise (relevant for pool deployed before v4)
                         if (storedBalance == 0) {
@@ -126,71 +124,47 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             revert(reason);
         }
 
+        // initialize pool value as base token balances (wallet balance plus apps balances)
+        int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
+
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
-        uint256 length = activeTokens.length;
-        address targetToken;
-        int256 poolValueInBaseToken;
+        int256[] memory tokenAmounts = new int256[](activeTokens.length);
 
-        // base token is not stored in activeTokens slot, so we add it as an additional element at the end of the loop
-        for (uint256 i = 0; i <= length; i++) {
-            targetToken = i == length ? baseToken : activeTokens[i];
-            storedBalance = targetToken.getBalance();
+        // base token is not stored in activeTokens array
+        for (uint256 i = 0; i < activeTokens.length; i++) {
+            tokenAmounts[i] = _getAndClearBalance(activeTokens[i]);
+        }
 
-            // clear temporary storage if used
-            if (storedBalance != 0) {
-                targetToken.storeBalance(0);
-            }
-
-            // the active tokens list contains unique addresses
-            if (targetToken == _ZERO_ADDRESS) {
-                storedBalance += int256(address(this).balance - msg.value);
-            } else {
-                try IERC20(targetToken).balanceOf(address(this)) returns (uint256 _balance) {
-                    storedBalance += int256(_balance);
-                } catch {
-                    // do not stop aum calculation in case of chain's base currency or rogue token
-                    continue;
-                }
-            }
-
-            // convert wrapped native to native to potentially skip one or more conversions
-            if (targetToken == wrappedNative) {
-                targetToken = _ZERO_ADDRESS;
-            }
-
-            // base token is always appended at the end of the loop
-            if (baseToken == wrappedNative) {
-                baseToken = _ZERO_ADDRESS;
-            }
-
-            // we perform this check here to avoid making oracle calls for wrappedNative base token
-            if (i == 0) {
-                // make sure we can convert token values in base token
-                require(IEOracle(address(this)).hasPriceFeed(baseToken), BaseTokenPriceFeedError());
-                ethToBaseTokenTwap = IEOracle(address(this)).getTwap(baseToken);
-            }
-
-            if (storedBalance < 0) {
-                poolValueInBaseToken -= int256(_getBaseTokenValue(targetToken, uint256(-storedBalance), baseToken, ethToBaseTokenTwap));
-            } else {
-                poolValueInBaseToken += int256(_getBaseTokenValue(targetToken, uint256(storedBalance), baseToken, ethToBaseTokenTwap));
-            }
+        if (activeTokens.length > 0) {
+            poolValueInBaseToken += IEOracle(address(this))
+                .convertBatchTokenAmounts(activeTokens, tokenAmounts, baseToken);
         }
 
         // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
-        return (uint256(poolValueInBaseToken) > 0 ? uint256(poolValueInBaseToken) : 1, ethToBaseTokenTwap);
+        return (uint256(poolValueInBaseToken) > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
-    /// @dev The eth to base token twap is stored in memory only when the base token is processed, which is always the last element in the loop (it won't be overwritten).
-    function _getBaseTokenValue(address token, uint256 amount, address baseToken, int24 ethToBaseTokenTwap) private view returns (uint256) {
-        if (token == baseToken || amount == 0) {
-            return amount;
+    /// @dev Returns 0 balance if ERC20 call fails.
+    function _getAndClearBalance(address token) private returns (int256 balance) {
+        balance = token.getBalance();
+
+        // clear temporary storage if used
+        if (balance != 0) {
+            token.storeBalance(0);
         }
 
-        // TODO: can append cached twaps to save some warm storage reads, but 100 gas saving if cached, 100 extra gas if not, i.e. all tokens out of positions.
-        // perform a staticcall to oracle extension
-        return IEOracle(address(this)).convertTokenAmount(token, amount, baseToken, ethToBaseTokenTwap);
+        // the active tokens list contains unique addresses
+        if (token == _ZERO_ADDRESS) {
+            balance += int256(address(this).balance - msg.value);
+        } else {
+            try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
+                balance += int256(_balance);
+            } catch {
+                // returns 0 balance if the ERC20 balance cannot be found
+                return 0;
+            }
+        }
     }
 
     /// virtual methods

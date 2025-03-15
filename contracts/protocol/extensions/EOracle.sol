@@ -35,47 +35,78 @@ contract EOracle is IEOracle {
     address private constant _ZERO_ADDRESS = address(0);
     uint256 private constant Q96 = 2**96;
 
+    address private immutable _wrappedNative;
+
     IOracle private immutable _oracle;
 
-    constructor(address oracleHookAddress) {
+    constructor(address oracleHookAddress, address wrappedNative) {
+        _wrappedNative = wrappedNative;
         _oracle = IOracle(oracleHookAddress);
+    }
+
+    /// @inheritdoc IEOracle
+    function convertBatchTokenAmounts(
+        address[] calldata tokens,
+        int256[] calldata amounts,
+        address targetToken
+    ) external view returns (int256 totalConvertedAmount) {
+        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS) ? int24(0) : getTwap(targetToken);
+        for (uint256 i = 0; i < tokens.length; i++) {
+            totalConvertedAmount += _convertTokenAmount(tokens[i], amounts[i], targetToken, ethToTargetTokenTwap);
+        }
     }
 
     /// @inheritdoc IEOracle
     function convertTokenAmount(
         address token,
-        uint256 amount,
-        address targetToken,
-        int24 ethToTargetTokenTick
-    ) external view override returns (uint256 value) {
-        if (token == address(0)) {
-            // Direct conversion from ETH to targetToken
-            return _convertUsingTick(amount, ethToTargetTokenTick);
-        } else if (targetToken == address(0)) {
-            // Direct conversion from token to ETH
-            return _convertUsingTick(amount, -ethToTargetTokenTick);
-        } else {
-            // Conversion through native (ETH)
-            int24 tokenToEthTick = getTwap(token);
-            int24 crossTick = tokenToEthTick - ethToTargetTokenTick; // Simplified cross tick calculation
+        int256 amount,
+        address targetToken
+    ) external view override returns (int256 convertedAmount) {
+        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS) ? int24(0) : getTwap(targetToken);
+        convertedAmount =  _convertTokenAmount(token, amount, targetToken, ethToTargetTokenTwap);
+    }
 
-            if (crossTick >= TickMath.MIN_TICK && crossTick <= TickMath.MAX_TICK) {
-                return _convertUsingTick(amount, crossTick);
+    function _convertTokenAmount(
+        address token,
+        int256 amount,
+        address targetToken,
+        int24 ethToTargetTokenTwap
+    ) private view returns (int256) {
+        if (targetToken == _wrappedNative) {
+            targetToken = _ZERO_ADDRESS;
+        }
+
+        if (token == _wrappedNative) {
+            token = _ZERO_ADDRESS;
+        }
+
+        if (amount == 0 || token == targetToken) {
+            return amount;
+        }
+
+        uint256 absAmount = uint256(amount >= 0 ? amount : -amount);
+        int24 conversionTick;
+
+        if (token == _ZERO_ADDRESS) {
+            // Direct conversion from ETH to targetToken
+            conversionTick = ethToTargetTokenTwap;
+        } else {
+            if (targetToken == _ZERO_ADDRESS) {
+                // Direct conversion from token to ETH
+                conversionTick = -getTwap(token);
             } else {
-                return 0;
+                conversionTick = -(getTwap(token) - ethToTargetTokenTwap);
+
+                if (conversionTick < TickMath.MIN_TICK || conversionTick > TickMath.MAX_TICK) {
+                    return 0;
+                }
             }
         }
-    }
 
-    function _convertUsingTick(uint256 amount, int24 tick) internal pure returns (uint256) {
-        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
+        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(conversionTick);
         uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96); // Q96 * Q96 = Q192
-        return FullMath.mulDiv(amount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
-    }
-
-    /// @inheritdoc IEOracle
-    function getOracleAddress() external view override returns (address) {
-        return address(_oracle);
+        uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
+        return amount >= 0 ? int256(tokenAmount) : -int256(tokenAmount);
     }
 
     /// @inheritdoc IEOracle
@@ -83,7 +114,7 @@ contract EOracle is IEOracle {
     /// @dev Adding wrapped native token requires a price feed against navite, as otherwise must warm up EApps in order
     /// to have same contract address on all chains.
     function hasPriceFeed(address token) external view returns (bool) {
-        if (token == _ZERO_ADDRESS || token == ISmartPoolImmutable(msg.sender).wrappedNative()) {
+        if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
             (PoolKey memory key, IOracle.ObservationState memory state) =
@@ -101,7 +132,7 @@ contract EOracle is IEOracle {
         PoolKey memory key;
         IOracle.ObservationState memory state;
 
-        if (token == _ZERO_ADDRESS) {
+        if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             // tick = 0 implies price of 1
             return 0;
         } else {
