@@ -130,13 +130,6 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  const eOracle = await deploy("EOracle", {
-    from: deployer,
-    args: [oracle.address],
-    log: true,
-    deterministicDeployment: true,
-  })
-
   const uniswapRouter2 = await deploy("MockUniswapRouter", {
     from: deployer,
     args: [],
@@ -150,6 +143,19 @@ const deploy: DeployFunction = async function (
   );
 
   const univ3NpmAddress = await uniRouter2Instance.positionManager()
+
+  const univ3NpmInstance = await hre.ethers.getContractAt(
+    "MockUniswapNpm",
+    univ3NpmAddress
+  );
+  const wethAddress = await univ3NpmInstance.WETH9()
+
+  const eOracle = await deploy("EOracle", {
+    from: deployer,
+    args: [oracle.address, wethAddress],
+    log: true,
+    deterministicDeployment: true,
+  })
 
   const permit2 = await deploy("MockPermit2", {
     from: deployer,
@@ -173,12 +179,6 @@ const deploy: DeployFunction = async function (
   });
 
   const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
-
-  const univ3NpmInstance = await hre.ethers.getContractAt(
-    "MockUniswapNpm",
-    univ3NpmAddress
-  );
-  const wethAddress = await univ3NpmInstance.WETH9()
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
