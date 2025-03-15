@@ -45,9 +45,10 @@ const deploy: DeployFunction = async function (
 
   // Notice: replace with deployed oracle address (uni hooks depends on PoolManager address, diff on each chains)
   const oracle = "0x813DADC6bfA14cA9f294f6341B15B530476C7ac4";
+  const wethAddress = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
   const eOracle = await deploy("EOracle", {
     from: deployer,
-    args: [oracle],
+    args: [oracle, wethAddress],
     log: true,
     deterministicDeployment: true,
   });
@@ -56,7 +57,6 @@ const deploy: DeployFunction = async function (
   const stakingProxy = "0xD40edcc947fF35637233d765CB9efCFc10fC8c22";
   const univ3Npm = "0x1238536071E1c677A632429e3655c799b22cDA52";
   const univ4Posm = "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4";
-  const wethAddress = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [stakingProxy, univ3Npm, univ4Posm],

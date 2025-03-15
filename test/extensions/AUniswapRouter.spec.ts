@@ -506,7 +506,7 @@ describe("AUniswapRouter", async () => {
       // technically, this does not happen in real world, where pool tokens are used and should not inflate it. But we return mock values from the test posm.
       const poolPrice = (await pool.getPoolTokens()).unitaryValue
       expect(poolPrice).to.be.gt(unitaryValue)
-      expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000051476461117"))
+      expect(poolPrice).to.be.eq(ethers.utils.parseEther("1.000000050457209347"))
     })
 
     it('should decode payment methods', async () => {
@@ -609,12 +609,12 @@ describe("AUniswapRouter", async () => {
       txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       result = await txReceipt.wait()
       gasCost = result.cumulativeGasUsed.toNumber()
-      console.log(gasCost,'second mintgas cost,  with no position')
+      console.log(gasCost,'second mint gas cost, with no position')
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       result = await txReceipt.wait()
       gasCost = result.cumulativeGasUsed.toNumber()
-      console.log(gasCost,'third mintgas cost,  with 1 position')
+      console.log(gasCost,'third mint gas cost, with 1 position')
       txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       result = await txReceipt.wait()
       gasCost = result.cumulativeGasUsed.toNumber()
@@ -1244,7 +1244,7 @@ describe("AUniswapRouter", async () => {
       txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
       result = await txReceipt.wait()
       gasCost = result.cumulativeGasUsed.toNumber()
-      console.log(gasCost,'3rd mint gas cost, with 2 active token (calculates nav)')
+      console.log(gasCost,'3rd mint gas cost, with 2 active tokens (calculates nav)')
       expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(2)
     })
 
@@ -1291,12 +1291,12 @@ describe("AUniswapRouter", async () => {
       txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
       result = await txReceipt.wait()
       gasCost = result.cumulativeGasUsed.toNumber()
-      console.log(gasCost,'3rd mint gas cost, with 2 active token (calculates nav)')
+      console.log(gasCost,'3rd mint gas cost, with 2 active tokens (calculates nav)')
       expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(2)
       txReceipt = await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
       result = await txReceipt.wait()
       gasCost = result.cumulativeGasUsed.toNumber()
-      console.log(gasCost,'4th mint gas cost, with 2 active token (calculates nav but does not update storage)')
+      console.log(gasCost,'4th mint gas cost, with 2 active tokens (calculates nav but does not update storage)')
       expect((await pool.getActiveTokens()).activeTokens.length).to.be.eq(2)
     })
   })
