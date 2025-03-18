@@ -26,7 +26,6 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
-import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {Observation} from "../types/Observation.sol";
 
 contract EOracle is IEOracle {
@@ -126,7 +125,6 @@ contract EOracle is IEOracle {
         }
     }
 
-    // TODO: check if need to adjust for decimals, as per https://github.com/Uniswap/v4-periphery/blob/de15ed6da5400b3c877095ab05ff16bcda80385f/src/libraries/Descriptor.sol#L280
     /// @inheritdoc IEOracle
     function getTwap(address token) public view override returns (int24 twap) {
         PoolKey memory key;

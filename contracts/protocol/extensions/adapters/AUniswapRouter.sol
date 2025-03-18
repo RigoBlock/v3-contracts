@@ -22,6 +22,7 @@ pragma solidity 0.8.28;
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
+import {ActionConstants} from '@uniswap/v4-periphery/src/libraries/ActionConstants.sol';
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
@@ -66,7 +67,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     error PositionOwner();
 
     /// @notice Thrown when the pool is not the recipient
-    error RecipientIsNotSmartPool();
+    error RecipientNotSmartPoolOrRouter();
 
     /// @notice Thrown when the pool reached maximum number of liquidity positions
     error UniV4PositionsLimitExceeded();
@@ -298,9 +299,16 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         }
     }
 
+    /// @dev We allow the recipient to be the router address, i.e. for unwrap weth. If balance is not swept, it could be stolen.
+    /// @dev Passing ROUTER_AS_RECIPIENT is required for payment calls that require the router to hold the balance.
     function _processRecipients(address[] memory recipients) private view {
         for (uint256 i = 0; i < recipients.length; i++) {
-            require(recipients[i] == address(this), RecipientIsNotSmartPool());
+            require(
+                recipients[i] == address(this) ||
+                    recipients[i] == ActionConstants.MSG_SENDER ||
+                    recipients[i] == ActionConstants.ADDRESS_THIS,
+                RecipientNotSmartPoolOrRouter()
+            );
         }
     }
 
