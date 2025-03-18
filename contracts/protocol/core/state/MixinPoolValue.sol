@@ -29,10 +29,8 @@ import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
-// TODO: check make catastrophic failure resistant, i.e. must always be possible to liquidate pool + must always
-//  use base token balances. If cannot guarantee base token balances can be retrieved, pointless and can be implemented in extension.
-//  General idea is if the component is simple and not requires revisit of logic, implement as library, otherwise
-//  implement as extension.
+/// @title MixinPoolValue
+/// @notice A contract that retrieves smart pool token balances and computes their base token value.
 abstract contract MixinPoolValue is MixinOwnerActions {
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
@@ -59,7 +57,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
             // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
-                // TODO: verify why we missed decimals rescaling
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue = totalPoolValue * 10 ** components.decimals / components.totalSupply;
             } else {
