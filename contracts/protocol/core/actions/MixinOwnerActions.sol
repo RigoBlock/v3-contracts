@@ -13,7 +13,6 @@ abstract contract MixinOwnerActions is MixinActions {
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
 
-    // TODO: verify rename erors from Pool... to OwnerAction...
     error PoolCallerIsNotOwner();
     error PoolFeeBiggerThanMax(uint16 maxFee);
     error PoolInputIsNotContract();

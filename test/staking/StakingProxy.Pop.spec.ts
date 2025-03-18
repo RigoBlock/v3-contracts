@@ -264,7 +264,6 @@ describe("StakingProxy-Pop", async () => {
                 pop.creditPopRewardToStakingProxy(newPoolAddress)
             ).to.emit(stakingProxy, "StakingPoolEarnedRewardsInEpoch").withArgs(2, poolId)
             await timeTravel({ days: 14, mine:true })
-            // TODO: check args rewardsAvailable, totalFeesCollected, totalWeightedStake
             await expect(stakingProxy.endEpoch())
             .to.emit(stakingProxy, "EpochEnded").withArgs(2, 1, 0, amount, amount.mul(9).div(10))
             .to.emit(stakingProxy, "GrgMintEvent").withArgs(0)

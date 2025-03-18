@@ -149,9 +149,6 @@ describe("Proxy", async () => {
             expect(await pool.totalSupply()).to.be.not.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(amount)
             const poolData = await pool.getPoolParams()
-            // TODO: check if should add test with second user mint (which will have positive spread)
-            //const spread = poolData.spread / 10000
-            //const netAmount = amount / (1 - spread)
             const netAmount = amount
             expect(netAmount.toString()).to.be.eq(etherAmount.toString())
         })
@@ -327,11 +324,8 @@ describe("Proxy", async () => {
             const preBalance = await hre.ethers.provider.getBalance(user1.address)
             const netRevenue = await pool.callStatic.burn(userPoolBalance, 1)
             const { unitaryValue } = await pool.getPoolTokens()
-            // TODO: the following condition is true only when buyer is not only only holder
-            //expect(netRevenue).to.be.eq(BigNumber.from(userPoolBalance).mul(95).div(100).mul(unitaryValue).div(etherAmount))
             expect(netRevenue).to.be.eq(BigNumber.from(userPoolBalance).mul(100).div(100).mul(unitaryValue).div(etherAmount))
-            // the following is true with fee set as 0 or if user is only holder
-            // TODO: also add mint and burn with 2 users, so can account for spread (or do that in spread test)
+            // the following is true with fee set as 0
             await expect(
                 pool.burn(userPoolBalance, 1)
             ).to.emit(pool, "Transfer").withArgs(
@@ -339,9 +333,6 @@ describe("Proxy", async () => {
                 AddressZero,
                 userPoolBalance
             )
-
-            // TODO: add spread tests, where 2 users mint and burn, so that spread is accounted for
-            //const spreadAmount = BigNumber.from(etherAmount).sub(etherAmount.div(100).mul(95).div(100).mul(95))
             const spreadAmount = BigNumber.from(etherAmount).sub(etherAmount.div(100).mul(100).div(100).mul(100))
             expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(spreadAmount)
             const postBalance = await hre.ethers.provider.getBalance(user1.address)
@@ -574,7 +565,7 @@ describe("Proxy", async () => {
 
         it('should revert with rogue values', async () => {
             const { pool } = await setupTests()
-            // min lockup is 10 seconds. TODO: verify if should be 10 blocks
+            // min lockup is 10 seconds.
             await expect(
                 pool.changeMinPeriod(1)
             ).to.be.revertedWith('PoolLockupPeriodInvalid(10, 2592000)')
@@ -653,12 +644,10 @@ describe("Proxy", async () => {
             activeTokens = (await pool.getActiveTokens()).activeTokens
             // second mint will prompt nav calculations, so lp tokens are included in active tokens
             expect(activeTokens.length).to.be.eq(1)
-            // TODO: assert that wethAddress is in activeTokens
             isWethInActiveTokens = activeTokens.includes(wethAddress)
             expect(isWethInActiveTokens).to.be.true
             // will execute and not remove any token
             await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
-            // TODO: active token is removed, while it shouldn't?
             activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(1)
         })
@@ -701,16 +690,12 @@ describe("Proxy", async () => {
             activeTokens = (await pool.getActiveTokens()).activeTokens
             // second mint will prompt nav calculations, so lp tokens are included in active tokens
             expect(activeTokens.length).to.be.eq(0)
-            // TODO: must verify if Posm actually adds a tokenId to owner mapping, but we still need to use
-            // the internal tokenIds array to get the active positions.
-            // TODO: verify if we need an enumerable mapping instead of simple array
             expect(await uniswapV4Posm.nextTokenId()).to.be.eq(2)
             expect(await uniswapV4Posm.balanceOf(pool.address)).to.be.eq(1)
             // will execute and not remove any token
             await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
             activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(0)
-            // TODO: need to push a new position by minting a new one via pool
         })
     })
 })

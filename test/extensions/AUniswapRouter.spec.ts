@@ -43,7 +43,6 @@ describe("AUniswapRouter", async () => {
         AddressZero
     )
     await factory.createPool('testpool','TEST',AddressZero)
-    // TODO: verify what is needed before this block
     const UniRouter2Instance = await deployments.get("MockUniswapRouter");
     const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
     const univ3NpmAddress = await uniswapRouter2.positionManager()
@@ -53,7 +52,6 @@ describe("AUniswapRouter", async () => {
     const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter");
     const uniRouter = await MockUniUniversalRouter.deploy(univ3NpmAddress, Univ4PosmInstance.address)
     const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter")
-    // TODO: verify we are using the same WETH9 for Posm initialization
     const univ3Npm = Univ3Npm.attach(univ3NpmAddress)
     const wethAddress = await univ3Npm.WETH9()
     const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address, wethAddress)
@@ -195,7 +193,7 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('RecipientIsNotSmartPool()')
+      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter()')
     })
 
     it('should revert mint if a token does not have a price feed', async () => {
@@ -316,7 +314,6 @@ describe("AUniswapRouter", async () => {
       // the mock posm does not move funds from the pool, so we can send before pool has balance
       const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
       const extPool = ExtPool.attach(pool.address)
-      // TODO: we can record event
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       ).to.be.revertedWith('PositionDoesNotExist()')
@@ -350,7 +347,6 @@ describe("AUniswapRouter", async () => {
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       v4Planner = new V4Planner()
       v4Planner.addAction(Actions.INCREASE_LIQUIDITY, [expectedTokenId, '6000000', etherAmount.div(2), MAX_UINT128, '0x'])
-      // TODO: we can record event
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       expect(await univ4Posm.nextTokenId()).to.be.eq(2)
       expect(await univ4Posm.balanceOf(pool.address)).to.be.eq(1)
@@ -390,7 +386,6 @@ describe("AUniswapRouter", async () => {
       v4Planner.addAction(Actions.DECREASE_LIQUIDITY, [expectedTokenId, '1200000', MAX_UINT128, MAX_UINT128, '0x'])
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(10001 + 6000000 - 1200000)
-      // TODO: should verify that tokenIds storage is unchanged
     })
 
     it('should burn owned position', async () => {
@@ -532,8 +527,7 @@ describe("AUniswapRouter", async () => {
       // the mock posm does not move funds from the pool, so we can send before pool has balance
       const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
       const extPool = ExtPool.attach(pool.address)
-      // ETH transfer fails without error when pool does not have enough balance
-      // TODO: safeTransferETH reverts with a reason, must verify why the reason is not returned
+      // ETH transfer fails with custom error when pool does not have enough balance
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       ).to.be.revertedWith('InsufficientNativeBalance()')
@@ -758,7 +752,6 @@ describe("AUniswapRouter", async () => {
         [commands, inputs, DEADLINE]
       )
       expect(await grgToken.allowance(pool.address, permit2.address)).to.be.eq(0)
-      // TODO: this swap failed silently before, as we did not set the correct permit2 approval. Check why it was not reverted with error
       const tx = await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       const receipt = await tx.wait()
       const block = await hre.ethers.provider.getBlock(receipt.blockNumber)
@@ -825,7 +818,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('RecipientIsNotSmartPool()')
+      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter()')
     })
 
     it('should revert settle if tokenOut does not have a price feed', async () => {
@@ -1068,7 +1061,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('RecipientIsNotSmartPool()')
+      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter()')
     });
 
     it("should process sweep, transfer and pay v3 payment methods", async function () {
