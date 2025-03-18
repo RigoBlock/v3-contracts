@@ -67,10 +67,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         netRevenue = _burn(amountIn, amountOutMin, _BASE_TOKEN_FLAG);
     }
 
-    // TODO: test for potential abuse. Technically, if the token can be manipulated, a burn in base token can do just as much
-    // harm as a burn in any token. Considering burn must happen after a certain period, a pool opeartor has time to sell illiquid tokens.
-    // technically, this could be used for exchanging big quantities of tokens at market rate. Which is not a big deal. prob should
-    // allow only if user does not have enough base tokens
     /// @inheritdoc ISmartPoolActions
     function burnForToken(
         uint256 amountIn,

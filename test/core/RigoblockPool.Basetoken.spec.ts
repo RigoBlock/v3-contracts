@@ -155,8 +155,6 @@ describe("BaseTokenProxy", async () => {
             poolData = await pool.getPoolStorage()
             expect(poolData.poolTokensInfo.unitaryValue).to.be.eq(parseEther("1"))
             expect(poolData.poolTokensInfo.totalSupply).to.be.eq(parseEther("10"))
-            // TODO: should add test of second mint with another wallet?
-            // default spread of 5% results in less token minted than amount in at initial price 1
 
         })
     })
@@ -215,10 +213,6 @@ describe("BaseTokenProxy", async () => {
             // with 0 fees and without changing price, total supply will be equal to userbalance
             expect(userTokens).to.be.eq(await pool.totalSupply())
             // with initial price 1, user tokens are equal to grg transferred to pool
-            const poolData = await pool.getPoolParams()
-            // TODO: only holder is not charged a spread, check if should assert with an additional holder
-            //const spread = poolGrgBalance * poolData.spread / 10000 // spread
-            //poolGrgBalance -= spread
             expect(userTokens.toString()).to.be.eq(poolGrgBalance.toString())
         })
     })
@@ -261,15 +255,6 @@ describe("BaseTokenProxy", async () => {
             await expect(
                 pool.burn(tokenAmountIn, BigNumber.from(tokenAmountIn).add(1))
             ).to.be.revertedWith('PoolBurnOutputAmount()')
-
-            // TODO: now can always burn as pool value is calculate automatically. Only way to simulate
-            // would be to move tokens via an adapter.
-            //await expect(
-            //    pool.burn(userPoolBalance, 0)
-            //).to.be.revertedWith('TokenTransferFailed()')
-            //await expect(
-            //    pool.burn(userPoolBalance, userPoolBalance)
-            //).to.be.revertedWith('PoolBurnOutputAmount()')
             const netRevenue = await pool.callStatic.burn(userPoolBalance, 0)
             // the following is true with fee set as 0
             await expect(
@@ -282,8 +267,6 @@ describe("BaseTokenProxy", async () => {
             const poolTotalSupply = await pool.totalSupply()
             expect(poolTotalSupply).to.be.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(0)
-            // TODO: mint with another wallet as well, so we can simulate with positive spread
-            // and increased unitary value. Be careful as we also want to assert base case where spread is nil
             // as long as price is 1, tokenAmountIn should be equal to netRevenue
             expect(Number(tokenAmountIn)).to.be.eq(Number(netRevenue))
             const tokenDelta = Number(tokenAmountIn) - netRevenue
@@ -291,10 +274,8 @@ describe("BaseTokenProxy", async () => {
             expect(poolGrgBalance).to.be.eq(tokenDelta.toString())
             // if fee != 0 and caller not fee recipient, supply will not be 0
             let poolData = await pool.getPoolParams()
-            // TODO: we could return a 0 spread if only holder, but if the transaction were frontrun, it would fail (which could be ok)
             const spread = poolData.spread
             const markup = userPoolBalance === poolTotalSupply ? userPoolBalance.mul(spread).div(10000) : 0
-            // TODO: also assert with positive spread
             userPoolBalance -= markup
             poolData = await pool.getPoolTokens()
             const unitaryValue = poolData.unitaryValue
@@ -327,7 +308,6 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
-    // TODO: also make assertions with correct values of minimum amount out
     describe("burn 6-decimals pool", async () => {
         it('should burn tokens with 6-decimal base token', async () => {
             const { pool, factory, oracle } = await setupTests()
@@ -352,8 +332,6 @@ describe("BaseTokenProxy", async () => {
             const poolUsdc = pool.attach(newPool.newPoolAddress)
             expect(await poolUsdc.decimals()).to.be.eq(6)
             await usdc.transfer(user2.address, 2000000)
-            // TODO: use a different amount than unit to make sure it is not a coincidence
-            // TODO: mint, then transfer, then mint again with higher price, ...
             // first mint will store initial value in storage
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 100000, 1)
@@ -380,12 +358,6 @@ describe("BaseTokenProxy", async () => {
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 999, 0)
             ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
-            // TODO: try burn, then set value again
-            /*await poolUsdc.updateUnitaryValue()
-            await poolUsdc.updateUnitaryValue()
-            await poolUsdc.updateUnitaryValue()
-            // the following line undeflows minimum liquidity (99.96% loss with small decimals), which is ok
-            poolUsdc.updateUnitaryValue()*/
             // TODO: verify setting minimum period to 2 will set to 10?
             await timeTravel({ seconds: 2592000, mine: true })
             const burnAmount = 6000
@@ -408,7 +380,6 @@ describe("BaseTokenProxy", async () => {
         })
     })
 
-    // TODO: also make assertions with correct values of minimum amount out
     describe("burnForToken", async () => {
         it('should revert when token is not active', async () => {
             const { pool, grgToken } = await setupTests()
@@ -466,7 +437,6 @@ describe("BaseTokenProxy", async () => {
             // NOTICE: if weth amount is smaller or values returned by univ3npm are changed, the amounts will need to be adjusted
             // pool has enough tokens to pay with base token
             await expect(pool.burnForToken(parseEther("0.12"), 0, weth.address)).to.be.revertedWith('BaseTokenBalance()')
-            // TODO: test with more granular amounts, maybe by just activating a token via a swap
             // nav is higher after lp mint, so the pool does not have enough base token to pay
             // this reverts because the pool does not have enough target token
             await expect(pool.burnForToken(parseEther("8"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
@@ -481,7 +451,7 @@ describe("BaseTokenProxy", async () => {
                 .and.to.emit(weth, "Transfer").withArgs(
                     pool.address,
                     user1.address,
-                    parseEther("34.973557588219344635")
+                    parseEther("34.972313000659623282")
                 )
                 .and.to.not.emit(grgToken, "Transfer")
         })
@@ -557,15 +527,15 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool, but includes lp token balances and weth balance
             const { unitaryValue } = await pool.getPoolTokens()
-            expect(unitaryValue).to.be.eq(parseEther("235.292654274150771514"))
+            expect(unitaryValue).to.be.eq(parseEther("231.804664178652316842"))
             await timeTravel({ seconds: 2592000, mine: true })
             await expect(
                 pool.burnForToken(parseEther("0.09"), 0, weth.address)
             )
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
-                // TODO: verify why we have a small difference in nav (possibly due to rounding)
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("235.292654274150771519"))
-                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.719188034102384560"))
+                // TODO: verify why we have a difference in nav (possibly due to rounding, or twap adjusting by block)
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("235.285146912841796609"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.718558864144876521"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })

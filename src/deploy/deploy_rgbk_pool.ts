@@ -43,7 +43,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: replace with deployed oracle address (same on all chains)
+  // Notice: replace with deployed oracle address (same on all chains)
   const oracleAddress = "0x8A753747A1Fa494EC906cE90E9f37563A8AF630e"
   const wethAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const eOracle = await deploy("EOracle", {
@@ -53,7 +53,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // TODO: replace with deployed address (different by chain)
+  // Notice: replace with deployed address (different by chain)
   const grgStakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ3Npm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
