@@ -1004,6 +1004,50 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
     });
 
+    it("should process v3 exactIn swap by passing sender as receipient flag", async function () {
+      const { pool, grgToken, wethAddress, oracle } = await setupTests()
+      const PAIR = DEFAULT_PAIR
+      PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      await oracle.initializeObservations(PAIR.poolKey)
+      const path = encodePath([wethAddress, grgToken.address], [FeeAmount.MEDIUM])
+      // from uniswap v4 periphery constants definition
+      const SENDER_AS_RECIPIENT = '0x0000000000000000000000000000000000000001'
+      const planner: RoutePlanner = new RoutePlanner()
+      // recipient, amountIn, amountOutMin, path, payerIsUser
+      planner.addCommand(CommandType.V3_SWAP_EXACT_IN, [SENDER_AS_RECIPIENT, 100, 1, path, true])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+    });
+
+    it("should process v3 exactIn swap and unwrap", async function () {
+      const { pool, grgToken, wethAddress, oracle } = await setupTests()
+      const PAIR = DEFAULT_PAIR
+      //PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      //await oracle.initializeObservations(PAIR.poolKey)
+      const path = encodePath([grgToken.address, wethAddress], [FeeAmount.MEDIUM])
+      const planner: RoutePlanner = new RoutePlanner()
+      // from uniswap v4 periphery constants definition. router must be WETH recipient, to be able to unwrap
+      const ROUTER_AS_RECIPIENT = '0x0000000000000000000000000000000000000002'
+      // recipient, amountIn, amountOutMin, path, payerIsUser
+      planner.addCommand(CommandType.V3_SWAP_EXACT_IN, [ROUTER_AS_RECIPIENT, 100, 1, path, true])
+      planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 100])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      // our mock router contract does not handle transaction logic, so cannot assert that ETH was sent to smart pool
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.not.be.reverted
+    });
+
     it("should process v3 exactOut", async function () {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
       const PAIR = DEFAULT_PAIR
