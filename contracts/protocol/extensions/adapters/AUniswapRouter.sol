@@ -204,6 +204,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         }
     }
 
+    /// @dev Some tokens only approve up to type(uint96).max, so we check if approval is less than that amount and approve max uint256 otherwise.
     function _safeApproveTokensIn(address[] memory tokensIn, address target) private {
         for (uint256 i = 0; i < tokensIn.length; i++) {
             // cannot approve base currency, early return
@@ -212,7 +213,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
             }
 
             // only approve once, permit2 will handle transaction block approval
-            if (IERC20(tokensIn[i]).allowance(address(this), address(_permit2)) != type(uint256).max) {
+            if (IERC20(tokensIn[i]).allowance(address(this), address(_permit2)) < type(uint96).max) {
                 tokensIn[i].safeApprove(address(_permit2), type(uint256).max);
             }
 
