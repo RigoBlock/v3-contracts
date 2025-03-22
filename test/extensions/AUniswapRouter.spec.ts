@@ -7,7 +7,7 @@ import { Actions, V4Planner } from '../shared/v4Planner'
 import { CommandType, RoutePlanner } from '../shared/planner'
 import { parse } from "path";
 import { parseEther } from "ethers/lib/utils";
-import { encodePath, FeeAmount } from "../utils/path";
+import { encodeMultihopExactInPath, encodePath, FeeAmount } from "../utils/path";
 import { timeTravel } from "../utils/utils";
 import { time } from "console";
 
@@ -767,7 +767,7 @@ describe("AUniswapRouter", async () => {
       PAIR.poolKey.currency0 = AddressZero
     })
 
-    it('should transfer eth to universal router with settle', async () => {
+    it('should transfer eth to universal router with exactInSingle', async () => {
       const { pool, grgToken, uniRouterAddress } = await setupTests()
       const PAIR = DEFAULT_PAIR
       PAIR.poolKey.currency1 = grgToken.address
@@ -781,7 +781,8 @@ describe("AUniswapRouter", async () => {
           hookData: '0x',
         },
       ])
-      v4Planner.addAction(Actions.SETTLE, [PAIR.poolKey.currency0, parseEther("12"), true])
+      // as SETTLE may be used with flag amount instead of actual amount, value is transferred with exactIn action
+      //v4Planner.addAction(Actions.SETTLE, [PAIR.poolKey.currency0, parseEther("12"), true])
       let planner: RoutePlanner = new RoutePlanner()
       planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
       const { commands, inputs } = planner
@@ -799,6 +800,73 @@ describe("AUniswapRouter", async () => {
       await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       // expect universal router to have received eth
       expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("12"))
+    })
+
+    it('should transfer eth to universal router with exactIn', async () => {
+      const { pool, grgToken, uniRouterAddress } = await setupTests()
+      const PAIR = DEFAULT_PAIR
+      const currencyIn = PAIR.poolKey.currency0
+      const amountInNative = ethers.utils.parseEther("12")
+      const minAmountOutToken = ethers.utils.parseEther("22")
+      PAIR.poolKey.currency1 = grgToken.address
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.SWAP_EXACT_IN, [
+        {
+          currencyIn,
+          path: encodeMultihopExactInPath([PAIR.poolKey], currencyIn),
+          amountIn: amountInNative,
+          amountOutMinimum: minAmountOutToken,
+        },
+      ])
+      let planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('InsufficientNativeBalance()')
+      await pool.mint(user1.address, ethers.utils.parseEther("12"), 1, { value: ethers.utils.parseEther("12") })
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      // expect universal router to have received eth
+      expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("12"))
+    })
+
+    it('should not transfer eth to universal router with exactIn when selling token for native', async () => {
+      const { pool, grgToken, uniRouterAddress } = await setupTests()
+      const PAIR = DEFAULT_PAIR
+      const currencyIn = PAIR.poolKey.currency1
+      const amountInNative = ethers.utils.parseEther("12")
+      const minAmountOutToken = ethers.utils.parseEther("22")
+      PAIR.poolKey.currency1 = grgToken.address
+      let v4Planner: V4Planner = new V4Planner()
+      // the following swap would revert in uniswap, as pair.poolKey.currency0 has not been inverted, but we want to make sure ETH is not transferred
+      v4Planner.addAction(Actions.SWAP_EXACT_IN, [
+        {
+          currencyIn,
+          path: encodeMultihopExactInPath([PAIR.poolKey], currencyIn),
+          amountIn: amountInNative,
+          amountOutMinimum: minAmountOutToken,
+        },
+      ])
+      let planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
+      await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      // expect universal router to have received eth
+      expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
     })
 
     it('should revert if recipient is not pool', async () => {
