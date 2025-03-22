@@ -148,14 +148,13 @@ abstract contract AUniswapDecoder {
                         return params;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
-                        (address recipient,, uint256 amountInMax,,) =
+                        (address recipient,,,,) =
                             abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
                         params.tokensOut = _addUnique(params.tokensOut, path[0]);
                         params.tokensIn = _addUnique(params.tokensIn, path[path.length - 1]);
                         params.recipients = _addUnique(params.recipients, recipient);
-                        params.value += path[0] == ZERO_ADDRESS ? amountInMax : 0;
                         return params;
                     } else if (command == Commands.PERMIT2_PERMIT) {
                         revert InvalidCommandType(command);
@@ -194,10 +193,16 @@ abstract contract AUniswapDecoder {
                         bytes calldata paramsAtIndex = encodedParams[actionIndex];
 
                         if (action < Actions.SETTLE) {
-                            // no further decoding is needed, as we retrieve net values in payments actions
+                            // we must retrieve native value here, as SETTLE may use flag amounts
                             if (action == Actions.SWAP_EXACT_IN) {
+                                IV4Router.ExactInputParams calldata swapParams = paramsAtIndex.decodeSwapExactInParams();
+                                params.value += Currency.unwrap(swapParams.currencyIn) == ZERO_ADDRESS ? swapParams.amountIn : 0;
                                 continue;
                             } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
+                                IV4Router.ExactInputSingleParams calldata swapParams = paramsAtIndex.decodeSwapExactInSingleParams();
+                                params.value += swapParams.zeroForOne && Currency.unwrap(swapParams.poolKey.currency0) == ZERO_ADDRESS
+                                    ? swapParams.amountIn
+                                    : 0;
                                 continue;
                             } else if (action == Actions.SWAP_EXACT_OUT) {
                                 continue;
@@ -206,9 +211,8 @@ abstract contract AUniswapDecoder {
                             }
                         } else {
                             if (action == Actions.SETTLE_ALL) {
-                                (Currency currency, uint256 maxAmount) = paramsAtIndex.decodeCurrencyAndUint256();
+                                (Currency currency, /*uint256 maxAmount*/) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? maxAmount : 0;
                                 continue;
                             } else if (action == Actions.TAKE_ALL) {
                                 (Currency currency,) = paramsAtIndex.decodeCurrencyAndUint256();
@@ -216,9 +220,8 @@ abstract contract AUniswapDecoder {
                                 continue;
                             } else if (action == Actions.SETTLE) {
                                 // Currency currency, uint256 amount, bool payerIsUser
-                                (Currency currency, uint256 amount,) = paramsAtIndex.decodeCurrencyUint256AndBool();
+                                (Currency currency,,) = paramsAtIndex.decodeCurrencyUint256AndBool();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
                                 continue;
                             } else if (action == Actions.TAKE) {
                                 (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
@@ -364,6 +367,7 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, to);
                 return (params, positions);
             } else if (action == Actions.WRAP) {
+                // TODO: verify if wrap uses amount flag, and if we have already appended value in liquidity action (should not append value here then)
                 uint256 amount = actionParams.decodeUint256();
                 params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
                 params.value += amount;
