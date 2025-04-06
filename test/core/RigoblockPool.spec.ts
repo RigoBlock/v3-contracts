@@ -3,15 +3,27 @@ import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
-import { BigNumber, Contract, utils } from "ethers";
-import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
+import { BigNumber, utils } from "ethers";
+import { DEADLINE } from "../shared/constants";
+import { CommandType, RoutePlanner } from '../shared/planner'
+import { Actions, V4Planner } from '../shared/v4Planner'
 import { deployContract, timeTravel } from "../utils/utils";
-import { getAddress } from "ethers/lib/utils";
-import { time } from "console";
 
 describe("Proxy", async () => {
     const [ user1, user2, user3 ] = waffle.provider.getWallets()
     const MAX_TICK_SPACING = 32767
+    const DEFAULT_PAIR = {
+        poolKey: {
+        currency0: AddressZero,
+        currency1: AddressZero,
+        fee: 0,
+        tickSpacing: MAX_TICK_SPACING,
+        hooks: AddressZero,
+        },
+        price: BigNumber.from('1282621508889261311518273674430423'),
+        tickLower: 193800,
+        tickUpper: 193900,
+    }
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -38,15 +50,28 @@ describe("Proxy", async () => {
         )
         const HookInstance = await deployments.get("MockOracle")
         const Hook = await hre.ethers.getContractFactory("MockOracle")
+        const uniswapV3Npm = UniswapV3Npm.attach(uniswapV3NpmAddress)
+        const authority = Authority.attach(AuthorityInstance.address)
+        const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter")
+        const univ3NpmAddress = await uniswapRouter2.positionManager()
+        const uniRouter = await MockUniUniversalRouter.deploy(univ3NpmAddress, UniswapV4PosmInstance.address)
+        const wethAddress = await uniswapV3Npm.WETH9()
+        const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter")
+        const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, UniswapV4PosmInstance.address, wethAddress)
+        await authority.setAdapter(aUniswapRouter.address, true)
+        // "3593564c": "execute(bytes calldata, bytes[] calldata, uint256)"
+        await authority.addMethod("0x3593564c", aUniswapRouter.address)
+        const Weth = await hre.ethers.getContractFactory("WETH9")
         return {
-            authority: Authority.attach(AuthorityInstance.address),
+            authority,
             factory,
             pool,
             uniswapV3Npm: UniswapV3Npm.attach(uniswapV3NpmAddress),
             uniswapV4Posm: UniswapV4Posm.attach(UniswapV4PosmInstance.address),
             oracle: Hook.attach(HookInstance.address),
+            weth: Weth.attach(wethAddress),
         }
-    });
+    })
 
     describe("receive", async () => {
         it('should revert if direct call to implementation', async () => {
@@ -248,7 +273,7 @@ describe("Proxy", async () => {
             expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5"))
         })
 
-        it('should include univ3npm position tokens', async () => {
+        it('should not include univ3npm position tokens', async () => {
             const { pool, uniswapV3Npm } = await setupTests()
             expect(await uniswapV3Npm.balanceOf(pool.address)).to.be.eq(0)
             // mint univ3 position from user1, as univ3 will add tokenId to recipient. MockUniswapNpm does not use input params
@@ -287,26 +312,18 @@ describe("Proxy", async () => {
             // updating nav will prompt going through position tokens, updating active tokens in storage, making a call to oracle extension
             await expect(
                 pool.updateUnitaryValue()
-            ).to.emit(pool, "NewNav").withArgs(
-                user1.address,
-                pool.address,
-                parseEther("200.685071384723181610")
-            )
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("200.685071384723181610"))
-            // second mint will use the previously stored value
-            const newNav = parseEther("200.685071384723181610")
-            const expectedAmount = etherAmount.mul(parseEther("1")).div(newNav)
-            expect(expectedAmount).to.be.deep.eq(parseEther("0.054812248485152427"))
+            ).to.not.emit(pool, "NewNav")
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("1"))
             await expect(
                 pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
             )
                 .to.emit(pool, "Transfer").withArgs(
                     AddressZero,
                     user1.address,
-                    expectedAmount
+                    etherAmount
                 )
                 .and.to.not.emit(pool, "NewNav")
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(newNav)
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("1"))
         })
     })
 
@@ -364,27 +381,34 @@ describe("Proxy", async () => {
     })
 
     it('should revert without enough base token balance', async () => {
-        const { pool, uniswapV3Npm } = await setupTests()
-        // mint univ3 position, so nav will be higher and pool won't have enough base currency
-        const mintParams = {
-            token0: AddressZero,
-            token1: AddressZero,
-            fee: 1,
-            tickLower: 1,
-            tickUpper: 1,
-            amount0Desired: 1,
-            amount1Desired: 1,
-            amount0Min: 1,
-            amount1Min: 1,
-            recipient: pool.address,
-            deadline: 1
-        }
-        await uniswapV3Npm.mint(mintParams)
+        const { pool, weth, oracle } = await setupTests()
         const etherAmount = parseEther("11")
         await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+        // transfer weth and activate it, so that nav increases, but balance is 0
+        await weth.deposit({ value: etherAmount })
+        await weth.transfer(pool.address, etherAmount)
+        await pool.updateUnitaryValue()
+        const unitaryValue = (await pool.getPoolTokens()).unitaryValue
+        // the token is not active, so it will not be included in the nav
+        expect(unitaryValue).to.be.eq(parseEther("1"))
+        const v4Planner: V4Planner = new V4Planner()
+        v4Planner.addAction(Actions.TAKE, [weth.address, pool.address, parseEther("12")])
+        const planner: RoutePlanner = new RoutePlanner()
+        planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+        const { commands, inputs } = planner
+        const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+        const extPool = ExtPool.attach(pool.address)
+        const encodedSwapData = extPool.interface.encodeFunctionData(
+            'execute(bytes,bytes[],uint256)',
+            [commands, inputs, DEADLINE]
+        )
+        const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+        await oracle.initializeObservations(poolKey)
+        // this call will activate the token
+        await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
         await timeTravel({ seconds: 2592000, mine: true })
         await expect(
-            pool.burn(parseEther("1"), 1)
+            pool.burn(parseEther("6"), 1)
         ).to.be.revertedWith('NativeTransferFailed()')
     })
 
@@ -614,42 +638,78 @@ describe("Proxy", async () => {
             await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
         })
 
-        it('should not remove an active token', async () => {
-            const { pool, uniswapV3Npm, oracle } = await setupTests()
-            const wethAddress = await uniswapV3Npm.WETH9()
-            const mintParams = {
-                token0: wethAddress,
-                token1: AddressZero,
-                fee: 1,
-                tickLower: 1,
-                tickUpper: 1,
-                amount0Desired: 1,
-                amount1Desired: 1,
-                amount0Min: 1,
-                amount1Min: 1,
-                recipient: pool.address,
-                deadline: 1
-            }
-            await uniswapV3Npm.mint(mintParams)
+        it('should not remove an active token with positive balance', async () => {
+            const { pool, oracle, weth } = await setupTests()
             const etherAmount = parseEther("12")
             await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-            // first mint does not prompt nav calculations, so lp tokens are not included in active tokens
+            // first mint does not prompt nav calculations
             let activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(0)
-            let isWethInActiveTokens = activeTokens.includes(wethAddress)
+            let isWethInActiveTokens = activeTokens.includes(weth.address)
             expect(isWethInActiveTokens).to.be.false
-            const poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)
+            const v4Planner: V4Planner = new V4Planner()
+            v4Planner.addAction(Actions.TAKE, [weth.address, pool.address, parseEther("12")])
+            const planner: RoutePlanner = new RoutePlanner()
+            planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+            const { commands, inputs } = planner
+            const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+            const extPool = ExtPool.attach(pool.address)
+            const encodedSwapData = extPool.interface.encodeFunctionData(
+                'execute(bytes,bytes[],uint256)',
+                [commands, inputs, DEADLINE]
+            )
+            // this call will activate the token
+            await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+            await weth.deposit({ value: etherAmount })
+            await weth.transfer(pool.address, etherAmount)
             await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
             activeTokens = (await pool.getActiveTokens()).activeTokens
             // second mint will prompt nav calculations, so lp tokens are included in active tokens
             expect(activeTokens.length).to.be.eq(1)
-            isWethInActiveTokens = activeTokens.includes(wethAddress)
+            isWethInActiveTokens = activeTokens.includes(weth.address)
             expect(isWethInActiveTokens).to.be.true
             // will execute and not remove any token
             await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
             activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(1)
+        })
+
+        it('should remove an active token with null balance', async () => {
+            const { pool, oracle, weth } = await setupTests()
+            const etherAmount = parseEther("12")
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            // first mint does not prompt nav calculations
+            let activeTokens = (await pool.getActiveTokens()).activeTokens
+            expect(activeTokens.length).to.be.eq(0)
+            let isWethInActiveTokens = activeTokens.includes(weth.address)
+            expect(isWethInActiveTokens).to.be.false
+            const poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            const v4Planner: V4Planner = new V4Planner()
+            v4Planner.addAction(Actions.TAKE, [weth.address, pool.address, parseEther("12")])
+            const planner: RoutePlanner = new RoutePlanner()
+            planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+            const { commands, inputs } = planner
+            const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+            const extPool = ExtPool.attach(pool.address)
+            const encodedSwapData = extPool.interface.encodeFunctionData(
+                'execute(bytes,bytes[],uint256)',
+                [commands, inputs, DEADLINE]
+            )
+            // this call will activate the token
+            await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+            await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
+            activeTokens = (await pool.getActiveTokens()).activeTokens
+            // second mint will prompt nav calculations, so lp tokens are included in active tokens
+            expect(activeTokens.length).to.be.eq(1)
+            isWethInActiveTokens = activeTokens.includes(weth.address)
+            expect(isWethInActiveTokens).to.be.true
+            // will execute and not remove any token
+            await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
+            activeTokens = (await pool.getActiveTokens()).activeTokens
+            expect(activeTokens.length).to.be.eq(0)
         })
 
         it('should not remove an active applications', async () => {
