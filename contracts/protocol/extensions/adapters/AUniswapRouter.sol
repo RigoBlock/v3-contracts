@@ -246,7 +246,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
             }
 
             // store the position. Mint reverts in uniswap if tokenId exists, so we can be sure it is unique
-            require(storedLength <= 256, UniV4PositionsLimitExceeded());
+            require(storedLength <= EnumerableSet._MAX_UNIQUE_VALUES / 2, UniV4PositionsLimitExceeded());
         }
 
         if (positions.length > 0) {
