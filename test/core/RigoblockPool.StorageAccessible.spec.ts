@@ -134,7 +134,7 @@ describe("MixinStorageAccessible", async () => {
             )
             // we assert we are comparing same length null arrays first
             expect(poolParams).to.be.eq(encodedPack)
-            await pool.changeMinPeriod(1234)
+            await pool.changeMinPeriod(1234567)
             await pool.changeSpread(445)
             await pool.setTransactionFee(67)
             await pool.changeFeeCollector(user2.address)
@@ -143,7 +143,7 @@ describe("MixinStorageAccessible", async () => {
             // EVM tightly encodes struct as following, adding 2 null bytes to fill first uint256 slot
             encodedPack = utils.solidityPack(
                 ['uint16', 'uint160', 'uint16', 'uint16', 'uint48','uint256'],
-                [0, user2.address, 67, 445, 1234, pool.address]
+                [0, user2.address, 67, 445, 1234567, pool.address]
             )
             expect(poolParams).to.be.eq(encodedPack)
         })
