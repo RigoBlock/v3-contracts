@@ -19,6 +19,7 @@
 
 pragma solidity 0.8.28;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
@@ -35,6 +36,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
     using TransientStorage for address;
+    using SafeCast for uint256;
 
     error BaseTokenPriceFeedError();
 
@@ -110,7 +112,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                             values.addUnique(IEOracle(address(this)), apps[i].balances[j].token, baseToken);
                         }
 
-                        storedBalance += int256(apps[i].balances[j].amount);
+                        storedBalance += apps[i].balances[j].amount;
                         // store balance and make sure slot is not cleared to prevent trying to add token again
                         apps[i].balances[j].token.storeBalance(storedBalance != 0 ? storedBalance : int256(1));
                     }
@@ -153,10 +155,10 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // the active tokens list contains unique addresses
         if (token == _ZERO_ADDRESS) {
-            balance += int256(address(this).balance - msg.value);
+            balance += (address(this).balance - msg.value).toInt256();
         } else {
             try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
-                balance += int256(_balance);
+                balance += _balance.toInt256();
             } catch {
                 // returns 0 balance if the ERC20 balance cannot be found
                 return 0;

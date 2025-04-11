@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
@@ -14,6 +15,7 @@ import {NavComponents} from "../../types/NavComponents.sol";
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using EnumerableSet for AddressSet;
+    using SafeCast for uint256;
 
     error BaseTokenBalance();
     error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
@@ -174,7 +176,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
 
             // an active token must have a price feed, hence the oracle query will always return a converted value
-            netRevenue = uint256(IEOracle(address(this)).convertTokenAmount(baseToken, int256(netRevenue), tokenOut));
+            netRevenue = uint256(IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue.toInt256(), tokenOut));
         }
 
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());

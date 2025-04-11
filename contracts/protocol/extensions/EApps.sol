@@ -19,6 +19,7 @@
 
 pragma solidity 0.8.28;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -47,6 +48,7 @@ contract EApps is IEApps {
     using StateLibrary for IPoolManager;
     using PositionInfoLibrary for PositionInfo;
     using TransientStorage for address;
+    using SafeCast for uint256;
 
     error UnknownApplication(uint256 appType);
 
@@ -79,9 +81,8 @@ contract EApps is IEApps {
             if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
                 activeAppCount++;
                 apps[i].isActive = true;
-            // grg staking and univ3 liquidity are pre-existing applications that do not require an upgrade, so they are not
-            // stored. However, future upgrades may change that and we use this fallback block until implemented.
-            } else if (Applications(i) == Applications.GRG_STAKING || Applications(i) == Applications.UNIV3_LIQUIDITY) {
+            // grg staking is a pre-existing application. Therefore, we always check staked balance.
+            } else if (Applications(i) == Applications.GRG_STAKING) {
                 activeAppCount++;
                 apps[i].isActive = true;
             } else {
@@ -103,11 +104,6 @@ contract EApps is IEApps {
     }
 
     /// @inheritdoc IEApps
-    function getUniV3TokenIds() external view override returns (uint256 [] memory tokenIds) {
-        return StorageLib.uniV3TokenIdsSlot().tokenIds;
-    }
-
-    /// @inheritdoc IEApps
     function getUniV4TokenIds() external view override returns (uint256[] memory tokenIds) {
         return StorageLib.uniV4TokenIdsSlot().tokenIds;
     }
@@ -118,8 +114,6 @@ contract EApps is IEApps {
     function _handleApplication(Applications appType) private returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.GRG_STAKING) {
             balances = _getGrgStakingProxyBalances();
-        } else if (appType == Applications.UNIV3_LIQUIDITY) {
-            balances = _getUniV3PmBalances();
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
             balances = _getUniV4PmBalances();
         } else {
@@ -137,48 +131,12 @@ contract EApps is IEApps {
             balances = new AppTokenBalance[](1);
             balances[0].token = address(_grgStakingProxy.getGrgContract());
             bytes32 poolId = IStorage(address(_grgStakingProxy)).poolIdByRbPoolAccount(address(this));
-            balances[0].amount += int256(stakingBalance + _grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this)));
-        }
-    }
-
-    /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans)
-    function _getUniV3PmBalances() private returns (AppTokenBalance[] memory balances) {
-        uint256[] memory tokenIds = StorageLib.uniV3TokenIdsSlot().tokenIds;
-        uint256 length = tokenIds.length;
-
-        // sync up to the first 32 pre-existing uni v3 positions
-        if (length == 0) {
-            length = IERC721(address(_uniV3NPM)).balanceOf(address(this));
-            length = length < 32 ? length : 32;
-            tokenIds = new uint256[](length);
-            for (uint256 i = 0; i < length; i++) {
-                tokenIds[i] = IERC721(address(_uniV3NPM)).tokenOfOwnerByIndex(address(this), i);
-            }
-        }
-
-        balances = new AppTokenBalance[](length * 2);
-
-        for (uint256 i = 0; i < length; i++) {
-            (,, address token0, address token1, , int24 tickLower, int24 tickUpper, uint128 liquidity, , , ,) =
-                _uniV3NPM.positions(tokenIds[i]);
-
-            // we use same v4 LiquidityAmounts library, as PositionValue and FullMath in v3's LiquidityAmounts lib require solc <0.8
-            // unclaimed fees are not included in nav calculations
-            (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
-                _findCrossPrice(token0, token1),
-                TickMath.getSqrtPriceAtTick(tickLower),
-                TickMath.getSqrtPriceAtTick(tickUpper),
-                liquidity
-            );
-
-            balances[i * 2].token = token0;
-            balances[i * 2].amount = int256(amount0);
-            balances[i * 2 + 1].token = token1;
-            balances[i * 2 + 1].amount = int256(amount1);
+            balances[0].amount += (stakingBalance + _grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this))).toInt256();
         }
     }
 
     /// @dev Assumes a hook does not influence liquidity. This is true as long as it cannot access after remove liquidity deltas.
+    /// @dev Using the oracle protects against manipulations of position tokens via slot0 (i.e. via flash loans).
     function _getUniV4PmBalances() private returns (AppTokenBalance[] memory balances) {
         // access stored position ids
         uint256[] memory tokenIds = StorageLib.uniV4TokenIdsSlot().tokenIds;
@@ -198,9 +156,9 @@ contract EApps is IEApps {
             );
 
             balances[i * 2].token = Currency.unwrap(poolKey.currency0);
-            balances[i * 2].amount = int256(amount0);
+            balances[i * 2].amount = amount0.toInt256();
             balances[i * 2 + 1].token = Currency.unwrap(poolKey.currency1);
-            balances[i * 2 + 1].amount = int256(amount1);
+            balances[i * 2 + 1].amount = amount1.toInt256();
         }
     }
 
