@@ -4,11 +4,26 @@ import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, utils } from "ethers";
+import { DEADLINE } from "../shared/constants";
+import { CommandType, RoutePlanner } from '../shared/planner'
+import { Actions, V4Planner } from '../shared/v4Planner'
 import { deployContract, timeTravel } from "../utils/utils";
 
 describe("BaseTokenProxy", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
     const MAX_TICK_SPACING = 32767
+    const DEFAULT_PAIR = {
+        poolKey: {
+        currency0: AddressZero,
+        currency1: AddressZero,
+        fee: 0,
+        tickSpacing: MAX_TICK_SPACING,
+        hooks: AddressZero,
+        },
+        price: BigNumber.from('1282621508889261311518273674430423'),
+        tickLower: 193800,
+        tickUpper: 193900,
+    }
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -27,12 +42,25 @@ describe("BaseTokenProxy", async () => {
             "SmartPool",
             newPoolAddress
         )
-        const UniRouter2Instance = await deployments.get("MockUniswapRouter");
+        const UniRouter2Instance = await deployments.get("MockUniswapRouter")
         const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
         const uniswapV3NpmAddress = await uniswapRouter2.positionManager()
         const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
         const uniswapV3Npm = UniswapV3Npm.attach(uniswapV3NpmAddress)
+        const Univ4PosmInstance = await deployments.get("MockUniswapPosm")
+        const Univ4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
+        const AuthorityInstance = await deployments.get("Authority")
+        const Authority = await hre.ethers.getContractFactory("Authority")
+        const authority = Authority.attach(AuthorityInstance.address)
+        const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter")
+        const univ3NpmAddress = await uniswapRouter2.positionManager()
+        const uniRouter = await MockUniUniversalRouter.deploy(univ3NpmAddress, Univ4PosmInstance.address)
         const wethAddress = await uniswapV3Npm.WETH9()
+        const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter")
+        const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address, wethAddress)
+        await authority.setAdapter(aUniswapRouter.address, true)
+        // "3593564c": "execute(bytes calldata, bytes[] calldata, uint256)"
+        await authority.addMethod("0x3593564c", aUniswapRouter.address)
         const Weth = await hre.ethers.getContractFactory("WETH9")
         const HookInstance = await deployments.get("MockOracle")
         const Hook = await hre.ethers.getContractFactory("MockOracle")
@@ -40,11 +68,11 @@ describe("BaseTokenProxy", async () => {
             pool,
             factory,
             grgToken: GrgToken.attach(GrgTokenInstance.address),
-            uniswapV3Npm,
+            univ4Posm: Univ4Posm.attach(Univ4PosmInstance.address),
             weth: Weth.attach(wethAddress),
             oracle: Hook.attach(HookInstance.address),
         }
-    });
+    })
 
     describe("poolStorage", async () => {
         it('should return pool implementation immutables', async () => {
@@ -391,29 +419,13 @@ describe("BaseTokenProxy", async () => {
         })
 
         it('should burn if token is active and base token balance small enough', async () => {
-            const { pool, grgToken, uniswapV3Npm, oracle } = await setupTests()
-            await grgToken.approve(pool.address, parseEther("30"))
+            const { pool, grgToken, oracle } = await setupTests()
+            await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
             // re-deploy weth, as otherwise transaction won't revert (weth is converted 1-1 to ETH)
             const Weth = await hre.ethers.getContractFactory("WETH9")
             const weth = await Weth.deploy()
-            // we need to mint an lp position to activate token. Until a price feed for both token exists, the token is not automatically activated
-            // by mint operation, as the liquidity amounts  will be 0 (cross price is 0), but the mint opeartion will still be successful
-            const mintParams = {
-                token0: weth.address,
-                token1: AddressZero,
-                fee: 1,
-                tickLower: 1,
-                tickUpper: 1,
-                amount0Desired: 1,
-                amount1Desired: 1,
-                amount0Min: 1,
-                amount1Min: 1,
-                recipient: pool.address,
-                deadline: 1000000000000
-            }
-            await uniswapV3Npm.mint(mintParams)
-            // minting again will activate token (a burn would also activate token)
+
             // nav calculations will sync uni v4 positions, but require if a token does not have a price feed, the liquidity amount will be 0
             await expect(
                 pool.mint(user1.address, parseEther("10"), 0)
@@ -423,98 +435,108 @@ describe("BaseTokenProxy", async () => {
             // as the new token does not have a price feed, the token is not activated by minting
             await pool.mint(user1.address, parseEther("10"), 0)
             await expect(pool.burnForToken(0, 0, weth.address)).to.be.revertedWith('PoolTokenNotActive()')
+
+            // using a supported app is the only way to activate a token
+            const PAIR = DEFAULT_PAIR
+            PAIR.poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            const v4Planner: V4Planner = new V4Planner()
+            v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency1, pool.address, parseEther("12")])
+            const planner: RoutePlanner = new RoutePlanner()
+            planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+            const { commands, inputs } = planner
+            const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+            const extPool = ExtPool.attach(pool.address)
+            const encodedSwapData = extPool.interface.encodeFunctionData(
+                'execute(bytes,bytes[],uint256)',
+                [commands, inputs, DEADLINE]
+            )
+            await expect(
+                user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+            ).to.be.revertedWith('TokenPriceFeedDoesNotExist')
             poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)
             // this call will activate the token
-            await pool.mint(user1.address, parseEther("10"), 0)
+            await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
             await expect(pool.burnForToken(0, 0, weth.address)).to.be.revertedWith('PoolBurnNullAmount()')
             await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
             await timeTravel({ seconds: 2592000, mine: true })
-            await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
+            await expect(pool.burnForToken(parseEther("1"), 0, weth.address)).to.be.revertedWith('BaseTokenBalance()')
             // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
             await weth.deposit({ value: parseEther("100") })
             await weth.transfer(pool.address, parseEther("100"))
-            // NOTICE: if weth amount is smaller or values returned by univ3npm are changed, the amounts will need to be adjusted
+            // Notice: if weth amount is smaller, the amounts will need to be adjusted
             // pool has enough tokens to pay with base token
-            await expect(pool.burnForToken(parseEther("0.12"), 0, weth.address)).to.be.revertedWith('BaseTokenBalance()')
-            // nav is higher after lp mint, so the pool does not have enough base token to pay
-            // this reverts because the pool does not have enough target token
-            await expect(pool.burnForToken(parseEther("8"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
+            // update and verify the pool unitary value before the burn
+            await pool.updateUnitaryValue()
+            const { unitaryValue } = await pool.getPoolTokens()
+            expect(unitaryValue).to.be.eq(parseEther("6"))
+            // as nav is higher (transferred 100 weth), the pool will not have enough base token to pay
+            await expect(pool.burnForToken(parseEther("16.7"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
             await expect(
-                pool.burnForToken(parseEther("0.15"), 0, weth.address)
+                pool.burnForToken(parseEther("16.5"), 0, weth.address)
             )
                 .to.emit(pool, "Transfer").withArgs(
                     user1.address,
                     AddressZero,
-                    parseEther("0.15")
+                    parseEther("16.5")
                 )
                 .and.to.emit(weth, "Transfer").withArgs(
                     pool.address,
                     user1.address,
-                    parseEther("34.972313000659623282")
+                    parseEther("99")
                 )
                 .and.to.not.emit(grgToken, "Transfer")
         })
 
         it('should burn if ETH is input token', async () => {
-            const { pool, grgToken, uniswapV3Npm, weth, oracle } = await setupTests()
+            const { pool, grgToken, weth, oracle } = await setupTests()
             await grgToken.approve(pool.address, parseEther("20"))
             await pool.mint(user1.address, parseEther("10"), 0)
-            // we need to mint an lp position to activate token
-            const mintParams = {
-                token0: weth.address,
-                token1: AddressZero,
-                fee: 1,
-                tickLower: 1,
-                tickUpper: 1,
-                amount0Desired: 1,
-                amount1Desired: 1,
-                amount0Min: 1,
-                amount1Min: 1,
-                recipient: pool.address,
-                deadline: 1
-            }
-            await uniswapV3Npm.mint(mintParams)
-            // minting again will activate token (a burn would also activate token)
-            let poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
-            await oracle.initializeObservations(poolKey)
-            poolKey = { currency0: AddressZero, currency1: weth.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
-            await oracle.initializeObservations(poolKey)
-            await pool.mint(user1.address, parseEther("10"), 0)
+            await expect(pool.burnForToken(0, 0, AddressZero)).to.be.revertedWith('PoolTokenNotActive()')
+            const v4Planner: V4Planner = new V4Planner()
+            v4Planner.addAction(Actions.TAKE, [AddressZero, pool.address, parseEther("12")])
+            const planner: RoutePlanner = new RoutePlanner()
+            planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+            const { commands, inputs } = planner
+            const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+            const extPool = ExtPool.attach(pool.address)
+            const encodedSwapData = extPool.interface.encodeFunctionData(
+                'execute(bytes,bytes[],uint256)',
+                [commands, inputs, DEADLINE]
+            )
+
+            // this call will activate the token
+            await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+            // verify native token has been activated
+            const activeTokens = (await pool.getActiveTokens()).activeTokens
+            expect(activeTokens[0]).to.be.eq(AddressZero)
+            expect(activeTokens.length).to.be.eq(1)
             await expect(pool.burnForToken(0, 0, AddressZero)).to.be.revertedWith('PoolBurnNullAmount()')
             await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('PoolMinimumPeriodNotEnough()')
             await timeTravel({ seconds: 2592000, mine: true })
-            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('NativeTransferFailed()')
+            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('BaseTokenPriceFeedError()')
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
+            await expect(pool.burnForToken(parseEther("1"), 0, AddressZero)).to.be.revertedWith('BaseTokenBalance()')
             await user1.sendTransaction({ to: pool.address, value: parseEther("98")})
+            await pool.updateUnitaryValue()
+            const { unitaryValue } = await pool.getPoolTokens()
+            expect(unitaryValue).to.be.eq(parseEther("10.997963134960554552"))
             await expect(pool.burnForToken(parseEther("0.08"), 0, AddressZero)).to.be.revertedWith('BaseTokenBalance()')
-            await expect(pool.burnForToken(parseEther("5"), 0, AddressZero)).to.be.revertedWith('NativeTransferFailed()')
+            await expect(pool.burnForToken(parseEther("9.1"), 0, AddressZero)).to.be.revertedWith('NativeTransferFailed()')
             await expect(
-                pool.burnForToken(parseEther("0.09"), 0, AddressZero)
+                pool.burnForToken(parseEther("9"), 0, AddressZero)
             )
                 .to.emit(pool, "Transfer").withArgs(
                     user1.address,
                     AddressZero,
-                    parseEther("0.09")
+                    parseEther("9")
                 )
                 .and.to.not.emit(grgToken, "Transfer")
         })
 
         it('should apply spread if user not only holder', async () => {
-            const { pool, grgToken, uniswapV3Npm, weth, oracle } = await setupTests()
-            const mintParams = {
-                token0: weth.address,
-                token1: AddressZero,
-                fee: 1,
-                tickLower: 1,
-                tickUpper: 1,
-                amount0Desired: 1,
-                amount1Desired: 1,
-                amount0Min: 1,
-                amount1Min: 1,
-                recipient: pool.address,
-                deadline: 1000000000000
-            }
-            await uniswapV3Npm.mint(mintParams)
+            const { pool, grgToken, weth, oracle } = await setupTests()
             // need to deposit a bigger amount, as otherwise won't be able to reproduce case where target token is transferred
             await weth.deposit({ value: parseEther("100") })
             await weth.transfer(pool.address, parseEther("100"))
@@ -523,19 +545,34 @@ describe("BaseTokenProxy", async () => {
             // we only need to create price feed for grg, as weth is converted 1-1 to eth
             const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)
+            // activate token via app
+            const v4Planner: V4Planner = new V4Planner()
+            v4Planner.addAction(Actions.TAKE, [weth.address, pool.address, parseEther("12")])
+            const planner: RoutePlanner = new RoutePlanner()
+            planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+            const { commands, inputs } = planner
+            const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+            const extPool = ExtPool.attach(pool.address)
+            const encodedSwapData = extPool.interface.encodeFunctionData(
+                'execute(bytes,bytes[],uint256)',
+                [commands, inputs, DEADLINE]
+            )
+
+            // this call will activate the token
+            await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
             // minting again to activate token via nav calculations
             await pool.mint(user2.address, parseEther("5"), 0)
-            // unitary value does not include spread to pool, but includes lp token balances and weth balance
+            // unitary value does not include spread to pool, but includes weth balance
             const { unitaryValue } = await pool.getPoolTokens()
-            expect(unitaryValue).to.be.eq(parseEther("231.804664178652316842"))
+            expect(unitaryValue).to.be.eq(parseEther("11.151123033319578267"))
             await timeTravel({ seconds: 2592000, mine: true })
             await expect(
-                pool.burnForToken(parseEther("0.09"), 0, weth.address)
+                pool.burnForToken(parseEther("9"), 0, weth.address)
             )
-                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("0.09"))
+                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("9"))
                 // TODO: verify why we have a difference in nav (possibly due to rounding, or twap adjusting by block)
-                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("235.285146912841796609"))
-                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("19.718558864144876521"))
+                .and.to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("11.199819711327277833"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, parseEther("93.862407866921491138"))
                 .and.to.not.emit(grgToken, "Transfer")
         })
     })
