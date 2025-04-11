@@ -863,9 +863,9 @@
   integrity sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==
 
 "@safe-global/safe-singleton-factory@^1.0.14":
-  version "1.0.41"
-  resolved "https://registry.yarnpkg.com/@safe-global/safe-singleton-factory/-/safe-singleton-factory-1.0.41.tgz#4fad6af86496c166f9663ec5896329d4431843a9"
-  integrity sha512-ypR7W4hgCTsAIBmcPibMWK6XItpA2fIALdKysAP5wA9nLx/u5eWEaM4Ge53Tilz5Ojijd2oETQtrghogE1koQw==
+  version "1.0.42"
+  resolved "https://registry.yarnpkg.com/@safe-global/safe-singleton-factory/-/safe-singleton-factory-1.0.42.tgz#038b55acf6c079e03bbb5f1f21981f17a4f715c5"
+  integrity sha512-FZD691qVNKI/bGLD36kniUQUWZtLhRivaBL6SRCEsLO4tNoKQvIWDbapTK6m9bblIE1oXGFTUpKPe1kEb3I/kg==
 
 "@scure/base@~1.1.0":
   version "1.1.1"
@@ -3427,9 +3427,9 @@ dotenv@^14.2.0:
   integrity sha512-vwEppIphpFdvaMCaHfCEv9IgwcxMljMw2TnAQBB4VWPvzXQLTb82jwmdOKzlEVUL3gNFT4l4TPKO+Bn+sqcrVQ==
 
 dotenv@^16.0.2:
-  version "16.4.7"
-  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-16.4.7.tgz#0e20c5b82950140aa99be360a8a5f52335f53c26"
-  integrity sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==
+  version "16.5.0"
+  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-16.5.0.tgz#092b49f25f808f020050051d1ff258e404c78692"
+  integrity sha512-m/C+AwOAr9/W1UOIZUo232ejMNnJAJtYQjUbHoNTBNTJSvqzzDh7vnrei3o3r3m9blf6ZoDkvcw0VmozNRFJxg==
 
 dotignore@~0.1.2:
   version "0.1.2"
@@ -3797,9 +3797,9 @@ escodegen@1.8.x:
     source-map "~0.2.0"
 
 eslint-config-prettier@^10.0.1:
-  version "10.1.1"
-  resolved "https://registry.yarnpkg.com/eslint-config-prettier/-/eslint-config-prettier-10.1.1.tgz#cf0ff6e5c4e7e15f129f1f1ce2a5ecba92dec132"
-  integrity sha512-4EQQr6wXwS+ZJSzaR5ZCrYgLxqvUjdXctaEtBqHcbkW944B1NQyO4qpdHQbXBONfwxXdkAY81HH4+LUfrg+zPw==
+  version "10.1.2"
+  resolved "https://registry.yarnpkg.com/eslint-config-prettier/-/eslint-config-prettier-10.1.2.tgz#31a4b393c40c4180202c27e829af43323bf85276"
+  integrity sha512-Epgp/EofAUeEpIdZkW60MHKvPyru1ruQJxPL+WIycnaPApuseK0Zpkrh/FwL9oIpQvIhJwV7ptOy0DWUjTlCiA==
 
 eslint-import-resolver-node@^0.3.9:
   version "0.3.9"
@@ -9544,9 +9544,9 @@ typedarray@^0.0.6:
   integrity sha1-hnrHTjhkGHsdPUfZlqeOxciDB3c=
 
 typescript@^5.0.4:
-  version "5.8.2"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.8.2.tgz#8170b3702f74b79db2e5a96207c15e65807999e4"
-  integrity sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ==
+  version "5.8.3"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.8.3.tgz#92f8a3e5e3cf497356f4178c34cd65a7f5e8440e"
+  integrity sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ==
 
 typewise-core@^1.2, typewise-core@^1.2.0:
   version "1.2.0"
