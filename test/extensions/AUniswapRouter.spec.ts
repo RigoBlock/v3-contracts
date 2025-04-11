@@ -72,7 +72,6 @@ describe("AUniswapRouter", async () => {
       pool: Pool.attach(newPoolAddress),
       newPoolAddress,
       poolId,
-      univ3Npm,
       univ4Posm: Univ4Posm.attach(Univ4PosmInstance.address),
       wethAddress,
       aUniswapRouter,
