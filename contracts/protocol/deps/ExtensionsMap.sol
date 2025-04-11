@@ -34,7 +34,6 @@ import {DeploymentParams, Extensions} from "../types/DeploymentParams.sol";
 contract ExtensionsMap is IExtensionsMap {
     // mapped selectors. When adding a new selector, make sure its mapping to extension address is added below.
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
-    bytes4 private constant _EAPPS_UNIV3_POSITIONS_SELECTOR = IEApps.getUniV3TokenIds.selector;
     bytes4 private constant _EAPPS_UNIV4_POSITIONS_SELECTOR = IEApps.getUniV4TokenIds.selector;
     bytes4 private constant _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR = IEOracle.convertBatchTokenAmounts.selector;
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
@@ -67,7 +66,6 @@ contract ExtensionsMap is IExtensionsMap {
         // validate immutable constants. Assumes deps are correctly initialized
         assert(
             _EAPPS_BALANCES_SELECTOR ^
-            _EAPPS_UNIV3_POSITIONS_SELECTOR ^
             _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId
         );
         assert(
@@ -89,7 +87,6 @@ contract ExtensionsMap is IExtensionsMap {
     {
         if (
             selector == _EAPPS_BALANCES_SELECTOR ||
-            selector == _EAPPS_UNIV3_POSITIONS_SELECTOR ||
             selector == _EAPPS_UNIV4_POSITIONS_SELECTOR
         ) {
             extension = eApps;

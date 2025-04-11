@@ -27,10 +27,6 @@ interface IEApps {
     /// @return appBalances The arrays of lists of token balances grouped by application type.
     function getAppTokenBalances(uint256 packedApplications) external returns (ExternalApp[] memory appBalances);
 
-    /// @notice Returns the pool's Uniswap V3 active liquidity positions.
-    /// @return tokenIds Array of liquidity position token ids.
-    function getUniV3TokenIds() external view returns (uint256 [] memory tokenIds);
-
     /// @notice Returns the pool's Uniswap V4 active liquidity positions.
     /// @return tokenIds Array of liquidity position token ids.
     function getUniV4TokenIds() external view returns (uint256[] memory tokenIds);
