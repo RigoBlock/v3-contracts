@@ -24,7 +24,6 @@ import {IAMulticall} from "./IAMulticall.sol";
 import {IAStaking} from "./IAStaking.sol";
 import {IAUniswap} from "./IAUniswap.sol";
 import {IAUniswapRouter} from "./IAUniswapRouter.sol";
-import {IAUniswapV3NPM} from "./IAUniswapV3NPM.sol";
 import {IEApps} from "./IEApps.sol";
 import {IEOracle} from "./IEOracle.sol";
 import {IEUpgrade} from "./IEUpgrade.sol";
@@ -38,7 +37,6 @@ interface IRigoblockExtensions is
     IAStaking,
     IAUniswap,
     IAUniswapRouter,
-    IAUniswapV3NPM,
     IEApps,
     IEOracle,
     IEUpgrade
