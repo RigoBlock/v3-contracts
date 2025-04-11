@@ -19,6 +19,7 @@
 
 pragma solidity 0.8.28;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
@@ -30,6 +31,7 @@ import {Observation} from "../types/Observation.sol";
 
 contract EOracle is IEOracle {
     using TickMath for int24;
+    using SafeCast for uint256;
 
     address private constant _ZERO_ADDRESS = address(0);
     uint256 private constant Q96 = 2**96;
