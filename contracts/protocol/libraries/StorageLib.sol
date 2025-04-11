@@ -7,7 +7,6 @@ import {AddressSet, Pool} from "./EnumerableSet.sol";
 
 /// @notice A library for extensions to access proxy pre-assigned storage slots.
 library StorageLib {
-    // TODO: check import from immutable storage definitions
     /// @notice persistent storage slot, used to read from proxy storage without having to update implementation
     bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;

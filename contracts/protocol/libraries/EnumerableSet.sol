@@ -52,7 +52,7 @@ library EnumerableSet {
     error TokenPriceFeedDoesNotExist(address token);
 
     // limit size of array to prevent DOS to nav estimates
-    uint256 private constant _MAX_UNIQUE_ADDRESSES = type(uint8).max;
+    uint256 internal constant _MAX_UNIQUE_VALUES = type(uint8).max / 2; // max 128 values
 
     // flag for removed address
     uint256 private constant REMOVED_ADDRESS_FLAG = type(uint256).max;
@@ -62,7 +62,7 @@ library EnumerableSet {
     function addUnique(AddressSet storage set, IEOracle eOracle, address token, address baseToken) internal {
         if (token != baseToken) {
             if (set.positions[token] == 0 || set.positions[token] == REMOVED_ADDRESS_FLAG) {
-                require(set.addresses.length < _MAX_UNIQUE_ADDRESSES, AddressListExceedsMaxLength());
+                require(set.addresses.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
 
                 // perform a staticcall to the oracle extension and assert token has a price feed
                 require(eOracle.hasPriceFeed(token), TokenPriceFeedDoesNotExist(token));

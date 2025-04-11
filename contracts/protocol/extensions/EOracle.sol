@@ -19,6 +19,7 @@
 
 pragma solidity 0.8.28;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
@@ -30,6 +31,7 @@ import {Observation} from "../types/Observation.sol";
 
 contract EOracle is IEOracle {
     using TickMath for int24;
+    using SafeCast for uint256;
 
     address private constant _ZERO_ADDRESS = address(0);
     uint256 private constant Q96 = 2**96;
@@ -105,7 +107,7 @@ contract EOracle is IEOracle {
         uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(conversionTick);
         uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96); // Q96 * Q96 = Q192
         uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
-        return amount >= 0 ? int256(tokenAmount) : -int256(tokenAmount);
+        return amount >= 0 ? tokenAmount.toInt256() : -tokenAmount.toInt256();
     }
 
     /// @inheritdoc IEOracle

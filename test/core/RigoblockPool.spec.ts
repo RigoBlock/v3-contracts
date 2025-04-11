@@ -12,18 +12,6 @@ import { deployContract, timeTravel } from "../utils/utils";
 describe("Proxy", async () => {
     const [ user1, user2, user3 ] = waffle.provider.getWallets()
     const MAX_TICK_SPACING = 32767
-    const DEFAULT_PAIR = {
-        poolKey: {
-        currency0: AddressZero,
-        currency1: AddressZero,
-        fee: 0,
-        tickSpacing: MAX_TICK_SPACING,
-        hooks: AddressZero,
-        },
-        price: BigNumber.from('1282621508889261311518273674430423'),
-        tickLower: 193800,
-        tickUpper: 193900,
-    }
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
@@ -589,20 +577,20 @@ describe("Proxy", async () => {
 
         it('should revert with rogue values', async () => {
             const { pool } = await setupTests()
-            // min lockup is 10 seconds.
+            // min lockup is 1 hour.
             await expect(
                 pool.changeMinPeriod(1)
-            ).to.be.revertedWith('PoolLockupPeriodInvalid(10, 2592000)')
+            ).to.be.revertedWith('PoolLockupPeriodInvalid(86400, 2592000)')
             // max 30 days lockup
             await expect(
                 pool.changeMinPeriod(2592001)
-            ).to.be.revertedWith('PoolLockupPeriodInvalid(10, 2592000)')
+            ).to.be.revertedWith('PoolLockupPeriodInvalid(86400, 2592000)')
         })
 
         it('should change spread', async () => {
             const { pool } = await setupTests()
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(2592000)
-            const newPeriod = 2592000 - 2591990
+            const newPeriod = 86400
             await expect(pool.changeMinPeriod(newPeriod))
                 .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)
@@ -611,7 +599,7 @@ describe("Proxy", async () => {
         it('will revert if spread same as current', async () => {
             const { pool } = await setupTests()
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(2592000)
-            let newPeriod = 2592000 - 2591990
+            let newPeriod = 86400
             await expect(pool.changeMinPeriod(newPeriod))
                 .to.emit(pool, "MinimumPeriodChanged").withArgs(pool.address, newPeriod)
             expect((await pool.getPoolParams()).minPeriod).to.be.eq(newPeriod)

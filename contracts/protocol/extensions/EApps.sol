@@ -19,6 +19,7 @@
 
 pragma solidity 0.8.28;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -47,6 +48,7 @@ contract EApps is IEApps {
     using StateLibrary for IPoolManager;
     using PositionInfoLibrary for PositionInfo;
     using TransientStorage for address;
+    using SafeCast for uint256;
 
     error UnknownApplication(uint256 appType);
 
@@ -129,7 +131,7 @@ contract EApps is IEApps {
             balances = new AppTokenBalance[](1);
             balances[0].token = address(_grgStakingProxy.getGrgContract());
             bytes32 poolId = IStorage(address(_grgStakingProxy)).poolIdByRbPoolAccount(address(this));
-            balances[0].amount += int256(stakingBalance + _grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this)));
+            balances[0].amount += (stakingBalance + _grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this))).toInt256();
         }
     }
 
@@ -154,9 +156,9 @@ contract EApps is IEApps {
             );
 
             balances[i * 2].token = Currency.unwrap(poolKey.currency0);
-            balances[i * 2].amount = int256(amount0);
+            balances[i * 2].amount = amount0.toInt256();
             balances[i * 2 + 1].token = Currency.unwrap(poolKey.currency1);
-            balances[i * 2 + 1].amount = int256(amount1);
+            balances[i * 2 + 1].amount = amount1.toInt256();
         }
     }
 
