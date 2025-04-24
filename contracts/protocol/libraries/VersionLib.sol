@@ -3,7 +3,10 @@ pragma solidity ^0.8.0;
 
 library VersionLib {
     // Compare versions
-    function isVersionHigherOrEqual(string memory givenVersion, string memory requiredVersion) internal pure returns (bool) {
+    function isVersionHigherOrEqual(
+        string memory givenVersion,
+        string memory requiredVersion
+    ) internal pure returns (bool) {
         uint256[3] memory given = parseVersion(givenVersion);
         uint256[3] memory required = parseVersion(requiredVersion);
 
@@ -23,7 +26,7 @@ library VersionLib {
     // Convert version string to an array of numbers
     function parseVersion(string memory _version) private pure returns (uint256[3] memory versionParts) {
         bytes memory b = bytes(_version);
-        
+
         uint256 partIndex = 0;
         uint256 currentNumber = 0;
 

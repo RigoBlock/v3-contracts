@@ -27,9 +27,7 @@ library SafeTransferLib {
 
     function safeTransferFrom(address token, address from, address to, uint256 amount) internal {
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = token.call(
-            abi.encodeCall(IERC20.transferFrom, (from, to, amount))
-        );
+        (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.transferFrom, (from, to, amount)));
         require(success && (data.length == 0 || abi.decode(data, (bool))), TokenTransferFromFailed());
     }
 
@@ -39,7 +37,7 @@ library SafeTransferLib {
         bool isContract = token.code.length > 0;
         require(isContract, ApprovalTargetIsNotContract(token));
         (bool success, bytes memory data) = token.call(abi.encodeCall(IERC20.approve, (spender, amount)));
-    
+
         if (!success || (data.length != 0 && !abi.decode(data, (bool)))) {
             // force approval
             (success, data) = token.call(abi.encodeCall(IERC20.approve, (spender, 0)));

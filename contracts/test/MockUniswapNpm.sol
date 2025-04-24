@@ -34,18 +34,19 @@ contract MockUniswapNpm {
     uint80 private _nextPoolId = 1;
 
     // default position in state. We can modify return params by override returned params
-    Position defaultPosition = Position({
-        nonce: 0,
-        operator: address(0),
-        poolId: 0,
-        tickLower: -2000,
-        tickUpper: 3000,
-        liquidity: 9369142662522830710261,
-        feeGrowthInside0LastX128: 2 * 1e16,
-        feeGrowthInside1LastX128: 3 * 1e16,
-        tokensOwed0: 16 * 1e16,
-        tokensOwed1: 15 * 1e16
-    });
+    Position defaultPosition =
+        Position({
+            nonce: 0,
+            operator: address(0),
+            poolId: 0,
+            tickLower: -2000,
+            tickUpper: 3000,
+            liquidity: 9369142662522830710261,
+            feeGrowthInside0LastX128: 2 * 1e16,
+            feeGrowthInside1LastX128: 3 * 1e16,
+            tokensOwed0: 16 * 1e16,
+            tokensOwed1: 15 * 1e16
+        });
 
     constructor() {
         WETH9 = address(new WETH9Contract());
@@ -91,7 +92,7 @@ contract MockUniswapNpm {
         delete _positions[tokenId];
         address owner = _ownerOf[tokenId];
         // technically could be an approve address, but in rigoblock we only allow transactions to be proxied by the pool
-        require(owner == msg.sender, 'Not approved');
+        require(owner == msg.sender, "Not approved");
         _balances[owner]--;
         delete _ownerOf[tokenId];
     }

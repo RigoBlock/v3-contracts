@@ -40,8 +40,5 @@ interface IExtensionsMap {
     /// @param selector Selector of the function signature.
     /// @return extension Address of the target extensions.
     /// @return shouldDelegatecall Boolean if should maintain context of call or not.
-    function getExtensionBySelector(bytes4 selector)
-        external
-        view
-        returns (address extension, bool shouldDelegatecall);
+    function getExtensionBySelector(bytes4 selector) external view returns (address extension, bool shouldDelegatecall);
 }

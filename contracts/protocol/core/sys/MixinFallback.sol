@@ -28,7 +28,9 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     /// @dev uses shouldDelegatecall to flag selectors that should prompt a delegatecall.
     fallback() external payable onlyDelegateCall {
         // returns nil target if selector not mapped. Uses delegatecall to preserve context of msg.sender for shouldDelegatecall flag
-        (, bytes memory returnData) = address(_extensionsMap).delegatecall(abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig)));
+        (, bytes memory returnData) = address(_extensionsMap).delegatecall(
+            abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig))
+        );
         (address target, bool shouldDelegatecall) = abi.decode(returnData, (address, bool));
 
         if (target == _ZERO_ADDRESS) {

@@ -30,7 +30,7 @@ library StorageLib {
 
     function uniV4TokenIdsSlot() internal pure returns (TokenIdsSlot storage s) {
         assembly {
-            s.slot := _UNIV4_TOKEN_IDS_SLOT 
+            s.slot := _UNIV4_TOKEN_IDS_SLOT
         }
     }
 
