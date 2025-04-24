@@ -81,7 +81,7 @@ contract EApps is IEApps {
             if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
                 activeAppCount++;
                 apps[i].isActive = true;
-            // grg staking is a pre-existing application. Therefore, we always check staked balance.
+                // grg staking is a pre-existing application. Therefore, we always check staked balance.
             } else if (Applications(i) == Applications.GRG_STAKING) {
                 activeAppCount++;
                 apps[i].isActive = true;
@@ -131,7 +131,8 @@ contract EApps is IEApps {
             balances = new AppTokenBalance[](1);
             balances[0].token = address(_grgStakingProxy.getGrgContract());
             bytes32 poolId = IStorage(address(_grgStakingProxy)).poolIdByRbPoolAccount(address(this));
-            balances[0].amount += (stakingBalance + _grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this))).toInt256();
+            balances[0].amount += (stakingBalance +
+                _grgStakingProxy.computeRewardBalanceOfDelegator(poolId, address(this))).toInt256();
         }
     }
 

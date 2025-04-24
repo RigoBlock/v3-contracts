@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.28;
+pragma solidity >=0.8.0 <0.9.0;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";
@@ -60,7 +60,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
-                components.unitaryValue = totalPoolValue * 10 ** components.decimals / components.totalSupply;
+                components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / components.totalSupply;
             } else {
                 return components;
             }
@@ -136,8 +136,11 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
 
         if (activeTokens.length > 0) {
-            poolValueInBaseToken += IEOracle(address(this))
-                .convertBatchTokenAmounts(activeTokens, tokenAmounts, baseToken);
+            poolValueInBaseToken += IEOracle(address(this)).convertBatchTokenAmounts(
+                activeTokens,
+                tokenAmounts,
+                baseToken
+            );
         }
 
         // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool

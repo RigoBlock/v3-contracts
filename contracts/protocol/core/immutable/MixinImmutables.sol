@@ -54,10 +54,11 @@ abstract contract MixinImmutables is MixinConstants {
         // the following assertion will alway be true, as long as IExtensionsMap implements the expected methods.
         assert(
             IExtensionsMap.eApps.selector ^
-            IExtensionsMap.eOracle.selector ^
-            IExtensionsMap.eUpgrade.selector ^
-            IExtensionsMap.wrappedNative.selector ^
-            IExtensionsMap.getExtensionBySelector.selector == type(IExtensionsMap).interfaceId
+                IExtensionsMap.eOracle.selector ^
+                IExtensionsMap.eUpgrade.selector ^
+                IExtensionsMap.wrappedNative.selector ^
+                IExtensionsMap.getExtensionBySelector.selector ==
+                type(IExtensionsMap).interfaceId
         );
     }
 }

@@ -13,8 +13,7 @@ library TransientStorage {
     bytes32 internal constant _TRANSIENT_BALANCE_SLOT =
         bytes32(uint256(keccak256("mixin.value.transient.balance")) - 1);
 
-    bytes32 internal constant _TRANSIENT_TWAP_TICK_SLOT =
-        bytes32(uint256(keccak256("transient.tick.slot")) - 1);
+    bytes32 internal constant _TRANSIENT_TWAP_TICK_SLOT = bytes32(uint256(keccak256("transient.tick.slot")) - 1);
 
     // Helper functions for tstore operations
     /// @notice Stores a mapping of token addresses to int256 values

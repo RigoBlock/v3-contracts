@@ -21,7 +21,7 @@
 pragma solidity 0.8.28;
 
 import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
-import {ISwapRouter02, IV3SwapRouter} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
+import {ISwapRouter02} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
@@ -42,7 +42,9 @@ contract AUniswap is IAUniswap, IMinimumVersion {
 
     /// @dev uniswapRouter2 address is 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks.
     constructor(address uniswapRouter02) {
-        _weth = IWETH9(payable(INonfungiblePositionManager(payable(ISwapRouter02(uniswapRouter02).positionManager())).WETH9()));
+        _weth = IWETH9(
+            payable(INonfungiblePositionManager(payable(ISwapRouter02(uniswapRouter02).positionManager())).WETH9())
+        );
     }
 
     /// @inheritdoc IMinimumVersion
