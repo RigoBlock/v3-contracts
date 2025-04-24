@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.28;
+pragma solidity >=0.8.0 <0.9.0;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {MixinOwnerActions} from "../actions/MixinOwnerActions.sol";

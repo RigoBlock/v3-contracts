@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
 /// @title IExtensionsMap - Wraps extensions selectors to addresses.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
