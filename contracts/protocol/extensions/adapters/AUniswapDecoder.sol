@@ -217,7 +217,8 @@ abstract contract AUniswapDecoder {
                             }
                         } else {
                             if (action == Actions.SETTLE_ALL) {
-                                (Currency currency /*uint256 maxAmount*/, ) = paramsAtIndex.decodeCurrencyAndUint256();
+                                // Currency currency, uint256 maxAmount
+                                (Currency currency, ) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                                 continue;
                             } else if (action == Actions.TAKE_ALL) {
