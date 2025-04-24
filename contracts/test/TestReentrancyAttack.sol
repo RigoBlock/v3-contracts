@@ -19,9 +19,7 @@ contract TestReentrancyAttack {
     function mintPool() public {
         count += 1;
         if (count <= maxLoopCount) {
-            try ISmartPool(payable(RIGOBLOCK_POOL)).mint(address(this), 1e19, 1) {} catch Error(
-                string memory reason
-            ) {
+            try ISmartPool(payable(RIGOBLOCK_POOL)).mint(address(this), 1e19, 1) {} catch Error(string memory reason) {
                 revert(reason);
             }
         }
