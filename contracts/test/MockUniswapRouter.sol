@@ -3,8 +3,8 @@
 pragma solidity 0.8.17;
 
 import {WETH9 as WETH9Contract} from "../tokens/WETH9/WETH9.sol";
-import "../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
-import "./MockUniswapNpm.sol";
+import {ISwapRouter02} from "../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
+import {MockUniswapNpm} from "./MockUniswapNpm.sol";
 
 contract MockUniswapRouter {
     string public constant requiredVersion = "4.0.0";

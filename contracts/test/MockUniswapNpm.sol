@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import {WETH9 as WETH9Contract} from "../tokens/WETH9/WETH9.sol";
-import "../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
+import {INonfungiblePositionManager} from "../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 
 struct Position {
     uint96 nonce;

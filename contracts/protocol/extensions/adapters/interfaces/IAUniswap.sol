@@ -19,8 +19,6 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
-
 interface IAUniswap {
     /// @notice Unwraps the contract's WETH9 balance and sends it to recipient as ETH.
     /// @dev The amountMinimum parameter prevents malicious contracts from stealing WETH9 from users.
