@@ -40,7 +40,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
     error BaseTokenPriceFeedError();
 
-    // TODO: assert not possible to inflate total supply to manipulate pool price.
     /// @notice Uses transient storage to keep track of unique token balances.
     /// @dev With null total supply a pool will return the last stored value.
     function _updateNav() internal override returns (NavComponents memory components) {
@@ -57,7 +56,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         } else {
             uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
 
-            // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / components.totalSupply;

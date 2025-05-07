@@ -378,7 +378,6 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, to);
                 return (params, positions);
             } else if (action == Actions.WRAP) {
-                // TODO: verify if wrap uses amount flag, and if we have already appended value in liquidity action (should not append value here then)
                 uint256 amount = actionParams.decodeUint256();
                 params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
                 params.value += amount;
