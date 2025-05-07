@@ -85,7 +85,13 @@ const userConfig: HardhatUserConfig = {
         ...compiler.settings,
         evmVersion: compiler.settings?.evmVersion || soliditySettings?.evmVersion
       }
-    }))
+    })),
+    overrides: {
+      "contracts/protocol/proxies/RigoblockPoolProxy.sol": {
+        version: "0.8.17",
+        settings: { ...soliditySettings, evmVersion: "london" }
+      },
+    }
   },
   networks: {
     hardhat: {
