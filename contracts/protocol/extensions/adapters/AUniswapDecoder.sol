@@ -187,9 +187,12 @@ abstract contract AUniswapDecoder {
                     //(bytes memory actions, bytes[] memory encodedParams) = abi.decode(inputs, (bytes, bytes[]));
                     // we decode manually to be able to override params?
                     (bytes calldata actions, bytes[] calldata encodedParams) = inputs.decodeActionsRouterParams();
-                    assert(actions.length == encodedParams.length);
 
-                    for (uint256 actionIndex = 0; actionIndex < actions.length; actionIndex++) {
+                    // caching for gas savings
+                    uint256 actionsLength = actions.length;
+                    assert(actionsLength == encodedParams.length);
+
+                    for (uint256 actionIndex = 0; actionIndex < actionsLength; actionIndex++) {
                         uint256 action = uint8(actions[actionIndex]);
                         bytes calldata paramsAtIndex = encodedParams[actionIndex];
 
@@ -264,7 +267,10 @@ abstract contract AUniswapDecoder {
             if (command == Commands.EXECUTE_SUB_PLAN) {
                 (bytes calldata _commands, bytes[] calldata _inputs) = inputs.decodeCommandsAndInputs();
 
-                for (uint256 j = 0; j < _commands.length; j++) {
+                // caching for gas savings
+                uint256 commandsLength = _commands.length;
+
+                for (uint256 j = 0; j < commandsLength; j++) {
                     params = _decodeInput(_commands[j], _inputs[j], params);
                 }
             } else {
@@ -352,11 +358,10 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.SETTLE) {
-                // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0)
+                // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0). Therefore, we do not append `value` here
                 // (Currency currency, uint256 amount, bool payerIsUser)
-                (Currency currency, uint256 amount, ) = actionParams.decodeCurrencyUint256AndBool();
+                (Currency currency, , ) = actionParams.decodeCurrencyUint256AndBool();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
                 return (params, positions);
             } else if (action == Actions.TAKE) {
                 (Currency currency, address recipient, ) = actionParams.decodeCurrencyAddressAndUint256();
@@ -393,32 +398,38 @@ abstract contract AUniswapDecoder {
     }
 
     function _addUnique(address[] memory array, address target) private pure returns (address[] memory) {
-        for (uint256 i = 0; i < array.length; i++) {
+        // caching for gas savings
+        uint256 arrayLength = array.length;
+
+        for (uint256 i = 0; i < arrayLength; i++) {
             if (array[i] == target) {
                 return array; // Already exists, return unchanged array
             }
         }
-        address[] memory newArray = new address[](array.length + 1);
-        for (uint256 i = 0; i < array.length; i++) {
+        address[] memory newArray = new address[](arrayLength + 1);
+        for (uint256 i = 0; i < arrayLength; i++) {
             newArray[i] = array[i];
         }
-        newArray[array.length] = target;
+        newArray[arrayLength] = target;
         return newArray;
     }
 
     /// @dev Multiple actions can be executed on the same tokenId, so we add a new position if same tokenId but different action
     function _addUniquePosition(Position[] memory array, Position memory pos) private pure returns (Position[] memory) {
-        for (uint256 i = 0; i < array.length; i++) {
+        // caching for gas savings
+        uint256 arrayLength = array.length;
+
+        for (uint256 i = 0; i < arrayLength; i++) {
             if (array[i].hook == pos.hook && array[i].tokenId == pos.tokenId && array[i].action == pos.action) {
                 return array;
             }
         }
-        Position[] memory newArray = new Position[](array.length + 1);
-        for (uint256 i = 0; i < array.length; i++) {
+        Position[] memory newArray = new Position[](arrayLength + 1);
+        for (uint256 i = 0; i < arrayLength; i++) {
             newArray[i] = array[i];
         }
 
-        newArray[array.length] = pos;
+        newArray[arrayLength] = pos;
         return newArray;
     }
 }

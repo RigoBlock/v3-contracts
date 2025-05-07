@@ -19,9 +19,9 @@
 
 pragma solidity 0.8.28;
 
-import "./adapters/interfaces/IEUpgrade.sol";
+import {IEUpgrade} from "./adapters/interfaces/IEUpgrade.sol";
 import {IRigoblockPoolProxyFactory as Beacon} from "../interfaces/IRigoblockPoolProxyFactory.sol";
-import "../libraries/StorageSlot.sol";
+import {StorageSlot} from "../libraries/StorageSlot.sol";
 
 /// @title EUpgrade - Allows upgrading implementation.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

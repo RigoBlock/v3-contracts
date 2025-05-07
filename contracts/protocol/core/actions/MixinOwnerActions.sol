@@ -78,14 +78,20 @@ abstract contract MixinOwnerActions is MixinActions {
 
         // base token is never pushed to active list for gas savings, we can safely remove any unactive token
         address[] memory activeTokens = set.addresses;
+
+        // caching for gas savings
+        uint256 activeTokensLength = activeTokens.length;
         uint256 activeTokenBalance;
 
-        for (uint256 i = 0; i < activeTokens.length; i++) {
+        for (uint256 i = 0; i < activeTokensLength; i++) {
             bool inApp;
 
-            // skip removal if a token is active in an application
+            // skip removal if a token is active in an application. Do not cache app length due to small number of supported applications.
             for (uint256 j = 0; j < activeApps.length; j++) {
-                for (uint256 k = 0; k < activeApps[j].balances.length; k++) {
+                // caching for gas savings
+                uint256 activeAppTokenBalancesLength = activeApps[j].balances.length;
+
+                for (uint256 k = 0; k < activeAppTokenBalancesLength; k++) {
                     if (activeApps[j].balances[k].token == activeTokens[i]) {
                         inApp = true;
                         break; // Exit k loop
