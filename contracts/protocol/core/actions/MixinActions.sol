@@ -162,12 +162,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             burntAmount -= (burntAmount * _getSpread()) / _SPREAD_BASE;
         }
 
-        // TODO: verify cases of possible underflow for small nav value
         netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
 
-        // TODO: test how this could be exploited.
         if (tokenOut == _BASE_TOKEN_FLAG) {
             tokenOut = baseToken;
         } else if (tokenOut != baseToken) {

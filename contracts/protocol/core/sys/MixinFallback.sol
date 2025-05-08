@@ -15,7 +15,6 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     error PoolMethodNotAllowed();
     error PoolVersionNotSupported();
 
-    // TODO: verify if this should be delegatecall restricted, as could be a repeated check in extensions/adapters
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
         _checkDelegateCall();
