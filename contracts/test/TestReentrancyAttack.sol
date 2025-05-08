@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache 2.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../protocol/ISmartPool.sol";
+import {ISmartPool} from "../protocol/ISmartPool.sol";
 
 contract TestReentrancyAttack {
     address private immutable RIGOBLOCK_POOL;

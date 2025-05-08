@@ -21,8 +21,11 @@ abstract contract MixinStorageAccessible is IStorageAccessible {
 
     /// @inheritdoc IStorageAccessible
     function getStorageSlotsAt(uint256[] memory slots) public view override returns (bytes memory) {
-        bytes memory result = new bytes(slots.length * 32);
-        for (uint256 index = 0; index < slots.length; index++) {
+        // caching for gas savings
+        uint256 slotsLength = slots.length;
+
+        bytes memory result = new bytes(slotsLength * 32);
+        for (uint256 index = 0; index < slotsLength; index++) {
             uint256 slot = slots[index];
             // solhint-disable-next-line no-inline-assembly
             assembly {

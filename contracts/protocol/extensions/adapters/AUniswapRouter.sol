@@ -122,11 +122,14 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
 
     /// @inheritdoc IAUniswapRouter
     function execute(bytes calldata commands, bytes[] calldata inputs) public override nonReentrant onlyDelegateCall {
-        assert(commands.length == inputs.length);
+        // caching for gas savings
+        uint256 commandsLength = commands.length;
+
+        assert(commandsLength == inputs.length);
         Parameters memory params;
 
         // loop through all given commands, verify their inputs and pass along outputs as defined
-        for (uint256 i = 0; i < commands.length; i++) {
+        for (uint256 i = 0; i < commandsLength; i++) {
             // input sanity check and parameters return
             params = _decodeInput(commands[i], inputs[i], params);
         }
@@ -154,11 +157,15 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     /// @dev Delegatecall-only for extra safety, to pervent accidental user liquidity locking.
     function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external override onlyDelegateCall {
         (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
-        assert(actions.length == params.length);
+
+        // caching for gas savings
+        uint256 actionsLength = actions.length;
+
+        assert(actionsLength == params.length);
         Parameters memory newParams;
         Position[] memory positions;
 
-        for (uint256 actionIndex = 0; actionIndex < actions.length; actionIndex++) {
+        for (uint256 actionIndex = 0; actionIndex < actionsLength; actionIndex++) {
             (newParams, positions) = _decodePosmAction(
                 uint8(actions[actionIndex]),
                 params[actionIndex],
@@ -260,11 +267,14 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                     // Assert hook does not have access to deltas. Hook address is returned for mint ops only.
                     // Notice: if moving the following block to protect all actions, make sure hook address is appended.
                     if (positions[i].hook != ZERO_ADDRESS) {
-                        Hooks.Permissions memory permissions = BaseHook(positions[i].hook).getHookPermissions();
+                        bool hasAfterAddLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
+                            Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
+                        bool hasAfterRemoveLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
+                            Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
 
-                        // we prevent hooks to that can access pool liquidity
+                        // Prevent hooks that can access pool liquidity deltas
                         require(
-                            !permissions.afterAddLiquidityReturnDelta && !permissions.afterRemoveLiquidityReturnDelta,
+                            !hasAfterAddLiquidityDeltaPermission && !hasAfterRemoveLiquidityDeltaPermission,
                             LiquidityMintHookError(positions[i].hook)
                         );
                     }
@@ -319,7 +329,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     }
 
     function _containsMintAction(Position[] memory positions) private pure returns (bool isMint) {
-        for (uint i = 0; i < positions.length; i++) {
+        for (uint256 i = 0; i < positions.length; i++) {
             if (positions[i].action == Actions.MINT_POSITION) {
                 isMint = true;
                 break;
