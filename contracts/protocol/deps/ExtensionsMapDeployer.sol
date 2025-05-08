@@ -26,19 +26,22 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
 
         // increase nonce if we are passing different params from last deployed. Will redeploy in case of a rollback, which is ok.
         if (newParamsHash != _paramsHash) {
-            unchecked { ++nonce; }
+            unchecked {
+                ++nonce;
+            }
             _paramsHash = newParamsHash;
         }
 
         // Pre-compute the CREATE2 address
         bytes32 salt = keccak256(abi.encode(msg.sender, nonce));
         address map = address(
-            uint160(uint256(keccak256(abi.encodePacked(
-                bytes1(0xff),
-                address(this),
-                salt,
-                keccak256(type(ExtensionsMap).creationCode)
-            ))))
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(bytes1(0xff), address(this), salt, keccak256(type(ExtensionsMap).creationCode))
+                    )
+                )
+            )
         );
 
         // Deploy only if no code exists
@@ -51,13 +54,10 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
 
     /// @inheritdoc IExtensionsMapDeployer
     function parameters() external view override returns (DeploymentParams memory) {
-        return DeploymentParams({
-            extensions: Extensions({
-                eApps: _eApps,
-                eOracle: _eOracle,
-                eUpgrade: _eUpgrade
-            }),
-            wrappedNative: _wrappedNative
-        });
+        return
+            DeploymentParams({
+                extensions: Extensions({eApps: _eApps, eOracle: _eOracle, eUpgrade: _eUpgrade}),
+                wrappedNative: _wrappedNative
+            });
     }
 }

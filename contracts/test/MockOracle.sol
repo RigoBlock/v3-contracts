@@ -37,22 +37,23 @@ contract MockOracle {
     }
 
     function getHookPermissions() public pure returns (Hooks.Permissions memory) {
-        return Hooks.Permissions({
-            beforeInitialize: true,
-            afterInitialize: true,
-            beforeAddLiquidity: true,
-            afterAddLiquidity: false,
-            beforeRemoveLiquidity: true,
-            afterRemoveLiquidity: false,
-            beforeSwap: true,
-            afterSwap: true,
-            beforeDonate: false,
-            afterDonate: false,
-            beforeSwapReturnDelta: false,
-            afterSwapReturnDelta: true,
-            afterAddLiquidityReturnDelta: true,
-            afterRemoveLiquidityReturnDelta: false
-        });
+        return
+            Hooks.Permissions({
+                beforeInitialize: true,
+                afterInitialize: true,
+                beforeAddLiquidity: true,
+                afterAddLiquidity: false,
+                beforeRemoveLiquidity: true,
+                afterRemoveLiquidity: false,
+                beforeSwap: true,
+                afterSwap: true,
+                beforeDonate: false,
+                afterDonate: false,
+                beforeSwapReturnDelta: false,
+                afterSwapReturnDelta: true,
+                afterAddLiquidityReturnDelta: true,
+                afterRemoveLiquidityReturnDelta: false
+            });
     }
 
     function getObservation(
@@ -75,7 +76,7 @@ contract MockOracle {
         uint32 currentTimestamp = uint32(block.timestamp);
         PoolId poolId = key.toId();
 
-        for (uint i = 0; i < secondsAgos.length; i++) {
+        for (uint256 i = 0; i < secondsAgos.length; i++) {
             uint32 targetTimestamp = currentTimestamp - secondsAgos[i];
 
             // Find the closest observation before or at the target timestamp

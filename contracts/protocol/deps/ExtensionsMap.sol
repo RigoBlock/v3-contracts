@@ -64,31 +64,23 @@ contract ExtensionsMap is IExtensionsMap {
         wrappedNative = params.wrappedNative;
 
         // validate immutable constants. Assumes deps are correctly initialized
-        assert(
-            _EAPPS_BALANCES_SELECTOR ^
-            _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId
-        );
+        assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId);
         assert(
             _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ^
-            _EORACLE_CONVERT_AMOUNT_SELECTOR ^
-            _EORACLE_PRICE_FEED_SELECTOR ^
-            _EORACLE_TWAP_SELECTOR == type(IEOracle).interfaceId
+                _EORACLE_CONVERT_AMOUNT_SELECTOR ^
+                _EORACLE_PRICE_FEED_SELECTOR ^
+                _EORACLE_TWAP_SELECTOR ==
+                type(IEOracle).interfaceId
         );
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
     }
 
     /// @inheritdoc IExtensionsMap
     /// @dev Should be called by pool with delegatecall
-    function getExtensionBySelector(bytes4 selector)
-        external
-        view
-        override
-        returns (address extension, bool shouldDelegatecall)
-    {
-        if (
-            selector == _EAPPS_BALANCES_SELECTOR ||
-            selector == _EAPPS_UNIV4_POSITIONS_SELECTOR
-        ) {
+    function getExtensionBySelector(
+        bytes4 selector
+    ) external view override returns (address extension, bool shouldDelegatecall) {
+        if (selector == _EAPPS_BALANCES_SELECTOR || selector == _EAPPS_UNIV4_POSITIONS_SELECTOR) {
             extension = eApps;
             shouldDelegatecall = true;
         } else if (

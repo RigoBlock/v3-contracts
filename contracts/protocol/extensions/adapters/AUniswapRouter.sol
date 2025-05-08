@@ -22,7 +22,7 @@ pragma solidity 0.8.28;
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
-import {ActionConstants} from '@uniswap/v4-periphery/src/libraries/ActionConstants.sol';
+import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
@@ -121,15 +121,15 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     }
 
     /// @inheritdoc IAUniswapRouter
-    function execute(
-        bytes calldata commands,
-        bytes[] calldata inputs
-    ) public override nonReentrant onlyDelegateCall {
-        assert(commands.length == inputs.length);
+    function execute(bytes calldata commands, bytes[] calldata inputs) public override nonReentrant onlyDelegateCall {
+        // caching for gas savings
+        uint256 commandsLength = commands.length;
+
+        assert(commandsLength == inputs.length);
         Parameters memory params;
 
         // loop through all given commands, verify their inputs and pass along outputs as defined
-        for (uint256 i = 0; i < commands.length; i++) {
+        for (uint256 i = 0; i < commandsLength; i++) {
             // input sanity check and parameters return
             params = _decodeInput(commands[i], inputs[i], params);
         }
@@ -155,18 +155,23 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     /// @inheritdoc IAUniswapRouter
     /// @notice Is not reentrancy-protected, as will revert in PositionManager.
     /// @dev Delegatecall-only for extra safety, to pervent accidental user liquidity locking.
-    function modifyLiquidities(
-        bytes calldata unlockData,
-        uint256 deadline
-    ) external onlyDelegateCall override {
+    function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external override onlyDelegateCall {
         (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
-        assert(actions.length == params.length);
+
+        // caching for gas savings
+        uint256 actionsLength = actions.length;
+
+        assert(actionsLength == params.length);
         Parameters memory newParams;
         Position[] memory positions;
 
-        for (uint256 actionIndex = 0; actionIndex < actions.length; actionIndex++) {
-            (newParams, positions) =
-                _decodePosmAction(uint8(actions[actionIndex]), params[actionIndex], newParams, positions);
+        for (uint256 actionIndex = 0; actionIndex < actionsLength; actionIndex++) {
+            (newParams, positions) = _decodePosmAction(
+                uint8(actions[actionIndex]),
+                params[actionIndex],
+                newParams,
+                positions
+            );
         }
 
         _processRecipients(newParams.recipients);
@@ -223,7 +228,11 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     }
 
     /// @dev Executed after the uniswap Posm call, so we can compare before and after state.
-    function _processTokenIds(Position[] memory positions, uint256 nextTokenIdBefore, uint256 nextTokenIdAfter) private {
+    function _processTokenIds(
+        Position[] memory positions,
+        uint256 nextTokenIdBefore,
+        uint256 nextTokenIdAfter
+    ) private {
         TokenIdsSlot storage idsSlot = StorageLib.uniV4TokenIdsSlot();
 
         // store new tokenIds if we have minted new positions
@@ -233,7 +242,10 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
             // on mint, decoder returns null tokenId, as we cannot reliably retrieve it from the Posm contract
             for (uint256 i = nextTokenIdBefore; i < nextTokenIdAfter; i++) {
                 // update storage if it has not been burnt in the same transaction
-                if (PositionInfo.unwrap(_uniV4Posm.positionInfo(i)) != PositionInfo.unwrap(PositionInfoLibrary.EMPTY_POSITION_INFO)) {
+                if (
+                    PositionInfo.unwrap(_uniV4Posm.positionInfo(i)) !=
+                    PositionInfo.unwrap(PositionInfoLibrary.EMPTY_POSITION_INFO)
+                ) {
                     // increase counter. Position 0 is reserved flag for removed position
                     if (storedLength++ == 0) {
                         // activate uniV4 liquidity application
@@ -255,11 +267,14 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                     // Assert hook does not have access to deltas. Hook address is returned for mint ops only.
                     // Notice: if moving the following block to protect all actions, make sure hook address is appended.
                     if (positions[i].hook != ZERO_ADDRESS) {
-                        Hooks.Permissions memory permissions = BaseHook(positions[i].hook).getHookPermissions();
+                        bool hasAfterAddLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
+                            Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
+                        bool hasAfterRemoveLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
+                            Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
 
-                        // we prevent hooks to that can access pool liquidity
+                        // Prevent hooks that can access pool liquidity deltas
                         require(
-                            !permissions.afterAddLiquidityReturnDelta && !permissions.afterRemoveLiquidityReturnDelta,
+                            !hasAfterAddLiquidityDeltaPermission && !hasAfterRemoveLiquidityDeltaPermission,
                             LiquidityMintHookError(positions[i].hook)
                         );
                     }
@@ -314,7 +329,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     }
 
     function _containsMintAction(Position[] memory positions) private pure returns (bool isMint) {
-        for (uint i = 0; i < positions.length; i++) {
+        for (uint256 i = 0; i < positions.length; i++) {
             if (positions[i].action == Actions.MINT_POSITION) {
                 isMint = true;
                 break;

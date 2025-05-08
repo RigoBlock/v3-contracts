@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import {IStorageAccessible} from "../../interfaces/v4/pool/IStorageAccessible.sol";
 
@@ -21,8 +21,11 @@ abstract contract MixinStorageAccessible is IStorageAccessible {
 
     /// @inheritdoc IStorageAccessible
     function getStorageSlotsAt(uint256[] memory slots) public view override returns (bytes memory) {
-        bytes memory result = new bytes(slots.length * 32);
-        for (uint256 index = 0; index < slots.length; index++) {
+        // caching for gas savings
+        uint256 slotsLength = slots.length;
+
+        bytes memory result = new bytes(slotsLength * 32);
+        for (uint256 index = 0; index < slotsLength; index++) {
             uint256 slot = slots[index];
             // solhint-disable-next-line no-inline-assembly
             assembly {

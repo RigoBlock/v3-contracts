@@ -18,7 +18,11 @@ library Allowance {
 
 contract MockPermit2 {
     event Approval(
-        address indexed owner, address indexed token, address indexed spender, uint160 amount, uint48 expiration
+        address indexed owner,
+        address indexed token,
+        address indexed spender,
+        uint160 amount,
+        uint48 expiration
     );
 
     using Allowance for IAllowanceTransfer.PackedAllowance;

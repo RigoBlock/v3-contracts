@@ -9,7 +9,7 @@ import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecod
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 
-/// @dev In uniswap Posm, calls must be calldata encoded to execute. We expose some methods for testing. 
+/// @dev In uniswap Posm, calls must be calldata encoded to execute. We expose some methods for testing.
 contract MockUniswapPosm {
     using PositionInfoLibrary for PositionInfo;
     using CalldataDecoder for bytes;
@@ -53,16 +53,26 @@ contract MockUniswapPosm {
                 ) = params[actionIndex].decodeMintParams();
                 mint(poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, owner, hookData);
             } else if (action == Actions.INCREASE_LIQUIDITY) {
-                (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
-                    params[actionIndex].decodeModifyLiquidityParams();
+                (
+                    uint256 tokenId,
+                    uint256 liquidity,
+                    uint128 amount0Max,
+                    uint128 amount1Max,
+                    bytes calldata hookData
+                ) = params[actionIndex].decodeModifyLiquidityParams();
                 _increase(tokenId, liquidity, amount0Max, amount1Max, hookData);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
-                (uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData) =
-                    params[actionIndex].decodeModifyLiquidityParams();
+                (
+                    uint256 tokenId,
+                    uint256 liquidity,
+                    uint128 amount0Max,
+                    uint128 amount1Max,
+                    bytes calldata hookData
+                ) = params[actionIndex].decodeModifyLiquidityParams();
                 _decrease(tokenId, liquidity, amount0Max, amount1Max, hookData);
             } else if (action == Actions.BURN_POSITION) {
-                (uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData) =
-                    params[actionIndex].decodeBurnParams();
+                (uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData) = params[actionIndex]
+                    .decodeBurnParams();
                 _burn(tokenId, amount0Min, amount1Min, hookData);
             }
         }
@@ -79,11 +89,12 @@ contract MockUniswapPosm {
         return uint128(_liquidities[tokenId]);
     }
 
-    function _getLiquidity(uint256 tokenId, PoolKey memory /*poolKey*/, int24 /*tickLower*/, int24 /*tickUpper*/)
-        internal
-        view
-        returns (uint128)
-    {
+    function _getLiquidity(
+        uint256 tokenId,
+        PoolKey memory /*poolKey*/,
+        int24 /*tickLower*/,
+        int24 /*tickUpper*/
+    ) internal view returns (uint128) {
         //bytes32 positionId = Position.calculatePositionKey(address(this), tickLower, tickUpper, bytes32(tokenId));
     }
 
@@ -144,9 +155,12 @@ contract MockUniswapPosm {
         _liquidities[tokenId] -= liquidity;
     }
 
-    function _burn(uint256 tokenId, uint128 /*amount0Min*/, uint128 /*amount1Min*/, bytes calldata /*hookData*/)
-        private
-    {
+    function _burn(
+        uint256 tokenId,
+        uint128 /*amount0Min*/,
+        uint128 /*amount1Min*/,
+        bytes calldata /*hookData*/
+    ) private {
         address owner = ownerOf(tokenId);
         _balanceOf[owner]--;
         _ownerOf[tokenId] = address(0);

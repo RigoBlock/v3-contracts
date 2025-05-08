@@ -29,7 +29,7 @@ import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
-import {BytesLib} from '@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol';
+import {BytesLib} from "@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol";
 
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
@@ -76,7 +76,7 @@ abstract contract AUniswapDecoder {
                 if (command < Commands.V2_SWAP_EXACT_IN) {
                     if (command == Commands.V3_SWAP_EXACT_IN) {
                         // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser
-                        (address recipient,,,,) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        (address recipient, , , , ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
@@ -92,7 +92,7 @@ abstract contract AUniswapDecoder {
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
-                        (address recipient,,,,) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        (address recipient, , , , ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, path.toAddress());
@@ -119,7 +119,7 @@ abstract contract AUniswapDecoder {
                         return params;
                     } else if (command == Commands.TRANSFER) {
                         // address token, address recipient, uint256 value
-                        (address token, address recipient,) = abi.decode(inputs, (address, address, uint256));
+                        (address token, address recipient, ) = abi.decode(inputs, (address, address, uint256));
                         params.tokensOut = _addUnique(params.tokensOut, token);
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
@@ -137,8 +137,10 @@ abstract contract AUniswapDecoder {
                     // 0x08 <= command < 0x10
                     if (command == Commands.V2_SWAP_EXACT_IN) {
                         // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser
-                        (address recipient, uint256 amountIn,,,) =
-                            abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        (address recipient, uint256 amountIn, , , ) = abi.decode(
+                            inputs,
+                            (address, uint256, uint256, bytes, bool)
+                        );
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
@@ -148,8 +150,7 @@ abstract contract AUniswapDecoder {
                         return params;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
-                        (address recipient,,,,) =
-                            abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        (address recipient, , , , ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
                         params.tokensOut = _addUnique(params.tokensOut, path[0]);
@@ -186,21 +187,29 @@ abstract contract AUniswapDecoder {
                     //(bytes memory actions, bytes[] memory encodedParams) = abi.decode(inputs, (bytes, bytes[]));
                     // we decode manually to be able to override params?
                     (bytes calldata actions, bytes[] calldata encodedParams) = inputs.decodeActionsRouterParams();
-                    assert(actions.length == encodedParams.length);
 
-                    for (uint256 actionIndex = 0; actionIndex < actions.length; actionIndex++) {
+                    // caching for gas savings
+                    uint256 actionsLength = actions.length;
+                    assert(actionsLength == encodedParams.length);
+
+                    for (uint256 actionIndex = 0; actionIndex < actionsLength; actionIndex++) {
                         uint256 action = uint8(actions[actionIndex]);
                         bytes calldata paramsAtIndex = encodedParams[actionIndex];
 
                         if (action < Actions.SETTLE) {
                             // we must retrieve native value here, as SETTLE may use flag amounts
                             if (action == Actions.SWAP_EXACT_IN) {
-                                IV4Router.ExactInputParams calldata swapParams = paramsAtIndex.decodeSwapExactInParams();
-                                params.value += Currency.unwrap(swapParams.currencyIn) == ZERO_ADDRESS ? swapParams.amountIn : 0;
+                                IV4Router.ExactInputParams calldata swapParams = paramsAtIndex
+                                    .decodeSwapExactInParams();
+                                params.value += Currency.unwrap(swapParams.currencyIn) == ZERO_ADDRESS
+                                    ? swapParams.amountIn
+                                    : 0;
                                 continue;
                             } else if (action == Actions.SWAP_EXACT_IN_SINGLE) {
-                                IV4Router.ExactInputSingleParams calldata swapParams = paramsAtIndex.decodeSwapExactInSingleParams();
-                                params.value += swapParams.zeroForOne && Currency.unwrap(swapParams.poolKey.currency0) == ZERO_ADDRESS
+                                IV4Router.ExactInputSingleParams calldata swapParams = paramsAtIndex
+                                    .decodeSwapExactInSingleParams();
+                                params.value += swapParams.zeroForOne &&
+                                    Currency.unwrap(swapParams.poolKey.currency0) == ZERO_ADDRESS
                                     ? swapParams.amountIn
                                     : 0;
                                 continue;
@@ -211,25 +220,28 @@ abstract contract AUniswapDecoder {
                             }
                         } else {
                             if (action == Actions.SETTLE_ALL) {
-                                (Currency currency, /*uint256 maxAmount*/) = paramsAtIndex.decodeCurrencyAndUint256();
+                                // Currency currency, uint256 maxAmount
+                                (Currency currency, ) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                                 continue;
                             } else if (action == Actions.TAKE_ALL) {
-                                (Currency currency,) = paramsAtIndex.decodeCurrencyAndUint256();
+                                (Currency currency, ) = paramsAtIndex.decodeCurrencyAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 continue;
                             } else if (action == Actions.SETTLE) {
                                 // Currency currency, uint256 amount, bool payerIsUser
-                                (Currency currency,,) = paramsAtIndex.decodeCurrencyUint256AndBool();
+                                (Currency currency, , ) = paramsAtIndex.decodeCurrencyUint256AndBool();
                                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                                 continue;
                             } else if (action == Actions.TAKE) {
-                                (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
+                                (Currency currency, address recipient, ) = paramsAtIndex
+                                    .decodeCurrencyAddressAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, recipient);
                                 continue;
                             } else if (action == Actions.TAKE_PORTION) {
-                                (Currency currency, address recipient,) = paramsAtIndex.decodeCurrencyAddressAndUint256();
+                                (Currency currency, address recipient, ) = paramsAtIndex
+                                    .decodeCurrencyAddressAndUint256();
                                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                                 params.recipients = _addUnique(params.recipients, recipient);
                                 continue;
@@ -255,7 +267,10 @@ abstract contract AUniswapDecoder {
             if (command == Commands.EXECUTE_SUB_PLAN) {
                 (bytes calldata _commands, bytes[] calldata _inputs) = inputs.decodeCommandsAndInputs();
 
-                for (uint256 j = 0; j < _commands.length; j++) {
+                // caching for gas savings
+                uint256 commandsLength = _commands.length;
+
+                for (uint256 j = 0; j < commandsLength; j++) {
                     params = _decodeInput(_commands[j], _inputs[j], params);
                 }
             } else {
@@ -284,8 +299,8 @@ abstract contract AUniswapDecoder {
         if (action < Actions.SETTLE) {
             if (action == Actions.INCREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, bytes calldata hookData
-                (uint256 tokenId,, uint128 amount0Max,,) = actionParams.decodeModifyLiquidityParams();
-                (PoolKey memory poolKey,) = _uniV4Posm.getPoolAndPositionInfo(tokenId);
+                (uint256 tokenId, , uint128 amount0Max, , ) = actionParams.decodeModifyLiquidityParams();
+                (PoolKey memory poolKey, ) = _uniV4Posm.getPoolAndPositionInfo(tokenId);
                 address hook = address(poolKey.hooks);
 
                 if (Currency.unwrap(poolKey.currency1) == ZERO_ADDRESS) {
@@ -302,13 +317,14 @@ abstract contract AUniswapDecoder {
                 revert UnsupportedAction(action);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
-                (uint256 tokenId,,,,) = actionParams.decodeModifyLiquidityParams();
+                (uint256 tokenId, , , , ) = actionParams.decodeModifyLiquidityParams();
                 // hook address is not relevant for decrease, use ZERO_ADDRESS instead to save gas
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.DECREASE_LIQUIDITY));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION) {
                 // PoolKey calldata poolKey, int24 tickLower, int24 tickUpper, uint256 liquidity, uint128 amount0Max, uint128 amount1Max, address owner, bytes calldata hookData
-                (PoolKey calldata poolKey,,,, uint128 amount0Max,, address owner,) = actionParams.decodeMintParams();
+                (PoolKey calldata poolKey, , , , uint128 amount0Max, , address owner, ) = actionParams
+                    .decodeMintParams();
 
                 // as an amount could be null, we want to assert here that both tokens have a price feed
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
@@ -321,7 +337,7 @@ abstract contract AUniswapDecoder {
                 revert UnsupportedAction(action);
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
-                (uint256 tokenId,,,) = actionParams.decodeBurnParams();
+                (uint256 tokenId, , , ) = actionParams.decodeBurnParams();
                 // hook address is not relevant for burn, use ZERO_ADDRESS instead to save gas
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
                 return (params, positions);
@@ -335,30 +351,30 @@ abstract contract AUniswapDecoder {
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency1));
                 return (params, positions);
             } else if (action == Actions.TAKE_PAIR) {
-                (Currency currency0, Currency currency1, address recipient) = actionParams.decodeCurrencyPairAndAddress();
+                (Currency currency0, Currency currency1, address recipient) = actionParams
+                    .decodeCurrencyPairAndAddress();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency0));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency1));
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.SETTLE) {
-                // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0)
+                // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0). Therefore, we do not append `value` here
                 // (Currency currency, uint256 amount, bool payerIsUser)
-                (Currency currency, uint256 amount,) = actionParams.decodeCurrencyUint256AndBool();
+                (Currency currency, , ) = actionParams.decodeCurrencyUint256AndBool();
                 params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
-                params.value += Currency.unwrap(currency) == ZERO_ADDRESS ? amount : 0;
                 return (params, positions);
             } else if (action == Actions.TAKE) {
-                (Currency currency, address recipient,) = actionParams.decodeCurrencyAddressAndUint256();
+                (Currency currency, address recipient, ) = actionParams.decodeCurrencyAddressAndUint256();
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.CLOSE_CURRENCY) {
                 Currency currency = actionParams.decodeCurrency();
-                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
             } else if (action == Actions.CLEAR_OR_TAKE) {
-                (Currency currency,) = actionParams.decodeCurrencyAndUint256();
-                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));  
+                (Currency currency, ) = actionParams.decodeCurrencyAndUint256();
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 return (params, positions);
             } else if (action == Actions.SWEEP) {
@@ -367,7 +383,6 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, to);
                 return (params, positions);
             } else if (action == Actions.WRAP) {
-                // TODO: verify if wrap uses amount flag, and if we have already appended value in liquidity action (should not append value here then)
                 uint256 amount = actionParams.decodeUint256();
                 params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
                 params.value += amount;
@@ -383,32 +398,38 @@ abstract contract AUniswapDecoder {
     }
 
     function _addUnique(address[] memory array, address target) private pure returns (address[] memory) {
-        for (uint256 i = 0; i < array.length; i++) {
+        // caching for gas savings
+        uint256 arrayLength = array.length;
+
+        for (uint256 i = 0; i < arrayLength; i++) {
             if (array[i] == target) {
                 return array; // Already exists, return unchanged array
             }
         }
-        address[] memory newArray = new address[](array.length + 1);
-        for (uint256 i = 0; i < array.length; i++) {
+        address[] memory newArray = new address[](arrayLength + 1);
+        for (uint256 i = 0; i < arrayLength; i++) {
             newArray[i] = array[i];
         }
-        newArray[array.length] = target;
+        newArray[arrayLength] = target;
         return newArray;
     }
 
     /// @dev Multiple actions can be executed on the same tokenId, so we add a new position if same tokenId but different action
     function _addUniquePosition(Position[] memory array, Position memory pos) private pure returns (Position[] memory) {
-        for (uint256 i = 0; i < array.length; i++) {
+        // caching for gas savings
+        uint256 arrayLength = array.length;
+
+        for (uint256 i = 0; i < arrayLength; i++) {
             if (array[i].hook == pos.hook && array[i].tokenId == pos.tokenId && array[i].action == pos.action) {
                 return array;
             }
         }
-        Position[] memory newArray = new Position[](array.length + 1);
-        for (uint256 i = 0; i < array.length; i++) {
+        Position[] memory newArray = new Position[](arrayLength + 1);
+        for (uint256 i = 0; i < arrayLength; i++) {
             newArray[i] = array[i];
         }
 
-        newArray[array.length] = pos;
+        newArray[arrayLength] = pos;
         return newArray;
     }
 }
