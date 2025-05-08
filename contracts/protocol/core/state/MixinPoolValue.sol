@@ -40,7 +40,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
     error BaseTokenPriceFeedError();
 
-    // TODO: assert not possible to inflate total supply to manipulate pool price.
     /// @notice Uses transient storage to keep track of unique token balances.
     /// @dev With null total supply a pool will return the last stored value.
     function _updateNav() internal override returns (NavComponents memory components) {
@@ -57,7 +56,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         } else {
             uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
 
-            // TODO: verify under what scenario totalPoolValue would be null here
             if (totalPoolValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / components.totalSupply;
@@ -94,8 +92,11 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
             // position balances can be negative, positive, or null (handled explicitly later)
             for (uint256 i = 0; i < apps.length; i++) {
+                // caching for gas savings
+                uint256 appTokenBalancesLength = apps[i].balances.length;
+
                 // active positions tokens are a subset of active tokens
-                for (uint256 j = 0; j < apps[i].balances.length; j++) {
+                for (uint256 j = 0; j < appTokenBalancesLength; j++) {
                     // push application if not active but tokens are returned from it (as with GRG staking and univ3 liquidity)
                     if (!ApplicationsLib.isActiveApplication(packedApps, uint256(apps[i].appType))) {
                         activeApplications().storeApplication(apps[i].appType);
@@ -128,14 +129,17 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
-        int256[] memory tokenAmounts = new int256[](activeTokens.length);
+
+        // caching for gas savings
+        uint256 activeTokensLength = activeTokens.length;
+        int256[] memory tokenAmounts = new int256[](activeTokensLength);
 
         // base token is not stored in activeTokens array
-        for (uint256 i = 0; i < activeTokens.length; i++) {
+        for (uint256 i = 0; i < activeTokensLength; i++) {
             tokenAmounts[i] = _getAndClearBalance(activeTokens[i]);
         }
 
-        if (activeTokens.length > 0) {
+        if (activeTokensLength > 0) {
             poolValueInBaseToken += IEOracle(address(this)).convertBatchTokenAmounts(
                 activeTokens,
                 tokenAmounts,
