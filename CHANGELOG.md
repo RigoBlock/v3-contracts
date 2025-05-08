@@ -1,3 +1,12 @@
+## [2.0.1](https://github.com/rigoblock/v3-contracts/compare/v2.0.0...v2.0.1) (2025-05-08)
+
+
+### Bug Fixes
+
+* add Foundry to publish-npm job ([4e38840](https://github.com/rigoblock/v3-contracts/commit/4e388408996aecb703a7579d607ce5e0778cf35e))
+
+
+
 # [2.0.0](https://github.com/rigoblock/v3-contracts/compare/v1.6.0...v2.0.0) (2025-05-08)
 
 
@@ -78,15 +87,6 @@
 ### Reverts
 
 * Revert "chore: fix check pr title workflow" ([911ad15](https://github.com/rigoblock/v3-contracts/commit/911ad158f96ede840cf7f2158e6a4fd6fed98908))
-
-
-
-## [1.4.1](https://github.com/rigoblock/v3-contracts/compare/v1.4.0...v1.4.1) (2023-09-09)
-
-
-### Bug Fixes
-
-* patch uniswap adapter ([96adeb9](https://github.com/rigoblock/v3-contracts/commit/96adeb99a06ccfd100416bfa381eee92d37f49d6))
 
 
 
