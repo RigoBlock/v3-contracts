@@ -27,10 +27,12 @@ library VersionLib {
     function parseVersion(string memory _version) private pure returns (uint256[3] memory versionParts) {
         bytes memory b = bytes(_version);
 
+        // caching for gas savings
+        uint256 stringLength = b.length;
         uint256 partIndex = 0;
         uint256 currentNumber = 0;
 
-        for (uint256 i = 0; i < b.length; i++) {
+        for (uint256 i = 0; i < stringLength; i++) {
             if (b[i] == ".") {
                 versionParts[partIndex] = currentNumber;
                 partIndex++;

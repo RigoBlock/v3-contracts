@@ -76,7 +76,7 @@ contract MockOracle {
         uint32 currentTimestamp = uint32(block.timestamp);
         PoolId poolId = key.toId();
 
-        for (uint i = 0; i < secondsAgos.length; i++) {
+        for (uint256 i = 0; i < secondsAgos.length; i++) {
             uint32 targetTimestamp = currentTimestamp - secondsAgos[i];
 
             // Find the closest observation before or at the target timestamp
