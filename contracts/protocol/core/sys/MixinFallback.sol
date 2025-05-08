@@ -15,7 +15,6 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     error PoolMethodNotAllowed();
     error PoolVersionNotSupported();
 
-    // TODO: verify if this should be delegatecall restricted, as could be a repeated check in extensions/adapters
     // reading immutable through internal method more gas efficient
     modifier onlyDelegateCall() {
         _checkDelegateCall();
@@ -28,7 +27,9 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     /// @dev uses shouldDelegatecall to flag selectors that should prompt a delegatecall.
     fallback() external payable onlyDelegateCall {
         // returns nil target if selector not mapped. Uses delegatecall to preserve context of msg.sender for shouldDelegatecall flag
-        (, bytes memory returnData) = address(_extensionsMap).delegatecall(abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig)));
+        (, bytes memory returnData) = address(_extensionsMap).delegatecall(
+            abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig))
+        );
         (address target, bool shouldDelegatecall) = abi.decode(returnData, (address, bool));
 
         if (target == _ZERO_ADDRESS) {

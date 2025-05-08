@@ -162,21 +162,23 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             burntAmount -= (burntAmount * _getSpread()) / _SPREAD_BASE;
         }
 
-        // TODO: verify cases of possible underflow for small nav value
         netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
 
-        // TODO: test how this could be exploited.
         if (tokenOut == _BASE_TOKEN_FLAG) {
             tokenOut = baseToken;
         } else if (tokenOut != baseToken) {
             // only allow arbitrary token redemption as a fallback in case the pool does not hold enough base currency
-            uint256 baseTokenBalance = baseToken.isAddressZero() ? address(this).balance : IERC20(baseToken).balanceOf(address(this));
+            uint256 baseTokenBalance = baseToken.isAddressZero()
+                ? address(this).balance
+                : IERC20(baseToken).balanceOf(address(this));
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
 
             // an active token must have a price feed, hence the oracle query will always return a converted value
-            netRevenue = uint256(IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue.toInt256(), tokenOut));
+            netRevenue = uint256(
+                IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue.toInt256(), tokenOut)
+            );
         }
 
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());

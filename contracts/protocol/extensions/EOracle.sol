@@ -34,7 +34,7 @@ contract EOracle is IEOracle {
     using SafeCast for uint256;
 
     address private constant _ZERO_ADDRESS = address(0);
-    uint256 private constant Q96 = 2**96;
+    uint256 private constant Q96 = 2 ** 96;
 
     address private immutable _wrappedNative;
 
@@ -51,7 +51,9 @@ contract EOracle is IEOracle {
         int256[] calldata amounts,
         address targetToken
     ) external view returns (int256 totalConvertedAmount) {
-        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS) ? int24(0) : getTwap(targetToken);
+        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS)
+            ? int24(0)
+            : getTwap(targetToken);
         for (uint256 i = 0; i < tokens.length; i++) {
             totalConvertedAmount += _convertTokenAmount(tokens[i], amounts[i], targetToken, ethToTargetTokenTwap);
         }
@@ -63,8 +65,10 @@ contract EOracle is IEOracle {
         int256 amount,
         address targetToken
     ) external view override returns (int256 convertedAmount) {
-        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS) ? int24(0) : getTwap(targetToken);
-        convertedAmount =  _convertTokenAmount(token, amount, targetToken, ethToTargetTokenTwap);
+        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS)
+            ? int24(0)
+            : getTwap(targetToken);
+        convertedAmount = _convertTokenAmount(token, amount, targetToken, ethToTargetTokenTwap);
     }
 
     function _convertTokenAmount(
@@ -118,11 +122,10 @@ contract EOracle is IEOracle {
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
-            (PoolKey memory key, IOracle.ObservationState memory state) =
-                _getPool(_ZERO_ADDRESS, token, _oracle);
+            (PoolKey memory key, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
 
             // try and get the last stored observation
-            (Observation memory observation) = _oracle.getObservation(key, state.index);
+            Observation memory observation = _oracle.getObservation(key, state.index);
             return observation.blockTimestamp != 0;
         }
     }

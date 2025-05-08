@@ -8,6 +8,4 @@ import {IV2SwapRouter} from "./IV2SwapRouter.sol";
 import {IV3SwapRouter} from "./IV3SwapRouter.sol";
 
 /// @title Router token swapping functionality
-interface ISwapRouter02 is IV2SwapRouter, IV3SwapRouter, IImmutableState, IPeripheryPaymentsWithFeeExtended {
-
-}
+interface ISwapRouter02 is IV2SwapRouter, IV3SwapRouter, IImmutableState, IPeripheryPaymentsWithFeeExtended {}
