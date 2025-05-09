@@ -55,11 +55,10 @@ const deploy: DeployFunction = async function (
 
   // Notice: replace with deployed address (different by chain).
   const stakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const univ3Npm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [stakingProxy, univ3Npm, univ4Posm],
+    args: [stakingProxy, univ4Posm],
     log: true,
     deterministicDeployment: true,
   });
