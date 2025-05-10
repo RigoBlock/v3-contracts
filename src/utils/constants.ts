@@ -66,7 +66,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     130: {
         rigoToken: "0x03C2868c6D7fD27575426f395EE081498B1120dd",
         oracle: "0x54bd666eA7FD8d5404c0593Eab3Dcf9b6E2A3aC4",
-        stakingProxy: "NA",
+        stakingProxy: "0x550Ed0bFFdbE38e8Bd33446D5c165668Ea071643",
         weth: "0x4200000000000000000000000000000000000006",
         univ3Npm: "0x943e6e07a7E8E791dAFC44083e54041D743C46E9",
         univ4Posm: "0x4529A01c7A0410167c5740C487A8DE60232617bf",

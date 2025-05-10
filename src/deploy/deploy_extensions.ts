@@ -5,11 +5,11 @@ import { chainConfig } from "../utils/constants";
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
-  const { deployments, getNamedAccounts, network } = hre;
+  const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  const chainId = network.config.chainId;
+  const chainId = await getChainId();
   if (!chainId || !chainConfig[chainId]) {
     throw new Error(`Unsupported network: Chain ID ${chainId}`);
   }
