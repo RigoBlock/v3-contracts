@@ -1,12 +1,20 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { chainConfig } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
-  const { deployments, getNamedAccounts } = hre;
+  const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
+
+  const chainId = await getChainId();
+  if (!chainId || !chainConfig[chainId]) {
+    throw new Error(`Unsupported network: Chain ID ${chainId}`);
+  }
+
+  const config = chainConfig[chainId];
 
   const grgTransferProxy = await deploy("ERC20Proxy", {
     from: deployer,
@@ -15,22 +23,11 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const rigoToken = await deploy("RigoToken", {
-    from: deployer,
-    args: [
-      deployer, // address _setMinter
-      deployer, // address _setRigoblock
-      deployer // address _grgHolder
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
-
   const grgVault = await deploy("GrgVault", {
     from: deployer,
     args: [
         grgTransferProxy.address,
-        rigoToken.address,
+        config.rigoToken,
         deployer  // Authorizable(_owner)
     ],
     log: true,
@@ -44,9 +41,6 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // registry uses IRigoblockV3Pool, which inherits ISmartPool and results in a different deployed address.
-  // Prevent re-deploy by passing deployed registry address. Deploy with V3 package if want to have
-  // same registery address on newly supported chains.
   const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
@@ -62,7 +56,7 @@ const deploy: DeployFunction = async function (
     args: [
         grgVault.address,
         registry.address,
-        rigoToken.address,
+        config.rigoToken,
     ],
     log: true,
     deterministicDeployment: true,
@@ -82,19 +76,16 @@ const deploy: DeployFunction = async function (
     from: deployer,
     args: [
         stakingProxy.address,
-        rigoToken.address,
+        config.rigoToken,
         grgTransferProxy.address
     ],
     log: true,
     deterministicDeployment: true,
   });
 
-  /*const inflation = await deploy("Inflation", {
+  await deploy("InflationL2", {
     from: deployer,
-    args: [
-      rigoToken.address,
-      stakingProxy.address
-    ],
+    args: [deployer],
     log: true,
     deterministicDeployment: true,
   });
@@ -104,7 +95,7 @@ const deploy: DeployFunction = async function (
     args: [stakingProxy.address],
     log: true,
     deterministicDeployment: true,
-  });*/
+  });
 };
 
 deploy.tags = ['staking', 'l2-suite', 'main-suite']

@@ -62,7 +62,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
       univ4Posm: "0x7A4a5c919aE2541AeD11041A1AEeE68f1287f95b",
       universalRouter: "0x1906c1d672b88cD1B9aC7593301cA990F94Eae07",
     },
-    // Unichain (Chain ID: 130 - Placeholder, verify the actual chain ID)
+    // Unichain (Chain ID: 130)
     130: {
         rigoToken: "0x03C2868c6D7fD27575426f395EE081498B1120dd",
         oracle: "0x54bd666eA7FD8d5404c0593Eab3Dcf9b6E2A3aC4",
