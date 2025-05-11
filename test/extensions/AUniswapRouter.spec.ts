@@ -279,15 +279,12 @@ describe("AUniswapRouter", async () => {
         '0x', // hookData
       ])
       const value = ethers.utils.parseEther("0")
-      const ExtPool = await ethers.getContractFactory("AUniswapRouter")
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
       const extPool = ExtPool.attach(pool.address)
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-      try {
-        await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-        expect.fail("Transaction should have reverted")
-      } catch (error) {
-        expect(error.message).to.include(`LiquidityMintHookError("${hookAddress}")`)
-      }
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      ).to.be.revertedWith(`LiquidityMintHookError("${hookAddress}")`)
     })
 
     it('should not be able to increase liquidity of non-owned position', async () => {
