@@ -1,12 +1,25 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { chainConfig } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
-  const { deployments, getNamedAccounts } = hre;
+  const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
+
+  const chainId = await getChainId();
+  if (!chainId || !chainConfig[chainId]) {
+    if (chainId === "31337") {
+      console.log("Skipping for Hardhat Network");
+      return;
+    } else {
+      throw new Error(`Unsupported network: Chain ID ${chainId}`);
+    }
+  }
+
+  const config = chainConfig[chainId];
 
   const authority = await deploy("Authority", {
     from: deployer,
@@ -43,22 +56,17 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // Notice: replace with deployed oracle address (same on all chains)
-  const oracle = "0x8A753747A1Fa494EC906cE90E9f37563A8AF630e"
-  const wethAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  // Notice: make sure the constants.ts file is updated with the correct address.
   const eOracle = await deploy("EOracle", {
     from: deployer,
-    args: [oracle, wethAddress],
+    args: [config.oracle, config.weth],
     log: true,
     deterministicDeployment: true,
   })
-
-  // Notice: replace with deployed address (different by chain).
-  const stakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [stakingProxy, univ4Posm],
+    args: [config.stakingProxy, config.univ4Posm],
     log: true,
     deterministicDeployment: true,
   });
@@ -79,7 +87,7 @@ const deploy: DeployFunction = async function (
 
   const params = {
     extensions: extensions,
-    wrappedNative: wethAddress
+    wrappedNative: config.weth,
   }
   const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
   const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
@@ -101,14 +109,19 @@ const deploy: DeployFunction = async function (
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
   }
 
-  /*const uniswapRouter2 = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
-
   await deploy("AUniswap", {
     from: deployer,
-    args: [uniswapRouter2],
+    args: [config.uniswapRouter2],
     log: true,
     deterministicDeployment: true,
-  });*/
+  });
+
+  await deploy("AUniswapRouter", {
+    from: deployer,
+    args: [config.universalRouter, config.univ4Posm, config.weth],
+    log: true,
+    deterministicDeployment: true,
+  });
 
   await deploy("AMulticall", {
     from: deployer,

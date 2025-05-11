@@ -1,6 +1,6 @@
 import type { HardhatUserConfig, HttpNetworkUserConfig } from "hardhat/types";
 import "@nomicfoundation/hardhat-foundry";
-import "@nomiclabs/hardhat-etherscan";
+import "@nomicfoundation/hardhat-verify";
 import "@nomiclabs/hardhat-waffle";
 import "solidity-coverage";
 import "hardhat-deploy";
@@ -102,7 +102,7 @@ const userConfig: HardhatUserConfig = {
     mainnet: {
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 11000000000,
+      gasPrice: 3000000000,
     },
     xdai: {
       ...sharedNetworkConfig,
@@ -190,14 +190,6 @@ const userConfig: HardhatUserConfig = {
       unichain: process.env.UNICHAIN_API_KEY ?? '',
     },
     customChains: [
-      {
-        network: "deprecated",
-        chainId: 2,
-        urls: {
-          apiURL: "https://api-optimistic.etherscan.io/api",
-          browserURL: "https://optimistic.etherscan.io"
-        }
-      },
       {
         network: "base",
         chainId: 8453,
