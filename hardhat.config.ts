@@ -1,6 +1,6 @@
 import type { HardhatUserConfig, HttpNetworkUserConfig } from "hardhat/types";
 import "@nomicfoundation/hardhat-foundry";
-import "@nomiclabs/hardhat-etherscan";
+import "@nomicfoundation/hardhat-verify";
 import "@nomiclabs/hardhat-waffle";
 import "solidity-coverage";
 import "hardhat-deploy";
@@ -102,7 +102,7 @@ const userConfig: HardhatUserConfig = {
     mainnet: {
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 11000000000,
+      gasPrice: 3000000000,
     },
     xdai: {
       ...sharedNetworkConfig,
@@ -166,6 +166,10 @@ const userConfig: HardhatUserConfig = {
       ...sharedNetworkConfig,
       url: `https://mainnet.base.org`,
     },
+    unichain: {
+      ...sharedNetworkConfig,
+      url: `https://unichain.infura.io/v3/${INFURA_KEY}`,
+    },
   },
   deterministicDeployment,
   namedAccounts: {
@@ -183,14 +187,23 @@ const userConfig: HardhatUserConfig = {
       bsc: process.env.BSCSCAN_API_KEY ?? '',
       polygon: process.env.POLYGONSCAN_API_KEY ?? '',
       base: process.env.BASE_API_KEY ?? '',
+      unichain: process.env.UNICHAIN_API_KEY ?? '',
     },
     customChains: [
       {
-        network: "deprecated",
-        chainId: 2,
+        network: "base",
+        chainId: 8453,
         urls: {
-          apiURL: "https://api-optimistic.etherscan.io/api",
-          browserURL: "https://optimistic.etherscan.io"
+          apiURL: "https://api.basescan.org/api",
+          browserURL: "https://basescan.org"
+        }
+      },
+      {
+        network: "unichain",
+        chainId: 130,
+        urls: {
+          apiURL: "https://api.uniscan.xyz/api",
+          browserURL: "https://uniscan.xyz"
         }
       }
     ]

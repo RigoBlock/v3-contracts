@@ -35,7 +35,6 @@ import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
-import {INonfungiblePositionManager} from "../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 import {Applications, TokenIdsSlot} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
@@ -55,13 +54,11 @@ contract EApps is IEApps {
     int24 private constant OUT_OF_RANGE_FLAG = -887273;
 
     IStaking private immutable _grgStakingProxy;
-    INonfungiblePositionManager private immutable _uniV3NPM;
     IPositionManager private immutable _uniV4Posm;
 
     /// @notice The different immutable addresses will result in different deployed addresses on different networks.
-    constructor(address grgStakingProxy, address univ3Npm, address univ4Posm) {
+    constructor(address grgStakingProxy, address univ4Posm) {
         _grgStakingProxy = IStaking(grgStakingProxy);
-        _uniV3NPM = INonfungiblePositionManager(univ3Npm);
         _uniV4Posm = IPositionManager(univ4Posm);
     }
 

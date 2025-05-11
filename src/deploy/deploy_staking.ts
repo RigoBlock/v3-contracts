@@ -1,12 +1,25 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { chainConfig } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
-  const { deployments, getNamedAccounts } = hre;
+  const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
+
+  const chainId = await getChainId();
+  if (!chainId || !chainConfig[chainId]) {
+    if (chainId === "31337") {
+      console.log("Skipping for Hardhat Network");
+      return;
+    } else {
+      throw new Error(`Unsupported network: Chain ID ${chainId}`);
+    }
+  }
+
+  const config = chainConfig[chainId];
 
   const grgTransferProxy = await deploy("ERC20Proxy", {
     from: deployer,
@@ -15,22 +28,11 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const rigoToken = await deploy("RigoToken", {
-    from: deployer,
-    args: [
-      deployer, // address _setMinter
-      deployer, // address _setRigoblock
-      deployer // address _grgHolder
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
-
   const grgVault = await deploy("GrgVault", {
     from: deployer,
     args: [
         grgTransferProxy.address,
-        rigoToken.address,
+        config.rigoToken,
         deployer  // Authorizable(_owner)
     ],
     log: true,
@@ -59,7 +61,7 @@ const deploy: DeployFunction = async function (
     args: [
         grgVault.address,
         registry.address,
-        rigoToken.address,
+        config.rigoToken,
     ],
     log: true,
     deterministicDeployment: true,
@@ -79,17 +81,17 @@ const deploy: DeployFunction = async function (
     from: deployer,
     args: [
         stakingProxy.address,
-        rigoToken.address,
+        config.rigoToken,
         grgTransferProxy.address
     ],
     log: true,
     deterministicDeployment: true,
   });
 
-  const inflation = await deploy("Inflation", {
+  await deploy("Inflation", {
     from: deployer,
     args: [
-      rigoToken.address,
+      config.rigoToken,
       stakingProxy.address
     ],
     log: true,
