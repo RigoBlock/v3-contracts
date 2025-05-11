@@ -45,14 +45,14 @@ describe("AUniswapRouter", async () => {
     await factory.createPool('testpool','TEST',AddressZero)
     const UniRouter2Instance = await deployments.get("MockUniswapRouter");
     const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
-    const univ3NpmAddress = await uniswapRouter2.positionManager()
-    const Univ3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+    const uniV3NpmAddress = await uniswapRouter2.positionManager()
+    const UniV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
     const Univ4PosmInstance = await deployments.get("MockUniswapPosm");
     const Univ4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
     const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter");
-    const uniRouter = await MockUniUniversalRouter.deploy(univ3NpmAddress, Univ4PosmInstance.address)
+    const uniRouter = await MockUniUniversalRouter.deploy(uniV3NpmAddress, Univ4PosmInstance.address)
     const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter")
-    const univ3Npm = Univ3Npm.attach(univ3NpmAddress)
+    const univ3Npm = UniV3Npm.attach(uniV3NpmAddress)
     const wethAddress = await univ3Npm.WETH9()
     const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address, wethAddress)
     await authority.setAdapter(aUniswapRouter.address, true)

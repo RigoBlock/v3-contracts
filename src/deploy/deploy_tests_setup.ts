@@ -130,29 +130,23 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  const uniswapRouter2 = await deploy("MockUniswapRouter", {
+  const weth = await deploy("WETH9", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
   })
 
-  const uniRouter2Instance = await hre.ethers.getContractAt(
-    "MockUniswapRouter",
-    uniswapRouter2.address
-  );
-
-  const univ3NpmAddress = await uniRouter2Instance.positionManager()
-
-  const univ3NpmInstance = await hre.ethers.getContractAt(
-    "MockUniswapNpm",
-    univ3NpmAddress
-  );
-  const wethAddress = await univ3NpmInstance.WETH9()
+  await deploy("MockUniswapRouter", {
+    from: deployer,
+    args: [weth.address],
+    log: true,
+    deterministicDeployment: true,
+  })
 
   const eOracle = await deploy("EOracle", {
     from: deployer,
-    args: [oracle.address, wethAddress],
+    args: [oracle.address, weth.address],
     log: true,
     deterministicDeployment: true,
   })
@@ -194,7 +188,7 @@ const deploy: DeployFunction = async function (
 
   const params = {
     extensions: extensions,
-    wrappedNative: wethAddress
+    wrappedNative: weth.address
   }
   const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
   const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
@@ -267,7 +261,7 @@ const deploy: DeployFunction = async function (
 
   await deploy("AUniswap", {
     from: deployer,
-    args: [uniswapRouter2.address],
+    args: [weth.address],
     log: true,
     deterministicDeployment: true,
   })

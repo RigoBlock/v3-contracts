@@ -3,7 +3,6 @@
 pragma solidity 0.8.17;
 
 import {PoolAddress} from "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
-import {WETH9 as WETH9Contract} from "../tokens/WETH9/WETH9.sol";
 import {INonfungiblePositionManager} from "../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 
 struct Position {
@@ -48,8 +47,8 @@ contract MockUniswapNpm {
             tokensOwed1: 15 * 1e16
         });
 
-    constructor() {
-        WETH9 = address(new WETH9Contract());
+    constructor(address weth) {
+        WETH9 = weth;
     }
 
     function mint(

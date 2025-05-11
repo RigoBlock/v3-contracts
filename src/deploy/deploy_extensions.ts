@@ -111,7 +111,7 @@ const deploy: DeployFunction = async function (
 
   await deploy("AUniswap", {
     from: deployer,
-    args: [config.uniswapRouter2],
+    args: [config.weth],
     log: true,
     deterministicDeployment: true,
   });
