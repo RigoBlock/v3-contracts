@@ -11,7 +11,12 @@ const deploy: DeployFunction = async function (
 
   const chainId = await getChainId();
   if (!chainId || !chainConfig[chainId]) {
-    throw new Error(`Unsupported network: Chain ID ${chainId}`);
+    if (chainId === "31337") {
+      console.log("Skipping for Hardhat Network");
+      return;
+    } else {
+      throw new Error(`Unsupported network: Chain ID ${chainId}`);
+    }
   }
 
   const config = chainConfig[chainId];
@@ -58,9 +63,10 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   })
+  
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [config.stakingProxy, config.univ3Npm, config.univ4Posm],
+    args: [config.stakingProxy, config.univ4Posm],
     log: true,
     deterministicDeployment: true,
   });
@@ -81,10 +87,13 @@ const deploy: DeployFunction = async function (
 
   const params = {
     extensions: extensions,
-    wrappedNative: config.weth
+    wrappedNative: config.weth,
   }
-  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
-  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
+
+  // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
+  const salt = hre.ethers.utils.formatBytes32String("extensionsMapSalt");
+  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params, salt);
+  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
   await tx.wait();
 
   const poolImplementation = await deploy("SmartPool", {
@@ -105,7 +114,7 @@ const deploy: DeployFunction = async function (
 
   await deploy("AUniswap", {
     from: deployer,
-    args: [config.uniswapRouter2],
+    args: [config.weth],
     log: true,
     deterministicDeployment: true,
   });

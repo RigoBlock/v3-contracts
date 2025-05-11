@@ -205,7 +205,7 @@ const userConfig: HardhatUserConfig = {
           apiURL: "https://api.uniscan.xyz/api",
           browserURL: "https://uniscan.xyz"
         }
-      },
+      }
     ]
   },
 };

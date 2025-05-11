@@ -40,11 +40,8 @@ contract AUniswap is IAUniswap, IMinimumVersion {
 
     IWETH9 private immutable _weth;
 
-    /// @dev uniswapRouter2 address is 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45 on public networks.
-    constructor(address uniswapRouter02) {
-        _weth = IWETH9(
-            payable(INonfungiblePositionManager(payable(ISwapRouter02(uniswapRouter02).positionManager())).WETH9())
-        );
+    constructor(address weth) {
+        _weth = IWETH9(weth);
     }
 
     /// @inheritdoc IMinimumVersion

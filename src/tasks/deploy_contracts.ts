@@ -18,6 +18,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
         } catch (error) {
             console.error("Sourcify verification failed:", error.message);
         }
+        await hre.run("sourcify")
 
         console.log("Verifying contracts on chain explorer...");
         const deployments = await hre.deployments.all();

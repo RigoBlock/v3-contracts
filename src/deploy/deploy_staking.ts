@@ -11,7 +11,12 @@ const deploy: DeployFunction = async function (
 
   const chainId = await getChainId();
   if (!chainId || !chainConfig[chainId]) {
-    throw new Error(`Unsupported network: Chain ID ${chainId}`);
+    if (chainId === "31337") {
+      console.log("Skipping for Hardhat Network");
+      return;
+    } else {
+      throw new Error(`Unsupported network: Chain ID ${chainId}`);
+    }
   }
 
   const config = chainConfig[chainId];
