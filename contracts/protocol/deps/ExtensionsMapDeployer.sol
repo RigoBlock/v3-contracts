@@ -6,34 +6,23 @@ import {IExtensionsMapDeployer} from "../interfaces/IExtensionsMapDeployer.sol";
 import {DeploymentParams, Extensions} from "../types/DeploymentParams.sol";
 
 contract ExtensionsMapDeployer is IExtensionsMapDeployer {
-    /// @inheritdoc IExtensionsMapDeployer
-    uint24 public override nonce;
-    bytes4 private _paramsHash;
-
     address private transient _eApps;
     address private transient _eOracle;
     address private transient _eUpgrade;
     address private transient _wrappedNative;
 
     /// @inheritdoc IExtensionsMapDeployer
-    function deployExtensionsMap(DeploymentParams memory params) external override returns (address) {
+    mapping(address deployer => mapping(bytes32 salt => address mapAddress)) public deployedMaps;
+
+    /// @inheritdoc IExtensionsMapDeployer
+    function deployExtensionsMap(DeploymentParams memory params, bytes32 salt) external override returns (address) {
         _eApps = params.extensions.eApps;
         _eOracle = params.extensions.eOracle;
         _eUpgrade = params.extensions.eUpgrade;
         _wrappedNative = params.wrappedNative;
 
-        bytes4 newParamsHash = bytes4(keccak256(abi.encode(params)));
-
-        // increase nonce if we are passing different params from last deployed. Will redeploy in case of a rollback, which is ok.
-        if (newParamsHash != _paramsHash) {
-            unchecked {
-                ++nonce;
-            }
-            _paramsHash = newParamsHash;
-        }
-
         // Pre-compute the CREATE2 address
-        bytes32 salt = keccak256(abi.encode(msg.sender, nonce));
+        salt = keccak256(abi.encode(msg.sender, salt));
         address map = address(
             uint160(
                 uint256(
@@ -46,10 +35,12 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
 
         // Deploy only if no code exists
         if (map.code.length == 0) {
-            return address(new ExtensionsMap{salt: salt}());
-        } else {
-            return map;
+            address newMap = address(new ExtensionsMap{salt: salt}());
+            assert(newMap == map);
+            deployedMaps[msg.sender][salt] = map;
         }
+
+        return map;
     }
 
     /// @inheritdoc IExtensionsMapDeployer

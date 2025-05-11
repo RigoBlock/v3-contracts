@@ -92,8 +92,11 @@ const deploy: DeployFunction = async function (
     extensions: extensions,
     wrappedNative: wethAddress
   }
-  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
-  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
+
+  // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
+  const salt = hre.ethers.utils.formatBytes32String("extensionsMapSalt");
+  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params, salt);
+  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
   await tx.wait();
 
   await deploy("SmartPool", {
