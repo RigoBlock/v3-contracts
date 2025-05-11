@@ -27,7 +27,6 @@ jobs:
       SOLIDITY_VERSION: ${{ matrix.solidity }}
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
       PROD: ""
-      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v4
         with:

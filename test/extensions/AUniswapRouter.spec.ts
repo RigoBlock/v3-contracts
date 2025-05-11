@@ -253,8 +253,14 @@ describe("AUniswapRouter", async () => {
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
     })
 
+    // Notice: the adapter uses the hook address's bitmask to check if the hook can access the liquidity deltas
     it('should revert if hook can access liquidity deltas', async () => {
-      const { pool, wethAddress, hookAddress } = await setupTests()
+      const { pool, wethAddress } = await setupTests()
+
+      // Mock an address with Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG (0x08) and Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG (0x04)
+      // Combined flags: 0x02 | 0x01 = 0x03 (binary: 00000011)
+      const hookAddress = "0x0000000000000000000000000000000000000003"
+
       const PAIR = {
         ...DEFAULT_PAIR,
         poolKey: {
