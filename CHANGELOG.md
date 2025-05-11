@@ -1,3 +1,14 @@
+## [2.0.2](https://github.com/rigoblock/v3-contracts/compare/v2.0.1...v2.0.2) (2025-05-11)
+
+
+### Bug Fixes
+
+* extensions map salt ([be60fd4](https://github.com/rigoblock/v3-contracts/commit/be60fd45e2c9401e34da71a2ebcb45c3f10717a2))
+* remove unused input param ([e53780d](https://github.com/rigoblock/v3-contracts/commit/e53780da1cf0961181110c14a33269b548a1bb0a))
+* unichain wrap/unwrap ([7cc7504](https://github.com/rigoblock/v3-contracts/commit/7cc7504f527cf9032f92b6c2bb6c473625fd9979))
+
+
+
 ## [2.0.1](https://github.com/rigoblock/v3-contracts/compare/v2.0.0...v2.0.1) (2025-05-08)
 
 
@@ -71,22 +82,6 @@
 ### Features
 
 * remove deprecated self custody code ([5cf93f9](https://github.com/rigoblock/v3-contracts/commit/5cf93f919ae8be69b35ae893caf4e62bfae3bc78))
-
-
-
-## [1.4.2](https://github.com/rigoblock/v3-contracts/compare/v1.4.1...v1.4.2) (2023-11-11)
-
-
-### Bug Fixes
-
-* gas optimization on initialization revert ([7a36acd](https://github.com/rigoblock/v3-contracts/commit/7a36acd151c75b6444dae6de0a3c4e348df236e7))
-* revert with wrong pool initialization ([5cb1cb8](https://github.com/rigoblock/v3-contracts/commit/5cb1cb84bbe46343d1dc42f00e1be45aeef265bd))
-* update version in implementation deployment constants ([f6beeb8](https://github.com/rigoblock/v3-contracts/commit/f6beeb889fd8c334ced6fd15eeed639c3c52edab))
-
-
-### Reverts
-
-* Revert "chore: fix check pr title workflow" ([911ad15](https://github.com/rigoblock/v3-contracts/commit/911ad158f96ede840cf7f2158e6a4fd6fed98908))
 
 
 
