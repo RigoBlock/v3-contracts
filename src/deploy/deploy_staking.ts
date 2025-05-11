@@ -106,7 +106,7 @@ const deploy: DeployFunction = async function (
     args: [stakingProxy.address],
     log: true,
     deterministicDeployment: true,
-  });*/
+  });
 };
 
 deploy.tags = ['staking', 'l2-suite', 'main-suite']
