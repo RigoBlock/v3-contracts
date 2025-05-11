@@ -36,26 +36,6 @@ contract MockOracle {
         });
     }
 
-    function getHookPermissions() public pure returns (Hooks.Permissions memory) {
-        return
-            Hooks.Permissions({
-                beforeInitialize: true,
-                afterInitialize: true,
-                beforeAddLiquidity: true,
-                afterAddLiquidity: false,
-                beforeRemoveLiquidity: true,
-                afterRemoveLiquidity: false,
-                beforeSwap: true,
-                afterSwap: true,
-                beforeDonate: false,
-                afterDonate: false,
-                beforeSwapReturnDelta: false,
-                afterSwapReturnDelta: true,
-                afterAddLiquidityReturnDelta: true,
-                afterRemoveLiquidityReturnDelta: false
-            });
-    }
-
     function getObservation(
         PoolKey calldata key,
         uint256 index

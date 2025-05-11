@@ -1,12 +1,25 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { chainConfig } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
-  const { deployments, getNamedAccounts } = hre;
+  const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
+
+  const chainId = await getChainId();
+  if (!chainId || !chainConfig[chainId]) {
+    if (chainId === "31337") {
+      console.log("Skipping for Hardhat Network");
+      return;
+    } else {
+      throw new Error(`Unsupported network: Chain ID ${chainId}`);
+    }
+  }
+
+  const config = chainConfig[chainId];
 
   const authority = await deploy("Authority", {
     from: deployer,
@@ -43,23 +56,17 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // Notice: replace with deployed oracle address (uni hooks depends on PoolManager address, diff on each chains)
-  const oracle = "0xE39CAf28BF7C238A42D4CDffB96587862F41bAC4";
-  const wethAddress = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
+  // Notice: make sure the constants.ts file is updated with the correct address.
   const eOracle = await deploy("EOracle", {
     from: deployer,
-    args: [oracle, wethAddress],
+    args: [config.oracle, config.weth],
     log: true,
     deterministicDeployment: true,
-  });
-
-  // Notice: replace with deployed address (different by chain).
-  const stakingProxy = "0xD40edcc947fF35637233d765CB9efCFc10fC8c22";
-  const univ3Npm = "0x1238536071E1c677A632429e3655c799b22cDA52";
-  const univ4Posm = "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4";
+  })
+  
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [stakingProxy, univ3Npm, univ4Posm],
+    args: [config.stakingProxy, config.univ4Posm],
     log: true,
     deterministicDeployment: true,
   });
@@ -80,10 +87,13 @@ const deploy: DeployFunction = async function (
 
   const params = {
     extensions: extensions,
-    wrappedNative: wethAddress
+    wrappedNative: config.weth,
   }
-  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params);
-  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params);
+
+  // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
+  const salt = hre.ethers.utils.formatBytes32String("extensionsMapSalt");
+  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params, salt);
+  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
   await tx.wait();
 
   const poolImplementation = await deploy("SmartPool", {
@@ -102,20 +112,16 @@ const deploy: DeployFunction = async function (
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
   };
 
-  const uniswapRouter2 = "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E";
-
   await deploy("AUniswap", {
     from: deployer,
-    args: [uniswapRouter2],
+    args: [config.weth],
     log: true,
     deterministicDeployment: true,
   });
 
-  const universalRouter = "0x3a9d48ab9751398bbfa63ad67599bb04e4bdf98b";
-
   await deploy("AUniswapRouter", {
     from: deployer,
-    args: [universalRouter, univ4Posm, wethAddress],
+    args: [config.universalRouter, config.univ4Posm, config.weth],
     log: true,
     deterministicDeployment: true,
   });

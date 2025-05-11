@@ -10,8 +10,8 @@ contract MockUniswapRouter {
     string public constant requiredVersion = "4.0.0";
     address public immutable MOCK_UNISWAP_NPM_ADDRESS;
 
-    constructor() {
-        MOCK_UNISWAP_NPM_ADDRESS = address(new MockUniswapNpm());
+    constructor(address weth) {
+        MOCK_UNISWAP_NPM_ADDRESS = address(new MockUniswapNpm(weth));
     }
 
     function swapExactTokensForTokens(

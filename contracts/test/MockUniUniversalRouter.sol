@@ -6,11 +6,9 @@ contract MockUniUniversalRouter {
     event UniCallExecuted(address caller);
 
     string public constant requiredVersion = "4.0.0";
-    address public immutable univ3Npm;
     address public immutable univ4Posm;
 
-    constructor(address univ3NpmAddress, address univ4PosmAddress) {
-        univ3Npm = univ3NpmAddress;
+    constructor(address univ4PosmAddress) {
         univ4Posm = univ4PosmAddress;
     }
 
