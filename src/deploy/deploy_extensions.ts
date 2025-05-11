@@ -103,6 +103,13 @@ const deploy: DeployFunction = async function (
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
   }
 
+  await deploy("AUniswap", {
+    from: deployer,
+    args: [config.uniswapRouter2],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   await deploy("AUniswapRouter", {
     from: deployer,
     args: [config.universalRouter, config.univ4Posm, config.weth],
