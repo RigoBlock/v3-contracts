@@ -1,7 +1,7 @@
 export const AddressOne = "0x0000000000000000000000000000000000000001";
 
 // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
-export const extensionsMapSalt = hre.ethers.utils.formatBytes32String("extensionsMapSalt2");
+export const extensionsMapSalt = "extensionsMapSalt2";
 
 interface ChainConfig {
   rigoToken: string;
