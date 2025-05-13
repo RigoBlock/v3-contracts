@@ -103,14 +103,14 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const proxyFactoryInstance = await hre.ethers.getContractAt(
+  /*const proxyFactoryInstance = await hre.ethers.getContractAt(
     "RigoblockPoolProxyFactory",
     proxyFactory.address
   );
   const currentImplementation = await proxyFactoryInstance.implementation()
   if (currentImplementation !== poolImplementation.address) {
     await proxyFactoryInstance.setImplementation(poolImplementation.address)
-  }
+  }*/
 
   await deploy("AUniswap", {
     from: deployer,
@@ -126,12 +126,12 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await deploy("AMulticall", {
+  /*await deploy("AMulticall", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
-  });
+  });*/
 };
 
 deploy.tags = ['extensions', 'adapters', 'l2-suite', 'main-suite']

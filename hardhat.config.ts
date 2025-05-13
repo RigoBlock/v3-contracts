@@ -102,7 +102,7 @@ const userConfig: HardhatUserConfig = {
     mainnet: {
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 3000000000,
+      gasPrice: 1500000000,
     },
     xdai: {
       ...sharedNetworkConfig,
