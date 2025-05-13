@@ -1,5 +1,8 @@
 export const AddressOne = "0x0000000000000000000000000000000000000001";
 
+// Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
+export const extensionsMapSalt = hre.ethers.utils.formatBytes32String("extensionsMapSalt2");
+
 interface ChainConfig {
   rigoToken: string;
   oracle: string;
@@ -15,7 +18,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
   1: {
     rigoToken: "0x4FbB350052Bca5417566f188eB2EBCE5b19BC964",
     oracle: "0xB13250f0Dc8ec6dE297E81CDA8142DB51860BaC4",
-    stakingProxy: "0x73f92F71544578BCC1D9F3B7dfce18859Bc20261",
+    stakingProxy: "0x730dDf7b602dB822043e0409d8926440395e07fE",
     weth: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     univ4Posm: "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
     universalRouter: "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
