@@ -1,6 +1,6 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { chainConfig } from "../utils/constants";
+import { chainConfig, extensionsMapSalt } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
