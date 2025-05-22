@@ -28,16 +28,10 @@ describe("AUniswap", async () => {
             AddressZero
         )
         await factory.createPool('testpool','TEST',AddressZero)
-        const Univ3RouterInstance = await deployments.get("MockUniswapRouter");
-        const Univ3Router = await hre.ethers.getContractFactory("MockUniswapRouter")
-        const univ3Router = Univ3Router.attach(Univ3RouterInstance.address)
-        const Univ3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
-        const univ3NpmAddress = await univ3Router.positionManager()
         return {
             aUniswap: AUniswapInstance.address,
             authority,
             newPoolAddress,
-            univ3Npm: Univ3Npm.attach(univ3NpmAddress),
         }
     })
 
