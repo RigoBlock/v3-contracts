@@ -138,7 +138,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   })
 
-  await deploy("MockUniswapRouter", {
+  await deploy("MockUniswapNpm", {
     from: deployer,
     args: [weth.address],
     log: true,

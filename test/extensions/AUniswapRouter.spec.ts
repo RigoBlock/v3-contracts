@@ -43,17 +43,14 @@ describe("AUniswapRouter", async () => {
         AddressZero
     )
     await factory.createPool('testpool','TEST',AddressZero)
-    const UniRouter2Instance = await deployments.get("MockUniswapRouter");
-    const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
-    const uniV3NpmAddress = await uniswapRouter2.positionManager()
-    const UniV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+    const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+    const uniswapV3Npm = await ethers.getContractAt("MockUniswapNpm", UniswapV3NpmInstance.address)
     const Univ4PosmInstance = await deployments.get("MockUniswapPosm");
     const Univ4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
     const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter");
     const uniRouter = await MockUniUniversalRouter.deploy(Univ4PosmInstance.address)
     const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter")
-    const univ3Npm = UniV3Npm.attach(uniV3NpmAddress)
-    const wethAddress = await univ3Npm.WETH9()
+    const wethAddress = await uniswapV3Npm.WETH9()
     const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address, wethAddress)
     await authority.setAdapter(aUniswapRouter.address, true)
     // "3593564c": "execute(bytes calldata, bytes[] calldata, uint256)"

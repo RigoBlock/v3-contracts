@@ -21,7 +21,6 @@
 pragma solidity 0.8.28;
 
 import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
-import {ISwapRouter02} from "../../../utils/exchanges/uniswap/ISwapRouter02/ISwapRouter02.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
