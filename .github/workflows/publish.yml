@@ -40,6 +40,14 @@ jobs:
   publish-npm:
     needs: build
     runs-on: ubuntu-latest
+    # The following strategy and env are used by hardhat compile
+    strategy:
+      matrix:
+        solidity: [""]
+        settings: ['{"optimizer":{"enabled":true,"runs":200}}']
+    env:
+      SOLIDITY_VERSION: ${{ matrix.solidity }}
+      SOLIDITY_SETTINGS: ${{ matrix.settings }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
