@@ -1,3 +1,14 @@
+## [2.0.3](https://github.com/rigoblock/v3-contracts/compare/v2.0.2...v2.0.3) (2025-05-25)
+
+
+### Bug Fixes
+
+* attach value with uni v4 exact out swap ([4b0b480](https://github.com/rigoblock/v3-contracts/commit/4b0b480aed904f71e51e69784e949b90e6eff2d0))
+* remove swap-router-contracts package ([959d630](https://github.com/rigoblock/v3-contracts/commit/959d630cf617f8e21f651ff92a667ab60a3e5bbb))
+* staking proxy address constant ([3167b46](https://github.com/rigoblock/v3-contracts/commit/3167b46c7135d90dc434d3c98ad7146df4ba9fad))
+
+
+
 ## [2.0.2](https://github.com/rigoblock/v3-contracts/compare/v2.0.1...v2.0.2) (2025-05-11)
 
 
@@ -73,15 +84,6 @@
 * upgrade uniswap v3 adapter ([b024d80](https://github.com/rigoblock/v3-contracts/commit/b024d806a15c6ae29948ee315a578eed6091363a))
 * use minimum version in uniswap v3 adapter ([8c44759](https://github.com/rigoblock/v3-contracts/commit/8c4475928c9b9ab9c971161d98f0d328d7f886a6))
 * use transient storage for inputs ([cb90c62](https://github.com/rigoblock/v3-contracts/commit/cb90c6230a31448828f13f4697dc12e5867c576a))
-
-
-
-# [1.5.0](https://github.com/rigoblock/v3-contracts/compare/v1.4.2...v1.5.0) (2023-11-25)
-
-
-### Features
-
-* remove deprecated self custody code ([5cf93f9](https://github.com/rigoblock/v3-contracts/commit/5cf93f919ae8be69b35ae893caf4e62bfae3bc78))
 
 
 
