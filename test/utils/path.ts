@@ -41,3 +41,21 @@ export const encodeMultihopExactInPath = (poolKeys: any[], currencyIn: string): 
   }
   return pathKeys
 }
+
+export const encodeMultihopExactOutPath = (poolKeys: any[], currencyOut: string): any[] => {
+  let pathKeys = []
+  for (let i = poolKeys.length; i > 0; i--) {
+    let currencyIn = currencyOut == poolKeys[i - 1].currency0 ? poolKeys[i - 1].currency1 : poolKeys[i - 1].currency0
+    let pathKey = {
+      intermediateCurrency: currencyIn,
+      fee: poolKeys[i - 1].fee,
+      tickSpacing: poolKeys[i - 1].tickSpacing,
+      hooks: poolKeys[i - 1].hooks,
+      hookData: '0x',
+    }
+    // unshift pushes to the beginning of the array
+    pathKeys.unshift(pathKey)
+    currencyOut = currencyIn
+  }
+  return pathKeys
+}
