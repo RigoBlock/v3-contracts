@@ -1,3 +1,12 @@
+## [2.0.5](https://github.com/rigoblock/v3-contracts/compare/v2.0.4...v2.0.5) (2025-05-25)
+
+
+### Bug Fixes
+
+* hardhat compile setup in npm publish task ([c79412c](https://github.com/rigoblock/v3-contracts/commit/c79412cbfcee69a5437184d2cec29f5eb5b5e82b))
+
+
+
 ## [2.0.4](https://github.com/rigoblock/v3-contracts/compare/v2.0.3...v2.0.4) (2025-05-25)
 
 
@@ -35,18 +44,6 @@
 ### Bug Fixes
 
 * add Foundry to publish-npm job ([4e38840](https://github.com/rigoblock/v3-contracts/commit/4e388408996aecb703a7579d607ce5e0778cf35e))
-
-
-
-# [2.0.0](https://github.com/rigoblock/v3-contracts/compare/v1.6.0...v2.0.0) (2025-05-08)
-
-
-* feat!: V4 Release ([81a2bee](https://github.com/rigoblock/v3-contracts/commit/81a2bee78126efe83bd375fd7ea58e87c20faca0))
-
-
-### BREAKING CHANGES
-
-* major release with automated nav calculation and universal token access
 
 
 
