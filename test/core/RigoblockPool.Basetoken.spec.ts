@@ -42,11 +42,8 @@ describe("BaseTokenProxy", async () => {
             "SmartPool",
             newPoolAddress
         )
-        const UniRouter2Instance = await deployments.get("MockUniswapRouter")
-        const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
-        const uniswapV3NpmAddress = await uniswapRouter2.positionManager()
-        const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
-        const uniswapV3Npm = UniswapV3Npm.attach(uniswapV3NpmAddress)
+        const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+        const uniswapV3Npm = await ethers.getContractAt("MockUniswapNpm", UniswapV3NpmInstance.address)
         const Univ4PosmInstance = await deployments.get("MockUniswapPosm")
         const Univ4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
         const AuthorityInstance = await deployments.get("Authority")

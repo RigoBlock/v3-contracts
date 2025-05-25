@@ -20,10 +20,8 @@ describe("Proxy", async () => {
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
         const factory = Factory.attach(RigoblockPoolProxyFactory.address)
-        const UniRouter2Instance = await deployments.get("MockUniswapRouter");
-        const uniswapRouter2 = await ethers.getContractAt("MockUniswapRouter", UniRouter2Instance.address) 
-        const uniswapV3NpmAddress = await uniswapRouter2.positionManager()
-        const UniswapV3Npm = await hre.ethers.getContractFactory("MockUniswapNpm")
+        const UniswapV3NpmInstance = await deployments.get("MockUniswapNpm")
+        const uniswapV3Npm = await ethers.getContractAt("MockUniswapNpm", UniswapV3NpmInstance.address)
         const UniswapV4PosmInstance = await deployments.get("MockUniswapPosm")
         const UniswapV4Posm = await hre.ethers.getContractFactory("MockUniswapPosm")
         const { newPoolAddress } = await factory.callStatic.createPool(
@@ -38,7 +36,6 @@ describe("Proxy", async () => {
         )
         const HookInstance = await deployments.get("MockOracle")
         const Hook = await hre.ethers.getContractFactory("MockOracle")
-        const uniswapV3Npm = UniswapV3Npm.attach(uniswapV3NpmAddress)
         const authority = Authority.attach(AuthorityInstance.address)
         const MockUniUniversalRouter = await ethers.getContractFactory("MockUniUniversalRouter")
         const uniRouter = await MockUniUniversalRouter.deploy(UniswapV4PosmInstance.address)
@@ -53,7 +50,7 @@ describe("Proxy", async () => {
             authority,
             factory,
             pool,
-            uniswapV3Npm: UniswapV3Npm.attach(uniswapV3NpmAddress),
+            uniswapV3Npm,
             uniswapV4Posm: UniswapV4Posm.attach(UniswapV4PosmInstance.address),
             oracle: Hook.attach(HookInstance.address),
             weth: Weth.attach(wethAddress),
