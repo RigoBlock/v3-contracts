@@ -28,6 +28,7 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
+import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from "@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol";
 
@@ -214,8 +215,23 @@ abstract contract AUniswapDecoder {
                                     : 0;
                                 continue;
                             } else if (action == Actions.SWAP_EXACT_OUT) {
+                                IV4Router.ExactOutputParams calldata swapParams = paramsAtIndex
+                                    .decodeSwapExactOutParams();
+
+                                if (swapParams.path.length > 0) {
+                                    PathKey calldata lastPathKey = swapParams.path[swapParams.path.length - 1];
+                                    params.value += Currency.unwrap(lastPathKey.intermediateCurrency) == ZERO_ADDRESS
+                                        ? swapParams.amountInMaximum
+                                        : 0;
+                                }
                                 continue;
                             } else if (action == Actions.SWAP_EXACT_OUT_SINGLE) {
+                                IV4Router.ExactOutputSingleParams calldata swapParams = paramsAtIndex
+                                    .decodeSwapExactOutSingleParams();
+                                params.value += swapParams.zeroForOne &&
+                                    Currency.unwrap(swapParams.poolKey.currency0) == ZERO_ADDRESS
+                                    ? swapParams.amountInMaximum
+                                    : 0;
                                 continue;
                             }
                         } else {

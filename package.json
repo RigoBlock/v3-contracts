@@ -1,6 +1,6 @@
 {
   "name": "@rgbk/v3-contracts",
-  "version": "2.0.2",
+  "version": "2.0.5",
   "description": "Ethereum asset management",
   "homepage": "https://github.com/rigoblock/v3-contracts/",
   "license": "Apache-2.0",
@@ -11,10 +11,12 @@
     "dist",
     "src",
     "test",
-    "build"
+    "build",
+    "out"
   ],
   "scripts": {
     "build": "forge compile",
+    "build:hardhat": "hardhat compile",
     "build:ts": "yarn rimraf dist && tsc",
     "test": "hardhat test --deploy-fixture",
     "coverage": "hardhat coverage",
@@ -28,7 +30,7 @@
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "prepack": "yarn build",
     "prepare": "chmod +x ./.husky/pre-commit && husky install",
-    "prepublish": "yarn rimraf build && yarn build && yarn build:ts"
+    "prepublish": "yarn rimraf build && yarn build && yarn build:hardhat && yarn build:ts"
   },
   "repository": {
     "type": "git",
@@ -56,7 +58,6 @@
     "@types/yargs": "^17.0.24",
     "@typescript-eslint/eslint-plugin": "^4.7.0",
     "@typescript-eslint/parser": "^4.7.0",
-    "@uniswap/swap-router-contracts": "^1.3.0",
     "argv": "^0.0.3",
     "chai": "^4.2.0",
     "debug": "^4.2.0",
