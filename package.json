@@ -11,10 +11,12 @@
     "dist",
     "src",
     "test",
-    "build"
+    "build",
+    "out"
   ],
   "scripts": {
     "build": "forge compile",
+    "build:hardhat": "hardhat compile",
     "build:ts": "yarn rimraf dist && tsc",
     "test": "hardhat test --deploy-fixture",
     "coverage": "hardhat coverage",
@@ -28,7 +30,7 @@
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "prepack": "yarn build",
     "prepare": "chmod +x ./.husky/pre-commit && husky install",
-    "prepublish": "yarn rimraf build && yarn build && yarn build:ts"
+    "prepublish": "yarn rimraf build && yarn build && yarn build:hardhat && yarn build:ts"
   },
   "repository": {
     "type": "git",
