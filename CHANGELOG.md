@@ -1,3 +1,12 @@
+## [2.0.6](https://github.com/rigoblock/v3-contracts/compare/v2.0.5...v2.0.6) (2025-05-29)
+
+
+### Bug Fixes
+
+* base token price feed assertion also on first mint ([bf5344b](https://github.com/rigoblock/v3-contracts/commit/bf5344b73da92865b31e076f856acc347c4623ce))
+
+
+
 ## [2.0.5](https://github.com/rigoblock/v3-contracts/compare/v2.0.4...v2.0.5) (2025-05-25)
 
 
@@ -35,15 +44,6 @@
 * extensions map salt ([be60fd4](https://github.com/rigoblock/v3-contracts/commit/be60fd45e2c9401e34da71a2ebcb45c3f10717a2))
 * remove unused input param ([e53780d](https://github.com/rigoblock/v3-contracts/commit/e53780da1cf0961181110c14a33269b548a1bb0a))
 * unichain wrap/unwrap ([7cc7504](https://github.com/rigoblock/v3-contracts/commit/7cc7504f527cf9032f92b6c2bb6c473625fd9979))
-
-
-
-## [2.0.1](https://github.com/rigoblock/v3-contracts/compare/v2.0.0...v2.0.1) (2025-05-08)
-
-
-### Bug Fixes
-
-* add Foundry to publish-npm job ([4e38840](https://github.com/rigoblock/v3-contracts/commit/4e388408996aecb703a7579d607ce5e0778cf35e))
 
 
 
