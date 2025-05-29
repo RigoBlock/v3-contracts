@@ -1,11 +1,8 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
+import hre, { deployments, waffle } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
-import { BigNumber, Contract } from "ethers";
-import { calculateProxyAddress, calculateProxyAddressWithCallback } from "../../src/utils/proxies";
-import { getAddress } from "ethers/lib/utils";
 
 describe("ProxyGasCost", async () => {
     const [ user1 ] = waffle.provider.getWallets()
@@ -103,6 +100,8 @@ describe("ProxyGasCost", async () => {
             const etherAmount = parseEther("1")
             const numberOfMintOperations = 2
             await grgToken.approve(pool.address, etherAmount.mul(numberOfMintOperations))
+            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             let txReceipt = await pool.mint(
                 user1.address,
                 etherAmount,
@@ -111,8 +110,6 @@ describe("ProxyGasCost", async () => {
             let result = await txReceipt.wait()
             let gasCost = result.cumulativeGasUsed.toNumber()
             console.log(gasCost,'first token pool mint')
-            const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
-            await oracle.initializeObservations(poolKey)
             txReceipt = await pool.mint(
                 user1.address,
                 etherAmount,

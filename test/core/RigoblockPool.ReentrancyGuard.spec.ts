@@ -1,21 +1,23 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
+import hre, { deployments, waffle } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
-import { getAddress } from "ethers/lib/utils";
-import { utils } from "ethers";
-import { deployContract, timeTravel } from "../utils/utils";
+import { deployContract } from "../utils/utils";
 
 describe("ReentrancyGuard", async () => {
-    const [ user1, user2, user3 ] = waffle.provider.getWallets()
+    const [ user1 ] = waffle.provider.getWallets()
+    const MAX_TICK_SPACING = 32767
 
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
+        const HookInstance = await deployments.get("MockOracle")
+        const Hook = await hre.ethers.getContractFactory("MockOracle")
         return {
-            factory: Factory.attach(RigoblockPoolProxyFactory.address)
+            factory: Factory.attach(RigoblockPoolProxyFactory.address),
+            oracle: Hook.attach(HookInstance.address),
         }
     });
 
@@ -24,7 +26,7 @@ describe("ReentrancyGuard", async () => {
         // "POOL_TRANSFER_FROM_FAILED_ERROR" when the pool makes a low-level call to the rogue token, we cannot return the
         // expected error "REENTRANCY_ILLEGAL"
         it('should fail when trying to mint', async () => {
-            const { factory } = await setupTests()
+            const { factory, oracle } = await setupTests()
             const source = `
             contract RogueToken {
                 uint256 public totalSupply = 1e24;
@@ -67,6 +69,8 @@ describe("ReentrancyGuard", async () => {
             await rogueToken.init(testReentrancyAttack.address)
             const tokenAmount = parseEther("100")
             await rogueToken.transfer(testReentrancyAttack.address, tokenAmount)
+            const poolKey = { currency0: AddressZero, currency1: rogueToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+            await oracle.initializeObservations(poolKey)
             await expect(testReentrancyAttack.mintPool()).to.be.revertedWith('TokenTransferFromFailed()')
             expect(await testReentrancyAttack.count()).to.be.eq(0)
             await testReentrancyAttack.setMaxCount(1)
