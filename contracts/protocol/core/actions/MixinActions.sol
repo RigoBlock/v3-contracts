@@ -57,7 +57,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
-        require(mintedAmount > amountOutMin, PoolMintOutputAmount());
+        require(mintedAmount >= amountOutMin, PoolMintOutputAmount());
         poolTokens().totalSupply += mintedAmount;
 
         // allocate pool token transfers and log events.
