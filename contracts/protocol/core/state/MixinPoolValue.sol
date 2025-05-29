@@ -48,6 +48,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         components.baseToken = pool().baseToken;
         components.decimals = pool().decimals;
 
+        // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
+        require(IEOracle(address(this)).hasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
+
         // first mint skips nav calculation
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
@@ -81,8 +84,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
     function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue) {
-        // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
-        require(IEOracle(address(this)).hasPriceFeed(baseToken), BaseTokenPriceFeedError());
         AddressSet storage values = activeTokensSet();
 
         ApplicationsSlot storage appsBitmap = activeApplications();
