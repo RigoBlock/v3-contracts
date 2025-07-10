@@ -861,10 +861,10 @@
   resolved "https://registry.yarnpkg.com/@rtsao/scc/-/scc-1.1.0.tgz#927dd2fae9bc3361403ac2c7a00c32ddce9ad7e8"
   integrity sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==
 
-"@safe-global/safe-singleton-factory@^1.0.14":
-  version "1.0.44"
-  resolved "https://registry.yarnpkg.com/@safe-global/safe-singleton-factory/-/safe-singleton-factory-1.0.44.tgz#c1d39c9e310a05a79e5505ac7ffeefbeb1369ddb"
-  integrity sha512-eJB+8c9ndShfjFwnzCGyDsXbANWLoqjdSlLCU5LNb5FmmH1ZlNJxDQ0DHHHXqkwOrmskvNLomAf1lOY4uYeCgQ==
+"@safe-global/safe-singleton-factory@^2.0.0":
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/@safe-global/safe-singleton-factory/-/safe-singleton-factory-2.0.0.tgz#05300f9575dd0e9f411155ad6e9b47406961d145"
+  integrity sha512-cWkdWHLCB6bfF86Y0cyesS7nunWZGhY8ZuDIxrL+Ra03wE8j1EWnLW0xc3tXh4+JBoPOE2r1ALwc//BM/bTvrA==
 
 "@scure/base@~1.1.0":
   version "1.1.1"
