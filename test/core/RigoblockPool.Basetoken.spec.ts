@@ -131,6 +131,8 @@ describe("BaseTokenProxy", async () => {
             await pool.mint(user1.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             expect(poolData.totalSupply).to.be.eq(parseEther("10"))
+            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('InvalidOperator()')
+            await pool.connect(user2).setOperator(user1.address, true)
             await pool.mint(user2.address, parseEther("10"), 0)
             poolData = await pool.getPoolTokens()
             // spread is not applied on mint
@@ -336,6 +338,8 @@ describe("BaseTokenProxy", async () => {
             const poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)
             await pool.mint(user1.address, parseEther("10"), 0)
+            await expect(pool.mint(user2.address, parseEther("5"), 0)).to.be.revertedWith('InvalidOperator()')
+            await pool.connect(user2).setOperator(user1.address, true)
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool
             expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1"))
@@ -581,6 +585,8 @@ describe("BaseTokenProxy", async () => {
             // this call will activate the token
             await user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
             // minting again to activate token via nav calculations
+            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('InvalidOperator()')
+            await pool.connect(user2).setOperator(user1.address, true)
             await pool.mint(user2.address, parseEther("5"), 0)
             // unitary value does not include spread to pool, but includes weth balance
             const { unitaryValue } = await pool.getPoolTokens()

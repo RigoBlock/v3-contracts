@@ -106,4 +106,9 @@ interface ISmartPoolState {
     /// @notice Returns the total amount of issued tokens for this pool.
     /// @return Number of total issued tokens.
     function totalSupply() external view returns (uint256);
+
+    /// @param holder The address of the holder.
+    /// @param operator The address of the operator.
+    /// @return approved The approval status.
+    function isOperator(address holder, address operator) external view returns (bool approved);
 }
