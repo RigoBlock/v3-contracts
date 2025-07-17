@@ -137,6 +137,8 @@ describe("MixinStorageAccessible", async () => {
             await pool.changeMinPeriod(1234567)
             await pool.changeSpread(445)
             await pool.setTransactionFee(67)
+            // fee collector must approve receiving fees
+            await pool.connect(user2).setOperator(user1.address, true)
             await pool.changeFeeCollector(user2.address)
             await pool.setKycProvider(pool.address)
             poolParams = await pool.getStorageAt(poolParamsSlot, 2)

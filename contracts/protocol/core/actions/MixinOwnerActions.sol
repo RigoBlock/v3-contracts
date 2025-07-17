@@ -28,6 +28,8 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc ISmartPoolOwnerActions
     function changeFeeCollector(address feeCollector) external override onlyOwner {
+        // TODO: consider moving to a modifier (it is reused)
+        require(msg.sender == feeCollector || isOperator(feeCollector, msg.sender), InvalidOperator());
         require(feeCollector != poolParams().feeCollector, OwnerActionInputIsSameAsCurrent());
         poolParams().feeCollector = feeCollector;
         emit NewCollector(msg.sender, address(this), feeCollector);

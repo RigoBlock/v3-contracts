@@ -77,7 +77,7 @@ describe("BaseTokenProxy", async () => {
             expect(await pool.authority()).to.be.eq(authority.address)
             // TODO: we should have an assertion that the version is different if implementation has changed
             //   so we are prompted to change the version in the deployment constants.
-            expect(await pool.VERSION()).to.be.eq('4.0.2')
+            expect(await pool.VERSION()).to.be.eq('4.0.3')
         })
     })
 

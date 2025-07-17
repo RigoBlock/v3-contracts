@@ -41,6 +41,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 amountOutMin
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
+        // TODO: consider moving to a modifier (it is reused)
         require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
         NavComponents memory components = _updateNav();
         address kycProvider = poolParams().kycProvider;
