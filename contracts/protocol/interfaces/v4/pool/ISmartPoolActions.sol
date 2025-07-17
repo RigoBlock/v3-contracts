@@ -53,4 +53,10 @@ interface ISmartPoolActions {
 
     /// @notice Allows anyone to store an up-to-date pool price.
     function updateUnitaryValue() external;
+
+    /// @notice Sets or removes an operator for the caller.
+    /// @param operator The address of the operator.
+    /// @param approved The approval status.
+    /// @return bool True, always.
+    function setOperator(address operator, bool approved) external returns (bool);
 }

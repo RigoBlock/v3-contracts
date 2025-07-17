@@ -26,7 +26,7 @@ import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.
 /// @dev Inheriting from interface is required as we override public variables.
 abstract contract MixinConstants is ISmartPool {
     /// @inheritdoc ISmartPoolImmutable
-    string public constant override VERSION = "4.0.2";
+    string public constant override VERSION = "4.0.3";
 
     bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
 
@@ -39,6 +39,8 @@ abstract contract MixinConstants is ISmartPool {
     bytes32 internal constant _POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
 
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
+
+    bytes32 internal constant _OPERATOR_BOOLEAN_SLOT = 0xac0ed3ab25c1c02fcfdfba47b1953f88a6f24e5a50f1076d09054047884e5350;
 
     address internal constant _ZERO_ADDRESS = address(0);
 

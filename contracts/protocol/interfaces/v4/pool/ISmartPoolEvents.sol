@@ -24,11 +24,11 @@ interface ISmartPoolEvents {
     /// @param current Address of the new owner.
     event NewOwner(address indexed old, address indexed current);
 
-    /// @notice Emitted when pool operator updates NAV.
-    /// @param poolOperator Address of the pool owner.
+    /// @notice Emitted when NAV storage is updated.
+    /// @param sender Address of the wallet prompting an update.
     /// @param pool Address of the pool.
     /// @param unitaryValue Value of 1 token in wei units.
-    event NewNav(address indexed poolOperator, address indexed pool, uint256 unitaryValue);
+    event NewNav(address indexed sender, address indexed pool, uint256 unitaryValue);
 
     /// @notice Emitted when pool operator sets new mint fee.
     /// @param pool Address of the pool.
@@ -56,4 +56,10 @@ interface ISmartPoolEvents {
     /// @param pool Address of the pool.
     /// @param kycProvider Address of the kyc provider.
     event KycProviderSet(address indexed pool, address indexed kycProvider);
+
+    /// @notice Emitted when a user sets an operator.
+    /// @param holder Address of the user.
+    /// @param operator Address of the operator.
+    /// @param approved Boolean the operator is approved by the user.
+    event OperatorSet(address indexed holder, address indexed operator, bool approved);
 }

@@ -93,8 +93,18 @@ const deploy: DeployFunction = async function (
   // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
   const salt = hre.ethers.utils.formatBytes32String(extensionsMapSalt);
   const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params, salt);
-  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
-  await tx.wait();
+
+  // Check if extensionsMapAddress has code (is a deployed contract)
+  const code = await hre.ethers.provider.getCode(extensionsMapAddress);
+
+  if (code === '0x') {
+    // No code at address, proceed with deployment
+    const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
+    await tx.wait();
+  } else {
+    // skip onchain call if the contract is already deployed (would just return the address, so we can skip it)
+    console.log(`Contract already deployed at ${extensionsMapAddress}`);
+  }
 
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
