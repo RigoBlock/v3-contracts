@@ -137,6 +137,8 @@ describe("MixinStorageAccessible", async () => {
             await pool.changeMinPeriod(1234567)
             await pool.changeSpread(445)
             await pool.setTransactionFee(67)
+            // fee collector must approve receiving fees
+            await pool.connect(user2).setOperator(user1.address, true)
             await pool.changeFeeCollector(user2.address)
             await pool.setKycProvider(pool.address)
             poolParams = await pool.getStorageAt(poolParamsSlot, 2)
@@ -158,6 +160,8 @@ describe("MixinStorageAccessible", async () => {
                 [0, 0]
             )
             expect(poolParams).to.be.eq(encodedPack)
+            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('InvalidOperator()')
+            await pool.connect(user2).setOperator(user1.address, true)
             await pool.mint(user2.address, parseEther("10"), 1, { value: parseEther("10") })
             poolParams = await pool.getStorageAt(poolTokensSlot, 2)
             encodedPack = utils.solidityPack(

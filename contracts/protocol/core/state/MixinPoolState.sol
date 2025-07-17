@@ -115,6 +115,11 @@ abstract contract MixinPoolState is MixinPoolValue {
         return string(bytesArray);
     }
 
+    /// @inheritdoc ISmartPoolState
+    function isOperator(address holder, address operator) public view override returns (bool) {
+        return operators().isApproved[holder][operator];
+    }
+
     /*
      * INTERNAL VIEW METHODS
      */

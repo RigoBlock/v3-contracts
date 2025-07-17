@@ -29,6 +29,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolMintOutputAmount();
     error PoolSupplyIsNullOrDust();
     error PoolTokenNotActive();
+    error InvalidOperator();
 
     /*
      * EXTERNAL METHODS
@@ -40,6 +41,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 amountOutMin
     ) public payable override nonReentrant returns (uint256 recipientAmount) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
+        require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
         NavComponents memory components = _updateNav();
         address kycProvider = poolParams().kycProvider;
 
@@ -88,10 +90,20 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         require(components.totalSupply >= 1e2, PoolSupplyIsNullOrDust());
     }
 
+    /// @inheritdoc ISmartPoolActions
+    function setOperator(address operator, bool approved) external override returns (bool) {
+        operators().isApproved[msg.sender][operator] = approved;
+
+        emit OperatorSet(msg.sender, operator, approved);
+
+        return true;
+    }
+
     /*
      * PUBLIC METHODS
      */
     function decimals() public view virtual override returns (uint8);
+    function isOperator(address holder, address operator) public view virtual returns (bool approved);
 
     /*
      * INTERNAL METHODS
