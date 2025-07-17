@@ -213,15 +213,19 @@ describe("Proxy", async () => {
             ).to.emit(pool, "Transfer").withArgs(AddressZero, feeCollector, mintedAmount)
             // when fee collector not same as recipient, fee gets allocated to fee recipient
             let fee = mintedAmount.div(10000).mul(transactionFee)
-            mintedAmount = await pool.callStatic.mint(user2.address, etherAmount, 0, { value: etherAmount })
+            mintedAmount = await pool.connect(user2).callStatic.mint(user2.address, etherAmount, 0, { value: etherAmount })
             // minted amount changes as second holder is charged the spread
             fee = mintedAmount.div(10000).mul(transactionFee)
             // TODO: verify why we cannot get the correct log arguments
+            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('InvalidOperator()')
+            await pool.connect(user2).setOperator(user1.address, true)
             await expect(
                 pool.mint(user2.address, etherAmount, 0, { value: etherAmount })
             )
                 .to.emit(pool, "Transfer") //.withArgs(AddressZero, feeCollector, fee)
                 //.and.to.emit(pool, "Transfer").withArgs(AddressZero, user2.address, mintedAmount)
+            // fee collector must approve receiving fees
+            await pool.connect(user3).setOperator(user1.address, true)
             await pool.changeFeeCollector(user3.address)
             feeCollector = (await pool.getPoolParams()).feeCollector
             expect(feeCollector).to.be.eq(user3.address)
@@ -313,7 +317,7 @@ describe("Proxy", async () => {
 
     describe("burn", async () => {
         it('should burn tokens', async () => {
-            const { authority, pool } = await setupTests()
+            const { pool } = await setupTests()
             const etherAmount = parseEther("1")
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             const userPoolBalance = await pool.balanceOf(user1.address)
@@ -340,6 +344,26 @@ describe("Proxy", async () => {
             expect(postBalance).to.be.gt(preBalance)
         })
 
+        // assert burn cannot be denied by anyone. Assumes the user has not given mint access to anyone else (i.e. an attacker)
+        it('should not allow dos by frontrun with mint to holder', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            const userPoolBalance = await pool.balanceOf(user1.address)
+            await timeTravel({ seconds: 2592000, mine: true })
+            await expect(
+                pool.connect(user2).mint(user1.address, etherAmount, 0, { value: etherAmount })
+            ).to.be.revertedWith('InvalidOperator()')
+            // the following is true with fee set as 0
+            await expect(
+                pool.burn(userPoolBalance, 1)
+            ).to.emit(pool, "Transfer").withArgs(
+                user1.address,
+                AddressZero,
+                userPoolBalance
+            )
+        })
+
         it('should allocate fee tokens to fee recipient', async () => {
             const { pool } = await setupTests()
             const etherAmount = parseEther("1")
@@ -351,16 +375,43 @@ describe("Proxy", async () => {
             await expect(
                 pool.burn(userPoolBalance.div(2), 1)
             ).to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, userPoolBalance.div(2))
-            const feeCollector = user3.address
-            await pool.changeFeeCollector(feeCollector)
+            const feeCollector = user3
+            // fee collector must approve receiving fees
+            await pool.connect(feeCollector).setOperator(user1.address, true)
+            await pool.changeFeeCollector(feeCollector.address)
             userPoolBalance = await pool.balanceOf(user1.address)
             const fee = userPoolBalance.div(10000).mul(transactionFee)
             const burntAmount = userPoolBalance.sub(fee)
             await expect(
                 pool.burn(userPoolBalance, 1)
             )
-                .to.emit(pool, "Transfer").withArgs(user1.address, feeCollector, fee)
+                .to.emit(pool, "Transfer").withArgs(user1.address, feeCollector.address, fee)
                 .and.to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, burntAmount)
+        })
+
+        // assert burn cannot be denied by pool operator. Assumes the user has not given mint access to the pool operator (can be revoked at any time)
+        it('should not allow dos by setting holder as fee recipient', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.connect(user3).mint(user3.address, etherAmount, 0, { value: etherAmount })
+            await timeTravel({ seconds: 2592000, mine: true })
+            const transactionFee = 50
+            await pool.setTransactionFee(transactionFee)
+            let userPoolBalance = await pool.balanceOf(user3.address)
+            // pool operator must set fee recipient as the target wallet, but this is not possible unless the target wallet has given permission to the pool operator
+            await expect(pool.changeFeeCollector(user3.address)).to.be.revertedWith('InvalidOperator()')
+            // now, any wallet can trigger him receiving the fee in locked pool tokens
+            await expect(
+                pool.connect(user3).mint(user2.address, etherAmount, 0, { value: etherAmount })
+            ).to.be.revertedWith('InvalidOperator()')
+            await pool.connect(user2).mint(user2.address, etherAmount, 0, { value: etherAmount })
+            const fee = userPoolBalance.div(10000).mul(transactionFee)
+            const burntAmount = userPoolBalance.sub(fee)
+            await expect(
+                pool.connect(user3).burn(userPoolBalance, 1)
+            )
+                .to.emit(pool, "Transfer").withArgs(user3.address, user1.address, fee)
+                .and.to.emit(pool, "Transfer").withArgs(user3.address, AddressZero, burntAmount)
         })
     })
 
@@ -468,6 +519,20 @@ describe("Proxy", async () => {
         })
     })
 
+    describe("setOperator", async () => {
+        // used when someone is minting on behalf of the user
+        it('should set operator for user', async () => {
+            const { pool } = await setupTests()
+            let isOperator = await pool.isOperator(user1.address, user2.address)
+            await expect(isOperator).to.not.be.true
+            await expect(
+                pool.setOperator(user2.address, true)
+            ).to.emit(pool, "OperatorSet").withArgs(user1.address, user2.address, true)
+            isOperator = await pool.isOperator(user1.address, user2.address)
+            await expect(isOperator).to.be.true
+        })
+    })
+
     describe("setKycProvider", async () => {
         it('should revert if caller not pool owner', async () => {
             const { pool } = await setupTests()
@@ -502,10 +567,19 @@ describe("Proxy", async () => {
             ).to.be.revertedWith('PoolCallerIsNotOwner()')
         })
 
+        it('should revert if fee collector has not given permission to pool operator', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.changeFeeCollector(AddressZero)
+            ).to.be.revertedWith('InvalidOperator()')
+        })
+
         it('should set fee collector', async () => {
             const { pool } = await setupTests()
             // default fee collector is pool owner
             expect((await pool.getPoolParams()).feeCollector).to.be.eq(await pool.owner())
+            // fee collector must approve receiving fees
+            await pool.connect(user2).setOperator(user1.address, true)
             await expect(
                 pool.changeFeeCollector(user2.address)
             ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
@@ -514,14 +588,18 @@ describe("Proxy", async () => {
 
         it('should revert if new is same as current', async () => {
             const { pool } = await setupTests()
-            const currentCollector = await pool.owner()
-            // first time we update storage
+            const initialCollector = await pool.owner()
+            // the first time we update storage, the address must be different from the default one (pool owner)
             await expect(
-                pool.changeFeeCollector(currentCollector)
-            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, currentCollector)
-            await expect(
-                pool.changeFeeCollector(currentCollector)
+                pool.changeFeeCollector(initialCollector)
             ).to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+            await pool.connect(user2).setOperator(user1.address, true)
+            await expect(
+                pool.changeFeeCollector(user2.address)
+            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
+            await expect(
+                pool.changeFeeCollector(initialCollector)
+            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, initialCollector)
         })
     })
 
@@ -555,11 +633,13 @@ describe("Proxy", async () => {
         it('should revert if same as current', async () => {
             const { pool } = await setupTests()
             expect((await pool.getPoolParams()).spread).to.be.eq(500)
-            // first time we update storage
-            await expect(pool.changeSpread(500))
-                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
+            // the first time we update storage, the spread must be different from the default one (500)
             await expect(pool.changeSpread(500))
                 .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+            await expect(pool.changeSpread(400))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 400)
+            await expect(pool.changeSpread(500))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
         })
     })
 

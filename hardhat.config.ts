@@ -2,19 +2,21 @@ import type { HardhatUserConfig, HttpNetworkUserConfig } from "hardhat/types";
 import "@nomicfoundation/hardhat-foundry";
 import "@nomicfoundation/hardhat-verify";
 import "@nomiclabs/hardhat-waffle";
+import { getSingletonFactoryInfo } from "@safe-global/safe-singleton-factory";
 import "solidity-coverage";
 import "hardhat-deploy";
 import dotenv from "dotenv";
 import yargs from "yargs";
-import { getSingletonFactoryInfo } from "@safe-global/safe-singleton-factory";
+import { hideBin } from "yargs/helpers";
 
-const argv = yargs
+const argv = yargs(hideBin(process.argv))
   .option("network", {
     type: "string",
     default: "hardhat",
   })
   .help(false)
-  .version(false).argv;
+  .version(false)
+  .parse();
 
 // Load environment variables.
 dotenv.config();
