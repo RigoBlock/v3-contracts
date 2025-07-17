@@ -341,7 +341,7 @@ describe("Proxy", async () => {
             const spreadAmount = BigNumber.from(etherAmount).sub(etherAmount.div(100).mul(100).div(100).mul(100))
             expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(spreadAmount)
             const postBalance = await hre.ethers.provider.getBalance(user1.address)
-            expect(Number(postBalance)).to.be.gt(Number(preBalance))
+            expect(postBalance).to.be.gt(preBalance)
         })
 
         // assert burn cannot be denied by anyone. Assumes the user has not given mint access to anyone else (i.e. an attacker)
@@ -398,7 +398,6 @@ describe("Proxy", async () => {
             const transactionFee = 50
             await pool.setTransactionFee(transactionFee)
             let userPoolBalance = await pool.balanceOf(user3.address)
-            // TODO: verify what the fee recipient is by default. It seems if it was never set, it is the pool owner, but the transaction won't revert if the pool operator sets itself as recipient, which he already is.
             // pool operator must set fee recipient as the target wallet, but this is not possible unless the target wallet has given permission to the pool operator
             await expect(pool.changeFeeCollector(user3.address)).to.be.revertedWith('InvalidOperator()')
             // now, any wallet can trigger him receiving the fee in locked pool tokens
