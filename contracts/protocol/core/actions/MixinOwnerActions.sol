@@ -28,9 +28,8 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc ISmartPoolOwnerActions
     function changeFeeCollector(address feeCollector) external override onlyOwner {
-        // TODO: consider moving to a modifier (it is reused)
         require(msg.sender == feeCollector || isOperator(feeCollector, msg.sender), InvalidOperator());
-        require(feeCollector != poolParams().feeCollector, OwnerActionInputIsSameAsCurrent());
+        require(feeCollector != _getFeeCollector(), OwnerActionInputIsSameAsCurrent());
         poolParams().feeCollector = feeCollector;
         emit NewCollector(msg.sender, address(this), feeCollector);
     }
@@ -42,7 +41,7 @@ abstract contract MixinOwnerActions is MixinActions {
             minPeriod >= _MIN_LOCKUP && minPeriod <= _MAX_LOCKUP,
             PoolLockupPeriodInvalid(_MIN_LOCKUP, _MAX_LOCKUP)
         );
-        require(minPeriod != poolParams().minPeriod, OwnerActionInputIsSameAsCurrent());
+        require(minPeriod != _getMinPeriod(), OwnerActionInputIsSameAsCurrent());
         poolParams().minPeriod = minPeriod;
         emit MinimumPeriodChanged(address(this), minPeriod);
     }
@@ -51,7 +50,7 @@ abstract contract MixinOwnerActions is MixinActions {
     function changeSpread(uint16 newSpread) external override onlyOwner {
         // 0 value is sentinel for uninitialized spread, returning _MAX_SPREAD
         require(newSpread > 0 && newSpread <= _MAX_SPREAD, PoolSpreadInvalid(_MAX_SPREAD));
-        require(newSpread != poolParams().spread, OwnerActionInputIsSameAsCurrent());
+        require(newSpread != _getSpread(), OwnerActionInputIsSameAsCurrent());
         poolParams().spread = newSpread;
         emit SpreadChanged(address(this), newSpread);
     }

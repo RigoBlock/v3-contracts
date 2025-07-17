@@ -589,14 +589,18 @@ describe("Proxy", async () => {
 
         it('should revert if new is same as current', async () => {
             const { pool } = await setupTests()
-            const currentCollector = await pool.owner()
-            // first time we update storage
+            const initialCollector = await pool.owner()
+            // the first time we update storage, the address must be different from the default one (pool owner)
             await expect(
-                pool.changeFeeCollector(currentCollector)
-            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, currentCollector)
-            await expect(
-                pool.changeFeeCollector(currentCollector)
+                pool.changeFeeCollector(initialCollector)
             ).to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+            await pool.connect(user2).setOperator(user1.address, true)
+            await expect(
+                pool.changeFeeCollector(user2.address)
+            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, user2.address)
+            await expect(
+                pool.changeFeeCollector(initialCollector)
+            ).to.emit(pool, "NewCollector").withArgs(user1.address, pool.address, initialCollector)
         })
     })
 
@@ -630,11 +634,13 @@ describe("Proxy", async () => {
         it('should revert if same as current', async () => {
             const { pool } = await setupTests()
             expect((await pool.getPoolParams()).spread).to.be.eq(500)
-            // first time we update storage
-            await expect(pool.changeSpread(500))
-                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
+            // the first time we update storage, the spread must be different from the default one (500)
             await expect(pool.changeSpread(500))
                 .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
+            await expect(pool.changeSpread(400))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 400)
+            await expect(pool.changeSpread(500))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
         })
     })
 
