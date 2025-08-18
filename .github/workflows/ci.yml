@@ -28,7 +28,7 @@ jobs:
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
       PROD: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: 'recursive'
       - uses: actions/setup-node@v4
