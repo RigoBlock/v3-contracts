@@ -1,0 +1,2 @@
+# Ignore IRigoblockPoolProxyFactory.sol to avoid changing deployment bytecode
+contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol
