@@ -13,5 +13,5 @@ tab_width = 4
 bracket_spacing = true
 int_types = "long"
 
-[linter.exclude_lints]
-files = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
+[lint]
+ignore = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
