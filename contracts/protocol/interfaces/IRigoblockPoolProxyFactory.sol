@@ -64,10 +64,10 @@ interface IRigoblockPoolProxyFactory {
     function getRegistry() external view returns (address);
 
     /// @notice Pool initialization parameters.
-    /// @params name String of the name (max 31 characters).
-    /// @params symbol bytes8 symbol.
-    /// @params owner Address of the owner.
-    /// @params baseToken Address of the base token.
+    /// @custom:param name String of the name (max 31 characters).
+    /// @custom:param symbol bytes8 symbol.
+    /// @custom:param owner Address of the owner.
+    /// @custom:param baseToken Address of the base token.
     struct Parameters {
         string name;
         bytes8 symbol;

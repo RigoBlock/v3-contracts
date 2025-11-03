@@ -5,9 +5,9 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Observation} from "../types/Observation.sol";
 
 interface IOracle {
-    /// @member index The index of the last written observation for the pool
-    /// @member cardinality The cardinality of the observations array for the pool
-    /// @member cardinalityNext The cardinality target of the observations array for the pool, which will replace cardinality when enough observations are written
+    /// @custom:member index The index of the last written observation for the pool
+    /// @custom:member cardinality The cardinality of the observations array for the pool
+    /// @custom:member cardinalityNext The cardinality target of the observations array for the pool, which will replace cardinality when enough observations are written
     struct ObservationState {
         uint16 index;
         uint16 cardinality;
