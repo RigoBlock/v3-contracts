@@ -99,6 +99,32 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         return true;
     }
 
+    error DonateTransferFromFailer();
+
+    // TODO: by integrating it as EIntents, we could remove the transferFrom on donate, or the donate entirely?
+    /// @inheritdoc ISmartPoolActions
+    function donate(address token, uint256 amount) external payable override {
+        // as the method is not restricted, we prevent nav inflation via a rogue token.
+        require(isOwnedToken(token), TokenIsNotOwned());
+    
+        if (amount == 0) {
+            return; // null amount is flag for rebalance check
+        } else if (amount == 1) {
+            // amount == 1 is flag for caller token balance
+            amount = IERC20(token).balanceOf(msg.sender);
+        }
+
+        // TODO: what if donation is made in nativeCurrency?
+        try IERC20(token).transferFrom(msg.sender, amount) {
+            address baseToken = pool().baseToken;
+            int256 convertedAmount = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
+            // TODO: simply define baseTokenVirtualBalance int256 in a library
+            virtualBalances[baseToken] -= IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
+        } catch {
+            revert DonateTransferFromFailer();
+        }
+    }
+
     /*
      * PUBLIC METHODS
      */

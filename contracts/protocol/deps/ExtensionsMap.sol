@@ -75,6 +75,7 @@ contract ExtensionsMap is IExtensionsMap {
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
     }
 
+    // TODO: add EAcrossIntents, allow delegatecall is msg.sender == acrossSpokePool
     /// @inheritdoc IExtensionsMap
     /// @dev Should be called by pool with delegatecall
     function getExtensionBySelector(

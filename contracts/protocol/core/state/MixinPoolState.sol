@@ -120,6 +120,18 @@ abstract contract MixinPoolState is MixinPoolValue {
         return operators().isApproved[holder][operator];
     }
 
+    /// @inheritdoc ISmartPoolState
+    function assertCrosschainNavInRange(uint256 sourceNav, uint256 tolerance) {
+        // TODO: we must take into account initial nav deltas
+        updateUnitaryValue();
+        PoolTokens memory poolTokens = getPoolTokens();
+        require(
+            poolTokens.unitaryValue >= sourceNav - tolerance ||
+            poolTokens.unitaryValue <= sourceNav + tolerange,
+            PoolNavNotInRange();
+        );
+    }
+
     /*
      * INTERNAL VIEW METHODS
      */
