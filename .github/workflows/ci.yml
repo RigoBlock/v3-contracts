@@ -45,7 +45,8 @@ jobs:
         with:
           version: nightly
       - run: yarn --frozen-lockfile
-      - run: yarn build
+      # Skip foundry build due to unfixed bugs in their solar linter
+      #- run: yarn build
       - run: yarn test
       - run: yarn coverage
       - name: Upload coverage to Codecov
