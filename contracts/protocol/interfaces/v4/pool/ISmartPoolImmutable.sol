@@ -12,8 +12,13 @@ interface ISmartPoolImmutable {
     /// @return Address of the authority contract.
     function authority() external view returns (address);
 
-    /// @notice Returns the WETH9 contract.
+    /// @notice Returns the address of the WETH9 contract.
     /// @dev Used to convert WETH balances to ETH without executing an oracle call.
     /// @return Address of the WETH9 contract.
     function wrappedNative() external view returns (address);
+
+    /// @notice Returns the address of the Rigoblock deflation contract.
+    /// @dev Used to transfer protocol fees to the buy-back-and-burn contract.
+    /// @dev Address of the deflation contract.
+    function deflation() external view returns (address);
 }

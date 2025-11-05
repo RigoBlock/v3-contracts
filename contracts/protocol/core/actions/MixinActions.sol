@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
@@ -35,11 +35,33 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
      * EXTERNAL METHODS
      */
     /// @inheritdoc ISmartPoolActions
+    function mintWithToken(
+        address recipient,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenIn
+    ) external payable override nonReentrant returns (uint256 recipientAmount) {
+        // TODO: should we restrict to owner-approved (although owned tokens are owner-approved in general)
+        // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
+        require(activeTokensSet().isActive(tokenIn), PoolTokenNotActive());
+        recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
+    }
+
+    /// @inheritdoc ISmartPoolActions
     function mint(
         address recipient,
         uint256 amountIn,
         uint256 amountOutMin
-    ) public payable override nonReentrant returns (uint256 recipientAmount) {
+    ) external payable override nonReentrant returns (uint256 recipientAmount) {
+        recipientAmount = _mint(recipient, amountIn, amountOutMin, _BASE_TOKEN_FLAG);
+    }
+
+    function _mint(
+        address recipient,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenIn
+    ) private returns (uint256 recipientAmount) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
         require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
         NavComponents memory components = _updateNav();
@@ -51,11 +73,26 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         _assertBiggerThanMinimum(amountIn);
+        unit256 spread = amountIn * _getSpread() / _SPREAD_BASE;
 
-        if (components.baseToken.isAddressZero()) {
+        if (tokenIn == _BASE_TOKEN_FLAG) {
+            tokenIn = components.baseToken;
+        }
+
+        if (tokenIn.isAddressZero()) {
             require(msg.value == amountIn, PoolMintAmountIn());
+            _getDeflation().safeTransferNative(spread);
         } else {
-            components.baseToken.safeTransferFrom(msg.sender, address(this), amountIn);
+            tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
+            tokenIn.safeTransfer(_getDeflation(), spread);
+            amountIn -= spread;
+        }
+
+        if (tokenIn != components.baseToken) {
+            // convert the tokenIn amount into base token amount
+            amountIn = uint256(
+                IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), baseToken)
+            );
         }
 
         uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
@@ -117,6 +154,8 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /// @dev Returns the spread, or _MAX_SPREAD if not set
     function _getSpread() internal view virtual returns (uint16);
 
+    function _getDeflation() internal view override returns (address);
+
     /*
      * PRIVATE METHODS
      */
@@ -166,15 +205,9 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn, userAccount.userBalance);
-        bool isOnlyHolder = components.totalSupply == userAccount.userBalance;
         poolTokens().totalSupply -= burntAmount;
 
-        if (!isOnlyHolder) {
-            // apply markup
-            burntAmount -= (burntAmount * _getSpread()) / _SPREAD_BASE;
-        }
-
-        netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
+        uint256 netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
 
@@ -193,12 +226,17 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             );
         }
 
+        uint256 spread = netRevenue * _getSpread() / _SPREAD_BASE;
+        netRevenue -= spread;
+
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());
 
         if (tokenOut.isAddressZero()) {
             msg.sender.safeTransferNative(netRevenue);
+            _getDeflation().safeTransferNative(spread);
         } else {
             tokenOut.safeTransfer(msg.sender, netRevenue);
+            tokenOut.safeTransfer(_getDeflation(), spread);
         }
     }
 

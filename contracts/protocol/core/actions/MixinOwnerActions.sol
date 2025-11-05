@@ -1,5 +1,22 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
+/*
+
+ Copyright 2025 Rigo Intl.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+*/
 
 import {MixinActions} from "./MixinActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
@@ -28,6 +45,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc ISmartPoolOwnerActions
     function changeFeeCollector(address feeCollector) external override onlyOwner {
+        // prevent the owner to set a fee collector without their prior consent
         require(msg.sender == feeCollector || isOperator(feeCollector, msg.sender), InvalidOperator());
         require(feeCollector != _getFeeCollector(), OwnerActionInputIsSameAsCurrent());
         poolParams().feeCollector = feeCollector;

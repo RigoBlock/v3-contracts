@@ -34,13 +34,16 @@ abstract contract MixinImmutables is MixinConstants {
     ///@inheritdoc ISmartPoolImmutable
     address public immutable override wrappedNative;
 
+    ///@inheritdoc ISmartPoolImmutable
+    address public immutable override deflation;
+
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
 
     IExtensionsMap internal immutable _extensionsMap;
 
     /// @notice The ExtensionsMap interface is required to implement the expected methods as sanity check.
-    constructor(address _authority, address extensionsMap) {
+    constructor(address _authority, address extensionsMap, address deflation) {
         require(_authority.code.length > 0, InvalidAuthorityInput());
         require(extensionsMap.code.length > 0, InvalidExtensionsMapInput());
         authority = _authority;

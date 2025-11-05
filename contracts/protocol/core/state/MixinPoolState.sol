@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
@@ -141,6 +141,8 @@ abstract contract MixinPoolState is MixinPoolValue {
         uint16 spread = poolParams().spread;
         return spread != 0 ? spread : _MAX_SPREAD;
     }
+
+    function _getDeflation() internal view override returns (address deflation) {}
 
     function _getActiveTokens() private view returns (ActiveTokens memory tokens) {
         tokens.activeTokens = activeTokensSet().addresses;
