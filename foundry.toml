@@ -7,11 +7,11 @@ cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
 
-[fmt]
+[profile.fmt]
 line_length = 120
 tab_width = 4
 bracket_spacing = true
 int_types = "long"
 
-[lint]
+[profile.lint]
 ignore = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
