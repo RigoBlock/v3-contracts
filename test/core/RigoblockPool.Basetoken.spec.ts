@@ -8,6 +8,7 @@ import { DEADLINE } from "../shared/constants";
 import { CommandType, RoutePlanner } from '../shared/planner'
 import { Actions, V4Planner } from '../shared/v4Planner'
 import { deployContract, timeTravel } from "../utils/utils";
+import { parse } from "path";
 
 describe("BaseTokenProxy", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
@@ -299,7 +300,7 @@ describe("BaseTokenProxy", async () => {
             let userPoolBalance = await pool.balanceOf(user1.address)
             // initial price is 1, so user balance is same as tokenAmountIn as long as no spread is applied
             const { spread } = await pool.getPoolParams()
-            const markup = tokenAmountIn.mul(spread).div(10000)
+            let markup = tokenAmountIn.mul(spread).div(10000)
             expect(userPoolBalance).to.be.eq(tokenAmountIn.sub(markup))
             await expect(
                 pool.burn(BigNumber.from(userPoolBalance).add(1), 0)
@@ -333,22 +334,24 @@ describe("BaseTokenProxy", async () => {
             const poolTotalSupply = await pool.totalSupply()
             expect(poolTotalSupply).to.be.eq(0)
             expect(await pool.balanceOf(user1.address)).to.be.eq(0)
-            // as long as price is 1, tokenAmountIn - spread should be equal to netRevenue
-            // TODO: fix text. Check why netRevenue is 0.9025 vs 0.9 balance minus markup
-            //expect(BigNumber.from(userPoolBalance).sub(markup)).to.be.eq(BigNumber.from(netRevenue))
-            //const tokenDelta = Number(tokenAmountIn) - netRevenue
-            //const poolGrgBalance = await grgToken.balanceOf(pool.address)
-            //expect(poolGrgBalance).to.be.eq(tokenDelta.toString())
+            markup = userPoolBalance.mul(spread).div(10000)
+            // as long as price is 1, userPoolBalance - spread should be equal to netRevenue
+            expect(BigNumber.from(userPoolBalance).sub(markup)).to.be.eq(BigNumber.from(netRevenue))
+            const tokenDelta = BigNumber.from(tokenAmountIn).sub(netRevenue)
+            // 5% applied on tokenIn, plus 5% applied on the smaller tokenOut amount due to spread
+            expect(tokenDelta).to.be.eq(parseEther("0.0975"))
+            const poolGrgBalance = await grgToken.balanceOf(pool.address)
+            expect(poolGrgBalance).to.be.not.eq(tokenDelta.toString())
+            // all spread tokens have gone to the fee collector, so pool balance is 0
+            expect(poolGrgBalance).to.be.eq(0)
             // if fee != 0 and caller not fee recipient, supply will not be 0
-            //let poolData = await pool.getPoolParams()
-            //userPoolBalance = userPoolBalance.sub(markup)
-            //poolData = await pool.getPoolTokens()
-            //const unitaryValue = poolData.unitaryValue
-            //const decimals = await pool.decimals()
+            const { unitaryValue } = await pool.getPoolTokens()
+            userPoolBalance = userPoolBalance.sub(markup)
+            const decimals = await pool.decimals()
             // we need to multiply by fraction as ts overflows otherwise
-            //const revenue = unitaryValue / (10**decimals) * userPoolBalance
-            //expect(userPoolBalance - revenue).to.be.eq(0)
-            //expect(Number(netRevenue)).to.be.deep.eq(revenue)
+            const revenue = BigNumber.from(unitaryValue).div(BigNumber.from(10).pow(decimals)).mul(userPoolBalance)
+            expect(userPoolBalance.sub(revenue)).to.be.eq(0)
+            expect(BigNumber.from(netRevenue)).to.be.deep.eq(revenue)
         })
 
         it('should apply spread if user not only holder', async () => {
@@ -520,23 +523,17 @@ describe("BaseTokenProxy", async () => {
             await pool.updateUnitaryValue()
             const { unitaryValue } = await pool.getPoolTokens()
             expect(unitaryValue).to.be.eq(parseEther("6.263157894736842105"))
+            await expect(pool.burnForToken(parseEther("16.1"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
+            const wethBalanceBefore = await weth.balanceOf(user1.address)
+            const tx = await pool.burnForToken(parseEther("15.9"), 0, weth.address)
+            const wethBalanceAfter = await weth.balanceOf(user1.address)
+            const wethReceived = wethBalanceAfter.sub(wethBalanceBefore)
+            expect(wethReceived).to.be.eq(parseEther("94.604999999999999996"))
             // as nav is higher (transferred 100 weth), the pool will not have enough base token to pay
-            // TODO: fix test
-            //await expect(pool.burnForToken(parseEther("16.9"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
-            //await expect(
-            //    pool.burnForToken(parseEther("15.5"), 0, weth.address)
-            //)
-            //    .to.emit(pool, "Transfer").withArgs(
-            //        user1.address,
-            //        AddressZero,
-            //        parseEther("15.5")
-            //    )
-                //.and.to.emit(weth, "Transfer").withArgs(
-                //    pool.address,
-                //    user1.address,
-                //    parseEther("99")
-                //)
-                //.and.to.not.emit(grgToken, "Transfer")
+            await expect(tx)
+                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("15.9"))
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, wethReceived)
+            await expect(tx).to.not.emit(grgToken, "Transfer")
         })
 
         it('should burn if ETH is input token', async () => {
@@ -619,15 +616,19 @@ describe("BaseTokenProxy", async () => {
             // @notice protocol uses a twap, which changes according to how the previous transactions are mined (changing their order will affect the twap)
             expect(unitaryValue).to.be.eq(parseEther("11.738950735725622504"))
             await timeTravel({ seconds: 2592000, mine: true })
-            await expect(
-                pool.burnForToken(parseEther("8"), 0, weth.address)
-            )
+            const wethBalanceBefore = await weth.balanceOf(user1.address)
+            const tx = await pool.burnForToken(parseEther("8"), 0, weth.address)
+            const wethBalanceAfter = await weth.balanceOf(user1.address)
+            const wethReceived = wethBalanceAfter.sub(wethBalanceBefore)
+            // 5% spread applied on burn
+            expect(wethReceived).to.be.eq(parseEther("87.449517366148384938"))
+            await expect(tx)
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("8"))
-                .and.to.emit(weth, "Transfer") //.withArgs(pool.address, user1.address, parseEther("93.880707036916933049"))
-                .and.to.not.emit(grgToken, "Transfer")
-                // twap has not changed, so unitary value is not updated
-                // TODO: verify that unitary value changes slightly due to spread
-                .and.to.emit(pool, "NewNav") // spread will result in slight unitary value change
+                .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, wethReceived)
+            await expect(tx).to.not.emit(grgToken, "Transfer")
+            // twap has not changed, so unitary value is not updated
+            // TODO: verify that unitary value changes slightly due to spread
+            await expect(tx).to.emit(pool, "NewNav") // spread will result in slight unitary value change
             // unitary value does not change until next nav calculation
             expect((await pool.getPoolTokens()).unitaryValue.sub(unitaryValue)).to.be.lt(10)
         })
