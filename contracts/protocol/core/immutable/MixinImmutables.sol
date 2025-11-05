@@ -43,7 +43,7 @@ abstract contract MixinImmutables is MixinConstants {
     IExtensionsMap internal immutable _extensionsMap;
 
     /// @notice The ExtensionsMap interface is required to implement the expected methods as sanity check.
-    constructor(address _authority, address extensionsMap, address deflation) {
+    constructor(address _authority, address extensionsMap, address _deflation) {
         require(_authority.code.length > 0, InvalidAuthorityInput());
         require(extensionsMap.code.length > 0, InvalidExtensionsMapInput());
         authority = _authority;
@@ -53,6 +53,10 @@ abstract contract MixinImmutables is MixinConstants {
         // initialize extensions mapping and assert it implements `getExtensionBySelector` method
         _extensionsMap = IExtensionsMap(extensionsMap);
         wrappedNative = _extensionsMap.wrappedNative();
+
+        // TODO: check if we can use the deflation contract interface to assert that the passed address implements the interface
+        // the deflation input is expected to be correct at deployment, no sanity checks
+        deflation = _deflation;
 
         // the following assertion will alway be true, as long as IExtensionsMap implements the expected methods.
         assert(

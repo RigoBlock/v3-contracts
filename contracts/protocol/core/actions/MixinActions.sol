@@ -35,19 +35,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
      * EXTERNAL METHODS
      */
     /// @inheritdoc ISmartPoolActions
-    function mintWithToken(
-        address recipient,
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address tokenIn
-    ) external payable override nonReentrant returns (uint256 recipientAmount) {
-        // TODO: should we restrict to owner-approved (although owned tokens are owner-approved in general)
-        // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
-        require(activeTokensSet().isActive(tokenIn), PoolTokenNotActive());
-        recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
-    }
-
-    /// @inheritdoc ISmartPoolActions
     function mint(
         address recipient,
         uint256 amountIn,
@@ -56,51 +43,16 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         recipientAmount = _mint(recipient, amountIn, amountOutMin, _BASE_TOKEN_FLAG);
     }
 
-    function _mint(
+    /// @inheritdoc ISmartPoolActions
+    function mintWithToken(
         address recipient,
         uint256 amountIn,
         uint256 amountOutMin,
         address tokenIn
-    ) private returns (uint256 recipientAmount) {
-        require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
-        require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
-        NavComponents memory components = _updateNav();
-        address kycProvider = poolParams().kycProvider;
-
-        // require whitelisted user if kyc is enforced
-        if (!kycProvider.isAddressZero()) {
-            require(IKyc(kycProvider).isWhitelistedUser(recipient), PoolCallerNotWhitelisted());
-        }
-
-        _assertBiggerThanMinimum(amountIn);
-        unit256 spread = amountIn * _getSpread() / _SPREAD_BASE;
-
-        if (tokenIn == _BASE_TOKEN_FLAG) {
-            tokenIn = components.baseToken;
-        }
-
-        if (tokenIn.isAddressZero()) {
-            require(msg.value == amountIn, PoolMintAmountIn());
-            _getDeflation().safeTransferNative(spread);
-        } else {
-            tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
-            tokenIn.safeTransfer(_getDeflation(), spread);
-            amountIn -= spread;
-        }
-
-        if (tokenIn != components.baseToken) {
-            // convert the tokenIn amount into base token amount
-            amountIn = uint256(
-                IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), baseToken)
-            );
-        }
-
-        uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
-        require(mintedAmount >= amountOutMin, PoolMintOutputAmount());
-        poolTokens().totalSupply += mintedAmount;
-
-        // allocate pool token transfers and log events.
-        recipientAmount = _allocateMintTokens(recipient, mintedAmount);
+    ) external payable override nonReentrant returns (uint256 recipientAmount) {
+        // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
+        require(activeTokensSet().isActive(tokenIn), PoolTokenNotActive());
+        recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
     }
 
     /// @inheritdoc ISmartPoolActions
@@ -154,11 +106,59 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /// @dev Returns the spread, or _MAX_SPREAD if not set
     function _getSpread() internal view virtual returns (uint16);
 
-    function _getDeflation() internal view override returns (address);
+    function _getDeflation() internal view virtual returns (address);
 
     /*
      * PRIVATE METHODS
      */
+    function _mint(
+        address recipient,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenIn
+    ) private returns (uint256 recipientAmount) {
+        require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
+        require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
+        NavComponents memory components = _updateNav();
+        address kycProvider = poolParams().kycProvider;
+
+        // require whitelisted user if kyc is enforced
+        if (!kycProvider.isAddressZero()) {
+            require(IKyc(kycProvider).isWhitelistedUser(recipient), PoolCallerNotWhitelisted());
+        }
+
+        _assertBiggerThanMinimum(amountIn);
+        uint256 spread = amountIn * _getSpread() / _SPREAD_BASE;
+
+        if (tokenIn == _BASE_TOKEN_FLAG) {
+            tokenIn = components.baseToken;
+        }
+
+        if (tokenIn.isAddressZero()) {
+            require(msg.value == amountIn, PoolMintAmountIn());
+            _getDeflation().safeTransferNative(spread);
+        } else {
+            tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
+            tokenIn.safeTransfer(_getDeflation(), spread);
+        }
+
+        amountIn -= spread;
+
+        if (tokenIn != components.baseToken) {
+            // convert the tokenIn amount into base token amount
+            amountIn = uint256(
+                IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), components.baseToken)
+            );
+        }
+
+        uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
+        require(mintedAmount >= amountOutMin, PoolMintOutputAmount());
+        poolTokens().totalSupply += mintedAmount;
+
+        // allocate pool token transfers and log events.
+        recipientAmount = _allocateMintTokens(recipient, mintedAmount);
+    }
+
     /// @notice Allocates tokens to recipient. Fee tokens are locked too.
     /// @dev Each new mint on same recipient sets new activation on all owned tokens.
     /// @param recipient Address of the recipient.
@@ -207,7 +207,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 burntAmount = _allocateBurnTokens(amountIn, userAccount.userBalance);
         poolTokens().totalSupply -= burntAmount;
 
-        uint256 netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
+        netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
 

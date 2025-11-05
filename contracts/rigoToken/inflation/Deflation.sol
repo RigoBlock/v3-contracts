@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity ^0.8.0;
-
 /*
 
  Copyright 2025 Rigo Intl.
@@ -19,14 +17,11 @@ pragma solidity ^0.8.0;
 
 */
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeCast.sol";
+pragma solidity 0.8.28;
 
-interface IERC20 {
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function transfer(address to, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-}
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
+import {IDeflation} from "../interfaces/IDeflation.sol";
 
 interface IEOracle {
     function convertTokenAmount(
@@ -46,7 +41,6 @@ contract Deflation is IDeflation {
 
     IERC20 public immutable GRG;
     IEOracle public oracle;
-    IBackgeooracle public oracle;
 
     uint256 public constant MAX_DISCOUNT = 8000; // 80% in basis points
     uint256 public constant AUCTION_DURATION = 2 weeks;
