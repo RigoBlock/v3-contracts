@@ -72,10 +72,9 @@ describe("Deflation", async () => {
         })
 
         it('should return max discount after auction duration', async () => {
-            const { deflation, weth } = await setupTests()
+            const { deflation, weth, oracle, grgToken } = await setupTests()
             
             // Set lastPurchaseTime by making a purchase
-            const { grgToken } = await setupTests()
             await weth.deposit({ value: parseEther("1") })
             await weth.transfer(deflation.address, parseEther("1"))
             await grgToken.approve(deflation.address, parseEther("1000"))

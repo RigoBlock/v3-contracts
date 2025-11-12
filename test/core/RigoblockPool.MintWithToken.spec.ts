@@ -216,19 +216,8 @@ describe("MintWithToken", async () => {
         it('should enforce KYC if provider is set', async () => {
             const { pool, factory, oracle, grgToken } = await setupTests()
             
-            // Create a new pool with KYC provider
-            const KycInstance = await deployments.get("MockKyc")
-            const kycProvider = KycInstance.address
-            
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'kycpool',
-                'KYC',
-                grgToken.address
-            )
-            await factory.createPool('kycpool','KYC',grgToken.address)
-            const kycPool = await hre.ethers.getContractAt("SmartPool", newPoolAddress)
-            
-            await kycPool.setKycProvider(kycProvider)
+            // Set a KYC provider (any non-zero address will enforce the check)
+            await pool.setKycProvider(user2.address)
             
             const poolKey = { 
                 currency0: AddressZero, 
@@ -240,10 +229,11 @@ describe("MintWithToken", async () => {
             await oracle.initializeObservations(poolKey)
             
             const tokenAmount = parseEther("10")
-            await grgToken.approve(kycPool.address, tokenAmount)
+            await grgToken.approve(pool.address, tokenAmount)
             
+            // Should fail because user1 is not whitelisted
             await expect(
-                kycPool.mintWithToken(user1.address, tokenAmount, 0, grgToken.address)
+                pool.mintWithToken(user1.address, tokenAmount, 0, grgToken.address)
             ).to.be.revertedWith('PoolCallerNotWhitelisted()')
         })
 
