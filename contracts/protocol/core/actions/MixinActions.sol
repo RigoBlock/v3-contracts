@@ -18,7 +18,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeCast for uint256;
 
     error BaseTokenBalance();
-    error PoolAmountSmallerThanMinumum(uint16 minimumOrderDivisor);
+    error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
     error PoolBurnNotEnough();
     error PoolBurnNullAmount();
     error PoolBurnOutputAmount();
@@ -116,7 +116,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 amountIn,
         uint256 amountOutMin,
         address tokenIn
-    ) private returns (uint256 recipientAmount) {
+    ) private returns (uint256) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
         require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
         NavComponents memory components = _updateNav();
@@ -145,18 +145,19 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         amountIn -= spread;
 
         if (tokenIn != components.baseToken) {
-            // convert the tokenIn amount into base token amount
+            // convert the tokenIn amount into base token amount BEFORE calculating mintedAmount
             amountIn = uint256(
                 IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), components.baseToken)
             );
         }
 
         uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
-        require(mintedAmount >= amountOutMin, PoolMintOutputAmount());
         poolTokens().totalSupply += mintedAmount;
 
         // allocate pool token transfers and log events.
-        recipientAmount = _allocateMintTokens(recipient, mintedAmount);
+        uint256 recipientAmount = _allocateMintTokens(recipient, mintedAmount);
+        require(recipientAmount >= amountOutMin, PoolMintOutputAmount());
+        return recipientAmount;
     }
 
     /// @notice Allocates tokens to recipient. Fee tokens are locked too.
@@ -273,7 +274,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     function _assertBiggerThanMinimum(uint256 amount) private view {
         require(
             amount >= 10 ** decimals() / _MINIMUM_ORDER_DIVISOR,
-            PoolAmountSmallerThanMinumum(_MINIMUM_ORDER_DIVISOR)
+            PoolAmountSmallerThanMinimum(_MINIMUM_ORDER_DIVISOR)
         );
     }
 }

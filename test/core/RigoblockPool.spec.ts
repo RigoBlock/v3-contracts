@@ -175,7 +175,7 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             const etherAmount = parseEther("0.00012")
             await expect(pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
+            ).to.be.revertedWith('PoolAmountSmallerThanMinimum(1000)')
         })
 
         it('should revert if user not whitelisted when whitelist enabled', async () => {

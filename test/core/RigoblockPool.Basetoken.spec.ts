@@ -239,7 +239,7 @@ describe("BaseTokenProxy", async () => {
             expect(await pool.decimals()).to.be.eq(18)
             await expect(
                 pool.mint(user1.address, dustAmount, 0)
-            ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
+            ).to.be.revertedWith('PoolAmountSmallerThanMinimum(1000)')
             const tokenAmountIn = parseEther("1")
             await expect(
                 pool.mint(user1.address, tokenAmountIn, 0)
@@ -433,7 +433,7 @@ describe("BaseTokenProxy", async () => {
                 .and.to.not.emit(poolUsdc, "NewNav")
             await expect(
                 poolUsdc.connect(user2).mint(user2.address, 999, 0)
-            ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
+            ).to.be.revertedWith('PoolAmountSmallerThanMinimum(1000)')
             // TODO: verify setting minimum period to 2 will set to 10?
             await timeTravel({ seconds: 2592000, mine: true })
             const burnAmount = 6000
