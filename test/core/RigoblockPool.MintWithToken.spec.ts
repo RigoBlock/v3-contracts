@@ -96,7 +96,7 @@ describe("MintWithToken", async () => {
             ).to.be.revertedWith('PoolTokenNotActive()')
         })
 
-        it('should should mint with alternative ERC20 token', async () => {
+        it('should mint with alternative ERC20 token', async () => {
             const { pool, oracle, tokenJar, weth, grgToken } = await setupTests()
             const tokenAmount = parseEther("100")
             await weth.deposit({ value: tokenAmount })
@@ -324,7 +324,7 @@ describe("MintWithToken", async () => {
             ).to.not.be.reverted
         })
 
-        it('should work with operator', async () => {
+        it('should work with user operator (different from pool operator)', async () => {
             const { pool, oracle, grgToken } = await setupTests()
             const poolKey = {
                 currency0: AddressZero,
@@ -370,9 +370,9 @@ describe("MintWithToken", async () => {
             await pool.connect(user2).setOperator(user1.address, true)
 
             // Should work now
-            await //expect(
+            await expect(
                 pool.mintWithToken(user2.address, tokenAmount, 0, ZERO_ADDRESS, { value: tokenAmount })
-            //).to.not.be.reverted
+            ).to.not.be.reverted
 
             expect(await pool.balanceOf(user2.address)).to.be.gt(0)
         })
