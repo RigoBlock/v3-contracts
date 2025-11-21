@@ -139,7 +139,7 @@ abstract contract MixinPoolState is MixinPoolValue {
 
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
-        return spread != 0 ? spread : _MAX_SPREAD;
+        return spread != 0 ? spread : _DEFAULT_SPREAD;
     }
 
     function _getTokenJar() internal view override returns (address) {

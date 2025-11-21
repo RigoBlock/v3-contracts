@@ -149,7 +149,7 @@ describe("Proxy", async () => {
                 pool.mint(user1.address, parseEther("2"), 0, { value: etherAmount })
             ).to.be.revertedWith('PoolMintAmountIn()')
             const spread =  BigNumber.from((await pool.getPoolParams()).spread)
-            expect(spread).to.be.eq(500) // default spread is 5%
+            expect(spread).to.be.eq(10) // default spread is 0.1%
             const expectedMintedAmount = etherAmount.sub(etherAmount.mul(spread).div(10000))
             await expect(
                 pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
@@ -257,13 +257,13 @@ describe("Proxy", async () => {
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
             expect(ethBalance).to.be.eq(1) // leftover wei due to spread calculation rounding
             expect(await pool.totalSupply()).to.be.eq(0)
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5.210526315789473684"))
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5.004004004004004004"))
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
             expect(ethBalance).to.be.eq(expectedMintedAmount.add(1)) // leftover wei due to spread calculation rounding
             // a higher unitary value results in a lower amount of pool tokens
-            expect(await pool.totalSupply()).to.be.eq(parseEther("0.018232323232323232"))
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5.210526315789473684"))
+            expect(await pool.totalSupply()).to.be.eq(parseEther("0.019964012802560512"))
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5.004004004004004004"))
         })
 
         it('should not include univ3npm position tokens', async () => {
@@ -511,7 +511,7 @@ describe("Proxy", async () => {
                 .to.emit(pool, "NewNav").withArgs(
                     user1.address,
                     pool.address,
-                    parseEther("5.210526315789473684")
+                    parseEther("5.004004004004004004")
                 )
         })
 
@@ -635,7 +635,7 @@ describe("Proxy", async () => {
 
         it('should change spread', async () => {
             const { pool } = await setupTests()
-            expect((await pool.getPoolParams()).spread).to.be.eq(500)
+            expect((await pool.getPoolParams()).spread).to.be.eq(10)
             await expect(pool.changeSpread(100))
                 .to.emit(pool, "SpreadChanged").withArgs(pool.address, 100)
             expect((await pool.getPoolParams()).spread).to.be.eq(100)
@@ -643,14 +643,14 @@ describe("Proxy", async () => {
 
         it('should revert if same as current', async () => {
             const { pool } = await setupTests()
-            expect((await pool.getPoolParams()).spread).to.be.eq(500)
-            // the first time we update storage, the spread must be different from the default one (500)
-            await expect(pool.changeSpread(500))
+            expect((await pool.getPoolParams()).spread).to.be.eq(10)
+            // the first time we update storage, the spread must be different from the default one (10)
+            await expect(pool.changeSpread(10))
                 .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
             await expect(pool.changeSpread(400))
                 .to.emit(pool, "SpreadChanged").withArgs(pool.address, 400)
-            await expect(pool.changeSpread(500))
-                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
+            await expect(pool.changeSpread(10))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 10)
         })
     })
 

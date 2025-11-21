@@ -106,7 +106,7 @@ describe("BaseTokenProxy", async () => {
             // 30 days default minimum period
             expect(poolData.minPeriod).to.be.eq(2592000)
             // 5% default spread
-            expect(poolData.spread).to.be.eq(500)
+            expect(poolData.spread).to.be.eq(10)
             expect(poolData.transactionFee).to.be.eq(0)
             // pool operator default fee collector
             expect(poolData.feeCollector).to.be.eq(user1.address)
@@ -135,7 +135,7 @@ describe("BaseTokenProxy", async () => {
             const spread = poolData.spread
             const markup = TEN_ETHER.mul(spread).div(10000)
             // spread is 5% by default
-            expect(markup).to.be.eq(TEN_ETHER.mul(500).div(10000))
+            expect(markup).to.be.eq(TEN_ETHER.mul(10).div(10000))
             // spread is applied on mint regardless of number of holders, total supply is net of spread to offset price impact
             poolData = await pool.getPoolTokens()
             expect(poolData.totalSupply).to.be.eq(TEN_ETHER.sub(markup))
@@ -167,7 +167,7 @@ describe("BaseTokenProxy", async () => {
             const poolData = await pool.getPoolStorage()
             // 30 days default minimum period
             expect(poolData.poolVariables.minPeriod).to.be.eq(2592000)
-            expect(poolData.poolVariables.spread).to.be.eq(500)
+            expect(poolData.poolVariables.spread).to.be.eq(10)
             expect(poolData.poolVariables.transactionFee).to.be.eq(0)
             expect(poolData.poolVariables.feeCollector).to.be.eq(user1.address)
             expect(poolData.poolVariables.kycProvider).to.be.eq(AddressZero)
@@ -188,8 +188,8 @@ describe("BaseTokenProxy", async () => {
             await pool.updateUnitaryValue()
             poolData = await pool.getPoolStorage()
             expect(poolData.poolTokensInfo.unitaryValue).to.be.eq(parseEther("1"))
-            // default spread is 5%, so total supply is net of spread applied on mint
-            expect(poolData.poolTokensInfo.totalSupply).to.be.eq(parseEther("9.5"))
+            // default spread is 0.1%, so total supply is net of spread applied on mint
+            expect(poolData.poolTokensInfo.totalSupply).to.be.eq(parseEther("9.99"))
 
         })
     })
@@ -208,8 +208,8 @@ describe("BaseTokenProxy", async () => {
             const block = await receipt.events[0].getBlock()
             poolData = await pool.getUserAccount(user1.address)
             expect(poolData.activation).to.be.eq(block.timestamp + 30 * 24 * 60 * 60)
-            // default spread is 5%, and applied regardless of number of existing holders
-            expect(poolData.userBalance).to.be.eq(parseEther("9.5"))
+            // default spread is 0.1%, and applied regardless of number of existing holders
+            expect(poolData.userBalance).to.be.eq(parseEther("9.99"))
         })
     })
 
@@ -338,8 +338,8 @@ describe("BaseTokenProxy", async () => {
             // as long as price is 1, userPoolBalance - spread should be equal to netRevenue
             expect(BigNumber.from(userPoolBalance).sub(markup)).to.be.eq(BigNumber.from(netRevenue))
             const tokenDelta = BigNumber.from(tokenAmountIn).sub(netRevenue)
-            // 5% applied on tokenIn, plus 5% applied on the smaller tokenOut amount due to spread
-            expect(tokenDelta).to.be.eq(parseEther("0.0975"))
+            // 0.1% applied on tokenIn, plus 0.1% applied on the smaller tokenOut amount due to spread
+            expect(tokenDelta).to.be.eq(parseEther("0.001999"))
             const poolGrgBalance = await grgToken.balanceOf(pool.address)
             expect(poolGrgBalance).to.be.not.eq(tokenDelta.toString())
             // all spread tokens have gone to the fee collector, so pool balance is 0
@@ -367,15 +367,12 @@ describe("BaseTokenProxy", async () => {
             // unitary value unaffected by spread on first mint
             expect(unitaryValue).to.be.eq(parseEther("1"))
             await timeTravel({ seconds: 2592000, mine: true })
-            // spread is now included in calculations
-            await expect(
-                pool.burn(parseEther("1"), 0)
-            )
-                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("1"))
-                // 5% spread is applied on burn
-                .and.to.emit(grgToken, "Transfer").withArgs(pool.address, user1.address, parseEther("0.95"))
-                // spread will result in slight unitary value increase
-                .and.to.not.emit(pool, "NewNav")
+
+            const tx = await pool.burn(parseEther("1"), 0)
+            await expect(tx).to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("1"))
+            // 0.1% spread is applied on burn
+            await expect(tx).to.emit(grgToken, "Transfer").withArgs(pool.address, user1.address, parseEther("0.999"))
+            await expect(tx).not.to.emit(pool, "NewNav")
             // unitary value changes after nav calculation due to spread applied
             expect((await pool.getPoolTokens()).unitaryValue.sub(unitaryValue)).to.be.lt(10)
         })
@@ -522,16 +519,18 @@ describe("BaseTokenProxy", async () => {
             // update and verify the pool unitary value before the burn
             await pool.updateUnitaryValue()
             const { unitaryValue } = await pool.getPoolTokens()
-            expect(unitaryValue).to.be.eq(parseEther("6.263157894736842105"))
-            await expect(pool.burnForToken(parseEther("16.1"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
+            // TODO: what is affecting unitary value calculation here?
+            expect(unitaryValue).to.be.eq(parseEther("6.005005005005005005"))
+            // Notice: sometimes, changing order of tx affects twaps, and the amount needed to revert this must be adjusted
+            await expect(pool.burnForToken(parseEther("16.7"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
             const wethBalanceBefore = await weth.balanceOf(user1.address)
-            const tx = await pool.burnForToken(parseEther("15.9"), 0, weth.address)
+            const tx = await pool.burnForToken(parseEther("16.6"), 0, weth.address)
             const wethBalanceAfter = await weth.balanceOf(user1.address)
             const wethReceived = wethBalanceAfter.sub(wethBalanceBefore)
-            expect(wethReceived).to.be.eq(parseEther("94.604999999999999996"))
+            expect(wethReceived).to.be.eq(parseEther("99.583400000000000000"))
             // as nav is higher (transferred 100 weth), the pool will not have enough base token to pay
             await expect(tx)
-                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("15.9"))
+                .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("16.6"))
                 .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, wethReceived)
             await expect(tx).to.not.emit(grgToken, "Transfer")
         })
@@ -568,7 +567,8 @@ describe("BaseTokenProxy", async () => {
             await user1.sendTransaction({ to: pool.address, value: parseEther("98")})
             await pool.updateUnitaryValue()
             const { unitaryValue } = await pool.getPoolTokens()
-            expect(unitaryValue).to.be.eq(parseEther("11.524171721011110054"))
+            // TODO: what is affecting unitary value calculation here?
+            expect(unitaryValue).to.be.eq(parseEther("11.007971106066621173"))
             await expect(pool.burnForToken(parseEther("0.08"), 0, AddressZero)).to.be.revertedWith('BaseTokenBalance()')
             await expect(pool.burnForToken(parseEther("9.1"), 0, AddressZero)).to.be.revertedWith('NativeTransferFailed()')
             await expect(
@@ -614,14 +614,14 @@ describe("BaseTokenProxy", async () => {
             // unitary value does not include spread to pool, but includes weth balance
             const { unitaryValue } = await pool.getPoolTokens()
             // @notice protocol uses a twap, which changes according to how the previous transactions are mined (changing their order will affect the twap)
-            expect(unitaryValue).to.be.eq(parseEther("11.738950735725622504"))
+            expect(unitaryValue).to.be.eq(parseEther("11.212215414353695074"))
             await timeTravel({ seconds: 2592000, mine: true })
             const wethBalanceBefore = await weth.balanceOf(user1.address)
             const tx = await pool.burnForToken(parseEther("8"), 0, weth.address)
             const wethBalanceAfter = await weth.balanceOf(user1.address)
             const wethReceived = wethBalanceAfter.sub(wethBalanceBefore)
             // 5% spread applied on burn
-            expect(wethReceived).to.be.eq(parseEther("87.449517366148384938"))
+            expect(wethReceived).to.be.eq(parseEther("87.833755630297091111"))
             await expect(tx)
                 .to.emit(pool, "Transfer").withArgs(user1.address, AddressZero, parseEther("8"))
                 .and.to.emit(weth, "Transfer").withArgs(pool.address, user1.address, wethReceived)

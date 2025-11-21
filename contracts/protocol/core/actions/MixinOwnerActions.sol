@@ -66,7 +66,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc ISmartPoolOwnerActions
     function changeSpread(uint16 newSpread) external override onlyOwner {
-        // 0 value is sentinel for uninitialized spread, returning _MAX_SPREAD
+        // 0 value is sentinel for uninitialized spread, returning _DEFAULT_SPREAD
         require(newSpread > 0 && newSpread <= _MAX_SPREAD, PoolSpreadInvalid(_MAX_SPREAD));
         require(newSpread != _getSpread(), OwnerActionInputIsSameAsCurrent());
         poolParams().spread = newSpread;

@@ -51,6 +51,8 @@ abstract contract MixinConstants is ISmartPool {
 
     uint16 internal constant _MAX_SPREAD = 500; // +-5%, in basis points
 
+    uint16 internal constant _DEFAULT_SPREAD = 10;
+
     uint16 internal constant _MAX_TRANSACTION_FEE = 100; // maximum 1%
 
     // minimum order size 1/1000th of base to avoid dust clogging things up
