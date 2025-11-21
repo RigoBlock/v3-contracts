@@ -128,7 +128,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         _assertBiggerThanMinimum(amountIn);
-        uint256 spread = amountIn * _getSpread() / _SPREAD_BASE;
+        uint256 spread = (amountIn * _getSpread()) / _SPREAD_BASE;
 
         if (tokenIn == _BASE_TOKEN_FLAG) {
             tokenIn = components.baseToken;
@@ -227,7 +227,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             );
         }
 
-        uint256 spread = netRevenue * _getSpread() / _SPREAD_BASE;
+        uint256 spread = (netRevenue * _getSpread()) / _SPREAD_BASE;
         netRevenue -= spread;
 
         require(netRevenue >= amountOutMin, PoolBurnOutputAmount());

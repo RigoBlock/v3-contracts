@@ -43,7 +43,11 @@ contract SmartPool is
     /// @notice Owner is initialized to 0 to lock owner actions in this implementation.
     /// @notice Kyc provider set as will effectively lock direct mint/burn actions.
     /// @notice ExtensionsMap validation is performed in MixinImmutables constructor.
-    constructor(address authority, address extensionsMap, address tokenJar) MixinImmutables(authority, extensionsMap, tokenJar) {
+    constructor(
+        address authority,
+        address extensionsMap,
+        address tokenJar
+    ) MixinImmutables(authority, extensionsMap, tokenJar) {
         // we lock implementation at deploy
         pool().owner = _ZERO_ADDRESS;
         poolParams().kycProvider == _BASE_TOKEN_FLAG;
