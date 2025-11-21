@@ -52,6 +52,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     ) external payable override nonReentrant returns (uint256 recipientAmount) {
         // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
         require(activeTokensSet().isActive(tokenIn), PoolTokenNotActive());
+        
         recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
     }
 

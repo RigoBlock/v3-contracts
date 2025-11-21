@@ -165,6 +165,10 @@ describe("MintWithToken", async () => {
             const { spread } = await pool.getPoolParams()
             const spreadAmount = tokenAmount.mul(spread).div(10000)
             const tokenJarBalanceBefore = await weth.balanceOf(tokenJar.address)
+
+            // travel time to avoid issues with oracle observations
+            await timeTravel({ seconds: 600 , mine: true}); // to ensure price feeds have enough data, so that twap does not change from simulation to actual tx
+            
             const mintedAmount = await pool.callStatic.mintWithToken(
                 user1.address,
                 tokenAmount,
@@ -173,25 +177,19 @@ describe("MintWithToken", async () => {
             )
 
             const tx = await pool.mintWithToken(user1.address, tokenAmount, 0, weth.address)
-            //console.log("Txn logs:", (await tx.wait()).events)
 
-            // TODO: the first mint should use nav 1, so minted amount should be 999.9 of amount after spread
-            // it is possible that the log and total supply are incorrectly calculated after the mint, causing this discrepancy
-
-            // TODO: verify why mintedAmount is equal to 95000000000000000000, while expected is 100400725735342815229 (weth is converted to eth at 1:1, while eth is converted to base token at tick 200)
-            await expect(tx).to.emit(pool, "Transfer").withArgs(AddressZero, user1.address, parseEther("100.400725735342815229"))
+            await expect(tx).to.emit(pool, "Transfer").withArgs(AddressZero, user1.address, parseEther("101.918011957404020383"))
             await expect(tx).to.emit(weth, "Transfer").withArgs(user1.address, pool.address, tokenAmount)
             await expect(tx).to.emit(weth, "Transfer").withArgs(pool.address, tokenJar.address, spreadAmount)
-            // TODO: verify if it is correct to log pool address, as the log is emitted from the pool contract
             await expect(tx).to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("1"))
-            expect(await pool.balanceOf(user1.address)).to.be.eq(parseEther("100.400725735342815229"))
-            // TODO: this test is flawed, because mintedAmount from callStatic is different from actual minted amount
-            // TODO: fix following test
-            //expect(mintedAmount).to.be.closeTo(parseEther("100.400725735342815229"), parseEther("0.01"))
+            expect(await pool.balanceOf(user1.address)).to.be.eq(parseEther("101.918011957404020383"))
+            expect(mintedAmount).to.be.closeTo(parseEther("101.918011957404020383"), parseEther("0.0000001"))
+            expect(mintedAmount).to.be.eq(parseEther("101.918011957404020383"))
 
             const tokenJarBalanceAfter = await weth.balanceOf(tokenJar.address)
             expect(tokenJarBalanceAfter.sub(tokenJarBalanceBefore)).to.be.eq(spreadAmount)
-            //expect(await pool.balanceOf(user1.address)).to.be.eq(tokenAmount.sub(spreadAmount))
+            // the user balance cannot be exactly tokenAmount - spreadAmount because the amountIn is not in base token
+            expect(await pool.balanceOf(user1.address)).to.be.not.eq(tokenAmount.sub(spreadAmount))
         })
 
         it('should revert if token is not active', async () => {
@@ -314,14 +312,23 @@ describe("MintWithToken", async () => {
 
             const tokenAmount = parseEther("100")
 
+            // travel time to avoid issues with oracle observations
+            await timeTravel({ seconds: 600 , mine: true}); // to ensure price feeds have enough data, so that twap does not change from simulation to actual tx
+
             const { spread } = await pool.getPoolParams()
-            const expectedMint = tokenAmount.sub(tokenAmount.mul(spread).div(10000))
+            //const expectedMint = tokenAmount.sub(tokenAmount.mul(spread).div(10000))
+            const expectedMintedAmount = await pool.callStatic.mintWithToken(
+                user1.address,
+                tokenAmount,
+                0,
+                ZERO_ADDRESS,
+                { value: tokenAmount }
+            )
 
             // Request more than will be minted
             await expect(
-                pool.mintWithToken(user1.address, tokenAmount, expectedMint.add(1), ZERO_ADDRESS, { value: tokenAmount })
-            //).to.be.revertedWith('PoolMintOutputAmount()')
-            ).to.not.be.reverted
+                pool.mintWithToken(user1.address, tokenAmount, expectedMintedAmount.add(1), ZERO_ADDRESS, { value: tokenAmount })
+            ).to.be.revertedWith('PoolMintOutputAmount()')
         })
 
         it('should work with user operator (different from pool operator)', async () => {
