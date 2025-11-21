@@ -38,6 +38,8 @@ contract Deflation is IDeflation {
 
     error InvalidConvertedAmount();
     error GrgAmountIsNull();
+    error AuctionNotStarted();
+    error InvalidTimestamp();
 
     IERC20 public immutable GRG;
     IEOracle public oracle;
@@ -68,10 +70,25 @@ contract Deflation is IDeflation {
     /// @notice Receive ETH from vaults
     receive() external payable {}
 
+    uint256 public immutable minimumThreshold;
+
+    function initialize(address token) public {
+        uint256 last = lastPurchaseTime[tokenOut];
+
+        if (lastPurchaseTime[tokenOut] == 0) {
+            lastPurchaseTime[tokenOut]; = block.timestamp;
+        }
+    }
+
     /// @inheritdoc IDeflation
     function buyToken(address tokenOut, uint256 amountOut) external returns (uint256 amountIn) {
         require(amountOut > 0, "Amount must be greater than 0");
         require(tokenOut != address(0), "Invalid token address");
+
+        // require auction to have been activated
+        uint256 last = lastPurchaseTime[tokenOut];
+        require(last != 0, AuctionNotStarted());
+        require(block.timestamp >= last, InvalidTimestamp());
 
         uint256 discount = getCurrentDiscount(tokenOut);
         int256 grgAmount = oracle.convertTokenAmount(tokenOut, int256(amountOut), address(GRG));
@@ -89,7 +106,7 @@ contract Deflation is IDeflation {
         lastPurchaseTime[tokenOut] = block.timestamp;
 
         // Transfer tokens to buyer
-        if (tokenOut == address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE)) {
+        if (tokenOut == address(0)) {
             // Handle ETH transfer
             (bool success, ) = msg.sender.call{value: amountOut}("");
             require(success, "ETH transfer failed");
@@ -97,10 +114,20 @@ contract Deflation is IDeflation {
             IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
         }
 
+        // burn the collected GRG
+        GRG.transfer(address(0xdead), amountIn);
+
         emit TokenPurchased(msg.sender, tokenOut, amountOut, amountIn, discount);
     }
 
     function getCurrentDiscount(address token) public view returns (uint256) {
+        uint256 last = lastPurchaseTime[token];
+
+        // auction hasn't started
+        if (last == 0) {
+            return 0;
+        }
+
         uint256 timeSinceLastPurchase = block.timestamp - lastPurchaseTime[token];
 
         if (timeSinceLastPurchase >= AUCTION_DURATION) {
