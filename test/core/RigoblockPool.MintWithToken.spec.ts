@@ -173,17 +173,15 @@ describe("MintWithToken", async () => {
             )
 
             const tx = await pool.mintWithToken(user1.address, tokenAmount, 0, weth.address)
-            //console.log("Txn logs:", (await tx.wait()).events)
 
-            // TODO: verify why mintedAmount is equal to 95000000000000000000, while expected is 95476165614189864332 (weth is converted to eth at 1:1, while eth is converted to base token at tick 200)
-            await expect(tx).to.emit(pool, "Transfer").withArgs(AddressZero, user1.address, parseEther("95.476165614189864332"))
+            const actualBalance = await pool.balanceOf(user1.address)
+            await expect(tx).to.emit(pool, "Transfer").withArgs(AddressZero, user1.address, actualBalance)
             await expect(tx).to.emit(weth, "Transfer").withArgs(user1.address, pool.address, tokenAmount)
             await expect(tx).to.emit(weth, "Transfer").withArgs(pool.address, tokenJar.address, spreadAmount)
-            // TODO: verify if it is correct to log pool address, as the log is emitted from the pool contract
             await expect(tx).to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("1"))
-            expect(await pool.balanceOf(user1.address)).to.be.eq(parseEther("95.476165614189864332"))
-            // TODO: this test is flawed, because mintedAmount from callStatic is different from actual minted amount
-            expect(mintedAmount).to.be.closeTo(parseEther("95.476165614189864332"), parseEther("0.48"))
+            expect(actualBalance).to.be.eq(parseEther("95.476165614189864332"))
+            // callStatic should return the same amount as actual execution
+            expect(mintedAmount).to.be.eq(actualBalance)
 
             const tokenJarBalanceAfter = await weth.balanceOf(tokenJar.address)
             expect(tokenJarBalanceAfter.sub(tokenJarBalanceBefore)).to.be.eq(spreadAmount)

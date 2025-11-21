@@ -90,7 +90,6 @@ contract ExtensionsMap is IExtensionsMap {
             selector == _EORACLE_TWAP_SELECTOR
         ) {
             extension = eOracle;
-            shouldDelegatecall = true;
         } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {
             extension = eUpgrade;
             shouldDelegatecall = msg.sender == StorageLib.pool().owner;

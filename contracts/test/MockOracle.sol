@@ -74,15 +74,9 @@ contract MockOracle {
             }
 
             // Calculate cumulatives based on the closest observation
+            // Note: We don't interpolate beyond the last observation to ensure callStatic returns the same value as actual execution
             tickCumulatives[i] = int48(closestObservation.tickCumulative);
             secondsPerLiquidityCumulativeX128s[i] = closestObservation.secondsPerLiquidityCumulativeX128;
-
-            // Adjust for time passed since the closest observation (simplified for mock)
-            if (targetTimestamp > closestObservation.blockTimestamp) {
-                uint32 timeDiff = targetTimestamp - closestObservation.blockTimestamp;
-                tickCumulatives[i] += int48(int24(closestObservation.prevTick) * int32(timeDiff));
-                secondsPerLiquidityCumulativeX128s[i] += uint144(ONE_X96 * timeDiff);
-            }
         }
     }
 }
