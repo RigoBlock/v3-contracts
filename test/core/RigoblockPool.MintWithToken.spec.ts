@@ -183,7 +183,7 @@ describe("MintWithToken", async () => {
             await expect(tx).to.emit(weth, "Transfer").withArgs(pool.address, tokenJar.address, spreadAmount)
             await expect(tx).to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("1"))
             expect(await pool.balanceOf(user1.address)).to.be.eq(parseEther("101.918011957404020383"))
-            expect(mintedAmount).to.be.closeTo(parseEther("101.918011957404020383"), parseEther("0.0000001"))
+            //expect(mintedAmount).to.be.closeTo(parseEther("101.918011957404020383"), parseEther("0.0000001"))
             expect(mintedAmount).to.be.eq(parseEther("101.918011957404020383"))
 
             const tokenJarBalanceAfter = await weth.balanceOf(tokenJar.address)
