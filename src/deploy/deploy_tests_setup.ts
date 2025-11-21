@@ -198,9 +198,9 @@ const deploy: DeployFunction = async function (
   const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
   await tx.wait();
 
-  const deflation = await deploy("Deflation", {
+  const mockTokenJar = await deploy("MockTokenJar", {
     from: deployer,
-    args: [rigoToken.address, eOracle.address],
+    args: [],
     log: true,
     deterministicDeployment: true,
   });
@@ -208,7 +208,7 @@ const deploy: DeployFunction = async function (
   // implementation address is different on each chain as extensionsMap is different, but proxies will have the same address
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMapAddress, deflation.address],
+    args: [authority.address, extensionsMapAddress, mockTokenJar.address],
     log: true,
     deterministicDeployment: true,
   });

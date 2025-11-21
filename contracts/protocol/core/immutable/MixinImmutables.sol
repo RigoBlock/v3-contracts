@@ -35,7 +35,7 @@ abstract contract MixinImmutables is MixinConstants {
     address public immutable override wrappedNative;
 
     ///@inheritdoc ISmartPoolImmutable
-    address public immutable override deflation;
+    address public immutable override tokenJar;
 
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
@@ -43,7 +43,7 @@ abstract contract MixinImmutables is MixinConstants {
     IExtensionsMap internal immutable _extensionsMap;
 
     /// @notice The ExtensionsMap interface is required to implement the expected methods as sanity check.
-    constructor(address _authority, address extensionsMap, address _deflation) {
+    constructor(address _authority, address extensionsMap, address _tokenJar) {
         require(_authority.code.length > 0, InvalidAuthorityInput());
         require(extensionsMap.code.length > 0, InvalidExtensionsMapInput());
         authority = _authority;
@@ -54,9 +54,8 @@ abstract contract MixinImmutables is MixinConstants {
         _extensionsMap = IExtensionsMap(extensionsMap);
         wrappedNative = _extensionsMap.wrappedNative();
 
-        // TODO: check if we can use the deflation contract interface to assert that the passed address implements the interface
-        // the deflation input is expected to be correct at deployment, no sanity checks
-        deflation = _deflation;
+        // the token jar input is expected to be correct at deployment, no sanity checks
+        tokenJar = _tokenJar;
 
         // the following assertion will alway be true, as long as IExtensionsMap implements the expected methods.
         assert(

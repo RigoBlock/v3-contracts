@@ -142,8 +142,8 @@ abstract contract MixinPoolState is MixinPoolValue {
         return spread != 0 ? spread : _MAX_SPREAD;
     }
 
-    function _getDeflation() internal view override returns (address) {
-        return deflation;
+    function _getTokenJar() internal view override returns (address) {
+        return tokenJar;
     }
 
     function _getActiveTokens() private view returns (ActiveTokens memory tokens) {

@@ -17,8 +17,8 @@ interface ISmartPoolImmutable {
     /// @return Address of the WETH9 contract.
     function wrappedNative() external view returns (address);
 
-    /// @notice Returns the address of the Rigoblock deflation contract.
+    /// @notice Returns the address of the Rigoblock token jar contract.
     /// @dev Used to transfer protocol fees to the buy-back-and-burn contract.
-    /// @dev Address of the deflation contract.
-    function deflation() external view returns (address);
+    /// @dev Address of the token jar contract.
+    function tokenJar() external view returns (address);
 }

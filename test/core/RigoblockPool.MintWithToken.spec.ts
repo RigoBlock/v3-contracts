@@ -46,9 +46,9 @@ describe("MintWithToken", async () => {
         const aUniswapRouter = await AUniswapRouter.deploy(uniRouter.address, Univ4PosmInstance.address, weth.address)
         await authority.setAdapter(aUniswapRouter.address, true)
         await authority.addMethod("0x3593564c", aUniswapRouter.address) // execute(bytes,bytes[],uint256)
-        const DeflationInstance = await deployments.get("Deflation")
-        const Deflation = await hre.ethers.getContractFactory("Deflation")
-        const deflation = Deflation.attach(DeflationInstance.address)
+        const MockTokenJarInstance = await deployments.get("MockTokenJar")
+        const MockTokenJar = await hre.ethers.getContractFactory("MockTokenJar")
+        const tokenJar = MockTokenJar.attach(MockTokenJarInstance.address)
 
         return {
             factory,
@@ -56,7 +56,7 @@ describe("MintWithToken", async () => {
             oracle,
             grgToken,
             weth,
-            deflation
+            tokenJar
         }
     })
 
@@ -97,7 +97,7 @@ describe("MintWithToken", async () => {
         })
 
         it('should should mint with alternative ERC20 token', async () => {
-            const { pool, oracle, deflation, weth, grgToken } = await setupTests()
+            const { pool, oracle, tokenJar, weth, grgToken } = await setupTests()
             const tokenAmount = parseEther("100")
             await weth.deposit({ value: tokenAmount })
             await weth.approve(pool.address, tokenAmount)
@@ -164,7 +164,7 @@ describe("MintWithToken", async () => {
 
             const { spread } = await pool.getPoolParams()
             const spreadAmount = tokenAmount.mul(spread).div(10000)
-            const deflationBalanceBefore = await weth.balanceOf(deflation.address)
+            const tokenJarBalanceBefore = await weth.balanceOf(tokenJar.address)
             const mintedAmount = await pool.callStatic.mintWithToken(
                 user1.address,
                 tokenAmount,
@@ -178,15 +178,15 @@ describe("MintWithToken", async () => {
             // TODO: verify why mintedAmount is equal to 95000000000000000000, while expected is 95476165614189864332 (weth is converted to eth at 1:1, while eth is converted to base token at tick 200)
             await expect(tx).to.emit(pool, "Transfer").withArgs(AddressZero, user1.address, parseEther("95.476165614189864332"))
             await expect(tx).to.emit(weth, "Transfer").withArgs(user1.address, pool.address, tokenAmount)
-            await expect(tx).to.emit(weth, "Transfer").withArgs(pool.address, deflation.address, spreadAmount)
+            await expect(tx).to.emit(weth, "Transfer").withArgs(pool.address, tokenJar.address, spreadAmount)
             // TODO: verify if it is correct to log pool address, as the log is emitted from the pool contract
             await expect(tx).to.emit(pool, "NewNav").withArgs(user1.address, pool.address, parseEther("1"))
             expect(await pool.balanceOf(user1.address)).to.be.eq(parseEther("95.476165614189864332"))
             // TODO: this test is flawed, because mintedAmount from callStatic is different from actual minted amount
             expect(mintedAmount).to.be.closeTo(parseEther("95.476165614189864332"), parseEther("0.48"))
 
-            const deflationBalanceAfter = await weth.balanceOf(deflation.address)
-            expect(deflationBalanceAfter.sub(deflationBalanceBefore)).to.be.eq(spreadAmount)
+            const tokenJarBalanceAfter = await weth.balanceOf(tokenJar.address)
+            expect(tokenJarBalanceAfter.sub(tokenJarBalanceBefore)).to.be.eq(spreadAmount)
             //expect(await pool.balanceOf(user1.address)).to.be.eq(tokenAmount.sub(spreadAmount))
         })
 
@@ -225,8 +225,8 @@ describe("MintWithToken", async () => {
             ).to.be.revertedWith('PoolTokenNotActive()')
         })
 
-        it('should apply spread and transfer to deflation contract', async () => {
-            const { pool, oracle, grgToken, deflation, weth } = await setupTests()
+        it('should apply spread and transfer to token jar contract', async () => {
+            const { pool, oracle, grgToken, tokenJar, weth } = await setupTests()
             const poolKey = {
                 currency0: AddressZero,
                 currency1: grgToken.address,
@@ -265,12 +265,12 @@ describe("MintWithToken", async () => {
             const { spread } = await pool.getPoolParams()
             const expectedSpread = tokenAmount.mul(spread).div(10000)
 
-            const deflationBalanceBefore = await ethers.provider.getBalance(deflation.address)
+            const tokenJarBalanceBefore = await ethers.provider.getBalance(tokenJar.address)
 
             await pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, { value: tokenAmount })
 
-            const deflationBalanceAfter = await ethers.provider.getBalance(deflation.address)
-            expect(deflationBalanceAfter.sub(deflationBalanceBefore)).to.be.eq(expectedSpread)
+            const tokenJarBalanceAfter = await ethers.provider.getBalance(tokenJar.address)
+            expect(tokenJarBalanceAfter.sub(tokenJarBalanceBefore)).to.be.eq(expectedSpread)
         })
 
         it('should respect minimum output amount', async () => {

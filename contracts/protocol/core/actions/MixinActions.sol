@@ -106,7 +106,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /// @dev Returns the spread, or _MAX_SPREAD if not set
     function _getSpread() internal view virtual returns (uint16);
 
-    function _getDeflation() internal view virtual returns (address);
+    function _getTokenJar() internal view virtual returns (address);
 
     /*
      * PRIVATE METHODS
@@ -136,10 +136,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         if (tokenIn.isAddressZero()) {
             require(msg.value == amountIn, PoolMintAmountIn());
-            _getDeflation().safeTransferNative(spread);
+            _getTokenJar().safeTransferNative(spread);
         } else {
             tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
-            tokenIn.safeTransfer(_getDeflation(), spread);
+            tokenIn.safeTransfer(_getTokenJar(), spread);
         }
 
         amountIn -= spread;
@@ -234,10 +234,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         if (tokenOut.isAddressZero()) {
             msg.sender.safeTransferNative(netRevenue);
-            _getDeflation().safeTransferNative(spread);
+            _getTokenJar().safeTransferNative(spread);
         } else {
             tokenOut.safeTransfer(msg.sender, netRevenue);
-            tokenOut.safeTransfer(_getDeflation(), spread);
+            tokenOut.safeTransfer(_getTokenJar(), spread);
         }
     }
 
