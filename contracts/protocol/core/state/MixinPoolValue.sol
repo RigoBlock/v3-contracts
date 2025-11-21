@@ -48,10 +48,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         components.baseToken = pool().baseToken;
         components.decimals = pool().decimals;
 
-        // TODO: check is correct requiring price feed only on first mint, where nav is 0 - because it is not initialized at deployment for gas savings
-        // TODO: this was probably due to having backwards compatibility with v3. As long as all vaults with positive supply have a price feed, we could
-        // safely move this in the following block (i.e. only on first mint).
         // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
+        // Notice: the following check adds a little gas overhead, but is necessary to guarantee backwards compatibility with v3. Because all existing
+        // v3 vaults have a price feed, we could move the following assertion to the following block, i.e. executing it only on the first mint.
         require(IEOracle(address(this)).hasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
 
         // first mint skips nav calculation
