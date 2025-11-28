@@ -17,6 +17,11 @@ abstract contract MixinPoolState is MixinPoolValue {
     }
 
     /// @inheritdoc ISmartPoolState
+    function getAcceptedMintTokens() external view override returns (address[] memory tokens) {
+        return _getAcceptedMintTokens();
+    }
+
+    /// @inheritdoc ISmartPoolState
     /// @dev Grg staking and UniV3 positions will not be returned by default.
     function getActiveApplications() external view override returns (uint256 packedApplications) {
         return _getActiveApplications();
@@ -144,6 +149,10 @@ abstract contract MixinPoolState is MixinPoolValue {
 
     function _getTokenJar() internal view override returns (address) {
         return tokenJar;
+    }
+
+    function _getAcceptedMintTokens() private view returns (address[] memory) {
+        return acceptedTokensSet().addresses;
     }
 
     function _getActiveTokens() private view returns (ActiveTokens memory tokens) {

@@ -69,7 +69,7 @@ describe("MintWithToken", async () => {
             // weth is not in the active tokens set
             await expect(
                 pool.mintWithToken(user1.address, tokenAmount, 0, weth.address)
-            ).to.be.revertedWith('PoolTokenNotActive()')
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
         })
 
         it('should revert it token is the same as pool base token', async () => {
@@ -80,7 +80,7 @@ describe("MintWithToken", async () => {
             // grgToken is the same as pool base token
             await expect(
                 pool.mintWithToken(user1.address, tokenAmount, 0, grgToken.address)
-            ).to.be.revertedWith('PoolTokenNotActive()')
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
 
             // check that base token is not activated
             const poolKey = {
@@ -93,7 +93,7 @@ describe("MintWithToken", async () => {
             await oracle.initializeObservations(poolKey)
             await expect(
                 pool.mintWithToken(user1.address, tokenAmount, 0, grgToken.address)
-            ).to.be.revertedWith('PoolTokenNotActive()')
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
         })
 
         it('should mint with alternative ERC20 token', async () => {
@@ -105,7 +105,7 @@ describe("MintWithToken", async () => {
             // grgToken is the same as pool base token
             await expect(
                 pool.mintWithToken(user1.address, tokenAmount, 0, weth.address)
-            ).to.be.revertedWith('PoolTokenNotActive()')
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
 
             // check that base token is not activated
             const poolKey = {
@@ -119,7 +119,7 @@ describe("MintWithToken", async () => {
 
             await expect(
                 pool.mintWithToken(user1.address, tokenAmount, 0, weth.address)
-            ).to.be.revertedWith('PoolTokenNotActive()')
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
 
             // make sure pool has some eth balance
             await user1.sendTransaction({
@@ -147,6 +147,11 @@ describe("MintWithToken", async () => {
                 const customError = error.error?.reason || error.reason || error.message;
                 throw new Error(`${customError}`);
             }
+
+            await expect(
+                pool.mintWithToken(user1.address, tokenAmount, 0, weth.address)
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
+            await pool.setAcceptableMintToken(weth.address, true)
 
             // the token is active, but the base token price feed does not exist, so it should revert (we wouldn't be able to price the token otherwise)
             await expect(
@@ -224,7 +229,7 @@ describe("MintWithToken", async () => {
 
             await expect(
                 pool.mintWithToken(user1.address, wethAmount, 0, weth.address)
-            ).to.be.revertedWith('PoolTokenNotActive()')
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
         })
 
         it('should apply spread and transfer to token jar contract', async () => {
@@ -268,6 +273,11 @@ describe("MintWithToken", async () => {
             const expectedSpread = tokenAmount.mul(spread).div(10000)
 
             const tokenJarBalanceBefore = await ethers.provider.getBalance(tokenJar.address)
+
+            await expect(
+                pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, { value: tokenAmount })
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
+            await pool.setAcceptableMintToken(ZERO_ADDRESS, true)
 
             await pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, { value: tokenAmount })
 
@@ -315,6 +325,8 @@ describe("MintWithToken", async () => {
             // travel time to avoid issues with oracle observations
             await timeTravel({ seconds: 600 , mine: true}); // to ensure price feeds have enough data, so that twap does not change from simulation to actual tx
 
+            await pool.setAcceptableMintToken(ZERO_ADDRESS, true)
+            
             const { spread } = await pool.getPoolParams()
             //const expectedMint = tokenAmount.sub(tokenAmount.mul(spread).div(10000))
             const expectedMintedAmount = await pool.callStatic.mintWithToken(
@@ -367,6 +379,11 @@ describe("MintWithToken", async () => {
 
             const tokenAmount = parseEther("50")
             await grgToken.connect(user2).approve(pool.address, tokenAmount)
+
+            await expect(
+                pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, { value: tokenAmount })
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
+            await pool.setAcceptableMintToken(ZERO_ADDRESS, true)
 
             // Should fail without operator approval
             await expect(
@@ -422,6 +439,11 @@ describe("MintWithToken", async () => {
 
             const tokenAmount = parseEther("10")
 
+            await expect(
+                pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, { value: tokenAmount })
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
+            await pool.setAcceptableMintToken(ZERO_ADDRESS, true)
+
             // Should fail, but not with PoolCallerNotWhitelisted() error, because factory does not implement the expected interface
             await expect(
                 pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, { value: tokenAmount })
@@ -465,7 +487,40 @@ describe("MintWithToken", async () => {
 
             await expect(
                 pool.mintWithToken(user1.address, minimumAmount.sub(1), 0, ZERO_ADDRESS, { value: minimumAmount.sub(1) })
+            ).to.be.revertedWith('PoolMintTokenNotActive()')
+
+            await pool.setAcceptableMintToken(ZERO_ADDRESS, true)
+
+            await expect(
+                pool.mintWithToken(user1.address, minimumAmount.sub(1), 0, ZERO_ADDRESS, { value: minimumAmount.sub(1) })
             ).to.be.revertedWith('PoolAmountSmallerThanMinimum(1000)')
         })
+    })
+
+    describe("setAcceptableMintToken", async () => {
+        it('should set acceptable mint token', async () => {
+            const { pool, weth } = await setupTests()
+
+            let acceptedTokensBefore = await pool.getAcceptedMintTokens()
+            expect(acceptedTokensBefore).to.not.include(weth.address)
+
+            await pool.setAcceptableMintToken(weth.address, true)
+
+            acceptedTokensBefore = await pool.getAcceptedMintTokens()
+            expect(acceptedTokensBefore).to.include(weth.address)
+
+            await pool.setAcceptableMintToken(weth.address, false)
+
+            acceptedTokensBefore = await pool.getAcceptedMintTokens()
+            expect(acceptedTokensBefore).to.not.include(weth.address)
+        })
+    })
+
+    it('should be owner restricted', async () => {
+        const { pool, weth } = await setupTests()
+
+        await expect(
+            pool.connect(user2).setAcceptableMintToken(weth.address, true)
+        ).to.be.revertedWith('PoolCallerIsNotOwner()')
     })
 })

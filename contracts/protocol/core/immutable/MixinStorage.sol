@@ -35,6 +35,7 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
         assert(_APPLICATIONS_SLOT == bytes32(uint256(keccak256("pool.proxy.applications")) - 1));
         assert(_OPERATOR_BOOLEAN_SLOT == bytes32(uint256(keccak256("pool.proxy.operator.boolean")) - 1));
+        assert(_ACCEPTED_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.accepted.tokens")) - 1));
     }
 
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
@@ -99,6 +100,12 @@ abstract contract MixinStorage is MixinImmutables {
     function operators() internal pure returns (Operator storage s) {
         assembly {
             s.slot := _OPERATOR_BOOLEAN_SLOT
+        }
+    }
+
+    function acceptedTokensSet() internal pure returns (AddressSet storage s) {
+        assembly {
+            s.slot := _ACCEPTED_TOKENS_SLOT
         }
     }
 }

@@ -20,6 +20,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinActions} from "./MixinActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
+import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolOwnerActions} from "../../interfaces/v4/pool/ISmartPoolOwnerActions.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
@@ -132,6 +133,16 @@ abstract contract MixinOwnerActions is MixinActions {
                     set.remove(activeTokens[i]);
                 }
             }
+        }
+    }
+
+    /// @inheritdoc ISmartPoolOwnerActions
+    function setAcceptableMintToken(address token, bool isAccepted) external override onlyOwner {
+        AddressSet storage set = acceptedTokensSet();
+        if (isAccepted) {
+            set.addUnique(IEOracle(address(this)), token, pool().baseToken);
+        } else {
+            set.remove(token);
         }
     }
 

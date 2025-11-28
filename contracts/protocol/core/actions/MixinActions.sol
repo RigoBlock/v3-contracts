@@ -30,6 +30,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolSupplyIsNullOrDust();
     error PoolTokenNotActive();
     error InvalidOperator();
+    error PoolMintTokenNotActive();
 
     /*
      * EXTERNAL METHODS
@@ -51,7 +52,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         address tokenIn
     ) external payable override nonReentrant returns (uint256 recipientAmount) {
         // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
-        require(activeTokensSet().isActive(tokenIn), PoolTokenNotActive());
+        require(acceptedTokensSet().isActive(tokenIn), PoolMintTokenNotActive());
         
         recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
     }
