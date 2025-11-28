@@ -1,9 +1,13 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface ISmartPoolState {
+    /// @notice Returns the list of accepted mint tokens.
+    /// @return tokens Array of token addresses.
+    function getAcceptedMintTokens() external view returns (address[] memory tokens);
+
     /// @notice Returns the active application flags.
     /// @return packedApplications Packed value of bitmap encoded active flags.
     function getActiveApplications() external view returns (uint256 packedApplications);

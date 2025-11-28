@@ -4,6 +4,7 @@ import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { deployContract } from "../utils/utils";
+import { BigNumber } from "ethers";
 
 describe("ReentrancyGuard", async () => {
     const [ user1 ] = waffle.provider.getWallets()
@@ -76,8 +77,11 @@ describe("ReentrancyGuard", async () => {
             await testReentrancyAttack.setMaxCount(1)
             await testReentrancyAttack.mintPool()
             expect(await testReentrancyAttack.count()).to.be.eq(2)
-            expect(await pool.balanceOf(testReentrancyAttack.address)).to.be.eq(parseEther("10"))
-            expect(await rogueToken.balanceOf(pool.address)).to.be.eq(parseEther("10"))
+            const etherAmount = parseEther("10")
+            const spread =  BigNumber.from((await pool.getPoolParams()).spread)
+            const expectedMintedAmount = etherAmount.sub(etherAmount.mul(spread).div(10000))
+            expect(await pool.balanceOf(testReentrancyAttack.address)).to.be.eq(expectedMintedAmount)
+            expect(await rogueToken.balanceOf(pool.address)).to.be.eq(expectedMintedAmount)
         })
     })
 })

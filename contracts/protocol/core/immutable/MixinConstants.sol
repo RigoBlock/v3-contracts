@@ -1,22 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2022-2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ISmartPool} from "../../ISmartPool.sol";
@@ -26,7 +8,7 @@ import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.
 /// @dev Inheriting from interface is required as we override public variables.
 abstract contract MixinConstants is ISmartPool {
     /// @inheritdoc ISmartPoolImmutable
-    string public constant override VERSION = "4.0.3";
+    string public constant override VERSION = "4.1.0";
 
     bytes32 internal constant _APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
 
@@ -40,7 +22,11 @@ abstract contract MixinConstants is ISmartPool {
 
     bytes32 internal constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
 
-    bytes32 internal constant _OPERATOR_BOOLEAN_SLOT = 0xac0ed3ab25c1c02fcfdfba47b1953f88a6f24e5a50f1076d09054047884e5350;
+    bytes32 internal constant _OPERATOR_BOOLEAN_SLOT =
+        0xac0ed3ab25c1c02fcfdfba47b1953f88a6f24e5a50f1076d09054047884e5350;
+
+    bytes32 internal constant _ACCEPTED_TOKENS_SLOT =
+        0xa33198d1011bad6f8d9b4a537f82cf21cfac49b1430cf1a99c11aaf4d7325fc6;
 
     address internal constant _ZERO_ADDRESS = address(0);
 
@@ -49,6 +35,8 @@ abstract contract MixinConstants is ISmartPool {
     uint16 internal constant _FEE_BASE = 10000;
 
     uint16 internal constant _MAX_SPREAD = 500; // +-5%, in basis points
+
+    uint16 internal constant _DEFAULT_SPREAD = 10;
 
     uint16 internal constant _MAX_TRANSACTION_FEE = 100; // maximum 1%
 
