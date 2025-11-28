@@ -19,6 +19,6 @@ interface ISmartPoolImmutable {
 
     /// @notice Returns the address of the Rigoblock token jar contract.
     /// @dev Used to transfer protocol fees to the buy-back-and-burn contract.
-    /// @dev Address of the token jar contract.
+    /// @return Address of the token jar contract.
     function tokenJar() external view returns (address);
 }

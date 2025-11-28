@@ -8,7 +8,6 @@ import { DEADLINE } from "../shared/constants";
 import { CommandType, RoutePlanner } from '../shared/planner'
 import { Actions, V4Planner } from '../shared/v4Planner'
 import { deployContract, timeTravel } from "../utils/utils";
-import { parse } from "path";
 
 describe("BaseTokenProxy", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()

@@ -326,9 +326,7 @@ describe("MintWithToken", async () => {
             await timeTravel({ seconds: 600 , mine: true}); // to ensure price feeds have enough data, so that twap does not change from simulation to actual tx
 
             await pool.setAcceptableMintToken(ZERO_ADDRESS, true)
-            
-            const { spread } = await pool.getPoolParams()
-            //const expectedMint = tokenAmount.sub(tokenAmount.mul(spread).div(10000))
+
             const expectedMintedAmount = await pool.callStatic.mintWithToken(
                 user1.address,
                 tokenAmount,
