@@ -162,11 +162,14 @@ describe("MixinStorageAccessible", async () => {
             expect(poolParams).to.be.eq(encodedPack)
             await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('InvalidOperator()')
             await pool.connect(user2).setOperator(user1.address, true)
-            await pool.mint(user2.address, parseEther("10"), 1, { value: parseEther("10") })
+            let etherValue = parseEther("10")
+            await pool.mint(user2.address, etherValue, 1, { value: etherValue })
+            etherValue = etherValue.sub(etherValue.mul((await pool.getPoolParams()).spread).div(10000))
             poolParams = await pool.getStorageAt(poolTokensSlot, 2)
+            // total supply will be equal to the ether value deposited after spread deduction
             encodedPack = utils.solidityPack(
                 ['uint256', 'uint256'],
-                [parseEther("1"), parseEther("10")]
+                [parseEther("1"), etherValue]
             )
             expect(poolParams).to.be.eq(encodedPack)
         })

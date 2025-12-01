@@ -198,10 +198,17 @@ const deploy: DeployFunction = async function (
   const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
   await tx.wait();
 
+  const mockTokenJar = await deploy("MockTokenJar", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   // implementation address is different on each chain as extensionsMap is different, but proxies will have the same address
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMapAddress],
+    args: [authority.address, extensionsMapAddress, mockTokenJar.address],
     log: true,
     deterministicDeployment: true,
   });

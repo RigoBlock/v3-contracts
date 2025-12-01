@@ -19,6 +19,7 @@
     "build:hardhat": "hardhat compile",
     "build:ts": "yarn rimraf dist && tsc",
     "test": "hardhat test --deploy-fixture",
+    "test:foundry": "forge test",
     "coverage": "hardhat coverage",
     "benchmark": "yarn test benchmark/*.ts",
     "deploy-custom": "rm -rf deployments/custom && yarn deploy-all custom",
@@ -30,7 +31,7 @@
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "prepack": "yarn build",
     "prepare": "chmod +x ./.husky/pre-commit && husky install",
-    "prepublish": "yarn rimraf build && yarn build && yarn build:hardhat && yarn build:ts"
+    "prepublish": "yarn rimraf build:hardhat && yarn build:hardhat && yarn build:ts"
   },
   "repository": {
     "type": "git",

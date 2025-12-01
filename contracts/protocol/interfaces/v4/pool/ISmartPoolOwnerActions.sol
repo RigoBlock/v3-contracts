@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 /// @title Rigoblock V3 Pool Owner Actions Interface - Interface of the owner methods.
@@ -20,6 +20,11 @@ interface ISmartPoolOwnerActions {
     /// @dev This is the only endpoint that has access to removing a token from the active tokens tuple.
     /// @dev Used to reduce cost of mint/burn as more tokens are traded, and allow lower gas for hft.
     function purgeInactiveTokensAndApps() external;
+
+    /// @notice Allows the owner to set acceptable mint tokens other than the base token.
+    /// @param token Address of the target token.
+    /// @param isAccepted Boolean to indicate whether the token is to be added or removed from storage.
+    function setAcceptableMintToken(address token, bool isAccepted) external;
 
     /// @notice Allows pool owner to set/update the user whitelist contract.
     /// @dev Kyc provider can be set to null, removing user whitelist requirement.

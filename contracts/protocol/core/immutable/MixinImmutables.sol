@@ -1,22 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2022-2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinConstants} from "./MixinConstants.sol";
@@ -34,13 +16,16 @@ abstract contract MixinImmutables is MixinConstants {
     ///@inheritdoc ISmartPoolImmutable
     address public immutable override wrappedNative;
 
+    ///@inheritdoc ISmartPoolImmutable
+    address public immutable override tokenJar;
+
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
 
     IExtensionsMap internal immutable _extensionsMap;
 
     /// @notice The ExtensionsMap interface is required to implement the expected methods as sanity check.
-    constructor(address _authority, address extensionsMap) {
+    constructor(address _authority, address extensionsMap, address _tokenJar) {
         require(_authority.code.length > 0, InvalidAuthorityInput());
         require(extensionsMap.code.length > 0, InvalidExtensionsMapInput());
         authority = _authority;
@@ -50,6 +35,9 @@ abstract contract MixinImmutables is MixinConstants {
         // initialize extensions mapping and assert it implements `getExtensionBySelector` method
         _extensionsMap = IExtensionsMap(extensionsMap);
         wrappedNative = _extensionsMap.wrappedNative();
+
+        // the token jar input is expected to be correct at deployment, no sanity checks
+        tokenJar = _tokenJar;
 
         // the following assertion will alway be true, as long as IExtensionsMap implements the expected methods.
         assert(

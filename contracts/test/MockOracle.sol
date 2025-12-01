@@ -77,6 +77,8 @@ contract MockOracle {
             tickCumulatives[i] = int48(closestObservation.tickCumulative);
             secondsPerLiquidityCumulativeX128s[i] = closestObservation.secondsPerLiquidityCumulativeX128;
 
+            // Notice: using time travel (i.e. 600 seconds) is generally enough to prevent twap change between simulation (callStatic) and execution blocks.
+            // If interpolation removal is required for tests correctness, comment the following block.
             // Adjust for time passed since the closest observation (simplified for mock)
             if (targetTimestamp > closestObservation.blockTimestamp) {
                 uint32 timeDiff = targetTimestamp - closestObservation.blockTimestamp;
