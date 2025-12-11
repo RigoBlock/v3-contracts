@@ -9,13 +9,14 @@ const deploy: DeployFunction = async function (
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
 
-  const chainId = await getChainId();
-  if (!chainId || !chainConfig[chainId]) {
-    if (chainId === "31337") {
+  const chainIdString = await getChainId();
+  const chainId = parseInt(chainIdString);
+  if (!chainIdString || !chainConfig[chainId]) {
+    if (chainIdString === "31337") {
       console.log("Skipping for Hardhat Network");
       return;
     } else {
-      throw new Error(`Unsupported network: Chain ID ${chainId}`);
+      throw new Error(`Unsupported network: Chain ID ${chainIdString}`);
     }
   }
 
@@ -71,7 +72,21 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
+  const acrossSpokePool = config.acrossSpokePool || "0x0000000000000000000000000000000000000000";
+
+  const eAcrossHandler = await deploy("EAcrossHandler", {
+    from: deployer,
+    args: [acrossSpokePool],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const extensions = {
+    eApps: eApps.address,
+    eOracle: eOracle.address,
+    eUpgrade: eUpgrade.address,
+    eAcrossHandler: eAcrossHandler.address
+  }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,

@@ -1,5 +1,6 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import "hardhat-deploy/dist/src/type-extensions";
 import { extensionsMapSalt } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
@@ -173,7 +174,27 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
+  // Deploy MockSpokePool for testing
+  const mockSpokePool = await deploy("MockSpokePool", {
+    from: deployer,
+    args: [weth.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const eAcrossHandler = await deploy("EAcrossHandler", {
+    from: deployer,
+    args: [mockSpokePool.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const extensions = {
+    eApps: eApps.address,
+    eOracle: eOracle.address,
+    eUpgrade: eUpgrade.address,
+    eAcrossHandler: eAcrossHandler.address
+  }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
@@ -283,6 +304,15 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   })
+
+  const aIntents = await deploy("AIntents", {
+    from: deployer,
+    args: [mockSpokePool.address],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  await authorityInstance.setAdapter(aIntents.address, true)
 };
 
 deploy.tags = ['tests-setup', 'l2-suite', 'main-suite']

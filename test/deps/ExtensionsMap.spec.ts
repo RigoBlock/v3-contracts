@@ -17,7 +17,7 @@ describe("ExtensionsMapDeployer", async () => {
     describe("deployExtensionsMap", async () => {
         it('should not re-deploy if salt has not changed', async () => {
             const { deployer } = await setupTests()
-            const extensions = {eApps: user1.address, eOracle: user1.address, eUpgrade: user1.address}
+            const extensions = {eApps: user1.address, eOracle: user1.address, eUpgrade: user1.address, eAcrossHandler: user1.address}
             const wrappedNative = user1.address
             const params = {
                 extensions: extensions,
@@ -38,7 +38,7 @@ describe("ExtensionsMapDeployer", async () => {
         // This test asserts that we can deploy to the same address on all chains
         it('should re-deploy if params are same but salt has changed', async () => {
             const { deployer } = await setupTests()
-            const extensions = {eApps: user1.address, eOracle: user1.address, eUpgrade: user1.address}
+            const extensions = {eApps: user1.address, eOracle: user1.address, eUpgrade: user1.address, eAcrossHandler: user1.address}
             const wrappedNative = user1.address
             const params = {
                 extensions: extensions,
