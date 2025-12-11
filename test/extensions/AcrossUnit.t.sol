@@ -60,6 +60,7 @@ contract AcrossUnitTest is Test {
         
         AIntents.CrossChainMessage memory message = AIntents.CrossChainMessage({
             messageType: AIntents.MessageType.Transfer,
+            sourceChainId: 0,
             sourceNav: 0,
             sourceDecimals: 18,
             navTolerance: 0,
@@ -78,6 +79,7 @@ contract AcrossUnitTest is Test {
     function test_MessageEncodingDecoding() public {
         AIntents.CrossChainMessage memory message = AIntents.CrossChainMessage({
             messageType: AIntents.MessageType.Transfer,
+            sourceChainId: 0,
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100,

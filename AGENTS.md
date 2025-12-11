@@ -13,9 +13,13 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 
 1. **Storage Layout**: Never reorder/remove storage variables in existing contracts
 2. **Extensions/Adapters**: Never add storage (they run via delegatecall in pool context)
-3. **Storage Slots**: Always assert new slots in `MixinStorage.sol` constructor
+3. **Storage Slots**: Always assert new slots in `MixinStorage.sol` constructor (use dot notation)
 4. **Security**: Extensions MUST verify `msg.sender` in delegatecall context
 5. **NAV Integrity**: Cross-chain transfers MUST manage virtual balances
+6. **Testing**: Always write/update tests when modifying .sol files - tests must pass
+7. **Error Handling**: Use custom errors (`error ErrorName(params)`) instead of revert strings
+8. **Override Keyword**: Add `override` to interface implementations - fix compilation warnings
+9. **Compilation**: Fix all warnings in new code (legacy warnings acceptable)
 
 ## Architecture in 30 Seconds
 
@@ -61,24 +65,28 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 ## Storage Pattern
 
-**All storage uses ERC-7201 namespaced pattern:**
+**All storage uses ERC-7201 namespaced pattern with dot notation:**
 
 ```solidity
-// In MixinConstants.sol
-bytes32 internal constant _YOUR_SLOT = 
-    bytes32(uint256(keccak256("pool.proxy.your.namespace")) - 1);
+// In MixinConstants.sol - use dots to separate namespace components
+bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
+    bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1);
 
-// In MixinStorage.sol constructor
-assert(_YOUR_SLOT == bytes32(uint256(keccak256("pool.proxy.your.namespace")) - 1));
+// NOT this - avoid mixed dots and camelCase
+bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
+    bytes32(uint256(keccak256("pool.proxy.virtualBalances")) - 1); // ❌
+
+// In MixinStorage.sol constructor - assert the slot calculation
+assert(_VIRTUAL_BALANCES_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1));
 
 // Access in contracts
 function _getValue(address key) private view returns (uint256 value) {
-    bytes32 slot = _YOUR_SLOT.deriveMapping(key);
+    bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(key);
     assembly { value := sload(slot) }
 }
 
 function _setValue(address key, uint256 value) private {
-    bytes32 slot = _YOUR_SLOT.deriveMapping(key);
+    bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(key);
     assembly { sstore(slot, value) }
 }
 ```
@@ -257,6 +265,8 @@ assembly { sstore(slot, value) }
 
 ## Security Checklist
 
+When modifying code:
+
 - [ ] Extensions verify `msg.sender` (preserved in delegatecall)
 - [ ] No storage in extensions/adapters (use pool storage)
 - [ ] New storage slots asserted in MixinStorage
@@ -265,6 +275,9 @@ assembly { sstore(slot, value) }
 - [ ] NAV updated before reading (if need current value)
 - [ ] Reentrancy protection for external calls
 - [ ] Virtual balances managed for cross-chain transfers
+- [ ] **Tests written/updated for modified functionality**
+- [ ] **Tests pass** (`forge test` or `yarn test`)
+- [ ] **Custom errors used** (not revert strings)
 
 ## Gas Optimization Tips
 
@@ -277,8 +290,23 @@ assembly { sstore(slot, value) }
 
 - NatSpec all public/external functions
 - Use `@inheritdoc` for interface implementations
-- Document known limitations clearly (see AIntents.sol token recovery)
+- Document known limitations clearly (see docs/across/KNOWN_ISSUES_AND_EDGE_CASES.md)
 - Keep inline comments minimal and focused on "why" not "what"
+
+### Documentation File Management
+
+**Where to Save Documentation**:
+- General docs → `/docs/`
+- Protocol-specific (Across, Uniswap, etc.) → `/docs/<protocol>/`
+- Working documents → Update existing files, don't create many small files
+
+**Workflow**:
+1. Create or update single comprehensive document
+2. Update as work progresses
+3. Move to `/docs/` subfolder when complete
+4. Clean up temporary/working documents
+
+**Avoid**: Creating many .md files in root directory - consolidate instead.
 
 ## Useful Commands
 
@@ -331,3 +359,53 @@ BASE_RPC_URL=https://...
 - Across integration: docs/across/
 - Deployed contracts: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 - GitHub: https://github.com/RigoBlock/v3-contracts
+### Documentation Update Pattern
+
+When working on a feature or integration:
+1. Create or update a single comprehensive document (e.g., `INTEGRATION_GUIDE.md`)
+2. Update as work progresses rather than creating multiple versions
+3. Move to appropriate `/docs/` subfolder when complete
+4. Clean up temporary/working documents
+
+**Avoid**: Creating many small .md files in root directory - consolidate instead.
+
+## Resources
+
+- **Documentation**: https://docs.rigoblock.com
+- **Deployed Addresses**: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
+- **GitHub**: https://github.com/RigoBlock/v3-contracts
+- **Across Integration**: docs/across/ (cross-chain bridge integration)
+
+## AI Assistant Checklist
+
+When making changes:
+
+- [ ] Preserve storage layout (never reorder/remove storage)
+- [ ] Use existing patterns (extensions, adapters, storage access)
+- [ ] Add storage slot assertions if adding new storage (dot notation in names)
+- [ ] Verify security (delegatecall context, access control)
+- [ ] **Add `override` keyword** to interface implementations
+- [ ] **Fix all compilation warnings** in new code (not required for legacy code)
+- [ ] **Write or update tests** (unit tests, integration tests, fork tests)
+- [ ] **Run tests to ensure they pass** (`forge test` for Foundry, `npm test` for Hardhat)
+- [ ] Test with forks if cross-chain or integration work
+- [ ] Update interfaces and use `@inheritdoc`
+- [ ] Follow existing code style and naming
+- [ ] **Use custom errors** (`error ErrorName(params)`) instead of revert strings
+- [ ] Document known limitations clearly
+- [ ] Consider gas optimization (immutables, transient storage)
+- [ ] Update deployment scripts if adding contracts
+- [ ] Save documentation files in `/docs/` or `/docs/<protocol>/`
+
+## Common Pitfalls to Avoid
+
+1. **Adding storage to extensions/adapters** - They run in pool context, use pool storage
+2. **Direct calls to extensions/adapters** - Always called via delegatecall
+3. **Forgetting security checks** - Verify msg.sender in delegatecall context
+4. **Breaking storage layout** - Never reorder/modify existing storage
+5. **Reading stale NAV** - Call updateUnitaryValue() first if need current value
+6. **Assuming same addresses across chains** - Extensions are chain-specific
+7. **Missing price feed checks** - Always verify hasPriceFeed() for new tokens
+8. **Unsafe token operations** - Use SafeTransferLib for USDT compatibility
+9. **Not testing on forks** - Integration tests should use actual deployed contracts
+10. **Ignoring virtual balances** - Cross-chain transfers must maintain NAV integrity

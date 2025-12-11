@@ -12,9 +12,10 @@ The integration consists of two main components:
 ## Key Features
 
 - **NAV Integrity**: Virtual balances ensure NAV remains accurate across chains
-- **Two Transfer Modes**:
+- **Three Transfer Modes**:
   - **Transfer Mode**: NAV-neutral transfers with virtual balance offsets
   - **Rebalance Mode**: Performance transfers with NAV verification
+  - **Sync Mode**: Initial chain synchronization for enabling rebalancing
 - **Security**: Handler verifies caller is Across SpokePool
 - **Token Safety**: Validates price feeds before accepting tokens
 
@@ -67,8 +68,25 @@ Use when intentionally transferring performance between chains.
 - Source chain: NAV changes naturally (tokens sent)
 - Destination chain: Verifies NAV matches source (within tolerance)
 - Accounts for different base token decimals
+- Uses stored NAV spread to account for initial chain NAV differences
 
 **Use case:** Rebalancing vault performance across chains
+
+**Prerequisite:** Chains must be synced first using Sync mode
+
+### Sync Mode (Chain Synchronization)
+
+Use once between each pair of chains to enable rebalancing.
+
+**How it works:**
+- Records NAV spread between source and destination chains
+- Spread = sourceNav - destNav
+- Stored for future rebalance operations
+- Tokens are transferred but no virtual balances created
+
+**Use case:** Initial setup before rebalancing between chain pairs
+
+**Note:** Should be performed when vault is first deployed on a new chain
 
 ## Architecture
 
@@ -99,15 +117,20 @@ Across SpokePool → Pool → EAcrossHandler Extension
 
 ## Storage
 
-Virtual balances are stored using ERC-7201 namespaced storage:
+Virtual balances and chain NAV spreads are stored using ERC-7201 namespaced storage:
 
 ```solidity
-// Storage slot
+// Virtual balances storage slot
 bytes32 constant VIRTUAL_BALANCES_SLOT = 
     bytes32(uint256(keccak256("pool.proxy.virtualBalances")) - 1);
 
-// Access pattern
+// Chain NAV spreads storage slot
+bytes32 constant CHAIN_NAV_SPREADS_SLOT =
+    bytes32(uint256(keccak256("pool.proxy.chainNavSpreads")) - 1);
+
+// Access patterns
 mapping(address token => int256 virtualBalance)
+mapping(uint256 chainId => int256 navSpread)
 ```
 
 ## Testing

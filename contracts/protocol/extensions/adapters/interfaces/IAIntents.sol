@@ -25,6 +25,7 @@ interface IAIntents {
     error DirectCallNotAllowed();
     error TokenIsNotOwned();
     error InsufficientWrappedNativeBalance();
+    error InvalidMessageType();
 
     /// @notice Initiates a cross-chain token transfer via Across Protocol V3
     /// @dev Matches Across's depositV3 signature exactly for seamless integration

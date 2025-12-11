@@ -41,6 +41,7 @@ contract EAcrossHandler is IEAcrossHandler {
     // Storage slot constants from MixinConstants
     bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
+    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
     
     /// @notice Address of the Across SpokePool contract
     /// @dev Immutable to save gas on verification
@@ -56,7 +57,7 @@ contract EAcrossHandler is IEAcrossHandler {
         address tokenReceived,
         uint256 amount,
         bytes calldata message
-    ) external {
+    ) external override {
         // CRITICAL SECURITY CHECK: Verify caller is the Across SpokePool
         // Since this is called via delegatecall, msg.sender is preserved from the original call
         require(msg.sender == acrossSpokePool, UnauthorizedCaller());
@@ -77,6 +78,8 @@ contract EAcrossHandler is IEAcrossHandler {
             _handleTransferMode(tokenReceived, amount);
         } else if (params.messageType == MessageType.Rebalance) {
             _handleRebalanceMode(amount, params);
+        } else if (params.messageType == MessageType.Sync) {
+            _handleSyncMode(amount, params);
         } else {
             revert InvalidMessageType();
         }
@@ -100,8 +103,12 @@ contract EAcrossHandler is IEAcrossHandler {
         _setVirtualBalance(baseToken, currentBalance - baseTokenAmount);
     }
 
-    /// @dev Handles Rebalance mode: verifies NAV is within tolerance of source chain NAV.
-    function _handleRebalanceMode(uint256 amount, CrossChainMessage memory params) private {
+    /// @dev Handles Rebalance mode: verifies NAV is within tolerance of source chain NAV plus spread.
+    function _handleRebalanceMode(uint256 /* amount */, CrossChainMessage memory params) private {
+        // Check that chains have been synced
+        int256 spread = _getChainNavSpread(params.sourceChainId);
+        require(spread != 0, ChainsNotSynced());
+        
         // Tokens are already transferred by Across
         // Get current NAV on destination chain (includes received tokens)
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
@@ -113,13 +120,42 @@ contract EAcrossHandler is IEAcrossHandler {
         // Normalize NAVs to same decimal scale for comparison
         uint256 normalizedSourceNav = _normalizeNav(params.sourceNav, params.sourceDecimals, destDecimals);
         
-        // Calculate acceptable range
-        uint256 tolerance = (normalizedSourceNav * params.navTolerance) / 10000;
-        uint256 minNav = normalizedSourceNav > tolerance ? normalizedSourceNav - tolerance : 0;
-        uint256 maxNav = normalizedSourceNav + tolerance;
+        // Expected dest NAV = source NAV - spread (spread can be positive or negative)
+        int256 expectedDestNav = normalizedSourceNav.toInt256() - spread;
+        int256 actualDestNav = destNav.toInt256();
+        int256 delta = actualDestNav - expectedDestNav;
         
-        // Verify destination NAV is within acceptable range (requirement 2c)
-        require(destNav >= minNav && destNav <= maxNav, NavDeviationTooHigh());
+        // Calculate tolerance
+        uint256 tolerance = (normalizedSourceNav * params.navTolerance) / 10000;
+        
+        // Verify destination NAV is within acceptable range accounting for spread
+        require(
+            delta >= -(tolerance.toInt256()) && delta <= tolerance.toInt256(),
+            NavDeviationTooHigh()
+        );
+    }
+    
+    /// @dev Handles Sync mode: records NAV spread between chains.
+    function _handleSyncMode(uint256 /* amount */, CrossChainMessage memory params) private {
+        // Get current NAV on destination chain (includes received tokens)
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        uint256 destNav = poolTokens.unitaryValue;
+        
+        // Get decimals from the pool  
+        uint8 destDecimals = StorageLib.pool().decimals;
+        
+        // Normalize source NAV to destination decimals
+        uint256 normalizedSourceNav = _normalizeNav(params.sourceNav, params.sourceDecimals, destDecimals);
+        
+        // Calculate spread: source NAV - destination NAV
+        // This represents how much the source chain NAV exceeds destination NAV
+        int256 spread = normalizedSourceNav.toInt256() - destNav.toInt256();
+        
+        // Store spread for source chain ID
+        _setChainNavSpread(params.sourceChainId, spread);
+        
+        // Note: Tokens are transferred but this is just a sync, NAV impact is acceptable
+        // Virtual balances are NOT created - tokens remain in pool
     }
 
     /// @dev Normalizes NAV from source decimals to destination decimals.
@@ -150,6 +186,22 @@ contract EAcrossHandler is IEAcrossHandler {
         bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
         assembly {
             sstore(slot, value)
+        }
+    }
+    
+    /// @dev Gets the NAV spread for a specific chain from pool storage.
+    function _getChainNavSpread(uint256 chainId) private view returns (int256 spread) {
+        bytes32 slot = _CHAIN_NAV_SPREADS_SLOT.deriveMapping(bytes32(chainId));
+        assembly {
+            spread := sload(slot)
+        }
+    }
+    
+    /// @dev Sets the NAV spread for a specific chain in pool storage.
+    function _setChainNavSpread(uint256 chainId, int256 spread) private {
+        bytes32 slot = _CHAIN_NAV_SPREADS_SLOT.deriveMapping(bytes32(chainId));
+        assembly {
+            sstore(slot, spread)
         }
     }
 }

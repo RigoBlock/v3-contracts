@@ -51,14 +51,16 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     // Re-export types from interface for external use
     enum MessageType {
         Transfer,
-        Rebalance
+        Rebalance,
+        Sync
     }
     
     struct CrossChainMessage {
         MessageType messageType;
+        uint256 sourceChainId;  // Chain ID of the source chain
         uint256 sourceNav;
         uint8 sourceDecimals;
-        uint256 navTolerance;
+        uint256 navTolerance;  // Not used in Sync mode
         bool unwrapNative;
     }
 
@@ -66,6 +68,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
+    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
     address private constant _ZERO_ADDRESS = address(0);
 
     address private immutable _wrappedNative;
@@ -101,7 +104,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         uint32 fillDeadline,
         uint32 exclusivityDeadline,
         bytes memory message
-    ) external payable nonReentrant onlyDelegateCall {
+    ) external payable override nonReentrant onlyDelegateCall {
         // Ignore some parameters as we enforce our own values for security
         depositor; recipient; exclusiveRelayer; quoteTimestamp; exclusivityDeadline;
         
@@ -163,7 +166,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         _safeApproveToken(inputToken, address(acrossSpokePool));
     }
     
-    /// @dev Processes message and adjusts virtual balances if needed.
+    /// @dev Processes message and adjusts virtual balances/spreads if needed.
     function _processMessage(
         bytes memory messageData,
         address inputToken,
@@ -174,9 +177,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         if (params.messageType == MessageType.Transfer) {
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
             return messageData;
+        } else if (params.messageType == MessageType.Rebalance) {
+            return _updateMessageForRebalance(params);
+        } else if (params.messageType == MessageType.Sync) {
+            return _updateMessageForSync(params);
         }
         
-        return _updateMessageForRebalance(params);
+        revert InvalidMessageType();
     }
     
     /// @dev Adjusts virtual balance for Transfer mode.
@@ -197,8 +204,23 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         
         // Now read the updated NAV from storage
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        params.sourceChainId = block.chainid;
         params.sourceNav = poolTokens.unitaryValue;
         params.sourceDecimals = StorageLib.pool().decimals;
+        return abi.encode(params);
+    }
+    
+    /// @dev Updates message with NAV for Sync mode.
+    function _updateMessageForSync(CrossChainMessage memory params) private returns (bytes memory) {
+        // Update NAV first to get current value
+        ISmartPoolActions(address(this)).updateUnitaryValue();
+        
+        // Read the updated NAV from storage
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        params.sourceChainId = block.chainid;
+        params.sourceNav = poolTokens.unitaryValue;
+        params.sourceDecimals = StorageLib.pool().decimals;
+        
         return abi.encode(params);
     }
     
@@ -245,9 +267,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.
     function _safeApproveToken(address token, address spender) private {
+        if (token == _ZERO_ADDRESS) return; // Skip if native currency
+        
         uint256 currentAllowance = IERC20(token).allowance(address(this), spender);
         if (currentAllowance > 0) {
-            // Reset to 0 first for tokens that require it
+            // Reset to 0 first for tokens that require it (like USDT)
             token.safeApprove(spender, 0);
         } else {
             // Approve max amount

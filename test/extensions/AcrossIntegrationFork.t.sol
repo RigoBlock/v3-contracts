@@ -237,6 +237,7 @@ contract AcrossIntegrationForkTest is Test {
         
         AIntents.CrossChainMessage memory message = AIntents.CrossChainMessage({
             messageType: AIntents.MessageType.Transfer,
+            sourceChainId: 0,
             sourceNav: 0,
             sourceDecimals: 18,
             navTolerance: 0,
@@ -271,6 +272,7 @@ contract AcrossIntegrationForkTest is Test {
         
         AIntents.CrossChainMessage memory message = AIntents.CrossChainMessage({
             messageType: AIntents.MessageType.Transfer,
+            sourceChainId: 0,
             sourceNav: 0,
             sourceDecimals: 18,
             navTolerance: 0,
@@ -346,6 +348,7 @@ contract AcrossIntegrationForkTest is Test {
     function testFork_TransferMessageEncoding() public {
         AIntents.CrossChainMessage memory message = AIntents.CrossChainMessage({
             messageType: AIntents.MessageType.Transfer,
+            sourceChainId: 0,
             sourceNav: 0,
             sourceDecimals: 18,
             navTolerance: 0,
@@ -363,6 +366,7 @@ contract AcrossIntegrationForkTest is Test {
     function testFork_RebalanceMessageEncoding() public {
         AIntents.CrossChainMessage memory message = AIntents.CrossChainMessage({
             messageType: AIntents.MessageType.Rebalance,
+            sourceChainId: 0,
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100, // 1%
@@ -438,6 +442,7 @@ contract AcrossIntegrationForkTest is Test {
         
         AIntents.CrossChainMessage memory message = AIntents.CrossChainMessage({
             messageType: AIntents.MessageType.Transfer,
+            sourceChainId: 0,
             sourceNav: 0,
             sourceDecimals: 6, // USDC decimals
             navTolerance: 0,

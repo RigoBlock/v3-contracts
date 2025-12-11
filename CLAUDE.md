@@ -342,9 +342,78 @@ contract YourAdapter is ReentrancyGuardTransient {
 - Follow existing Solidity style (0.8.28)
 - Use NatSpec comments for public/external functions
 - Inherit docs with `@inheritdoc` when implementing interfaces
+- **Use `override` keyword** for methods that implement interface functions
+  - Compilation will warn if missing - fix all warnings in new code
+  - Legacy code may have warnings - acceptable, but fix when modifying
 - Keep functions focused and well-named
 - Use libraries for reusable logic
 - Prefer immutables over constants for chain-specific values
+- **Error Handling**: Use custom errors (e.g., `InvalidMessageType()`) instead of revert strings
+  - Custom errors save gas and allow parameters for better testing
+  - Format: `error ErrorName(param1Type param1, param2Type param2);`
+  - Legacy code may still have revert strings - update when modifying
+
+### Testing Requirements
+
+**For all new Solidity contracts:**
+1. Create or update unit tests (Hardhat TypeScript in `test/`)
+2. Create or update fork tests if applicable (Foundry in `test/`)
+3. Tests MUST pass before considering implementation complete
+4. Run tests: `npm test` (Hardhat) and `forge test` (Foundry)
+5. Fix all compilation warnings in new code
+
+**When modifying existing contracts:**
+- Ensure existing tests still pass
+- Add tests for new functionality
+- Update tests for changed behavior
+
+### Storage Slot Naming Convention
+
+When defining storage slot constants in `MixinConstants.sol`, use **dot notation**:
+```solidity
+// Correct format - use dots to separate namespace components
+bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
+    keccak256("pool.proxy.virtual.balances") - 1;
+
+bytes32 internal constant _CHAIN_NAV_SPREADS_SLOT =
+    keccak256("pool.proxy.chain.nav.spreads") - 1;
+
+// NOT this - avoid mixed dots and camelCase
+bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
+    keccak256("pool.proxy.virtualBalances") - 1; // ❌
+```
+
+**When adding new storage slots:**
+1. Define constant in `MixinConstants.sol` with dot notation
+2. Add assertion in `MixinStorage.sol` constructor
+3. Update storage layout assertions for validation
+
+**Storage slot usage:**
+- Adapters can import from `MixinConstants.sol` or define in `StorageLib.sol`
+- Extensions import from `MixinConstants.sol` (extensions deployed with new implementation)
+- Be mindful: modifying `StorageLib.sol` triggers recompilation of all dependent contracts
+
+### Extensions and shouldDelegatecall
+
+Extensions in `ExtensionsMap.sol` can specify call context via `shouldDelegatecall` return value:
+
+```solidity
+function getExtensionBySelector(bytes4 selector) external view 
+    returns (address extension, bool shouldDelegatecall) {
+    if (selector == _EAPPS_BALANCES_SELECTOR) {
+        extension = eApps;
+        shouldDelegatecall = true; // Needs write access to pool storage
+    } else if (selector == _EORACLE_CONVERT_AMOUNT_SELECTOR) {
+        extension = eOracle;
+        shouldDelegatecall = false; // Read-only, no state changes
+    } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {
+        extension = eUpgrade;
+        shouldDelegatecall = msg.sender == StorageLib.pool().owner; // Conditional
+    }
+}
+```
+
+**Security consideration**: If extension needs write access (delegatecall), implement caller verification in the extension itself (e.g., `require(msg.sender == acrossSpokePool)`).
 
 ## Deployment
 
@@ -400,14 +469,20 @@ When making changes:
 
 - [ ] Preserve storage layout (never reorder/remove storage)
 - [ ] Use existing patterns (extensions, adapters, storage access)
-- [ ] Add storage slot assertions if adding new storage
+- [ ] Add storage slot assertions if adding new storage (dot notation in names)
 - [ ] Verify security (delegatecall context, access control)
+- [ ] **Add `override` keyword** to interface implementations
+- [ ] **Fix all compilation warnings** in new code (not required for legacy code)
+- [ ] **Write or update tests** (unit tests, integration tests, fork tests)
+- [ ] **Run tests to ensure they pass** (`forge test` for Foundry, `npm test` for Hardhat)
 - [ ] Test with forks if cross-chain or integration work
 - [ ] Update interfaces and use `@inheritdoc`
 - [ ] Follow existing code style and naming
+- [ ] **Use custom errors** (`error ErrorName(params)`) instead of revert strings
 - [ ] Document known limitations clearly
 - [ ] Consider gas optimization (immutables, transient storage)
 - [ ] Update deployment scripts if adding contracts
+- [ ] Save documentation files in `/docs/` or `/docs/<protocol>/`
 
 ## Common Pitfalls to Avoid
 

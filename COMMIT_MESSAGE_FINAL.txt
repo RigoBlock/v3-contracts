@@ -1,0 +1,147 @@
+feat: Complete Across Protocol V3 integration for cross-chain transfers
+
+Implements comprehensive cross-chain token transfer functionality via Across Protocol V3
+with NAV integrity preservation and three operational modes.
+
+## Core Components
+
+### Adapter (AIntents.sol)
+- Initiates cross-chain transfers on source chain
+- Manages virtual balances for NAV integrity
+- Supports native currency wrapping
+- Uses SafeTransferLib for token operations
+- Implements custom errors for gas efficiency
+
+### Extension (EAcrossHandler.sol)
+- Handles incoming transfers on destination chain
+- Verifies caller is Across SpokePool (critical security)
+- Validates token price feeds before accepting
+- Processes three transfer modes
+- Stores acrossSpokePool as immutable for gas savings
+
+## Features
+
+### Three Transfer Modes
+
+1. **Transfer Mode** - NAV-neutral transfers
+   - Creates positive virtual balance on source (offsets sent tokens)
+   - Creates negative virtual balance on dest (offsets received tokens)
+   - Net result: NAV unchanged on both chains
+   
+2. **Rebalance Mode** - Performance transfers with verification
+   - NAV changes naturally on source
+   - Verifies dest NAV within tolerance of source NAV (accounting for spread)
+   - Normalizes NAV across different decimals
+   - Requires prior sync between chain pairs
+
+3. **Sync Mode** - Chain synchronization
+   - Records NAV spread between chains
+   - Enables future rebalancing
+   - Performed once per chain pair
+   - Tokens transferred but no virtual balances created
+
+### Storage
+
+Added ERC-7201 namespaced storage slots:
+- `_VIRTUAL_BALANCES_SLOT` - Per-token virtual balances (int256)
+- `_CHAIN_NAV_SPREADS_SLOT` - Per-chain NAV spreads (int256)
+
+Both slots asserted in MixinStorage.sol constructor.
+
+### Security
+
+- Handler MUST verify msg.sender == acrossSpokePool
+- Price feed validation for all received tokens
+- Rebalance mode enforces NAV tolerance limits
+- Extensions/adapters only callable via delegatecall
+- Used custom errors throughout for gas efficiency
+
+## Testing
+
+### Unit Tests (test/extensions/AcrossUnit.t.sol)
+- 15 tests covering all core functionality
+- Component deployment and configuration
+- Message encoding/decoding
+- NAV normalization logic
+- Tolerance calculations
+- Security checks (unauthorized caller rejection)
+- Fuzz tests for edge cases
+- ✅ All tests passing
+
+### Fork Tests (test/extensions/AcrossIntegrationFork.t.sol)
+- 13 tests for cross-chain integration
+- Contract configuration verification
+- Virtual balance storage and NAV impact
+- Cross-chain transfer flow simulation
+- Selector and interface matching
+- ✅ All tests passing
+
+## Documentation
+
+### Updated Guidelines
+- CLAUDE.md: Added testing requirements, custom errors, doc file management
+- AGENTS.md: Added testing checklist, custom errors, security updates
+
+### Across Integration Docs (/docs/across/)
+- IMPLEMENTATION_STATUS.md - Current status and completion checklist
+- README.md - Overview with transfer modes explained
+- KNOWN_ISSUES_AND_EDGE_CASES.md - Edge cases and limitations
+- Multiple implementation guides and summaries
+
+## Known Limitations
+
+### Token Recovery
+- Across V3 lacks direct recovery for unfilled deposits
+- speedUpV3Deposit is unsafe (can't verify if deposit was filled)
+- **Mitigation**: Use reasonable fillDeadline (5-30 minutes)
+- **Impact**: Rare with proper parameters (Across fills in seconds)
+
+### External Returns
+- If Across returns tokens externally, they're not NAV-excluded
+- Documented as known edge case
+
+### Chain Synchronization
+- Vaults deployed at different times have different initial NAVs
+- Sync mode records spread between chains
+- Required once per chain pair for rebalancing
+- Client should sync all chains when vault created on new chain
+
+## Breaking Changes
+
+None - This is a new feature addition.
+
+## Migration Guide
+
+No migration needed for existing pools. New functionality is opt-in via:
+1. Deploy EAcrossHandler per chain
+2. Deploy ExtensionsMap with handler selector
+3. Whitelist AIntents in Authority (governance vote)
+4. Upgrade pool implementation if needed (governance vote)
+
+## Dependencies
+
+- Across Protocol V3 SpokePool contracts (already deployed)
+- Existing Rigoblock infrastructure (Authority, Registry, Factory)
+- SafeTransferLib for token operations
+- StorageLib for pool storage access
+
+## Gas Optimizations
+
+- Immutable storage for chain-specific addresses
+- Transient storage for reentrancy guard
+- Minimal storage reads/writes
+- Batch token conversions to base token
+- Single approval pattern (approve/reset in same tx)
+
+## Future Improvements
+
+- Monitor Across for native recovery mechanisms
+- Consider implementing partial fills if supported
+- Multi-hop transfers if beneficial
+- Further gas optimizations based on usage patterns
+
+## Related Issues
+
+Closes #[issue-number] (if applicable)
+
+Co-authored-by: Gabriele Rigo <gab@rigoblock.com>
