@@ -357,12 +357,42 @@ See `src/deploy/` for deployment scripts (TypeScript + Hardhat).
 4. Whitelist adapters in Authority (governance vote)
 5. Upgrade pool implementation if needed (governance vote)
 
+## Documentation Guidelines
+
+### Where to Save Documentation Files
+
+**General Documentation** (`/docs/`):
+- Architecture overviews
+- Integration guides
+- Design decisions
+- Known issues/limitations
+
+**Protocol-Specific Documentation** (`/docs/<protocol>/`):
+- Create protocol folder for external integrations (e.g., `/docs/across/`, `/docs/uniswap/`)
+- Keep all files related to that integration in its folder
+- Examples: implementation summaries, deployment guides, test reports
+
+**Working Files**:
+- Update existing .md files rather than creating new ones
+- Consolidate related information into single files
+- Use clear, descriptive filenames
+
+### Documentation Update Pattern
+
+When working on a feature or integration:
+1. Create or update a single comprehensive document (e.g., `INTEGRATION_GUIDE.md`)
+2. Update as work progresses rather than creating multiple versions
+3. Move to appropriate `/docs/` subfolder when complete
+4. Clean up temporary/working documents
+
+**Avoid**: Creating many small .md files in root directory - consolidate instead.
+
 ## Resources
 
 - **Documentation**: https://docs.rigoblock.com
 - **Deployed Addresses**: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 - **GitHub**: https://github.com/RigoBlock/v3-contracts
-- **Across Docs**: docs/across/ (integration details)
+- **Across Integration**: docs/across/ (cross-chain bridge integration)
 
 ## AI Assistant Checklist
 
