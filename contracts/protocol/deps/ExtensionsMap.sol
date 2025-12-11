@@ -41,6 +41,9 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EORACLE_TWAP_SELECTOR = IEOracle.getTwap.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
+    
+    // EAcrossHandler selector - handleV3AcrossMessage(address,uint256,bytes)
+    bytes4 private constant _EACROSS_HANDLE_MESSAGE_SELECTOR = bytes4(keccak256("handleV3AcrossMessage(address,uint256,bytes)"));
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eApps;
@@ -53,6 +56,9 @@ contract ExtensionsMap is IExtensionsMap {
 
     /// @inheritdoc IExtensionsMap
     address public immutable override wrappedNative;
+    
+    /// @notice Across handler extension address
+    address public immutable eAcrossHandler;
 
     /// @notice Assumes extensions have been correctly initialized.
     /// @dev When adding a new app, modify apps type and assert correct params are passed to the constructor.
@@ -61,6 +67,7 @@ contract ExtensionsMap is IExtensionsMap {
         eApps = params.extensions.eApps;
         eOracle = params.extensions.eOracle;
         eUpgrade = params.extensions.eUpgrade;
+        eAcrossHandler = params.extensions.eAcrossHandler;
         wrappedNative = params.wrappedNative;
 
         // validate immutable constants. Assumes deps are correctly initialized
@@ -96,6 +103,10 @@ contract ExtensionsMap is IExtensionsMap {
             shouldDelegatecall = msg.sender == StorageLib.pool().owner;
         } else if (selector == _EUPGRADE_GET_BEACON_SELECTOR) {
             extension = eUpgrade;
+        } else if (selector == _EACROSS_HANDLE_MESSAGE_SELECTOR) {
+            // EAcrossHandler - called by Across SpokePool via delegatecall
+            extension = eAcrossHandler;
+            shouldDelegatecall = true;
         } else {
             return (address(0), false);
         }

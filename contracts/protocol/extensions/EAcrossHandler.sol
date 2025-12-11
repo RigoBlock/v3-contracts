@@ -19,44 +19,137 @@
 
 pragma solidity 0.8.28;
 
-import {IEAcrossHandler} from "../interfaces/IEAcrossHandler.sol";
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
+import {IERC20} from "../interfaces/IERC20.sol";
+import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol";
+import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
+import {IWETH9} from "../interfaces/IWETH9.sol";
+import {SlotDerivation} from "../libraries/SlotDerivation.sol";
+import {StorageLib} from "../libraries/StorageLib.sol";
+import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
+import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
 
+/// @title EAcrossHandler - Handles incoming cross-chain transfers via Across Protocol.
+/// @notice This extension manages NAV integrity when receiving cross-chain token transfers.
+/// @dev Called via delegatecall from pool when Across SpokePool fills deposits.
+/// @author Gabriele Rigo - <gab@rigoblock.com>
 contract EAcrossHandler is IEAcrossHandler {
     using SafeCast for uint256;
+    using SafeCast for int256;
+    using SlotDerivation for bytes32;
 
-    error Unauthorized();
-
-    address private constant _ZERO_ADDRESS = address(0);
-
-    SpokePoolInterface public immutable acrossSpokePool;
-
-    address private immutable _wrappedNative;
-
-    constructor(address acrossSpokePoolAddress) {
-        acrossSpokePool = SpokePoolInterface(acrossSpokePoolAddress);
-        _wrappedNative = acrossSpokePool.wrappedNativeToken();
-    }
-
-    enum MessageType {
-        Transfer; // nav is unchanged on both chains
-        Rebalance; // nav is affected on both chains
-    }
-
-    struct ActionsParams {
-        address user; // the smart pool
-        uint256 initialNav; // the nav on the source chain when first synced via a cross-chain intent
-        uint256 poolNav; // the latest nav on the source chain
-        MessageType messageType;
+    // Storage slot constants from MixinConstants
+    bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
+    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
+    
+    /// @notice Address of the Across SpokePool contract
+    /// @dev Immutable to save gas on verification
+    address public immutable acrossSpokePool;
+    
+    constructor(address _acrossSpokePool) {
+        require(_acrossSpokePool != address(0), "INVALID_SPOKE_POOL");
+        acrossSpokePool = _acrossSpokePool;
     }
 
     /// @inheritdoc IEAcrossHandler
     function handleV3AcrossMessage(
-        address tokenSent,
+        address tokenReceived,
         uint256 amount,
-        address relayer,
-        bytes memory message
+        bytes calldata message
     ) external {
-        require(msg.sender == acrossSpokePool, Unauthorized());
-        ActionsParams memory params = abi.decode(message, (ActionsParams));
+        // CRITICAL SECURITY CHECK: Verify caller is the Across SpokePool
+        // Since this is called via delegatecall, msg.sender is preserved from the original call
+        require(msg.sender == acrossSpokePool, UnauthorizedCaller());
+        
+        // Decode the message
+        CrossChainMessage memory params = abi.decode(message, (CrossChainMessage));
+        
+        // Verify output token has a price feed (requirement #3)
+        require(IEOracle(address(this)).hasPriceFeed(tokenReceived), TokenWithoutPriceFeed());
+        
+        // Unwrap native if requested
+        address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
+        if (params.unwrapNative && tokenReceived == wrappedNative) {
+            IWETH9(wrappedNative).withdraw(amount);
+        }
+        
+        if (params.messageType == MessageType.Transfer) {
+            _handleTransferMode(tokenReceived, amount);
+        } else if (params.messageType == MessageType.Rebalance) {
+            _handleRebalanceMode(amount, params);
+        } else {
+            revert InvalidMessageType();
+        }
+    }
+
+    /// @dev Handles Transfer mode: creates negative virtual balance to offset NAV increase.
+    function _handleTransferMode(address tokenReceived, uint256 amount) private {
+        // Get base token for this pool
+        address baseToken = StorageLib.pool().baseToken;
+        
+        // Convert received amount to base token equivalent
+        int256 baseTokenAmount = IEOracle(address(this)).convertTokenAmount(
+            tokenReceived,
+            amount.toInt256(),
+            baseToken
+        );
+        
+        // Create negative virtual balance to offset the NAV increase from receiving tokens
+        // Tokens are already in the pool (transferred by Across before calling this)
+        int256 currentBalance = _getVirtualBalance(baseToken);
+        _setVirtualBalance(baseToken, currentBalance - baseTokenAmount);
+    }
+
+    /// @dev Handles Rebalance mode: verifies NAV is within tolerance of source chain NAV.
+    function _handleRebalanceMode(uint256 amount, CrossChainMessage memory params) private {
+        // Tokens are already transferred by Across
+        // Get current NAV on destination chain (includes received tokens)
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        uint256 destNav = poolTokens.unitaryValue;
+        
+        // Get decimals from the pool
+        uint8 destDecimals = StorageLib.pool().decimals;
+        
+        // Normalize NAVs to same decimal scale for comparison
+        uint256 normalizedSourceNav = _normalizeNav(params.sourceNav, params.sourceDecimals, destDecimals);
+        
+        // Calculate acceptable range
+        uint256 tolerance = (normalizedSourceNav * params.navTolerance) / 10000;
+        uint256 minNav = normalizedSourceNav > tolerance ? normalizedSourceNav - tolerance : 0;
+        uint256 maxNav = normalizedSourceNav + tolerance;
+        
+        // Verify destination NAV is within acceptable range (requirement 2c)
+        require(destNav >= minNav && destNav <= maxNav, NavDeviationTooHigh());
+    }
+
+    /// @dev Normalizes NAV from source decimals to destination decimals.
+    function _normalizeNav(
+        uint256 nav,
+        uint8 sourceDecimals,
+        uint8 destDecimals
+    ) private pure returns (uint256) {
+        if (sourceDecimals == destDecimals) {
+            return nav;
+        } else if (sourceDecimals > destDecimals) {
+            return nav / (10 ** (sourceDecimals - destDecimals));
+        } else {
+            return nav * (10 ** (destDecimals - sourceDecimals));
+        }
+    }
+
+    /// @dev Gets the virtual balance for a token from pool storage.
+    function _getVirtualBalance(address token) private view returns (int256 value) {
+        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+        assembly {
+            value := sload(slot)
+        }
+    }
+
+    /// @dev Sets the virtual balance for a token in pool storage.
+    function _setVirtualBalance(address token, int256 value) private {
+        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+        assembly {
+            sstore(slot, value)
+        }
     }
 }

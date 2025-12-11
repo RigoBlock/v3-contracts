@@ -4,8 +4,11 @@ pragma solidity >=0.8.0 <0.9.0;
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
+import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
+    error PoolNavNotInRange();
+    
     /*
      * EXTERNAL VIEW METHODS
      */
@@ -125,15 +128,16 @@ abstract contract MixinPoolState is MixinPoolValue {
         return operators().isApproved[holder][operator];
     }
 
-    /// @inheritdoc ISmartPoolState
-    function assertCrosschainNavInRange(uint256 sourceNav, uint256 tolerance) {
+    /// @notice Asserts that cross-chain NAV is within acceptable range.
+    /// @param sourceNav The NAV from the source chain.
+    /// @param tolerance The acceptable tolerance in absolute terms.
+    function assertCrosschainNavInRange(uint256 sourceNav, uint256 tolerance) external {
         // TODO: we must take into account initial nav deltas
-        updateUnitaryValue();
-        PoolTokens memory poolTokens = getPoolTokens();
+        NavComponents memory components = _updateNav();
         require(
-            poolTokens.unitaryValue >= sourceNav - tolerance ||
-            poolTokens.unitaryValue <= sourceNav + tolerange,
-            PoolNavNotInRange();
+            components.unitaryValue >= sourceNav - tolerance &&
+            components.unitaryValue <= sourceNav + tolerance,
+            PoolNavNotInRange()
         );
     }
 

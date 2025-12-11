@@ -20,241 +20,267 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
-import {WETH9Interface} from "@across/contracts/external/interfaces/WETH9Interface.sol";
-import {SpokePoolInterface} from "@across/contracts/interfaces/SpokePoolInterface.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
+import {IAcrossSpokePool} from "../../interfaces/IAcrossSpokePool.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {IWETH9} from "../../interfaces/IWETH9.sol";
+import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
+import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
+import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
+import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
+import {StorageLib} from "../../libraries/StorageLib.sol";
+import {IEOracle} from "./interfaces/IEOracle.sol";
+import {IAIntents} from "./interfaces/IAIntents.sol";
+import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 
-/// @title AUniswapRouter - Allows interactions with the Uniswap universal router contracts.
-/// @notice This contract is used as a bridge between a Rigoblock smart pool contract and the Uniswap universal router.
-/// @dev This contract ensures that tokens approvals are set and removed correctly, and that recipient and tokens are validated.
+/// @title AIntents - Allows cross-chain token transfers via Across Protocol.
+/// @notice This adapter enables Rigoblock smart pools to bridge tokens across chains while maintaining NAV integrity.
+/// @dev This contract ensures virtual balances are managed to offset NAV changes from cross-chain transfers.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract AIntents {
-    using SafeERC20 for IERC20;
+contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
+    using SafeCast for uint256;
+    using SafeCast for int256;
+    using EnumerableSet for AddressSet;
+    using SlotDerivation for bytes32;
 
-    SpokePoolInterface public immutable acrossSpokePool;
+    IAcrossSpokePool public immutable override acrossSpokePool;
+    
+    // Re-export types from interface for external use
+    enum MessageType {
+        Transfer,
+        Rebalance
+    }
+    
+    struct CrossChainMessage {
+        MessageType messageType;
+        uint256 sourceNav;
+        uint8 sourceDecimals;
+        uint256 navTolerance;
+        bool unwrapNative;
+    }
 
-    /// @notice Cross-chain actions require new feat version 
-    string private constant _REQUIRED_VERSION = "4.1.0";
+    // Storage slot constants from MixinConstants
+    bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
+    bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
+    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
+    address private constant _ZERO_ADDRESS = address(0);
 
     address private immutable _wrappedNative;
+    address private immutable _IMPLEMENTATION;
 
-    constructor(
-        address acrossSpokePoolAddress
-    ) {
-        acrossSpokePool = SpokePoolInterface(acrossSpokePoolAddress);
+    modifier onlyDelegateCall() {
+        require(address(this) != _IMPLEMENTATION, DirectCallNotAllowed());
+        _;
+    }
+
+    /// @inheritdoc IMinimumVersion
+    function requiredVersion() external pure override returns (string memory) {
+        return "HF_4.1.0";
+    }
+
+    constructor(address acrossSpokePoolAddress) {
+        acrossSpokePool = IAcrossSpokePool(acrossSpokePoolAddress);
         _wrappedNative = acrossSpokePool.wrappedNativeToken();
+        _IMPLEMENTATION = address(this);
     }
 
-    struct Call {
-        address target;
-        bytes callData;
-        uint256 value;
-    }
-
-    struct Instructions {
-        //  Calls that will be attempted.
-        Call[] calls;
-        // Where the tokens go if any part of the call fails.
-        // Leftover tokens are sent here as well if the action succeeds.
-        address fallbackRecipient;
-    }
-
-    /// @inheritdoc ISmartPoolOwnerActions
-    function initiateCrossChainTransfer(
+    /// @inheritdoc IAIntents
+    function depositV3(
+        address depositor,
+        address recipient,
         address inputToken,
         address outputToken,
         uint256 inputAmount,
         uint256 outputAmount,
         uint256 destinationChainId,
-        bool isSendNative,
-        bool isReceiveNative
-    ) external override nonReentrant onlyDelegateCall {
-        require(isOwnedToken(inputToken), TokenIsNotOwned());
-
-        Call[] memory calls = new Call[](4);
-
-        // encode destination chain handler actions
-        bytes memory poolApproveCalldata = abi.encodeWithSelector(
-            IERC20.approve.selector,
+        address exclusiveRelayer,
+        uint32 quoteTimestamp,
+        uint32 fillDeadline,
+        uint32 exclusivityDeadline,
+        bytes memory message
+    ) external payable nonReentrant onlyDelegateCall {
+        // Ignore some parameters as we enforce our own values for security
+        depositor; recipient; exclusiveRelayer; quoteTimestamp; exclusivityDeadline;
+        
+        require(_isOwnedToken(inputToken), TokenIsNotOwned());
+        
+        // Calculate fillDeadlineBuffer from fillDeadline
+        uint32 fillDeadlineBuffer = fillDeadline > uint32(block.timestamp) 
+            ? fillDeadline - uint32(block.timestamp) 
+            : 300; // Default 5 minutes
+        
+        // Prepare input token and handle wrapping
+        (address token, uint256 msgValue) = _prepareInputToken(inputToken, inputAmount);
+        
+        // Process message and virtual balances
+        message = _processMessage(message, token, inputAmount);
+        
+        // Execute deposit
+        _executeDeposit(token, outputToken, inputAmount, outputAmount, destinationChainId, fillDeadlineBuffer, message, msgValue);
+    }
+    
+    /// @dev Prepares input token (handles wrapping) and returns token address and msg.value.
+    function _prepareInputToken(address inputToken, uint256 amount) private returns (address, uint256) {
+        bool isSendNative = inputToken == _ZERO_ADDRESS;
+        if (isSendNative) {
+            _wrapNativeIfNeeded(amount);
+            return (_wrappedNative, amount);
+        }
+        return (inputToken, 0);
+    }
+    
+    /// @dev Executes the actual Across deposit.
+    function _executeDeposit(
+        address inputToken,
+        address outputToken,
+        uint256 inputAmount,
+        uint256 outputAmount,
+        uint256 destinationChainId,
+        uint32 fillDeadlineBuffer,
+        bytes memory messageData,
+        uint256 msgValue
+    ) private {
+        _safeApproveToken(inputToken, address(acrossSpokePool));
+        
+        acrossSpokePool.depositV3{value: msgValue}(
             address(this),
-            type(uint256).max
-        );
-        calls[0] = Call({ target: outputToken, callData: poolApproveCalldata, value: 0 });
-
-        // TODO: the amount could be higher? i.e. we should get the correct amount in a custom handler?
-        bytes memory poolDonateCalldata = abi.encodeWithSelector(
-            ISmartPool.donate.selector,
+            address(this),
+            inputToken,
             outputToken,
-            1 // flag for caller balance
-        );
-        calls[1] = Call({ target: address(this), callData: poolDonateCalldata, value: 0 });
-
-        poolApproveCalldata = abi.encodeWithSelector(
-            IERC20.approve.selector,
-            address(this),
-            0
-        );
-        calls[2] = Call({ target: outputToken, callData: poolApproveCalldata, value: 0 });
-
-        if (isReceiveNative) {
-            // TODO: the amount could be slightly higher, we we'd have wrapped native left
-            wrappedWithdrawCalldata = abi.encodeWithSelector(
-                IERC20.withdraw.selector,
-                outputAmount; // the actual amount could be higher, a custom handler would be required
-            );
-            calls[3] = Call({ target: _wrappedNative, callData: wrappedWithdrawCalldata, value: 0 });
-        }
-
-        Instructions memory instructions = Instructions({
-            calls: isReceiveNative ? calls : calls.pop(),
-            fallbackRecipient: address(this);
-        });
-
-        if (!isSendNative && inputToken != address(0)) {
-            _safeApproveToken(inputToken, address(acrossSpokePool));
-        } else {
-            inputToken = _wrappedNative;
-        }
-
-        // across will expect wrapped native address and msg.value > 0 when bridging native currency
-        acrossSpokePool.deposit{value: isSendNative ? inputAmount : 0}(
-            address(this).toBytes32(), // depositor
-            address(acrossSpokePool).toBytes32(), // will use the default handler and execute passed calls
-            inputToken.toBytes32(), // inputToken
-            outputToken.toBytes32(), //outputToken
             inputAmount,
             outputAmount,
             destinationChainId,
-            address(0).toBytes32(), // exclusiveRelayer, anyone can fill as they see it
-            block.timestamp, // quoteTimestamp
-            block.timestamp + 5 minutes, // fillDeadline // TODO: add fillDeadlineBuffer
-            0, // exclusivityParameter
-            abi.encode(instructions);// message
+            _ZERO_ADDRESS,
+            uint32(block.timestamp),
+            uint32(block.timestamp + fillDeadlineBuffer),
+            0,
+            messageData
         );
-
-        // we write a virtual balance for the token, which neutralizes the impact on the pool nav
-        // NOTICE: the performance of the asset stays in the source pool, which is ok if we implement the cross-nav as well
-        // the impact is that a big pool transferring to a small pool will result in potentially a big performance on the small
-        // pool if the balance is converted, but it would be the same if we crease a base token virtual balance, because it
-        // would be generating a big performance on the destination chain, so we should choose the simples model.
-        address baseToken = pool().baseToken;
-        int256 convertedAmount = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
-        virtualBalances[inputToken] += baseCurrencyAmount.toInt256();
+        
+        _safeApproveToken(inputToken, address(acrossSpokePool));
     }
-
-    // TODO: verify if we should implement with pool as custom handler, as encoding the calls is prob worse
-    // than implementing as a extension (where the across spoke will be allowed to call). Also because that is
-    // a callback, if say there is a buf in the code, we can deactivate this adapter, and the callback would
-    // not be usable (but we must make sure tokens are not moved regardless, because a rogue solver could spoof a call).
-    // Also we are forced to make write calls and revert using the multicall handler, while we could simply make assertions.
-    // TODO: verify if this call could safely be opened to anyone
-    /// @inheritdoc ISmartPoolOwnerActions
-    function rebalance(
+    
+    /// @dev Processes message and adjusts virtual balances if needed.
+    function _processMessage(
+        bytes memory messageData,
         address inputToken,
-        address outputToken,
-        uint256 inputAmount,
-        uint256 outputAmount,
-        uint256 destinationChainId,
-        bool isSendNative,
-        bool isReceiveNative
-    ) external override nonReentrant onlyDelegateCall {
-        // TODO: if we receive wrapped native address from the api, this might revert (when pool does not own it)
-        // TODO: _wrappedNative is also accepted, but it should be stored as an active token
-        require(isOwnedToken(sourceToken), TokenIsNotOwned());
-
-        if (!isSendNative && inputToken != address(0)) {
-            _safeApproveToken(inputToken, address(acrossSpokePool));
-        } else {
-            inputToken = _wrappedNative;
+        uint256 inputAmount
+    ) private returns (bytes memory) {
+        CrossChainMessage memory params = abi.decode(messageData, (CrossChainMessage));
+        
+        if (params.messageType == MessageType.Transfer) {
+            _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
+            return messageData;
         }
-
-        Call[] memory calls;
-
-        if (isReceiveNative) {
-            // TODO: if we want to withdraw balance amount, we should implement a withdraw method with flag amount (not ideal)
-            withdrawCalldata = abi.encodeWithSelector(
-                WETHInterface.withdraw.selector,
-                outputAmount; // the actual amount might be higher, a custom handler would be required
-            );
-
-            calls = new Call[](2);
-            calls[0] = Call({ target: _wrappedNative, callData: withdrawCalldata, value: 0 });
-            calls[1] = Call({ target: address(this), callData: "", value: outputAmount });
-        } else {
-            bytes memory transferCalldata = abi.encodeWithSelector(
-                IERC20.transfer.selector, // Changed from safeTransfer to match IERC20
-                address(this),
-                outputAmount // the actual amount might be higher, a custom handler would be required
-            );
-        }
-
-        // assertCrosschainNavInRange
-        // we will use type(int256).max as flag for a pool initialized on both chains but with same nav (i.e. at deploy)
-        uint256 initialNav = _initialNav[destinationChainId] != 0;
-
-        // simulate token exit
-        virtualBalances[inputToken == _wrappedNative ? address(0) : inputToken] -= inputAmount;
-
-        // update nav in storage for later retrieval
-        ISmartPoolActions.updateUnitaryValue();
-
-        // TODO: technically, we could require the initialization to be executed by the operator before, so we know we send
-        // less calls to the destination chain handler (but we would still need to read the delta here)
-        // TODO: it could be mapped on the destination chain, but we cannot know in advance
-        // at initialization we only want to store the initial nav and navDelta on both chains
-        if (!isPoolMapped) {
-            // TODO: the inputAmount is the reward for initializing the delta, paid to the solver
-            // WARNING: the outputAmount could be non-null, and tokens would be sent to the pool, affecting nav
-            outputAmount = 0;
-
-            // TODO: verify method permission, as this modifies storage (only the first time)
-            storeNavDeltaCalldata = abi.encodeWithSelector(
-                ISmartPool.syncInitialNav.selector,
-                _getNav(),
-                // TODO: we could pass the delta if exists, with amount flags for pool having same price
-                // or we could store initial nav on distination chain (so we don't have to worry about inverting sign
-                // when going from chain A to B, or from B to A)
-                this.chainId
-            );
-
-            calls = new Call[](1);
-            calls[0] = Call({ target: address(this), callData: storeNavDeltaCalldata, value: 0 });
-        } else {
-            // TODO: we could still store nav delta, but this will return if already stored on the dest chain
-        }
-
-        // TODO: we need to calc nav delta, i.e. we need to calc total assets, sub inputAmount in base token, divide by total supply
-        // or we can create a virtual balance here, so the value will only change on the destination chain, and must be equal to
-        // nav after transfer +- slippage tolerance (plus initial nav delta) -> meaning we calc nav only on one chain
-
-        // across will expect wrapped native address and msg.value > 0 when bridging native currency
-        acrossSpokePool.deposit{value: isSendNative ? inputAmount : 0}(
-            address(this).toBytes32(), // depositor
-            address(acrossSpokePool).toBytes32(), // will use the default handler and execute passed calls
-            inputToken.toBytes32(), // inputToken
-            outputToken.toBytes32(), //outputToken
-            inputAmount,
-            outputAmount,
-            destinationChainId,
-            address(0).toBytes32(), // exclusiveRelayer, anyone can fill as they see it
-            block.timestamp, // quoteTimestamp
-            block.timestamp + 5 minutes, // fillDeadline // TODO: add fillDeadlineBuffer
-            0, // exclusivityParameter
-            abi.encode(instructions);// message
+        
+        return _updateMessageForRebalance(params);
+    }
+    
+    /// @dev Adjusts virtual balance for Transfer mode.
+    function _adjustVirtualBalanceForTransfer(address inputToken, uint256 inputAmount) private {
+        address baseToken = StorageLib.pool().baseToken;
+        int256 baseTokenAmount = IEOracle(address(this)).convertTokenAmount(
+            inputToken,
+            inputAmount.toInt256(),
+            baseToken
         );
+        _setVirtualBalance(baseToken, _getVirtualBalance(baseToken) + baseTokenAmount);
+    }
+    
+    /// @dev Updates message with NAV for Rebalance mode.
+    function _updateMessageForRebalance(CrossChainMessage memory params) private returns (bytes memory) {
+        // Update NAV first to get current value (not stale storage value)
+        ISmartPoolActions(address(this)).updateUnitaryValue();
+        
+        // Now read the updated NAV from storage
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        params.sourceNav = poolTokens.unitaryValue;
+        params.sourceDecimals = StorageLib.pool().decimals;
+        return abi.encode(params);
+    }
+    
+    /*
+     * KNOWN LIMITATION: Token Recovery
+     * 
+     * Across Protocol V3 does not provide a direct method to reclaim tokens from unfilled deposits.
+     * The speedUpV3Deposit method can update parameters but has a critical limitation:
+     * "If a deposit has been completed already, this function will not revert but it won't be able 
+     * to be filled anymore with the updated params."
+     * 
+     * This creates a NAV inflation risk:
+     * 1. Pool owner creates deposit with very short deadline (e.g., 1 second)
+     * 2. Deposit likely remains unfilled
+     * 3. Owner calls speedUpV3Deposit, modifying virtual balances
+     * 4. If deposit was already filled, tokens don't return but virtual balances are adjusted
+     * 5. Result: NAV is artificially inflated
+     * 
+     * MITIGATION:
+     * - We intentionally DO NOT implement token recovery via speedUpV3Deposit
+     * - Pool operators should set reasonable fillDeadline values (recommended: 5-30 minutes)
+     * - With proper parameters, Across fills deposits within seconds to minutes
+     * - If a deposit fails, the locked tokens are effectively lost (extremely rare with correct setup)
+     * 
+     * FUTURE IMPROVEMENT:
+     * - Monitor Across Protocol for native recovery mechanisms
+     * - Consider implementing recovery if Across adds safe claim-back functionality
+     * - Could implement recovery with additional safeguards (e.g., require proof deposit wasn't filled)
+     */
+
+    /*
+     * INTERNAL METHODS
+     */
+
+    /// @dev Wraps native currency into wrapped native if pool doesn't have enough balance.
+    function _wrapNativeIfNeeded(uint256 amount) private {
+        uint256 balance = IERC20(_wrappedNative).balanceOf(address(this));
+        if (balance < amount) {
+            uint256 toWrap = amount - balance;
+            require(address(this).balance >= toWrap, InsufficientWrappedNativeBalance());
+            IWETH9(_wrappedNative).deposit{value: toWrap}();
+        }
     }
 
-    /// @dev Some tokens only approve up to type(uint96).max, so we check if approval is less than that amount and approve max uint256 otherwise.
-    function _safeApproveToken(address inputToken, address target) private {
-        // only approve once, permit2 will handle transaction block approval
-        if (IERC20(originToken).allowance(address(this), address(permit2)) < type(uint96).max) {
-            originToken.safeApprove(address(permit2), type(uint256).max);
+    /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.
+    function _safeApproveToken(address token, address spender) private {
+        uint256 currentAllowance = IERC20(token).allowance(address(this), spender);
+        if (currentAllowance > 0) {
+            // Reset to 0 first for tokens that require it
+            token.safeApprove(spender, 0);
+        } else {
+            // Approve max amount
+            token.safeApprove(spender, type(uint256).max);
         }
+    }
 
-        // expiration is set to 0 so that every transaction has an approval valid only for the transaction block
-        permit2.approve(tokensIn[i], target, type(uint160).max, 0);
+    /// @dev Gets the virtual balance for a token from storage.
+    function _getVirtualBalance(address token) private view returns (int256 value) {
+        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+        assembly {
+            value := sload(slot)
+        }
+    }
+
+    /// @dev Sets the virtual balance for a token.
+    function _setVirtualBalance(address token, int256 value) private {
+        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+        assembly {
+            sstore(slot, value)
+        }
+    }
+
+    /// @dev Checks if a token is owned by the pool.
+    function _isOwnedToken(address token) private view returns (bool) {
+        AddressSet storage activeTokens = StorageLib.activeTokensSet();
+        address baseToken = StorageLib.pool().baseToken;
+        
+        // Base token and native currency are always owned
+        if (token == baseToken || token == _ZERO_ADDRESS || token == _wrappedNative) {
+            return true;
+        }
+        
+        return activeTokens.isActive(token);
     }
 }

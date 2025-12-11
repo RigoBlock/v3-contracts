@@ -8,6 +8,7 @@ import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
+import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
@@ -17,6 +18,7 @@ import {NavComponents} from "../../types/NavComponents.sol";
 abstract contract MixinPoolValue is MixinOwnerActions {
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
+    using SlotDerivation for bytes32;
     using TransientStorage for address;
     using SafeCast for uint256;
 
@@ -111,7 +113,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // initialize pool value as base token balances (wallet balance plus apps balances)
         int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
-        poolValueInBaseToken += virtualBalances[baseToken];
+        
+        // Add virtual balances for cross-chain transfers (requirement 1 & 4)
+        poolValueInBaseToken += _getVirtualBalance(baseToken);
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
@@ -138,20 +142,20 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     }
 
     /// @dev Returns 0 balance if ERC20 call fails.
-    function _getAndClearBalance(address token) private returns (int256 balance) {
-        balance = token.getBalance();
+    function _getAndClearBalance(address token) private returns (int256 value) {
+        value = token.getBalance();
 
         // clear temporary storage if used
-        if (balance != 0) {
+        if (value != 0) {
             token.storeBalance(0);
         }
 
         // the active tokens list contains unique addresses
         if (token == _ZERO_ADDRESS) {
-            balance += (address(this).balance - msg.value).toInt256();
+            value += (address(this).balance - msg.value).toInt256();
         } else {
             try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
-                balance += _balance.toInt256();
+                value += _balance.toInt256();
             } catch {
                 // returns 0 balance if the ERC20 balance cannot be found
                 return 0;

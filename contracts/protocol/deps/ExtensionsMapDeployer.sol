@@ -9,6 +9,7 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     address private transient _eApps;
     address private transient _eOracle;
     address private transient _eUpgrade;
+    address private transient _eAcrossHandler;
     address private transient _wrappedNative;
 
     /// @inheritdoc IExtensionsMapDeployer
@@ -19,6 +20,7 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
         _eApps = params.extensions.eApps;
         _eOracle = params.extensions.eOracle;
         _eUpgrade = params.extensions.eUpgrade;
+        _eAcrossHandler = params.extensions.eAcrossHandler;
         _wrappedNative = params.wrappedNative;
 
         // Pre-compute the CREATE2 address
@@ -47,7 +49,12 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     function parameters() external view override returns (DeploymentParams memory) {
         return
             DeploymentParams({
-                extensions: Extensions({eApps: _eApps, eOracle: _eOracle, eUpgrade: _eUpgrade}),
+                extensions: Extensions({
+                    eApps: _eApps, 
+                    eOracle: _eOracle, 
+                    eUpgrade: _eUpgrade,
+                    eAcrossHandler: _eAcrossHandler
+                }),
                 wrappedNative: _wrappedNative
             });
     }

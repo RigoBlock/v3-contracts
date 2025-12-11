@@ -10,12 +10,14 @@ import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol"
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using EnumerableSet for AddressSet;
     using SafeCast for uint256;
+    using SlotDerivation for bytes32;
 
     error BaseTokenBalance();
     error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
@@ -91,12 +93,13 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     error DonateTransferFromFailer();
+    error TokenIsNotOwned();
 
     // TODO: by integrating it as EIntents, we could remove the transferFrom on donate, or the donate entirely?
-    /// @inheritdoc ISmartPoolActions
-    function donate(address token, uint256 amount) external payable override {
+    /// @notice Allows donations to the pool without affecting NAV.
+    function donate(address token, uint256 amount) external payable {
         // as the method is not restricted, we prevent nav inflation via a rogue token.
-        require(isOwnedToken(token), TokenIsNotOwned());
+        require(_isOwnedToken(token), TokenIsNotOwned());
     
         if (amount == 0) {
             return; // null amount is flag for rebalance check
@@ -106,14 +109,11 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         }
 
         // TODO: what if donation is made in nativeCurrency?
-        try IERC20(token).transferFrom(msg.sender, amount) {
-            address baseToken = pool().baseToken;
-            int256 convertedAmount = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
-            // TODO: simply define baseTokenVirtualBalance int256 in a library
-            virtualBalances[baseToken] -= IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
-        } catch {
-            revert DonateTransferFromFailer();
-        }
+        IERC20(token).transferFrom(msg.sender, address(this), amount);
+        address baseToken = pool().baseToken;
+        int256 convertedAmount = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
+        // Reduce virtual balance to offset the donation (so NAV is unaffected)
+        _setVirtualBalance(baseToken, _getVirtualBalance(baseToken) - convertedAmount);
     }
 
     /*
@@ -304,5 +304,34 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             amount >= 10 ** decimals() / _MINIMUM_ORDER_DIVISOR,
             PoolAmountSmallerThanMinimum(_MINIMUM_ORDER_DIVISOR)
         );
+    }
+
+    /// @dev Gets the virtual balance for a token from storage.
+    function _getVirtualBalance(address token) internal view returns (int256 value) {
+        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+        assembly {
+            value := sload(slot)
+        }
+    }
+
+    /// @dev Sets the virtual balance for a token.
+    function _setVirtualBalance(address token, int256 value) internal {
+        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+        assembly {
+            sstore(slot, value)
+        }
+    }
+
+    /// @dev Checks if a token is owned by the pool.
+    function _isOwnedToken(address token) private view returns (bool) {
+        AddressSet storage activeTokens = activeTokensSet();
+        address baseToken = pool().baseToken;
+        
+        // Base token and native currency are always owned
+        if (token == baseToken || token == _ZERO_ADDRESS) {
+            return true;
+        }
+        
+        return activeTokens.isActive(token);
     }
 }
