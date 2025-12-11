@@ -1111,10 +1111,10 @@
     "@types/node" "*"
     form-data "^3.0.0"
 
-"@types/node@*", "@types/node@^24.0.1":
-  version "24.10.1"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.10.1.tgz#91e92182c93db8bd6224fca031e2370cef9a8f01"
-  integrity sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==
+"@types/node@*", "@types/node@^25.0.0":
+  version "25.0.0"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-25.0.0.tgz#c0e0022c3c7b41635c49322e6b3a0279fffa7d62"
+  integrity sha512-rl78HwuZlaDIUSeUKkmogkhebA+8K1Hy7tddZuJ3D0xV8pZSfsYGTsliGUol1JPzu9EKnTxPC4L1fiWouStRew==
   dependencies:
     undici-types "~7.16.0"
 
@@ -5617,9 +5617,9 @@ hardhat-deploy@1.0.4:
     zksync-ethers "^5.0.0"
 
 hardhat@^2.13.1:
-  version "2.27.1"
-  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-2.27.1.tgz#69bc5c0261ac3882080f4d364fbcacc81d33f072"
-  integrity sha512-0+AWlXgXd0fbPUsAJwp9x6kgYwNxFdZtHVE40bVqPO1WIpCZeWldvubxZl2yOGSzbufa6d9s0n+gNj7JSlTYCQ==
+  version "2.27.2"
+  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-2.27.2.tgz#a7d1c4b96d668962abe8155a8cb9149220b9803a"
+  integrity sha512-2N51AWD3Hg9T+4+A1zmJ70RkJgHzK+JYASrRtSmD3nVsoceYrFxwIJHUucw5fuy7Z9x9JTSMGO5dgCYe7MX8FQ==
   dependencies:
     "@ethereumjs/util" "^9.1.0"
     "@ethersproject/abi" "^5.1.2"
@@ -9403,10 +9403,10 @@ solc@0.8.26:
     semver "^5.5.0"
     tmp "0.0.33"
 
-solc@0.8.30:
-  version "0.8.30"
-  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.30.tgz#7a24abacb8fae6c346b67263ffca911922268c47"
-  integrity sha512-9Srk/gndtBmoUbg4CE6ypAzPQlElv8ntbnl6SigUBAzgXKn35v87sj04uZeoZWjtDkdzT0qKFcIo/wl63UMxdw==
+solc@0.8.31:
+  version "0.8.31"
+  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.31.tgz#4b3e6e2ef790758f34e952442c746e3828fbee44"
+  integrity sha512-wpccgDgu/aE/rRcF2F/LeN+4knK0734XTcjppyaQOticjYd/Giq1AJE3XPQZKEViAsY3sNaFKl7QpMRYrK35vg==
   dependencies:
     command-exists "^1.2.8"
     commander "^8.1.0"
