@@ -55,6 +55,7 @@ contract EAcrossHandler is IEAcrossHandler {
     address public immutable acrossSpokePool;
     
     constructor(address _acrossSpokePool) {
+        // TODO: use custom errors!
         require(_acrossSpokePool != address(0), "INVALID_SPOKE_POOL");
         acrossSpokePool = _acrossSpokePool;
     }

@@ -57,20 +57,12 @@ contract OffchainNav {
         uint256 timestamp;     // Block timestamp when calculated
     }
 
-    error BaseTokenPriceFeedError();
-
     /// @notice Returns all token balances including virtual balances and application positions
     /// @param pool Address of the Rigoblock pool
     /// @return balances Array of TokenBalance structs
     /// @dev This is not a view function because getAppTokenBalances uses transient storage.
     ///      Can still be called off-chain via eth_call for read-only queries.
     function getTokensAndBalances(address pool) public returns (TokenBalance[] memory balances) {
-        // Get base token
-        address baseToken = StorageLib.pool().baseToken;
-        
-        // Verify base token has price feed
-        require(IEOracle(pool).hasPriceFeed(baseToken), BaseTokenPriceFeedError());
-        
         // Get active tokens
         AddressSet storage activeTokensSet = StorageLib.activeTokensSet();
         address[] memory activeTokens = activeTokensSet.addresses;
@@ -115,6 +107,7 @@ contract OffchainNav {
         }
         
         // Add base token balance
+        address baseToken = StorageLib.pool().baseToken;
         {
             int256 baseBalance = int256(pool.balance) + _getVirtualBalance(baseToken);
             bool found = false;

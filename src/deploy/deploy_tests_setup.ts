@@ -226,7 +226,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // implementation address is different on each chain as extensionsMap is different, but proxies will have the same address
+  // TODO: make sure the token jar is deployed at same address across all chains. Otherwise, we must store its address
+  // Notice: when updating extensions, make sure the ExtensionsMap setup is correct, when updating storage slot definitions, make sure they are correct.
+  // implementation will have same address on all chains as long as args are the same
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
     args: [authority.address, extensionsMapAddress, mockTokenJar.address],
