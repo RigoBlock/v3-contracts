@@ -5,9 +5,11 @@ pragma solidity 0.8.28;
 /// @notice Provides minimal implementation for testing Across integration
 contract MockSpokePool {
     address public immutable wrappedNativeToken;
+    uint32 public immutable fillDeadlineBuffer;
     
     constructor(address _wrappedNativeToken) {
         wrappedNativeToken = _wrappedNativeToken;
+        fillDeadlineBuffer = 21600;
     }
     
     /// @notice Mock function to simulate filling a deposit and calling handler

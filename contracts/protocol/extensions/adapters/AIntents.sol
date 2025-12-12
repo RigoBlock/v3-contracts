@@ -73,7 +73,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc IAIntents
-    function depositV3(AcrossParams calldata params) external payable override nonReentrant onlyDelegateCall {
+    function depositV3(AcrossParams calldata params) external override nonReentrant onlyDelegateCall {
         // sanity checks
         // TODO: check if we can safely skip this check. Also maybe use unified error + condition
         require(!params.inputToken.isAddressZero(), NullAddress());

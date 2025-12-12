@@ -44,7 +44,7 @@ interface IAIntents {
     }
 
     // TODO: add natspec docs and lint
-    function depositV3(AcrossParams memory params) external payable;
+    function depositV3(AcrossParams memory params) external;
 
     /// @notice Returns the Across SpokePool address for this chain
     /// @return Address of the Across SpokePool contract

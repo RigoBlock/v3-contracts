@@ -30,9 +30,9 @@ import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {ExternalApp} from "../types/ExternalApp.sol";
 
-/// @title OffchainNav - Offchain NAV calculation for Rigoblock smart pools
-/// @notice Provides view methods to retrieve token balances and NAV without transient storage
-/// @dev Designed for off-chain queries like DeFiLlama, subgraphs, or ZK proof generation
+/// @title OffchainNav - Offchain NAV calculation for Rigoblock smart pools.
+/// @notice Provides view methods to retrieve token balances and NAV without transient storage.
+/// @dev Designed for off-chain queries like DeFiLlama, subgraphs, or ZK proof generation.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract OffchainNav {
     using ApplicationsLib for ApplicationsSlot;
@@ -40,6 +40,7 @@ contract OffchainNav {
     using SlotDerivation for bytes32;
     using SafeCast for uint256;
 
+    // TODO: import these storage slots from other contracts
     bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
@@ -62,21 +63,20 @@ contract OffchainNav {
     /// @return balances Array of TokenBalance structs
     /// @dev This is not a view function because getAppTokenBalances uses transient storage.
     ///      Can still be called off-chain via eth_call for read-only queries.
-    function getTokensAndBalances(address pool) public returns (TokenBalance[] memory balances) {
-        // Get active tokens
-        AddressSet storage activeTokensSet = StorageLib.activeTokensSet();
-        address[] memory activeTokens = activeTokensSet.addresses;
+    // TODO: we cannot declare as `view` because it calls IEApps(pool).getAppTokenBalances(packedApps)
+    function getTokensAndBalances(address pool) public /*view*/ returns (TokenBalance[] memory balances) {
+        // Get active tokens and active applications
+        ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(pool).getActiveTokens();
+        uint256 packedApps = ISmartPoolState(pool).getActiveApplications();
         
-        // Get active applications
-        ApplicationsSlot storage appsBitmap = StorageLib.activeApplications();
-        uint256 packedApps = appsBitmap.packedApplications;
-        
+        // TODO: this is not right
         // Create memory arrays to track unique tokens and their balances
-        address[] memory uniqueTokens = new address[](activeTokens.length + 100); // Buffer for app tokens
-        int256[] memory tokenBalances = new int256[](activeTokens.length + 100);
+        address[] memory uniqueTokens = new address[](tokens.activeTokens.length + 100); // Buffer for app tokens
+        int256[] memory tokenBalances = new int256[](tokens.activeTokens.length + 100);
         uint256 tokenCount = 0;
         
         // Try to get application balances
+        // TODO: no lazy implementation - should re-implement here without modifying storage, i.e. we will be able to make the method view
         try IEApps(pool).getAppTokenBalances(packedApps) returns (ExternalApp[] memory apps) {
             for (uint256 i = 0; i < apps.length; i++) {
                 for (uint256 j = 0; j < apps[i].balances.length; j++) {
@@ -105,29 +105,30 @@ contract OffchainNav {
         } catch {
             // If apps fail, continue with wallet balances only
         }
-        
-        // Add base token balance
-        address baseToken = StorageLib.pool().baseToken;
+
         {
-            int256 baseBalance = int256(pool.balance) + _getVirtualBalance(baseToken);
+            // TODO: why pool.balance? the baseToken can be any token
+            int256 baseBalance = int256(pool.balance) + _getVirtualBalance(tokens.baseToken);
             bool found = false;
             for (uint256 k = 0; k < tokenCount; k++) {
-                if (uniqueTokens[k] == baseToken || uniqueTokens[k] == _ZERO_ADDRESS) {
+                // TODO: wrong, base token is never in the active tokens array, and is returned by tokens.baseToken
+                if (uniqueTokens[k] == tokens.baseToken || uniqueTokens[k] == _ZERO_ADDRESS) {
                     tokenBalances[k] += baseBalance;
                     found = true;
                     break;
                 }
             }
             if (!found) {
-                uniqueTokens[tokenCount] = baseToken;
+                // TODO: not sure this is the correct way of adding, as later we will lose the ability to append to the same token?
+                uniqueTokens[tokenCount] = tokens.baseToken;
                 tokenBalances[tokenCount] = baseBalance;
                 tokenCount++;
             }
         }
         
         // Add active tokens wallet balances
-        for (uint256 i = 0; i < activeTokens.length; i++) {
-            address token = activeTokens[i];
+        for (uint256 i = 0; i < tokens.activeTokens.length; i++) {
+            address token = tokens.activeTokens[i];
             int256 walletBalance = 0;
             
             try IERC20(token).balanceOf(pool) returns (uint256 _balance) {
@@ -183,6 +184,7 @@ contract OffchainNav {
         // Prepare arrays for batch conversion (excluding base token)
         uint256 nonBaseTokenCount = 0;
         for (uint256 i = 0; i < balances.length; i++) {
+            // TODO: this does not look right
             if (balances[i].token == baseToken || balances[i].token == _ZERO_ADDRESS) {
                 totalValue += balances[i].balance;
             } else if (balances[i].balance != 0) {

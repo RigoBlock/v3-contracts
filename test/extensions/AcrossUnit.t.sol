@@ -36,12 +36,12 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test adapter deployment
-    function test_Adapter_Deployment() public {
+    function test_Adapter_Deployment() public view {
         assertEq(address(adapter.acrossSpokePool()), mockSpokePool, "SpokePool address incorrect");
     }
     
     /// @notice Test handler deployment (stateless)
-    function test_Handler_Deployment() public {
+    function test_Handler_Deployment() public view {
         // Handler should have no state
         assertTrue(address(handler).code.length > 0, "Handler should be deployed");
         assertEq(handler.acrossSpokePool(), mockSpokePool, "Handler should store SpokePool");
@@ -78,7 +78,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test message encoding/decoding
-    function test_MessageEncodingDecoding() public {
+    function test_MessageEncodingDecoding() public pure {
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
             sourceChainId: 0,
@@ -100,7 +100,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test required version
-    function test_Adapter_RequiredVersion() public {
+    function test_Adapter_RequiredVersion() public view {
         string memory version = adapter.requiredVersion();
         assertEq(version, "HF_4.1.0", "Required version incorrect");
     }
@@ -112,7 +112,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test ExtensionsMap selector mapping
-    function test_ExtensionsMap_SelectorMapping() public {
+    function test_ExtensionsMap_SelectorMapping() public pure {
         bytes4 selector = bytes4(keccak256("handleV3AcrossMessage(address,uint256,bytes)"));
         
         // Verify selector is correctly calculated
@@ -137,7 +137,7 @@ contract AcrossUnitTest is Test {
     //}
     
     /// @notice Test virtual balance storage slot calculation
-    function test_VirtualBalanceSlot() public {
+    function test_VirtualBalanceSlot() public pure {
         // Verify storage slot matches MixinConstants
         bytes32 expectedSlot = bytes32(uint256(keccak256("pool.proxy.virtualBalances")) - 1);
         bytes32 calculatedSlot = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
@@ -146,7 +146,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test message type enum values
-    function test_OpTypeEnumValues() public {
+    function test_OpTypeEnumValues() public pure {
         uint8 transferType = uint8(OpType.Transfer);
         uint8 rebalanceType = uint8(OpType.Rebalance);
         
@@ -155,7 +155,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test NAV normalization logic
-    function test_NavNormalization() public {
+    function test_NavNormalization() public pure {
         // Test same decimals
         assertEq(_normalizeNav(1e18, 18, 18), 1e18, "Same decimals should not change");
         
@@ -167,7 +167,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test tolerance calculation
-    function test_ToleranceCalculation() public {
+    function test_ToleranceCalculation() public pure {
         uint256 nav = 1e18; // 1.0 per share
         uint256 tolerance = 100; // 1% = 100 basis points
         
@@ -182,7 +182,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Fuzz test: NAV normalization
-    function testFuzz_NavNormalization(uint256 nav, uint8 sourceDecimals, uint8 destDecimals) public {
+    function testFuzz_NavNormalization(uint256 nav, uint8 sourceDecimals, uint8 destDecimals) public pure {
         // Constrain decimals to reasonable range
         vm.assume(sourceDecimals <= 18 && destDecimals <= 18);
         vm.assume(sourceDecimals > 0 && destDecimals > 0);
@@ -196,6 +196,8 @@ contract AcrossUnitTest is Test {
         
         // Verify reversibility
         uint256 denormalized = _normalizeNav(normalized, destDecimals, sourceDecimals);
+        // TODO: there is a small precision loss here, check if we can assert that delta is within a 1e8 range
+        //assertEq(denormalized, nav, "Denormalized should be equal to nav");
         
         if (sourceDecimals == destDecimals) {
             assertEq(normalized, nav, "Same decimals should not change");
@@ -207,7 +209,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Fuzz test: Tolerance within range
-    function testFuzz_ToleranceInRange(uint256 nav, uint256 tolerance) public {
+    function testFuzz_ToleranceInRange(uint256 nav, uint256 tolerance) public pure {
         vm.assume(nav > 0 && nav < type(uint256).max / 10000);
         vm.assume(tolerance <= 10000); // Max 100%
         vm.assume(tolerance > 0); // Must have some tolerance

@@ -283,11 +283,14 @@ contract AcrossIntegrationForkTest is Test {
         });
         
         bytes memory encodedMessage = abi.encode(message);
+        assertTrue(encodedMessage.length != 0);
         
         // Mock the pool's base token for virtual balance calculation
         // Would need full pool setup to test this properly
         
-        console2.log("Handler security check verified");
+        console2.log("Handler security check verified.");
+        console2.log("Amount", amount);
+        console2.log("TokenReceived", tokenReceived);
     }
     
     /*
@@ -348,7 +351,7 @@ contract AcrossIntegrationForkTest is Test {
      */
     
     /// @notice Test Transfer message encoding
-    function testFork_TransferMessageEncoding() public {
+    function testFork_TransferMessageEncoding() public pure {
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
             sourceChainId: 0,
@@ -367,7 +370,7 @@ contract AcrossIntegrationForkTest is Test {
     }
     
     /// @notice Test Rebalance message encoding
-    function testFork_RebalanceMessageEncoding() public {
+    function testFork_RebalanceMessageEncoding() public pure {
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Rebalance,
             sourceChainId: 0,
@@ -409,7 +412,7 @@ contract AcrossIntegrationForkTest is Test {
     //}
     
     /// @notice Test handleV3AcrossMessage selector
-    function testFork_HandleMessageSelector() public {
+    function testFork_HandleMessageSelector() public pure {
         bytes4 expectedSelector = bytes4(keccak256("handleV3AcrossMessage(address,uint256,bytes)"));
         bytes4 actualSelector = EAcrossHandler.handleV3AcrossMessage.selector;
         
@@ -422,7 +425,7 @@ contract AcrossIntegrationForkTest is Test {
      */
     
     /// @notice Verify virtual balance storage slot matches MixinConstants
-    function testFork_VirtualBalanceSlotCorrect() public {
+    function testFork_VirtualBalanceSlotCorrect() public pure {
         bytes32 expectedSlot = bytes32(uint256(keccak256("pool.proxy.virtualBalances")) - 1);
         bytes32 actualSlot = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
         
@@ -457,6 +460,7 @@ contract AcrossIntegrationForkTest is Test {
         });
         
         bytes memory encodedMessage = abi.encode(message);
+        assertTrue(encodedMessage.length != 0);
         
         console2.log("Source chain (Arbitrum) prepared");
         console2.log("Transfer amount:", transferAmount);
