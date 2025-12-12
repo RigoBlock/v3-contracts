@@ -17,6 +17,7 @@
   "scripts": {
     "build": "forge compile",
     "build:hardhat": "hardhat compile",
+    "build:foundry:ir": "forge compile --via-ir",
     "build:ts": "yarn rimraf dist && tsc",
     "test": "hardhat test --deploy-fixture",
     "test:foundry": "forge test",

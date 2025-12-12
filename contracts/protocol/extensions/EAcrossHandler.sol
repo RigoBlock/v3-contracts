@@ -24,10 +24,18 @@ import {IERC20} from "../interfaces/IERC20.sol";
 import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
 import {IWETH9} from "../interfaces/IWETH9.sol";
+import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
+import {OpType, DestinationMessage, SourceMessage} from "../types/Crosschain.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
+
+// TODO: we could implement a different flow for calling across, i.e. calling self (i.e. a new method with onlySelf modifier) to change the msg.sender context
+// which requires forwarding value to the EAcrossHandler address, or transfering the token to the handler - which would then approve across and further
+// forward value and approve across. A further method should be implemented, which allows an admin to withdraw funds. In this case, a hypothetical refund (rare)
+// could be refunded to a smart pool via "pool.donate(token, amount)" without impacting nav, and updating virtual balances. It is not possible to do it directly
+// from the vault, because the across spoke pool does not have deposit state (everything is monitored via onchain logs in across after a deposit).
 
 /// @title EAcrossHandler - Handles incoming cross-chain transfers via Across Protocol.
 /// @notice This extension manages NAV integrity when receiving cross-chain token transfers.
@@ -37,9 +45,8 @@ contract EAcrossHandler is IEAcrossHandler {
     using SafeCast for uint256;
     using SafeCast for int256;
     using SlotDerivation for bytes32;
+    using EnumerableSet for AddressSet;
 
-    // Storage slot constants from MixinConstants
-    bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
     bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
     
@@ -61,35 +68,34 @@ contract EAcrossHandler is IEAcrossHandler {
         // CRITICAL SECURITY CHECK: Verify caller is the Across SpokePool
         // Since this is called via delegatecall, msg.sender is preserved from the original call
         require(msg.sender == acrossSpokePool, UnauthorizedCaller());
-        
+
+        // ensure token is active, otherwise won't be included in nav calculations
+        AddressSet storage set = StorageLib.activeTokensSet();
+        address baseToken = StorageLib.pool().baseToken;
+        set.addUnique(IEOracle(address(this)), tokenReceived, baseToken);
+
         // Decode the message
-        CrossChainMessage memory params = abi.decode(message, (CrossChainMessage));
-        
-        // Verify output token has a price feed (requirement #3)
-        require(IEOracle(address(this)).hasPriceFeed(tokenReceived), TokenWithoutPriceFeed());
+        DestinationMessage memory params = abi.decode(message, (DestinationMessage));
         
         // Unwrap native if requested
         address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
-        if (params.unwrapNative && tokenReceived == wrappedNative) {
+        if (params.shouldUnwrap && tokenReceived == wrappedNative) {
             IWETH9(wrappedNative).withdraw(amount);
         }
         
-        if (params.messageType == MessageType.Transfer) {
-            _handleTransferMode(tokenReceived, amount);
-        } else if (params.messageType == MessageType.Rebalance) {
-            _handleRebalanceMode(amount, params);
-        } else if (params.messageType == MessageType.Sync) {
-            _handleSyncMode(amount, params);
+        if (params.opType == OpType.Transfer) {
+            _handleTransferMode(tokenReceived, amount, baseToken);
+        } else if (params.opType == OpType.Rebalance) {
+            _handleRebalanceMode(params);
+        } else if (params.opType == OpType.Sync) {
+            _handleSyncMode(params);
         } else {
-            revert InvalidMessageType();
+            revert InvalidOpType();
         }
     }
 
     /// @dev Handles Transfer mode: creates negative virtual balance to offset NAV increase.
-    function _handleTransferMode(address tokenReceived, uint256 amount) private {
-        // Get base token for this pool
-        address baseToken = StorageLib.pool().baseToken;
-        
+    function _handleTransferMode(address tokenReceived, uint256 amount, address baseToken) private {
         // Convert received amount to base token equivalent
         int256 baseTokenAmount = IEOracle(address(this)).convertTokenAmount(
             tokenReceived,
@@ -104,9 +110,15 @@ contract EAcrossHandler is IEAcrossHandler {
     }
 
     /// @dev Handles Rebalance mode: verifies NAV is within tolerance of source chain NAV plus spread.
-    function _handleRebalanceMode(uint256 /* amount */, CrossChainMessage memory params) private {
+    function _handleRebalanceMode(DestinationMessage memory params) private view {
         // Check that chains have been synced
         int256 spread = _getChainNavSpread(params.sourceChainId);
+        // WARNING: DANGER - critical flaw - if spread is not set, a transfer that has happened on the source chain will revert this transaction
+        // As the transaction reverts, will the tokens be left in the vault, or will they be lost? in the latter case, the nav on the source chain
+        // will be incorrect, while in the former the nav on the destination chain will be affected - which it shouldn't. When a spread is not 
+        // stored, the transaction should not revert, but the transaction should be handled like a sync transaction. And technically, as in the AIntents,
+        // because the sync and transfer mode do very similar things, we should double check whether it makes sense to define the sync mode, or transient
+        // a rebalance as a transfer instead.
         require(spread != 0, ChainsNotSynced());
         
         // Tokens are already transferred by Across
@@ -136,7 +148,7 @@ contract EAcrossHandler is IEAcrossHandler {
     }
     
     /// @dev Handles Sync mode: records NAV spread between chains.
-    function _handleSyncMode(uint256 /* amount */, CrossChainMessage memory params) private {
+    function _handleSyncMode(DestinationMessage memory params) private {
         // Get current NAV on destination chain (includes received tokens)
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint256 destNav = poolTokens.unitaryValue;
@@ -173,6 +185,8 @@ contract EAcrossHandler is IEAcrossHandler {
         }
     }
 
+    // TODO: these following methods should be moved to library in /libraries folder, like storage lib
+    // also TODO: we could implement in library to return storage - could update the set by defining it as storage (less code)
     /// @dev Gets the virtual balance for a token from pool storage.
     function _getVirtualBalance(address token) private view returns (int256 value) {
         bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);

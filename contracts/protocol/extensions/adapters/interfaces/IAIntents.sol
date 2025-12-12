@@ -23,38 +23,28 @@ interface IAIntents {
     );
 
     error DirectCallNotAllowed();
-    error TokenIsNotOwned();
+    error NullAddress();
+    error TokenNotActive();
     error InsufficientWrappedNativeBalance();
-    error InvalidMessageType();
+    error InvalidOpType();
 
-    /// @notice Initiates a cross-chain token transfer via Across Protocol V3
-    /// @dev Matches Across's depositV3 signature exactly for seamless integration
-    /// @param depositor Address of the depositor (ignored, uses address(this))
-    /// @param recipient Address of recipient on destination chain (ignored, uses address(this))
-    /// @param inputToken Address of input token on source chain
-    /// @param outputToken Address of output token on destination chain
-    /// @param inputAmount Amount of input token to deposit
-    /// @param outputAmount Expected amount of output token on destination
-    /// @param destinationChainId Chain ID of destination
-    /// @param exclusiveRelayer Address of exclusive relayer (ignored, uses address(0))
-    /// @param quoteTimestamp Timestamp of the quote (ignored, uses block.timestamp)
-    /// @param fillDeadline Deadline for the fill
-    /// @param exclusivityDeadline Deadline for exclusive relayer (ignored, uses 0)
-    /// @param message Encoded CrossChainMessage struct
-    function depositV3(
-        address depositor,
-        address recipient,
-        address inputToken,
-        address outputToken,
-        uint256 inputAmount,
-        uint256 outputAmount,
-        uint256 destinationChainId,
-        address exclusiveRelayer,
-        uint32 quoteTimestamp,
-        uint32 fillDeadline,
-        uint32 exclusivityDeadline,
-        bytes memory message
-    ) external payable;
+    struct AcrossParams {
+        address depositor;
+        address recipient;
+        address inputToken;
+        address outputToken;
+        uint256 inputAmount;
+        uint256 outputAmount;
+        uint256 destinationChainId;
+        address exclusiveRelayer;
+        uint32 quoteTimestamp;
+        uint32 fillDeadline;
+        uint32 exclusivityDeadline;
+        bytes message;
+    }
+
+    // TODO: add natspec docs and lint
+    function depositV3(AcrossParams memory params) external payable;
 
     /// @notice Returns the Across SpokePool address for this chain
     /// @return Address of the Across SpokePool contract

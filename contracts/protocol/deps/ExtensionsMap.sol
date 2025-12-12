@@ -20,6 +20,7 @@
 pragma solidity 0.8.28;
 
 import {IEApps} from "../extensions/adapters/interfaces/IEApps.sol";
+import {IEAcrossHandler} from "../extensions/adapters/interfaces/IEAcrossHandler.sol";
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 import {IEUpgrade} from "../extensions/adapters/interfaces/IEUpgrade.sol";
 import {IAuthority} from "../interfaces/IAuthority.sol";
@@ -41,9 +42,7 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EORACLE_TWAP_SELECTOR = IEOracle.getTwap.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
-    
-    // EAcrossHandler selector - handleV3AcrossMessage(address,uint256,bytes)
-    bytes4 private constant _EACROSS_HANDLE_MESSAGE_SELECTOR = bytes4(keccak256("handleV3AcrossMessage(address,uint256,bytes)"));
+    bytes4 private constant _EACROSS_HANDLE_MESSAGE_SELECTOR = IEAcrossHandler.handleV3AcrossMessage.selector;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eApps;
@@ -55,10 +54,10 @@ contract ExtensionsMap is IExtensionsMap {
     address public immutable override eUpgrade;
 
     /// @inheritdoc IExtensionsMap
+    address public immutable override eAcrossHandler;
+
+    /// @inheritdoc IExtensionsMap
     address public immutable override wrappedNative;
-    
-    /// @notice Across handler extension address
-    address public immutable eAcrossHandler;
 
     /// @notice Assumes extensions have been correctly initialized.
     /// @dev When adding a new app, modify apps type and assert correct params are passed to the constructor.
@@ -80,9 +79,10 @@ contract ExtensionsMap is IExtensionsMap {
                 type(IEOracle).interfaceId
         );
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
+        assert(_EACROSS_HANDLE_MESSAGE_SELECTOR == type(IEAcrossHandler).interfaceId);
     }
 
-    // TODO: add EAcrossIntents, allow delegatecall is msg.sender == acrossSpokePool
+    // TODO: check allow delegatecall is msg.sender == acrossSpokePool in EAcrossIntents
     /// @inheritdoc IExtensionsMap
     /// @dev Should be called by pool with delegatecall
     function getExtensionBySelector(
@@ -104,7 +104,6 @@ contract ExtensionsMap is IExtensionsMap {
         } else if (selector == _EUPGRADE_GET_BEACON_SELECTOR) {
             extension = eUpgrade;
         } else if (selector == _EACROSS_HANDLE_MESSAGE_SELECTOR) {
-            // EAcrossHandler - called by Across SpokePool via delegatecall
             extension = eAcrossHandler;
             shouldDelegatecall = true;
         } else {

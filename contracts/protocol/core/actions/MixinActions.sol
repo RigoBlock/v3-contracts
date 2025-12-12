@@ -306,6 +306,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         );
     }
 
+    // WARNING: DANGER - the following mapping derivations are for a single address - won't allow storing and reading an array or enumerable set (i.e. if we want to store the virtual balances by token, not the base token)
     /// @dev Gets the virtual balance for a token from storage.
     function _getVirtualBalance(address token) internal view returns (int256 value) {
         bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);

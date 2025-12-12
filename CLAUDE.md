@@ -348,7 +348,7 @@ contract YourAdapter is ReentrancyGuardTransient {
 - Keep functions focused and well-named
 - Use libraries for reusable logic
 - Prefer immutables over constants for chain-specific values
-- **Error Handling**: Use custom errors (e.g., `InvalidMessageType()`) instead of revert strings
+- **Error Handling**: Use custom errors (e.g., `InvalidOpType()`) instead of revert strings
   - Custom errors save gas and allow parameters for better testing
   - Format: `error ErrorName(param1Type param1, param2Type param2);`
   - Legacy code may still have revert strings - update when modifying
@@ -448,13 +448,16 @@ See `src/deploy/` for deployment scripts (TypeScript + Hardhat).
 
 ### Documentation Update Pattern
 
-When working on a feature or integration:
-1. Create or update a single comprehensive document (e.g., `INTEGRATION_GUIDE.md`)
-2. Update as work progresses rather than creating multiple versions
-3. Move to appropriate `/docs/` subfolder when complete
-4. Clean up temporary/working documents
+**CRITICAL: STOP CREATING EXCESSIVE .MD FILES**
 
-**Avoid**: Creating many small .md files in root directory - consolidate instead.
+When working on a feature or integration:
+1. **UPDATE existing files** - do NOT create new files for each iteration
+2. Consolidate information into single comprehensive documents
+3. Save protocol-specific docs in `/docs/<protocol>/` (e.g., `/docs/across/`)
+4. Limit to 3-5 core documentation files maximum per integration
+5. Delete temporary/working documents after consolidation
+
+**Avoid**: Creating 15+ .md files. This creates confusion and clutter.
 
 ## Resources
 

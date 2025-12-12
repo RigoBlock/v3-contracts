@@ -21,6 +21,23 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 8. **Override Keyword**: Add `override` to interface implementations - fix compilation warnings
 9. **Compilation**: Fix all warnings in new code (legacy warnings acceptable)
 
+## AI Agent Limitations (CRITICAL)
+
+**⚠️ AI-GENERATED SOLIDITY CODE CONTAINS CRITICAL BUGS ⚠️**
+
+- AI agents are NOT proficient at writing secure Solidity code
+- Code produced contains security vulnerabilities and logical flaws
+- NEVER consider AI-generated code "ready for deployment" or "audit-ready"
+- ALWAYS perform thorough manual security review
+- AI may reintroduce bugs even after they're fixed
+- AI may make incorrect assumptions not based on specifications
+- All code must be treated as containing critical vulnerabilities until proven otherwise
+
+**Documentation Issues:**
+- AI tends to create excessive .md files instead of updating existing ones
+- Consolidate documentation into fewer, well-organized files
+- Update existing files rather than creating new ones for each iteration
+
 ## Architecture in 30 Seconds
 
 ```

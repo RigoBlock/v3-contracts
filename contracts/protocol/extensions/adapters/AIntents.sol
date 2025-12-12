@@ -31,6 +31,7 @@ import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
+import {OpType, DestinationMessage, SourceMessage} from "../../types/Crosschain.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
@@ -47,31 +48,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using SlotDerivation for bytes32;
 
     IAcrossSpokePool public immutable override acrossSpokePool;
-    
-    // Re-export types from interface for external use
-    enum MessageType {
-        Transfer,
-        Rebalance,
-        Sync
-    }
-    
-    struct CrossChainMessage {
-        MessageType messageType;
-        uint256 sourceChainId;  // Chain ID of the source chain
-        uint256 sourceNav;
-        uint8 sourceDecimals;
-        uint256 navTolerance;  // Not used in Sync mode
-        bool unwrapNative;
-    }
 
-    // Storage slot constants from MixinConstants
-    bytes32 private constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 private constant _TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
+    // TODO: check if can inherit these from the implementation constants to avoid manual errors
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
-    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
-    address private constant _ZERO_ADDRESS = address(0);
 
-    address private immutable _wrappedNative;
+    // TODO: are we not storing anything on the source chain? how will we know it's a OpType.Sync vs .Rebalance when i.e. we always successfully bridge from chain1 to chain2???
+    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
+
     address private immutable _IMPLEMENTATION;
 
     modifier onlyDelegateCall() {
@@ -86,106 +69,87 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     constructor(address acrossSpokePoolAddress) {
         acrossSpokePool = IAcrossSpokePool(acrossSpokePoolAddress);
-        _wrappedNative = acrossSpokePool.wrappedNativeToken();
         _IMPLEMENTATION = address(this);
     }
 
     /// @inheritdoc IAIntents
-    function depositV3(
-        address depositor,
-        address recipient,
-        address inputToken,
-        address outputToken,
-        uint256 inputAmount,
-        uint256 outputAmount,
-        uint256 destinationChainId,
-        address exclusiveRelayer,
-        uint32 quoteTimestamp,
-        uint32 fillDeadline,
-        uint32 exclusivityDeadline,
-        bytes memory message
-    ) external payable override nonReentrant onlyDelegateCall {
-        // Ignore some parameters as we enforce our own values for security
-        depositor; recipient; exclusiveRelayer; quoteTimestamp; exclusivityDeadline;
-        
-        require(_isOwnedToken(inputToken), TokenIsNotOwned());
-        
-        // Calculate fillDeadlineBuffer from fillDeadline
-        uint32 fillDeadlineBuffer = fillDeadline > uint32(block.timestamp) 
-            ? fillDeadline - uint32(block.timestamp) 
-            : 300; // Default 5 minutes
-        
-        // Prepare input token and handle wrapping
-        (address token, uint256 msgValue) = _prepareInputToken(inputToken, inputAmount);
-        
-        // Process message and virtual balances
-        message = _processMessage(message, token, inputAmount);
-        
-        // Execute deposit
-        _executeDeposit(token, outputToken, inputAmount, outputAmount, destinationChainId, fillDeadlineBuffer, message, msgValue);
-    }
-    
-    /// @dev Prepares input token (handles wrapping) and returns token address and msg.value.
-    function _prepareInputToken(address inputToken, uint256 amount) private returns (address, uint256) {
-        bool isSendNative = inputToken == _ZERO_ADDRESS;
-        if (isSendNative) {
-            _wrapNativeIfNeeded(amount);
-            return (_wrappedNative, amount);
+    function depositV3(AcrossParams calldata params) external payable override nonReentrant onlyDelegateCall {
+        // sanity checks
+        // TODO: check if we can safely skip this check. Also maybe use unified error + condition
+        require(!params.inputToken.isAddressZero(), NullAddress());
+        require(params.exclusiveRelayer.isAddressZero(), NullAddress());
+
+        // TODO: check if we can query tokens + base token in 1 call and reading only exact slots, as we're not writing to storage
+        if (params.inputToken != StorageLib.pool().baseToken) {
+            require(StorageLib.activeTokensSet().isActive(params.inputToken), TokenNotActive());
         }
-        return (inputToken, 0);
-    }
-    
-    /// @dev Executes the actual Across deposit.
-    function _executeDeposit(
-        address inputToken,
-        address outputToken,
-        uint256 inputAmount,
-        uint256 outputAmount,
-        uint256 destinationChainId,
-        uint32 fillDeadlineBuffer,
-        bytes memory messageData,
-        uint256 msgValue
-    ) private {
-        _safeApproveToken(inputToken, address(acrossSpokePool));
+
+        // Process message and get encoded result
+        DestinationMessage memory dstMsg = _processMessage(
+            params.message,
+            params.inputToken,
+            params.inputAmount
+        );
+
+        _safeApproveToken(params.inputToken);
         
-        acrossSpokePool.depositV3{value: msgValue}(
+        acrossSpokePool.depositV3{value: dstMsg.sourceNativeAmount}(
             address(this),
             address(this),
-            inputToken,
-            outputToken,
-            inputAmount,
-            outputAmount,
-            destinationChainId,
-            _ZERO_ADDRESS,
-            uint32(block.timestamp),
-            uint32(block.timestamp + fillDeadlineBuffer),
-            0,
-            messageData
+            params.inputToken,
+            params.outputToken,
+            params.inputAmount,
+            params.outputAmount,
+            params.destinationChainId,
+            params.exclusiveRelayer,
+            params.quoteTimestamp,
+            uint32(block.timestamp + acrossSpokePool.fillDeadlineBuffer()), // use the across max allowed deadline
+            params.exclusivityDeadline, // this param will not be used by across as the exclusiveRelayer must be the null address TODO: verify it is like this
+            abi.encode(dstMsg)
         );
         
-        _safeApproveToken(inputToken, address(acrossSpokePool));
+        _safeApproveToken(params.inputToken);
     }
     
-    /// @dev Processes message and adjusts virtual balances/spreads if needed.
+    /*
+     * INTERNAL METHODS
+     */
     function _processMessage(
-        bytes memory messageData,
+        bytes calldata messageData,
         address inputToken,
         uint256 inputAmount
-    ) private returns (bytes memory) {
-        CrossChainMessage memory params = abi.decode(messageData, (CrossChainMessage));
-        
-        if (params.messageType == MessageType.Transfer) {
+    ) private returns (DestinationMessage memory) {
+        SourceMessage memory srcMsg = abi.decode(messageData, (SourceMessage));
+
+        if (srcMsg.opType == OpType.Transfer) {
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
-            return messageData;
-        } else if (params.messageType == MessageType.Rebalance) {
-            return _updateMessageForRebalance(params);
-        } else if (params.messageType == MessageType.Sync) {
-            return _updateMessageForSync(params);
+        } else if (srcMsg.opType == OpType.Rebalance) {
+            // TODO: fix code and uncomment - after the correct solution has been implemented
+            //if (!storedNav[targetChain]) {
+            //    srcMsg.opType = OpType.Sync; // but could be OpType.Transfer and we could remove one op type
+            //    _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
+            //}
+        } else if (srcMsg.opType == OpType.Sync) {
+            _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
+        } else {
+            revert InvalidOpType();
         }
-        
-        revert InvalidMessageType();
+
+        ISmartPoolActions(address(this)).updateUnitaryValue();
+
+        // navTolerance in a client-side input
+        return DestinationMessage({
+            opType: srcMsg.opType,
+            sourceChainId: block.chainid,
+            sourceNav: ISmartPoolState(address(this)).getPoolTokens().unitaryValue,
+            sourceDecimals: StorageLib.pool().decimals,
+            navTolerance: srcMsg.navTolerance > 1000 ? 1000 : srcMsg.navTolerance, // reasonable 10% max tolerance
+            shouldUnwrap: srcMsg.shouldUnwrapOnDestination,
+            sourceNativeAmount: srcMsg.sourceNativeAmount // TODO: check if we can remove this param from dest message
+        });
     }
     
+    // TOdo: check if should create virtual balance for actual token instead instead of base token
     /// @dev Adjusts virtual balance for Transfer mode.
     function _adjustVirtualBalanceForTransfer(address inputToken, uint256 inputAmount) private {
         address baseToken = StorageLib.pool().baseToken;
@@ -196,89 +160,25 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
         _setVirtualBalance(baseToken, _getVirtualBalance(baseToken) + baseTokenAmount);
     }
-    
-    /// @dev Updates message with NAV for Rebalance mode.
-    function _updateMessageForRebalance(CrossChainMessage memory params) private returns (bytes memory) {
-        // Update NAV first to get current value (not stale storage value)
-        ISmartPoolActions(address(this)).updateUnitaryValue();
-        
-        // Now read the updated NAV from storage
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-        params.sourceChainId = block.chainid;
-        params.sourceNav = poolTokens.unitaryValue;
-        params.sourceDecimals = StorageLib.pool().decimals;
-        return abi.encode(params);
-    }
-    
-    /// @dev Updates message with NAV for Sync mode.
-    function _updateMessageForSync(CrossChainMessage memory params) private returns (bytes memory) {
-        // Update NAV first to get current value
-        ISmartPoolActions(address(this)).updateUnitaryValue();
-        
-        // Read the updated NAV from storage
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-        params.sourceChainId = block.chainid;
-        params.sourceNav = poolTokens.unitaryValue;
-        params.sourceDecimals = StorageLib.pool().decimals;
-        
-        return abi.encode(params);
-    }
-    
-    /*
-     * KNOWN LIMITATION: Token Recovery
-     * 
-     * Across Protocol V3 does not provide a direct method to reclaim tokens from unfilled deposits.
-     * The speedUpV3Deposit method can update parameters but has a critical limitation:
-     * "If a deposit has been completed already, this function will not revert but it won't be able 
-     * to be filled anymore with the updated params."
-     * 
-     * This creates a NAV inflation risk:
-     * 1. Pool owner creates deposit with very short deadline (e.g., 1 second)
-     * 2. Deposit likely remains unfilled
-     * 3. Owner calls speedUpV3Deposit, modifying virtual balances
-     * 4. If deposit was already filled, tokens don't return but virtual balances are adjusted
-     * 5. Result: NAV is artificially inflated
-     * 
-     * MITIGATION:
-     * - We intentionally DO NOT implement token recovery via speedUpV3Deposit
-     * - Pool operators should set reasonable fillDeadline values (recommended: 5-30 minutes)
-     * - With proper parameters, Across fills deposits within seconds to minutes
-     * - If a deposit fails, the locked tokens are effectively lost (extremely rare with correct setup)
-     * 
-     * FUTURE IMPROVEMENT:
-     * - Monitor Across Protocol for native recovery mechanisms
-     * - Consider implementing recovery if Across adds safe claim-back functionality
-     * - Could implement recovery with additional safeguards (e.g., require proof deposit wasn't filled)
-     */
 
     /*
      * INTERNAL METHODS
      */
-
-    /// @dev Wraps native currency into wrapped native if pool doesn't have enough balance.
-    function _wrapNativeIfNeeded(uint256 amount) private {
-        uint256 balance = IERC20(_wrappedNative).balanceOf(address(this));
-        if (balance < amount) {
-            uint256 toWrap = amount - balance;
-            require(address(this).balance >= toWrap, InsufficientWrappedNativeBalance());
-            IWETH9(_wrappedNative).deposit{value: toWrap}();
-        }
-    }
-
     /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.
-    function _safeApproveToken(address token, address spender) private {
-        if (token == _ZERO_ADDRESS) return; // Skip if native currency
+    function _safeApproveToken(address token) private {
+        if (token.isAddressZero()) return; // Skip if native currency
         
-        uint256 currentAllowance = IERC20(token).allowance(address(this), spender);
-        if (currentAllowance > 0) {
+        // TODO: can this fail silently, and are there side effects?
+        if (IERC20(token).allowance(address(this), address(acrossSpokePool)) > 0) {
             // Reset to 0 first for tokens that require it (like USDT)
-            token.safeApprove(spender, 0);
+            token.safeApprove(address(acrossSpokePool), 0);
         } else {
             // Approve max amount
-            token.safeApprove(spender, type(uint256).max);
+            token.safeApprove(address(acrossSpokePool), type(uint256).max);
         }
     }
 
+    // TODO: these methods are identical in EAcrossHandler, should be implemented in a library and imported
     /// @dev Gets the virtual balance for a token from storage.
     function _getVirtualBalance(address token) private view returns (int256 value) {
         bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
@@ -293,18 +193,5 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         assembly {
             sstore(slot, value)
         }
-    }
-
-    /// @dev Checks if a token is owned by the pool.
-    function _isOwnedToken(address token) private view returns (bool) {
-        AddressSet storage activeTokens = StorageLib.activeTokensSet();
-        address baseToken = StorageLib.pool().baseToken;
-        
-        // Base token and native currency are always owned
-        if (token == baseToken || token == _ZERO_ADDRESS || token == _wrappedNative) {
-            return true;
-        }
-        
-        return activeTokens.isActive(token);
     }
 }
