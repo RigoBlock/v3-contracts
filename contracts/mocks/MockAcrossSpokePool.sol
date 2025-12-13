@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {IERC20} from "../protocol/interfaces/IERC20.sol";
-
+// TODO: absurd defining erc20 here when we can import it. Absurd using erc20 when we can mock state, but leaving as it is probably
+// the root of why across foundry tests fail even when creating the price feed for the base token - because the token is probably different (i.e. deployed in foundry fixture)
 /// @notice Mock ERC20 token for testing
-contract MockERC20 is IERC20 {
+contract MockERC20 {
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
     string public name;
     string public symbol;
     uint8 public decimals;
@@ -25,11 +28,11 @@ contract MockERC20 is IERC20 {
         emit Transfer(address(0), to, amount);
     }
     
-    function balanceOf(address account) external view override returns (uint256) {
+    function balanceOf(address account) external view returns (uint256) {
         return balances[account];
     }
     
-    function transfer(address to, uint256 amount) external override returns (bool) {
+    function transfer(address to, uint256 amount) external returns (bool) {
         require(balances[msg.sender] >= amount, "Insufficient balance");
         balances[msg.sender] -= amount;
         balances[to] += amount;
@@ -37,7 +40,7 @@ contract MockERC20 is IERC20 {
         return true;
     }
     
-    function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         require(balances[from] >= amount, "Insufficient balance");
         require(allowances[from][msg.sender] >= amount, "Insufficient allowance");
         
@@ -49,13 +52,13 @@ contract MockERC20 is IERC20 {
         return true;
     }
     
-    function approve(address spender, uint256 amount) external override returns (bool) {
+    function approve(address spender, uint256 amount) external returns (bool) {
         allowances[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
         return true;
     }
     
-    function allowance(address owner, address spender) external view override returns (uint256) {
+    function allowance(address owner, address spender) external view returns (uint256) {
         return allowances[owner][spender];
     }
 }
@@ -100,7 +103,7 @@ contract MockAcrossSpokePool {
     ) external payable {
         // Transfer tokens from depositor
         if (inputToken != address(0)) {
-            IERC20(inputToken).transferFrom(msg.sender, address(this), inputAmount);
+            MockERC20(inputToken).transferFrom(msg.sender, address(this), inputAmount);
         }
         
         emit V3FundsDeposited(
