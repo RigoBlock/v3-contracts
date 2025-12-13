@@ -50,7 +50,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     IAcrossSpokePool public immutable override acrossSpokePool;
 
     // TODO: check if can inherit these from the implementation constants to avoid manual errors
-    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
+    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 
     // TODO: are we not storing anything on the source chain? how will we know it's a OpType.Sync vs .Rebalance when i.e. we always successfully bridge from chain1 to chain2???
     bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;

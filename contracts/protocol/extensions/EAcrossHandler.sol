@@ -47,7 +47,7 @@ contract EAcrossHandler is IEAcrossHandler {
     using SlotDerivation for bytes32;
     using EnumerableSet for AddressSet;
 
-    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
+    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
     bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
     
     /// @notice Address of the Across SpokePool contract

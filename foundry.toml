@@ -6,6 +6,8 @@ test = "test"
 cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
+# Exclude AcrossMocks.sol - requires --via-ir which is only in Hardhat config
+skip = ["*/AcrossMocks.sol"]
 
 [profile.fmt]
 line_length = 120
