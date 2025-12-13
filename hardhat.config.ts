@@ -93,7 +93,7 @@ const userConfig: HardhatUserConfig = {
         version: "0.8.17",
         settings: { ...soliditySettings, evmVersion: "london" }
       },
-      "contracts/mocks/AcrossMocks.sol": {
+      "contracts/mocks/MockAcrossSpokePool.sol": {
         version: "0.8.28",
         settings: { 
           ...soliditySettings,

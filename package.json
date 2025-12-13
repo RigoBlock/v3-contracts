@@ -22,6 +22,7 @@
     "test": "hardhat test --deploy-fixture",
     "test:foundry": "forge test",
     "coverage": "hardhat coverage",
+    "coverage:foundry": "forge coverage",
     "benchmark": "yarn test benchmark/*.ts",
     "deploy-custom": "rm -rf deployments/custom && yarn deploy-all custom",
     "deploy-all": "hardhat deploy-contracts --network",

@@ -614,6 +614,146 @@ contract AcrossUnitTest is Test {
         pool.callDepositV3(params);
     }
     
+    /// @notice Test handler constructor stores spoke pool address
+    function test_Handler_ConstructorStoresSpokePool() public view {
+        assertEq(handler.acrossSpokePool(), mockSpokePool, "SpokePool should be stored");
+    }
+    
+    /// @notice Test adapter constructor stores spoke pool address
+    function test_Adapter_ConstructorStoresSpokePool() public view {
+        assertEq(address(adapter.acrossSpokePool()), mockSpokePool, "SpokePool should be stored");
+    }
+    
+    /// @notice Test OpType enum has correct values
+    function test_OpType_EnumValues() public pure {
+        assertEq(uint8(OpType.Transfer), 0, "Transfer should be 0");
+        assertEq(uint8(OpType.Rebalance), 1, "Rebalance should be 1");
+        assertEq(uint8(OpType.Sync), 2, "Sync should be 2");
+    }
+    
+    /// @notice Test DestinationMessage encoding/decoding with all OpTypes
+    function test_DestinationMessage_AllOpTypes() public pure {
+        // Test Transfer
+        DestinationMessage memory transferMsg = DestinationMessage({
+            opType: OpType.Transfer,
+            sourceChainId: 42161,
+            sourceNav: 1e18,
+            sourceDecimals: 18,
+            navTolerance: 100,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        bytes memory encodedTransfer = abi.encode(transferMsg);
+        DestinationMessage memory decodedTransfer = abi.decode(encodedTransfer, (DestinationMessage));
+        assertEq(uint8(decodedTransfer.opType), uint8(OpType.Transfer));
+        
+        // Test Rebalance
+        DestinationMessage memory rebalanceMsg = DestinationMessage({
+            opType: OpType.Rebalance,
+            sourceChainId: 42161,
+            sourceNav: 1e18,
+            sourceDecimals: 18,
+            navTolerance: 200,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        bytes memory encodedRebalance = abi.encode(rebalanceMsg);
+        DestinationMessage memory decodedRebalance = abi.decode(encodedRebalance, (DestinationMessage));
+        assertEq(uint8(decodedRebalance.opType), uint8(OpType.Rebalance));
+        
+        // Test Sync
+        DestinationMessage memory syncMsg = DestinationMessage({
+            opType: OpType.Sync,
+            sourceChainId: 42161,
+            sourceNav: 1e18,
+            sourceDecimals: 18,
+            navTolerance: 0,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        bytes memory encodedSync = abi.encode(syncMsg);
+        DestinationMessage memory decodedSync = abi.decode(encodedSync, (DestinationMessage));
+        assertEq(uint8(decodedSync.opType), uint8(OpType.Sync));
+    }
+    
+    /// @notice Test SourceMessage encoding/decoding
+    function test_SourceMessage_EncodingDecoding() public pure {
+        SourceMessage memory msg = SourceMessage({
+            opType: OpType.Transfer,
+            navTolerance: 100,
+            shouldUnwrapOnDestination: true,
+            sourceNativeAmount: 0.01 ether
+        });
+        
+        bytes memory encoded = abi.encode(msg);
+        SourceMessage memory decoded = abi.decode(encoded, (SourceMessage));
+        
+        assertEq(uint8(decoded.opType), uint8(OpType.Transfer));
+        assertEq(decoded.navTolerance, 100);
+        assertTrue(decoded.shouldUnwrapOnDestination);
+        assertEq(decoded.sourceNativeAmount, 0.01 ether);
+    }
+    
+    /// @notice Test NAV normalization edge cases
+    function test_NavNormalization_EdgeCases() public pure {
+        // Same decimals
+        assertEq(_normalizeNav(1e18, 18, 18), 1e18);
+        
+        // Downscale by 12
+        assertEq(_normalizeNav(1e18, 18, 6), 1e6);
+        
+        // Upscale by 12
+        assertEq(_normalizeNav(1e6, 6, 18), 1e18);
+        
+        // Downscale by 1
+        assertEq(_normalizeNav(1e18, 18, 17), 1e17);
+        
+        // Upscale by 1
+        assertEq(_normalizeNav(1e17, 17, 18), 1e18);
+    }
+    
+    /// @notice Test tolerance calculation edge cases
+    function test_ToleranceCalculation_EdgeCases() public pure {
+        // 0.01% tolerance
+        uint256 nav1 = 1e18;
+        uint256 tol1 = 1; // 0.01%
+        uint256 tolAmt1 = (nav1 * tol1) / 10000;
+        assertEq(tolAmt1, 1e14);
+        
+        // 10% tolerance (max)
+        uint256 nav2 = 1e18;
+        uint256 tol2 = 1000; // 10%
+        uint256 tolAmt2 = (nav2 * tol2) / 10000;
+        assertEq(tolAmt2, 1e17);
+        
+        // 100% tolerance (unrealistic but mathematically valid)
+        uint256 nav3 = 1e18;
+        uint256 tol3 = 10000; // 100%
+        uint256 tolAmt3 = (nav3 * tol3) / 10000;
+        assertEq(tolAmt3, 1e18);
+    }
+    
+    /// @notice Test adapter rejects inactive token
+    function test_Adapter_RejectsInactiveToken() public {
+        MockPool pool = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
+        
+        // Create token that won't be marked as active
+        address inactiveToken = makeAddr("inactiveToken");
+        
+        IAIntents.AcrossParams memory params = _createAcrossParams(
+            inactiveToken,
+            inactiveToken,
+            100e6,
+            99e6,
+            10,
+            OpType.Transfer,
+            100
+        );
+        
+        vm.expectRevert(abi.encodeWithSelector(IAIntents.TokenNotActive.selector));
+        pool.callDepositV3(params);
+    }
+    
     /// @notice Test ExtensionsMap selector mapping
     function test_ExtensionsMap_SelectorMapping() public pure {
         bytes4 selector = bytes4(keccak256("handleV3AcrossMessage(address,uint256,bytes)"));
@@ -698,7 +838,7 @@ contract AcrossUnitTest is Test {
         uint256 normalized = _normalizeNav(nav, sourceDecimals, destDecimals);
         
         // Verify reversibility
-        uint256 denormalized = _normalizeNav(normalized, destDecimals, sourceDecimals);
+        //uint256 denormalized = _normalizeNav(normalized, destDecimals, sourceDecimals);
         // TODO: there is a small precision loss here, check if we can assert that delta is within a 1e8 range
         //assertEq(denormalized, nav, "Denormalized should be equal to nav");
         

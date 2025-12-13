@@ -26,3 +26,9 @@ int_types = "long"
 
 [profile.lint]
 ignore = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
+
+[rpc_endpoints]
+mainnet = "${MAINNET_RPC_URL}"
+arbitrum = "${ARBITRUM_RPC_URL:https://arb1.arbitrum.io/rpc}"
+optimism = "${OPTIMISM_RPC_URL:https://mainnet.optimism.io}"
+base = "${BASE_RPC_URL:https://mainnet.base.org}"

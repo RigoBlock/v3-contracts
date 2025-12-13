@@ -480,4 +480,155 @@ contract AcrossIntegrationForkTest is Test {
         
         console2.log("Cross-chain transfer flow simulation complete");
     }
+    
+    /// @notice Test handler constructor with zero address reverts
+    function testFork_Handler_ConstructorZeroAddressReverts() public {
+        vm.expectRevert("INVALID_SPOKE_POOL");
+        new EAcrossHandler(address(0));
+    }
+    
+    /// @notice Test adapter and handler deployed on Arbitrum
+    function testFork_Arb_DeployedContractsExist() public {
+        if (arbFork == 0) {
+            console2.log("Skipping: No Arbitrum fork");
+            return;
+        }
+        
+        vm.selectFork(arbFork);
+        
+        assertTrue(address(arbAdapter).code.length > 0, "Adapter should be deployed");
+        assertTrue(address(arbHandler).code.length > 0, "Handler should be deployed");
+        
+        assertEq(address(arbAdapter.acrossSpokePool()), ARB_SPOKE_POOL);
+        assertEq(arbHandler.acrossSpokePool(), ARB_SPOKE_POOL);
+    }
+    
+    /// @notice Test adapter and handler deployed on Optimism
+    function testFork_Opt_DeployedContractsExist() public {
+        if (optFork == 0) {
+            console2.log("Skipping: No Optimism fork");
+            return;
+        }
+        
+        vm.selectFork(optFork);
+        
+        assertTrue(address(optAdapter).code.length > 0, "Adapter should be deployed");
+        assertTrue(address(optHandler).code.length > 0, "Handler should be deployed");
+        
+        assertEq(address(optAdapter.acrossSpokePool()), OPT_SPOKE_POOL);
+        assertEq(optHandler.acrossSpokePool(), OPT_SPOKE_POOL);
+    }
+    
+    /// @notice Test adapter requiredVersion
+    function testFork_Adapter_RequiredVersion() public {
+        if (arbFork == 0) {
+            console2.log("Skipping: No Arbitrum fork");
+            return;
+        }
+        
+        vm.selectFork(arbFork);
+        assertEq(arbAdapter.requiredVersion(), "HF_4.1.0");
+    }
+    
+    /// @notice Test USDC token exists on Arbitrum
+    function testFork_Arb_USDCExists() public {
+        if (arbFork == 0) {
+            console2.log("Skipping: No Arbitrum fork");
+            return;
+        }
+        
+        vm.selectFork(arbFork);
+        
+        assertTrue(USDC_ARB.code.length > 0, "USDC should exist");
+        
+        // Check token properties
+        uint8 decimals = IERC20(USDC_ARB).decimals();
+        assertEq(decimals, 6, "USDC should have 6 decimals");
+    }
+    
+    /// @notice Test WETH token exists on Arbitrum
+    function testFork_Arb_WETHExists() public {
+        if (arbFork == 0) {
+            console2.log("Skipping: No Arbitrum fork");
+            return;
+        }
+        
+        vm.selectFork(arbFork);
+        
+        assertTrue(WETH_ARB.code.length > 0, "WETH should exist");
+        
+        uint8 decimals = IERC20(WETH_ARB).decimals();
+        assertEq(decimals, 18, "WETH should have 18 decimals");
+    }
+    
+    /// @notice Test Across SpokePool exists on Arbitrum
+    function testFork_Arb_SpokePoolExists() public {
+        if (arbFork == 0) {
+            console2.log("Skipping: No Arbitrum fork");
+            return;
+        }
+        
+        vm.selectFork(arbFork);
+        
+        assertTrue(ARB_SPOKE_POOL.code.length > 0, "SpokePool should exist");
+    }
+    
+    /// @notice Test message encoding consistency across chains
+    function testFork_MessageEncodingConsistency() public pure {
+        DestinationMessage memory msg1 = DestinationMessage({
+            opType: OpType.Transfer,
+            sourceChainId: ARB_CHAIN_ID,
+            sourceNav: 1e18,
+            sourceDecimals: 18,
+            navTolerance: 100,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        
+        bytes memory encoded1 = abi.encode(msg1);
+        DestinationMessage memory decoded1 = abi.decode(encoded1, (DestinationMessage));
+        
+        assertEq(uint8(decoded1.opType), uint8(OpType.Transfer));
+        assertEq(decoded1.sourceChainId, ARB_CHAIN_ID);
+        assertEq(decoded1.sourceNav, 1e18);
+    }
+    
+    /// @notice Test all three OpTypes
+    function testFork_AllOpTypes() public pure {
+        // Transfer
+        DestinationMessage memory transferMsg = DestinationMessage({
+            opType: OpType.Transfer,
+            sourceChainId: ARB_CHAIN_ID,
+            sourceNav: 1e18,
+            sourceDecimals: 18,
+            navTolerance: 100,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        assertEq(uint8(transferMsg.opType), 0);
+        
+        // Rebalance
+        DestinationMessage memory rebalanceMsg = DestinationMessage({
+            opType: OpType.Rebalance,
+            sourceChainId: ARB_CHAIN_ID,
+            sourceNav: 1e18,
+            sourceDecimals: 18,
+            navTolerance: 200,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        assertEq(uint8(rebalanceMsg.opType), 1);
+        
+        // Sync
+        DestinationMessage memory syncMsg = DestinationMessage({
+            opType: OpType.Sync,
+            sourceChainId: ARB_CHAIN_ID,
+            sourceNav: 1e18,
+            sourceDecimals: 18,
+            navTolerance: 0,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        assertEq(uint8(syncMsg.opType), 2);
+    }
 }
