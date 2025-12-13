@@ -37,10 +37,18 @@ describe("OffchainNav", async () => {
         const HookInstance = await deployments.get("MockOracle")
         const Hook = await hre.ethers.getContractFactory("MockOracle")
         const oracle = Hook.attach(HookInstance.address)
+
+        const UniV4PosmInstance = await deployments.get("MockUniswapPosm");
+        const UniV4Posm = await hre.ethers.getContractFactory("MockUniswapPosm");
+        const uniV4Posm = UniV4Posm.attach(UniV4PosmInstance.address);
+
+        const StakingProxyInstance = await deployments.get("StakingProxy");
+        const StakingProxy = await hre.ethers.getContractFactory("StakingProxy");
+        const stakingProxy = StakingProxy.attach(StakingProxyInstance.address);
         
         // Deploy OffchainNav contract
         const OffchainNav = await ethers.getContractFactory("OffchainNav");
-        const offchainNav = await OffchainNav.deploy();
+        const offchainNav = await OffchainNav.deploy(stakingProxy.address, uniV4Posm.address);
         
         return {
             pool,
