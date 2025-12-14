@@ -174,8 +174,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // Deploy MockSpokePool for testing
-  const mockSpokePool = await deploy("MockSpokePool", {
+  const acrossSpokePool = await deploy("MockAcrossSpokePool", {
     from: deployer,
     args: [weth.address],
     log: true,
@@ -184,7 +183,7 @@ const deploy: DeployFunction = async function (
 
   const eAcrossHandler = await deploy("EAcrossHandler", {
     from: deployer,
-    args: [mockSpokePool.address],
+    args: [acrossSpokePool.address],
     log: true,
     deterministicDeployment: true,
   });
@@ -309,7 +308,7 @@ const deploy: DeployFunction = async function (
 
   const aIntents = await deploy("AIntents", {
     from: deployer,
-    args: [mockSpokePool.address],
+    args: [acrossSpokePool.address],
     log: true,
     deterministicDeployment: true,
   })

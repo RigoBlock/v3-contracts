@@ -678,14 +678,14 @@ contract AcrossUnitTest is Test {
     
     /// @notice Test SourceMessage encoding/decoding
     function test_SourceMessage_EncodingDecoding() public pure {
-        SourceMessage memory msg = SourceMessage({
+        SourceMessage memory $ = SourceMessage({
             opType: OpType.Transfer,
             navTolerance: 100,
             shouldUnwrapOnDestination: true,
             sourceNativeAmount: 0.01 ether
         });
         
-        bytes memory encoded = abi.encode(msg);
+        bytes memory encoded = abi.encode($);
         SourceMessage memory decoded = abi.decode(encoded, (SourceMessage));
         
         assertEq(uint8(decoded.opType), uint8(OpType.Transfer));

@@ -13,8 +13,8 @@ describe("Across Integration - Execution Coverage", () => {
   let authority: Contract;
   let eAcrossHandler: Contract;
   let aIntents: Contract;
-  let mockSpokePool: Contract;
-  let mockWETH: Contract;
+  let acrossSpokePool: Contract;
+  let wethContract: Contract;
   let mockUSDC: Contract;
   let owner: Signer;
   let user: Signer;
@@ -34,21 +34,22 @@ describe("Across Integration - Execution Coverage", () => {
 
     // Deploy mock tokens
     const MockERC20 = await ethers.getContractFactory("MockERC20");
-    mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
+    const WETH9Instance = await hre.deployments.get("WETH9")
+    const WETH9 = await hre.ethers.getContractFactory("WETH9")
+    wethContract = await WETH9.attach(WETH9Instance.address)
     mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
 
     // Deploy mock SpokePool
-    const MockSpokePool = await ethers.getContractFactory("MockAcrossSpokePool");
-    mockSpokePool = await MockSpokePool.deploy(mockWETH.address);
+    const MockAcrossSpokePool = await ethers.getContractFactory("MockAcrossSpokePool");
+    acrossSpokePool = await MockAcrossSpokePool.deploy(wethContract.address);
 
     // Deploy EAcrossHandler
     const EAcrossHandler = await ethers.getContractFactory("EAcrossHandler");
-    eAcrossHandler = await EAcrossHandler.deploy(mockSpokePool.address);
+    eAcrossHandler = await EAcrossHandler.deploy(acrossSpokePool.address);
 
     // Deploy AIntents
     const AIntents = await ethers.getContractFactory("AIntents");
-    aIntents = await AIntents.deploy(mockSpokePool.address);
-
+    aIntents = await AIntents.deploy(acrossSpokePool.address);
     // For real coverage, we'd need to deploy the full pool infrastructure
     // For now, let's test what we can with direct calls and mocking
   });
@@ -56,7 +57,7 @@ describe("Across Integration - Execution Coverage", () => {
   describe("EAcrossHandler - Direct Execution Tests", () => {
     it("should successfully verify SpokePool address in constructor", async () => {
       const spokePoolAddr = await eAcrossHandler.acrossSpokePool();
-      expect(spokePoolAddr).to.equal(mockSpokePool.address);
+      expect(spokePoolAddr).to.equal(acrossSpokePool.address);
     });
 
     it("should store immutable SpokePool correctly", async () => {
@@ -64,7 +65,7 @@ describe("Across Integration - Execution Coverage", () => {
       const addr1 = await eAcrossHandler.acrossSpokePool();
       const addr2 = await eAcrossHandler.acrossSpokePool();
       expect(addr1).to.equal(addr2);
-      expect(addr1).to.equal(mockSpokePool.address);
+      expect(addr1).to.equal(acrossSpokePool.address);
     });
 
     it("should reject handleV3AcrossMessage from non-SpokePool", async () => {
@@ -83,14 +84,14 @@ describe("Across Integration - Execution Coverage", () => {
       // Impersonate the SpokePool
       await hre.network.provider.request({
         method: "hardhat_impersonateAccount",
-        params: [mockSpokePool.address],
+        params: [acrossSpokePool.address],
       });
 
-      const spokePoolSigner = await ethers.getSigner(mockSpokePool.address);
+      const spokePoolSigner = await ethers.getSigner(acrossSpokePool.address);
       
       // Fund the SpokePool address
       await owner.sendTransaction({
-        to: mockSpokePool.address,
+        to: acrossSpokePool.address,
         value: ethers.utils.parseEther("1"),
       });
 
@@ -107,11 +108,11 @@ describe("Across Integration - Execution Coverage", () => {
           1000000,
           message
         )
-      ).to.be.reverted; // Will fail on pool state access, not auth check
+      ).to.be.revertedWith("Transaction reverted: function selector was not recognized and there's no fallback function"); // Will fail on pool state access, not auth check
 
       await hre.network.provider.request({
         method: "hardhat_stopImpersonatingAccount",
-        params: [mockSpokePool.address],
+        params: [acrossSpokePool.address],
       });
     });
 
@@ -175,7 +176,7 @@ describe("Across Integration - Execution Coverage", () => {
 
     it("should have correct SpokePool immutable", async () => {
       const spokePool = await aIntents.acrossSpokePool();
-      expect(spokePool).to.equal(mockSpokePool.address);
+      expect(spokePool).to.equal(acrossSpokePool.address);
     });
 
     it("should reject direct calls to depositV3", async () => {
@@ -225,21 +226,21 @@ describe("Across Integration - Execution Coverage", () => {
 
   describe("Mock SpokePool Functionality", () => {
     it("should have correct wrappedNativeToken", async () => {
-      const weth = await mockSpokePool.wrappedNativeToken();
-      expect(weth).to.equal(mockWETH.address);
+      const weth = await acrossSpokePool.wrappedNativeToken();
+      expect(weth).to.equal(wethContract.address);
     });
 
     it("should have fillDeadlineBuffer set", async () => {
-      const buffer = await mockSpokePool.fillDeadlineBuffer();
+      const buffer = await acrossSpokePool.fillDeadlineBuffer();
       expect(buffer).to.be.gt(0);
     });
 
     it("should accept depositV3 calls", async () => {
       // Mint tokens to test account
       await mockUSDC.mint(ownerAddress, ethers.utils.parseUnits("1000", 6));
-      await mockUSDC.approve(mockSpokePool.address, ethers.utils.parseUnits("100", 6));
+      await mockUSDC.approve(acrossSpokePool.address, ethers.utils.parseUnits("100", 6));
 
-      const tx = await mockSpokePool.depositV3(
+      const tx = await acrossSpokePool.depositV3(
         ownerAddress, // depositor
         ownerAddress, // recipient
         mockUSDC.address, // inputToken
@@ -254,16 +255,16 @@ describe("Across Integration - Execution Coverage", () => {
         "0x" // message
       );
 
-      await expect(tx).to.emit(mockSpokePool, "V3FundsDeposited");
+      await expect(tx).to.emit(acrossSpokePool, "V3FundsDeposited");
     });
 
     it("should transfer tokens on depositV3", async () => {
       const initialBalance = await mockUSDC.balanceOf(ownerAddress);
       const depositAmount = ethers.utils.parseUnits("50", 6);
 
-      await mockUSDC.approve(mockSpokePool.address, depositAmount);
+      await mockUSDC.approve(acrossSpokePool.address, depositAmount);
 
-      await mockSpokePool.depositV3(
+      await acrossSpokePool.depositV3(
         ownerAddress,
         ownerAddress,
         mockUSDC.address,

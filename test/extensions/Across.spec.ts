@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import hre, { ethers } from "hardhat";
+import hre, { deployments, ethers } from "hardhat";
 import { Contract, Signer } from "ethers";
 import { Address } from "hardhat-deploy/types";
 
@@ -12,8 +12,7 @@ describe("Across Integration", () => {
 
   let eAcrossHandler: Contract;
   let aIntents: Contract;
-  let mockSpokePool: Contract;
-  let mockWETH: Contract;
+  let acrossSpokePool: Contract;
   let mockUSDC: Contract;
   let mockPool: Contract;
 
@@ -26,25 +25,26 @@ describe("Across Integration", () => {
 
     // Deploy mock contracts
     const MockERC20 = await ethers.getContractFactory("MockERC20");
-    mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
+    const WETH9Instance = await deployments.get("WETH9")
+    const WETH9 = await hre.ethers.getContractFactory("WETH9")
+    const weth = await WETH9.attach(WETH9Instance.address)
     mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
 
     // Deploy mock SpokePool (from AcrossMocks.sol)
-    const MockSpokePool = await ethers.getContractFactory("MockAcrossSpokePool");
-    mockSpokePool = await MockSpokePool.deploy(mockWETH.address);
+    const MockAcrossSpokePool = await ethers.getContractFactory("MockAcrossSpokePool");
+    acrossSpokePool = await MockAcrossSpokePool.deploy(weth.address);
 
     // Deploy EAcrossHandler
     const EAcrossHandler = await ethers.getContractFactory("EAcrossHandler");
-    eAcrossHandler = await EAcrossHandler.deploy(mockSpokePool.address);
-
+    eAcrossHandler = await EAcrossHandler.deploy(acrossSpokePool.address);
     // Deploy AIntents
     const AIntents = await ethers.getContractFactory("AIntents");
-    aIntents = await AIntents.deploy(mockSpokePool.address);
+    aIntents = await AIntents.deploy(acrossSpokePool.address);
   });
 
   describe("EAcrossHandler", () => {
     it("should deploy with correct SpokePool address", async () => {
-      expect(await eAcrossHandler.acrossSpokePool()).to.equal(mockSpokePool.address);
+      expect(await eAcrossHandler.acrossSpokePool()).to.equal(acrossSpokePool.address);
     });
 
     it("should revert when deploying with zero address", async () => {
@@ -171,7 +171,7 @@ describe("Across Integration", () => {
 
   describe("AIntents", () => {
     it("should deploy with correct SpokePool address", async () => {
-      expect(await aIntents.acrossSpokePool()).to.equal(mockSpokePool.address);
+      expect(await aIntents.acrossSpokePool()).to.equal(acrossSpokePool.address);
     });
 
     it("should return correct required version", async () => {

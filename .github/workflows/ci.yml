@@ -48,11 +48,15 @@ jobs:
       # Skip foundry build due to unfixed bugs in their solar linter
       #- run: yarn build
       - run: yarn test
-      - run: yarn coverage
+
+      - name: Generate combined coverage report
+        run: yarn coverage:combined
+
       - name: Upload coverage to Codecov
         if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/combined_lcov.info
           fail_ci_if_error: true
           verbose: true

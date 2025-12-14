@@ -65,9 +65,6 @@ contract MockERC20 {
 
 /// @notice Mock Across SpokePool for testing
 contract MockAcrossSpokePool {
-    address public wrappedNativeToken;
-    uint32 public fillDeadlineBuffer = 3600; // 1 hour
-    
     event V3FundsDeposited(
         address inputToken,
         address outputToken,
@@ -82,10 +79,16 @@ contract MockAcrossSpokePool {
         address exclusiveRelayer,
         bytes message
     );
+
+    address public wrappedNativeToken;
+    uint32 public immutable fillDeadlineBuffer;
     
     constructor(address _wrappedNativeToken) {
         wrappedNativeToken = _wrappedNativeToken;
+        fillDeadlineBuffer = 21600;
     }
+
+    receive() external payable {}
     
     function depositV3(
         address depositor,
@@ -120,5 +123,23 @@ contract MockAcrossSpokePool {
             exclusiveRelayer,
             message
         );
+    }
+
+    /// @notice Mock function to simulate filling a deposit and calling handler
+    function simulateFill(
+        address handler,
+        address tokenReceived,
+        uint256 amount,
+        bytes calldata message
+    ) external {
+        (bool success,) = handler.call(
+            abi.encodeWithSignature(
+                "handleV3AcrossMessage(address,uint256,bytes)",
+                tokenReceived,
+                amount,
+                message
+            )
+        );
+        require(success, "Handler call failed");
     }
 }

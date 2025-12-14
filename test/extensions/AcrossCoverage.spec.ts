@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import hre, { ethers } from "hardhat";
+import hre, { deployments, ethers } from "hardhat";
 import { Contract, Signer, BigNumber } from "ethers";
 import { Address } from "hardhat-deploy/types";
 
@@ -17,11 +17,9 @@ describe("Across Coverage Tests", () => {
   let ownerAddress: Address;
   let userAddress: Address;
   let unauthorizedAddress: Address;
-
   let eAcrossHandler: Contract;
   let aIntents: Contract;
-  let mockSpokePool: Contract;
-  let mockWETH: Contract;
+  let acrossSpokePool: Contract;
   let mockUSDC: Contract;
   let mockDAI: Contract;
   let mockERC20: Contract;
@@ -45,27 +43,29 @@ describe("Across Coverage Tests", () => {
 
     // Deploy mock ERC20 tokens
     const MockERC20 = await ethers.getContractFactory("MockERC20");
-    mockWETH = await MockERC20.deploy("Wrapped Ether", "WETH", 18);
+    const WETH9Instance = await deployments.get("WETH9")
+    const WETH9 = await hre.ethers.getContractFactory("WETH9");
+    const weth = await WETH9.attach(WETH9Instance.address);
     mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
     mockDAI = await MockERC20.deploy("Dai Stablecoin", "DAI", 18);
     mockERC20 = await MockERC20.deploy("Test Token", "TEST", 8);
 
     // Deploy mock SpokePool
-    const MockSpokePool = await ethers.getContractFactory("MockAcrossSpokePool");
-    mockSpokePool = await MockSpokePool.deploy(mockWETH.address);
+    const MockAcrossSpokePool = await ethers.getContractFactory("MockAcrossSpokePool");
+    acrossSpokePool = await MockAcrossSpokePool.deploy(weth.address);
 
     // Deploy EAcrossHandler
     const EAcrossHandler = await ethers.getContractFactory("EAcrossHandler");
-    eAcrossHandler = await EAcrossHandler.deploy(mockSpokePool.address);
+    eAcrossHandler = await EAcrossHandler.deploy(acrossSpokePool.address);
 
     // Deploy AIntents
     const AIntents = await ethers.getContractFactory("AIntents");
-    aIntents = await AIntents.deploy(mockSpokePool.address);
+    aIntents = await AIntents.deploy(acrossSpokePool.address);
   });
 
   describe("EAcrossHandler - Constructor Tests", () => {
     it("should set the correct SpokePool address", async () => {
-      expect(await eAcrossHandler.acrossSpokePool()).to.equal(mockSpokePool.address);
+      expect(await eAcrossHandler.acrossSpokePool()).to.equal(acrossSpokePool.address);
     });
 
     it("should revert with zero address", async () => {
@@ -342,7 +342,7 @@ describe("Across Coverage Tests", () => {
 
   describe("AIntents - Constructor and Immutables", () => {
     it("should set correct SpokePool address", async () => {
-      expect(await aIntents.acrossSpokePool()).to.equal(mockSpokePool.address);
+      expect(await aIntents.acrossSpokePool()).to.equal(acrossSpokePool.address);
     });
 
     it("should return correct required version", async () => {
