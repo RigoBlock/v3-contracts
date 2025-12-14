@@ -25,7 +25,7 @@
     "coverage:setup": "chmod +x ./scripts/setup-lcov.sh && scripts/setup-lcov.sh",
     "coverage:hardhat": "hardhat coverage",
     "coverage:foundry": "forge coverage --report lcov && mv lcov.info coverage/foundry_lcov.info",
-    "coverage:merge": "lcov --add-tracefile coverage/lcov.info --add-tracefile coverage/foundry_lcov.info --output-file coverage/combined_lcov.info",
+    "coverage:merge": "lcov --add-tracefile coverage/lcov.info --add-tracefile coverage/foundry_lcov.info --output-file coverage/combined_lcov.info --ignore-errors format,corrupt",
     "coverage:combined": "yarn coverage:setup && yarn coverage:hardhat && yarn coverage:foundry && yarn coverage:merge",
     "coverage:combined:summary": "yarn coverage:setup && yarn coverage:hardhat && yarn coverage:foundry && yarn coverage:merge && yarn coverage:summary",
     "coverage:summary": "genhtml -o coverage/html coverage/combined_lcov.info",
