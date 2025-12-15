@@ -4,6 +4,7 @@ module.exports = {
         './tokens/',
         './utils/',
         './mocks/',
+        './test/',
         './protocol/libraries/SlotDerivation.sol',
         './protocol/libraries/ReentrancyGuardTransient.sol',
         './protocol/libraries/TransientSlot.sol'
