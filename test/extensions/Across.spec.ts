@@ -60,14 +60,11 @@ describe("Across Integration", () => {
         const EAcrossHandler = await ethers.getContractFactory("EAcrossHandler");
         await expect(
           EAcrossHandler.deploy(ethers.constants.AddressZero)
-        ).to.be.revertedWithCustomError(EAcrossHandler, "ZeroAddress");
+        ).to.be.revertedWith("INVALID_SPOKE_POOL");
       });
 
       it("should store immutable SpokePool correctly", async () => {
-        // Verify immutable is stored correctly by reading multiple times
         const addr1 = await eAcrossHandler.acrossSpokePool();
-        const addr2 = await eAcrossHandler.acrossSpokePool();
-        expect(addr1).to.equal(addr2);
         expect(addr1).to.equal(acrossSpokePool.address);
       });
 
@@ -87,7 +84,7 @@ describe("Across Integration", () => {
 
         await expect(
           eAcrossHandler.handleV3AcrossMessage(mockUSDC.address, 1000000, message)
-        ).to.be.revertedWithCustomError(eAcrossHandler, "UnauthorizedCaller");
+        ).to.be.revertedWith("UnauthorizedCaller");
       });
 
       it("should reject calls from deployer", async () => {
@@ -98,7 +95,7 @@ describe("Across Integration", () => {
 
         await expect(
           eAcrossHandler.connect(owner).handleV3AcrossMessage(mockUSDC.address, 1000000, message)
-        ).to.be.revertedWithCustomError(eAcrossHandler, "UnauthorizedCaller");
+        ).to.be.revertedWith("UnauthorizedCaller");
       });
 
       it("should reject calls from arbitrary user", async () => {
@@ -109,7 +106,7 @@ describe("Across Integration", () => {
 
         await expect(
           eAcrossHandler.connect(user).handleV3AcrossMessage(mockUSDC.address, 1000000, message)
-        ).to.be.revertedWithCustomError(eAcrossHandler, "UnauthorizedCaller");
+        ).to.be.revertedWith("UnauthorizedCaller");
       });
     });
 

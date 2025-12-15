@@ -20,6 +20,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 7. **Error Handling**: Use custom errors (`error ErrorName(params)`) instead of revert strings
 8. **Override Keyword**: Add `override` to interface implementations - fix compilation warnings
 9. **Compilation**: Fix all warnings in new code (legacy warnings acceptable)
+10. **ALWAYS RUN TESTS**: After ANY modification to .sol files or test files, IMMEDIATELY run tests to verify they pass
 
 ## AI Agent Limitations (CRITICAL)
 
@@ -404,6 +405,7 @@ When making changes:
 - [ ] **Add `override` keyword** to interface implementations
 - [ ] **Fix all compilation warnings** in new code (not required for legacy code)
 - [ ] **Write or update tests** (unit tests, integration tests, fork tests)
+- [ ] **IMMEDIATELY RUN TESTS after ANY code change** (`forge test` for Foundry, `yarn test` for Hardhat)
 - [ ] **Run tests to ensure they pass** (`forge test` for Foundry, `npm test` for Hardhat)
 - [ ] Test with forks if cross-chain or integration work
 - [ ] Update interfaces and use `@inheritdoc`
@@ -413,6 +415,8 @@ When making changes:
 - [ ] Consider gas optimization (immutables, transient storage)
 - [ ] Update deployment scripts if adding contracts
 - [ ] Save documentation files in `/docs/` or `/docs/<protocol>/`
+
+**CRITICAL**: After modifying any .sol or .spec.ts file, you MUST run the corresponding tests immediately to verify they pass before proceeding.
 
 ## Common Pitfalls to Avoid
 
