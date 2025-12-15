@@ -27,6 +27,7 @@ jobs:
       SOLIDITY_VERSION: ${{ matrix.solidity }}
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
       PROD: ""
+      INFURA_KEY: ${{ secrets.INFURA_KEY }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -38,20 +39,16 @@ jobs:
         with:
           path: |
             **/node_modules
-            **/.foundry
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
       - name: Install Foundry
-        uses: onbjerg/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
       - run: yarn --frozen-lockfile
-      # Skip foundry build due to unfixed bugs in their solar linter
-      #- run: yarn build
+      - run: yarn build
       - run: yarn test
 
       - name: Generate combined coverage report
-        env:
-          INFURA_KEY: ${{ secrets.INFURA_KEY || '' }}
         run: yarn coverage:combined
 
       - name: Upload coverage to Codecov
