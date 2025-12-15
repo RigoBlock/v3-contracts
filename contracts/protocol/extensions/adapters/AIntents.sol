@@ -53,7 +53,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 
     // TODO: are we not storing anything on the source chain? how will we know it's a OpType.Sync vs .Rebalance when i.e. we always successfully bridge from chain1 to chain2???
-    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
+    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492d;
 
     address private immutable _IMPLEMENTATION;
 

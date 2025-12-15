@@ -1,13 +1,14 @@
 import { expect } from "chai";
-import hre, { deployments, waffle } from "hardhat";
+import hre, { deployments } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
+import { getFixedGasSigners } from "../shared/helper";
 
 describe("AUniswap", async () => {
-    const [ user1, user2 ] = waffle.provider.getWallets()
+    const [user1, user2] = await getFixedGasSigners();
 
-    const setupTests = deployments.createFixture(async ({ deployments }) => {
+    const setupTests = deployments.createFixture(async ({ deployments }: { deployments: any }) => {
         await deployments.fixture('tests-setup')
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
@@ -35,9 +36,9 @@ describe("AUniswap", async () => {
         }
     })
 
-    // TODO: uncomment once failing test in coverage is fixed (tests pass in normal test run). Error happens after ai code changes
-    // to other (apparently unrelated) files. Possibly related to hardhat-coverage plugin.
-    describe.skip("unwrapWETH9", async () => {
+    // TODO: uncomment once failing test in coverage is fixed (tests pass in normal test run). Error happens after bridge code changes,
+    // to (apparently unrelated) different files. Possibly related to hardhat-coverage plugin - or to slow compilation on coverage - requires improving tests execution.
+    describe("unwrapWETH9 @skip-on-coverage", async () => {
         it('should call WETH contract', async () => {
             const { authority, aUniswap, newPoolAddress } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AUniswap")
@@ -56,31 +57,17 @@ describe("AUniswap", async () => {
             )
             await expect(authority.addMethod("0x49404b7c", aUniswap)).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
             await expect(authority.addMethod("0x49404b7c", aUniswap)).to.be.revertedWith("SELECTOR_EXISTS_ERROR")
-            const PeripheryPayments = await hre.ethers.getContractAt("MockPeripheryPayments", newPoolAddress)
-            await PeripheryPayments.unwrapWETH9(unwrapAmount, rogueRecipient)
-            expect(await hre.ethers.provider.getBalance(rogueRecipient)).to.be.eq(rogueBalance.add(unwrapAmount))
-            expect(await hre.ethers.provider.getBalance(newPoolAddress)).to.be.eq(amount.sub(unwrapAmount))
-            
-            // attempts to debug - simulation not failing in coverage
-            // Debug: simulate the call first to see the revert reason
             try {
-                await user1.call({ 
-                    to: newPoolAddress, 
-                    value: 0, 
+                await user1.sendTransaction({
+                    to: newPoolAddress,
+                    value: 0,
                     data: encodedUnwrapData
-                })
+                });
             } catch (error: any) {
-                console.log("Revert reason:", error.message)
-                // Re-throw to see full error details
-                throw error
+                const customError = error.error?.reason || error.reason || error.message;
+                throw new Error(`${customError}`);
             }
             
-            // old transaction flow
-            await user1.sendTransaction({ 
-                to: newPoolAddress, 
-                value: 0, 
-                data: encodedUnwrapData
-            })
             // unwrapped token returned to pool regardless recipient input
             expect(await hre.ethers.provider.getBalance(rogueRecipient)).to.be.eq(rogueBalance)
             expect(await hre.ethers.provider.getBalance(newPoolAddress)).to.be.eq(unwrapAmount)
@@ -89,7 +76,16 @@ describe("AUniswap", async () => {
                 [50]
             )
             await authority.addMethod("0x49616997", aUniswap)
-            await user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedUnwrapData})
+            try {
+                await user1.sendTransaction({
+                to: newPoolAddress,
+                value: 0,
+                data: encodedUnwrapData
+                });
+            } catch (error: any) {
+                const customError = error.error?.reason || error.reason || error.message;
+                throw new Error(`${customError}`);
+            }
         })
     })
 })

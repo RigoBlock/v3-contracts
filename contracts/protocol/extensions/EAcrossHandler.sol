@@ -48,14 +48,14 @@ contract EAcrossHandler is IEAcrossHandler {
     using EnumerableSet for AddressSet;
 
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
-    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0xa0c9d7d54ff2fdd3c228763004d60a319012acab15df4dac498e6018b7372dd7;
+    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492d;
     
     /// @notice Address of the Across SpokePool contract
     /// @dev Immutable to save gas on verification
     address public immutable acrossSpokePool;
     
     constructor(address _acrossSpokePool) {
-        // TODO: use custom errors!
+        // TODO: use custom errors! Also constructor args are assumed to be valid, no validation should be needed
         require(_acrossSpokePool != address(0), "INVALID_SPOKE_POOL");
         acrossSpokePool = _acrossSpokePool;
     }
@@ -81,6 +81,7 @@ contract EAcrossHandler is IEAcrossHandler {
         // Unwrap native if requested
         address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
         if (params.shouldUnwrap && tokenReceived == wrappedNative) {
+            // interaction with external contract should happen via AUniswap.withdrawWETH9?
             IWETH9(wrappedNative).withdraw(amount);
         }
         

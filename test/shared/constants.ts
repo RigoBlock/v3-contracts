@@ -27,3 +27,6 @@ export const V2_INIT_CODE_HASH_MAINNET = '0x96e8ac4277198ff8b6f785478aa9a39f403c
 export const V3_NFT_POSITION_MANAGER_MAINNET = '0xC36442b4a4522E871399CD717aBDD847Ab11FE88'
 export const V4_POSITION_DESCRIPTOR_ADDRESS = '0x0000000000000000000000000000000000000000' // TODO, deploy this in-line and use the proper address in posm's constructor
 export const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
+
+// Signers with fixed gas limit
+export const FIXED_GAS_LIMIT = 1000000
