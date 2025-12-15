@@ -580,4 +580,156 @@ contract AcrossIntegrationForkTest is Test {
         
         console2.log("Round trip completed successfully");
     }
+    
+    /*
+     * ADVANCED COVERAGE TESTS - EAcrossHandler
+     */
+    
+    /// @notice Test handler with shouldUnwrap flag (WETH unwrapping)
+    function testFork_Arb_HandlerUnwrapWETH() public {
+        if (arbFork == 0) return;
+        vm.selectFork(arbFork);
+        
+        uint256 amount = 1e18;
+        
+        // Deal WETH to pool
+        deal(WETH_ARB, address(arbPool), amount);
+        
+        DestinationMessage memory message = DestinationMessage({
+            opType: OpType.Transfer,
+            sourceChainId: OPT_CHAIN_ID,
+            sourceNav: 0,
+            sourceDecimals: 18,
+            navTolerance: 0,
+            shouldUnwrap: true,
+            sourceNativeAmount: amount
+        });
+        
+        uint256 ethBalanceBefore = address(arbPool).balance;
+        
+        bytes memory callData = abi.encodeWithSelector(
+            IEAcrossHandler.handleV3AcrossMessage.selector,
+            WETH_ARB,
+            amount,
+            abi.encode(message)
+        );
+        
+        vm.prank(ARB_SPOKE_POOL);
+        (bool success,) = address(arbPool).call(callData);
+        assertTrue(success, "Handler with unwrap should succeed");
+        
+        // Check ETH was received (WETH unwrapped)
+        uint256 ethBalanceAfter = address(arbPool).balance;
+        assertGt(ethBalanceAfter, ethBalanceBefore, "Should receive ETH from unwrap");
+        
+        console2.log("WETH unwrapped successfully");
+    }
+    
+    /// @notice Test handler with different decimal conversions
+    function testFork_Arb_HandlerDifferentDecimals() public {
+        if (arbFork == 0) return;
+        vm.selectFork(arbFork);
+        
+        // Test with 18 decimals token (WETH)
+        uint256 amount = 5e18;
+        deal(WETH_ARB, address(arbPool), amount);
+        
+        DestinationMessage memory message = DestinationMessage({
+            opType: OpType.Transfer,
+            sourceChainId: OPT_CHAIN_ID,
+            sourceNav: 0,
+            sourceDecimals: 18,
+            navTolerance: 0,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        
+        bytes memory callData = abi.encodeWithSelector(
+            IEAcrossHandler.handleV3AcrossMessage.selector,
+            WETH_ARB,
+            amount,
+            abi.encode(message)
+        );
+        
+        vm.prank(ARB_SPOKE_POOL);
+        (bool success,) = address(arbPool).call(callData);
+        assertTrue(success, "Should handle 18 decimals");
+        
+        // Virtual balance should be in base token decimals (6)
+        int256 vBalance = arbPool.getVirtualBalance(USDC_ARB);
+        console2.log("Virtual balance after 18 dec transfer:", vBalance);
+    }
+    
+    /// @notice Test handler with large amounts
+    function testFork_Arb_HandlerLargeAmount() public {
+        if (arbFork == 0) return;
+        vm.selectFork(arbFork);
+        
+        uint256 largeAmount = 1000000e6; // 1M USDC
+        deal(USDC_ARB, address(arbPool), largeAmount);
+        
+        DestinationMessage memory message = DestinationMessage({
+            opType: OpType.Transfer,
+            sourceChainId: OPT_CHAIN_ID,
+            sourceNav: 0,
+            sourceDecimals: 6,
+            navTolerance: 0,
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        
+        bytes memory callData = abi.encodeWithSelector(
+            IEAcrossHandler.handleV3AcrossMessage.selector,
+            USDC_ARB,
+            largeAmount,
+            abi.encode(message)
+        );
+        
+        vm.prank(ARB_SPOKE_POOL);
+        (bool success,) = address(arbPool).call(callData);
+        assertTrue(success, "Should handle large amounts");
+        
+        int256 vBalance = arbPool.getVirtualBalance(USDC_ARB);
+        assertEq(vBalance, -int256(largeAmount), "Virtual balance should match");
+    }
+    
+    /// @notice Test handler Rebalance mode with NAV check
+    function testFork_Arb_HandlerRebalanceWithNavCheck() public {
+        if (arbFork == 0) return;
+        vm.selectFork(arbFork);
+        
+        uint256 amount = 1000e6;
+        uint256 poolNav = 1005000; // 1.005 in 6 decimals
+        uint256 sourceNav = 1000000; // 1.0 in 6 decimals
+        
+        // Mock pool NAV
+        vm.mockCall(
+            address(arbPool),
+            abi.encodeWithSignature("getPoolTokens()"),
+            abi.encode(1000e18, poolNav) // totalSupply, unitaryValue
+        );
+        
+        DestinationMessage memory message = DestinationMessage({
+            opType: OpType.Rebalance,
+            sourceChainId: OPT_CHAIN_ID,
+            sourceNav: sourceNav,
+            sourceDecimals: 6,
+            navTolerance: 10000, // 1% tolerance
+            shouldUnwrap: false,
+            sourceNativeAmount: 0
+        });
+        
+        bytes memory callData = abi.encodeWithSelector(
+            IEAcrossHandler.handleV3AcrossMessage.selector,
+            USDC_ARB,
+            amount,
+            abi.encode(message)
+        );
+        
+        vm.prank(ARB_SPOKE_POOL);
+        (bool success,) = address(arbPool).call(callData);
+        assertTrue(success, "Rebalance with valid NAV should succeed");
+        
+        vm.clearMockedCalls();
+    }
 }
