@@ -50,6 +50,8 @@ jobs:
       - run: yarn test
 
       - name: Generate combined coverage report
+        env:
+          INFURA_KEY: ${{ secrets.INFURA_KEY }}
         run: yarn coverage:combined
 
       - name: Upload coverage to Codecov
