@@ -32,10 +32,6 @@ abstract contract MixinConstants is ISmartPool {
     bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
         0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 
-    // bytes32(uint256(keccak256("pool.proxy.escrow.contracts")) - 1)
-    bytes32 internal constant _ESCROW_CONTRACTS_SLOT = 
-        0x09040af395217ff2320f5fd2feffe9cbcfd5e6f9c0234bd4ec2ab0caced5e4a5;
-
     // bytes32(uint256(keccak256("pool.proxy.chain.nav.spreads")) - 1)
     bytes32 internal constant _CHAIN_NAV_SPREADS_SLOT =
         0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492d;

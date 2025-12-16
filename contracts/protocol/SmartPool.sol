@@ -32,6 +32,6 @@ contract SmartPool is
     ) MixinImmutables(authority, extensionsMap, tokenJar) {
         // we lock implementation at deploy
         pool().owner = _ZERO_ADDRESS;
-        poolParams().kycProvider == _BASE_TOKEN_FLAG;
+        poolParams().kycProvider = _BASE_TOKEN_FLAG;
     }
 }

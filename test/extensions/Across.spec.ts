@@ -17,8 +17,7 @@ describe("Across Integration", () => {
 
   const OpType = {
     Transfer: 0,
-    Rebalance: 1,
-    Sync: 2,
+    Sync: 1,
   };
 
   before(async () => {
@@ -78,8 +77,8 @@ describe("Across Integration", () => {
     describe("Access Control", () => {
       it("should reject calls from non-SpokePool addresses", async () => {
         const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false, 0]]
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          [[OpType.Transfer, 1, 0, 18, 0, false]]
         );
 
         await expect(
@@ -89,8 +88,8 @@ describe("Across Integration", () => {
 
       it("should reject calls from deployer", async () => {
         const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false, 0]]
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          [[OpType.Transfer, 1, 0, 18, 0, false]]
         );
 
         await expect(
@@ -100,8 +99,8 @@ describe("Across Integration", () => {
 
       it("should reject calls from arbitrary user", async () => {
         const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false, 0]]
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          [[OpType.Transfer, 1, 0, 18, 0, false]]
         );
 
         await expect(
@@ -122,7 +121,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           [[
             transferMsg.opType,
             transferMsg.sourceChainId,
@@ -134,7 +133,7 @@ describe("Across Integration", () => {
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           encoded
         )[0];
 
@@ -157,7 +156,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           [[
             transferMsg.opType,
             transferMsg.sourceChainId,
@@ -169,7 +168,7 @@ describe("Across Integration", () => {
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           encoded
         )[0];
 
@@ -180,7 +179,7 @@ describe("Across Integration", () => {
 
       it("should encode/decode rebalance mode message", async () => {
         const rebalanceMsg = {
-          opType: OpType.Rebalance,
+          opType: OpType.Sync,
           sourceChainId: 10,
           sourceNav: ethers.utils.parseEther("1.05"),
           sourceDecimals: 18,
@@ -189,7 +188,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           [[
             rebalanceMsg.opType,
             rebalanceMsg.sourceChainId,
@@ -201,11 +200,11 @@ describe("Across Integration", () => {
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           encoded
         )[0];
 
-        expect(decoded[0]).to.equal(OpType.Rebalance);
+        expect(decoded[0]).to.equal(OpType.Sync);
         expect(decoded[2]).to.equal(rebalanceMsg.sourceNav);
         expect(decoded[4]).to.equal(rebalanceMsg.navTolerance);
       });
@@ -221,7 +220,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           [[
             syncMsg.opType,
             syncMsg.sourceChainId,
@@ -233,7 +232,7 @@ describe("Across Integration", () => {
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
           encoded
         )[0];
 
@@ -255,7 +254,7 @@ describe("Across Integration", () => {
           };
 
           const encoded = ethers.utils.defaultAbiCoder.encode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
             [[
               message.opType,
               message.sourceChainId,
@@ -267,7 +266,7 @@ describe("Across Integration", () => {
           );
 
           const decoded = ethers.utils.defaultAbiCoder.decode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
             encoded
           )[0];
 
@@ -276,16 +275,16 @@ describe("Across Integration", () => {
       });
 
       it("should handle different OpTypes in message", async () => {
-        const opTypes = [OpType.Transfer, OpType.Rebalance, OpType.Sync];
+        const opTypes = [OpType.Transfer, OpType.Sync];
 
         for (const opType of opTypes) {
           const message = ethers.utils.defaultAbiCoder.encode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-            [[opType, 1, ethers.utils.parseEther("1"), 18, 100, false, 0]]
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+            [[opType, 1, ethers.utils.parseEther("1"), 18, 100, false]]
           );
 
           const decoded = ethers.utils.defaultAbiCoder.decode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
             message
           )[0];
 
@@ -391,9 +390,9 @@ describe("Across Integration", () => {
         expect(decoded[3]).to.equal(message.sourceNativeAmount);
       });
 
-      it("should encode rebalance mode source message", () => {
+      it("should encode sync mode with different tolerance", () => {
         const message = {
-          opType: OpType.Rebalance,
+          opType: OpType.Sync,
           navTolerance: 200,
           shouldUnwrapOnDestination: true,
           sourceNativeAmount: ethers.utils.parseEther("1"),
@@ -414,7 +413,7 @@ describe("Across Integration", () => {
           encoded
         )[0];
 
-        expect(decoded[0]).to.equal(OpType.Rebalance);
+        expect(decoded[0]).to.equal(OpType.Sync);
         expect(decoded[2]).to.equal(true);
       });
 
@@ -465,7 +464,6 @@ describe("Across Integration", () => {
       it("should handle different source message types", async () => {
         const messageTypes = [
           { opType: OpType.Transfer, tolerance: 100 },
-          { opType: OpType.Rebalance, tolerance: 200 },
           { opType: OpType.Sync, tolerance: 0 },
         ];
 
@@ -537,19 +535,17 @@ describe("Across Integration", () => {
   describe("OpType Enum Values", () => {
     it("should have correct OpType values", () => {
       expect(OpType.Transfer).to.equal(0);
-      expect(OpType.Rebalance).to.equal(1);
-      expect(OpType.Sync).to.equal(2);
+      expect(OpType.Sync).to.equal(1);
     });
 
     it("should have correct enum ordering", () => {
-      expect(OpType.Transfer).to.be.lessThan(OpType.Rebalance);
-      expect(OpType.Rebalance).to.be.lessThan(OpType.Sync);
+      expect(OpType.Transfer).to.be.lessThan(OpType.Sync);
     });
 
     it("should maintain distinct values", () => {
-      const values = [OpType.Transfer, OpType.Rebalance, OpType.Sync];
+      const values = [OpType.Transfer, OpType.Sync];
       const uniqueValues = [...new Set(values)];
-      expect(uniqueValues.length).to.equal(3);
+      expect(uniqueValues.length).to.equal(2);
     });
   });
 
