@@ -73,6 +73,8 @@ contract TestProxyForAcross {
         }
     }
     
+    // TODO: check these method are correct here, as we might use the fallback to redirect to internal methods, because
+    // we should mimic the real env as close as possible.
     /// @notice Get virtual balance for a token
     /// @param token The token address
     /// @return The virtual balance (can be negative)
