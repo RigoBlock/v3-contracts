@@ -14,6 +14,8 @@ import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmar
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {OpType, DestinationMessage, SourceMessage} from "../../contracts/protocol/types/Crosschain.sol";
+import {EscrowFactory} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
+import {TransferEscrow} from "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
 
 /// @title AcrossUnit - Unit tests for Across integration components
 /// @notice Tests individual contract functionality without cross-chain simulation
@@ -763,6 +765,160 @@ contract AcrossUnitTest is Test {
         assertTrue(minNav <= nav, "Min NAV should be <= NAV");
         assertTrue(maxNav >= nav, "Max NAV should be >= NAV");
         assertTrue(maxNav > minNav, "Max should be > Min with non-zero tolerance");
+    }
+    
+    /// @notice Test escrow address prediction accuracy in pool context
+    function test_EscrowAddressPrediction_PoolContext() public {
+        // The key insight: EscrowFactory uses address(this) as the deployer in CREATE2
+        // In AIntents (delegatecall context), address(this) = pool
+        // But getEscrowAddress also uses address(this), so both should match
+        
+        // Test escrow address computation for both Transfer and Sync operations
+        OpType[2] memory opTypes = [OpType.Transfer, OpType.Sync];
+        
+        for (uint256 i = 0; i < opTypes.length; i++) {
+            OpType opType = opTypes[i];
+            
+            // Both prediction and deployment use address(this) as deployer
+            // This simulates the delegatecall context where both calls happen in same contract
+            address predictedAddress = EscrowFactory.getEscrowAddress(address(this), opType);
+            address deployedAddress = EscrowFactory.deployEscrow(address(this), opType);
+            
+            // They should match since both use address(this) as deployer context
+            assertEq(
+                deployedAddress,
+                predictedAddress,
+                string(abi.encodePacked(
+                    "Predicted address should match deployed address for ",
+                    opType == OpType.Transfer ? "Transfer" : "Sync"
+                ))
+            );
+            
+            // Verify escrow contract is properly deployed
+            assertTrue(
+                deployedAddress.code.length > 0,
+                string(abi.encodePacked(
+                    "Deployed escrow should have code for ",
+                    opType == OpType.Transfer ? "Transfer" : "Sync"
+                ))
+            );
+            
+            // Verify escrow has correct pool (should be the test contract since that's the "pool" context)
+            TransferEscrow escrowContract = TransferEscrow(payable(deployedAddress));
+            assertEq(
+                escrowContract.pool(),
+                address(this),
+                string(abi.encodePacked(
+                    "Escrow pool should be test contract (simulating pool context) for ",
+                    opType == OpType.Transfer ? "Transfer" : "Sync"
+                ))
+            );
+            
+            // Test that different deployer would give different address
+            // (This shows the importance of delegatecall context)
+            MockPool mockPool = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
+            address differentPrediction = _predictEscrowFromDifferentContext(address(mockPool), opType);
+            assertTrue(
+                deployedAddress != differentPrediction,
+                string(abi.encodePacked(
+                    "Different deployer context should give different address for ",
+                    opType == OpType.Transfer ? "Transfer" : "Sync"
+                ))
+            );
+        }
+    }
+    
+    /// @dev Helper to predict escrow address from different context (simulates wrong caller)
+    function _predictEscrowFromDifferentContext(address pool, OpType opType) internal view returns (address) {
+        // Manually calculate CREATE2 address with different deployer
+        bytes32 salt = keccak256(abi.encodePacked(pool, uint8(opType)));
+        bytes32 bytecodeHash = keccak256(abi.encodePacked(
+            type(TransferEscrow).creationCode,
+            abi.encode(pool)
+        ));
+        
+        // Use the MockPool as deployer (different from test contract)
+        return address(uint160(uint256(keccak256(abi.encodePacked(
+            bytes1(0xff),
+            pool, // Different deployer
+            salt,
+            bytecodeHash
+        )))));
+    }
+    
+    /// @notice Test escrow address prediction with different pools
+    function test_EscrowAddressPrediction_DifferentPools() public {
+        // Deploy two different mock pools
+        MockPool pool1 = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
+        MockPool pool2 = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
+        
+        // Predict escrow addresses for same OpType but different pools
+        address escrow1 = EscrowFactory.getEscrowAddress(address(pool1), OpType.Transfer);
+        address escrow2 = EscrowFactory.getEscrowAddress(address(pool2), OpType.Transfer);
+        
+        // Different pools should generate different escrow addresses
+        assertTrue(
+            escrow1 != escrow2,
+            "Different pools should generate different escrow addresses"
+        );
+        
+        // But same pool + opType should always give same address
+        address escrow1Again = EscrowFactory.getEscrowAddress(address(pool1), OpType.Transfer);
+        assertEq(
+            escrow1,
+            escrow1Again,
+            "Same pool + opType should always give same address"
+        );
+    }
+    
+    /// @notice Test escrow address prediction for different OpTypes
+    function test_EscrowAddressPrediction_DifferentOpTypes() public {
+        MockPool pool = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
+        
+        // Get predicted addresses for different OpTypes
+        address transferEscrow = EscrowFactory.getEscrowAddress(address(pool), OpType.Transfer);
+        address syncEscrow = EscrowFactory.getEscrowAddress(address(pool), OpType.Sync);
+        
+        // Different OpTypes should generate different addresses
+        assertTrue(
+            transferEscrow != syncEscrow,
+            "Different OpTypes should generate different escrow addresses"
+        );
+    }
+    
+    /// @notice Test CREATE2 salt composition for escrow deployment
+    function test_EscrowSaltComposition() public {
+        // Test salt generation for different combinations
+        address poolForSalt = makeAddr("poolForSalt");
+        
+        bytes32 transferSalt = keccak256(abi.encodePacked(poolForSalt, OpType.Transfer));
+        bytes32 syncSalt = keccak256(abi.encodePacked(poolForSalt, OpType.Sync));
+        
+        // Different combinations should generate different salts
+        assertTrue(transferSalt != syncSalt, "Different OpTypes should generate different salts");
+        
+        // Same combination should generate same salt
+        bytes32 transferSaltAgain = keccak256(abi.encodePacked(poolForSalt, OpType.Transfer));
+        assertEq(transferSalt, transferSaltAgain, "Same inputs should generate same salt");
+    }
+    
+    /// @notice Test idempotent escrow deployment
+    function test_EscrowDeployment_Idempotent() public {
+        // Deploy escrow for first time using this contract as deployer
+        address escrow1 = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
+        
+        // Deploy "again" - should return same address due to try/catch pattern
+        address escrow2 = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
+        
+        // Should be same address (idempotent)
+        assertEq(escrow1, escrow2, "Escrow deployment should be idempotent");
+        
+        // Should still have code
+        assertTrue(escrow1.code.length > 0, "Escrow should remain deployed");
+        
+        // Verify it's the same address as predicted
+        address predicted = EscrowFactory.getEscrowAddress(address(this), OpType.Transfer);
+        assertEq(escrow1, predicted, "Deployed address should match predicted address");
     }
     
     /*

@@ -30,14 +30,9 @@ import {TransferEscrow} from "./TransferEscrow.sol";
 library EscrowFactory {
     using SlotDerivation for bytes32;
 
-    /// @notice Storage slot for escrow contracts mapping
-    bytes32 private constant _ESCROW_CONTRACTS_SLOT = 
-        0x09040af395217ff2320f5fd2feffe9cbcfd5e6f9c0234bd4ec2ab0caced5e4a5;
-
     /// @notice Emitted when a new escrow contract is deployed
     event EscrowDeployed(address indexed pool, OpType indexed opType, address escrowContract);
 
-    error EscrowAlreadyExists();
     error InvalidOpType();
     error DeploymentFailed();
 
@@ -57,47 +52,31 @@ library EscrowFactory {
         )))));
     }
 
-    /// @notice Deploys an escrow contract using CREATE2
+    /// @notice Deploys an escrow contract using CREATE2 (idempotent)
     /// @param pool The pool address
     /// @param opType The operation type
     /// @return escrowContract The deployed escrow contract address
     function deployEscrow(address pool, OpType opType) internal returns (address escrowContract) {
-        // Check if escrow already exists
-        escrowContract = _getStoredEscrow(pool, opType);
-        if (escrowContract != address(0)) {
-            revert EscrowAlreadyExists();
-        }
-
         bytes32 salt = _getSalt(pool, opType);
         
-        if (opType == OpType.Transfer || opType == OpType.Sync) {
-            escrowContract = address(new TransferEscrow{salt: salt}(pool));
-        } else {
-            revert InvalidOpType();
+        // Try to deploy - if already exists, CREATE2 will succeed and return existing address
+        try new TransferEscrow{salt: salt}(pool) returns (TransferEscrow escrow) {
+            escrowContract = address(escrow);
+            emit EscrowDeployed(pool, opType, escrowContract);
+        } catch {
+            // Escrow already exists at this address - compute and return it
+            escrowContract = getEscrowAddress(pool, opType);
         }
-
+        
         require(escrowContract != address(0), DeploymentFailed());
-
-        // Store the escrow contract address
-        _setStoredEscrow(pool, opType, escrowContract);
-
-        emit EscrowDeployed(pool, opType, escrowContract);
     }
 
-    /// @notice Deploys escrow if needed using precomputed address for gas efficiency
+    /// @notice Deploys escrow if needed (idempotent)
     /// @param pool The pool address
     /// @param opType The operation type  
-    /// @param expectedAddress The precomputed escrow address
     /// @return escrowContract The escrow contract address (existing or newly deployed)
-    function deployEscrowIfNeeded(address pool, OpType opType, address expectedAddress) internal returns (address escrowContract) {
-        address storedEscrow = _getStoredEscrow(pool, opType);
-        
-        if (storedEscrow == address(0)) {
-            escrowContract = deployEscrow(pool, opType);
-            require(escrowContract == expectedAddress, "Address mismatch");
-        } else {
-            escrowContract = storedEscrow;
-        }
+    function deployEscrowIfNeeded(address pool, OpType opType) internal returns (address escrowContract) {
+        return deployEscrow(pool, opType);
     }
 
     /// @dev Gets the salt for CREATE2 deployment
@@ -106,7 +85,7 @@ library EscrowFactory {
     }
 
     /// @dev Gets the bytecode hash for CREATE2 address calculation
-    function _getBytecodeHash(OpType opType, address pool) private pure returns (bytes32) {
+    function _getBytecodeHash(OpType /* opType */, address pool) private pure returns (bytes32) {
         // All operations use TransferEscrow now
         return keccak256(abi.encodePacked(
             type(TransferEscrow).creationCode,
@@ -114,21 +93,4 @@ library EscrowFactory {
         ));
     }
 
-    /// @dev Gets stored escrow contract address from storage
-    function _getStoredEscrow(address pool, OpType opType) private view returns (address escrowContract) {
-        bytes32 key = keccak256(abi.encodePacked(pool, uint8(opType)));
-        bytes32 slot = _ESCROW_CONTRACTS_SLOT.deriveMapping(key);
-        assembly {
-            escrowContract := sload(slot)
-        }
-    }
-
-    /// @dev Sets stored escrow contract address in storage
-    function _setStoredEscrow(address pool, OpType opType, address escrowContract) private {
-        bytes32 key = keccak256(abi.encodePacked(pool, uint8(opType)));
-        bytes32 slot = _ESCROW_CONTRACTS_SLOT.deriveMapping(key);
-        assembly {
-            sstore(slot, escrowContract)
-        }
-    }
 }

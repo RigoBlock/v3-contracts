@@ -52,9 +52,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     IAcrossSpokePool public immutable override acrossSpokePool;
 
-    /// @notice Precomputed escrow address for Transfer operations
-    address private immutable _TRANSFER_ESCROW;
-
     address private immutable _IMPLEMENTATION;
 
     modifier onlyDelegateCall() {
@@ -70,9 +67,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     constructor(address acrossSpokePoolAddress) {
         acrossSpokePool = IAcrossSpokePool(acrossSpokePoolAddress);
         _IMPLEMENTATION = address(this);
-        
-        // Precompute Transfer escrow address for gas efficiency
-        _TRANSFER_ESCROW = EscrowFactory.getEscrowAddress(address(this), OpType.Transfer);
     }
 
     /// @inheritdoc IAIntents
@@ -117,7 +111,9 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         DestinationMessage memory destMsg
     ) private {
         acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
-            sourceMsg.opType == OpType.Transfer ? _TRANSFER_ESCROW : address(this), // depositor for refunds
+            sourceMsg.opType == OpType.Transfer 
+                ? EscrowFactory.getEscrowAddress(address(this), OpType.Transfer)
+                : address(this), // depositor for refunds
             address(this),          // recipient - destination chain recipient (always pool)
             params.inputToken,
             params.outputToken,
@@ -139,7 +135,8 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     ) private returns (DestinationMessage memory) {
         // Deploy Transfer escrow if needed
         if (message.opType == OpType.Transfer) {
-            EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer, _TRANSFER_ESCROW);
+            // Deploy escrow in delegatecall context (address(this) = pool)
+            EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer);
             // Only adjust virtual balance for Transfer operations (NAV neutral)
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
         } else if (message.opType == OpType.Sync) {
