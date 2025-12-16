@@ -61,31 +61,14 @@ contract AcrossIntegrationForkTest is Test {
         poolOwner = makeAddr("poolOwner");
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
-        
-        // Create forks using Infura
-        string memory infuraKey = vm.envOr("INFURA_KEY", string(""));
-        
-        if (bytes(infuraKey).length > 0) {
-            string memory ethRpc = string.concat("https://mainnet.infura.io/v3/", infuraKey);
-            string memory baseRpc = string.concat("https://base-mainnet.infura.io/v3/", infuraKey);
-            
-            ethFork = vm.createSelectFork(ethRpc, MAINNET_BLOCK);
-            _setupEthereum();
-            
-            baseFork = vm.createSelectFork(baseRpc, BASE_BLOCK);
+
+        ethFork = vm.createSelectFork("mainnet", MAINNET_BLOCK);
+        _setupEthereum();
+
+        baseFork = vm.createSelectFork("base", BASE_BLOCK);
             _setupBase();
-            
-            console2.log("=== All forks created successfully ===");
-        } else {
-            revert("NO_INFURA_KEY_FOUND");
-            // Fallback to individual RPC URLs from env
-            //string memory baseRpc = vm.envOr("BASE_RPC_URL", string(""));
-            
-            //if (bytes(baseRpc).length > 0) {
-            //    baseFork = vm.createSelectFork(baseRpc, BASE_BLOCK);
-            //    _setupBase();
-            //}
-        }
+
+        console2.log("=== All forks created successfully ===");
     }
     
     function _setupEthereum() private {

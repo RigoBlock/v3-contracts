@@ -54,6 +54,7 @@ library RigoblockPoolForkFixture {
         address poolOwner;
     }
     
+    // TODO: this is a mock? so why are our tests not reverting - i.e. solidity silent fail???
     /// @notice Deploy full Rigoblock pool infrastructure on a fork
     /// @param spokePool Across SpokePool address for this chain
     /// @param baseToken Base token for the pool
