@@ -49,7 +49,9 @@ jobs:
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
 
       - run: yarn --frozen-lockfile
+
       - run: yarn build
+
       - run: yarn test
 
       - name: Generate combined coverage report
