@@ -14,7 +14,6 @@ struct DestinationMessage {
     uint8 sourceDecimals;
     uint256 navTolerance;  // Not used in Sync mode
     bool shouldUnwrap;
-    uint256 sourceNativeAmount; // used to save stack memory on source
 }
 
 struct SourceMessage {

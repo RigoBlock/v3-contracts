@@ -87,8 +87,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 0,
             sourceDecimals: 18,
             navTolerance: 0,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -108,8 +107,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 0,
             sourceDecimals: 6,
             navTolerance: 0,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -130,8 +128,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 200, // 2%
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         
         bytes memory encoded = abi.encode(rebalanceMsg);
@@ -153,8 +150,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 0,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         
         bytes memory encoded = abi.encode(message);
@@ -173,8 +169,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 0,
             sourceDecimals: 18,
             navTolerance: 0,
-            shouldUnwrap: true, // Request unwrap
-            sourceNativeAmount: 0
+            shouldUnwrap: true // Request unwrap
         });
         
         bytes memory encoded = abi.encode(message);
@@ -221,8 +216,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         
         // Mock pool state
@@ -252,8 +246,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 200,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         
         vm.mockCall(
@@ -272,8 +265,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 200, // 2%
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         
         // Update mock to return higher NAV
@@ -296,8 +288,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100,
-            shouldUnwrap: true,
-            sourceNativeAmount: 0
+            shouldUnwrap: true
         });
         
         bytes memory encoded = abi.encode(message);
@@ -568,8 +559,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         bytes memory encodedTransfer = abi.encode(transferMsg);
         DestinationMessage memory decodedTransfer = abi.decode(encodedTransfer, (DestinationMessage));
@@ -582,8 +572,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 200,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         bytes memory encodedRebalance = abi.encode(rebalanceMsg);
         DestinationMessage memory decodedRebalance = abi.decode(encodedRebalance, (DestinationMessage));
@@ -596,8 +585,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 0,
-            shouldUnwrap: false,
-            sourceNativeAmount: 0
+            shouldUnwrap: false
         });
         bytes memory encodedSync = abi.encode(syncMsg);
         DestinationMessage memory decodedSync = abi.decode(encodedSync, (DestinationMessage));

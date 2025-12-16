@@ -119,7 +119,6 @@ describe("Across Integration", () => {
           sourceDecimals: 18,
           navTolerance: 0,
           shouldUnwrap: false,
-          sourceNativeAmount: 0,
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
@@ -131,7 +130,6 @@ describe("Across Integration", () => {
             transferMsg.sourceDecimals,
             transferMsg.navTolerance,
             transferMsg.shouldUnwrap,
-            transferMsg.sourceNativeAmount,
           ]]
         );
 
@@ -146,7 +144,6 @@ describe("Across Integration", () => {
         expect(decoded[3]).to.equal(transferMsg.sourceDecimals);
         expect(decoded[4]).to.equal(transferMsg.navTolerance);
         expect(decoded[5]).to.equal(transferMsg.shouldUnwrap);
-        expect(decoded[6]).to.equal(transferMsg.sourceNativeAmount);
       });
 
       it("should encode/decode transfer mode message with max values", async () => {
@@ -157,7 +154,6 @@ describe("Across Integration", () => {
           sourceDecimals: 18,
           navTolerance: 1000, // 10%
           shouldUnwrap: true,
-          sourceNativeAmount: ethers.utils.parseEther("1"),
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
@@ -169,7 +165,6 @@ describe("Across Integration", () => {
             transferMsg.sourceDecimals,
             transferMsg.navTolerance,
             transferMsg.shouldUnwrap,
-            transferMsg.sourceNativeAmount,
           ]]
         );
 
@@ -191,7 +186,6 @@ describe("Across Integration", () => {
           sourceDecimals: 18,
           navTolerance: 100, // 1%
           shouldUnwrap: false,
-          sourceNativeAmount: 0,
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
@@ -203,7 +197,6 @@ describe("Across Integration", () => {
             rebalanceMsg.sourceDecimals,
             rebalanceMsg.navTolerance,
             rebalanceMsg.shouldUnwrap,
-            rebalanceMsg.sourceNativeAmount,
           ]]
         );
 
@@ -225,7 +218,6 @@ describe("Across Integration", () => {
           sourceDecimals: 18,
           navTolerance: 200, // 2%
           shouldUnwrap: true,
-          sourceNativeAmount: ethers.utils.parseEther("0.5"),
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
@@ -237,7 +229,6 @@ describe("Across Integration", () => {
             syncMsg.sourceDecimals,
             syncMsg.navTolerance,
             syncMsg.shouldUnwrap,
-            syncMsg.sourceNativeAmount,
           ]]
         );
 
@@ -261,7 +252,6 @@ describe("Across Integration", () => {
             sourceDecimals: decimals,
             navTolerance: 100,
             shouldUnwrap: false,
-            sourceNativeAmount: 0,
           };
 
           const encoded = ethers.utils.defaultAbiCoder.encode(
@@ -273,7 +263,6 @@ describe("Across Integration", () => {
               message.sourceDecimals,
               message.navTolerance,
               message.shouldUnwrap,
-              message.sourceNativeAmount,
             ]]
           );
 

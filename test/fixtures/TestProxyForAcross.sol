@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+
+import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
+import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
+
 /// @title TestProxyForAcross
 /// @notice Proper delegatecall proxy with fallback for testing Across extension and adapter
 /// @dev Mimics RigoblockPoolProxy fallback pattern but simplified for testing
@@ -45,12 +49,9 @@ contract TestProxyForAcross {
             selector := calldataload(0)
         }
         
-        // handleV3AcrossMessage selector: 0x52ebbe5b
-        if (selector == 0x52ebbe5b) {
+        if (selector == IEAcrossHandler.handleV3AcrossMessage.selector) {
             target = handler;
-        }
-        // depositV3 selector: 0xd0cc7a67
-        else if (selector == 0xd0cc7a67) {
+        } else if (selector == IAIntents.depositV3.selector) {
             target = adapter;
         }
         else {

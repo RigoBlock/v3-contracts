@@ -72,6 +72,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         _IMPLEMENTATION = address(this);
     }
 
+    // TODO: check if this is efficient, as by using passed params, we would save 1 params in stack?
     /// @inheritdoc IAIntents
     function depositV3(AcrossParams calldata params) external override nonReentrant onlyDelegateCall {
         // sanity checks
@@ -99,7 +100,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         _safeApproveToken(params.inputToken);
         
-        acrossSpokePool.depositV3{value: destMsg.sourceNativeAmount}(
+        acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
             address(this),
             address(this),
             params.inputToken,
@@ -148,8 +149,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             sourceNav: ISmartPoolState(address(this)).getPoolTokens().unitaryValue,
             sourceDecimals: StorageLib.pool().decimals,
             navTolerance: message.navTolerance > 1000 ? 1000 : message.navTolerance, // reasonable 10% max tolerance
-            shouldUnwrap: message.shouldUnwrapOnDestination,
-            sourceNativeAmount: message.sourceNativeAmount // TODO: check if we can remove this param from dest message
+            shouldUnwrap: message.shouldUnwrapOnDestination
         });
     }
     

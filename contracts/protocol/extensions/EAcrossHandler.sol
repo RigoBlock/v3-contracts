@@ -61,6 +61,7 @@ contract EAcrossHandler is IEAcrossHandler {
         acrossSpokePool = _acrossSpokePool;
     }
 
+    // TODO: if this modifies state, it must not be directly callable!
     /// @inheritdoc IEAcrossHandler
     function handleV3AcrossMessage(
         address tokenReceived,
