@@ -47,6 +47,7 @@ contract EAcrossHandler is IEAcrossHandler {
     using SlotDerivation for bytes32;
     using EnumerableSet for AddressSet;
 
+    // TODO: these slots must not be manually defined, they must be imported to prevent manual errors.
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
     bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492d;
     
@@ -70,6 +71,10 @@ contract EAcrossHandler is IEAcrossHandler {
         // Since this is called via delegatecall, msg.sender is preserved from the original call
         require(msg.sender == acrossSpokePool, UnauthorizedCaller());
 
+        // TODO: all preconditions that could revert the transaction would trigger funds loss. Therefore, they should be
+        // reduced to rogue inputs on the source chain. Also, we must verify what happens on the source chain then, as we
+        // might simply decide to refund the sender on the source chain, instead of reverting, i.e. in all cases where
+        // the nav might be incorrectly affected (virtual balances vs nav impact).
         // ensure token is active, otherwise won't be included in nav calculations
         AddressSet storage set = StorageLib.activeTokensSet();
         address baseToken = StorageLib.pool().baseToken;

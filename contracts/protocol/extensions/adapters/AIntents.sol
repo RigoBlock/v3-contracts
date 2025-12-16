@@ -79,21 +79,27 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         require(!params.inputToken.isAddressZero(), NullAddress());
         require(params.exclusiveRelayer.isAddressZero(), NullAddress());
 
+        // TODO: validate source message to make sure the params are properly formatted, otherwise we could end up
+        // in a scenario where the destination message is not correctly formatted, and the transaction reverts on the
+        // dest chain, while it should have reverted on the source chain (i.e. potential loss of funds).
+        // { opType, navTolerance, sourceNativeAmount, shouldUnwrapOnDestination }
+        SourceMessage memory sourceMsg = abi.decode(params.message, (SourceMessage));
+
         // TODO: check if we can query tokens + base token in 1 call and reading only exact slots, as we're not writing to storage
         if (params.inputToken != StorageLib.pool().baseToken) {
             require(StorageLib.activeTokensSet().isActive(params.inputToken), TokenNotActive());
         }
 
         // Process message and get encoded result
-        DestinationMessage memory dstMsg = _processMessage(
-            params.message,
+        DestinationMessage memory destMsg = _processMessage(
             params.inputToken,
-            params.inputAmount
+            params.inputAmount,
+            sourceMsg
         );
 
         _safeApproveToken(params.inputToken);
         
-        acrossSpokePool.depositV3{value: dstMsg.sourceNativeAmount}(
+        acrossSpokePool.depositV3{value: destMsg.sourceNativeAmount}(
             address(this),
             address(this),
             params.inputToken,
@@ -105,7 +111,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.quoteTimestamp,
             uint32(block.timestamp + acrossSpokePool.fillDeadlineBuffer()), // use the across max allowed deadline
             params.exclusivityDeadline, // this param will not be used by across as the exclusiveRelayer must be the null address TODO: verify it is like this
-            abi.encode(dstMsg)
+            abi.encode(destMsg)
         );
         
         _safeApproveToken(params.inputToken);
@@ -115,21 +121,19 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
      * INTERNAL METHODS
      */
     function _processMessage(
-        bytes calldata messageData,
         address inputToken,
-        uint256 inputAmount
+        uint256 inputAmount,
+        SourceMessage memory message
     ) private returns (DestinationMessage memory) {
-        SourceMessage memory srcMsg = abi.decode(messageData, (SourceMessage));
-
-        if (srcMsg.opType == OpType.Transfer) {
+        if (message.opType == OpType.Transfer) {
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
-        } else if (srcMsg.opType == OpType.Rebalance) {
+        } else if (message.opType == OpType.Rebalance) {
             // TODO: fix code and uncomment - after the correct solution has been implemented
             //if (!storedNav[targetChain]) {
-            //    srcMsg.opType = OpType.Sync; // but could be OpType.Transfer and we could remove one op type
+            //    message.opType = OpType.Sync; // but could be OpType.Transfer and we could remove one op type
             //    _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
             //}
-        } else if (srcMsg.opType == OpType.Sync) {
+        } else if (message.opType == OpType.Sync) {
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
         } else {
             revert InvalidOpType();
@@ -139,13 +143,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         // navTolerance in a client-side input
         return DestinationMessage({
-            opType: srcMsg.opType,
+            opType: message.opType,
             sourceChainId: block.chainid,
             sourceNav: ISmartPoolState(address(this)).getPoolTokens().unitaryValue,
             sourceDecimals: StorageLib.pool().decimals,
-            navTolerance: srcMsg.navTolerance > 1000 ? 1000 : srcMsg.navTolerance, // reasonable 10% max tolerance
-            shouldUnwrap: srcMsg.shouldUnwrapOnDestination,
-            sourceNativeAmount: srcMsg.sourceNativeAmount // TODO: check if we can remove this param from dest message
+            navTolerance: message.navTolerance > 1000 ? 1000 : message.navTolerance, // reasonable 10% max tolerance
+            shouldUnwrap: message.shouldUnwrapOnDestination,
+            sourceNativeAmount: message.sourceNativeAmount // TODO: check if we can remove this param from dest message
         });
     }
     
