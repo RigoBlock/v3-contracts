@@ -21,6 +21,8 @@ abstract contract MixinStorage is MixinImmutables {
         // Cross-chain integration storage (ERC-7201 namespaced)
         assert(_VIRTUAL_BALANCES_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1));
         assert(_CHAIN_NAV_SPREADS_SLOT == bytes32(uint256(keccak256("pool.proxy.chain.nav.spreads")) - 1));
+        // Escrow contracts storage
+        assert(_ESCROW_CONTRACTS_SLOT == bytes32(uint256(keccak256("pool.proxy.escrow.contracts")) - 1));
     }
 
     // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))

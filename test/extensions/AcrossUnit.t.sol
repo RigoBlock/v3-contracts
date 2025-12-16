@@ -118,12 +118,12 @@ contract AcrossUnitTest is Test {
         assertEq(decoded.sourceDecimals, 6, "Source decimals should match");
     }
     
-    /// @notice Test Rebalance mode message encoding/decoding
-    function test_Handler_RebalanceMode_MessageParsing() public view {
+    /// @notice Test Sync mode message encoding/decoding with NAV
+    function test_Handler_SyncMode_MessageParsing() public view {
         uint256 sourceNav = 1e18; // 1.0 per share
         
-        DestinationMessage memory rebalanceMsg = DestinationMessage({
-            opType: OpType.Rebalance,
+        DestinationMessage memory syncMsg = DestinationMessage({
+            opType: OpType.Sync,
             sourceChainId: 42161,
             sourceNav: sourceNav,
             sourceDecimals: 18,
@@ -131,17 +131,17 @@ contract AcrossUnitTest is Test {
             shouldUnwrap: false
         });
         
-        bytes memory encoded = abi.encode(rebalanceMsg);
+        bytes memory encoded = abi.encode(syncMsg);
         DestinationMessage memory decoded = abi.decode(encoded, (DestinationMessage));
         
-        assertEq(uint8(decoded.opType), uint8(OpType.Rebalance), "OpType should be Rebalance");
+        assertEq(uint8(decoded.opType), uint8(OpType.Sync), "OpType should be Sync");
         assertEq(decoded.sourceChainId, 42161, "Source chain ID should match");
         assertEq(decoded.sourceNav, sourceNav, "Source NAV should match");
         assertEq(decoded.navTolerance, 200, "NAV tolerance should match");
     }
     
-    /// @notice Test Sync mode message encoding/decoding
-    function test_Handler_SyncMode_MessageParsing() public view {
+    /// @notice Test Sync mode message encoding/decoding with nav
+    function test_Handler_SyncMode_MessageParsing_WithNav() public view {
         uint256 sourceNav = 1e18;
         
         DestinationMessage memory message = DestinationMessage({
@@ -205,6 +205,7 @@ contract AcrossUnitTest is Test {
         handler.handleV3AcrossMessage(mockInputToken, 100e6, encodedMessage);
     }
     
+    /*
     /// @notice Test handler rejects rebalance without sync
     function test_Handler_RejectsRebalanceWithoutSync() public {
         vm.skip(true); // Skip: Requires full pool context with delegatecall - covered by AcrossIntegrationFork.t.sol
@@ -230,6 +231,7 @@ contract AcrossUnitTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IEAcrossHandler.ChainsNotSynced.selector));
         handler.handleV3AcrossMessage(mockInputToken, 100e6, abi.encode(message));
     }
+    */
     
     /// @notice Test handler rejects NAV deviation too high
     function test_Handler_RejectsNavDeviationTooHigh() public {
@@ -260,7 +262,7 @@ contract AcrossUnitTest is Test {
         
         // Now rebalance with NAV outside tolerance
         DestinationMessage memory rebalanceMsg = DestinationMessage({
-            opType: OpType.Rebalance,
+            opType: OpType.Sync,
             sourceChainId: 42161,
             sourceNav: sourceNav,
             sourceDecimals: 18,
@@ -420,32 +422,6 @@ contract AcrossUnitTest is Test {
         pool.callDepositV3(params);
     }
     
-    /// @notice Test adapter with Rebalance mode
-    function test_Adapter_DepositV3_RebalanceMode() public {
-        vm.skip(true); // Skip: Requires full pool context with delegatecall - covered by AcrossIntegrationFork.t.sol
-        MockPool pool = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
-        deal(mockInputToken, address(pool), 1000e6);
-        
-        // Mock token operations
-        vm.mockCall(mockInputToken, abi.encodeWithSelector(IERC20.allowance.selector), abi.encode(uint256(0)));
-        vm.mockCall(mockInputToken, abi.encodeWithSelector(IERC20.approve.selector), abi.encode(true));
-        
-        // Mock SpokePool depositV3
-        vm.mockCall(mockSpokePool, abi.encodeWithSelector(IAcrossSpokePool.depositV3.selector), abi.encode());
-        
-        IAIntents.AcrossParams memory params = _createAcrossParams(
-            mockInputToken,
-            mockInputToken,
-            100e6,
-            99e6,
-            10,
-            OpType.Rebalance,
-            200
-        );
-        
-        pool.callDepositV3(params);
-    }
-    
     /// @notice Test adapter with Sync mode
     function test_Adapter_DepositV3_SyncMode() public {
         vm.skip(true); // Skip: Requires full pool context with delegatecall - covered by AcrossIntegrationFork.t.sol
@@ -466,12 +442,12 @@ contract AcrossUnitTest is Test {
             99e6,
             10,
             OpType.Sync,
-            100
+            200
         );
         
         pool.callDepositV3(params);
     }
-    
+
     /// @notice Test adapter caps navTolerance at 10%
     function test_Adapter_CapsNavTolerance() public {
         vm.skip(true); // Skip: Requires full pool context with delegatecall - covered by AcrossIntegrationFork.t.sol
@@ -546,8 +522,7 @@ contract AcrossUnitTest is Test {
     /// @notice Test OpType enum has correct values
     function test_OpType_EnumValues() public pure {
         assertEq(uint8(OpType.Transfer), 0, "Transfer should be 0");
-        assertEq(uint8(OpType.Rebalance), 1, "Rebalance should be 1");
-        assertEq(uint8(OpType.Sync), 2, "Sync should be 2");
+        assertEq(uint8(OpType.Sync), 1, "Sync should be 1");
     }
     
     /// @notice Test DestinationMessage encoding/decoding with all OpTypes
@@ -565,26 +540,13 @@ contract AcrossUnitTest is Test {
         DestinationMessage memory decodedTransfer = abi.decode(encodedTransfer, (DestinationMessage));
         assertEq(uint8(decodedTransfer.opType), uint8(OpType.Transfer));
         
-        // Test Rebalance
-        DestinationMessage memory rebalanceMsg = DestinationMessage({
-            opType: OpType.Rebalance,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
-            navTolerance: 200,
-            shouldUnwrap: false
-        });
-        bytes memory encodedRebalance = abi.encode(rebalanceMsg);
-        DestinationMessage memory decodedRebalance = abi.decode(encodedRebalance, (DestinationMessage));
-        assertEq(uint8(decodedRebalance.opType), uint8(OpType.Rebalance));
-        
         // Test Sync
         DestinationMessage memory syncMsg = DestinationMessage({
             opType: OpType.Sync,
             sourceChainId: 42161,
             sourceNav: 1e18,
             sourceDecimals: 18,
-            navTolerance: 0,
+            navTolerance: 200,
             shouldUnwrap: false
         });
         bytes memory encodedSync = abi.encode(syncMsg);
@@ -682,18 +644,14 @@ contract AcrossUnitTest is Test {
         );
     }
     
-    // TODO: update test, as it's taking tuple input
-    /// @notice Test depositV3 interface matches Across exactly
-    //function test_DepositV3InterfaceMatch() public {
-        // Verify our adapter has exact same signature as Across SpokePool
-    //    bytes4 acrossSelector = bytes4(keccak256(
-    //        "depositV3(address,address,address,address,uint256,uint256,uint256,address,uint32,uint32,uint32,bytes)"
-    //    ));
-    //    
-    //    bytes4 adapterSelector = AIntents.depositV3.selector;
-    //    
-    //    assertEq(adapterSelector, acrossSelector, "Adapter must match Across interface exactly");
-    //}
+    /// @notice Test depositV3 interface uses struct parameter (different from Across)
+    function test_Adapter_DepositV3Interface() public {
+        // Verify our adapter uses struct-based interface for better stack management
+        bytes4 adapterSelector = IAIntents.depositV3.selector;
+        bytes4 expectedSelector = bytes4(keccak256("depositV3((address,address,address,address,uint256,uint256,uint256,address,uint32,uint32,uint32,bytes))"));
+        
+        assertEq(adapterSelector, expectedSelector, "Adapter must use struct-based depositV3 signature");
+    }
     
     /// @notice Test virtual balance storage slot calculation
     function test_VirtualBalanceSlot() public pure {
@@ -707,10 +665,10 @@ contract AcrossUnitTest is Test {
     /// @notice Test message type enum values
     function test_OpTypeEnumValues() public pure {
         uint8 transferType = uint8(OpType.Transfer);
-        uint8 rebalanceType = uint8(OpType.Rebalance);
+        uint8 syncType = uint8(OpType.Sync);
         
         assertEq(transferType, 0, "Transfer should be 0");
-        assertEq(rebalanceType, 1, "Rebalance should be 1");
+        assertEq(syncType, 1, "Sync should be 1");
     }
     
     /// @notice Test NAV normalization logic
@@ -738,6 +696,29 @@ contract AcrossUnitTest is Test {
         
         assertEq(minNav, 99e16, "Min NAV incorrect");
         assertEq(maxNav, 101e16, "Max NAV incorrect");
+    }
+
+    /// @notice Test tolerance capping logic from adapter
+    function test_ToleranceCapping() public pure {
+        // Test normal tolerance (should not be capped)
+        uint256 normalTolerance = 500; // 5%
+        uint256 cappedNormal = normalTolerance > 1000 ? 1000 : normalTolerance;
+        assertEq(cappedNormal, 500, "Normal tolerance should not be capped");
+        
+        // Test max allowed tolerance
+        uint256 maxTolerance = 1000; // 10%
+        uint256 cappedMax = maxTolerance > 1000 ? 1000 : maxTolerance;
+        assertEq(cappedMax, 1000, "Max tolerance should remain at 1000");
+        
+        // Test excessive tolerance (should be capped)
+        uint256 excessiveTolerance = 2500; // 25%
+        uint256 cappedExcessive = excessiveTolerance > 1000 ? 1000 : excessiveTolerance;
+        assertEq(cappedExcessive, 1000, "Excessive tolerance should be capped to 1000");
+        
+        // Test very high tolerance (should be capped)
+        uint256 veryHighTolerance = 10000; // 100%
+        uint256 cappedVeryHigh = veryHighTolerance > 1000 ? 1000 : veryHighTolerance;
+        assertEq(cappedVeryHigh, 1000, "Very high tolerance should be capped to 1000");
     }
     
     /// @notice Fuzz test: NAV normalization

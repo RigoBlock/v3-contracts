@@ -31,7 +31,9 @@ import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
+import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
 import {OpType, DestinationMessage, SourceMessage} from "../../types/Crosschain.sol";
+import {EscrowFactory} from "../escrow/EscrowFactory.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
@@ -46,14 +48,12 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using SafeCast for int256;
     using EnumerableSet for AddressSet;
     using SlotDerivation for bytes32;
+    using VirtualBalanceLib for address;
 
     IAcrossSpokePool public immutable override acrossSpokePool;
 
-    // TODO: check if can inherit these from the implementation constants to avoid manual errors
-    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
-
-    // TODO: are we not storing anything on the source chain? how will we know it's a OpType.Sync vs .Rebalance when i.e. we always successfully bridge from chain1 to chain2???
-    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492d;
+    /// @notice Precomputed escrow address for Transfer operations
+    address private immutable _TRANSFER_ESCROW;
 
     address private immutable _IMPLEMENTATION;
 
@@ -70,9 +70,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     constructor(address acrossSpokePoolAddress) {
         acrossSpokePool = IAcrossSpokePool(acrossSpokePoolAddress);
         _IMPLEMENTATION = address(this);
+        
+        // Precompute Transfer escrow address for gas efficiency
+        _TRANSFER_ESCROW = EscrowFactory.getEscrowAddress(address(this), OpType.Transfer);
     }
 
-    // TODO: check if this is efficient, as by using passed params, we would save 1 params in stack?
     /// @inheritdoc IAIntents
     function depositV3(AcrossParams calldata params) external override nonReentrant onlyDelegateCall {
         // sanity checks
@@ -97,23 +99,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.inputAmount,
             sourceMsg
         );
-
+        
         _safeApproveToken(params.inputToken);
         
-        acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
-            address(this),
-            address(this),
-            params.inputToken,
-            params.outputToken,
-            params.inputAmount,
-            params.outputAmount,
-            params.destinationChainId,
-            params.exclusiveRelayer,
-            params.quoteTimestamp,
-            uint32(block.timestamp + acrossSpokePool.fillDeadlineBuffer()), // use the across max allowed deadline
-            params.exclusivityDeadline, // this param will not be used by across as the exclusiveRelayer must be the null address TODO: verify it is like this
-            abi.encode(destMsg)
-        );
+        _executeDeposit(params, sourceMsg, destMsg);
         
         _safeApproveToken(params.inputToken);
     }
@@ -121,21 +110,43 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /*
      * INTERNAL METHODS
      */
+    /// @dev Executes the depositV3 call to avoid stack too deep issues in main function
+    function _executeDeposit(
+        AcrossParams calldata params,
+        SourceMessage memory sourceMsg,
+        DestinationMessage memory destMsg
+    ) private {
+        acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
+            sourceMsg.opType == OpType.Transfer ? _TRANSFER_ESCROW : address(this), // depositor for refunds
+            address(this),          // recipient - destination chain recipient (always pool)
+            params.inputToken,
+            params.outputToken,
+            params.inputAmount,
+            params.outputAmount,
+            params.destinationChainId,
+            params.exclusiveRelayer,
+            params.quoteTimestamp,
+            uint32(block.timestamp + acrossSpokePool.fillDeadlineBuffer()),
+            params.exclusivityDeadline,
+            abi.encode(destMsg)
+        );
+    }
+    
     function _processMessage(
         address inputToken,
         uint256 inputAmount,
         SourceMessage memory message
     ) private returns (DestinationMessage memory) {
+        // Deploy Transfer escrow if needed
         if (message.opType == OpType.Transfer) {
+            EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer, _TRANSFER_ESCROW);
+            // Only adjust virtual balance for Transfer operations (NAV neutral)
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
-        } else if (message.opType == OpType.Rebalance) {
-            // TODO: fix code and uncomment - after the correct solution has been implemented
-            //if (!storedNav[targetChain]) {
-            //    message.opType = OpType.Sync; // but could be OpType.Transfer and we could remove one op type
-            //    _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
-            //}
         } else if (message.opType == OpType.Sync) {
-            _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
+            // Sync operations don't adjust virtual balance (NAV changes expected)
+            // TODO: SECURITY CONCERN - Operator could abuse by declaring Transfer operation
+            // on source (uses escrow) but inflating NAV on destination before handler processes.
+            // Handler must validate opType matches expected behavior and prevent NAV manipulation.
         } else {
             revert InvalidOpType();
         }
@@ -153,16 +164,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         });
     }
     
-    // TOdo: check if should create virtual balance for actual token instead instead of base token
-    /// @dev Adjusts virtual balance for Transfer mode.
+    // TODO: check if should create virtual balance for actual token instead instead of base token
+    /// @dev Adjusts virtual balance for Transfer mode only - uses per-token virtual balances.
+    /// @dev Only called for Transfer operations to maintain NAV neutrality.
     function _adjustVirtualBalanceForTransfer(address inputToken, uint256 inputAmount) private {
-        address baseToken = StorageLib.pool().baseToken;
-        int256 baseTokenAmount = IEOracle(address(this)).convertTokenAmount(
-            inputToken,
-            inputAmount.toInt256(),
-            baseToken
-        );
-        _setVirtualBalance(baseToken, _getVirtualBalance(baseToken) + baseTokenAmount);
+        // Create virtual balance for the actual token being transferred
+        // This provides more accurate tracking and NAV calculations by chain
+        VirtualBalanceLib.adjustVirtualBalance(inputToken, inputAmount.toInt256());
     }
 
     /*
@@ -179,23 +187,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         } else {
             // Approve max amount
             token.safeApprove(address(acrossSpokePool), type(uint256).max);
-        }
-    }
-
-    // TODO: these methods are identical in EAcrossHandler, should be implemented in a library and imported
-    /// @dev Gets the virtual balance for a token from storage.
-    function _getVirtualBalance(address token) private view returns (int256 value) {
-        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
-        assembly {
-            value := sload(slot)
-        }
-    }
-
-    /// @dev Sets the virtual balance for a token.
-    function _setVirtualBalance(address token, int256 value) private {
-        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
-        assembly {
-            sstore(slot, value)
         }
     }
 }

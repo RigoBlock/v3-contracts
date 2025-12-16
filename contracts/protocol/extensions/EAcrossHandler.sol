@@ -27,6 +27,7 @@ import {IWETH9} from "../interfaces/IWETH9.sol";
 import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
+import {VirtualBalanceLib} from "../libraries/VirtualBalanceLib.sol";
 import {OpType, DestinationMessage, SourceMessage} from "../types/Crosschain.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
@@ -46,11 +47,8 @@ contract EAcrossHandler is IEAcrossHandler {
     using SafeCast for int256;
     using SlotDerivation for bytes32;
     using EnumerableSet for AddressSet;
+    using VirtualBalanceLib for address;
 
-    // TODO: these slots must not be manually defined, they must be imported to prevent manual errors.
-    bytes32 private constant _VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
-    bytes32 private constant _CHAIN_NAV_SPREADS_SLOT = 0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492d;
-    
     /// @notice Address of the Across SpokePool contract
     /// @dev Immutable to save gas on verification
     address public immutable acrossSpokePool;
@@ -72,6 +70,16 @@ contract EAcrossHandler is IEAcrossHandler {
         // Since this is called via delegatecall, msg.sender is preserved from the original call
         require(msg.sender == acrossSpokePool, UnauthorizedCaller());
 
+        // Decode the message - this is internal data, not external contract interaction
+        DestinationMessage memory params = abi.decode(message, (DestinationMessage));
+
+        // TODO: SECURITY VULNERABILITY - Pool operator could abuse opType designation:
+        // 1. Declare Transfer operation on source (uses escrow as depositor for refunds)
+        // 2. Inflate NAV on destination chain before this handler processes the message
+        // 3. Virtual balance calculations could be manipulated
+        // MITIGATION: Handler should validate opType behavior matches source declaration
+        // and prevent NAV manipulation between cross-chain message initiation and processing.
+
         // TODO: all preconditions that could revert the transaction would trigger funds loss. Therefore, they should be
         // reduced to rogue inputs on the source chain. Also, we must verify what happens on the source chain then, as we
         // might simply decide to refund the sender on the source chain, instead of reverting, i.e. in all cases where
@@ -79,10 +87,25 @@ contract EAcrossHandler is IEAcrossHandler {
         // ensure token is active, otherwise won't be included in nav calculations
         AddressSet storage set = StorageLib.activeTokensSet();
         address baseToken = StorageLib.pool().baseToken;
-        set.addUnique(IEOracle(address(this)), tokenReceived, baseToken);
 
-        // Decode the message
-        DestinationMessage memory params = abi.decode(message, (DestinationMessage));
+        // TODO: this method will revert, i.e. funds would be lost, or not accounted for? should not revert, and
+        // peacefully add the token to the tracked tokens (should pass flag - revertIfNoPriceFeed ?). This means
+        // we should add a price feed, because the transfer will use the price to create a virtual balance? or
+        // should we simply use the virtual balances by token mapping, and the nav will only include the token if
+        // it can calculate the value in base token? We'd have to handle less edge cases here, and more in the
+        // nav estimate, which does that - and also we'd have to accept a higher gas overhead in calculating nav
+        // because we would have an array of virtual balances.
+        
+        // For tokens without price feeds, we can revert since escrow setup on source handles refunds properly
+        if (tokenReceived != baseToken && !set.isActive(tokenReceived)) {
+            // Try to add token if it has a price feed
+            if (IEOracle(address(this)).hasPriceFeed(tokenReceived)) {
+                set.addUnique(IEOracle(address(this)), tokenReceived, baseToken);
+            } else {
+                // Token doesn't have price feed - can revert since escrow handles refunds
+                revert TokenWithoutPriceFeed();
+            }
+        }
         
         // Unwrap native if requested
         address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
@@ -91,94 +114,23 @@ contract EAcrossHandler is IEAcrossHandler {
             IWETH9(wrappedNative).withdraw(amount);
         }
         
-        if (params.opType == OpType.Transfer) {
-            _handleTransferMode(tokenReceived, amount, baseToken);
-        } else if (params.opType == OpType.Rebalance) {
-            _handleRebalanceMode(params);
-        } else if (params.opType == OpType.Sync) {
-            _handleSyncMode(params);
+        if (params.opType == OpType.Transfer || params.opType == OpType.Sync) {
+            // Both Transfer and Sync create virtual balances
+            _handleTransferMode(tokenReceived, amount);
         } else {
             revert InvalidOpType();
         }
     }
 
-    /// @dev Handles Transfer mode: creates negative virtual balance to offset NAV increase.
-    function _handleTransferMode(address tokenReceived, uint256 amount, address baseToken) private {
-        // Convert received amount to base token equivalent
-        int256 baseTokenAmount = IEOracle(address(this)).convertTokenAmount(
-            tokenReceived,
-            amount.toInt256(),
-            baseToken
-        );
-        
-        // Create negative virtual balance to offset the NAV increase from receiving tokens
-        // Tokens are already in the pool (transferred by Across before calling this)
-        int256 currentBalance = _getVirtualBalance(baseToken);
-        _setVirtualBalance(baseToken, currentBalance - baseTokenAmount);
-    }
-
-    /// @dev Handles Rebalance mode: verifies NAV is within tolerance of source chain NAV plus spread.
-    function _handleRebalanceMode(DestinationMessage memory params) private view {
-        // Check that chains have been synced
-        int256 spread = _getChainNavSpread(params.sourceChainId);
-        // WARNING: DANGER - critical flaw - if spread is not set, a transfer that has happened on the source chain will revert this transaction
-        // As the transaction reverts, will the tokens be left in the vault, or will they be lost? in the latter case, the nav on the source chain
-        // will be incorrect, while in the former the nav on the destination chain will be affected - which it shouldn't. When a spread is not 
-        // stored, the transaction should not revert, but the transaction should be handled like a sync transaction. And technically, as in the AIntents,
-        // because the sync and transfer mode do very similar things, we should double check whether it makes sense to define the sync mode, or transient
-        // a rebalance as a transfer instead.
-        require(spread != 0, ChainsNotSynced());
-        
-        // Tokens are already transferred by Across
-        // Get current NAV on destination chain (includes received tokens)
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-        uint256 destNav = poolTokens.unitaryValue;
-        
-        // Get decimals from the pool
-        uint8 destDecimals = StorageLib.pool().decimals;
-        
-        // Normalize NAVs to same decimal scale for comparison
-        uint256 normalizedSourceNav = _normalizeNav(params.sourceNav, params.sourceDecimals, destDecimals);
-        
-        // Expected dest NAV = source NAV - spread (spread can be positive or negative)
-        int256 expectedDestNav = normalizedSourceNav.toInt256() - spread;
-        int256 actualDestNav = destNav.toInt256();
-        int256 delta = actualDestNav - expectedDestNav;
-        
-        // Calculate tolerance
-        uint256 tolerance = (normalizedSourceNav * params.navTolerance) / 10000;
-        
-        // Verify destination NAV is within acceptable range accounting for spread
-        require(
-            delta >= -(tolerance.toInt256()) && delta <= tolerance.toInt256(),
-            NavDeviationTooHigh()
-        );
-    }
-    
-    /// @dev Handles Sync mode: records NAV spread between chains.
-    function _handleSyncMode(DestinationMessage memory params) private {
-        // Get current NAV on destination chain (includes received tokens)
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-        uint256 destNav = poolTokens.unitaryValue;
-        
-        // Get decimals from the pool  
-        uint8 destDecimals = StorageLib.pool().decimals;
-        
-        // Normalize source NAV to destination decimals
-        uint256 normalizedSourceNav = _normalizeNav(params.sourceNav, params.sourceDecimals, destDecimals);
-        
-        // Calculate spread: source NAV - destination NAV
-        // This represents how much the source chain NAV exceeds destination NAV
-        int256 spread = normalizedSourceNav.toInt256() - destNav.toInt256();
-        
-        // Store spread for source chain ID
-        _setChainNavSpread(params.sourceChainId, spread);
-        
-        // Note: Tokens are transferred but this is just a sync, NAV impact is acceptable
-        // Virtual balances are NOT created - tokens remain in pool
+    /// @dev Handles Transfer and Sync modes: creates negative virtual balance to offset NAV increase.
+    function _handleTransferMode(address tokenReceived, uint256 amount) private {
+        // Create negative virtual balance for the actual received token
+        // This provides accurate per-token tracking for Transfer and Sync operations
+        VirtualBalanceLib.adjustVirtualBalance(tokenReceived, -(amount.toInt256()));
     }
 
     /// @dev Normalizes NAV from source decimals to destination decimals.
+    /// @dev This is critical for cross-chain NAV comparisons where vault decimals may differ
     function _normalizeNav(
         uint256 nav,
         uint8 sourceDecimals,
@@ -190,40 +142,6 @@ contract EAcrossHandler is IEAcrossHandler {
             return nav / (10 ** (sourceDecimals - destDecimals));
         } else {
             return nav * (10 ** (destDecimals - sourceDecimals));
-        }
-    }
-
-    // TODO: these following methods should be moved to library in /libraries folder, like storage lib
-    // also TODO: we could implement in library to return storage - could update the set by defining it as storage (less code)
-    /// @dev Gets the virtual balance for a token from pool storage.
-    function _getVirtualBalance(address token) private view returns (int256 value) {
-        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
-        assembly {
-            value := sload(slot)
-        }
-    }
-
-    /// @dev Sets the virtual balance for a token in pool storage.
-    function _setVirtualBalance(address token, int256 value) private {
-        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
-        assembly {
-            sstore(slot, value)
-        }
-    }
-    
-    /// @dev Gets the NAV spread for a specific chain from pool storage.
-    function _getChainNavSpread(uint256 chainId) private view returns (int256 spread) {
-        bytes32 slot = _CHAIN_NAV_SPREADS_SLOT.deriveMapping(bytes32(chainId));
-        assembly {
-            spread := sload(slot)
-        }
-    }
-    
-    /// @dev Sets the NAV spread for a specific chain in pool storage.
-    function _setChainNavSpread(uint256 chainId, int256 spread) private {
-        bytes32 slot = _CHAIN_NAV_SPREADS_SLOT.deriveMapping(bytes32(chainId));
-        assembly {
-            sstore(slot, spread)
         }
     }
 }

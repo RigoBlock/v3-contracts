@@ -248,6 +248,7 @@ contract AcrossIntegrationForkTest is Test {
         console2.log("Transfer mode: virtual balance =", vBalanceAfter);
     }
     
+    /*
     /// @notice Test handler processes Rebalance message
     function testFork_Eth_HandlerRebalanceMode() public {
         if (ethForkId == 0) return;
@@ -279,6 +280,7 @@ contract AcrossIntegrationForkTest is Test {
         int256 vBalance = ethPool.getVirtualBalance(USDC_ETH);
         assertEq(vBalance, 0, "No virtual balance in Rebalance mode");
     }
+    */
     
     /// @notice Test handler processes Sync message
     function testFork_Eth_HandlerSyncMode() public {
@@ -586,6 +588,7 @@ contract AcrossIntegrationForkTest is Test {
         assertEq(vBalance, -int256(largeAmount), "Virtual balance should match");
     }
     
+    /*
     /// @notice Test handler Rebalance mode with NAV check
     function testFork_Eth_HandlerRebalanceWithNavCheck() public {
         if (ethForkId == 0) return;
@@ -624,6 +627,7 @@ contract AcrossIntegrationForkTest is Test {
         
         vm.clearMockedCalls();
     }
+    */
     
     /// @notice Test adapter depositV3 with actual balance transfer
     function testFork_Eth_AdapterDepositV3WithBalances() public {
@@ -697,6 +701,8 @@ contract AcrossIntegrationForkTest is Test {
         assertEq(balanceAfter - balanceBefore, 0.5 ether, "Should receive unwrapped ETH");
     }
     
+    /*
+    /*
     /// @notice Test handler rebalance mode with NAV deviation
     function testFork_Eth_HandlerRebalanceNavDeviation() public {
         if (ethForkId == 0) return;
@@ -734,6 +740,7 @@ contract AcrossIntegrationForkTest is Test {
         
         vm.clearMockedCalls();
     }
+    */
     
     /// @notice Test handler sync mode with actual NAV sync
     function testFork_Eth_HandlerSyncModeWithNav() public {
@@ -779,7 +786,7 @@ contract AcrossIntegrationForkTest is Test {
         vm.selectFork(ethForkId);
         
         SourceMessage memory sourceMsg = SourceMessage({
-            opType: OpType.Rebalance,
+            opType: OpType.Sync,
             navTolerance: 0.05e18,
             sourceNativeAmount: 0,
             shouldUnwrapOnDestination: false
@@ -788,7 +795,7 @@ contract AcrossIntegrationForkTest is Test {
         bytes memory encoded = abi.encode(sourceMsg);
         SourceMessage memory decoded = abi.decode(encoded, (SourceMessage));
         
-        assertEq(uint8(decoded.opType), uint8(OpType.Rebalance));
+        assertEq(uint8(decoded.opType), uint8(OpType.Sync));
         assertEq(decoded.navTolerance, 0.05e18);
     }
     
