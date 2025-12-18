@@ -53,10 +53,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     IAcrossSpokePool public immutable override acrossSpokePool;
 
-    address private immutable _IMPLEMENTATION;
+    address private immutable _aIntents;
 
     modifier onlyDelegateCall() {
-        require(address(this) != _IMPLEMENTATION, DirectCallNotAllowed());
+        require(address(this) != _aIntents, DirectCallNotAllowed());
         _;
     }
 
@@ -67,7 +67,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     constructor(address acrossSpokePoolAddress) {
         acrossSpokePool = IAcrossSpokePool(acrossSpokePoolAddress);
-        _IMPLEMENTATION = address(this);
+        _aIntents = address(this);
     }
 
     /// @inheritdoc IAIntents
