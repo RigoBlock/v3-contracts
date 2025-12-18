@@ -104,9 +104,20 @@ contract MockAcrossSpokePool {
         uint32 exclusivityDeadline,
         bytes calldata message
     ) external payable {
-        // Transfer tokens from depositor
-        if (inputToken != address(0)) {
+        // inputToken should never be address(0) - ETH deposits use WETH address
+        require(inputToken != address(0), "Input token cannot be zero address");
+        
+        // Only transfer tokens if no native value sent
+        // When msg.value > 0, the SpokePool wraps ETH to WETH internally
+        if (msg.value == 0) {
+            // Normal ERC20 token transfer
             MockERC20(inputToken).transferFrom(msg.sender, address(this), inputAmount);
+        } else {
+            // Native ETH deposit case
+            require(inputToken == wrappedNativeToken, "Native value requires WETH input token");
+            require(msg.value == inputAmount, "Native value must equal input amount");
+            // In real SpokePool, ETH would be wrapped to WETH here
+            // For our mock, we just accept the native value
         }
         
         emit V3FundsDeposited(
