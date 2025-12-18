@@ -308,7 +308,9 @@ const deploy: DeployFunction = async function (
 
   const aIntents = await deploy("AIntents", {
     from: deployer,
-    args: [acrossSpokePool.address],
+    args: [
+      acrossSpokePool.address
+    ],
     log: true,
     deterministicDeployment: true,
   })

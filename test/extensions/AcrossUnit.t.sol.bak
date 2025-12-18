@@ -111,8 +111,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 0,
             sourceDecimals: 6,
             navTolerance: 0,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -133,8 +132,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 200, // 2%
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         
         bytes memory encoded = abi.encode(syncMsg);
@@ -156,8 +154,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 0,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         
         bytes memory encoded = abi.encode(message);
@@ -176,8 +173,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 0,
             sourceDecimals: 18,
             navTolerance: 0,
-            shouldUnwrap: true, // Request unwrap
-            sourceAmount: 100e6
+            shouldUnwrap: true // Request unwrap
         });
         
         bytes memory encoded = abi.encode(message);
@@ -225,8 +221,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         
         // Mock pool state
@@ -257,8 +252,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 200,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         
         vm.mockCall(
@@ -277,8 +271,7 @@ contract AcrossUnitTest is Test {
             sourceNav: sourceNav,
             sourceDecimals: 18,
             navTolerance: 200, // 2%
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         
         // Update mock to return higher NAV
@@ -292,52 +285,6 @@ contract AcrossUnitTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IEAcrossHandler.NavDeviationTooHigh.selector));
         handler.handleV3AcrossMessage(mockInputToken, 100e6, abi.encode(rebalanceMsg));
     }
-
-    /// @notice Test handler rejects source amount outside tolerance range
-    function test_Handler_RejectsSourceAmountMismatch() public {
-        vm.skip(true); // Skip: Requires full pool context with delegatecall - covered by AcrossIntegrationFork.t.sol
-        _setupPoolMocks();
-        
-        uint256 receivedAmount = 100e18; // Use 18 decimals for base token
-        uint256 rogueSourceAmount = 150e18; // 50% difference - way outside 10% tolerance
-        
-        DestinationMessage memory message = DestinationMessage({
-            opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: rogueSourceAmount // This should be rejected
-        });
-        
-        vm.prank(mockSpokePool);
-        vm.expectRevert(abi.encodeWithSelector(IEAcrossHandler.SourceAmountMismatch.selector));
-        handler.handleV3AcrossMessage(mockBaseToken, receivedAmount, abi.encode(message));
-    }
-
-    /// @notice Test handler accepts source amount within tolerance range  
-    function test_Handler_AcceptsSourceAmountWithinTolerance() public {
-        vm.skip(true); // Skip: Requires full pool context with delegatecall - covered by AcrossIntegrationFork.t.sol
-        _setupPoolMocks();
-        
-        uint256 receivedAmount = 100e18; // Use 18 decimals for base token
-        uint256 validSourceAmount = 105e18; // 5% difference - within 10% tolerance
-        
-        DestinationMessage memory message = DestinationMessage({
-            opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: validSourceAmount // This should be accepted
-        });
-        
-        vm.prank(mockSpokePool);
-        // Should not revert
-        handler.handleV3AcrossMessage(mockBaseToken, receivedAmount, abi.encode(message));
-    }
     
     /// @notice Test message encoding/decoding
     function test_MessageEncodingDecoding() public pure {
@@ -347,8 +294,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100,
-            shouldUnwrap: true,
-            sourceAmount: 100e6
+            shouldUnwrap: true
         });
         
         bytes memory encoded = abi.encode(message);
@@ -592,8 +538,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         bytes memory encodedTransfer = abi.encode(transferMsg);
         DestinationMessage memory decodedTransfer = abi.decode(encodedTransfer, (DestinationMessage));
@@ -606,8 +551,7 @@ contract AcrossUnitTest is Test {
             sourceNav: 1e18,
             sourceDecimals: 18,
             navTolerance: 200,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrap: false
         });
         bytes memory encodedSync = abi.encode(syncMsg);
         DestinationMessage memory decodedSync = abi.decode(encodedSync, (DestinationMessage));
@@ -677,11 +621,10 @@ contract AcrossUnitTest is Test {
         
         // Create token that won't be marked as active
         address inactiveToken = makeAddr("inactiveToken");
-        address differentInactiveToken = makeAddr("differentInactiveToken");
         
         IAIntents.AcrossParams memory params = _createAcrossParams(
             inactiveToken,
-            differentInactiveToken,
+            inactiveToken,
             100e6,
             99e6,
             10,
@@ -689,7 +632,7 @@ contract AcrossUnitTest is Test {
             100
         );
         
-        vm.expectRevert(abi.encodeWithSelector(IAIntents.UnsupportedCrossChainToken.selector));
+        vm.expectRevert(abi.encodeWithSelector(IAIntents.TokenNotActive.selector));
         pool.callDepositV3(params);
     }
     

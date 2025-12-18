@@ -27,6 +27,7 @@ The integration consists of two main components:
 - **ACROSS_FINAL_SUMMARY.md** - Final implementation summary
 - **ACROSS_CRITICAL_FIXES.md** - Critical fixes and security considerations
 - **ACROSS_TESTS_README.md** - Testing guide and patterns
+- **SOLVER_FEE_NAV_IMPACT.md** - Known issue with solver fees creating small NAV overvaluation
 
 ## Quick Start
 

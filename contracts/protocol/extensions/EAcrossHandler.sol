@@ -116,17 +116,44 @@ contract EAcrossHandler is IEAcrossHandler {
         
         if (params.opType == OpType.Transfer || params.opType == OpType.Sync) {
             // Both Transfer and Sync create virtual balances
-            _handleTransferMode(tokenReceived, amount);
+            _handleTransferMode(tokenReceived, amount, params);
         } else {
             revert InvalidOpType();
         }
     }
 
     /// @dev Handles Transfer and Sync modes: creates negative virtual balance to offset NAV increase.
-    function _handleTransferMode(address tokenReceived, uint256 amount) private {
-        // Create negative virtual balance for the actual received token
-        // This provides accurate per-token tracking for Transfer and Sync operations
-        VirtualBalanceLib.adjustVirtualBalance(tokenReceived, -(amount.toInt256()));
+    /// @dev For Transfer mode, uses sourceAmount to ensure exact NAV neutrality despite solver fees.
+    /// @dev For Sync mode, uses received amount since NAV changes are intended.
+    function _handleTransferMode(
+        address tokenReceived, 
+        uint256 receivedAmount,
+        DestinationMessage memory params
+    ) private {
+        uint256 virtualBalanceAmount;
+        
+        if (params.opType == OpType.Transfer) {
+            // Sanity check: sourceAmount should be within 10% of received amount
+            // This protects against bugs or misconfigurations in decimal conversion logic
+            uint256 tolerance = receivedAmount / 10; // 10% tolerance
+            uint256 lowerBound = receivedAmount > tolerance ? receivedAmount - tolerance : 0;
+            uint256 upperBound = receivedAmount + tolerance;
+            
+            require(
+                params.sourceAmount >= lowerBound && params.sourceAmount <= upperBound,
+                SourceAmountMismatch()
+            );
+            
+            // For Transfer: use original source amount for exact NAV neutrality
+            // Source handles all decimal conversions, so sourceAmount is in correct destination decimals
+            virtualBalanceAmount = params.sourceAmount;
+        } else {
+            // For Sync: use actual received amount (NAV changes intended)
+            virtualBalanceAmount = receivedAmount;
+        }
+        
+        // Create negative virtual balance for the received token
+        VirtualBalanceLib.adjustVirtualBalance(tokenReceived, -(virtualBalanceAmount.toInt256()));
     }
 
     /// @dev Normalizes NAV from source decimals to destination decimals.

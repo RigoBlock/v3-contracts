@@ -13,6 +13,7 @@ struct DestinationMessage {
     uint8 sourceDecimals;
     uint256 navTolerance;  // Not used in Sync mode
     bool shouldUnwrap;
+    uint256 sourceAmount;   // Original amount sent from source (before solver fees)
 }
 
 struct SourceMessage {

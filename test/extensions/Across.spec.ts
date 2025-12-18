@@ -77,8 +77,8 @@ describe("Across Integration", () => {
     describe("Access Control", () => {
       it("should reject calls from non-SpokePool addresses", async () => {
         const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false]]
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          [[OpType.Transfer, 1, 0, 18, 0, false, 1000000]]
         );
 
         await expect(
@@ -88,8 +88,8 @@ describe("Across Integration", () => {
 
       it("should reject calls from deployer", async () => {
         const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false]]
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          [[OpType.Transfer, 1, 0, 18, 0, false, 1000000]]
         );
 
         await expect(
@@ -99,8 +99,8 @@ describe("Across Integration", () => {
 
       it("should reject calls from arbitrary user", async () => {
         const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false]]
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+          [[OpType.Transfer, 1, 0, 18, 0, false, 1000000]]
         );
 
         await expect(
@@ -121,7 +121,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           [[
             transferMsg.opType,
             transferMsg.sourceChainId,
@@ -129,11 +129,12 @@ describe("Across Integration", () => {
             transferMsg.sourceDecimals,
             transferMsg.navTolerance,
             transferMsg.shouldUnwrap,
+            1000000 // sourceAmount
           ]]
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           encoded
         )[0];
 
@@ -143,6 +144,7 @@ describe("Across Integration", () => {
         expect(decoded[3]).to.equal(transferMsg.sourceDecimals);
         expect(decoded[4]).to.equal(transferMsg.navTolerance);
         expect(decoded[5]).to.equal(transferMsg.shouldUnwrap);
+        expect(decoded[6]).to.equal(1000000); // sourceAmount
       });
 
       it("should encode/decode transfer mode message with max values", async () => {
@@ -156,7 +158,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           [[
             transferMsg.opType,
             transferMsg.sourceChainId,
@@ -164,17 +166,19 @@ describe("Across Integration", () => {
             transferMsg.sourceDecimals,
             transferMsg.navTolerance,
             transferMsg.shouldUnwrap,
+            ethers.utils.parseEther("1000000") // sourceAmount
           ]]
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           encoded
         )[0];
 
         expect(decoded[0]).to.equal(transferMsg.opType);
         expect(decoded[2]).to.equal(transferMsg.sourceNav);
         expect(decoded[5]).to.equal(transferMsg.shouldUnwrap);
+        expect(decoded[6]).to.equal(ethers.utils.parseEther("1000000")); // sourceAmount
       });
 
       it("should encode/decode rebalance mode message", async () => {
@@ -188,7 +192,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           [[
             rebalanceMsg.opType,
             rebalanceMsg.sourceChainId,
@@ -196,17 +200,19 @@ describe("Across Integration", () => {
             rebalanceMsg.sourceDecimals,
             rebalanceMsg.navTolerance,
             rebalanceMsg.shouldUnwrap,
+            ethers.utils.parseEther("1.05") // sourceAmount
           ]]
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           encoded
         )[0];
 
         expect(decoded[0]).to.equal(OpType.Sync);
         expect(decoded[2]).to.equal(rebalanceMsg.sourceNav);
         expect(decoded[4]).to.equal(rebalanceMsg.navTolerance);
+        expect(decoded[6]).to.equal(ethers.utils.parseEther("1.05")); // sourceAmount
       });
 
       it("should encode/decode sync mode message", async () => {
@@ -220,7 +226,7 @@ describe("Across Integration", () => {
         };
 
         const encoded = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           [[
             syncMsg.opType,
             syncMsg.sourceChainId,
@@ -228,16 +234,18 @@ describe("Across Integration", () => {
             syncMsg.sourceDecimals,
             syncMsg.navTolerance,
             syncMsg.shouldUnwrap,
+            ethers.utils.parseEther("0.98") // sourceAmount
           ]]
         );
 
         const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
           encoded
         )[0];
 
         expect(decoded[0]).to.equal(OpType.Sync);
         expect(decoded[5]).to.equal(syncMsg.shouldUnwrap);
+        expect(decoded[6]).to.equal(ethers.utils.parseEther("0.98")); // sourceAmount
       });
 
       it("should handle different token decimals", async () => {
@@ -254,7 +262,7 @@ describe("Across Integration", () => {
           };
 
           const encoded = ethers.utils.defaultAbiCoder.encode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
             [[
               message.opType,
               message.sourceChainId,
@@ -262,15 +270,17 @@ describe("Across Integration", () => {
               message.sourceDecimals,
               message.navTolerance,
               message.shouldUnwrap,
+              ethers.utils.parseUnits("1", decimals) // sourceAmount
             ]]
           );
 
           const decoded = ethers.utils.defaultAbiCoder.decode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
             encoded
           )[0];
 
           expect(decoded[3]).to.equal(decimals);
+          expect(decoded[6]).to.equal(ethers.utils.parseUnits("1", decimals)); // sourceAmount
         }
       });
 
@@ -279,16 +289,17 @@ describe("Across Integration", () => {
 
         for (const opType of opTypes) {
           const message = ethers.utils.defaultAbiCoder.encode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
-            [[opType, 1, ethers.utils.parseEther("1"), 18, 100, false]]
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
+            [[opType, 1, ethers.utils.parseEther("1"), 18, 100, false, ethers.utils.parseEther("1")]]
           );
 
           const decoded = ethers.utils.defaultAbiCoder.decode(
-            ["tuple(uint8,uint256,uint256,uint8,uint256,bool)"],
+            ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
             message
           )[0];
 
           expect(decoded[0]).to.equal(opType);
+          expect(decoded[6]).to.equal(ethers.utils.parseEther("1")); // sourceAmount
         }
       });
     });

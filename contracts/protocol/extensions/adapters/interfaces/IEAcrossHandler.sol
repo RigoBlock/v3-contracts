@@ -9,6 +9,7 @@ interface IEAcrossHandler {
     error InvalidOpType();
     error UnauthorizedCaller();
     error ChainsNotSynced();
+    error SourceAmountMismatch();
 
     /// @notice Handles cross-chain message from Across SpokePool
     /// @dev Called via delegatecall from pool when Across fills deposits. MUST be called by SpokePool only.
