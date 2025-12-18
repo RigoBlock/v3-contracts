@@ -108,6 +108,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         
         _safeApproveToken(params.inputToken);
     }
+
+    /// @notice Gets the deterministic escrow address for Transfer operations
+    /// @param opType The operation type (only Transfer supported)
+    /// @return escrowAddress The deterministic escrow address
+    function getEscrowAddress(OpType opType) external view onlyDelegateCall returns (address escrowAddress) {
+        return EscrowFactory.getEscrowAddress(address(this), opType);
+    }
     
     /*
      * INTERNAL METHODS
@@ -142,11 +149,9 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         uint256 inputAmount,
         SourceMessage memory message
     ) private returns (DestinationMessage memory) {
-        // Deploy Transfer escrow if needed
         if (message.opType == OpType.Transfer) {
-            // Deploy escrow in delegatecall context (address(this) = pool)
+            // Deploy escrow and adjust virtual balance for Transfer operations (NAV neutral)
             EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer);
-            // Only adjust virtual balance for Transfer operations (NAV neutral)
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
         } else if (message.opType == OpType.Sync) {
             // Sync operations don't adjust virtual balance (NAV changes expected)

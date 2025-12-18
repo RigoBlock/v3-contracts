@@ -41,7 +41,7 @@ library EscrowFactory {
     /// @param opType The operation type
     /// @return escrowAddress The deterministic address
     function getEscrowAddress(address pool, OpType opType) internal view returns (address escrowAddress) {
-        bytes32 salt = _getSalt(pool, opType);
+        bytes32 salt = _getSalt(opType);
         bytes32 bytecodeHash = _getBytecodeHash(opType, pool);
         
         escrowAddress = address(uint160(uint256(keccak256(abi.encodePacked(
@@ -57,7 +57,7 @@ library EscrowFactory {
     /// @param opType The operation type
     /// @return escrowContract The deployed escrow contract address
     function deployEscrow(address pool, OpType opType) internal returns (address escrowContract) {
-        bytes32 salt = _getSalt(pool, opType);
+        bytes32 salt = _getSalt(opType);
         
         // Try to deploy - if already exists, CREATE2 will succeed and return existing address
         try new TransferEscrow{salt: salt}(pool) returns (TransferEscrow escrow) {
@@ -73,20 +73,21 @@ library EscrowFactory {
 
     /// @notice Deploys escrow if needed (idempotent)
     /// @param pool The pool address
-    /// @param opType The operation type  
+    /// @param opType The operation type
     /// @return escrowContract The escrow contract address (existing or newly deployed)
     function deployEscrowIfNeeded(address pool, OpType opType) internal returns (address escrowContract) {
         return deployEscrow(pool, opType);
     }
 
     /// @dev Gets the salt for CREATE2 deployment
-    function _getSalt(address pool, OpType opType) private pure returns (bytes32) {
-        return keccak256(abi.encodePacked(pool, uint8(opType)));
+    function _getSalt(OpType opType) private pure returns (bytes32) {
+        // Use opType to generate different escrow addresses per operation type
+        return keccak256(abi.encodePacked(uint8(opType)));
     }
 
     /// @dev Gets the bytecode hash for CREATE2 address calculation
     function _getBytecodeHash(OpType /* opType */, address pool) private pure returns (bytes32) {
-        // All operations use TransferEscrow now
+        // All operations use TransferEscrow for now
         return keccak256(abi.encodePacked(
             type(TransferEscrow).creationCode,
             abi.encode(pool)

@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {IAcrossSpokePool} from "../../../interfaces/IAcrossSpokePool.sol";
+import {OpType} from "../../../types/Crosschain.sol";
 
 /// @title AIntents Interface - Across Protocol integration for cross-chain transfers
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -46,6 +47,11 @@ interface IAIntents {
 
     // TODO: add natspec docs and lint
     function depositV3(AcrossParams memory params) external;
+
+    /// @notice Gets the deterministic escrow address for Transfer operations
+    /// @param opType The operation type (only Transfer supported)
+    /// @return escrowAddress The deterministic escrow address
+    function getEscrowAddress(OpType opType) external view returns (address escrowAddress);
 
     /// @notice Returns the Across SpokePool address for this chain
     /// @return Address of the Across SpokePool contract
