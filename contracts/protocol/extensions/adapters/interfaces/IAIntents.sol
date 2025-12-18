@@ -27,6 +27,7 @@ interface IAIntents {
     error TokenNotActive();
     error InsufficientWrappedNativeBalance();
     error InvalidOpType();
+    error SameChainTransfer();
 
     struct AcrossParams {
         address depositor;

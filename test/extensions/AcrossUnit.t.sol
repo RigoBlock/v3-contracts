@@ -481,6 +481,24 @@ contract AcrossUnitTest is Test {
         pool.callDepositV3(params);
     }
     
+    /// @notice Test adapter rejects same-chain transfers
+    function test_Adapter_RejectsSameChainTransfer() public {
+        MockPool pool = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
+        
+        IAIntents.AcrossParams memory params = _createAcrossParams(
+            mockInputToken,
+            mockInputToken,
+            100e6,
+            99e6,
+            block.chainid, // Same chain as current
+            OpType.Transfer,
+            100
+        );
+        
+        vm.expectRevert(abi.encodeWithSelector(IAIntents.SameChainTransfer.selector));
+        pool.callDepositV3(params);
+    }
+    
     /// @notice Test adapter with Sync mode
     function test_Adapter_DepositV3_SyncMode() public {
         vm.skip(true); // Skip: Requires full pool context with delegatecall - covered by AcrossIntegrationFork.t.sol
@@ -672,8 +690,8 @@ contract AcrossUnitTest is Test {
         assertEq(tolAmt3, 1e18);
     }
     
-    /// @notice Test adapter rejects inactive token
-    function test_Adapter_RejectsInactiveToken() public {
+    /// @notice Test that unsupported token pairs are rejected
+    function test_Adapter_RejectsUnsupportedTokenPairs() public {
         MockPool pool = new MockPool(address(adapter), mockSpokePool, mockBaseToken, mockInputToken);
         
         // Create token that won't be marked as active
@@ -692,6 +710,72 @@ contract AcrossUnitTest is Test {
         
         vm.expectRevert(abi.encodeWithSelector(CrosschainLib.UnsupportedCrossChainToken.selector));
         pool.callDepositV3(params);
+    }
+    
+    /// @notice Test CrosschainLib validation function directly  
+    function test_CrosschainLib_ValidatesSupportedTokenPairs() public pure {
+        // Test supported pairs - should not revert
+        
+        // ETH USDC -> ARB USDC
+        CrosschainLib.validateBridgeableTokenPair(
+            0xa0b86a33E6441319A87aA51FBbcFa4De9A7A24c8, // ETH_USDC
+            0xaf88d065e77c8cC2239327C5EDb3A432268e5831 // ARB_USDC
+        );
+        
+        // OPT WETH -> ETH WETH (different addresses)
+        CrosschainLib.validateBridgeableTokenPair(
+            0x4200000000000000000000000000000000000006, // OPT_WETH  
+            0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 // ETH_WETH
+        );
+        
+        // ETH WBTC -> POLY WBTC
+        CrosschainLib.validateBridgeableTokenPair(
+            0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, // ETH_WBTC
+            0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6 // POLY_WBTC
+        );
+        
+        // BSC USDC -> ETH USDC (different decimal handling)
+        CrosschainLib.validateBridgeableTokenPair(
+            0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d, // BSC_USDC
+            0xa0b86a33E6441319A87aA51FBbcFa4De9A7A24c8 // ETH_USDC
+        );
+        
+        // Same token address across chains (e.g., WETH on Superchain)
+        CrosschainLib.validateBridgeableTokenPair(
+            0x4200000000000000000000000000000000000006, // OPT_WETH
+            0x4200000000000000000000000000000000000006 // BASE_WETH (same address)
+        );
+    }
+    
+    // NOTE: Negative validation tests are covered by the existing test_Adapter_RejectsUnsupportedTokenPairs
+    // which tests the full adapter flow and confirms that UnsupportedCrossChainToken is thrown
+    // for random/unsupported token addresses via CrosschainLib.validateBridgeableTokenPair()
+    
+    /// @notice Test CrosschainLib BSC decimal conversion
+    function test_CrosschainLib_BSCDecimalConversion() public pure {
+        // Test to BSC conversion (6 decimals -> 18 decimals)
+        uint256 result = CrosschainLib.applyBscDecimalConversion(
+            0xa0b86a33E6441319A87aA51FBbcFa4De9A7A24c8, // ETH_USDC (source)
+            0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d, // BSC_USDC (destination)
+            100e6
+        );
+        assertEq(result, 100e18, "Should convert 6 decimals to 18 decimals when going to BSC");
+        
+        // Test from BSC conversion (18 decimals -> 6 decimals)
+        uint256 result2 = CrosschainLib.applyBscDecimalConversion(
+            0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d, // BSC_USDC (source)
+            0xa0b86a33E6441319A87aA51FBbcFa4De9A7A24c8, // ETH_USDC (destination)
+            100e18
+        );
+        assertEq(result2, 100e6, "Should convert 18 decimals to 6 decimals when from BSC");
+        
+        // Test no BSC involved - no conversion
+        uint256 result3 = CrosschainLib.applyBscDecimalConversion(
+            0xa0b86a33E6441319A87aA51FBbcFa4De9A7A24c8, // ETH_USDC
+            0xaf88d065e77c8cC2239327C5EDb3A432268e5831, // ARB_USDC
+            100e6
+        );
+        assertEq(result3, 100e6, "Should not modify amount when no BSC involved");
     }
     
     /// @notice Test ExtensionsMap selector mapping

@@ -45,7 +45,6 @@ library CrosschainLib {
     address internal constant UNI_WETH = 0x4200000000000000000000000000000000000006;
 
     // Custom errors
-    error TokenMismatch();
     error UnsupportedCrossChainToken();
 
     /// @notice Validates that input and output tokens are compatible for cross-chain bridging
@@ -53,8 +52,8 @@ library CrosschainLib {
     /// @param inputToken Source token address
     /// @param outputToken Destination token address
     function validateBridgeableTokenPair(address inputToken, address outputToken) internal pure {
-        // Input and output tokens must be different (Across should enforce this too)
-        require(inputToken != outputToken, TokenMismatch());
+        // Allow same token addresses (e.g., WETH on Superchain has same address across chains)
+        // Chain ID validation is handled separately in AIntents
         
         // Check USDC bridgeable tokens (includes BSC with 18vs6 decimal conversion)
         if (inputToken == ETH_USDC || inputToken == ARB_USDC || inputToken == OPT_USDC || 

@@ -76,6 +76,9 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // TODO: check if we can safely skip this check. Also maybe use unified error + condition
         require(!params.inputToken.isAddressZero(), NullAddress());
         require(params.exclusiveRelayer.isAddressZero(), NullAddress());
+        
+        // Prevent same-chain transfers (destination must be different chain)
+        require(params.destinationChainId != block.chainid, SameChainTransfer());
 
         // Validate bridgeable token restriction - ensure input and output tokens are compatible
         CrosschainLib.validateBridgeableTokenPair(params.inputToken, params.outputToken);
