@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
@@ -689,7 +690,7 @@ contract AcrossUnitTest is Test {
             100
         );
         
-        vm.expectRevert(abi.encodeWithSelector(IAIntents.UnsupportedCrossChainToken.selector));
+        vm.expectRevert(abi.encodeWithSelector(CrosschainLib.UnsupportedCrossChainToken.selector));
         pool.callDepositV3(params);
     }
     
