@@ -48,11 +48,12 @@ The integration supports two transfer modes via encoded message:
 - Virtual balances offset nav impact
 - Use case: Moving assets between chains
 
-#### Type 2: Rebalance
+#### Type 2: Sync
 - Nav impact not offset by virtual balances
 - Syncs nav between chains
 - Requires delta tracking for chains
 - Use case: Equalizing performance across chains
+- The first Sync operation is treated as Transfer, because nav delta has not been initialized yet
 
 ---
 
