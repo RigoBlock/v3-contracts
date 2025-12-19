@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
@@ -15,27 +16,28 @@ import {TestProxyForAcross} from "../fixtures/TestProxyForAcross.sol";
 /// @title AcrossIntegrationFork - Comprehensive fork-based integration tests
 /// @notice Merged integration tests for Across protocol testing on real forks
 contract AcrossIntegrationForkTest is Test {
-    uint256 constant MAINNET_BLOCK    = 21_000_000;
-    uint256 constant BASE_BLOCK   = 35521323;
+    // Use constants for block numbers to save RPC calls
+    uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK_LEGACY;
+    uint256 constant BASE_BLOCK = Constants.BASE_BLOCK;
 
     uint256 constant BASE_CHAIN_ID = 8453;
 
-    // Deployed infrastructure addresses
-    address constant AUTHORITY = 0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1;
-    address constant FACTORY = 0x4aA9e5A5A244C81C3897558C5cF5b752EBefA88f;
-    address constant REGISTRY = 0x19Be0f8D5f35DB8c2d2f50c9a3742C5d1eB88907;
+    // Use correct deployed infrastructure addresses from Constants
+    address constant AUTHORITY = Constants.AUTHORITY;
+    address constant FACTORY = Constants.FACTORY;
+    address constant REGISTRY = Constants.REGISTRY;
     
-    // Across SpokePools by chain
-    address constant ETH_SPOKE_POOL = 0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5;
-    address constant BASE_SPOKE_POOL = 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64;
+    // Use Across SpokePools from Constants
+    address constant ETH_SPOKE_POOL = Constants.ETH_SPOKE_POOL;
+    address constant BASE_SPOKE_POOL = Constants.BASE_SPOKE_POOL;
     
-    // Tokens on Ethereum mainnet
-    address constant USDC_ETH = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant WETH_ETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    // Use tokens from Constants
+    address constant USDC_ETH = Constants.ETH_USDC;
+    address constant WETH_ETH = Constants.ETH_WETH;
     
     // Tokens on Base
-    address constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    address constant WETH_BASE = 0x4200000000000000000000000000000000000006;
+    address constant USDC_BASE = Constants.BASE_USDC;
+    address constant WETH_BASE = Constants.BASE_WETH;
     
     // Test actors
     address poolOwner;

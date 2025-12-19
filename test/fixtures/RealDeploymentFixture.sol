@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
@@ -23,25 +24,25 @@ import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 /// @notice Fixture that uses actual deployed SmartPool infrastructure for testing
 /// @dev This deploys new extensions and implementation but uses existing factory/authority
 contract RealDeploymentFixture is Test {
-    // Chain-specific addresses - using same constants as ENavViewFork.t.sol
-    address constant GRG_STAKING = 0x730dDf7b602dB822043e0409d8926440395e07fE;
-    address constant UNISWAP_V4_POSM = 0x00000000000000000000000000000000DeaDBeef; // Placeholder for now
-    address constant ORACLE = 0xB13250f0Dc8ec6dE297E81CDA8142DB51860BaC4;
+    // Chain-specific addresses using Constants.sol for consistency
+    address constant GRG_STAKING = Constants.GRG_STAKING;
+    address constant UNISWAP_V4_POSM = Constants.UNISWAP_V4_POSM;
+    address constant ORACLE = Constants.ORACLE;
     
     // Deployed contracts (same across most chains)
-    address constant AUTHORITY = 0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1;
-    address constant FACTORY = 0x4aA9e5A5A244C81C3897558C5cF5b752EBefA88f;
-    address constant REGISTRY = 0x19Be0f8D5f35DB8c2d2f50c9a3742C5d1eB88907;
+    address constant AUTHORITY = Constants.AUTHORITY;
+    address constant FACTORY = Constants.FACTORY;
+    address constant REGISTRY = Constants.REGISTRY;
     
     // Across SpokePools by chain
-    address constant ARB_SPOKE_POOL = 0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A;
-    address constant OPT_SPOKE_POOL = 0x6f26Bf09B1C792e3228e5467807a900A503c0281;
-    address constant BASE_SPOKE_POOL = 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64;
+    address constant ARB_SPOKE_POOL = Constants.ARB_SPOKE_POOL;
+    address constant OPT_SPOKE_POOL = Constants.OPT_SPOKE_POOL;
+    address constant BASE_SPOKE_POOL = Constants.BASE_SPOKE_POOL;
     
-    // WETH addresses by chain
-    address constant WETH_ARB = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    address constant WETH_OPT = 0x4200000000000000000000000000000000000006;
-    address constant WETH_BASE = 0x4200000000000000000000000000000000000006;
+    // WETH addresses by chain  
+    address constant WETH_ARB = Constants.ARB_WETH;
+    address constant WETH_OPT = Constants.OPT_WETH;
+    address constant WETH_BASE = Constants.BASE_WETH;
     
     // Deployed new contracts
     EAcrossHandler public handler;

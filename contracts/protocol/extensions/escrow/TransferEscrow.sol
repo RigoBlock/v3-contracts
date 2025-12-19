@@ -19,54 +19,68 @@
 
 pragma solidity 0.8.28;
 
-import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
-import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
+import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
 import {OpType} from "../../types/Crosschain.sol";
-import {BaseEscrowContract} from "./BaseEscrowContract.sol";
-import {IEscrowContract} from "./IEscrowContract.sol";
 
 /// @title TransferEscrow - Escrow contract for Transfer and Sync operation refunds
 /// @notice Manages refunds from failed Transfer/Sync operations with NAV-neutral donations
-/// @dev Transfer/Sync operations create virtual balances, so refunds must adjust them to maintain NAV neutrality
-contract TransferEscrow is BaseEscrowContract {
+/// @dev Combined escrow contract that handles both receive() and claimRefund() functionality
+contract TransferEscrow {
     using SafeTransferLib for address;
-    using VirtualBalanceLib for address;
-    using SafeCast for uint256;
 
-    constructor(address _pool) BaseEscrowContract(_pool) {}
+    /// @notice Emitted when tokens are donated back to the pool
+    event TokensDonated(address indexed token, uint256 amount);
+    
+    /// @notice The pool this escrow is associated with
+    address public immutable pool;
 
-    /// @inheritdoc IEscrowContract
-    function opType() external pure override returns (OpType) {
-        // This escrow handles both Transfer and Sync operations
+    error TransferFailed();
+    error InvalidAmount();
+
+    constructor(address _pool) {
+        require(_pool != address(0), "Invalid pool address");
+        pool = _pool;
+    }
+
+    /// @notice Returns the operation type this escrow handles
+    function opType() external pure returns (OpType) {
         return OpType.Transfer;
     }
 
-    /// @inheritdoc IEscrowContract
-    function donateToPool(address token, uint256 amount) external override {
-        require(amount > 0, InvalidAmount());
-        _donateToPool(token, amount);
+    /// @notice Receives tokens (typically from refunds) and donates immediately
+    receive() external payable {
+        if (msg.value > 0) {
+            // Donate immediately to pool to ensure proper virtual balance management
+            ISmartPoolActions(pool).donate{value: msg.value}(address(0), msg.value);
+            emit TokensDonated(address(0), msg.value);
+        }
     }
 
-    /// @dev Donates tokens to pool and adjusts virtual balance to maintain NAV neutrality
-    /// @param token The token to donate
-    /// @param amount The amount to donate
-    function _donateToPool(address token, uint256 amount) internal override {
-        // Transfer tokens to the pool
+    /// @notice Allows anyone to claim refund tokens and send them to the pool
+    /// @param token The token address to claim (address(0) for native)
+    function claimRefund(address token) external {
+        uint256 balance;
         if (token == address(0)) {
-            // Native token
-            (bool success, ) = payable(pool).call{value: amount}("");
-            require(success, TransferFailed());
+            balance = address(this).balance;
         } else {
-            // ERC20 token
-            token.safeTransfer(pool, amount);
+            balance = IERC20(token).balanceOf(address(this));
+        }
+        require(balance > 0, InvalidAmount());
+        
+        if (token == address(0)) {
+            // For native currency, use the pool's donate function directly
+            ISmartPoolActions(pool).donate{value: balance}(address(0), balance);
+        } else {
+            // Approve the pool to spend the tokens
+            token.safeApprove(pool, balance);
+            
+            // Call the pool's donate function which handles NAV neutrality
+            ISmartPoolActions(pool).donate(token, balance);
         }
 
-        // Adjust virtual balance for the specific token: decrease virtual balance to offset the donation
-        // This maintains NAV neutrality since the tokens are being donated back
-        VirtualBalanceLib.adjustVirtualBalance(token, -(amount.toInt256()));
-
-        emit TokensDonated(token, amount);
+        emit TokensDonated(token, balance);
     }
 }

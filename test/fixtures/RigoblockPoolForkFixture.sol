@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+import {Constants} from "../../contracts/test/Constants.sol";
+
 /// @title RigoblockPoolForkFixture
 /// @notice Fixture for deploying real Rigoblock pool infrastructure on forks
 /// @dev TODO: Implement full deployment with actual factory, extensions map, etc.
@@ -35,15 +37,15 @@ pragma solidity 0.8.28;
 ///
 /// @author AI Agent (Placeholder - needs human implementation)
 library RigoblockPoolForkFixture {
-    // Deployed infrastructure addresses
-    address constant AUTHORITY = 0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1;
-    address constant FACTORY = 0x4aA9e5A5A244C81C3897558C5cF5b752EBefA88f;
-    address constant REGISTRY = 0x19Be0f8D5f35DB8c2d2f50c9a3742C5d1eB88907;
+    // Use correct deployed infrastructure addresses from Constants
+    address constant AUTHORITY = Constants.AUTHORITY;
+    address constant FACTORY = Constants.FACTORY;
+    address constant REGISTRY = Constants.REGISTRY;
     
-    // Chain-specific SpokePools
-    address constant ARB_SPOKE_POOL = 0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A;
-    address constant OPT_SPOKE_POOL = 0x6f26Bf09B1C792e3228e5467807a900A503c0281;
-    address constant BASE_SPOKE_POOL = 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64;
+    // Chain-specific SpokePools using Constants
+    address constant ARB_SPOKE_POOL = Constants.ARB_SPOKE_POOL;
+    address constant OPT_SPOKE_POOL = Constants.OPT_SPOKE_POOL;
+    address constant BASE_SPOKE_POOL = Constants.BASE_SPOKE_POOL;
     
     struct PoolInfrastructure {
         address poolProxy;

@@ -21,7 +21,6 @@ pragma solidity 0.8.28;
 
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {OpType} from "../../types/Crosschain.sol";
-import {IEscrowContract} from "./IEscrowContract.sol";
 import {TransferEscrow} from "./TransferEscrow.sol";
 
 /// @title EscrowFactory - Factory for creating deterministic escrow contracts

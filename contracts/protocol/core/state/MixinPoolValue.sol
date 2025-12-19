@@ -10,6 +10,7 @@ import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
+import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
@@ -115,7 +116,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
         
         // Add virtual balances for cross-chain transfers (requirement 1 & 4)
-        poolValueInBaseToken += _getVirtualBalance(baseToken);
+        poolValueInBaseToken += VirtualBalanceLib.getVirtualBalance(baseToken);
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;

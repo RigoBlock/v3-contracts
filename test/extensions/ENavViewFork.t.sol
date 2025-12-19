@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
@@ -22,23 +23,24 @@ import {DeploymentParams, Extensions} from "../../contracts/protocol/types/Deplo
 /// @title ENavViewFork - Fork-based tests for the ENavView extension
 /// @notice Tests the ENavView extension against a live pool with implementation upgrade simulation
 contract ENavViewForkTest is Test {
-    uint256 constant MAINNET_BLOCK = 22_600_000; // Recent block after oracle deployment at 22,425,175
+    // Using constants for consistency and reduced RPC load  
+    uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK_RECENT; // After oracle deployment
 
-    // Deployed infrastructure addresses
-    address constant AUTHORITY = 0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1;
-    address constant FACTORY = 0x4aA9e5A5A244C81C3897558C5cF5b752EBefA88f;
-    address constant REGISTRY = 0x19Be0f8D5f35DB8c2d2f50c9a3742C5d1eB88907;
-    address constant GRG_STAKING = 0x730dDf7b602dB822043e0409d8926440395e07fE;
-    address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address constant UNISWAP_V4_POSM = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
-    address constant ACROSS_SPOKE_POOL = 0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5;
-    address constant EXTENSIONS_MAP_DEPLOYER = 0x5A69bBe7f8F9dbDBFEa35CeFf33e093C6690d437; // Mainnet deployer
+    // Deployed infrastructure addresses from Constants.sol
+    address constant AUTHORITY = Constants.AUTHORITY;
+    address constant FACTORY = Constants.FACTORY;
+    address constant REGISTRY = Constants.REGISTRY;
+    address constant GRG_STAKING = Constants.GRG_STAKING;
+    address constant WETH = Constants.ETH_WETH;
+    address constant UNISWAP_V4_POSM = Constants.UNISWAP_V4_POSM;
+    address constant ACROSS_SPOKE_POOL = Constants.ETH_SPOKE_POOL;
+    address constant EXTENSIONS_MAP_DEPLOYER = Constants.EXTENSIONS_MAP_DEPLOYER;
 
     // Test pool with assets on multiple chains
-    address constant TEST_POOL = 0xEfa4bDf566aE50537A507863612638680420645C;
+    address constant TEST_POOL = Constants.TEST_POOL;
 
     // Implementation slot from EIP-1967
-    bytes32 constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    bytes32 constant IMPLEMENTATION_SLOT = Constants.IMPLEMENTATION_SLOT;
 
     // Fork ID
     uint256 mainnetFork;
