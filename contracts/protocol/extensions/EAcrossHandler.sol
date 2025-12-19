@@ -84,6 +84,15 @@ contract EAcrossHandler is IEAcrossHandler {
         AddressSet storage set = StorageLib.activeTokensSet();
         address baseToken = StorageLib.pool().baseToken;
 
+        // Unwrap native if requested
+        address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
+        address effectiveToken = tokenReceived;
+        if (params.shouldUnwrap && tokenReceived == wrappedNative) {
+            // interaction with external contract should happen via AUniswap.withdrawWETH9?
+            IWETH9(wrappedNative).withdraw(amount);
+            effectiveToken = address(0); // ETH is represented as address(0)
+        }
+
         // TODO: this method will revert, i.e. funds would be lost, or not accounted for? should not revert, and
         // peacefully add the token to the tracked tokens (should pass flag - revertIfNoPriceFeed ?). This means
         // we should add a price feed, because the transfer will use the price to create a virtual balance? or
@@ -93,29 +102,22 @@ contract EAcrossHandler is IEAcrossHandler {
         // because we would have an array of virtual balances.
         
         // For tokens without price feeds, we can revert since escrow setup on source handles refunds properly
-        if (tokenReceived != baseToken && !set.isActive(tokenReceived)) {
+        if (effectiveToken != baseToken && !set.isActive(effectiveToken)) {
             // Try to add token if it has a price feed
-            if (IEOracle(address(this)).hasPriceFeed(tokenReceived)) {
-                set.addUnique(IEOracle(address(this)), tokenReceived, baseToken);
+            if (IEOracle(address(this)).hasPriceFeed(effectiveToken)) {
+                set.addUnique(IEOracle(address(this)), effectiveToken, baseToken);
             } else {
                 // Token doesn't have price feed - can revert since escrow handles refunds
                 revert TokenWithoutPriceFeed();
             }
         }
         
-        // Unwrap native if requested
-        address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
-        if (params.shouldUnwrap && tokenReceived == wrappedNative) {
-            // interaction with external contract should happen via AUniswap.withdrawWETH9?
-            IWETH9(wrappedNative).withdraw(amount);
-        }
-        
-        if (params.opType == OpType.Transfer || params.opType == OpType.Sync) {
-            // Both Transfer and Sync create virtual balances
-            _handleTransferMode(tokenReceived, amount, params);
-            
-            // For Sync operations, validate NAV spread (only if not in testing mode)
-            if (params.opType == OpType.Sync && params.sourceNav > 0) {
+        if (params.opType == OpType.Transfer) {
+            // Transfer is NAV-neutral: create negative virtual balance to offset NAV increase
+            _handleTransferMode(effectiveToken, amount, params);
+        } else if (params.opType == OpType.Sync) {
+            // Sync impacts NAV: no virtual balance adjustment, validate NAV spread
+            if (params.sourceNav > 0) {
                 _validateNavSpread(params);
             }
         } else {
@@ -123,38 +125,30 @@ contract EAcrossHandler is IEAcrossHandler {
         }
     }
 
-    /// @dev Handles Transfer and Sync modes: creates negative virtual balance to offset NAV increase.
-    /// @dev For Transfer mode, uses sourceAmount to ensure exact NAV neutrality despite solver fees.
-    /// @dev For Sync mode, uses received amount since NAV changes are intended.
+    /// @dev Handles Transfer mode: creates negative virtual balance to offset NAV increase.
+    /// @dev Transfer is NAV-neutral and uses sourceAmount for exact neutrality despite solver fees.
     function _handleTransferMode(
-        address tokenReceived, 
+        address effectiveToken, 
         uint256 receivedAmount,
         DestinationMessage memory params
     ) private {
-        uint256 virtualBalanceAmount;
+        // Sanity check: sourceAmount should be within 10% of received amount
+        // This protects against bugs or misconfigurations in decimal conversion logic
+        uint256 tolerance = receivedAmount / 10; // 10% tolerance
+        uint256 lowerBound = receivedAmount > tolerance ? receivedAmount - tolerance : 0;
+        uint256 upperBound = receivedAmount + tolerance;
         
-        if (params.opType == OpType.Transfer) {
-            // Sanity check: sourceAmount should be within 10% of received amount
-            // This protects against bugs or misconfigurations in decimal conversion logic
-            uint256 tolerance = receivedAmount / 10; // 10% tolerance
-            uint256 lowerBound = receivedAmount > tolerance ? receivedAmount - tolerance : 0;
-            uint256 upperBound = receivedAmount + tolerance;
-            
-            require(
-                params.sourceAmount >= lowerBound && params.sourceAmount <= upperBound,
-                SourceAmountMismatch()
-            );
-            
-            // For Transfer: use original source amount for exact NAV neutrality
-            // Source handles all decimal conversions, so sourceAmount is in correct destination decimals
-            virtualBalanceAmount = params.sourceAmount;
-        } else {
-            // For Sync: use actual received amount (NAV changes intended)
-            virtualBalanceAmount = receivedAmount;
-        }
+        require(
+            params.sourceAmount >= lowerBound && params.sourceAmount <= upperBound,
+            SourceAmountMismatch()
+        );
         
-        // Create negative virtual balance for the received token
-        VirtualBalanceLib.adjustVirtualBalance(tokenReceived, -(virtualBalanceAmount.toInt256()));
+        // For Transfer: use original source amount for exact NAV neutrality
+        // Source handles all decimal conversions, so sourceAmount is in correct destination decimals
+        uint256 virtualBalanceAmount = params.sourceAmount;
+        
+        // Create negative virtual balance for the effective token (ETH if unwrapped, otherwise received token)
+        VirtualBalanceLib.adjustVirtualBalance(effectiveToken, -(virtualBalanceAmount.toInt256()));
     }
 
     /// @dev Normalizes NAV from source decimals to destination decimals.

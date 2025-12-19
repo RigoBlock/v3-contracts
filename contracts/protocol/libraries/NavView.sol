@@ -127,16 +127,16 @@ library NavView {
                     int256 amount = apps[i].balances[j].amount;
                     
                     // Find if token already tracked
-                    bool found = false;
+                    bool tokenFound = false;
                     for (uint256 k = 0; k < tokenCount; k++) {
                         if (uniqueTokens[k] == token) {
                             tokenBalances[k] += amount;
-                            found = true;
+                            tokenFound = true;
                             break;
                         }
                     }
                     
-                    if (!found) {
+                    if (!tokenFound) {
                         uniqueTokens[tokenCount] = token;
                         tokenBalances[tokenCount] = amount;
                         tokenCount++;
@@ -156,7 +156,7 @@ library NavView {
                 break;
             }
         }
-        
+
         if (!found) {
             uniqueTokens[tokenCount] = tokens.baseToken;
             tokenBalances[tokenCount] = baseBalance;
@@ -176,16 +176,16 @@ library NavView {
             }
             
             // Find if token already tracked
-            bool found = false;
+            bool walletTokenFound = false;
             for (uint256 k = 0; k < tokenCount; k++) {
                 if (uniqueTokens[k] == token) {
                     tokenBalances[k] += walletBalance;
-                    found = true;
+                    walletTokenFound = true;
                     break;
                 }
             }
             
-            if (!found) {
+            if (!walletTokenFound) {
                 uniqueTokens[tokenCount] = token;
                 tokenBalances[tokenCount] = walletBalance;
                 tokenCount++;
