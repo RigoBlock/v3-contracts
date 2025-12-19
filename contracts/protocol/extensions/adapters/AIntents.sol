@@ -159,6 +159,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             // on source (uses escrow) but inflating NAV on destination before handler processes.
             // Handler must validate opType matches expected behavior and prevent NAV manipulation.
         } else {
+            // Includes OpType.Unknown and any other invalid values
             revert InvalidOpType();
         }
 

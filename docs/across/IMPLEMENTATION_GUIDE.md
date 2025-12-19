@@ -33,10 +33,10 @@ This document consolidates all aspects of the Across bridge integration for Rigo
    - Maps EAcrossHandler methods to delegatecall
    - Location: `protocol/deps/ExtensionsMapDeployer.sol`
 
-4. **OffchainNav.sol** (Utility)
+4. **ENavView.sol** (Utility)
    - Provides offchain nav calculations
    - Returns token balances and nav values
-   - Location: `protocol/offchain/OffchainNav.sol`
+   - Location: `protocol/extensions/ENavView.sol`
 
 ### Message Types
 

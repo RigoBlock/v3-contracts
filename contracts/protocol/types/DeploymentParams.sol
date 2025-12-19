@@ -6,6 +6,7 @@ struct Extensions {
     address eOracle;
     address eUpgrade;
     address eAcrossHandler;
+    address eNavView;
 }
 
 struct DeploymentParams {

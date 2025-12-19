@@ -64,7 +64,7 @@ Added to both `CLAUDE.md` and `AGENTS.md`:
 
 ## 4. Test Status ⚠️
 
-### TypeScript Tests (OffchainNav)
+### TypeScript Tests (ENavView)
 **Status:** Created but encountering deployment fixture issue
 
 **Issue:** Deploy script has undefined address error in test setup
@@ -74,7 +74,7 @@ Error: invalid address or ENS name (argument="name", value=undefined...)
 
 **Root Cause:** The existing `deploy_tests_setup.ts` has dependency issues when running isolated tests.
 
-**Test File:** `/test/offchain/OffchainNav.spec.ts`
+**Test File:** `/test/extensions/ENavView.spec.ts`
 
 **What's Tested:**
 - Token balances return correctly

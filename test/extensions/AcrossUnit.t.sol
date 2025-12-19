@@ -681,18 +681,60 @@ contract AcrossUnitTest is Test {
         vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.approve.selector), abi.encode(true));
         vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         
-        // Create valid message first, then manually corrupt the OpType
-        bytes memory validMessage = abi.encode(SourceMessage({
+        // Create message with Unknown OpType (should trigger InvalidOpType error)
+        bytes memory invalidMessage = abi.encode(SourceMessage({
+            opType: OpType.Unknown, // Use the explicit Unknown enum value
+            navTolerance: 100,
+            sourceNativeAmount: 0,
+            shouldUnwrapOnDestination: false
+        }));
+        
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: ethUsdc,
+            outputToken: arbUsdc,
+            inputAmount: 100e6,
+            outputAmount: 99e6,
+            destinationChainId: 42161,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 3600),
+            exclusivityDeadline: 0,
+            message: invalidMessage
+        });
+        
+        // Should revert with InvalidOpType since OpType.Unknown is explicitly handled
+        vm.expectRevert(IAIntents.InvalidOpType.selector);
+        pool.callDepositV3(params);
+    }
+    
+    /// @notice Test that truly out-of-bounds enum values still cause panic (defensive test)
+    function test_Adapter_TrulyInvalidOpType_CausesPanic() public {
+        address ethUsdc = 0xa0b86a33E6441319A87aA51FBbcFa4De9A7A24c8;
+        address arbUsdc = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+        
+        MockPoolWithWorkingStorage pool = new MockPoolWithWorkingStorage(address(adapter), mockSpokePool);
+        _setupPoolStorage(address(pool), ethUsdc);
+        
+        // Mock token calls
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector), abi.encode(1000e6));
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.allowance.selector), abi.encode(uint256(0)));
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.approve.selector), abi.encode(true));
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+        
+        // Create valid message first, then corrupt it to a truly invalid value (99)
+        bytes memory corruptedMessage = abi.encode(SourceMessage({
             opType: OpType.Transfer, // Will be corrupted to invalid value
             navTolerance: 100,
             sourceNativeAmount: 0,
             shouldUnwrapOnDestination: false
         }));
         
-        // Manually corrupt the OpType field to an invalid value (2)
-        // The OpType is the first field, so it's at offset 0x20 (after length)
+        // Manually corrupt the OpType field to a truly invalid value (99)
+        // This value doesn't exist in the enum (Transfer=0, Sync=1, Unknown=2)
         assembly {
-            mstore(add(validMessage, 0x20), 2) // Set invalid OpType = 2
+            mstore(add(corruptedMessage, 0x20), 99) // Set invalid OpType = 99
         }
         
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
@@ -707,12 +749,11 @@ contract AcrossUnitTest is Test {
             quoteTimestamp: uint32(block.timestamp),
             fillDeadline: uint32(block.timestamp + 3600),
             exclusivityDeadline: 0,
-            message: validMessage
+            message: corruptedMessage
         });
         
-        // Should revert - enum value 2 will cause decode error before reaching InvalidOpType check
-        // Solidity 0.8+ has strict enum decoding, so abi.decode will revert for out-of-bounds values
-        // This will be a panic(0x21) for enum conversion out of bounds, not InvalidOpType
+        // Should revert with panic since 99 is not a valid enum value at all
+        // Solidity 0.8+ has strict enum decoding for truly out-of-bounds values
         vm.expectRevert();
         pool.callDepositV3(params);
     }
@@ -1036,6 +1077,7 @@ contract AcrossUnitTest is Test {
     function test_OpType_EnumValues() public pure {
         assertEq(uint8(OpType.Transfer), 0, "Transfer should be 0");
         assertEq(uint8(OpType.Sync), 1, "Sync should be 1");
+        assertEq(uint8(OpType.Unknown), 2, "Unknown should be 2");
     }
     
     /// @notice Test DestinationMessage encoding/decoding with all OpTypes
@@ -1535,9 +1577,11 @@ contract AcrossUnitTest is Test {
     function test_OpTypeEnumValues() public pure {
         uint8 transferType = uint8(OpType.Transfer);
         uint8 syncType = uint8(OpType.Sync);
+        uint8 unknownType = uint8(OpType.Unknown);
         
         assertEq(transferType, 0, "Transfer should be 0");
         assertEq(syncType, 1, "Sync should be 1");
+        assertEq(unknownType, 2, "Unknown should be 2");
     }
     
     /// @notice Test NAV normalization logic

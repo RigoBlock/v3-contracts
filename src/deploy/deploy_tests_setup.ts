@@ -174,6 +174,13 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const eNavView = await deploy("ENavView", {
+    from: deployer,
+    args: [stakingProxy.address, univ4Posm.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   const acrossSpokePool = await deploy("MockAcrossSpokePool", {
     from: deployer,
     args: [weth.address],
@@ -190,6 +197,7 @@ const deploy: DeployFunction = async function (
 
   const extensions = {
     eApps: eApps.address,
+    eNavView: eNavView.address,
     eOracle: eOracle.address,
     eUpgrade: eUpgrade.address,
     eAcrossHandler: eAcrossHandler.address

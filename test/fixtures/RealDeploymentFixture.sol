@@ -5,6 +5,10 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
+import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
+import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
+import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {ExtensionsMap} from "../../contracts/protocol/deps/ExtensionsMap.sol";
 import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
@@ -12,12 +16,18 @@ import {Extensions, DeploymentParams} from "../../contracts/protocol/types/Deplo
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
+import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 
 /// @title RealDeploymentFixture
 /// @notice Fixture that uses actual deployed SmartPool infrastructure for testing
 /// @dev This deploys new extensions and implementation but uses existing factory/authority
 contract RealDeploymentFixture is Test {
+    // Chain-specific addresses - using same constants as ENavViewFork.t.sol
+    address constant GRG_STAKING = 0x730dDf7b602dB822043e0409d8926440395e07fE;
+    address constant UNISWAP_V4_POSM = 0x00000000000000000000000000000000DeaDBeef; // Placeholder for now
+    address constant ORACLE = 0xB13250f0Dc8ec6dE297E81CDA8142DB51860BaC4;
+    
     // Deployed contracts (same across most chains)
     address constant AUTHORITY = 0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1;
     address constant FACTORY = 0x4aA9e5A5A244C81C3897558C5cF5b752EBefA88f;
@@ -56,15 +66,25 @@ contract RealDeploymentFixture is Test {
     /// @notice Deploy fixture on a specific fork
     /// @param config Chain-specific configuration
     /// @param baseToken Token to use as base token for pool
-    function deployFixture(ChainConfig memory config, address baseToken) public {
+    /// @param referencePool Existing pool to read authority and factory addresses from
+    function deployFixture(ChainConfig memory config, address baseToken, address referencePool) public {
         poolOwner = makeAddr("poolOwner");
         user = makeAddr("user");
         
         console2.log("=== Deploying Real Infrastructure Fixture ===");
-        console2.log("Chain ID:", config.chainId);
-        console2.log("SpokePool:", config.spokePool);
         
-        // 1. Deploy new EAcrossHandler
+        // Read infrastructure addresses from existing pool
+        address authorityAddress = ISmartPool(payable(referencePool)).authority();
+        console2.log("Authority (from pool):", authorityAddress);
+        
+        _deployExtensions(config);
+        _deployNewImplementation(authorityAddress);
+        _updateFactoryAndCreatePool(baseToken, authorityAddress);
+        
+        console2.log("=== Fixture Deployment Complete ===");
+    }
+    
+    function _deployExtensions(ChainConfig memory config) private {
         handler = new EAcrossHandler(config.spokePool);
         console2.log("Deployed EAcrossHandler:", address(handler));
         
@@ -76,17 +96,13 @@ contract RealDeploymentFixture is Test {
         extensionsMapDeployer = new ExtensionsMapDeployer();
         console2.log("Deployed ExtensionsMapDeployer:", address(extensionsMapDeployer));
         
-        // 4. Prepare extensions params
-        // TODO: Get other extension addresses from deployments or hardcode known addresses
-        // For now, using mock addresses - THESE NEED TO BE REPLACED WITH ACTUAL ADDRESSES
-        address eApps = address(0x1111111111111111111111111111111111111111); // Mock - replace with actual
-        address eOracle = address(0x2222222222222222222222222222222222222222); // Mock - replace with actual
-        address eUpgrade = address(0x3333333333333333333333333333333333333333); // Mock - replace with actual
-        
+        // 4. Use existing deployed extensions from the deployer contract
+        // This way if extensions already exist, the deployer will skip deployment
         Extensions memory extensions = Extensions({
-            eApps: eApps,
-            eOracle: eOracle,
-            eUpgrade: eUpgrade,
+            eApps: address(0), // Will be deployed by extensionsMapDeployer if needed
+            eNavView: address(0), // Will be deployed by extensionsMapDeployer if needed
+            eOracle: address(0), // Will be deployed by extensionsMapDeployer if needed
+            eUpgrade: address(0), // Will be deployed by extensionsMapDeployer if needed
             eAcrossHandler: address(handler)
         });
         
@@ -100,19 +116,23 @@ contract RealDeploymentFixture is Test {
         address extensionsMapAddr = extensionsMapDeployer.deployExtensionsMap(params, newSalt);
         extensionsMap = ExtensionsMap(extensionsMapAddr);
         console2.log("Deployed ExtensionsMap:", address(extensionsMap));
-        
-        // 6. Deploy mock TokenJar (using a simple mock address for deterministic deployment)
+    }
+    
+    function _deployNewImplementation(address authorityAddress) private {
+        // Deploy mock TokenJar (using a simple mock address for deterministic deployment)
         address mockTokenJar = address(0x4444444444444444444444444444444444444444);
         
-        // 7. Deploy new SmartPool implementation
+        // Deploy new SmartPool implementation
         implementation = new SmartPool(
-            AUTHORITY,
+            authorityAddress,
             address(extensionsMap),
             mockTokenJar
         );
         console2.log("Deployed SmartPool implementation:", address(implementation));
-        
-        // 8. Update factory to use new implementation
+    }
+    
+    function _updateFactoryAndCreatePool(address baseToken, address authorityAddress) private {
+        // Update factory to use new implementation
         // We need to prank as the RigoblockDao from the registry
         address registry = IRigoblockPoolProxyFactory(FACTORY).getRegistry();
         address rigoblockDao = IPoolRegistry(registry).rigoblockDao();
@@ -122,7 +142,7 @@ contract RealDeploymentFixture is Test {
         IRigoblockPoolProxyFactory(FACTORY).setImplementation(address(implementation));
         console2.log("Updated factory implementation");
         
-        // 9. Deploy a new pool from factory
+        // Deploy a new pool from factory
         vm.prank(poolOwner);
         (address poolAddr, ) = IRigoblockPoolProxyFactory(FACTORY).createPool(
             "Test Pool",
@@ -141,15 +161,12 @@ contract RealDeploymentFixture is Test {
         bytes4 depositV3Selector = AIntents(address(adapter)).depositV3.selector;
         
         vm.prank(rigoblockDaoAuth);
-        IAuthority(AUTHORITY).addMethod(depositV3Selector, address(adapter));
+        IAuthority(authorityAddress).addMethod(depositV3Selector, address(adapter));
         console2.log("Added depositV3 selector to authority");
         
-        // 11. Fund the pool for testing
+        // Fund the pool for testing
         deal(baseToken, pool, 1000000e6); // 1M base token
-        deal(config.weth, pool, 100e18);   // 100 WETH
         console2.log("Funded pool with tokens");
-        
-        console2.log("=== Fixture Deployment Complete ===");
     }
     
     /// @notice Helper to get chain config for Arbitrum
