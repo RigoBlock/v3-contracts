@@ -103,21 +103,14 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         // as the method is not restricted, we prevent nav inflation via a rogue token.
         require(_isOwnedToken(token), TokenIsNotOwned());
     
+        // TODO: do we actually need to pass flags? this call can potentially eat all of the caller balance
         if (amount == 0) {
             return; // null amount is flag for rebalance check
-        } else if (amount == 1) {
-            // amount == 1 is flag for caller token balance
-            if (token == _ZERO_ADDRESS) {
-                amount = msg.sender.balance;
-            } else {
-                amount = IERC20(token).balanceOf(msg.sender);
-            }
         }
 
         // Handle native currency (ETH) donation
         if (token == _ZERO_ADDRESS) {
             require(msg.value == amount, IncorrectETHAmount());
-            // ETH is already received via msg.value, no transfer needed
         } else {
             token.safeTransferFrom(msg.sender, address(this), amount);
         }

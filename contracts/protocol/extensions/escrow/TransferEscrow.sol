@@ -37,31 +37,20 @@ contract TransferEscrow {
     /// @notice The pool this escrow is associated with
     address public immutable pool;
 
-    error TransferFailed();
     error InvalidAmount();
+    error InvalidPool();
 
     constructor(address _pool) {
-        require(_pool != address(0), "Invalid pool address");
+        require(_pool.code.length > 0, InvalidPool()); // pool must be a smart contract
         pool = _pool;
     }
 
-    /// @notice Returns the operation type this escrow handles
-    function opType() external pure returns (OpType) {
-        return OpType.Transfer;
-    }
-
-    /// @notice Receives tokens (typically from refunds) and donates immediately
-    receive() external payable {
-        if (msg.value > 0) {
-            // Donate immediately to pool to ensure proper virtual balance management
-            ISmartPoolActions(pool).donate{value: msg.value}(address(0), msg.value);
-            emit TokensDonated(address(0), msg.value);
-        }
-    }
+    /// @notice Receives native currency
+    receive() external payable {}
 
     /// @notice Allows anyone to claim refund tokens and send them to the pool
     /// @param token The token address to claim (address(0) for native)
-    function claimRefund(address token) external {
+    function refundVault(address token) external {
         uint256 balance;
         if (token == address(0)) {
             balance = address(this).balance;

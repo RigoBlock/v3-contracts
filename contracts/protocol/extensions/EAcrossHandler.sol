@@ -32,12 +32,6 @@ import {OpType, DestinationMessage, SourceMessage} from "../types/Crosschain.sol
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
 
-// TODO: we could implement a different flow for calling across, i.e. calling self (i.e. a new method with onlySelf modifier) to change the msg.sender context
-// which requires forwarding value to the EAcrossHandler address, or transfering the token to the handler - which would then approve across and further
-// forward value and approve across. A further method should be implemented, which allows an admin to withdraw funds. In this case, a hypothetical refund (rare)
-// could be refunded to a smart pool via "pool.donate(token, amount)" without impacting nav, and updating virtual balances. It is not possible to do it directly
-// from the vault, because the across spoke pool does not have deposit state (everything is monitored via onchain logs in across after a deposit).
-
 /// @title EAcrossHandler - Handles incoming cross-chain transfers via Across Protocol.
 /// @notice This extension manages NAV integrity when receiving cross-chain token transfers.
 /// @dev Called via delegatecall from pool when Across SpokePool fills deposits.

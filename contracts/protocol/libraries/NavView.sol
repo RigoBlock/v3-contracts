@@ -146,23 +146,23 @@ library NavView {
         }
 
         // Add base token balance (native ETH balance + virtual balance)
-        {
-            int256 baseBalance = int256(address(this).balance) + getVirtualBalance(tokens.baseToken);
-            bool found = false;
-            for (uint256 k = 0; k < tokenCount; k++) {
-                if (uniqueTokens[k] == tokens.baseToken || uniqueTokens[k] == ZERO_ADDRESS) {
-                    tokenBalances[k] += baseBalance;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                uniqueTokens[tokenCount] = tokens.baseToken;
-                tokenBalances[tokenCount] = baseBalance;
-                tokenCount++;
+        int256 baseBalance = int256(address(this).balance) + getVirtualBalance(tokens.baseToken);
+        bool found = false;
+
+        for (uint256 k = 0; k < tokenCount; k++) {
+            if (uniqueTokens[k] == tokens.baseToken || uniqueTokens[k] == ZERO_ADDRESS) {
+                tokenBalances[k] += baseBalance;
+                found = true;
+                break;
             }
         }
         
+        if (!found) {
+            uniqueTokens[tokenCount] = tokens.baseToken;
+            tokenBalances[tokenCount] = baseBalance;
+            tokenCount++;
+        }
+    
         // Add active tokens wallet balances
         for (uint256 i = 0; i < tokens.activeTokens.length; i++) {
             address token = tokens.activeTokens[i];

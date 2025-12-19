@@ -4,11 +4,14 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Test.sol";
 import "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
+import {EscrowFactory} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
+import {TransferEscrow} from "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLib.sol";
+import {OpType} from "../../contracts/protocol/types/Crosschain.sol";
 
 contract PoolDonateTest is Test {
     using SafeTransferLib for address;
@@ -194,6 +197,140 @@ contract PoolDonateTest is Test {
         ISmartPoolActions(pool).donate{value: 1 ether}(address(0), 2 ether);
         
         vm.stopPrank();
+    }
+
+    /// @notice Test escrow deployment and refundVault integration with pool
+    function test_EscrowIntegration_DeployAndRefund() public {
+        // Deploy a Transfer escrow for the pool
+        address escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
+        TransferEscrow escrow = TransferEscrow(payable(escrowAddress));
+        
+        console2.log("Deployed escrow:", escrowAddress);
+        console2.log("Escrow pool:", escrow.pool());
+        
+        // Verify escrow was deployed correctly
+        assertEq(escrow.pool(), pool, "Escrow should reference the correct pool");
+        assertTrue(escrowAddress.code.length > 0, "Escrow should be deployed");
+        
+        // First test: Use non-owned token - should fail with TokenIsNotOwned
+        address testToken = Constants.ARB_USDC; // Use real USDC token
+        uint256 refundAmount = 5000e6; // 5k USDC
+        
+        // Fund the escrow with tokens (simulating failed transfer refund)
+        deal(testToken, escrowAddress, refundAmount);
+        
+        // Verify escrow has the tokens
+        uint256 escrowBalance = IERC20(testToken).balanceOf(escrowAddress);
+        assertEq(escrowBalance, refundAmount, "Escrow should have refund tokens");
+        
+        console2.log("Testing with non-owned token - should fail with TokenIsNotOwned");
+        
+        // This should revert because USDC is not in the pool's active tokens
+        vm.prank(donor);
+        vm.expectRevert(abi.encodeWithSignature("TokenIsNotOwned()"));
+        escrow.refundVault(testToken);
+        
+        console2.log("Confirmed TokenIsNotOwned error as expected");
+        
+        // Second test: Use base token (ETH) which is always accepted
+        console2.log("Testing with base token (ETH) - should succeed");
+        
+        // Give escrow some ETH
+        uint256 ethAmount = 1 ether;
+        vm.deal(escrowAddress, ethAmount);
+        
+        // Verify escrow has ETH
+        assertEq(escrowAddress.balance, ethAmount, "Escrow should have ETH");
+        
+        // Get pool ETH balance before refund
+        uint256 poolEthBefore = pool.balance;
+        console2.log("Pool ETH before refund:", poolEthBefore);
+        
+        // Mock the convertTokenAmount call for ETH (base token)
+        vm.mockCall(
+            pool,
+            abi.encodeWithSignature("convertTokenAmount(address,int256,address)", address(0), int256(ethAmount), address(0)),
+            abi.encode(int256(ethAmount))
+        );
+        
+        // Refund ETH to pool - this should succeed since ETH is the base token
+        vm.prank(donor);
+        escrow.refundVault(address(0)); // address(0) means native ETH
+        
+        // Verify escrow no longer has ETH
+        assertEq(escrowAddress.balance, 0, "Escrow should have no ETH after refund");
+        
+        // Verify pool received ETH
+        uint256 poolEthAfter = pool.balance;
+        console2.log("Pool ETH after refund:", poolEthAfter);
+        
+        assertTrue(poolEthAfter > poolEthBefore, "Pool should have received ETH");
+        assertEq(poolEthAfter - poolEthBefore, ethAmount, "Pool should receive exactly the refund amount");
+        
+        console2.log("ETH escrow refund completed successfully");
+    }
+    
+    /// @notice Test escrow refund with native ETH
+    function test_EscrowIntegration_ETHRefund() public {
+        // Deploy escrow
+        address escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
+        TransferEscrow escrow = TransferEscrow(payable(escrowAddress));
+        
+        // Give escrow some ETH
+        uint256 ethAmount = 2 ether;
+        vm.deal(escrowAddress, ethAmount);
+        
+        assertEq(escrowAddress.balance, ethAmount, "Escrow should have ETH");
+        
+        // Get pool ETH balance before
+        uint256 poolEthBefore = pool.balance;
+        console2.log("Pool ETH before refund:", poolEthBefore);
+        
+        // Mock the convertTokenAmount call for ETH donation
+        vm.mockCall(
+            pool,
+            abi.encodeWithSignature("convertTokenAmount(address,int256,address)", address(0), int256(ethAmount), address(0)),
+            abi.encode(int256(ethAmount))
+        );
+        
+        // Refund ETH to pool
+        vm.prank(donor);
+        escrow.refundVault(address(0)); // address(0) means native ETH
+        
+        // Verify escrow has no ETH
+        assertEq(escrowAddress.balance, 0, "Escrow should have no ETH after refund");
+        
+        // Verify pool received ETH (through donate function)
+        uint256 poolEthAfter = pool.balance;
+        console2.log("Pool ETH after refund:", poolEthAfter);
+        
+        assertTrue(poolEthAfter > poolEthBefore, "Pool should have received ETH");
+        assertEq(poolEthAfter - poolEthBefore, ethAmount, "Pool should receive exactly the refund amount");
+        
+        console2.log("ETH escrow refund completed successfully");
+    }
+    
+    /// @notice Test multiple escrow deployments have different addresses
+    function test_EscrowIntegration_MultipleEscrows() public {
+        // Deploy Transfer escrow
+        address transferEscrow = EscrowFactory.deployEscrow(pool, OpType.Transfer);
+        
+        // Deploy Sync escrow
+        address syncEscrow = EscrowFactory.deployEscrow(pool, OpType.Sync);
+        
+        // They should be different addresses
+        assertNotEq(transferEscrow, syncEscrow, "Different OpTypes should create different escrows");
+        
+        // Both should be valid contracts
+        assertTrue(transferEscrow.code.length > 0, "Transfer escrow should be deployed");
+        assertTrue(syncEscrow.code.length > 0, "Sync escrow should be deployed");
+        
+        // Both should reference the same pool
+        assertEq(TransferEscrow(payable(transferEscrow)).pool(), pool, "Transfer escrow should reference pool");
+        assertEq(TransferEscrow(payable(syncEscrow)).pool(), pool, "Sync escrow should reference pool");
+        
+        console2.log("Transfer escrow:", transferEscrow);
+        console2.log("Sync escrow:", syncEscrow);
     }
 
     /// @notice Helper to verify pool state after operations
