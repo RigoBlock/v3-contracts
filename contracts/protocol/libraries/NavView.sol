@@ -145,41 +145,53 @@ library NavView {
             }
         }
 
-        // Add base token balance (native ETH balance + virtual balance)
-        int256 baseBalance = int256(address(this).balance) + getVirtualBalance(tokens.baseToken);
-        bool found = false;
-
+        // Add base token balance: only add native balance if base token is native (address(0))
+        int256 baseTokenBalance = 0;
+        if (tokens.baseToken == ZERO_ADDRESS) {
+            // For native token, add native balance
+            baseTokenBalance = int256(address(this).balance);
+        }
+        // Always add virtual balance for base token
+        baseTokenBalance += getVirtualBalance(tokens.baseToken);
+        
+        bool baseTokenFound = false;
         for (uint256 k = 0; k < tokenCount; k++) {
-            if (uniqueTokens[k] == tokens.baseToken || uniqueTokens[k] == ZERO_ADDRESS) {
-                tokenBalances[k] += baseBalance;
-                found = true;
+            if (uniqueTokens[k] == tokens.baseToken || (tokens.baseToken == ZERO_ADDRESS && uniqueTokens[k] == ZERO_ADDRESS)) {
+                tokenBalances[k] += baseTokenBalance;
+                baseTokenFound = true;
                 break;
             }
         }
 
-        if (!found) {
+        if (!baseTokenFound) {
             uniqueTokens[tokenCount] = tokens.baseToken;
-            tokenBalances[tokenCount] = baseBalance;
+            tokenBalances[tokenCount] = baseTokenBalance;
             tokenCount++;
         }
     
-        // Add active tokens wallet balances
+        // Add active tokens wallet balances + virtual balances
         for (uint256 i = 0; i < tokens.activeTokens.length; i++) {
             address token = tokens.activeTokens[i];
-            int256 walletBalance = 0;
+            int256 totalBalance = 0;
             
+            // Get wallet balance
             try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
-                walletBalance = int256(_balance);
+                totalBalance = int256(_balance);
             } catch {
-                // Skip if balance read fails
-                continue;
+                // Continue even if balance read fails, might have virtual balance
             }
+            
+            // Add virtual balance for this token
+            totalBalance += getVirtualBalance(token);
+            
+            // Skip if no balance (wallet + virtual)
+            if (totalBalance == 0) continue;
             
             // Find if token already tracked
             bool walletTokenFound = false;
             for (uint256 k = 0; k < tokenCount; k++) {
                 if (uniqueTokens[k] == token) {
-                    tokenBalances[k] += walletBalance;
+                    tokenBalances[k] += totalBalance;
                     walletTokenFound = true;
                     break;
                 }
@@ -187,7 +199,7 @@ library NavView {
             
             if (!walletTokenFound) {
                 uniqueTokens[tokenCount] = token;
-                tokenBalances[tokenCount] = walletBalance;
+                tokenBalances[tokenCount] = totalBalance;
                 tokenCount++;
             }
         }

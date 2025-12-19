@@ -60,17 +60,4 @@ library VirtualBalanceLib {
         int256 currentBalance = getVirtualBalance(token);
         setVirtualBalance(token, currentBalance + delta);
     }
-
-    /// @notice Checks if a token has any virtual balance
-    /// @param token The token address
-    /// @return hasBalance True if the token has a non-zero virtual balance
-    function hasVirtualBalance(address token) internal view returns (bool hasBalance) {
-        return getVirtualBalance(token) != 0;
-    }
-
-    /// @notice Resets the virtual balance for a token to zero
-    /// @param token The token address
-    function clearVirtualBalance(address token) internal {
-        setVirtualBalance(token, 0);
-    }
 }

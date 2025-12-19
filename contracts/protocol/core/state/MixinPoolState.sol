@@ -128,21 +128,6 @@ abstract contract MixinPoolState is MixinPoolValue {
         return operators().isApproved[holder][operator];
     }
 
-    // TODO: this function is not a state function (i.e. not view to access state), this should be implemented in the handler
-    // does not make sense implementing here, plus is missing the override and the the IMixinPoolState interface declaration
-    /// @notice Asserts that cross-chain NAV is within acceptable range.
-    /// @param sourceNav The NAV from the source chain.
-    /// @param tolerance The acceptable tolerance in absolute terms.
-    function assertCrosschainNavInRange(uint256 sourceNav, uint256 tolerance) external {
-        // TODO: we must take into account initial nav deltas
-        NavComponents memory components = _updateNav();
-        require(
-            components.unitaryValue >= sourceNav - tolerance &&
-            components.unitaryValue <= sourceNav + tolerance,
-            PoolNavNotInRange()
-        );
-    }
-
     /*
      * INTERNAL VIEW METHODS
      */

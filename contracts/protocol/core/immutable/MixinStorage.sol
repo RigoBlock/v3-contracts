@@ -23,6 +23,10 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_CHAIN_NAV_SPREADS_SLOT == bytes32(uint256(keccak256("pool.proxy.chain.nav.spreads")) - 1));
     }
 
+    struct VirtualBalances {
+        mapping(address => int256) balances;
+    }
+
     /// @notice Internal method to access virtual balances storage
     /// @dev Should be used by child contracts instead of direct slot access
     function virtualBalances() internal pure returns (VirtualBalances storage s) {
@@ -35,10 +39,6 @@ abstract contract MixinStorage is MixinImmutables {
     // activation stored at locantion keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT)) + 1
     struct Accounts {
         mapping(address => UserAccount) userAccounts;
-    }
-
-    struct VirtualBalances {
-        mapping(address => int256) balances;
     }
 
     function accounts() internal pure returns (Accounts storage s) {
