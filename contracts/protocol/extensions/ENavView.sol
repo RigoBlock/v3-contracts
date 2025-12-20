@@ -20,6 +20,7 @@
 pragma solidity 0.8.28;
 
 import {IENavView} from "./adapters/interfaces/IENavView.sol";
+import {ISmartPool} from "../ISmartPool.sol";
 import {NavView} from "../libraries/NavView.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {Applications} from "../types/Applications.sol";

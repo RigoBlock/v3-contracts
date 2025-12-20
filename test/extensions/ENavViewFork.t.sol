@@ -24,7 +24,7 @@ import {DeploymentParams, Extensions} from "../../contracts/protocol/types/Deplo
 /// @notice Tests the ENavView extension against a live pool with implementation upgrade simulation
 contract ENavViewForkTest is Test {
     // Using constants for consistency and reduced RPC load  
-    uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK_RECENT; // After oracle deployment
+    uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK; // After oracle deployment
 
     // Deployed infrastructure addresses from Constants.sol
     address constant AUTHORITY = Constants.AUTHORITY;
@@ -34,7 +34,6 @@ contract ENavViewForkTest is Test {
     address constant WETH = Constants.ETH_WETH;
     address constant UNISWAP_V4_POSM = Constants.UNISWAP_V4_POSM;
     address constant ACROSS_SPOKE_POOL = Constants.ETH_SPOKE_POOL;
-    address constant EXTENSIONS_MAP_DEPLOYER = Constants.EXTENSIONS_MAP_DEPLOYER;
 
     // Test pool with assets on multiple chains
     address constant TEST_POOL = Constants.TEST_POOL;

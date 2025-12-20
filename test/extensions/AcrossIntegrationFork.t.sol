@@ -17,7 +17,7 @@ import {TestProxyForAcross} from "../fixtures/TestProxyForAcross.sol";
 /// @notice Merged integration tests for Across protocol testing on real forks
 contract AcrossIntegrationForkTest is Test {
     // Use constants for block numbers to save RPC calls
-    uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK_LEGACY;
+    uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK;
     uint256 constant BASE_BLOCK = Constants.BASE_BLOCK;
 
     uint256 constant BASE_CHAIN_ID = Constants.BASE_CHAIN_ID;

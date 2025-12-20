@@ -435,6 +435,5 @@ When making changes:
     - Factory: 0x8DE8895ddD702d9a216E640966A98e08c9228f24  
     - Registry: 0x06767e8090bA5c4Eca89ED00C3A719909D503ED6
 12. **ALWAYS USE CONSTANTS.SOL IMPORTS** - NEVER hardcode addresses or block numbers in test files. ALWAYS import from Constants.sol to ensure consistency and reduce RPC calls. Examples:
-    - Use `Constants.MAINNET_BLOCK_LEGACY` not `21_000_000`
     - Use `Constants.ARB_USDC` not `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`
     - Use `Constants.AUTHORITY` not hardcoded authority addresses

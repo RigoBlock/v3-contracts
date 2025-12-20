@@ -10,11 +10,7 @@ library Constants {
     
     /// @notice Mainnet block number after oracle deployment (22,425,175)
     /// @dev Use this for tests requiring oracle price feeds
-    uint256 internal constant MAINNET_BLOCK_RECENT = 22_600_000;
-    
-    /// @notice Legacy mainnet block before oracle deployment
-    /// @dev Use only for tests that don't need price feeds (reduces RPC load)
-    uint256 internal constant MAINNET_BLOCK_LEGACY = 21_000_000;
+    uint256 internal constant MAINNET_BLOCK = 22_600_000;
     
     /// @notice Base chain block number for fork tests
     uint256 internal constant BASE_BLOCK = 35521323;
@@ -46,18 +42,20 @@ library Constants {
     
     /// @notice GRG Token on Ethereum
     address internal constant GRG_TOKEN = 0x4FbB350052Bca5417566f188eB2EBCE5b19BC964;
+    address internal constant BASE_GRG_TOKEN = 0x09188484e1Ab980DAeF53a9755241D759C5B7d60;
     
     /// @notice GRG Staking Proxy on Ethereum
     address internal constant GRG_STAKING = 0x730dDf7b602dB822043e0409d8926440395e07fE;
+    address internal constant BASE_GRG_STAKING = 0xc758Ea84d6D978fe86Ee29c1fbD47B4F302F1992;
+    address internal constant POLYGON_GRG_STAKING = 0xc758Ea84d6D978fe86Ee29c1fbD47B4F302F1992;
     
     /// @notice Rigoblock Governance Proxy
     address internal constant GOV_PROXY = 0x5F8607739c2D2d0b57a4292868C368AB1809767a;
     
     /// @notice Oracle contract on Ethereum
     address internal constant ORACLE = 0xB13250f0Dc8ec6dE297E81CDA8142DB51860BaC4;
-    
-    /// @notice ExtensionsMapDeployer on Ethereum  
-    address internal constant EXTENSIONS_MAP_DEPLOYER = 0x5A69bBe7f8F9dbDBFEa35CeFf33e093C6690d437;
+    address internal constant BASE_ORACLE = 0x59f39091Fd6f47e9D0bCB466F74e305f1709BAC4;
+    address internal constant POLYGON_ORACLE = 0x1D8691A1A7d53B60DeDd99D8079E026cB0E5bac4;
     
     /// @notice Test pool address with cross-chain assets
     address internal constant TEST_POOL = 0xEfa4bDf566aE50537A507863612638680420645C;
@@ -77,6 +75,8 @@ library Constants {
     
     /// @notice Uniswap V4 Position Manager on Ethereum
     address internal constant UNISWAP_V4_POSM = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
+    address internal constant BASE_UNISWAP_V4_POSM = 0x7C5f5A4bBd8fD63184577525326123B519429bDc;
+    address internal constant POLYGON_UNISWAP_V4_POSM = 0x1Ec2eBf4F37E7363FDfe3551602425af0B3ceef9;
     
     /*//////////////////////////////////////////////////////////////
                             TOKENS - ETHEREUM
@@ -122,6 +122,7 @@ library Constants {
     address internal constant POLY_USDT = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
     address internal constant POLY_WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
     address internal constant POLY_WBTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
+    address internal constant POLY_WPOL = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
     
     /*//////////////////////////////////////////////////////////////
                             TOKENS - BSC
@@ -130,6 +131,7 @@ library Constants {
     address internal constant BSC_USDC = 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d;
     address internal constant BSC_USDT = 0x55d398326f99059fF775485246999027B3197955;
     address internal constant BSC_WETH = 0x2170Ed0880ac9A755fd29B2688956BD959F933F8;
+    address internal constant BSC_WBNB = 0x2170Ed0880ac9A755fd29B2688956BD959F933F8;
     // Note: No WBTC on BSC in CrosschainLib
     
     /*//////////////////////////////////////////////////////////////
