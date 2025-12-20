@@ -33,6 +33,7 @@ import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
+import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {OpType, DestinationMessage, SourceMessage} from "../../types/Crosschain.sol";
 import {EscrowFactory} from "../escrow/EscrowFactory.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
@@ -154,10 +155,8 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer);
             _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
         } else if (message.opType == OpType.Sync) {
-            // Sync operations don't adjust virtual balance (NAV changes expected)
-            // TODO: SECURITY CONCERN - Operator could abuse by declaring Transfer operation
-            // on source (uses escrow) but inflating NAV on destination before handler processes.
-            // Handler must validate opType matches expected behavior and prevent NAV manipulation.
+            // Sync operations impact NAV: validate tolerance before transfer
+            NavImpactLib.validateNavImpactTolerance(inputToken, inputAmount, message.navTolerance);
         } else {
             // Includes OpType.Unknown and any other invalid values
             revert InvalidOpType();

@@ -4,6 +4,8 @@ pragma solidity 0.8.28;
 
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ISmartPoolImmutable} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolImmutable.sol";
+import {ISmartPoolImmutable} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolImmutable.sol";
+import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
 import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
@@ -62,6 +64,16 @@ contract TestProxyForAcross {
             // Don't delegate this - handle it directly with our implementation below
             // This is a view function that doesn't need delegation
             return;
+        } else if (selector == ISmartPoolImmutable.wrappedNative.selector) {
+            // Handle wrappedNative directly - don't delegate
+            return;
+        } else if (selector == ISmartPoolActions.updateUnitaryValue.selector) {
+            // Handle updateUnitaryValue directly - don't delegate (no-op for testing)
+            return;
+        } else if (selector == IEOracle.convertTokenAmount.selector ||
+                   selector == IEOracle.hasPriceFeed.selector) {
+            // Handle oracle methods directly - don't delegate
+            return;  
         } else {
             revert("SELECTOR_NOT_FOUND");
         }
@@ -101,6 +113,15 @@ contract TestProxyForAcross {
         return true; // Always true for testing
     }
     
+    /// @notice Mock token amount conversion (1:1 for testing)
+    function convertTokenAmount(
+        address,
+        int256 amount,
+        address
+    ) external pure returns (int256) {
+        return amount; // 1:1 conversion for testing
+    }
+    
     function wrappedNative() external view returns (address) {
         // Return appropriate WETH based on chain
         if (block.chainid == 1) {
@@ -116,6 +137,10 @@ contract TestProxyForAcross {
             unitaryValue: 1000000, // 1.0 in base token decimals
             totalSupply: totalSupply
         });
+    }
+    
+    function updateUnitaryValue() external {
+        // No-op for testing - NAV is static in tests
     }
     
     /// @notice Set virtual balance for testing

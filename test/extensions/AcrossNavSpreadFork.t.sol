@@ -6,7 +6,6 @@ import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
-import {ChainNavSpreadLib} from "../../contracts/protocol/libraries/ChainNavSpreadLib.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
@@ -18,7 +17,6 @@ import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmar
 /// @title AcrossNavSpreadForkTest - NAV spread testing with round-trip flow
 /// @notice Comprehensive NAV spread testing using TestProxyForAcross (fixed for getPoolTokens)
 contract AcrossNavSpreadForkTest is Test {
-    using ChainNavSpreadLib for bytes32;
 
     // Use constants for consistency and RPC savings
     uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK_LEGACY;

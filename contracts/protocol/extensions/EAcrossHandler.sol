@@ -21,14 +21,15 @@ pragma solidity 0.8.28;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
+import {ISmartPoolActions} from "../interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
 import {IWETH9} from "../interfaces/IWETH9.sol";
 import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
-import {ChainNavSpreadLib} from "../libraries/ChainNavSpreadLib.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {VirtualBalanceLib} from "../libraries/VirtualBalanceLib.sol";
+import {NavImpactLib} from "../libraries/NavImpactLib.sol";
 import {OpType, DestinationMessage, SourceMessage} from "../types/Crosschain.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
@@ -43,7 +44,6 @@ contract EAcrossHandler is IEAcrossHandler {
     using SlotDerivation for bytes32;
     using EnumerableSet for AddressSet;
     using VirtualBalanceLib for address;
-    using ChainNavSpreadLib for uint256;
 
     /// @notice Address of the Across SpokePool contract
     /// @dev Immutable to save gas on verification
@@ -116,10 +116,10 @@ contract EAcrossHandler is IEAcrossHandler {
             // Transfer is NAV-neutral: create negative virtual balance to offset NAV increase
             _handleTransferMode(effectiveToken, amount, params);
         } else if (params.opType == OpType.Sync) {
-            // Sync impacts NAV: no virtual balance adjustment, validate NAV spread
-            if (params.sourceNav > 0) {
-                _validateNavSpread(params);
-            }
+            // Sync impacts NAV: validate percentage impact using post-transfer pool state
+            // Update NAV first to reflect current state (including received tokens)
+            ISmartPoolActions(address(this)).updateUnitaryValue();
+            NavImpactLib.validateNavImpactTolerance(effectiveToken, amount, params.navTolerance);
         } else {
             revert InvalidOpType();
         }
@@ -134,7 +134,8 @@ contract EAcrossHandler is IEAcrossHandler {
     ) private {
         // Sanity check: sourceAmount should be within 10% of received amount
         // This protects against bugs or misconfigurations in decimal conversion logic
-        uint256 tolerance = receivedAmount / 10; // 10% tolerance
+        // TODO: hardcoded max tolerance should be defined as a constant
+        uint256 tolerance = receivedAmount / 10; // 10% tolerance. for very small amounts, this test could fail.
         uint256 lowerBound = receivedAmount > tolerance ? receivedAmount - tolerance : 0;
         uint256 upperBound = receivedAmount + tolerance;
         
@@ -151,50 +152,24 @@ contract EAcrossHandler is IEAcrossHandler {
         VirtualBalanceLib.adjustVirtualBalance(effectiveToken, -(virtualBalanceAmount.toInt256()));
     }
 
-    /// @dev Normalizes NAV from source decimals to destination decimals.
-    /// @dev This is critical for cross-chain NAV comparisons where vault decimals may differ
+    /// @dev Normalizes NAV from source decimals to destination decimals for comparison
+    /// @param sourceNav The NAV from source chain
+    /// @param sourceDecimals Decimals of source chain pool
+    /// @param destDecimals Decimals of destination chain pool 
+    /// @return normalizedNav NAV adjusted to destination decimals
     function _normalizeNav(
-        uint256 nav,
+        uint256 sourceNav,
         uint8 sourceDecimals,
         uint8 destDecimals
-    ) private pure returns (uint256) {
+    ) private pure returns (uint256 normalizedNav) {
         if (sourceDecimals == destDecimals) {
-            return nav;
-        } else if (sourceDecimals > destDecimals) {
-            return nav / (10 ** (sourceDecimals - destDecimals));
+            return sourceNav;
+        } else if (sourceDecimals < destDecimals) {
+            // Scale up: source has fewer decimals
+            return sourceNav * (10 ** (destDecimals - sourceDecimals));
         } else {
-            return nav * (10 ** (destDecimals - sourceDecimals));
-        }
-    }
-
-    /// @dev Validates NAV spread for Sync operations to ensure chains stay within acceptable range
-    /// @dev Initializes spread on first sync or validates subsequent syncs are within tolerance
-    function _validateNavSpread(DestinationMessage memory params) private {
-        // Get current pool decimals for normalization
-        uint8 destDecimals = StorageLib.pool().decimals;
-        
-        // Normalize source NAV to destination decimals for comparison
-        uint256 normalizedSourceNav = _normalizeNav(
-            params.sourceNav,
-            params.sourceDecimals,
-            destDecimals
-        );
-        
-        // Get existing spread for source chain
-        int256 existingSpread = ChainNavSpreadLib.getChainNavSpread(params.sourceChainId);
-        
-        if (existingSpread == 0) {
-            // First sync from this chain - initialize spread
-            // Spread = normalized_source_nav - current_dest_nav
-            ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-            int256 initialSpread = int256(normalizedSourceNav) - int256(poolTokens.unitaryValue);
-            ChainNavSpreadLib.setChainNavSpread(params.sourceChainId, initialSpread);
-        } else {
-            // Subsequent sync - validate spread remains within tolerance
-            // For now, just store the current spread - tolerance validation can be added later
-            ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-            int256 currentSpread = int256(normalizedSourceNav) - int256(poolTokens.unitaryValue);
-            ChainNavSpreadLib.setChainNavSpread(params.sourceChainId, currentSpread);
+            // Scale down: source has more decimals
+            return sourceNav / (10 ** (sourceDecimals - destDecimals));
         }
     }
 }
