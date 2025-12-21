@@ -4,12 +4,13 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
-import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
+import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
+import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
 import {ExtensionsMap} from "../../contracts/protocol/deps/ExtensionsMap.sol";
 import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
@@ -19,6 +20,7 @@ import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.s
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
+import {IOwnedUninitialized} from "../../contracts/utils/owned/IOwnedUninitialized.sol";
 
 /// @title RealDeploymentFixture
 /// @notice Fixture that uses actual deployed SmartPool infrastructure for testing
@@ -26,23 +28,52 @@ import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 contract RealDeploymentFixture is Test {
     address public AUTHORITY = Constants.AUTHORITY;
 
-    // Deployed new contracts
-    EAcrossHandler public eAcrossHandler;
-    EApps public eApps;
-    EOracle public eOracle;
-    EUpgrade public eUpgrade;
-    ENavView public eNavView;
-    AIntents public adapter;
-    ExtensionsMap public extensionsMap;
-    ExtensionsMapDeployer public extensionsMapDeployer;
-    SmartPool public implementation;
+    // Per-chain deployment data
+    struct ChainDeployment {
+        EAcrossHandler eAcrossHandler;
+        EApps eApps;
+        EOracle eOracle;
+        EUpgrade eUpgrade;
+        ENavView eNavView;
+        AIntents aIntentsAdapter;
+        ExtensionsMap extensionsMap;
+        ExtensionsMapDeployer extensionsMapDeployer;
+        SmartPool implementation;
+        address pool;
+        address baseToken;
+        address spokePool;
+    }
     
-    // Created pool
-    address public pool;
+    // Chain-specific deployments
+    ChainDeployment public ethereum;
+    ChainDeployment public base;
+    
+    // Convenience accessors for current active chain (for backward compatibility)
+    function eAcrossHandler() public view returns (EAcrossHandler) {
+        if (block.chainid == Constants.ETHEREUM_CHAIN_ID) return ethereum.eAcrossHandler;
+        if (block.chainid == Constants.BASE_CHAIN_ID) return base.eAcrossHandler;
+        revert("Unsupported chain");
+    }
+    
+    function aIntentsAdapter() public view returns (AIntents) {
+        if (block.chainid == Constants.ETHEREUM_CHAIN_ID) return ethereum.aIntentsAdapter;
+        if (block.chainid == Constants.BASE_CHAIN_ID) return base.aIntentsAdapter;
+        revert("Unsupported chain");
+    }
+    
+    function pool() public view returns (address) {
+        if (block.chainid == Constants.ETHEREUM_CHAIN_ID) return ethereum.pool;
+        if (block.chainid == Constants.BASE_CHAIN_ID) return base.pool;
+        revert("Unsupported chain");
+    }
     
     // Test accounts
     address public poolOwner;
     address public user;
+    
+    // Fork IDs for chain switching
+    uint256 public mainnetForkId;
+    uint256 public baseForkId;
     
     struct ChainConfig {
         address spokePool;
@@ -53,9 +84,9 @@ contract RealDeploymentFixture is Test {
         address grgStakingProxy;
     }
     
-    /// @notice Deploy fixture on a specific fork
-    /// @param baseToken Token to use as base token for pool
-    function deployFixture(address baseToken) public {
+    /// @notice Deploy fixture on specific chains based on number of base tokens provided
+    /// @param baseTokens Array of addresses to use as base token - 1 token = single chain, 2+ tokens = multi chain
+    function deployFixture(address[] memory baseTokens) public {
         poolOwner = makeAddr("poolOwner");
         user = makeAddr("user");
 
@@ -63,82 +94,112 @@ contract RealDeploymentFixture is Test {
         
         console2.log("=== Deploying Real Infrastructure Fixture ===");
 
-        vm.createSelectFork("mainnet", Constants.MAINNET_BLOCK);
-        _setupEthereum(baseToken);
+        if (baseTokens.length == 1) {
+            // Single chain deployment (Ethereum only)
+            mainnetForkId = vm.createSelectFork("mainnet", Constants.MAINNET_BLOCK);
+            ethereum = _setupEthereum(baseTokens[0]);
+            console2.log("Single chain deployment completed on Ethereum");
+        } else if (baseTokens.length == 2) {
+            // Multi-chain deployment
+            mainnetForkId = vm.createSelectFork("mainnet", Constants.MAINNET_BLOCK);
+            ethereum = _setupEthereum(baseTokens[0]);
 
-        vm.createSelectFork("base", Constants.BASE_BLOCK);
-        _setupBase(baseToken);
+            baseForkId = vm.createSelectFork("base", Constants.BASE_BLOCK);
+            base = _setupBase(baseTokens[1]);
+            console2.log("Multi-chain deployment completed");
+        } else {
+            revert("Only ethereum and base forks atm");
+        }
         
         console2.log("=== Fixture Deployment Complete ===");
     }
 
-    function _setupEthereum(address baseToken) private {
+    function _setupEthereum(address baseToken) private returns (ChainDeployment memory deployment) {
         ChainConfig memory config = getEthereumConfig();
+
+        // user needs balance in order to mint
+        deal(Constants.ETH_USDC, user, 1000000e6);
+        deal(Constants.ETH_WETH, user, 100e18);
         
-        _deployExtensions(config);
-        _deployNewImplementation();
-        _updateFactoryAndCreatePool(baseToken);
+        deployment = _deployExtensions(config);
+        deployment.implementation = _deployNewImplementation(deployment.extensionsMap);
+        deployment.pool = _updateFactoryAndCreatePool(baseToken, deployment.implementation, deployment.aIntentsAdapter);
+        deployment.baseToken = baseToken;
+        deployment.spokePool = config.spokePool;
+        
+        return deployment;
     }
 
-    function _setupBase(address baseToken) private {
+    function _setupBase(address baseToken) private returns (ChainDeployment memory deployment) {
         ChainConfig memory config = getBaseConfig();
+
+        // user needs balance in order to mint
+        deal(Constants.BASE_USDC, user, 1000000e6);
+        deal(Constants.BASE_WETH, user, 100e18);
         
-        _deployExtensions(config);
-        _deployNewImplementation();
-        _updateFactoryAndCreatePool(baseToken);
+        deployment = _deployExtensions(config);
+        deployment.implementation = _deployNewImplementation(deployment.extensionsMap);
+        deployment.pool = _updateFactoryAndCreatePool(baseToken, deployment.implementation, deployment.aIntentsAdapter);
+        deployment.baseToken = baseToken;
+        deployment.spokePool = config.spokePool;
+        
+        return deployment;
     }
     
-    function _deployExtensions(ChainConfig memory config) private {
-        // 1. Deploy new AIntents
-        adapter = new AIntents(config.spokePool);
-        console2.log("Deployed AIntents:", address(adapter));
-        
-        // 2. Deploy ExtensionsMapDeployer
-        extensionsMapDeployer = new ExtensionsMapDeployer();
-        console2.log("Deployed ExtensionsMapDeployer:", address(extensionsMapDeployer));
-        
-        // 3. Deploy extensions - will have different address from deployed (deployer address)
-        eApps = new EApps(config.grgStakingProxy, config.uniV4Posm);
-        eOracle = new EOracle(config.oracle, config.wrappedNative);
-        eUpgrade = new EUpgrade(Constants.FACTORY);
-        eNavView = new ENavView(config.grgStakingProxy, config.uniV4Posm);
-        eAcrossHandler = new EAcrossHandler(config.spokePool);
+    function _deployExtensions(ChainConfig memory config) public returns (ChainDeployment memory deployment) {
+        // 1. Deploy extensions - will have different address from deployed (deployer address)
+        deployment.eApps = new EApps(config.grgStakingProxy, config.uniV4Posm);
+        deployment.eOracle = new EOracle(config.oracle, config.wrappedNative);
+        deployment.eUpgrade = new EUpgrade(Constants.FACTORY);
+        deployment.eNavView = new ENavView(config.grgStakingProxy, config.uniV4Posm);
+        deployment.eAcrossHandler = new EAcrossHandler(config.spokePool);
         console2.log("Deployed extensions successfully");
 
         Extensions memory extensions = Extensions({
-            eApps: address(eApps),
-            eOracle: address(eOracle),
-            eUpgrade: address(eUpgrade),
-            eNavView: address(eNavView),
-            eAcrossHandler: address(eAcrossHandler)
+            eApps: address(deployment.eApps),
+            eOracle: address(deployment.eOracle),
+            eUpgrade: address(deployment.eUpgrade),
+            eNavView: address(deployment.eNavView),
+            eAcrossHandler: address(deployment.eAcrossHandler)
         });
+
+        // 2. Deploy ExtensionsMapDeployer
+        deployment.extensionsMapDeployer = new ExtensionsMapDeployer();
+        console2.log("Deployed ExtensionsMapDeployer:", address(deployment.extensionsMapDeployer));
         
         DeploymentParams memory params = DeploymentParams({
             extensions: extensions,
             wrappedNative: config.wrappedNative
         });
         
-        // 5. Deploy new ExtensionsMap with different salt to avoid collision
-        bytes32 newSalt = keccak256("TEST_EXTENSIONS_MAP_V1");
-        address extensionsMapAddr = extensionsMapDeployer.deployExtensionsMap(params, newSalt);
-        extensionsMap = ExtensionsMap(extensionsMapAddr);
-        console2.log("Deployed ExtensionsMap:", address(extensionsMap));
+        // 3. Deploy new ExtensionsMap with different salt to avoid collision
+        bytes32 newSalt = keccak256(abi.encodePacked("TEST_EXTENSIONS_MAP_V1_", block.chainid));
+        address extensionsMapAddr = deployment.extensionsMapDeployer.deployExtensionsMap(params, newSalt);
+        deployment.extensionsMap = ExtensionsMap(extensionsMapAddr);
+        console2.log("Deployed ExtensionsMap:", address(deployment.extensionsMap));
+
+        // 4. Deploy new AIntents
+        deployment.aIntentsAdapter = new AIntents(config.spokePool);
+        console2.log("Deployed AIntents:", address(deployment.aIntentsAdapter));
+        
+        return deployment;
     }
     
-    function _deployNewImplementation() private {
+    function _deployNewImplementation(ExtensionsMap extensionsMapParam) public returns (SmartPool) {
         // Deploy mock TokenJar (using a simple mock address for deterministic deployment)
         address mockTokenJar = address(0x4444444444444444444444444444444444444444);
         
         // Deploy new SmartPool implementation
-        implementation = new SmartPool(
+        SmartPool impl = new SmartPool(
             AUTHORITY,
-            address(extensionsMap),
+            address(extensionsMapParam),
             mockTokenJar
         );
-        console2.log("Deployed SmartPool implementation:", address(implementation));
+        console2.log("Deployed SmartPool implementation:", address(impl));
+        return impl;
     }
     
-    function _updateFactoryAndCreatePool(address baseToken) private {
+    function _updateFactoryAndCreatePool(address baseToken, SmartPool impl, AIntents adapter) public returns (address) {
         // Update factory to use new implementation
         // We need to prank as the RigoblockDao from the registry
         address registry = IRigoblockPoolProxyFactory(Constants.FACTORY).getRegistry();
@@ -146,7 +207,7 @@ contract RealDeploymentFixture is Test {
         console2.log("RigoblockDao:", rigoblockDao);
         
         vm.prank(rigoblockDao);
-        IRigoblockPoolProxyFactory(Constants.FACTORY).setImplementation(address(implementation));
+        IRigoblockPoolProxyFactory(Constants.FACTORY).setImplementation(address(impl));
         console2.log("Updated factory implementation");
         
         // Deploy a new pool from factory
@@ -156,30 +217,46 @@ contract RealDeploymentFixture is Test {
             "TEST",
             baseToken
         );
-        pool = poolAddr;
-        console2.log("Created pool:", pool);
+        console2.log("Created pool:", poolAddr);
+        console2.log("Base token:", baseToken);
+        console2.log("Chain:", block.chainid);
         
-        // 10. Add adapter selector to authority
-        // Authority uses whitelister pattern - use RigoblockDao as it typically has permissions
-        address rigoblockDaoAuth = IPoolRegistry(registry).rigoblockDao();
-        console2.log("Using RigoblockDao for authority:", rigoblockDaoAuth);
+        // Add adapter selectors to authority
+        // Authority uses whitelister pattern
+        address authorityOwner = IOwnedUninitialized(AUTHORITY).owner();
+        console2.log("Using authority owner for authority:", authorityOwner);
 
-        vm.prank(rigoblockDaoAuth);
-
-        // first need to whitelist the adapter and set self as whitelister
+        vm.startPrank(authorityOwner);
+        
+        // First whitelist the adapter 
         IAuthority(AUTHORITY).setAdapter(address(adapter), true);
-        if (!IAuthority(AUTHORITY).isWhitelister(rigoblockDaoAuth)) {
-            IAuthority(AUTHORITY).setWhitelister(rigoblockDaoAuth, true);
+        console2.log("Set intents adapter as whitelisted");
+        
+        // Check if RigoblockDao is already a whitelister
+        bool isWhitelister = IAuthority(AUTHORITY).isWhitelister(authorityOwner);
+
+        if (!isWhitelister) {
+            IAuthority(AUTHORITY).setWhitelister(authorityOwner, true);
         }
-
-
-        IAuthority(AUTHORITY).addMethod(AIntents.depositV3.selector, address(adapter));
-        IAuthority(AUTHORITY).addMethod(AIntents.getEscrowAddress.selector, address(adapter));
-        console2.log("Added depositV3 and getEscrowAddress selectors to authority");
+        
+        IAuthority authorityInstance = IAuthority(AUTHORITY);
+        authorityInstance.addMethod(IAIntents.depositV3.selector, address(adapter));
+        authorityInstance.addMethod(IAIntents.getEscrowAddress.selector, address(adapter));
+        assertEq(authorityInstance.getApplicationAdapter(IAIntents.depositV3.selector), address(adapter), "depositV3 selector should be mapped");
+        assertEq(authorityInstance.getApplicationAdapter(IAIntents.getEscrowAddress.selector), address(adapter), "getEscrowAddress selector should be mapped");
+        console2.log("Mapped depositV3 and getEscrowAddress selectors in authority");
+        
+        vm.stopPrank();
         
         // Fund the pool for testing
-        deal(baseToken, pool, 1000000e6); // 1M base token
-        console2.log("Funded pool with tokens");
+        vm.startPrank(user);
+
+        IERC20(baseToken).approve(poolAddr, type(uint256).max);
+        uint256 mintAmount = ISmartPool(payable(poolAddr)).mint(user, 100000e6, 0);
+        console2.log("Minted pool with base token:", mintAmount);
+        vm.stopPrank();
+        
+        return poolAddr;
     }
     
     /// @notice Helper to get chain config for Optimism
@@ -200,7 +277,7 @@ contract RealDeploymentFixture is Test {
             spokePool: Constants.BASE_SPOKE_POOL,
             wrappedNative: Constants.BASE_WETH,
             chainId: Constants.BASE_CHAIN_ID,
-            grgStakingProxy: Constants.GRG_STAKING,
+            grgStakingProxy: Constants.BASE_GRG_STAKING,
             uniV4Posm: Constants.BASE_UNISWAP_V4_POSM,
             oracle: Constants.BASE_ORACLE
         });

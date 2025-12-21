@@ -122,22 +122,10 @@ contract AcrossUnitTest is Test {
         vm.store(pool, positionSlot, bytes32(uint256(1))); // 1-based index
     }
     
-    /// @notice Test adapter deployment
-    function test_Adapter_Deployment() public view {
-        assertEq(address(adapter.acrossSpokePool()), mockSpokePool, "SpokePool address incorrect");
-    }
-    
     /// @notice Test handler deployment (stateless)
     function test_Handler_Deployment() public view {
         // Handler should have no state
         assertTrue(address(handler).code.length > 0, "Handler should be deployed");
-        assertEq(handler.acrossSpokePool(), mockSpokePool, "Handler should store SpokePool");
-    }
-    
-    /// @notice Test handler rejects invalid SpokePool in constructor
-    function test_Handler_RejectsInvalidSpokePool() public {
-        vm.expectRevert("INVALID_SPOKE_POOL");
-        new EAcrossHandler(address(0));
     }
     
     /// @notice Test handler rejects unauthorized caller

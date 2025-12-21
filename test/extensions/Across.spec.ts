@@ -50,21 +50,11 @@ describe("Across Integration", () => {
 
   describe("EAcrossHandler", () => {
     describe("Constructor and Deployment", () => {
-      it("should deploy with correct SpokePool address", async () => {
-        const spokePoolAddr = await eAcrossHandler.acrossSpokePool();
-        expect(spokePoolAddr).to.equal(acrossSpokePool.address);
-      });
-
       it("should revert when deploying with zero address", async () => {
         const EAcrossHandler = await ethers.getContractFactory("EAcrossHandler");
         await expect(
           EAcrossHandler.deploy(ethers.constants.AddressZero)
         ).to.be.revertedWith("INVALID_SPOKE_POOL");
-      });
-
-      it("should store immutable SpokePool correctly", async () => {
-        const addr1 = await eAcrossHandler.acrossSpokePool();
-        expect(addr1).to.equal(acrossSpokePool.address);
       });
 
       it("should deploy with non-zero bytecode", async () => {
@@ -307,19 +297,9 @@ describe("Across Integration", () => {
 
   describe("AIntents", () => {
     describe("Constructor and Immutables", () => {
-      it("should deploy with correct SpokePool address", async () => {
-        const spokePoolAddr = await aIntents.acrossSpokePool();
-        expect(spokePoolAddr).to.equal(acrossSpokePool.address);
-      });
-
       it("should return correct required version", async () => {
         const version = await aIntents.requiredVersion();
-        expect(version).to.equal("HF_4.1.0");
-      });
-
-      it("should have correct SpokePool immutable", async () => {
-        const spokePool = await aIntents.acrossSpokePool();
-        expect(spokePool).to.equal(acrossSpokePool.address);
+        expect(version).to.equal("4.1.0");
       });
 
       it("should have non-zero bytecode", async () => {

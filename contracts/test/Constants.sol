@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+import {CrosschainTokens} from "../protocol/types/CrosschainTokens.sol";
+
 /// @title Constants - Shared constants for testing and deployment
 /// @notice Centralizes hardcoded values used across tests to reduce duplication and RPC load
 library Constants {
@@ -10,10 +12,10 @@ library Constants {
     
     /// @notice Mainnet block number after oracle deployment (22,425,175)
     /// @dev Use this for tests requiring oracle price feeds
-    uint256 internal constant MAINNET_BLOCK = 22_600_000;
+    uint256 internal constant MAINNET_BLOCK = 24_000_000;
     
     /// @notice Base chain block number for fork tests
-    uint256 internal constant BASE_BLOCK = 35521323;
+    uint256 internal constant BASE_BLOCK = 39521323;
     
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
@@ -47,7 +49,7 @@ library Constants {
     /// @notice GRG Staking Proxy on Ethereum
     address internal constant GRG_STAKING = 0x730dDf7b602dB822043e0409d8926440395e07fE;
     address internal constant BASE_GRG_STAKING = 0xc758Ea84d6D978fe86Ee29c1fbD47B4F302F1992;
-    address internal constant POLYGON_GRG_STAKING = 0xc758Ea84d6D978fe86Ee29c1fbD47B4F302F1992;
+    address internal constant POLYGON_GRG_STAKING = 0xC87d1B952303ae3A9218727692BAda6723662dad;
     
     /// @notice Rigoblock Governance Proxy
     address internal constant GOV_PROXY = 0x5F8607739c2D2d0b57a4292868C368AB1809767a;
@@ -79,67 +81,50 @@ library Constants {
     address internal constant POLYGON_UNISWAP_V4_POSM = 0x1Ec2eBf4F37E7363FDfe3551602425af0B3ceef9;
     
     /*//////////////////////////////////////////////////////////////
-                            TOKENS - ETHEREUM
+                            TOKENS - SHARED FROM CrosschainTokens
     //////////////////////////////////////////////////////////////*/
     
-    address internal constant ETH_USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address internal constant ETH_USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
-    address internal constant ETH_WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address internal constant ETH_WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+    // Ethereum mainnet - use shared constants  
+    address internal constant ETH_USDC = CrosschainTokens.ETH_USDC;
+    address internal constant ETH_USDT = CrosschainTokens.ETH_USDT;
+    address internal constant ETH_WETH = CrosschainTokens.ETH_WETH;
+    address internal constant ETH_WBTC = CrosschainTokens.ETH_WBTC;
     
-    /*//////////////////////////////////////////////////////////////
-                            TOKENS - ARBITRUM
-    //////////////////////////////////////////////////////////////*/
+    // Arbitrum - use shared constants
+    address internal constant ARB_USDC = CrosschainTokens.ARB_USDC;
+    address internal constant ARB_USDT = CrosschainTokens.ARB_USDT;
+    address internal constant ARB_WETH = CrosschainTokens.ARB_WETH;
+    address internal constant ARB_WBTC = CrosschainTokens.ARB_WBTC;
     
-    address internal constant ARB_USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-    address internal constant ARB_USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
-    address internal constant ARB_WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    address internal constant ARB_WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
+    // Optimism - use shared constants
+    address internal constant OPT_USDC = CrosschainTokens.OPT_USDC;
+    address internal constant OPT_USDT = CrosschainTokens.OPT_USDT;
+    address internal constant OPT_WETH = CrosschainTokens.OPT_WETH;
+    address internal constant OPT_WBTC = CrosschainTokens.OPT_WBTC;
     
-    /*//////////////////////////////////////////////////////////////
-                            TOKENS - OPTIMISM
-    //////////////////////////////////////////////////////////////*/
+    // Base - use shared constants
+    address internal constant BASE_USDC = CrosschainTokens.BASE_USDC;
+    address internal constant BASE_USDT = CrosschainTokens.BASE_USDT;
+    address internal constant BASE_WETH = CrosschainTokens.BASE_WETH;
     
-    address internal constant OPT_USDC = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
-    address internal constant OPT_USDT = 0x94b008aA00579c1307B0EF2c499aD98a8ce58e58;
-    address internal constant OPT_WETH = 0x4200000000000000000000000000000000000006;
-    address internal constant OPT_WBTC = 0x68f180fcCe6836688e9084f035309E29Bf0A2095;
+    // Polygon - use shared constants
+    address internal constant POLY_USDC = CrosschainTokens.POLY_USDC;
+    address internal constant POLY_USDT = CrosschainTokens.POLY_USDT;
+    address internal constant POLY_WETH = CrosschainTokens.POLY_WETH;
+    address internal constant POLY_WBTC = CrosschainTokens.POLY_WBTC;
     
-    /*//////////////////////////////////////////////////////////////
-                            TOKENS - BASE
-    //////////////////////////////////////////////////////////////*/
+    // BSC - use shared constants
+    address internal constant BSC_USDC = CrosschainTokens.BSC_USDC;
+    address internal constant BSC_USDT = CrosschainTokens.BSC_USDT;
+    address internal constant BSC_WETH = CrosschainTokens.BSC_WETH;
     
-    address internal constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    address internal constant BASE_USDT = 0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2;
-    address internal constant BASE_WETH = 0x4200000000000000000000000000000000000006;
-    // Note: No WBTC on Base in CrosschainLib
-    
-    /*//////////////////////////////////////////////////////////////
-                            TOKENS - POLYGON
-    //////////////////////////////////////////////////////////////*/
-    
-    address internal constant POLY_USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
-    address internal constant POLY_USDT = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
-    address internal constant POLY_WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
-    address internal constant POLY_WBTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
+    // Unichain - use shared constants
+    address internal constant UNI_USDC = CrosschainTokens.UNI_USDC;
+    address internal constant UNI_WETH = CrosschainTokens.UNI_WETH;
+
+    // Additional tokens not in crosschain lib (chain-specific)
     address internal constant POLY_WPOL = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
-    
-    /*//////////////////////////////////////////////////////////////
-                            TOKENS - BSC
-    //////////////////////////////////////////////////////////////*/
-    
-    address internal constant BSC_USDC = 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d;
-    address internal constant BSC_USDT = 0x55d398326f99059fF775485246999027B3197955;
-    address internal constant BSC_WETH = 0x2170Ed0880ac9A755fd29B2688956BD959F933F8;
     address internal constant BSC_WBNB = 0x2170Ed0880ac9A755fd29B2688956BD959F933F8;
-    // Note: No WBTC on BSC in CrosschainLib
-    
-    /*//////////////////////////////////////////////////////////////
-                            TOKENS - UNICHAIN  
-    //////////////////////////////////////////////////////////////*/
-    
-    address internal constant UNI_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    address internal constant UNI_WETH = 0x4200000000000000000000000000000000000006;
     
     /*//////////////////////////////////////////////////////////////
                         STORAGE SLOTS (ERC-7201)

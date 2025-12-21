@@ -52,8 +52,4 @@ interface IAIntents {
     /// @param opType The operation type (only Transfer supported)
     /// @return escrowAddress The deterministic escrow address
     function getEscrowAddress(OpType opType) external view returns (address escrowAddress);
-
-    /// @notice Returns the Across SpokePool address for this chain
-    /// @return Address of the Across SpokePool contract
-    function acrossSpokePool() external view returns (IAcrossSpokePool);
 }

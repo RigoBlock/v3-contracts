@@ -46,13 +46,11 @@ contract EAcrossHandler is IEAcrossHandler {
     using VirtualBalanceLib for address;
 
     /// @notice Address of the Across SpokePool contract
-    /// @dev Immutable to save gas on verification
-    address public immutable acrossSpokePool;
+    address private immutable _acrossSpokePool;
     
-    constructor(address _acrossSpokePool) {
-        // TODO: use custom errors! Also constructor args are assumed to be valid, no validation should be needed
-        require(_acrossSpokePool != address(0), "INVALID_SPOKE_POOL");
-        acrossSpokePool = _acrossSpokePool;
+    /// @dev Passed param is expected to be valid - skip validation
+    constructor(address acrossSpokePool) {
+        _acrossSpokePool = acrossSpokePool;
     }
 
     // TODO: if this modifies state, it must not be directly callable!
@@ -64,7 +62,7 @@ contract EAcrossHandler is IEAcrossHandler {
     ) external override {
         // CRITICAL SECURITY CHECK: Verify caller is the Across SpokePool
         // Since this is called via delegatecall, msg.sender is preserved from the original call
-        require(msg.sender == acrossSpokePool, UnauthorizedCaller());
+        require(msg.sender == _acrossSpokePool, UnauthorizedCaller());
 
         // Decode the message - this is internal data, not external contract interaction
         DestinationMessage memory params = abi.decode(message, (DestinationMessage));

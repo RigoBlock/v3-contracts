@@ -52,7 +52,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using SlotDerivation for bytes32;
     using VirtualBalanceLib for address;
 
-    IAcrossSpokePool public immutable override acrossSpokePool;
+    IAcrossSpokePool private immutable _acrossSpokePool;
 
     address private immutable _aIntents;
 
@@ -63,11 +63,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     /// @inheritdoc IMinimumVersion
     function requiredVersion() external pure override returns (string memory) {
-        return "HF_4.1.0";
+        return "4.1.0";
     }
 
     constructor(address acrossSpokePoolAddress) {
-        acrossSpokePool = IAcrossSpokePool(acrossSpokePoolAddress);
+        _acrossSpokePool = IAcrossSpokePool(acrossSpokePoolAddress);
         _aIntents = address(this);
     }
 
@@ -126,7 +126,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         SourceMessage memory sourceMsg,
         DestinationMessage memory destMsg
     ) private {
-        acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
+        _acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
             sourceMsg.opType == OpType.Transfer 
                 ? EscrowFactory.getEscrowAddress(address(this), OpType.Transfer)
                 : address(this), // depositor for refunds
@@ -138,7 +138,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.destinationChainId,
             params.exclusiveRelayer,
             params.quoteTimestamp,
-            uint32(block.timestamp + acrossSpokePool.fillDeadlineBuffer()),
+            uint32(block.timestamp + _acrossSpokePool.fillDeadlineBuffer()),
             params.exclusivityDeadline,
             abi.encode(destMsg)
         );
@@ -195,14 +195,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.
     function _safeApproveToken(address token) private {
         if (token.isAddressZero()) return; // Skip if native currency
-        
-        // TODO: can this fail silently, and are there side effects?
-        if (IERC20(token).allowance(address(this), address(acrossSpokePool)) > 0) {
+
+        if (IERC20(token).allowance(address(this), address(_acrossSpokePool)) > 0) {
             // Reset to 0 first for tokens that require it (like USDT)
-            token.safeApprove(address(acrossSpokePool), 0);
+            token.safeApprove(address(_acrossSpokePool), 0);
         } else {
             // Approve max amount
-            token.safeApprove(address(acrossSpokePool), type(uint256).max);
+            token.safeApprove(address(_acrossSpokePool), type(uint256).max);
         }
     }
 }
