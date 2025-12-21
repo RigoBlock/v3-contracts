@@ -162,18 +162,15 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             revert InvalidOpType();
         }
 
-        ISmartPoolActions(address(this)).updateUnitaryValue();
+        //ISmartPoolActions(address(this)).updateUnitaryValue();
 
         // Apply BSC decimal conversion for USDC/USDT if needed (both directions)
         inputAmount = CrosschainLib.applyBscDecimalConversion(inputToken, outputToken, inputAmount);
 
-        // navTolerance in a client-side input
+        // navTolerance is a client-side input - pass through without modification
         return DestinationMessage({
             opType: message.opType,
-            sourceChainId: block.chainid,
-            sourceNav: ISmartPoolState(address(this)).getPoolTokens().unitaryValue,
-            sourceDecimals: StorageLib.pool().decimals,
-            navTolerance: message.navTolerance > 1000 ? 1000 : message.navTolerance, // reasonable 10% max tolerance
+            navTolerance: message.navTolerance, // Pass client tolerance without imposing extra limits
             shouldUnwrap: message.shouldUnwrapOnDestination,
             sourceAmount: inputAmount  // Decimal-adjusted amount for exact cross-chain offsetting
         });

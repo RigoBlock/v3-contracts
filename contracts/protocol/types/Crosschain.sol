@@ -9,10 +9,7 @@ enum OpType {
 
 struct DestinationMessage {
     OpType opType;
-    uint256 sourceChainId;  // Chain ID of the source chain
-    uint256 sourceNav;
-    uint8 sourceDecimals;
-    uint256 navTolerance;  // Not used in Sync mode
+    uint256 navTolerance;  // Not used in Transfer mode, only for Sync operations
     bool shouldUnwrap;
     uint256 sourceAmount;   // Original amount sent from source (before solver fees)
 }

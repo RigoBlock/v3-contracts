@@ -627,9 +627,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Prepare handler message for Transfer mode
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: Constants.ETHEREUM_CHAIN_ID, 
-            sourceNav: initialTokens.unitaryValue,
-            sourceDecimals: 18,
             navTolerance: 100, // 1% tolerance
             shouldUnwrap: false,
             sourceAmount: transferAmount
@@ -666,9 +663,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Prepare transfer mode message
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: Constants.ETHEREUM_CHAIN_ID,
-            sourceNav: initialTokens.unitaryValue,
-            sourceDecimals: 6, // USDC decimals
             navTolerance: 50, // 0.5% tolerance
             shouldUnwrap: false,
             sourceAmount: transferAmount
@@ -708,9 +702,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Prepare sync mode message with matching NAV
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Sync,
-            sourceChainId: Constants.ETHEREUM_CHAIN_ID,
-            sourceNav: currentTokens.unitaryValue, // Use current NAV
-            sourceDecimals: 6, // USDC decimals
+
             navTolerance: 1000, // 10% tolerance
             shouldUnwrap: false,
             sourceAmount: syncAmount
@@ -740,9 +732,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Prepare message for WETH handling
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: Constants.BASE_CHAIN_ID,
-            sourceNav: 1e18, // 1.0 NAV
-            sourceDecimals: 18, // WETH decimals
+
             navTolerance: 1000, // 10% tolerance
             shouldUnwrap: true, // Unwrap WETH to ETH
             sourceAmount: wethAmount

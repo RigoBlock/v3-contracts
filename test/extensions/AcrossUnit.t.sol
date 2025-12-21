@@ -136,9 +136,6 @@ contract AcrossUnitTest is Test {
         
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 0,
-            sourceNav: 0,
-            sourceDecimals: 18,
             navTolerance: 0,
             shouldUnwrap: false,
             sourceAmount: 100e6
@@ -157,9 +154,6 @@ contract AcrossUnitTest is Test {
         // Test that Transfer message can be properly encoded/decoded
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 0,
-            sourceNav: 0,
-            sourceDecimals: 6,
             navTolerance: 0,
             shouldUnwrap: false,
             sourceAmount: 100e6
@@ -169,19 +163,13 @@ contract AcrossUnitTest is Test {
         DestinationMessage memory decoded = abi.decode(encodedMessage, (DestinationMessage));
         
         assertEq(uint8(decoded.opType), uint8(OpType.Transfer), "OpType should be Transfer");
-        assertEq(decoded.sourceChainId, 0, "Source chain ID should match");
-        assertEq(decoded.sourceDecimals, 6, "Source decimals should match");
+        assertEq(decoded.sourceAmount, 100e6, "Source amount should match");
     }
     
     /// @notice Test Sync mode message encoding/decoding with NAV
     function test_Handler_SyncMode_MessageParsing() public pure {
-        uint256 sourceNav = 1e18; // 1.0 per share
-        
         DestinationMessage memory syncMsg = DestinationMessage({
             opType: OpType.Sync,
-            sourceChainId: 42161,
-            sourceNav: sourceNav,
-            sourceDecimals: 18,
             navTolerance: 200, // 2%
             shouldUnwrap: false,
             sourceAmount: 100e6
@@ -191,20 +179,15 @@ contract AcrossUnitTest is Test {
         DestinationMessage memory decoded = abi.decode(encoded, (DestinationMessage));
         
         assertEq(uint8(decoded.opType), uint8(OpType.Sync), "OpType should be Sync");
-        assertEq(decoded.sourceChainId, 42161, "Source chain ID should match");
-        assertEq(decoded.sourceNav, sourceNav, "Source NAV should match");
         assertEq(decoded.navTolerance, 200, "NAV tolerance should match");
+        assertEq(decoded.sourceAmount, 100e6, "Source amount should match");
     }
     
     /// @notice Test Sync mode message encoding/decoding with nav
     function test_Handler_SyncMode_MessageParsing_WithNav() public pure {
-        uint256 sourceNav = 1e18;
         
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Sync,
-            sourceChainId: 42161,
-            sourceNav: sourceNav,
-            sourceDecimals: 18,
             navTolerance: 0,
             shouldUnwrap: false,
             sourceAmount: 100e6
@@ -214,17 +197,13 @@ contract AcrossUnitTest is Test {
         DestinationMessage memory decoded = abi.decode(encoded, (DestinationMessage));
         
         assertEq(uint8(decoded.opType), uint8(OpType.Sync), "OpType should be Sync");
-        assertEq(decoded.sourceChainId, 42161, "Source chain ID should match");
-        assertEq(decoded.sourceNav, sourceNav, "Source NAV should match");
+        assertEq(decoded.sourceAmount, 100e6, "Source amount should match");
     }
     
     /// @notice Test WETH unwrap message construction
     function test_Handler_UnwrapWETH_MessageSetup() public pure {
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 0,
-            sourceNav: 0,
-            sourceDecimals: 18,
             navTolerance: 0,
             shouldUnwrap: true, // Request unwrap
             sourceAmount: 100e6
@@ -286,9 +265,6 @@ contract AcrossUnitTest is Test {
         // Create message with Unknown OpType to test InvalidOpType revert
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Unknown, // This should trigger InvalidOpType error
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e6
@@ -313,9 +289,6 @@ contract AcrossUnitTest is Test {
         
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: rogueSourceAmount // This should be rejected
@@ -340,9 +313,6 @@ contract AcrossUnitTest is Test {
         
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: validSourceAmount // This should be accepted
@@ -381,9 +351,6 @@ contract AcrossUnitTest is Test {
         
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 6,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: sourceAmount
@@ -427,9 +394,6 @@ contract AcrossUnitTest is Test {
         
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Sync,
-            sourceChainId: 42161,
-            sourceNav: 0, // Set to 0 to skip NAV validation
-            sourceDecimals: 18,
             navTolerance: 200, // 2%
             shouldUnwrap: false,
             sourceAmount: 1e18 // For Sync, this is used for validation but virtualBalance uses receivedAmount
@@ -473,9 +437,6 @@ contract AcrossUnitTest is Test {
         
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 10,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: true, // Request WETH unwrap
             sourceAmount: 1e18
@@ -517,9 +478,6 @@ contract AcrossUnitTest is Test {
         // Create Transfer message with unknown token
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e18
@@ -567,9 +525,7 @@ contract AcrossUnitTest is Test {
         // Create Transfer message with new token
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1e18,
-            sourceDecimals: 18,
+
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e18
@@ -603,9 +559,6 @@ contract AcrossUnitTest is Test {
         // Create Transfer message with 18 decimals (source) and properly scaled NAV
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 42161,
-            sourceNav: 1500000000000000000, // 1.5 * 10^18 (18 decimals - matches sourceDecimals)
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e18
@@ -640,9 +593,6 @@ contract AcrossUnitTest is Test {
         // Create Transfer message with 6 decimals (source) and properly scaled NAV
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 137,
-            sourceNav: 1500000, // 1.5 * 10^6 (6 decimals - matches sourceDecimals)
-            sourceDecimals: 6,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e6
@@ -677,9 +627,6 @@ contract AcrossUnitTest is Test {
         // Create Transfer message with 18 decimals (source) - same as destination
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 10,
-            sourceNav: 1500000000000000000, // 1.5 * 10^18 (18 decimals - matches sourceDecimals)
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e18
@@ -726,9 +673,6 @@ contract AcrossUnitTest is Test {
         // Create Transfer message with shouldUnwrap=true
         DestinationMessage memory message = DestinationMessage({
             opType: OpType.Transfer,
-            sourceChainId: 10,
-            sourceNav: 0, // Not used for Transfer
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: true, // This should unwrap WETH to ETH
             sourceAmount: 100e18
@@ -770,9 +714,6 @@ contract AcrossUnitTest is Test {
         // Test 1: Sync with sourceNav = 0 should succeed (client handles validation)
         DestinationMessage memory messageNoNav = DestinationMessage({
             opType: OpType.Sync,
-            sourceChainId: 42161,
-            sourceNav: 0,
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e18
@@ -787,9 +728,6 @@ contract AcrossUnitTest is Test {
         // Test 2: Sync with sourceNav > 0 should also succeed (client responsibility)
         DestinationMessage memory messageWithNav = DestinationMessage({
             opType: OpType.Sync,
-            sourceChainId: 42161,
-            sourceNav: 1200000000000000000,
-            sourceDecimals: 18,
             navTolerance: 100,
             shouldUnwrap: false,
             sourceAmount: 100e18

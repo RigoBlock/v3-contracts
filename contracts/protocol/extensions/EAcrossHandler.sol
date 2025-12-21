@@ -60,24 +60,12 @@ contract EAcrossHandler is IEAcrossHandler {
         uint256 amount,
         bytes calldata message
     ) external override {
-        // CRITICAL SECURITY CHECK: Verify caller is the Across SpokePool
-        // Since this is called via delegatecall, msg.sender is preserved from the original call
+        // verify caller is the Across SpokePool
         require(msg.sender == _acrossSpokePool, UnauthorizedCaller());
 
         // Decode the message - this is internal data, not external contract interaction
         DestinationMessage memory params = abi.decode(message, (DestinationMessage));
 
-        // TODO: SECURITY VULNERABILITY - Pool operator could abuse opType designation:
-        // 1. Declare Transfer operation on source (uses escrow as depositor for refunds)
-        // 2. Inflate NAV on destination chain before this handler processes the message
-        // 3. Virtual balance calculations could be manipulated
-        // MITIGATION: Handler should validate opType behavior matches source declaration
-        // and prevent NAV manipulation between cross-chain message initiation and processing.
-
-        // TODO: all preconditions that could revert the transaction would trigger funds loss. Therefore, they should be
-        // reduced to rogue inputs on the source chain. Also, we must verify what happens on the source chain then, as we
-        // might simply decide to refund the sender on the source chain, instead of reverting, i.e. in all cases where
-        // the nav might be incorrectly affected (virtual balances vs nav impact).
         // ensure token is active, otherwise won't be included in nav calculations
         AddressSet storage set = StorageLib.activeTokensSet();
         address baseToken = StorageLib.pool().baseToken;
@@ -90,14 +78,6 @@ contract EAcrossHandler is IEAcrossHandler {
             IWETH9(wrappedNative).withdraw(amount);
             effectiveToken = address(0); // ETH is represented as address(0)
         }
-
-        // TODO: this method will revert, i.e. funds would be lost, or not accounted for? should not revert, and
-        // peacefully add the token to the tracked tokens (should pass flag - revertIfNoPriceFeed ?). This means
-        // we should add a price feed, because the transfer will use the price to create a virtual balance? or
-        // should we simply use the virtual balances by token mapping, and the nav will only include the token if
-        // it can calculate the value in base token? We'd have to handle less edge cases here, and more in the
-        // nav estimate, which does that - and also we'd have to accept a higher gas overhead in calculating nav
-        // because we would have an array of virtual balances.
         
         // For tokens without price feeds, we can revert since escrow setup on source handles refunds properly
         if (effectiveToken != baseToken && !set.isActive(effectiveToken)) {
@@ -132,8 +112,9 @@ contract EAcrossHandler is IEAcrossHandler {
     ) private {
         // Sanity check: sourceAmount should be within 10% of received amount
         // This protects against bugs or misconfigurations in decimal conversion logic
-        // TODO: hardcoded max tolerance should be defined as a constant
-        uint256 tolerance = receivedAmount / 10; // 10% tolerance. for very small amounts, this test could fail.
+        // Note: For very small amounts where solver fees result in 0 outputAmount, this check may fail
+        // TODO: Consider improving tolerance handling for edge cases with small amounts and high fees
+        uint256 tolerance = receivedAmount / 10; // 10% tolerance
         uint256 lowerBound = receivedAmount > tolerance ? receivedAmount - tolerance : 0;
         uint256 upperBound = receivedAmount + tolerance;
         
@@ -148,26 +129,5 @@ contract EAcrossHandler is IEAcrossHandler {
         
         // Create negative virtual balance for the effective token (ETH if unwrapped, otherwise received token)
         VirtualBalanceLib.adjustVirtualBalance(effectiveToken, -(virtualBalanceAmount.toInt256()));
-    }
-
-    /// @dev Normalizes NAV from source decimals to destination decimals for comparison
-    /// @param sourceNav The NAV from source chain
-    /// @param sourceDecimals Decimals of source chain pool
-    /// @param destDecimals Decimals of destination chain pool 
-    /// @return normalizedNav NAV adjusted to destination decimals
-    function _normalizeNav(
-        uint256 sourceNav,
-        uint8 sourceDecimals,
-        uint8 destDecimals
-    ) private pure returns (uint256 normalizedNav) {
-        if (sourceDecimals == destDecimals) {
-            return sourceNav;
-        } else if (sourceDecimals < destDecimals) {
-            // Scale up: source has fewer decimals
-            return sourceNav * (10 ** (destDecimals - sourceDecimals));
-        } else {
-            // Scale down: source has more decimals
-            return sourceNav / (10 ** (sourceDecimals - destDecimals));
-        }
     }
 }
