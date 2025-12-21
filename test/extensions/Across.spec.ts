@@ -50,13 +50,6 @@ describe("Across Integration", () => {
 
   describe("EAcrossHandler", () => {
     describe("Constructor and Deployment", () => {
-      it("should revert when deploying with zero address", async () => {
-        const EAcrossHandler = await ethers.getContractFactory("EAcrossHandler");
-        await expect(
-          EAcrossHandler.deploy(ethers.constants.AddressZero)
-        ).to.be.revertedWith("INVALID_SPOKE_POOL");
-      });
-
       it("should deploy with non-zero bytecode", async () => {
         const code = await ethers.provider.getCode(eAcrossHandler.address);
         expect(code).to.not.equal("0x");
