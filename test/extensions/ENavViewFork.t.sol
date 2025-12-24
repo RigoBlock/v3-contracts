@@ -34,6 +34,7 @@ contract ENavViewForkTest is Test {
     address constant WETH = Constants.ETH_WETH;
     address constant UNISWAP_V4_POSM = Constants.UNISWAP_V4_POSM;
     address constant ACROSS_SPOKE_POOL = Constants.ETH_SPOKE_POOL;
+    address constant ACROSS_MULTICALL_HANDLER = Constants.ETH_MULTICALL_HANDLER;
 
     // Test pool with assets on multiple chains
     address constant TEST_POOL = Constants.TEST_POOL;
@@ -113,7 +114,7 @@ contract ENavViewForkTest is Test {
         console2.log("  New ENavView:", address(eNavView));
 
         // We'll deploy EAcrossHandler since it's not on mainnet yet
-        eAcrossHandler = new EAcrossHandler(ACROSS_SPOKE_POOL);
+        eAcrossHandler = new EAcrossHandler(ACROSS_SPOKE_POOL, ACROSS_MULTICALL_HANDLER);
         console2.log("  New EAcrossHandler:", address(eAcrossHandler));
 
         console2.log("  Using deployed EApps: 0x598Fe2A5a459AA47228088a4206a657Ef8ec3676");
@@ -181,7 +182,7 @@ contract ENavViewForkTest is Test {
     }
 
     /// @notice Test that ENavView works via extension call
-    function test_ENavView_GetNavDataView() public {
+    function test_ENavView_GetNavDataView() public view {
         console2.log("=== Testing ENavView.getNavDataView() ===");
 
         // Call getNavDataView via the pool (using fallback to extension)
@@ -217,7 +218,7 @@ contract ENavViewForkTest is Test {
     }
 
     /// @notice Test that ENavView returns token balances
-    function test_ENavView_GetTokensAndBalances() public {
+    function test_ENavView_GetTokensAndBalances() public view {
         console2.log("=== Testing ENavView.getAllTokensAndBalancesView() ===");
 
         // Call getTokensAndBalances via the pool
@@ -242,7 +243,7 @@ contract ENavViewForkTest is Test {
     }
 
     /// @notice Test that ENavView returns application balances
-    function test_ENavView_GetAppTokensAndBalancesView() public {
+    function test_ENavView_GetAppTokensAndBalancesView() public view {
         console2.log("=== Testing ENavView.getAppTokensAndBalancesView() ===");
 
         // Call getAppTokensAndBalancesView via the pool (no parameters needed)
@@ -317,7 +318,7 @@ contract ENavViewForkTest is Test {
     }
 
     /// @notice Test that extension calls work correctly
-    function test_ENavView_ExtensionCalls() public {
+    function test_ENavView_ExtensionCalls() public view {
         console2.log("=== Testing Extension Calls ===");
 
         // Verify extensions map configuration
@@ -339,7 +340,7 @@ contract ENavViewForkTest is Test {
     }
 
     /// @notice Test edge cases and error handling
-    function test_ENavView_EdgeCases() public {
+    function test_ENavView_EdgeCases() public view {
         console2.log("=== Testing Edge Cases ===");
 
         // Test with invalid packed applications

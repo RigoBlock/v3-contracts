@@ -77,6 +77,7 @@ contract RealDeploymentFixture is Test {
     
     struct ChainConfig {
         address spokePool;
+        address multicallHandler;
         address wrappedNative;
         uint256 chainId;
         address oracle;
@@ -152,7 +153,7 @@ contract RealDeploymentFixture is Test {
         deployment.eOracle = new EOracle(config.oracle, config.wrappedNative);
         deployment.eUpgrade = new EUpgrade(Constants.FACTORY);
         deployment.eNavView = new ENavView(config.grgStakingProxy, config.uniV4Posm);
-        deployment.eAcrossHandler = new EAcrossHandler(config.spokePool);
+        deployment.eAcrossHandler = new EAcrossHandler(config.spokePool, config.multicallHandler);
         console2.log("Deployed extensions successfully");
 
         Extensions memory extensions = Extensions({
@@ -263,6 +264,7 @@ contract RealDeploymentFixture is Test {
     function getEthereumConfig() public pure returns (ChainConfig memory) {
         return ChainConfig({
             spokePool: Constants.ETH_SPOKE_POOL,
+            multicallHandler: Constants.ETH_MULTICALL_HANDLER,
             wrappedNative: Constants.ETH_WETH,
             chainId: Constants.ETHEREUM_CHAIN_ID,
             grgStakingProxy: Constants.GRG_STAKING,
@@ -275,6 +277,7 @@ contract RealDeploymentFixture is Test {
     function getBaseConfig() public pure returns (ChainConfig memory) {
         return ChainConfig({
             spokePool: Constants.BASE_SPOKE_POOL,
+            multicallHandler: Constants.BASE_MULTICALL_HANDLER,
             wrappedNative: Constants.BASE_WETH,
             chainId: Constants.BASE_CHAIN_ID,
             grgStakingProxy: Constants.BASE_GRG_STAKING,
@@ -287,6 +290,7 @@ contract RealDeploymentFixture is Test {
     function getPolygonConfig() public pure returns (ChainConfig memory) {
         return ChainConfig({
             spokePool: Constants.BASE_SPOKE_POOL,
+            multicallHandler: Constants.POLY_MULTICALL_HANDLER,
             wrappedNative: Constants.POLY_WPOL,
             chainId: Constants.POLYGON_CHAIN_ID,
             grgStakingProxy: Constants.POLYGON_GRG_STAKING,

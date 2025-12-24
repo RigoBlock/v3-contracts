@@ -19,12 +19,13 @@
 
 pragma solidity 0.8.28;
 
+import {IEAcrossHandler} from "../../extensions/adapters/interfaces/IEAcrossHandler.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
-import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
-import {OpType} from "../../types/Crosschain.sol";
+import {OpType, SourceMessageParams} from "../../types/Crosschain.sol";
 
+// TODO: check if should move TransferEscrow our of the extensions folder, as it's not an extension
 /// @title TransferEscrow - Escrow contract for Transfer and Sync operation refunds
 /// @notice Manages refunds from failed Transfer/Sync operations with NAV-neutral donations
 /// @dev Combined escrow contract that handles both receive() and claimRefund() functionality
@@ -48,27 +49,35 @@ contract TransferEscrow {
     /// @notice Receives native currency
     receive() external payable {}
 
+    // TODO: transfers token, should be non-reentrant protected?
     /// @notice Allows anyone to claim refund tokens and send them to the pool
     /// @param token The token address to claim (address(0) for native)
     function refundVault(address token) external {
         uint256 balance;
+
         if (token == address(0)) {
             balance = address(this).balance;
         } else {
             balance = IERC20(token).balanceOf(address(this));
         }
+
         require(balance > 0, InvalidAmount());
         
+        SourceMessageParams memory params;
+        params.opType = OpType.Transfer;
+
+        // Store balance before transfer
+        IEAcrossHandler(pool).donate(token, 1, params);
+        
+        // Transfer tokens to pool
         if (token == address(0)) {
-            // For native currency, use the pool's donate function directly
-            ISmartPoolActions(pool).donate{value: balance}(address(0), balance);
+            pool.safeTransferNative(balance);
         } else {
-            // Approve the pool to spend the tokens
-            token.safeApprove(pool, balance);
-            
-            // Call the pool's donate function which handles NAV neutrality
-            ISmartPoolActions(pool).donate(token, balance);
+            token.safeTransfer(pool, balance);
         }
+        
+        // Process donation with actual balance
+        IEAcrossHandler(pool).donate(token, balance, params);
 
         emit TokensDonated(token, balance);
     }

@@ -188,9 +188,16 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const acrossMulticallHandler = await deploy("MockAcrossMulticallHandler", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   const eAcrossHandler = await deploy("EAcrossHandler", {
     from: deployer,
-    args: [acrossSpokePool.address],
+    args: [acrossSpokePool.address, acrossMulticallHandler.address],
     log: true,
     deterministicDeployment: true,
   });

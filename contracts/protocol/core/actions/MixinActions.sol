@@ -10,15 +10,12 @@ import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol"
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
-import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
-import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using EnumerableSet for AddressSet;
     using SafeCast for uint256;
-    using SlotDerivation for bytes32;
 
     error BaseTokenBalance();
     error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
@@ -91,34 +88,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         emit OperatorSet(msg.sender, operator, approved);
 
         return true;
-    }
-
-    error DonateTransferFromFailer();
-    error TokenIsNotOwned();
-    error IncorrectETHAmount();
-
-    // TODO: by integrating it as EIntents, we could remove the transferFrom on donate, or the donate entirely?
-    /// @notice Allows donations to the pool without affecting NAV.
-    function donate(address token, uint256 amount) external payable override {
-        // as the method is not restricted, we prevent nav inflation via a rogue token.
-        require(_isOwnedToken(token), TokenIsNotOwned());
-    
-        // TODO: do we actually need to pass flags? this call can potentially eat all of the caller balance
-        if (amount == 0) {
-            return; // null amount is flag for rebalance check
-        }
-
-        // Handle native currency (ETH) donation
-        if (token == _ZERO_ADDRESS) {
-            require(msg.value == amount, IncorrectETHAmount());
-        } else {
-            token.safeTransferFrom(msg.sender, address(this), amount);
-        }
-        
-        address baseToken = pool().baseToken;
-        int256 convertedAmount = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
-        // Reduce virtual balance to offset the donation (so NAV is unaffected)
-        VirtualBalanceLib.adjustVirtualBalance(baseToken, -convertedAmount);
     }
 
     /*
@@ -309,19 +278,5 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             amount >= 10 ** decimals() / _MINIMUM_ORDER_DIVISOR,
             PoolAmountSmallerThanMinimum(_MINIMUM_ORDER_DIVISOR)
         );
-    }
-
-    /// @dev Checks if a token is owned by the pool.
-    function _isOwnedToken(address token) private view returns (bool) {
-        AddressSet storage activeTokens = activeTokensSet();
-        address baseToken = pool().baseToken;
-        
-        // Base token is always owned
-        if (token == baseToken) {
-            return true;
-        }
-        
-        // Check if token is in active tokens set
-        return activeTokens.isActive(token);
     }
 }

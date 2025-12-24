@@ -29,6 +29,7 @@ interface IAIntents {
     error InsufficientWrappedNativeBalance();
     error InvalidOpType();
     error SameChainTransfer();
+    error UnauthorizedCaller();
 
     struct AcrossParams {
         address depositor;

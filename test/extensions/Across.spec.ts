@@ -59,36 +59,42 @@ describe("Across Integration", () => {
 
     describe("Access Control", () => {
       it("should reject calls from non-SpokePool addresses", async () => {
-        const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false, 1000000]]
-        );
+        const sourceMessageParams = {
+          opType: OpType.Transfer,
+          navTolerance: 100,
+          shouldUnwrapOnDestination: false,
+          sourceNativeAmount: 0
+        };
 
         await expect(
-          eAcrossHandler.handleV3AcrossMessage(mockUSDC.address, 1000000, message)
-        ).to.be.revertedWith("UnauthorizedCaller");
+          eAcrossHandler.donate(mockUSDC.address, 1000000, sourceMessageParams)
+        ).to.be.revertedWith("DonationLock(false)");
       });
 
       it("should reject calls from deployer", async () => {
-        const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false, 1000000]]
-        );
+        const sourceMessageParams = {
+          opType: OpType.Transfer,
+          navTolerance: 100,
+          shouldUnwrapOnDestination: false,
+          sourceNativeAmount: 0
+        };
 
         await expect(
-          eAcrossHandler.connect(owner).handleV3AcrossMessage(mockUSDC.address, 1000000, message)
-        ).to.be.revertedWith("UnauthorizedCaller");
+          eAcrossHandler.connect(owner).donate(mockUSDC.address, 1000000, sourceMessageParams)
+        ).to.be.revertedWith("DonationLock(false)");
       });
 
       it("should reject calls from arbitrary user", async () => {
-        const message = ethers.utils.defaultAbiCoder.encode(
-          ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[OpType.Transfer, 1, 0, 18, 0, false, 1000000]]
-        );
+        const sourceMessageParams = {
+          opType: OpType.Transfer,
+          navTolerance: 100,
+          shouldUnwrapOnDestination: false,
+          sourceNativeAmount: 0
+        };
 
         await expect(
-          eAcrossHandler.connect(user).handleV3AcrossMessage(mockUSDC.address, 1000000, message)
-        ).to.be.revertedWith("UnauthorizedCaller");
+          eAcrossHandler.connect(user).donate(mockUSDC.address, 1000000, sourceMessageParams)
+        ).to.be.revertedWith("DonationLock(false)");
       });
     });
 

@@ -28,106 +28,160 @@ import {IWETH9} from "../interfaces/IWETH9.sol";
 import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
+import {TransientSlot} from "../libraries/TransientSlot.sol";
+import {TransientStorage} from "../libraries/TransientStorage.sol";
 import {VirtualBalanceLib} from "../libraries/VirtualBalanceLib.sol";
 import {NavImpactLib} from "../libraries/NavImpactLib.sol";
-import {OpType, DestinationMessage, SourceMessage} from "../types/Crosschain.sol";
+import {OpType, SourceMessageParams} from "../types/Crosschain.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
 
+// TODO: rename in order to avoid confusing with across handler (this is called by the across multicall handler)
 /// @title EAcrossHandler - Handles incoming cross-chain transfers via Across Protocol.
 /// @notice This extension manages NAV integrity when receiving cross-chain token transfers.
-/// @dev Called via delegatecall from pool when Across SpokePool fills deposits.
+/// @dev Called via delegatecall from pool when Across SpokePool or MulticallHandler delivers tokens.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract EAcrossHandler is IEAcrossHandler {
     using SafeCast for uint256;
     using SafeCast for int256;
     using SlotDerivation for bytes32;
+    using TransientSlot for *;
     using EnumerableSet for AddressSet;
     using VirtualBalanceLib for address;
 
     /// @notice Address of the Across SpokePool contract
     address private immutable _acrossSpokePool;
     
+    /// @notice Across MulticallHandler addresses (for multicall-based transfers)
+    address private immutable _acrossHandler;
+    
+    /// @notice Storage slot for temporary balance tracking
+    bytes32 private constant _TEMP_BALANCE_SLOT = bytes32(uint256(keccak256("eacross.temp.balance")) - 1);
+    
+    /// @notice Storage slot for donation lock tracking (boolean)
+    bytes32 private constant _DONATION_LOCK_SLOT = bytes32(uint256(keccak256("eacross.donation.lock")) - 1);
+    
     /// @dev Passed param is expected to be valid - skip validation
-    constructor(address acrossSpokePool) {
+    constructor(address acrossSpokePool, address acrossMulticallHandler) {
         _acrossSpokePool = acrossSpokePool;
+        _acrossHandler = acrossMulticallHandler;
     }
 
-    // TODO: if this modifies state, it must not be directly callable!
+    error DonateTransferFromFailer();
+    error TokenIsNotOwned();
+    error IncorrectETHAmount();
+    error NullAddresS();
+    error CallerTransferAmount();
+    error DonationLock(bool locked);
+    error BalanceUnderflow();
+    error NavManipulationDetected(uint256 expectedNav, uint256 actualNav);
+
     /// @inheritdoc IEAcrossHandler
-    function handleV3AcrossMessage(
-        address tokenReceived,
-        uint256 amount,
-        bytes calldata message
-    ) external override {
-        // verify caller is the Across SpokePool
-        require(msg.sender == _acrossSpokePool, UnauthorizedCaller());
+    function donate(address token, uint256 amount, SourceMessageParams calldata params) external payable override {
+        bool isLocked = _getDonationLock(token);
 
-        // Decode the message - this is internal data, not external contract interaction
-        DestinationMessage memory params = abi.decode(message, (DestinationMessage));
+        // 1 is flag for initializing temp storage.
+        if (amount == 1) {
+            require(!isLocked, DonationLock(isLocked));
+            _setDonationLock(token, true);
 
-        // ensure token is active, otherwise won't be included in nav calculations
-        AddressSet storage set = StorageLib.activeTokensSet();
-        address baseToken = StorageLib.pool().baseToken;
+            _storeTemporaryBalance(token);
 
-        // Unwrap native if requested
-        address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
-        address effectiveToken = tokenReceived;
-        if (params.shouldUnwrap && tokenReceived == wrappedNative) {
-            // interaction with external contract should happen via AUniswap.withdrawWETH9?
-            IWETH9(wrappedNative).withdraw(amount);
-            effectiveToken = address(0); // ETH is represented as address(0)
-        }
-        
-        // For tokens without price feeds, we can revert since escrow setup on source handles refunds properly
-        if (effectiveToken != baseToken && !set.isActive(effectiveToken)) {
-            // Try to add token if it has a price feed
-            if (IEOracle(address(this)).hasPriceFeed(effectiveToken)) {
-                set.addUnique(IEOracle(address(this)), effectiveToken, baseToken);
-            } else {
-                // Token doesn't have price feed - can revert since escrow handles refunds
-                revert TokenWithoutPriceFeed();
-            }
-        }
-        
-        if (params.opType == OpType.Transfer) {
-            // Transfer is NAV-neutral: create negative virtual balance to offset NAV increase
-            _handleTransferMode(effectiveToken, amount, params);
-        } else if (params.opType == OpType.Sync) {
-            // Sync impacts NAV: validate percentage impact using post-transfer pool state
-            // Update NAV first to reflect current state (including received tokens)
+            // Update unitary value for both Sync and Transfer operations
             ISmartPoolActions(address(this)).updateUnitaryValue();
-            NavImpactLib.validateNavImpactTolerance(effectiveToken, amount, params.navTolerance);
+            return;
+        }
+
+        // For actual donation processing
+        require(isLocked, DonationLock(isLocked));
+
+        uint256 currentBalance = token == address(0)
+            ? address(this).balance
+            : IERC20(token).balanceOf(address(this));
+        uint256 storedBalance = _getTemporaryBalance(token);
+
+        // Explicit check: ensure balance didn't decrease (clearer error than underflow)
+        require(currentBalance >= storedBalance, BalanceUnderflow());
+
+        uint256 amountDelta = currentBalance - storedBalance;
+
+        // For bridge transactions, amountDelta will be >= amount due to solver surplus
+        // We use amountDelta for virtual balance (captures full value) 
+        // and amount for validation that we got at least what was expected
+        require(amountDelta >= amount, CallerTransferAmount());
+
+        _clearTemporaryBalance(token);
+        _setDonationLock(token, false); // Reset lock
+
+        address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
+
+        if (token == wrappedNative && params.shouldUnwrapOnDestination) {
+            // amountDelta (actual balance delta) for unwrapping
+            IWETH9(wrappedNative).withdraw(amountDelta);
+            token = address(0);
+        }
+
+        if (params.opType == OpType.Sync) {
+            // validate nav impact on nav updated before the transfer, changing `token` context when unwrapping native
+            require(_isOwnedToken(token), TokenIsNotOwned());
+            NavImpactLib.validateNavImpactTolerance(token, amountDelta, params.navTolerance);
         } else {
-            revert InvalidOpType();
+            // For Transfer: Implement NAV integrity protection
+            // Read NAV from permanent storage (updated in amount==1 call)
+            uint256 expectedNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
+            
+            // Update NAV again and read the new value
+            ISmartPoolActions(address(this)).updateUnitaryValue();
+            uint256 currentNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
+            
+            // Assert NAV unchanged - any donation would be detected here
+            require(currentNav == expectedNav, NavManipulationDetected(expectedNav, currentNav));
+            
+            // Use passed amount for NAV neutrality (net-zero virtual balance)
+            VirtualBalanceLib.adjustVirtualBalance(token, -(amount.toInt256()));
         }
     }
 
-    /// @dev Handles Transfer mode: creates negative virtual balance to offset NAV increase.
-    /// @dev Transfer is NAV-neutral and uses sourceAmount for exact neutrality despite solver fees.
-    function _handleTransferMode(
-        address effectiveToken, 
-        uint256 receivedAmount,
-        DestinationMessage memory params
-    ) private {
-        // Sanity check: sourceAmount should be within 10% of received amount
-        // This protects against bugs or misconfigurations in decimal conversion logic
-        // Note: For very small amounts where solver fees result in 0 outputAmount, this check may fail
-        // TODO: Consider improving tolerance handling for edge cases with small amounts and high fees
-        uint256 tolerance = receivedAmount / 10; // 10% tolerance
-        uint256 lowerBound = receivedAmount > tolerance ? receivedAmount - tolerance : 0;
-        uint256 upperBound = receivedAmount + tolerance;
+    function _getDonationLock(address token) private view returns (bool) {
+        bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
+        return slot.asBoolean().tload();
+    }
+    
+    function _setDonationLock(address token, bool locked) private {
+        bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
+        slot.asBoolean().tstore(locked);
+    }
+
+    function _storeTemporaryBalance(address token) private {
+        uint256 currentBalance = token == address(0)
+            ? address(this).balance
+            : IERC20(token).balanceOf(address(this));
+            
+        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
+        slot.asUint256().tstore(currentBalance);
+    }
+
+    function _clearTemporaryBalance(address token) private {
+        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
+        slot.asUint256().tstore(0);
+    }
+
+    function _getTemporaryBalance(address token) private view returns (uint256) {
+        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
+        return slot.asUint256().tload();
+    }
+
+    /// @dev Checks if a token is owned by the pool.
+    function _isOwnedToken(address token) private view returns (bool) {
+        AddressSet storage activeTokens = StorageLib.activeTokensSet();
+        address baseToken = StorageLib.pool().baseToken;
         
-        require(
-            params.sourceAmount >= lowerBound && params.sourceAmount <= upperBound,
-            SourceAmountMismatch()
-        );
+        // Base token is always owned
+        if (token == baseToken) {
+            return true;
+        }
         
-        // For Transfer: use original source amount for exact NAV neutrality
-        // Source handles all decimal conversions, so sourceAmount is in correct destination decimals
-        uint256 virtualBalanceAmount = params.sourceAmount;
-        
-        // Create negative virtual balance for the effective token (ETH if unwrapped, otherwise received token)
-        VirtualBalanceLib.adjustVirtualBalance(effectiveToken, -(virtualBalanceAmount.toInt256()));
+        // Check if token is in active tokens set
+        return activeTokens.isActive(token);
     }
 }

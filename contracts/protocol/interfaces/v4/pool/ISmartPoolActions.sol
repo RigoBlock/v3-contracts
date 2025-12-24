@@ -55,9 +55,4 @@ interface ISmartPoolActions {
     /// @param approved The approval status.
     /// @return bool True, always.
     function setOperator(address operator, bool approved) external returns (bool);
-
-    /// @notice Allows donations to the pool without affecting NAV.
-    /// @param token The token to donate (or address(0) for native currency).
-    /// @param amount The amount to donate.
-    function donate(address token, uint256 amount) external payable;
 }

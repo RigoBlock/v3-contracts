@@ -26,6 +26,7 @@ import {IERC20} from "../../interfaces/IERC20.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {CrosschainLib} from "../../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
@@ -34,15 +35,21 @@ import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
-import {OpType, DestinationMessage, SourceMessage} from "../../types/Crosschain.sol";
+import {OpType, SourceMessageParams, Call, Instructions} from "../../types/Crosschain.sol";
 import {EscrowFactory} from "../escrow/EscrowFactory.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
+import {IEAcrossHandler} from "./interfaces/IEAcrossHandler.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 
-/// @title AIntents - Allows cross-chain token transfers via Across Protocol.
+// TODO: move to an imported interface
+interface IMulticallHandler {
+    function drainLeftoverTokens(address token, address payable destination) external;
+}
+
+/// @title AIntents - Allows cross-chain token transfers via Across Protocol with adapter synchronization.
 /// @notice This adapter enables Rigoblock smart pools to bridge tokens across chains while maintaining NAV integrity.
-/// @dev This contract ensures virtual balances are managed to offset NAV changes from cross-chain transfers.
+/// @dev Uses synchronized adapter deployment to ensure destination adapters exist before enabling cross-chain features.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
@@ -53,8 +60,21 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using VirtualBalanceLib for address;
 
     IAcrossSpokePool private immutable _acrossSpokePool;
+    
+    /// @notice Maximum allowed nav tolerance in basis points (100% = 10000 bps)
+    uint256 private constant MAX_NAV_TOLERANCE_BPS = 10000;
+    
+    /// @notice Across MulticallHandler addresses
+    address internal constant DEFAULT_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
 
     address private immutable _aIntents;
+    
+    // Custom errors (inherit UnauthorizedCaller from interface)
+    error NavToleranceTooHigh();
+    error AdapterNotDeployedOnDestination();
+    error DestinationPoolNotFound(address poolAddress);
+    error OutputAmountValidationFailed(uint256 expected, uint256 provided, uint256 tolerance);
 
     modifier onlyDelegateCall() {
         require(address(this) != _aIntents, DirectCallNotAllowed());
@@ -74,121 +94,162 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /// @inheritdoc IAIntents
     function depositV3(AcrossParams calldata params) external override nonReentrant onlyDelegateCall {
         // sanity checks
-        // TODO: check if we can safely skip this check. Also maybe use unified error + condition
         require(!params.inputToken.isAddressZero(), NullAddress());
         require(params.exclusiveRelayer.isAddressZero(), NullAddress());
-        
+
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
+
+        // TODO: could use bitmask to assert the destination chainId is supported, so we can revert on
+        // source instead of on destination if it not? although the following token assertion will revert
+        // if new chain's output tokens are not mapped.
 
         // Validate bridgeable token restriction - ensure input and output tokens are compatible
         CrosschainLib.validateBridgeableTokenPair(params.inputToken, params.outputToken);
 
-        // TODO: validate source message to make sure the params are properly formatted, otherwise we could end up
-        // in a scenario where the destination message is not correctly formatted, and the transaction reverts on the
-        // dest chain, while it should have reverted on the source chain (i.e. potential loss of funds).
-        // { opType, navTolerance, sourceNativeAmount, shouldUnwrapOnDestination }
-        SourceMessage memory sourceMsg = abi.decode(params.message, (SourceMessage));
+        // Validate source message parameters to prevent rogue input
+        SourceMessageParams memory sourceMsg = abi.decode(params.message, (SourceMessageParams));
 
-        // TODO: check if we can query tokens + base token in 1 call and reading only exact slots, as we're not writing to storage
+        // Validate nav tolerance is within reasonable limits
+        require(sourceMsg.navTolerance <= MAX_NAV_TOLERANCE_BPS, NavToleranceTooHigh());
+
+        // Validate operation type
+        require(sourceMsg.opType == OpType.Transfer || sourceMsg.opType == OpType.Sync, InvalidOpType());
+
+        // TODO: is this sanity check necessary? this because the transferFrom called by across will revert anyway
+        // if the pool doesn't hold, or if the token is not active, not sure it would be a problem (we allow that
+        // for same chain swaps) - as we only call the inputToken.safeApprove() which does not have impact if it is
+        // a rogue token (won't be able to reenter the call anyway)? Or do we to push the token to active instead?
         if (params.inputToken != StorageLib.pool().baseToken) {
             require(StorageLib.activeTokensSet().isActive(params.inputToken), TokenNotActive());
         }
 
-        // Process message and get encoded result
-        DestinationMessage memory destMsg = _processMessage(
-            params.inputToken,
-            params.outputToken,
-            params.inputAmount,
-            sourceMsg
-        );
-        
+        _validateTokenAmounts(params);
+
         _safeApproveToken(params.inputToken);
-        
-        _executeDeposit(params, sourceMsg, destMsg);
-        
+
+        // Always use multicall handler approach for robust pool existence checking
+        Instructions memory instructions = _buildMulticallInstructions(params, sourceMsg);
+        _executeAcrossDeposit(params, sourceMsg, instructions);
+
         _safeApproveToken(params.inputToken);
     }
 
-    /// @notice Gets the deterministic escrow address for Transfer operations
-    /// @param opType The operation type (only Transfer supported)
-    /// @return escrowAddress The deterministic escrow address
+    /// @inheritdoc IAIntents
     function getEscrowAddress(OpType opType) external view onlyDelegateCall returns (address escrowAddress) {
         return EscrowFactory.getEscrowAddress(address(this), opType);
     }
-    
+
     /*
      * INTERNAL METHODS
      */
-    /// @dev Executes the depositV3 call to avoid stack too deep issues in main function
-    function _executeDeposit(
-        AcrossParams calldata params,
-        SourceMessage memory sourceMsg,
-        DestinationMessage memory destMsg
+
+    /// @dev Validates token amounts on the source chain to ensure output amount matches expected conversion.
+    /// Virtual balance adjustments are handled separately in _executeAcrossDeposit based on opType.
+    function _validateTokenAmounts(AcrossParams calldata params) private pure {
+        // Apply BSC decimal conversion to get exact amount expected on destination
+        uint256 expectedOutputAmount = CrosschainLib.applyBscDecimalConversion(
+            params.inputToken,
+            params.outputToken,
+            params.inputAmount
+        );
+
+        // Validate that provided output amount matches expected (within 1% tolerance)
+        uint256 tolerance = expectedOutputAmount / 100; // 1% tolerance for Across quote differences
+        
+        require(
+            params.outputAmount >= expectedOutputAmount - tolerance &&
+            params.outputAmount <= expectedOutputAmount + tolerance,
+            OutputAmountValidationFailed(expectedOutputAmount, params.outputAmount, tolerance)
+        );
+    }
+
+    function _buildMulticallInstructions(
+        AcrossParams memory params,
+        SourceMessageParams memory sourceMsg
+    ) private view returns (Instructions memory) {
+        Call[] memory calls = new Call[](4);
+
+        // 1. Store pool's current token balance (for delta calculation)
+        calls[0] = Call({
+            target: address(this),
+            callData: abi.encodeWithSelector(
+                IEAcrossHandler.donate.selector,
+                params.outputToken,
+                1, // flag for temporary storing pool balance
+                sourceMsg
+            ),
+            value: 0
+        });
+
+        // 2. Transfer expected amount to pool (no approval needed)
+        calls[1] = Call({
+            target: params.outputToken,
+            callData: abi.encodeWithSelector(IERC20.transfer.selector, params.recipient, params.outputAmount),
+            value: 0
+        });
+
+        // 3. Drain any leftover tokens from MulticallHandler to pool before donating (need correct amount to unwrap)
+        calls[2] = Call({
+            target: _getAcrossHandler(params.destinationChainId),
+            callData: abi.encodeWithSelector(
+                IMulticallHandler.drainLeftoverTokens.selector,
+                params.outputToken,
+                params.recipient
+            ),
+            value: 0
+        });
+
+        // 4. Donate to pool with virtual balance management
+        calls[3] = Call({
+            target: address(this),
+            callData: abi.encodeWithSelector(
+                IEAcrossHandler.donate.selector,
+                params.outputToken,
+                params.outputAmount,
+                sourceMsg
+            ),
+            value: 0
+        });
+        
+        return Instructions({
+            calls: calls,
+            fallbackRecipient: address(0) // Revert on failure
+        });
+    }
+
+    /// @dev Executes deposit via multicall handler
+    function _executeAcrossDeposit(
+        AcrossParams memory params,
+        SourceMessageParams memory sourceMsg,
+        Instructions memory instructions
     ) private {
+        // Handle source-side virtual balance adjustments
+        if (sourceMsg.opType == OpType.Transfer) {
+            EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer);
+            VirtualBalanceLib.adjustVirtualBalance(params.inputToken, params.inputAmount.toInt256());
+        } else if (sourceMsg.opType == OpType.Sync) {
+            NavImpactLib.validateNavImpactTolerance(params.inputToken, params.inputAmount, sourceMsg.navTolerance);
+        }
+
         _acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
-            sourceMsg.opType == OpType.Transfer 
+            sourceMsg.opType == OpType.Transfer
                 ? EscrowFactory.getEscrowAddress(address(this), OpType.Transfer)
-                : address(this), // depositor for refunds
-            address(this),          // recipient - destination chain recipient (always pool)
+                : address(this),
+            _getAcrossHandler(params.destinationChainId), // recipient on destination chain
             params.inputToken,
             params.outputToken,
             params.inputAmount,
             params.outputAmount,
             params.destinationChainId,
-            params.exclusiveRelayer,
+            address(0),
             params.quoteTimestamp,
             uint32(block.timestamp + _acrossSpokePool.fillDeadlineBuffer()),
             params.exclusivityDeadline,
-            abi.encode(destMsg)
+            abi.encode(instructions)
         );
     }
-    
-    function _processMessage(
-        address inputToken,
-        address outputToken,
-        uint256 inputAmount,
-        SourceMessage memory message
-    ) private returns (DestinationMessage memory) {
-        if (message.opType == OpType.Transfer) {
-            // Deploy escrow and adjust virtual balance for Transfer operations (NAV neutral)
-            EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer);
-            _adjustVirtualBalanceForTransfer(inputToken, inputAmount);
-        } else if (message.opType == OpType.Sync) {
-            // Sync operations impact NAV: validate tolerance before transfer
-            NavImpactLib.validateNavImpactTolerance(inputToken, inputAmount, message.navTolerance);
-        } else {
-            // Includes OpType.Unknown and any other invalid values
-            revert InvalidOpType();
-        }
 
-        //ISmartPoolActions(address(this)).updateUnitaryValue();
-
-        // Apply BSC decimal conversion for USDC/USDT if needed (both directions)
-        inputAmount = CrosschainLib.applyBscDecimalConversion(inputToken, outputToken, inputAmount);
-
-        // navTolerance is a client-side input - pass through without modification
-        return DestinationMessage({
-            opType: message.opType,
-            navTolerance: message.navTolerance, // Pass client tolerance without imposing extra limits
-            shouldUnwrap: message.shouldUnwrapOnDestination,
-            sourceAmount: inputAmount  // Decimal-adjusted amount for exact cross-chain offsetting
-        });
-    }
-    
-    // TODO: check if should create virtual balance for actual token instead instead of base token
-    /// @dev Adjusts virtual balance for Transfer mode only - uses per-token virtual balances.
-    /// @dev Only called for Transfer operations to maintain NAV neutrality.
-    /// @dev Source adds positive virtual balance, destination subtracts same amount for exact NAV neutrality.
-    function _adjustVirtualBalanceForTransfer(address inputToken, uint256 inputAmount) private {
-        // Create virtual balance for the actual token being transferred
-        // This amount is passed to destination via sourceAmount field for exact offsetting
-        VirtualBalanceLib.adjustVirtualBalance(inputToken, inputAmount.toInt256());
-    }
-
-    /*
-     * INTERNAL METHODS
-     */
     /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.
     function _safeApproveToken(address token) private {
         if (token.isAddressZero()) return; // Skip if native currency
@@ -200,5 +261,20 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             // Approve max amount
             token.safeApprove(address(_acrossSpokePool), type(uint256).max);
         }
+    }
+
+    /// @dev Returns multicall handler address for given chain
+    /// @dev As we map source and destination token, we will not use a non-existing handler on new chains.
+    // TODO: Requires careful handling when supporting new chains, should revert if chain is not supported.
+    // Could use bitmask flags of supported chains to assert that, so that when we add new chains, this will
+    // revert if we do not modify the bitmask, which will prompt updating this method with the newly supported chain.
+    function _getAcrossHandler(uint256 chainId) private pure returns (address) {
+        // BSC uses different multicall handler
+        if (chainId == 56) { // BSC
+            return BSC_MULTICALL_HANDLER;
+        }
+
+        // Most chains use the standard multicall handler
+        return DEFAULT_MULTICALL_HANDLER;
     }
 }

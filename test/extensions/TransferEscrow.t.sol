@@ -227,17 +227,30 @@ contract TransferEscrowWorkingTest is Test {
 contract MockPoolForEscrow {
     using SafeTransferLib for address;
     
-    /// @notice Mock donate function that accepts tokens
+    // Import types we need
+    struct SourceMessageParams {
+        uint8 opType;
+        uint256 navTolerance;
+        uint256 sourceNativeAmount;
+        bool shouldUnwrapOnDestination;
+    }
+    
+    /// @notice Mock donate function that accepts tokens - updated to match EAcrossHandler interface
     /// @param token Token to donate
     /// @param amount Amount to donate
-    function donate(address token, uint256 amount) external payable {
-        if (token == address(0)) {
-            // For ETH donations, just accept the ETH
-            require(msg.value == amount, "ETH amount mismatch");
-        } else {
-            // For ERC20 donations, transfer from sender
-            token.safeTransferFrom(msg.sender, address(this), amount);
-        }
+    /// @param params Source message parameters (ignored in mock)
+    function donate(address token, uint256 amount, SourceMessageParams calldata params) external payable {
+        // In the real EAcrossHandler, donate just updates NAV accounting
+        // It doesn't transfer tokens - they are already transferred separately
+        // So this mock just accepts the call without doing any token transfers
+        
+        // The real TransferEscrow flow:
+        // 1. donate(token, 1, params) - pre-donation NAV update
+        // 2. token.safeTransfer(pool, balance) - actual token transfer
+        // 3. donate(token, balance, params) - post-donation NAV update
+        
+        // Mock just accepts the donation call
+        (token, amount, params); // Silence unused parameter warnings
     }
     
     /// @notice Allow contract to receive ETH

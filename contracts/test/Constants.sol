@@ -72,6 +72,20 @@ library Constants {
     address internal constant BASE_SPOKE_POOL = 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64;
     
     /*//////////////////////////////////////////////////////////////
+                        ACROSS MULTICALL HANDLERS
+    //////////////////////////////////////////////////////////////*/
+    
+    /// @notice Across Protocol Multicall Handler (standard address across chains)
+    address internal constant ETH_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant ARB_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant OPT_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant BASE_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant POLY_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant UNI_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
+    
+    
+    /*//////////////////////////////////////////////////////////////
                             UNISWAP V4 
     //////////////////////////////////////////////////////////////*/
     

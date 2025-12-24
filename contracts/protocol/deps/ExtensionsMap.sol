@@ -46,7 +46,7 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EORACLE_TWAP_SELECTOR = IEOracle.getTwap.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
-    bytes4 private constant _EACROSS_HANDLE_MESSAGE_SELECTOR = IEAcrossHandler.handleV3AcrossMessage.selector;
+    bytes4 private constant _EACROSS_DONATE_SELECTOR = IEAcrossHandler.donate.selector;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eApps;
@@ -93,7 +93,7 @@ contract ExtensionsMap is IExtensionsMap {
                 type(IEOracle).interfaceId
         );
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
-        assert(_EACROSS_HANDLE_MESSAGE_SELECTOR == type(IEAcrossHandler).interfaceId);
+        assert(_EACROSS_DONATE_SELECTOR == type(IEAcrossHandler).interfaceId);
     }
 
     // TODO: check allow delegatecall is msg.sender == acrossSpokePool in EAcrossIntents
@@ -124,7 +124,7 @@ contract ExtensionsMap is IExtensionsMap {
             shouldDelegatecall = msg.sender == StorageLib.pool().owner;
         } else if (selector == _EUPGRADE_GET_BEACON_SELECTOR) {
             extension = eUpgrade;
-        } else if (selector == _EACROSS_HANDLE_MESSAGE_SELECTOR) {
+        } else if (selector == _EACROSS_DONATE_SELECTOR) {
             extension = eAcrossHandler;
             shouldDelegatecall = true;
         } else {
