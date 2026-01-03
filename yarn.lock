@@ -9403,10 +9403,10 @@ solc@0.8.26:
     semver "^5.5.0"
     tmp "0.0.33"
 
-solc@0.8.31:
-  version "0.8.31"
-  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.31.tgz#4b3e6e2ef790758f34e952442c746e3828fbee44"
-  integrity sha512-wpccgDgu/aE/rRcF2F/LeN+4knK0734XTcjppyaQOticjYd/Giq1AJE3XPQZKEViAsY3sNaFKl7QpMRYrK35vg==
+solc@0.8.33:
+  version "0.8.33"
+  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.33.tgz#f13bf54085ffb63186fb4d774b32e1861eaf5ad9"
+  integrity sha512-qPdHuAeg+DccqYz4Mq4grc7lOdgLA8wB8meCrMHcVXj70noKZhfAMzOCcOD/4RODZnn+sV3V6fWEyUkeVaBPVQ==
   dependencies:
     command-exists "^1.2.8"
     commander "^8.1.0"
