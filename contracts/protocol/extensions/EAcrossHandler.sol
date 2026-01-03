@@ -130,16 +130,16 @@ contract EAcrossHandler is IEAcrossHandler {
             // Read NAV from permanent storage (updated in amount==1 call)
             uint256 expectedNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
             
-            // Step 1: Apply virtual balance adjustment for full received amount
             VirtualBalanceLib.adjustVirtualBalance(token, -(amountDelta.toInt256()));
             
-            // Step 2: Update NAV and assert unchanged - validates legitimate external transfer
             ISmartPoolActions(address(this)).updateUnitaryValue();
             uint256 currentNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
             require(currentNav == expectedNav, NavManipulationDetected(expectedNav, currentNav));
             
-            // Step 3: Adjust back by expected amount, leaving only surplus offset
-            VirtualBalanceLib.adjustVirtualBalance(token, (amountDelta - amount).toInt256());
+            // adjust by surplus if positive
+            if (amountDelta > amount) {
+                VirtualBalanceLib.adjustVirtualBalance(token, (amountDelta - amount).toInt256());
+            }
         }
     }
 
