@@ -276,7 +276,7 @@ contract MockNavImpactPool {
         uint256 amount,
         uint256 toleranceBps
     ) external view {
-        NavImpactLib.validateNavImpactTolerance(token, amount, toleranceBps);
+        NavImpactLib.validateNavImpact(token, amount, toleranceBps);
     }
     
     // Mock ISmartPoolState.getPoolTokens()

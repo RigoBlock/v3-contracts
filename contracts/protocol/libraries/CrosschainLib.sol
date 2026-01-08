@@ -83,4 +83,26 @@ library CrosschainLib {
         // No BSC involved - no conversion needed
         return amount;
     }
+
+    /// @notice Check if a token is allowed for cross-chain operations on the current chain
+    /// @param token The token address to check
+    /// @return True if the token is allowed for cross-chain operations
+    function isAllowedCrosschainToken(address token) internal view returns (bool) {
+        if (block.chainid == 1) { // Ethereum
+            return token == CrosschainTokens.ETH_USDC || token == CrosschainTokens.ETH_USDT || token == CrosschainTokens.ETH_WETH;
+        } else if (block.chainid == 42161) { // Arbitrum  
+            return token == CrosschainTokens.ARB_USDC || token == CrosschainTokens.ARB_USDT || token == CrosschainTokens.ARB_WETH;
+        } else if (block.chainid == 10) { // Optimism
+            return token == CrosschainTokens.OPT_USDC || token == CrosschainTokens.OPT_USDT || token == CrosschainTokens.OPT_WETH;
+        } else if (block.chainid == 8453) { // Base
+            return token == CrosschainTokens.BASE_USDC || token == CrosschainTokens.BASE_WETH; // No USDT on Base
+        } else if (block.chainid == 137) { // Polygon
+            return token == CrosschainTokens.POLY_USDC || token == CrosschainTokens.POLY_USDT || token == CrosschainTokens.POLY_WETH;
+        } else if (block.chainid == 56) { // BSC
+            return token == CrosschainTokens.BSC_USDC || token == CrosschainTokens.BSC_USDT || token == CrosschainTokens.BSC_WETH;
+        } else if (block.chainid == 1301) { // Unichain
+            return token == CrosschainTokens.UNI_USDC || token == CrosschainTokens.UNI_WETH;
+        }
+        return false;
+    }
 }

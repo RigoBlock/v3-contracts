@@ -22,6 +22,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using SlotDerivation for bytes32;
     using TransientStorage for address;
     using SafeCast for uint256;
+    using SafeCast for int256;
 
     error BaseTokenPriceFeedError();
 
@@ -41,14 +42,21 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // first mint skips nav calculation
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
-        } else if (components.totalSupply == 0) {
-            return components;
         } else {
+            // Calculate effective supply (actual + virtual) - both systems can coexist
+            uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
+            uint256 effectiveSupply = components.totalSupply + virtualSupply;
+            
+            if (effectiveSupply == 0) {
+                // No supply anywhere - return stored NAV
+                return components;
+            }
+            
             uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
 
             if (totalPoolValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
-                components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / components.totalSupply;
+                components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / effectiveSupply;
             } else {
                 return components;
             }

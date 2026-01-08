@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {SourceMessageParams} from "../../../types/Crosschain.sol";
+import {DestinationMessageParams} from "../../../types/Crosschain.sol";
 
 /// @title EAcrossHandler Interface - Handles incoming cross-chain transfers
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -17,5 +17,5 @@ interface IEAcrossHandler {
     /// @param token The token received on this chain.
     /// @param amount The amount received.
     /// @param params The message params from the source calls sent to the across multicall handler.
-    function donate(address token, uint256 amount, SourceMessageParams calldata params) external payable;
+    function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable;
 }

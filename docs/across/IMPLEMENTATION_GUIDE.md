@@ -40,86 +40,105 @@ This document consolidates all aspects of the Across bridge integration for Rigo
 
 ### Message Types
 
-The integration supports two transfer modes via encoded message:
+The integration supports two operation modes via encoded message:
 
-#### Type 1: Transfer (Default)
-- Source chain nav decreases
-- Destination chain nav increases
-- Virtual balances offset nav impact
-- Use case: Moving assets between chains
+#### Type 1: Transfer (OpType.Transfer)
+- Source chain NAV made neutral via virtual adjustments
+- Destination chain NAV made neutral via virtual adjustments
+- Bridge fees reduce global NAV (real economic cost)
+- Use case: Moving assets between chains without affecting NAV
 
-#### Type 2: Sync
-- Nav impact not offset by virtual balances
-- Syncs nav between chains
-- Requires delta tracking for chains
-- Use case: Equalizing performance across chains
-- The first Sync operation is treated as Transfer, because nav delta has not been initialized yet
+#### Type 2: Sync (OpType.Sync)
+- No virtual adjustments on either chain
+- NAV changes allowed (donations, rebalancing)
+- NavImpactLib validates NAV tolerance on source
+- Destination validates NAV is within expected range
+- Use case: Donations, performance transfers, allowing solver surplus to benefit holders
 
 ---
 
 ## Implementation Details
 
-### Transfer Flow (Type 1)
+### Transfer Flow (OpType.Transfer)
 
 **Source Chain (AIntents.depositV3):**
 1. Validate inputs (amount, token, destination chain)
 2. Wrap native currency if needed
 3. Approve token to Across SpokePool
-4. Create positive virtual balance (nav-neutral)
-5. Call Across depositV3 with encoded message
+4. Adjust virtual balances/supply (NAV-neutral)
+5. Call Across depositV3 with encoded multicall instructions
 6. Emit CrossChainTransfer event
 
-**Destination Chain (EAcrossHandler.handleV3AcrossMessage):**
+**Destination Chain (EAcrossHandler.handleV3AcrossMessage → donate):**
 1. Verify caller is Across SpokePool
 2. Decode message and validate type
-3. For Transfer: Create negative virtual balance
-4. Verify token has price feed
-5. Transfer any surplus to pool owner
+3. Store NAV baseline in transient storage
+4. For Transfer mode: Apply virtual balance/supply adjustments (NAV-neutral)
+5. Verify token has price feed
+6. Validate final NAV matches expected (stored NAV + solver surplus)
 
-### Rebalance Flow (Type 2)
+### Sync Flow (OpType.Sync)
 
 **Source Chain:**
-1. Calculate nav before transfer
-2. Encode nav and rebalance params in message
-3. Execute transfer (nav is affected)
+1. Calculate NAV before transfer
+2. Validate NAV impact is within tolerance (NavImpactLib)
+3. Encode Sync mode in message
+4. Execute transfer (NAV decreases naturally)
 
 **Destination Chain:**
-1. Calculate nav after receiving tokens
-2. Compare with source nav (adjusted for decimals)
-3. Assert nav within tolerance range
-4. Record delta if first sync between chains
+1. Store NAV baseline in transient storage
+2. No virtual adjustments (allow NAV to increase)
+3. Validate NAV is within tolerance of expected
+4. Solver surplus increases NAV (benefits holders)
 
-### Virtual Balance Management
+### Virtual Balance & Supply Management
 
-Virtual balances ensure nav neutrality for transfers:
+Virtual balances and virtual supply ensure NAV integrity for transfers:
 
+**Virtual Supply** (global cross-chain share tracking):
 ```solidity
-// Source chain: Add positive virtual balance
-virtualBalance[baseToken] += convertedAmount;
-
-// Destination chain: Add negative virtual balance  
-virtualBalance[baseToken] -= convertedAmount;
+// Denominated in pool token units (shares)
+// Tracks pool tokens that exist on other chains
+int256 virtualSupply;
 ```
 
-Stored in pool storage at slot: `VIRTUAL_BALANCE_SLOT_PREFIX.{chainId}.{token}`
-
-### Nav Synchronization
-
-**Problem:** Vaults deployed at different times have different initial navs.
-
-**Solution:** Delta tracking per chain pair
-
+**Virtual Balances** (per-token NAV offsets):
 ```solidity
-// Storage: chainNavDelta[destinationChainId]
-// First rebalance records delta
-if (chainNavDelta[destChainId] == 0) {
-    chainNavDelta[destChainId] = sourceNav - destNav;
+// Denominated in token-specific units
+// Offsets physical balance changes for NAV neutrality
+mapping(address token => int256 virtualBalance);
+```
+
+**Source Chain (Transfer Mode)**:
+```solidity
+// Try to burn virtual supply first (if exists)
+if (virtualSupply >= sharesToBurn) {
+    adjustVirtualSupply(-sharesToBurn);
+} else if (virtualSupply > 0) {
+    // Burn all virtual supply, use virtual balance for remainder
+    adjustVirtualSupply(-virtualSupply);
+    adjustVirtualBalance(token, remainderInTokenUnits);
+} else {
+    // No virtual supply - use virtual balance entirely
+    adjustVirtualBalance(token, scaledOutputAmount);
+}
+```
+
+**Destination Chain (Transfer Mode)**:
+```solidity
+// Reduce positive virtual balances first (tokens returning)
+if (virtualBalance > 0) {
+    adjustVirtualBalance(token, -min(amount, virtualBalance));
 }
 
-// Subsequent rebalances use delta
-uint256 expectedNav = destNav + chainNavDelta[destChainId];
-require(sourceNav within tolerance of expectedNav);
+// Increase virtual supply for remaining amount
+if (remainingAmount > 0) {
+    uint256 shares = convertTokensToShares(remainingAmount, storedNav);
+    adjustVirtualSupply(shares);
+}
 ```
+
+Stored in pool storage using ERC-7201 namespaced slots with dot notation.
 
 ---
 

@@ -18,8 +18,8 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_APPLICATIONS_SLOT == bytes32(uint256(keccak256("pool.proxy.applications")) - 1));
         assert(_OPERATOR_BOOLEAN_SLOT == bytes32(uint256(keccak256("pool.proxy.operator.boolean")) - 1));
         assert(_ACCEPTED_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.accepted.tokens")) - 1));
-        // Cross-chain integration storage (ERC-7201 namespaced)
         assert(_VIRTUAL_BALANCES_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1));
+        assert(_VIRTUAL_SUPPLY_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1));
     }
 
     struct VirtualBalances {

@@ -23,7 +23,7 @@ import {IEAcrossHandler} from "../../extensions/adapters/interfaces/IEAcrossHand
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
-import {OpType, SourceMessageParams} from "../../types/Crosschain.sol";
+import {DestinationMessageParams, OpType} from "../../types/Crosschain.sol";
 
 // TODO: check if should move TransferEscrow our of the extensions folder, as it's not an extension
 /// @title TransferEscrow - Escrow contract for Transfer and Sync operation refunds
@@ -63,7 +63,7 @@ contract TransferEscrow {
 
         require(balance > 0, InvalidAmount());
         
-        SourceMessageParams memory params;
+        DestinationMessageParams memory params;
         params.opType = OpType.Transfer;
 
         // Store balance before transfer

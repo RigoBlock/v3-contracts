@@ -32,7 +32,8 @@ import {TransientSlot} from "../libraries/TransientSlot.sol";
 import {TransientStorage} from "../libraries/TransientStorage.sol";
 import {VirtualBalanceLib} from "../libraries/VirtualBalanceLib.sol";
 import {NavImpactLib} from "../libraries/NavImpactLib.sol";
-import {OpType, SourceMessageParams} from "../types/Crosschain.sol";
+import {CrosschainLib} from "../libraries/CrosschainLib.sol";
+import {DestinationMessageParams, OpType} from "../types/Crosschain.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
 
@@ -48,18 +49,13 @@ contract EAcrossHandler is IEAcrossHandler {
     using TransientSlot for *;
     using EnumerableSet for AddressSet;
     using VirtualBalanceLib for address;
+    using TransientStorage for address;
 
     /// @notice Address of the Across SpokePool contract
     address private immutable _acrossSpokePool;
     
     /// @notice Across MulticallHandler addresses (for multicall-based transfers)
     address private immutable _acrossHandler;
-    
-    /// @notice Storage slot for temporary balance tracking
-    bytes32 private constant _TEMP_BALANCE_SLOT = bytes32(uint256(keccak256("eacross.temp.balance")) - 1);
-    
-    /// @notice Storage slot for donation lock tracking (boolean)
-    bytes32 private constant _DONATION_LOCK_SLOT = bytes32(uint256(keccak256("eacross.donation.lock")) - 1);
     
     /// @dev Passed param is expected to be valid - skip validation
     constructor(address acrossSpokePool, address acrossMulticallHandler) {
@@ -77,112 +73,138 @@ contract EAcrossHandler is IEAcrossHandler {
     error NavManipulationDetected(uint256 expectedNav, uint256 actualNav);
 
     /// @inheritdoc IEAcrossHandler
-    function donate(address token, uint256 amount, SourceMessageParams calldata params) external payable override {
-        bool isLocked = _getDonationLock(token);
+    function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable override {
+        bool isLocked = token.getDonationLock();
+        
+        uint256 balance = token == address(0)
+            ? address(this).balance
+            : IERC20(token).balanceOf(address(this));
 
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
-            _setDonationLock(token, true);
-
-            _storeTemporaryBalance(token);
+            token.setDonationLock(true);
+            token.storeTemporaryBalance(balance);
 
             // Update unitary value for both Sync and Transfer operations
             ISmartPoolActions(address(this)).updateUnitaryValue();
+            
+            // Store NAV for later manipulation check
+            uint256 currentNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
+            token.storeNav(currentNav);
             return;
         }
 
         // For actual donation processing
         require(isLocked, DonationLock(isLocked));
 
-        uint256 currentBalance = token == address(0)
-            ? address(this).balance
-            : IERC20(token).balanceOf(address(this));
-        uint256 storedBalance = _getTemporaryBalance(token);
+        uint256 storedBalance = token.getTemporaryBalance();
 
-        // Explicit check: ensure balance didn't decrease (clearer error than underflow)
-        require(currentBalance >= storedBalance, BalanceUnderflow());
+        // we must clear before modifying wrapped native token to native currency
+        token.clearTemporaryBalance();
 
-        uint256 amountDelta = currentBalance - storedBalance;
+        // ensure balance didn't decrease
+        require(balance >= storedBalance, BalanceUnderflow());
+
+        uint256 amountDelta = balance - storedBalance;
 
         // For bridge transactions, amountDelta will be >= amount due to solver surplus
         // We use amountDelta for virtual balance (captures full value) 
         // and amount for validation that we got at least what was expected
         require(amountDelta >= amount, CallerTransferAmount());
 
-        _clearTemporaryBalance(token);
-        _setDonationLock(token, false); // Reset lock
-
         address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
 
-        if (token == wrappedNative && params.shouldUnwrapOnDestination) {
+        if (token == wrappedNative && params.shouldUnwrapNative) {
             // amountDelta (actual balance delta) for unwrapping
             IWETH9(wrappedNative).withdraw(amountDelta);
             token = address(0);
         }
 
-        if (params.opType == OpType.Sync) {
-            // validate nav impact on nav updated before the transfer, changing `token` context when unwrapping native
-            require(_isOwnedToken(token), TokenIsNotOwned());
-            NavImpactLib.validateNavImpactTolerance(token, amountDelta, params.navTolerance);
-        } else {
-            // For Transfer: Implement NAV integrity protection
-            // Read NAV from permanent storage (updated in amount==1 call)
-            uint256 expectedNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
-            
-            VirtualBalanceLib.adjustVirtualBalance(token, -(amountDelta.toInt256()));
-            
-            ISmartPoolActions(address(this)).updateUnitaryValue();
-            uint256 currentNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
-            require(currentNav == expectedNav, NavManipulationDetected(expectedNav, currentNav));
-            
-            // adjust by surplus if positive
-            if (amountDelta > amount) {
-                VirtualBalanceLib.adjustVirtualBalance(token, (amountDelta - amount).toInt256());
-            }
+        // Only allow tokens from our cross-chain whitelist
+        require(CrosschainLib.isAllowedCrosschainToken(token), CrosschainLib.UnsupportedCrossChainToken());
+        
+        // If token not already owned, activate it (addUnique checks price feed requirement)
+        if (!StorageLib.isOwnedToken(token)) {
+            StorageLib.activeTokensSet().addUnique(
+                IEOracle(address(this)), 
+                token, 
+                StorageLib.pool().baseToken
+            );
         }
-    }
 
-    function _getDonationLock(address token) private view returns (bool) {
-        bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
-        return slot.asBoolean().tload();
+        if (params.opType == OpType.Transfer) {
+            _handleTransferMode(token, amount, amountDelta);
+        } else if (params.opType != OpType.Sync) {
+            revert InvalidOpType();
+        }
+
+        // reset lock
+        token.setDonationLock(false);
     }
     
-    function _setDonationLock(address token, bool locked) private {
-        bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
-        slot.asBoolean().tstore(locked);
-    }
-
-    function _storeTemporaryBalance(address token) private {
-        uint256 currentBalance = token == address(0)
-            ? address(this).balance
-            : IERC20(token).balanceOf(address(this));
-            
-        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
-        slot.asUint256().tstore(currentBalance);
-    }
-
-    function _clearTemporaryBalance(address token) private {
-        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
-        slot.asUint256().tstore(0);
-    }
-
-    function _getTemporaryBalance(address token) private view returns (uint256) {
-        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
-        return slot.asUint256().tload();
-    }
-
-    /// @dev Checks if a token is owned by the pool.
-    function _isOwnedToken(address token) private view returns (bool) {
-        AddressSet storage activeTokens = StorageLib.activeTokensSet();
+    function _handleTransferMode(address token, uint256 amount, uint256 amountDelta) private {
+        // Use stored NAV from initialization for all calculations
+        uint256 storedNav = token.getStoredNav();
+        uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
         
-        // Base token is always owned
-        if (token == baseToken) {
-            return true;
+        // Check if positive virtual balances exist for this token
+        int256 currentVirtualBalance = VirtualBalanceLib.getVirtualBalance(token);
+        uint256 remainingAmount = amount;
+        
+        if (currentVirtualBalance > 0) {
+            // Reduce existing positive virtual balance (tokens coming back to this chain)
+            uint256 virtualBalanceUint = currentVirtualBalance.toUint256();
+            if (virtualBalanceUint >= remainingAmount) {
+                // Sufficient virtual balance to cover net transfer amount
+                VirtualBalanceLib.adjustVirtualBalance(token, -(remainingAmount.toInt256()));
+                remainingAmount = 0; // No virtual supply increase needed
+            } else {
+                // Partial reduction of virtual balance, then increase virtual supply for remainder
+                VirtualBalanceLib.adjustVirtualBalance(token, -currentVirtualBalance); // Zero it out
+                remainingAmount = remainingAmount - virtualBalanceUint;
+            }
         }
         
-        // Check if token is in active tokens set
-        return activeTokens.isActive(token);
+        // Increase virtual supply if there's remaining amount (cross-chain representation)
+        if (remainingAmount > 0) {
+            uint256 baseValue = IEOracle(address(this)).convertTokenAmount(
+                token,
+                remainingAmount.toInt256(),
+                baseToken
+            ).toUint256();
+            
+            // shares = baseValue / storedNav (in pool token units)
+            uint256 virtualSupplyIncrease = (baseValue * (10 ** poolDecimals)) / storedNav;
+            
+            VirtualBalanceLib.adjustVirtualSupply(virtualSupplyIncrease.toInt256());
+        }
+        
+        // CRITICAL: Validate NAV after virtual adjustments 
+        // Transfer mode should be NAV-neutral except for surplus from solver
+        
+        // Update NAV to reflect received tokens before validation
+        ISmartPoolActions(address(this)).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        uint256 finalNav = poolTokens.unitaryValue;
+        uint256 expectedNav = storedNav;
+        
+        if (amountDelta > amount) {
+            // Surplus exists (solver kept some value on destination) - this increases NAV
+            uint256 surplusBaseValue = IEOracle(address(this)).convertTokenAmount(
+                token,
+                (amountDelta - amount).toInt256(),
+                baseToken
+            ).toUint256();
+            
+            // Calculate expected NAV increase: surplusValue / effectiveSupply
+            uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
+            uint256 effectiveSupply = poolTokens.totalSupply + virtualSupply;
+            uint256 expectedNavIncrease = (surplusBaseValue * (10 ** poolDecimals)) / effectiveSupply;
+            expectedNav = storedNav + expectedNavIncrease;
+        }
+        
+        require(finalNav == expectedNav, NavManipulationDetected(expectedNav, finalNav));
     }
 }

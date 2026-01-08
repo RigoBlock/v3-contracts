@@ -10,11 +10,12 @@ import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.so
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
+import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
 import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
-import {OpType, DestinationMessage, SourceMessageParams, Call, Instructions} from "../../contracts/protocol/types/Crosschain.sol";
+import {OpType, DestinationMessageParams, SourceMessageParams, Call, Instructions} from "../../contracts/protocol/types/Crosschain.sol";
 import {IMinimumVersion} from "../../contracts/protocol/extensions/adapters/interfaces/IMinimumVersion.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
@@ -24,12 +25,6 @@ import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.so
 /// @notice Interface for Across MulticallHandler contract
 /// @dev This matches the actual Across Protocol MulticallHandler interface
 interface IMulticallHandler {
-    struct Call {
-        address target;
-        bytes callData;
-        uint256 value;
-    }
-
     error CallReverted(uint256 index, Call[] calls);
     function handleV3AcrossMessage(address token, uint256, address, bytes memory message) external;
     function drainLeftoverTokens(address token, address payable destination) external;
@@ -115,9 +110,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     
     /// @notice Test AIntents deployment and initialization
     function test_AIntents_DeploymentAndImmutables() public view {
-        // Use pool from fixture - no need for separate instances
-        ISmartPool poolInstance = ISmartPool(payable(pool()));
-        
         // Verify deployment
         assertTrue(address(ethereum.aIntentsAdapter) != address(0), "AIntents should be deployed");
         assertTrue(address(pool()) != address(0), "Pool should be deployed");
@@ -309,8 +301,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     
     /// @notice Test token conversion with real oracle
     function test_TokenConversion_RealOracle() public view {
-        ISmartPool poolInstance = ISmartPool(payable(pool()));
-        
         // Test USDC to USDC conversion (should be 1:1)
         int256 usdcToUsdc = IEOracle(address(pool())).convertTokenAmount(
             Constants.ETH_USDC,
@@ -335,8 +325,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     
     /// @notice Test parameter validation in depositV3
     function test_DepositV3_ParameterValidation() public {
-        ISmartPool poolInstance = ISmartPool(payable(pool()));
-        
         // Test null address rejection
         IAIntents.AcrossParams memory invalidParams = IAIntents.AcrossParams({
             depositor: user,
@@ -419,8 +407,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     
     /// @notice Test complete workflow without any mocks
     function test_CompleteWorkflow_NoMocksRequired() public {
-        ISmartPool poolInstance = ISmartPool(payable(pool()));
-        
         // 1. Verify pool is properly funded
         uint256 poolBalance = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
         assertTrue(poolBalance > 0, "Pool should be funded");
@@ -757,6 +743,222 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Cross-chain transfer with handler - Transfer mode NAV neutrality working correctly!");
     }
 
+    /// @notice Test Transfer mode with solver surplus (amountDelta > amount)
+    /// @dev This tests that the NAV increase from surplus is correctly calculated and validated
+    function test_IntegrationFork_CrossChain_TransferWithSurplus() public {
+        uint256 transferAmount = 1000e6; // 1000 USDC expected
+        uint256 surplusAmount = 50e6;    // 50 USDC surplus (solver keeps 5%)
+        uint256 totalReceived = transferAmount + surplusAmount; // 1050 USDC actually received
+
+        // Fund the pool with some USDC for the test
+        deal(Constants.ETH_USDC, address(pool()), transferAmount * 2);
+
+        SourceMessageParams memory sourceParams = SourceMessageParams({
+            opType: OpType.Transfer,
+            navTolerance: TOLERANCE_BPS,
+            shouldUnwrapOnDestination: false,
+            sourceNativeAmount: 0
+        });
+
+        // 1. Prepare transfer on source chain (Ethereum)
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount, // Expect 1000 USDC
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(sourceParams)
+        });
+        
+        // Give poolOwner the tokens
+        deal(Constants.ETH_USDC, poolOwner, transferAmount);
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
+        // 2. Simulate cross-chain message on Base with surplus
+        vm.selectFork(baseForkId);
+        
+        // Capture initial NAV before surplus
+        ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(pool()).getPoolTokens();
+        uint256 initialNav = initialTokens.unitaryValue;
+
+        Instructions memory instructions = buildTestInstructions(
+            params.outputToken,
+            pool(),
+            params.outputAmount, // Still pass expected amount (1000 USDC)
+            sourceParams
+        );
+
+        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
+
+        // Verify amounts: totalReceived > transferAmount (surplus exists)
+        assertGt(totalReceived, transferAmount, "Total received should be greater than transfer amount");
+        
+        // Fund with MORE than expected (surplus scenario)
+        deal(Constants.BASE_USDC, multicallHandler, totalReceived);
+
+        // Handler processes the cross-chain message
+        // The donate function will calculate:
+        // - amountDelta = totalReceived (1050) - stored balance (0) = 1050
+        // - amount = transferAmount (1000)
+        // - surplus = 50 USDC
+        // Expected behavior: NAV should increase by (50 USDC / effectiveSupply)
+        vm.prank(user);
+        IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+            Constants.BASE_USDC,
+            transferAmount, // amount parameter (what pool expects)
+            user,
+            abi.encode(instructions)
+        );
+        
+        // Verify NAV increased due to surplus
+        ISmartPoolState.PoolTokens memory finalTokens = ISmartPoolState(pool()).getPoolTokens();
+        uint256 finalNav = finalTokens.unitaryValue;
+        assertGt(finalNav, initialNav, "NAV should increase due to surplus");
+
+        console2.log("Cross-chain transfer with surplus - NAV increase correctly calculated and validated!");
+        console2.log("Initial NAV:", initialNav);
+        console2.log("Final NAV:", finalNav);
+        console2.log("Surplus amount:", surplusAmount);
+    }
+
+    /// @notice Test that NavManipulationDetected is triggered when NAV is manipulated between unlock and execute
+    /// @dev This tests the actual NavManipulationDetected error by:
+    /// 1. Starting cross-chain transfer (creates virtual supply offset)
+    /// 2. Handler initializes donation (stores NAV baseline)
+    /// 3. Manipulate pool NAV by adding WETH (different asset)
+    /// 4. Handler executes donate - should detect NAV mismatch and revert
+    function test_IntegrationFork_CrossChain_NavManipulationDetected() public {
+        uint256 transferAmount = 1000e6; // 1000 USDC expected
+
+        // Fund the pool with some USDC for the test
+        deal(Constants.ETH_USDC, address(pool()), transferAmount * 2);
+
+        SourceMessageParams memory sourceParams = SourceMessageParams({
+            opType: OpType.Transfer,
+            navTolerance: TOLERANCE_BPS,
+            shouldUnwrapOnDestination: false,
+            sourceNativeAmount: 0
+        });
+
+        // 1. Prepare transfer on source chain (Ethereum)
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(sourceParams)
+        });
+        
+        // Give poolOwner the tokens
+        deal(Constants.ETH_USDC, poolOwner, transferAmount);
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
+        // 2. Switch to destination chain (Base)
+        vm.selectFork(baseForkId);
+
+        Instructions memory instructions = buildTestInstructions(
+            params.outputToken,
+            pool(),
+            params.outputAmount,
+            sourceParams
+        );
+
+        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
+
+        // Fund handler with exact amount (no surplus)
+        deal(Constants.BASE_USDC, multicallHandler, transferAmount);
+
+        // Execute first 3 calls (initialize, transfer, drain) but NOT the final donate
+        vm.startPrank(multicallHandler);
+        
+        // Call 1: Initialize (stores NAV baseline)
+        (bool success1,) = instructions.calls[0].target.call(instructions.calls[0].callData);
+        require(success1, "Initialize failed");
+        
+        // Call 2: Transfer USDC to pool
+        (bool success2,) = instructions.calls[1].target.call(instructions.calls[1].callData);
+        require(success2, "Transfer failed");
+        
+        // Call 3: Drain (no-op in this case)
+        (bool success3,) = instructions.calls[2].target.call(instructions.calls[2].callData);
+        require(success3, "Drain failed");
+        
+        vm.stopPrank();
+
+        // 3. MANIPULATE NAV: Add WETH to pool (increases NAV)
+        uint256 wethAmount = 0.5 ether; // Add 0.5 WETH (~$1000-2000)
+        deal(Constants.BASE_WETH, pool(), wethAmount);
+        
+        console2.log("Added WETH to pool to manipulate NAV");
+
+        // 4. Final donate should detect NAV manipulation and revert
+        // Use expectRevert with just selector to match any parameters
+        vm.prank(multicallHandler);
+        vm.expectRevert(EAcrossHandler.NavManipulationDetected.selector);
+        (bool success4,) = instructions.calls[3].target.call(instructions.calls[3].callData);
+
+        console2.log("NavManipulationDetected error properly triggered when NAV manipulated!");
+    }
+
+    /// @notice Test that BalanceUnderflow is thrown when tokens are removed between unlock and execute
+    /// @dev Tests the balance protection in donate() by:
+    /// 1. Unlocking with amount=1 (stores balance baseline)
+    /// 2. Removing tokens from pool
+    /// 3. Executing donate (should detect balance underflow)
+    function test_IntegrationFork_CrossChain_BalanceUnderflowDetected() public {
+        vm.selectFork(mainnetForkId);
+
+        // Setup: Get pool and relevant tokens
+        address pool = ethereum.pool;
+        address usdc = Constants.ETH_USDC;
+        address handler = Constants.ETH_MULTICALL_HANDLER;
+
+        // Fund handler with USDC to donate
+        uint256 donationAmount = 1000e6; // 1000 USDC
+        deal(usdc, handler, donationAmount);
+
+        // Prepare destination params (Transfer mode)
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+
+        // Step 1: Unlock and store balance (amount=1 initializes)
+        vm.prank(handler);
+        IEAcrossHandler(pool).donate{value: 0}(usdc, 1, params);
+
+        // Step 2: Remove tokens from pool (decreases balance below stored baseline)
+        uint256 stolenAmount = 100e6; // Steal 100 USDC
+        vm.prank(pool);
+        IERC20(usdc).transfer(address(0xdead), stolenAmount);
+
+        // Step 3: Execute donate - should detect balance underflow
+        vm.prank(handler);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                EAcrossHandler.BalanceUnderflow.selector
+            )
+        );
+        IEAcrossHandler(pool).donate{value: 0}(usdc, donationAmount, params);
+    }
+
     /// @notice Test transfer mode NAV handling (migrated from AcrossIntegrationForkTest)
     function test_IntegrationFork_TransferMode_NavHandling() public {
         // TODO: correctly route through multicall handler
@@ -771,12 +973,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             ISmartPoolState(pool()).getPoolTokens();
         
         // Prepare transfer mode message
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 50, // 0.5% tolerance
-            shouldUnwrap: false,
-            sourceAmount: transferAmount
+            shouldUnwrapNative: false
         });
 
         bytes memory encodedMessage = abi.encode(message);
@@ -813,13 +1012,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             ISmartPoolState(address(pool())).getPoolTokens();
         
         // Prepare sync mode message with matching NAV
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Sync,
-
-            navTolerance: 1000, // 10% tolerance
-            shouldUnwrap: false,
-            sourceAmount: syncAmount
+            shouldUnwrapNative: false
         });
 
         bytes memory encodedMessage = abi.encode(message);
@@ -846,13 +1041,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 wethAmount = 1 ether;
         
         // Prepare message for WETH handling
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-
-            navTolerance: 1000, // 10% tolerance
-            shouldUnwrap: true, // Unwrap WETH to ETH
-            sourceAmount: wethAmount
+            shouldUnwrapNative: true
         });
 
         bytes memory encodedMessage = abi.encode(message);
@@ -1263,7 +1454,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         try IEAcrossHandler(destinationPool).donate(
             Constants.ETH_USDC,
             1, // flag amount for initialization 
-            sourceMsg
+            DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination })
         ) {
             console2.log("Step 1 - Initialize donation: SUCCESS");
         } catch Error(string memory reason) {
@@ -1274,7 +1465,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }
         
         // Step 2: Transfer tokens to pool (simulating MulticallHandler token transfer)
-        deal(Constants.ETH_USDC, destinationPool, initialBalance + transferAmount);
+        // Give tokens to multicall handler and then transfer to pool to simulate real bridge flow
+        deal(Constants.ETH_USDC, multicallHandler, transferAmount);
+        vm.prank(multicallHandler);
+        IERC20(Constants.ETH_USDC).transfer(destinationPool, transferAmount);
         console2.log("Step 2 - Transferred tokens to pool");
         
         // Step 3: Final donation call (with actual amount to validate NAV)
@@ -1282,7 +1476,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         try IEAcrossHandler(destinationPool).donate(
             Constants.ETH_USDC,
             transferAmount, // actual transfer amount
-            sourceMsg
+            DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination })
         ) {
             console2.log("Step 3 - Final donation: SUCCESS");
         } catch Error(string memory reason) {

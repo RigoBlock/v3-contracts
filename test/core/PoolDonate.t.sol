@@ -11,7 +11,7 @@ import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmar
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLib.sol";
-import {OpType, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
+import {DestinationMessageParams, OpType} from "../../contracts/protocol/types/Crosschain.sol";
 
 contract PoolDonateTest is Test {
     using SafeTransferLib for address;
@@ -70,7 +70,7 @@ contract PoolDonateTest is Test {
         // Also mock specific revert for USDC (non-owned token) when used in escrow test  
         vm.mockCallRevert(
             mockEAcrossHandler,
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector, Constants.ARB_USDC, 1, SourceMessageParams({opType: OpType.Transfer, navTolerance: 0, sourceNativeAmount: 0, shouldUnwrapOnDestination: false})),
+            abi.encodeWithSelector(IEAcrossHandler.donate.selector, Constants.ARB_USDC, 1, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
             abi.encodeWithSignature("TokenIsNotOwned()")
         );
         
@@ -125,7 +125,7 @@ contract PoolDonateTest is Test {
         
         console2.log("Calling donate function...");
         // Donate 1 ETH to the pool (baseToken is address(0) for ETH)
-        SourceMessageParams memory params;
+        DestinationMessageParams memory params;
         IEAcrossHandler(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
         
         vm.stopPrank();
@@ -150,7 +150,7 @@ contract PoolDonateTest is Test {
     function test_Donate_ZeroAmount_Success() public {
         vm.prank(donor);
         // Should not revert, just return early
-        SourceMessageParams memory params;
+        DestinationMessageParams memory params;
         IEAcrossHandler(pool).donate(address(0), 0, params);
         console2.log("Zero amount donation handled correctly");
     }
@@ -168,7 +168,7 @@ contract PoolDonateTest is Test {
         vm.prank(donor);
         
         // Donate ETH
-        SourceMessageParams memory params;
+        DestinationMessageParams memory params;
         IEAcrossHandler(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
         
         // Verify balances
@@ -207,7 +207,7 @@ contract PoolDonateTest is Test {
         // Mock the donate function to revert with TokenIsNotOwned for non-owned tokens
         vm.mockCallRevert(
             mockEAcrossHandler,
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector, randomToken, 1000, SourceMessageParams({opType: OpType.Transfer, navTolerance: 0, sourceNativeAmount: 0, shouldUnwrapOnDestination: false})),
+            abi.encodeWithSelector(IEAcrossHandler.donate.selector, randomToken, 1000, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
             abi.encodeWithSignature("TokenIsNotOwned()")
         );
         
@@ -215,7 +215,7 @@ contract PoolDonateTest is Test {
         
         // Should revert with TokenIsNotOwned error 
         vm.expectRevert(abi.encodeWithSignature("TokenIsNotOwned()"));
-        SourceMessageParams memory params;
+        DestinationMessageParams memory params;
         params.opType = OpType.Transfer;
         IEAcrossHandler(pool).donate(randomToken, 1000, params);
         
@@ -247,7 +247,7 @@ contract PoolDonateTest is Test {
         
         // Should revert with IncorrectETHAmount error when msg.value != amount
         vm.expectRevert(abi.encodeWithSignature("IncorrectETHAmount()"));
-        SourceMessageParams memory params;
+        DestinationMessageParams memory params;
         IEAcrossHandler(pool).donate{value: 1 ether}(address(0), 2 ether, params);
         
         vm.stopPrank();

@@ -12,10 +12,9 @@ The integration consists of two main components:
 ## Key Features
 
 - **NAV Integrity**: Virtual balances ensure NAV remains accurate across chains
-- **Three Transfer Modes**:
-  - **Transfer Mode**: NAV-neutral transfers with virtual balance offsets
-  - **Rebalance Mode**: Performance transfers with NAV verification
-  - **Sync Mode**: Initial chain synchronization for enabling rebalancing
+- **Two Transfer Modes**:
+  - **Transfer Mode (OpType.Transfer)**: NAV-neutral transfers with virtual balance/supply offsets
+  - **Sync Mode (OpType.Sync)**: Allows NAV changes (donations, rebalancing, performance transfers)
 - **Security**: Handler verifies caller is Across SpokePool
 - **Token Safety**: Validates price feeds before accepting tokens
 
@@ -50,44 +49,33 @@ The integration consists of two main components:
 
 ## Transfer Modes Explained
 
-### Transfer Mode (NAV Neutral)
+### Transfer Mode (OpType.Transfer) - NAV Neutral
 
 Use when transferring tokens without wanting to affect NAV on either chain.
 
 **How it works:**
-- Source chain: Creates positive virtual balance (reduces NAV by locked amount)
-- Destination chain: Creates negative virtual balance (increases NAV by received amount)
-- Net effect: NAV unchanged on both chains
+- Source chain: Creates positive virtual balance or burns virtual supply (reduces NAV impact)
+- Destination chain: Creates negative virtual balance or increases virtual supply (increases NAV by received amount)
+- Net effect: NAV unchanged on both chains (except for bridge fees, which are real costs)
 
 **Use case:** Moving liquidity between chains while maintaining vault value
 
-### Rebalance Mode (NAV Changes)
+### Sync Mode (OpType.Sync) - NAV Changes Allowed
 
-Use when intentionally transferring performance between chains.
-
-**How it works:**
-- Source chain: NAV changes naturally (tokens sent)
-- Destination chain: Verifies NAV matches source (within tolerance)
-- Accounts for different base token decimals
-- Uses stored NAV spread to account for initial chain NAV differences
-
-**Use case:** Rebalancing vault performance across chains
-
-**Prerequisite:** Chains must be synced first using Sync mode
-
-### Sync Mode (Chain Synchronization)
-
-Use once between each pair of chains to enable rebalancing.
+Use when intentionally allowing NAV changes (donations, performance transfers, rebalancing).
 
 **How it works:**
-- Records NAV spread between source and destination chains
-- Spread = sourceNav - destNav
-- Stored for future rebalance operations
-- Tokens are transferred but no virtual balances created
+- Source chain: NAV changes naturally (tokens sent, NavImpactLib validates tolerance)
+- Destination chain: No virtual adjustments, NAV increases by received amount
+- Validates NAV is within acceptable tolerance
+- Allows solver surplus to increase NAV
 
-**Use case:** Initial setup before rebalancing between chain pairs
+**Use case:** 
+- Accepting donations via cross-chain transfer
+- Allowing solver fees to benefit holders  
+- Rebalancing vault performance across chains
 
-**Note:** Should be performed when vault is first deployed on a new chain
+**Note:** The destination validates that NAV changes are within expected tolerance to prevent manipulation.
 
 ## Architecture
 
@@ -118,20 +106,20 @@ Across SpokePool → Pool → EAcrossHandler Extension
 
 ## Storage
 
-Virtual balances and chain NAV spreads are stored using ERC-7201 namespaced storage:
+Virtual balances and virtual supply are stored using ERC-7201 namespaced storage with dot notation:
 
 ```solidity
-// Virtual balances storage slot
-bytes32 constant VIRTUAL_BALANCES_SLOT = 
-    bytes32(uint256(keccak256("pool.proxy.virtualBalances")) - 1);
+// Virtual balances storage slot (per-token offsets)
+bytes32 constant _VIRTUAL_BALANCES_SLOT = 
+    bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1);
 
-// Chain NAV spreads storage slot
-bytes32 constant CHAIN_NAV_SPREADS_SLOT =
-    bytes32(uint256(keccak256("pool.proxy.chainNavSpreads")) - 1);
+// Virtual supply storage slot (global cross-chain share tracking)
+bytes32 constant _VIRTUAL_SUPPLY_SLOT =
+    bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1);
 
-// Access patterns
+// Access patterns via VirtualBalanceLib
 mapping(address token => int256 virtualBalance)
-mapping(uint256 chainId => int256 navSpread)
+int256 virtualSupply
 ```
 
 ## Testing

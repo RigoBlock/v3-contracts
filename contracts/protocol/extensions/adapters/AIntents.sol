@@ -35,7 +35,7 @@ import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
-import {OpType, SourceMessageParams, Call, Instructions} from "../../types/Crosschain.sol";
+import {Call, DestinationMessageParams, Instructions, OpType, SourceMessageParams} from "../../types/Crosschain.sol";
 import {EscrowFactory} from "../escrow/EscrowFactory.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
@@ -74,7 +74,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     error NavToleranceTooHigh();
     error AdapterNotDeployedOnDestination();
     error DestinationPoolNotFound(address poolAddress);
-    error OutputAmountValidationFailed(uint256 expected, uint256 provided, uint256 tolerance);
 
     modifier onlyDelegateCall() {
         require(address(this) != _aIntents, DirectCallNotAllowed());
@@ -108,29 +107,20 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         CrosschainLib.validateBridgeableTokenPair(params.inputToken, params.outputToken);
 
         // Validate source message parameters to prevent rogue input
-        SourceMessageParams memory sourceMsg = abi.decode(params.message, (SourceMessageParams));
+        SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
 
         // Validate nav tolerance is within reasonable limits
-        require(sourceMsg.navTolerance <= MAX_NAV_TOLERANCE_BPS, NavToleranceTooHigh());
+        require(sourceParams.navTolerance <= MAX_NAV_TOLERANCE_BPS, NavToleranceTooHigh());
 
-        // Validate operation type
-        require(sourceMsg.opType == OpType.Transfer || sourceMsg.opType == OpType.Sync, InvalidOpType());
-
-        // TODO: is this sanity check necessary? this because the transferFrom called by across will revert anyway
-        // if the pool doesn't hold, or if the token is not active, not sure it would be a problem (we allow that
-        // for same chain swaps) - as we only call the inputToken.safeApprove() which does not have impact if it is
-        // a rogue token (won't be able to reenter the call anyway)? Or do we to push the token to active instead?
-        if (params.inputToken != StorageLib.pool().baseToken) {
-            require(StorageLib.activeTokensSet().isActive(params.inputToken), TokenNotActive());
-        }
-
-        _validateTokenAmounts(params);
+        // Ensure input token is active on source chain for cross-chain transfers
+        // This simplifies logic and prevents manipulation via inactive tokens
+        require(StorageLib.isOwnedToken(params.inputToken), TokenNotActive());
 
         _safeApproveToken(params.inputToken);
 
         // Always use multicall handler approach for robust pool existence checking
-        Instructions memory instructions = _buildMulticallInstructions(params, sourceMsg);
-        _executeAcrossDeposit(params, sourceMsg, instructions);
+        Instructions memory instructions = _buildMulticallInstructions(params, sourceParams);
+        _executeAcrossDeposit(params, sourceParams, instructions);
 
         _safeApproveToken(params.inputToken);
     }
@@ -143,32 +133,15 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /*
      * INTERNAL METHODS
      */
-
-    /// @dev Validates token amounts on the source chain to ensure output amount matches expected conversion.
-    /// Virtual balance adjustments are handled separately in _executeAcrossDeposit based on opType.
-    function _validateTokenAmounts(AcrossParams calldata params) private pure {
-        // Apply BSC decimal conversion to get exact amount expected on destination
-        uint256 expectedOutputAmount = CrosschainLib.applyBscDecimalConversion(
-            params.inputToken,
-            params.outputToken,
-            params.inputAmount
-        );
-
-        // Validate that provided output amount matches expected (within 1% tolerance)
-        uint256 tolerance = expectedOutputAmount / 100; // 1% tolerance for Across quote differences
-        
-        require(
-            params.outputAmount >= expectedOutputAmount - tolerance &&
-            params.outputAmount <= expectedOutputAmount + tolerance,
-            OutputAmountValidationFailed(expectedOutputAmount, params.outputAmount, tolerance)
-        );
-    }
-
     function _buildMulticallInstructions(
         AcrossParams memory params,
-        SourceMessageParams memory sourceMsg
+        SourceMessageParams memory sourceParams
     ) private view returns (Instructions memory) {
         Call[] memory calls = new Call[](4);
+        DestinationMessageParams memory destParams = DestinationMessageParams({
+            opType: sourceParams.opType,
+            shouldUnwrapNative: sourceParams.shouldUnwrapOnDestination
+        });
 
         // 1. Store pool's current token balance (for delta calculation)
         calls[0] = Call({
@@ -177,7 +150,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
                 IEAcrossHandler.donate.selector,
                 params.outputToken,
                 1, // flag for temporary storing pool balance
-                sourceMsg
+                destParams
             ),
             value: 0
         });
@@ -207,7 +180,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
                 IEAcrossHandler.donate.selector,
                 params.outputToken,
                 params.outputAmount,
-                sourceMsg
+                destParams
             ),
             value: 0
         });
@@ -221,22 +194,24 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /// @dev Executes deposit via multicall handler
     function _executeAcrossDeposit(
         AcrossParams memory params,
-        SourceMessageParams memory sourceMsg,
+        SourceMessageParams memory sourceParams,
         Instructions memory instructions
     ) private {
-        // Handle source-side virtual balance adjustments
-        if (sourceMsg.opType == OpType.Transfer) {
+        // Handle source-side adjustments based on operation type
+        if (sourceParams.opType == OpType.Transfer) {
             EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer);
-            VirtualBalanceLib.adjustVirtualBalance(params.inputToken, params.inputAmount.toInt256());
-        } else if (sourceMsg.opType == OpType.Sync) {
-            NavImpactLib.validateNavImpactTolerance(params.inputToken, params.inputAmount, sourceMsg.navTolerance);
+            params.depositor = EscrowFactory.getEscrowAddress(address(this), OpType.Transfer);
+            _handleSourceTransfer(params);
+        } else if (sourceParams.opType == OpType.Sync) {
+            params.depositor = address(this);
+            NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
+        } else {
+            revert InvalidOpType();
         }
 
-        _acrossSpokePool.depositV3{value: sourceMsg.sourceNativeAmount}(
-            sourceMsg.opType == OpType.Transfer
-                ? EscrowFactory.getEscrowAddress(address(this), OpType.Transfer)
-                : address(this),
-            _getAcrossHandler(params.destinationChainId), // recipient on destination chain
+        _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(
+            params.depositor,
+            _getAcrossHandler(params.destinationChainId),
             params.inputToken,
             params.outputToken,
             params.inputAmount,
@@ -248,6 +223,59 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.exclusivityDeadline,
             abi.encode(instructions)
         );
+    }
+
+    function _handleSourceTransfer(AcrossParams memory params) private {
+        // Scale outputAmount to inputToken decimals for proper comparison
+        // (same token on different chains may have different decimals, e.g., BSC USDC)
+        uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
+            params.outputToken, // Amount is in this token's decimals
+            params.inputToken,  // Convert to this token's decimals
+            params.outputAmount
+        );
+        
+        // Convert to base token value for supply calculations
+        address baseToken = StorageLib.pool().baseToken;
+        int256 outputValueInBaseInt = IEOracle(address(this)).convertTokenAmount(
+            params.inputToken,
+            scaledOutputAmount.toInt256(),
+            baseToken
+        );
+        uint256 outputValueInBase = outputValueInBaseInt.toUint256();
+        
+        // Update NAV and get pool state
+        ISmartPoolActions(address(this)).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
+        uint8 poolDecimals = StorageLib.pool().decimals;
+        
+        // Convert transfer value to shares using current NAV (same as mint/burn calculation)
+        // shares = baseValue / unitaryValue (in pool token units)
+        uint256 sharesToBurn = (outputValueInBase * (10 ** poolDecimals)) / poolTokens.unitaryValue;
+        
+        if (virtualSupply > 0) {
+            if (virtualSupply >= sharesToBurn) {
+                // Sufficient virtual supply - burn the exact share amount
+                VirtualBalanceLib.adjustVirtualSupply(-(sharesToBurn.toInt256()));
+            } else {
+                // Insufficient virtual supply - burn all of it, use virtual balance for remainder
+                VirtualBalanceLib.adjustVirtualSupply(-(virtualSupply.toInt256()));
+                
+                // Calculate remaining value that wasn't covered by burning virtual supply
+                uint256 remainingValue = ((sharesToBurn - virtualSupply) * poolTokens.unitaryValue) / (10 ** poolDecimals);
+                
+                // Convert remaining base value back to input token units using oracle
+                int256 remainingTokensInt = IEOracle(address(this)).convertTokenAmount(
+                    baseToken,
+                    remainingValue.toInt256(),
+                    params.inputToken
+                );
+                VirtualBalanceLib.adjustVirtualBalance(params.inputToken, remainingTokensInt);
+            }
+        } else {
+            // No virtual supply - use virtual balance entirely to offset the transfer
+            VirtualBalanceLib.adjustVirtualBalance(params.inputToken, scaledOutputAmount.toInt256());
+        }
     }
 
     /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.

@@ -22,6 +22,7 @@ pragma solidity 0.8.28;
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
 import {StorageLib} from "./StorageLib.sol";
+import {VirtualBalanceLib} from "./VirtualBalanceLib.sol";
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 
 /// @title NavImpactLib - Library for validating NAV impact tolerance
@@ -41,7 +42,7 @@ library NavImpactLib {
     /// @param token Token being transferred
     /// @param amount Amount being transferred  
     /// @param toleranceBps Maximum allowed NAV impact in basis points (e.g., 1000 = 10%)
-    function validateNavImpactTolerance(
+    function validateNavImpact(
         address token,
         uint256 amount,
         uint256 toleranceBps
@@ -51,12 +52,17 @@ library NavImpactLib {
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
         
-        // Calculate total assets value: NAV × totalSupply
-        uint256 totalAssetsValue = poolTokens.unitaryValue * poolTokens.totalSupply / (10 ** poolDecimals);
+        // Include virtual supply in calculation - represents real economic value on other chains
+        uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
+        uint256 effectiveSupply = poolTokens.totalSupply + virtualSupply;
         
-        // Prevent division by zero for empty pools
+        // Calculate total assets value: NAV × effectiveSupply (includes cross-chain positions)
+        uint256 totalAssetsValue = poolTokens.unitaryValue * effectiveSupply / (10 ** poolDecimals);
+        
+        // For empty pools (all supply burnt on all chains), allow any transfer
+        // This handles edge case of receiving first tokens on a chain
         if (totalAssetsValue == 0) {
-            return; // Allow any transfer in empty pool
+            return;
         }
         
         // Convert transfer amount to base token value for percentage calculation
@@ -80,5 +86,14 @@ library NavImpactLib {
         if (impactBps > toleranceBps) {
             revert NavImpactTooHigh();
         }
+    }
+    
+    /// @notice Gets total pool value in base token units (including cross-chain positions)
+    /// @return totalValue NAV × effectiveSupply
+    function getTotalPoolValue() internal view returns (uint256 totalValue) {
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+        uint8 poolDecimals = StorageLib.pool().decimals;
+        return (poolTokens.unitaryValue * poolTokens.totalSupply) / (10 ** poolDecimals);
     }
 }

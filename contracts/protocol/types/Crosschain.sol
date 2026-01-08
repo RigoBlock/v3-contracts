@@ -14,13 +14,9 @@ struct SourceMessageParams {
     bool shouldUnwrapOnDestination;
 }
 
-// TODO: remove, left here temporary to update across fork tests
-struct DestinationMessage {
-    address poolAddress;
+struct DestinationMessageParams {
     OpType opType;
-    uint256 navTolerance;
-    bool shouldUnwrap;
-    uint256 sourceAmount;
+    bool shouldUnwrapNative;
 }
 
 /*//////////////////////////////////////////////////////////////

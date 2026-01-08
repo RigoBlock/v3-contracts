@@ -1,21 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-/*
-
- Copyright 2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
 
 pragma solidity 0.8.28;
 
@@ -27,18 +10,32 @@ import {SlotDerivation} from "./SlotDerivation.sol";
 library VirtualBalanceLib {
     using SlotDerivation for bytes32;
 
+    // TODO: check how we can use same as immutable constants without hardcoding here
     /// @notice Storage slot for per-token virtual balances (legacy slot)
     bytes32 private constant _VIRTUAL_BALANCES_SLOT = 
         0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 
-    /// @notice Gets the virtual balance for a specific token
+    /// @notice Storage slot for virtual supply (int256 to allow negative values)
+    bytes32 private constant _VIRTUAL_SUPPLY_SLOT = 
+        0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee3411450f;
+
+    /// @notice Adjusts the virtual balance for a specific token
     /// @param token The token address
-    /// @return value The virtual balance (can be negative)
-    function getVirtualBalance(address token) internal view returns (int256 value) {
-        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
-        assembly {
-            value := sload(slot)
-        }
+    /// @param delta The amount to add to the current virtual balance (can be negative)
+    function adjustVirtualBalance(address token, int256 delta) internal {
+        if (delta == 0) return;
+        
+        int256 currentBalance = getVirtualBalance(token);
+        setVirtualBalance(token, currentBalance + delta);
+    }
+
+    /// @notice Adjusts the virtual supply by a delta amount
+    /// @param delta The amount to add to the current virtual supply (can be negative)
+    function adjustVirtualSupply(int256 delta) internal {
+        if (delta == 0) return;
+        
+        int256 currentSupply = getVirtualSupply();
+        setVirtualSupply(currentSupply + delta);
     }
 
     /// @notice Sets the virtual balance for a specific token
@@ -51,13 +48,42 @@ library VirtualBalanceLib {
         }
     }
 
-    /// @notice Adjusts the virtual balance for a specific token
-    /// @param token The token address
-    /// @param delta The amount to add to the current virtual balance (can be negative)
-    function adjustVirtualBalance(address token, int256 delta) internal {
-        if (delta == 0) return;
+    /// @notice Sets the virtual supply
+    /// @param value The virtual supply to set (can be negative)
+    function setVirtualSupply(int256 value) internal {
+        bytes32 slot = _VIRTUAL_SUPPLY_SLOT;
+        assembly {
+            sstore(slot, value)
+        }
+    }
+
+    /// @notice Gets the effective total supply including virtual supply
+    /// @param actualSupply The actual token total supply
+    /// @return effectiveSupply The effective supply (actual + virtual, minimum 0)
+    function getEffectiveTotalSupply(uint256 actualSupply) internal view returns (uint256 effectiveSupply) {
+        int256 virtualSupply = getVirtualSupply();
+        int256 totalSupply = int256(actualSupply) + virtualSupply;
         
-        int256 currentBalance = getVirtualBalance(token);
-        setVirtualBalance(token, currentBalance + delta);
+        // Ensure we never return negative supply
+        effectiveSupply = totalSupply > 0 ? uint256(totalSupply) : 0;
+    }
+
+    /// @notice Gets the virtual balance for a specific token
+    /// @param token The token address
+    /// @return value The virtual balance (can be negative)
+    function getVirtualBalance(address token) internal view returns (int256 value) {
+        bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+        assembly {
+            value := sload(slot)
+        }
+    }
+
+    /// @notice Gets the virtual supply
+    /// @return value The virtual supply (can be negative)
+    function getVirtualSupply() internal view returns (int256 value) {
+        bytes32 slot = _VIRTUAL_SUPPLY_SLOT;
+        assembly {
+            value := sload(slot)
+        }
     }
 }

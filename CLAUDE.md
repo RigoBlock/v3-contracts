@@ -2,6 +2,21 @@
 
 This document provides comprehensive guidance for AI assistants working with the Rigoblock v3-contracts codebase.
 
+## AI Agent Limitations (CRITICAL)
+
+**⚠️ AI-GENERATED SOLIDITY CODE CONTAINS CRITICAL BUGS ⚠️**
+
+- AI agents are NOT proficient at writing secure Solidity code
+- **AI agents have significant difficulty with logic problems and reasoning**
+- Code produced contains security vulnerabilities and logical flaws
+- **AI frequently ignores working solutions and introduces new bugs**  
+- NEVER consider AI-generated code "ready for deployment" or "audit-ready"
+- ALWAYS perform thorough manual security review
+- AI may reintroduce bugs even after they're fixed
+- AI may make incorrect assumptions not based on specifications
+- **AI struggles with complex conditional logic and state management**
+- All code must be treated as containing critical vulnerabilities until proven otherwise
+
 ## Project Overview
 
 Rigoblock v3-contracts is a decentralized asset management protocol built on EVM-compatible chains. The repository contains:

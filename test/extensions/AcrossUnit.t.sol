@@ -16,7 +16,7 @@ import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmar
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {Pool} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
-import {OpType, DestinationMessage, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
+import {OpType, DestinationMessageParams, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 import {EscrowFactory} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
 import {TransferEscrow} from "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
 
@@ -167,12 +167,9 @@ contract AcrossUnitTest is Test {
         );
         
         // Create valid Transfer message
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -186,55 +183,43 @@ contract AcrossUnitTest is Test {
     /// @notice Test handler Transfer mode execution using actual contract
     function test_Handler_TransferMode_MessageParsing() public view {
         // Test that Transfer message can be properly encoded/decoded
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 0,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
-        DestinationMessage memory decoded = abi.decode(encodedMessage, (DestinationMessage));
+        DestinationMessageParams memory decoded = abi.decode(encodedMessage, (DestinationMessageParams));
         
         assertEq(uint8(decoded.opType), uint8(OpType.Transfer), "OpType should be Transfer");
-        assertEq(decoded.sourceAmount, 100e6, "Source amount should match");
     }
     
     /// @notice Test Sync mode message encoding/decoding with NAV
     function test_Handler_SyncMode_MessageParsing() public view {
-        DestinationMessage memory syncMsg = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            navTolerance: 200, // 2%
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+            shouldUnwrapNative: false
         });
         
-        bytes memory encoded = abi.encode(syncMsg);
-        DestinationMessage memory decoded = abi.decode(encoded, (DestinationMessage));
+        bytes memory encoded = abi.encode(params);
+        DestinationMessageParams memory decoded = abi.decode(encoded, (DestinationMessageParams));
         
         assertEq(uint8(decoded.opType), uint8(OpType.Sync), "OpType should be Sync");
-        assertEq(decoded.navTolerance, 200, "NAV tolerance should match");
-        assertEq(decoded.sourceAmount, 100e6, "Source amount should match");
     }
     
 
     
     /// @notice Test WETH unwrap message construction
     function test_Handler_UnwrapWETH_MessageSetup() public view {
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 0,
-            shouldUnwrap: true, // Request unwrap
-            sourceAmount: 100e6
+            shouldUnwrapNative: true
         });
         
         bytes memory encoded = abi.encode(message);
-        DestinationMessage memory decoded = abi.decode(encoded, (DestinationMessage));
+        DestinationMessageParams memory decoded = abi.decode(encoded, (DestinationMessageParams));
         
-        assertTrue(decoded.shouldUnwrap, "Should unwrap should be true");
+        assertTrue(decoded.shouldUnwrapNative, "Should unwrap should be true");
         assertEq(uint8(decoded.opType), uint8(OpType.Transfer), "OpType should be Transfer");
     }
     
@@ -292,12 +277,9 @@ contract AcrossUnitTest is Test {
         );
         
         // Create message with Unknown OpType to test InvalidOpType revert
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
-            opType: OpType.Unknown, // This should trigger InvalidOpType error
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e6
+        DestinationMessageParams memory message = DestinationMessageParams({
+            opType: OpType.Unknown,
+            shouldUnwrapNative: false
         });
         
         vm.prank(mockSpokePool);
@@ -327,12 +309,9 @@ contract AcrossUnitTest is Test {
             abi.encode(100e18) // First call during initialization
         );
         
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: validSourceAmount // This should be accepted
+            shouldUnwrapNative: false
         });
         
         vm.prank(mockSpokePool);
@@ -383,12 +362,9 @@ contract AcrossUnitTest is Test {
         uint256 receivedAmount = 100e6;
         uint256 sourceAmount = 98e6; // Within 10% tolerance
         
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: sourceAmount
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -432,12 +408,9 @@ contract AcrossUnitTest is Test {
         // Create Sync message with sourceNav = 0 to skip NAV validation
         uint256 receivedAmount = 1e18;
         
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Sync,
-            navTolerance: 200, // 2%
-            shouldUnwrap: false,
-            sourceAmount: 1e18 // For Sync, this is used for validation but virtualBalance uses receivedAmount
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -485,12 +458,9 @@ contract AcrossUnitTest is Test {
         // Create Transfer message with unwrap request
         uint256 receivedAmount = 1e18;
         
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 100,
-            shouldUnwrap: true, // Request WETH unwrap
-            sourceAmount: 1e18
+            shouldUnwrapNative: true
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -534,12 +504,9 @@ contract AcrossUnitTest is Test {
         );
         
         // Create Transfer message with unknown token
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e18
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -590,13 +557,9 @@ contract AcrossUnitTest is Test {
         );
         
         // Create Transfer message with new token
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e18
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -633,13 +596,9 @@ contract AcrossUnitTest is Test {
             abi.encode(mockWETH)
         );
         
-        // Create Transfer message with 18 decimals (source) and properly scaled NAV
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e18
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -695,12 +654,9 @@ contract AcrossUnitTest is Test {
         );
         
         // Create Transfer message with shouldUnwrap=true
-        DestinationMessage memory message = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
-            navTolerance: 100,
-            shouldUnwrap: true, // This should unwrap WETH to ETH
-            sourceAmount: 100e18
+            shouldUnwrapNative: true
         });
         
         bytes memory encodedMessage = abi.encode(message);
@@ -746,15 +702,12 @@ contract AcrossUnitTest is Test {
         );
         
         // Test 1: Sync with sourceNav = 0 should succeed (client handles validation)
-        DestinationMessage memory messageNoNav = DestinationMessage({
-            poolAddress: address(this),
+        DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            navTolerance: 100,
-            shouldUnwrap: false,
-            sourceAmount: 100e18
+            shouldUnwrapNative: false
         });
         
-        bytes memory encodedNoNav = abi.encode(messageNoNav);
+        bytes memory encodedNoNav = abi.encode(params);
         
         // Should succeed - no on-chain NAV validation, but due to mock limitations
         // we get CallerTransferAmount instead. In a real scenario, both sourceNav = 0

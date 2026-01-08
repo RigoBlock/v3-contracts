@@ -6,6 +6,7 @@ import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLib.sol";
 import {EscrowFactory, OpType} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
 import {TransferEscrow} from "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
+import {DestinationMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 
 /// @title MockERC20 - Simple ERC20 mock for testing
 contract MockERC20 {
@@ -227,19 +228,11 @@ contract TransferEscrowWorkingTest is Test {
 contract MockPoolForEscrow {
     using SafeTransferLib for address;
     
-    // Import types we need
-    struct SourceMessageParams {
-        uint8 opType;
-        uint256 navTolerance;
-        uint256 sourceNativeAmount;
-        bool shouldUnwrapOnDestination;
-    }
-    
     /// @notice Mock donate function that accepts tokens - updated to match EAcrossHandler interface
     /// @param token Token to donate
     /// @param amount Amount to donate
-    /// @param params Source message parameters (ignored in mock)
-    function donate(address token, uint256 amount, SourceMessageParams calldata params) external payable {
+    /// @param params Destination message parameters (ignored in mock)
+    function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable {
         // In the real EAcrossHandler, donate just updates NAV accounting
         // It doesn't transfer tokens - they are already transferred separately
         // So this mock just accepts the call without doing any token transfers

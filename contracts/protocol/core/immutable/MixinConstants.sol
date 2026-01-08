@@ -28,9 +28,11 @@ abstract contract MixinConstants is ISmartPool {
     bytes32 internal constant _ACCEPTED_TOKENS_SLOT =
         0xa33198d1011bad6f8d9b4a537f82cf21cfac49b1430cf1a99c11aaf4d7325fc6;
 
-    // bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1) - Used for per-token virtual balances mapping
     bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
         0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
+
+    bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = 
+        0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee3411450f;
 
     address internal constant _ZERO_ADDRESS = address(0);
 
