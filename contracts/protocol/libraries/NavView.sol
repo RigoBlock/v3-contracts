@@ -17,6 +17,7 @@ import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {ApplicationsLib} from "../libraries/ApplicationsLib.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
+import {VirtualBalanceLib} from "../libraries/VirtualBalanceLib.sol";
 import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
@@ -30,6 +31,7 @@ library NavView {
     using EnumerableSet for AddressSet;
     using SlotDerivation for bytes32;
     using SafeCast for uint256;
+    using SafeCast for int256;
     using StateLibrary for IPoolManager;
     using PositionInfoLibrary for PositionInfo;
 
@@ -41,11 +43,6 @@ library NavView {
 
     /// @notice Zero address constant
     address internal constant ZERO_ADDRESS = address(0);
-
-    /// @notice Virtual balances storage slot
-    /// @dev bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1)
-    bytes32 internal constant VIRTUAL_BALANCES_SLOT = 
-        0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 
     /// @notice Represents a token balance including virtual balances and application positions
     struct TokenBalance {
@@ -152,7 +149,7 @@ library NavView {
             baseTokenBalance = int256(address(this).balance);
         }
         // Always add virtual balance for base token
-        baseTokenBalance += getVirtualBalance(tokens.baseToken);
+        baseTokenBalance += VirtualBalanceLib.getVirtualBalance(tokens.baseToken);
         
         bool baseTokenFound = false;
         for (uint256 k = 0; k < tokenCount; k++) {
@@ -182,7 +179,7 @@ library NavView {
             }
             
             // Add virtual balance for this token
-            totalBalance += getVirtualBalance(token);
+            totalBalance += VirtualBalanceLib.getVirtualBalance(token);
             
             // Skip if no balance (wallet + virtual)
             if (totalBalance == 0) continue;
@@ -268,9 +265,12 @@ library NavView {
             }
         }
         
-        // Get total supply
+        // Get total supply (actual + virtual)
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint256 totalSupply = poolTokens.totalSupply;
+        
+        // Add virtual supply for cross-chain transfers (matches MixinPoolValue)
+        totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
         
         // Calculate unitary value
         uint256 unitaryValue;
@@ -384,15 +384,5 @@ library NavView {
         }
 
         return TickMath.getSqrtPriceAtTick(twap1 - twap0);
-    }
-
-    /// @notice Gets the virtual balance for a token from storage
-    /// @param token The token address to get virtual balance for
-    /// @return value The virtual balance (can be negative)
-    function getVirtualBalance(address token) internal view returns (int256 value) {
-        bytes32 slot = VIRTUAL_BALANCES_SLOT.deriveMapping(token);
-        assembly {
-            value := sload(slot)
-        }
     }
 }

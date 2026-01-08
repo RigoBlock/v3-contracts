@@ -607,9 +607,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         ISmartPoolState.PoolTokens memory initialTokens =
             ISmartPoolState(address(pool())).getPoolTokens();
 
-        // TODO: this will inflate nav - remove, or mint pool tokens with USDC
-        // Fund the pool with some USDC for the test
-        deal(Constants.ETH_USDC, address(pool()), transferAmount * 2);
+        // Pool already funded with 100k USDC from fixture
 
         SourceMessageParams memory sourceParams = SourceMessageParams({
             opType: OpType.Transfer,
@@ -678,9 +676,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         ISmartPoolState.PoolTokens memory initialTokens =
             ISmartPoolState(address(pool())).getPoolTokens();
 
-        // TODO: this will inflate nav - remove, or mint pool tokens with USDC
-        // Fund the pool with some USDC for the test
-        deal(Constants.ETH_USDC, address(pool()), transferAmount * 2);
+        // Pool already funded with 100k USDC from fixture
 
         SourceMessageParams memory sourceParams = SourceMessageParams({
             opType: OpType.Transfer,
@@ -750,8 +746,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 surplusAmount = 50e6;    // 50 USDC surplus (solver keeps 5%)
         uint256 totalReceived = transferAmount + surplusAmount; // 1050 USDC actually received
 
-        // Fund the pool with some USDC for the test
-        deal(Constants.ETH_USDC, address(pool()), transferAmount * 2);
+        // Pool already funded with 100k USDC from fixture
 
         SourceMessageParams memory sourceParams = SourceMessageParams({
             opType: OpType.Transfer,
@@ -838,8 +833,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     function test_IntegrationFork_CrossChain_NavManipulationDetected() public {
         uint256 transferAmount = 1000e6; // 1000 USDC expected
 
-        // Fund the pool with some USDC for the test
-        deal(Constants.ETH_USDC, address(pool()), transferAmount * 2);
+        // Pool already funded with 100k USDC from fixture
 
         SourceMessageParams memory sourceParams = SourceMessageParams({
             opType: OpType.Transfer,
@@ -915,6 +909,117 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         (bool success4,) = instructions.calls[3].target.call(instructions.calls[3].callData);
 
         console2.log("NavManipulationDetected error properly triggered when NAV manipulated!");
+    }
+
+    /// @notice Test Sync mode cross-chain transfer
+    /// @dev Sync mode differs from Transfer mode:
+    /// - Source: Validates NAV impact, transfers from pool directly (no escrow)
+    /// - Destination: No virtual balance/supply adjustments, NAV changes naturally
+    /// - Use case: Rebalancing operations where NAV change is acceptable
+    function test_IntegrationFork_CrossChain_SyncMode() public {
+        // Fixture already minted 100,000 USDC worth of pool tokens
+        // NAV should be ~1.0 (1e6 for USDC decimals)
+        
+        uint256 transferAmount = 50e6; // 50 USDC (0.05% of 100k pool)
+
+        // Get initial state on source chain (Ethereum)
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory initialSourceTokens = 
+            ISmartPoolState(pool()).getPoolTokens();
+        uint256 initialSourceNav = initialSourceTokens.unitaryValue;
+        
+        console2.log("=== Source Chain (Ethereum) ===");
+        console2.log("Initial source NAV:", initialSourceNav);
+        console2.log("Initial source supply:", initialSourceTokens.totalSupply);
+        console2.log("Transfer amount:", transferAmount);
+
+        SourceMessageParams memory sourceParams = SourceMessageParams({
+            opType: OpType.Sync,
+            navTolerance: TOLERANCE_BPS, // 1% tolerance (100 bps)
+            shouldUnwrapOnDestination: false,
+            sourceNativeAmount: 0
+        });
+
+        // 1. Prepare Sync transfer on source chain (Ethereum)
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(sourceParams)
+        });
+        
+        // Give poolOwner the tokens
+        deal(Constants.ETH_USDC, poolOwner, transferAmount);
+
+        // Execute depositV3 in Sync mode
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+        
+        // Verify source chain NAV changed (Sync mode doesn't use virtual balances)
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory afterSourceTokens = 
+            ISmartPoolState(pool()).getPoolTokens();
+        uint256 afterSourceNav = afterSourceTokens.unitaryValue;
+        
+        console2.log("After depositV3 source NAV:", afterSourceNav);
+        // In Sync mode, NAV decreases on source because tokens leave without virtual balance offset
+        assertLt(afterSourceNav, initialSourceNav, "Source NAV should decrease in Sync mode");
+
+        // 2. Switch to destination chain (Base)
+        vm.selectFork(baseForkId);
+        
+        // Get initial state on destination chain
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory initialDestTokens = 
+            ISmartPoolState(pool()).getPoolTokens();
+        uint256 initialDestNav = initialDestTokens.unitaryValue;
+        
+        console2.log("\n=== Destination Chain (Base) ===");
+        console2.log("Initial destination NAV:", initialDestNav);
+        console2.log("Initial destination supply:", initialDestTokens.totalSupply);
+
+        Instructions memory instructions = buildTestInstructions(
+            params.outputToken,
+            pool(),
+            params.outputAmount,
+            sourceParams
+        );
+
+        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
+
+        // Fund handler with USDC for the destination
+        deal(Constants.BASE_USDC, multicallHandler, transferAmount);
+
+        // Handler processes the cross-chain message in Sync mode
+        // Sync mode: No virtual balance adjustments, NAV increases naturally
+        vm.prank(user);
+        IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+            Constants.BASE_USDC,
+            transferAmount,
+            user,
+            abi.encode(instructions)
+        );
+        
+        // Verify destination chain NAV increased (Sync mode - natural NAV change)
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory finalDestTokens = 
+            ISmartPoolState(pool()).getPoolTokens();
+        uint256 finalDestNav = finalDestTokens.unitaryValue;
+        
+        console2.log("Final destination NAV:", finalDestNav);
+        assertGt(finalDestNav, initialDestNav, "Destination NAV should increase in Sync mode");
+        
+        console2.log("\nSync mode cross-chain transfer completed!");
+        console2.log("Source NAV decreased by:", initialSourceNav - afterSourceNav);
+        console2.log("Destination NAV increased by:", finalDestNav - initialDestNav);
     }
 
     /// @notice Test that BalanceUnderflow is thrown when tokens are removed between unlock and execute
