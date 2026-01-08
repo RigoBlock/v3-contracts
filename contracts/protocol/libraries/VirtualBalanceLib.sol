@@ -57,17 +57,6 @@ library VirtualBalanceLib {
         }
     }
 
-    /// @notice Gets the effective total supply including virtual supply
-    /// @param actualSupply The actual token total supply
-    /// @return effectiveSupply The effective supply (actual + virtual, minimum 0)
-    function getEffectiveTotalSupply(uint256 actualSupply) internal view returns (uint256 effectiveSupply) {
-        int256 virtualSupply = getVirtualSupply();
-        int256 totalSupply = int256(actualSupply) + virtualSupply;
-        
-        // Ensure we never return negative supply
-        effectiveSupply = totalSupply > 0 ? uint256(totalSupply) : 0;
-    }
-
     /// @notice Gets the virtual balance for a specific token
     /// @param token The token address
     /// @return value The virtual balance (can be negative)

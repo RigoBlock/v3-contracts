@@ -199,9 +199,8 @@ contract EAcrossHandler is IEAcrossHandler {
             ).toUint256();
             
             // Calculate expected NAV increase: surplusValue / effectiveSupply
-            uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
-            uint256 effectiveSupply = poolTokens.totalSupply + virtualSupply;
-            uint256 expectedNavIncrease = (surplusBaseValue * (10 ** poolDecimals)) / effectiveSupply;
+            poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+            uint256 expectedNavIncrease = (surplusBaseValue * (10 ** poolDecimals)) / poolTokens.totalSupply;
             expectedNav = storedNav + expectedNavIncrease;
         }
         

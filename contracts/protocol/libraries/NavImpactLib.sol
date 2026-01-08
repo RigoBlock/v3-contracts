@@ -51,16 +51,10 @@ library NavImpactLib {
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
+        poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+        uint256 totalAssetsValue = poolTokens.unitaryValue * poolTokens.totalSupply / (10 ** poolDecimals);
         
-        // Include virtual supply in calculation - represents real economic value on other chains
-        uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
-        uint256 effectiveSupply = poolTokens.totalSupply + virtualSupply;
-        
-        // Calculate total assets value: NAV × effectiveSupply (includes cross-chain positions)
-        uint256 totalAssetsValue = poolTokens.unitaryValue * effectiveSupply / (10 ** poolDecimals);
-        
-        // For empty pools (all supply burnt on all chains), allow any transfer
-        // This handles edge case of receiving first tokens on a chain
+        // For empty pools (all supply burnt on all chains), allow any transfer. Handles edge case of receiving first tokens on a chain
         if (totalAssetsValue == 0) {
             return;
         }
@@ -86,14 +80,5 @@ library NavImpactLib {
         if (impactBps > toleranceBps) {
             revert NavImpactTooHigh();
         }
-    }
-    
-    /// @notice Gets total pool value in base token units (including cross-chain positions)
-    /// @return totalValue NAV × effectiveSupply
-    function getTotalPoolValue() internal view returns (uint256 totalValue) {
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-        poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
-        uint8 poolDecimals = StorageLib.pool().decimals;
-        return (poolTokens.unitaryValue * poolTokens.totalSupply) / (10 ** poolDecimals);
     }
 }

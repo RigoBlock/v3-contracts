@@ -44,10 +44,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             components.unitaryValue = 10 ** components.decimals;
         } else {
             // Calculate effective supply (actual + virtual) - both systems can coexist
-            uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
-            uint256 effectiveSupply = components.totalSupply + virtualSupply;
+            components.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
             
-            if (effectiveSupply == 0) {
+            if (components.totalSupply == 0) {
                 // No supply anywhere - return stored NAV
                 return components;
             }
@@ -56,7 +55,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
             if (totalPoolValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
-                components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / effectiveSupply;
+                components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / components.totalSupply;
             } else {
                 return components;
             }
