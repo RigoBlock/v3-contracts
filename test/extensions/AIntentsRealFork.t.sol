@@ -22,6 +22,7 @@ import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/
 import {IAcrossSpokePool} from "../../contracts/protocol/interfaces/IAcrossSpokePool.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
 import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
+import {VirtualBalanceLib} from "../../contracts/protocol/libraries/VirtualBalanceLib.sol";
 
 /// @notice Interface for Across MulticallHandler contract
 /// @dev This matches the actual Across Protocol MulticallHandler interface
@@ -1858,5 +1859,36 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Virtual balance should be zeroed out (partial reduction case - lines 159-160)
         assertEq(int256(uint256(vm.load(ethereum.pool, slot))), 0, "Virtual balance should be zeroed after partial reduction");
+    }
+
+    function test_AIntents_InvalidOpType_Revert() public {
+        // Use the same pattern as working tests - fund poolOwner and prank as poolOwner
+        deal(Constants.ETH_USDC, poolOwner, 500e6);
+        
+        // Expect the specific InvalidOpType error
+        vm.expectRevert(IAIntents.InvalidOpType.selector); 
+        
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(
+            IAIntents.AcrossParams({
+                depositor: address(this),  // Keep same as working tests
+                recipient: address(this),  // Keep same as working tests  
+                inputToken: Constants.ETH_USDC,
+                outputToken: Constants.BASE_USDC,
+                inputAmount: 500e6,
+                outputAmount: 500e6,
+                destinationChainId: Constants.BASE_CHAIN_ID,
+                exclusiveRelayer: address(0),
+                quoteTimestamp: uint32(block.timestamp),
+                fillDeadline: uint32(block.timestamp + 1 hours),
+                exclusivityDeadline: 0,
+                message: abi.encode(SourceMessageParams({
+                    opType: OpType.Unknown, // This should trigger InvalidOpType at line 210
+                    navTolerance: TOLERANCE_BPS,
+                    shouldUnwrapOnDestination: false,
+                    sourceNativeAmount: 0
+                }))
+            })
+        );
     }
 }
