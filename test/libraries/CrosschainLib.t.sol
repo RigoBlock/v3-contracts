@@ -654,4 +654,84 @@ contract CrosschainLibTest is Test {
         assertFalse(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ETH_USDC), "ETH_USDC not on Unichain");
         assertFalse(CrosschainLib.isAllowedCrosschainToken(address(0x1234)), "Random token not on Unichain");
     }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                           SPECIFIC LINE COVERAGE TESTS
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// forge-config: default.allow_internal_expect_revert = true
+    /// @notice Test USDC input with invalid output token (lines 35-41)
+    /// @dev Tests when inputToken matches USDC category but outputToken is NOT in USDC list
+    /// ✅ COVERS: Lines 35-41 require() block in validateBridgeableTokenPair
+    function test_ValidateBridgeableTokenPair_USDC_InputToken_InvalidOutput_Lines35To41() public {
+        // USDC input but USDT output - should hit require() at lines 35-41
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDC, CrosschainTokens.ETH_USDT);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_USDC, CrosschainTokens.ETH_WETH);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_USDC, CrosschainTokens.ETH_WBTC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BSC_USDC, address(0x1111111111111111111111111111111111111111)); // Use existing contract address
+    }
+
+    /// forge-config: default.allow_internal_expect_revert = true
+    /// @notice Test USDT input with invalid output token (lines 47-62) 
+    /// @dev Tests when inputToken matches USDT category but outputToken is NOT in USDT list
+    /// ✅ COVERS: Lines 47-62 require() block in validateBridgeableTokenPair
+    function test_ValidateBridgeableTokenPair_USDT_InputToken_InvalidOutput_Lines47To62() public {
+        // USDT input but USDC output - should hit require() at lines 47-62
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDT, CrosschainTokens.ETH_USDC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_USDT, CrosschainTokens.ARB_WETH);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_USDT, CrosschainTokens.POLY_WBTC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BSC_USDT, address(0x2222222222222222222222222222222222222222)); // Use existing contract address
+    }
+
+    /// forge-config: default.allow_internal_expect_revert = true
+    /// @notice Test WETH input with invalid output token (lines 79-85)
+    /// @dev Tests when inputToken matches WETH category but outputToken is NOT in WETH list
+    /// ✅ COVERS: Lines 79-85 require() block in validateBridgeableTokenPair
+    function test_ValidateBridgeableTokenPair_WETH_InputToken_InvalidOutput_Lines79To85() public {
+        // WETH input but USDC output - should hit require() at lines 79-85
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WETH, CrosschainTokens.ETH_USDC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WETH, CrosschainTokens.ARB_USDT);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_WETH, CrosschainTokens.ETH_WBTC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.UNI_WETH, address(0x3333333333333333333333333333333333333333)); // Use existing contract address
+    }
+
+    /// forge-config: default.allow_internal_expect_revert = true
+    /// @notice Test WBTC input with invalid output token (lines 99-102)
+    /// @dev Tests when inputToken matches WBTC category but outputToken is NOT in WBTC list
+    /// ✅ COVERS: Lines 99-102 require() block in validateBridgeableTokenPair
+    function test_ValidateBridgeableTokenPair_WBTC_InputToken_InvalidOutput_Lines99To102() public {
+        // WBTC input but USDC output - should hit require() at lines 99-102
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.ETH_USDC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WBTC, CrosschainTokens.ARB_USDT);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_WBTC, CrosschainTokens.OPT_WETH);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WBTC, address(0x4444444444444444444444444444444444444444)); // Use existing contract address
+    }
 }
