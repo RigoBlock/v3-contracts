@@ -40,42 +40,36 @@ library NavImpactLib {
     /// @notice Validates that transfer amount doesn't exceed NAV impact tolerance
     /// @dev Calculates percentage impact: (transferValue * 10000) / totalAssetsValue vs toleranceBps
     /// @param token Token being transferred
-    /// @param amount Amount being transferred  
+    /// @param amount Amount being transferred
     /// @param toleranceBps Maximum allowed NAV impact in basis points (e.g., 1000 = 10%)
-    function validateNavImpact(
-        address token,
-        uint256 amount,
-        uint256 toleranceBps
-    ) internal view {
+    function validateNavImpact(address token, uint256 amount, uint256 toleranceBps) internal view {
         // Get current pool state
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
         poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
-        uint256 totalAssetsValue = poolTokens.unitaryValue * poolTokens.totalSupply / (10 ** poolDecimals);
-        
+        uint256 totalAssetsValue = (poolTokens.unitaryValue * poolTokens.totalSupply) / (10 ** poolDecimals);
+
         // For empty pools (all supply burnt on all chains), allow any transfer. Handles edge case of receiving first tokens on a chain
         if (totalAssetsValue == 0) {
             return;
         }
-        
+
         // Convert transfer amount to base token value for percentage calculation
         int256 transferValueInBase;
         if (token == baseToken) {
             transferValueInBase = amount.toInt256();
         } else {
             // Use convertTokenAmount for non-base tokens
-            transferValueInBase = IEOracle(address(this)).convertTokenAmount(
-                token,
-                amount.toInt256(),
-                baseToken
-            );
+            transferValueInBase = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken);
         }
-        
+
         // Calculate percentage impact in basis points: (transferValue * 10000) / totalAssetsValue
-        uint256 transferValueAbs = transferValueInBase >= 0 ? uint256(transferValueInBase) : uint256(-transferValueInBase);
+        uint256 transferValueAbs = transferValueInBase >= 0
+            ? uint256(transferValueInBase)
+            : uint256(-transferValueInBase);
         uint256 impactBps = (transferValueAbs * 10000) / totalAssetsValue;
-        
+
         // Validate impact is within tolerance
         if (impactBps > toleranceBps) {
             revert NavImpactTooHigh();

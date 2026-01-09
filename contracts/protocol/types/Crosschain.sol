@@ -26,14 +26,14 @@ struct DestinationMessageParams {
 /// @notice Single call to be executed by Across MulticallHandler
 /// @dev Matches Across protocol Call struct exactly
 struct Call {
-    address target;      // Contract to call
-    bytes callData;      // Encoded function call data  
-    uint256 value;       // ETH value to send with the call
+    address target; // Contract to call
+    bytes callData; // Encoded function call data
+    uint256 value; // ETH value to send with the call
 }
 
 /// @notice Complete instructions for MulticallHandler execution
 /// @dev Matches Across protocol Instructions struct exactly
 struct Instructions {
-    Call[] calls;                    // Array of calls to execute
-    address fallbackRecipient;      // Where tokens go if calls fail (address(0) = revert on failure)
+    Call[] calls; // Array of calls to execute
+    address fallbackRecipient; // Where tokens go if calls fail (address(0) = revert on failure)
 }

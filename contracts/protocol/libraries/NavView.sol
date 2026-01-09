@@ -52,9 +52,9 @@ library NavView {
 
     /// @notice Complete NAV data for a pool
     struct NavData {
-        uint256 totalValue;    // Total pool value in base token
-        uint256 unitaryValue;  // NAV per share
-        uint256 timestamp;     // Block timestamp when calculated
+        uint256 totalValue; // Total pool value in base token
+        uint256 unitaryValue; // NAV per share
+        uint256 timestamp; // Block timestamp when calculated
     }
 
     /// @notice Gets application token balances for external positions
@@ -86,11 +86,7 @@ library NavView {
 
         for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
             if (appStates[i]) {
-                apps[activeAppIndex].balances = handleApplication(
-                    Applications(i),
-                    grgStakingProxy,
-                    uniV4Posm
-                );
+                apps[activeAppIndex].balances = handleApplication(Applications(i), grgStakingProxy, uniV4Posm);
                 apps[activeAppIndex].appType = uint256(Applications(i));
                 activeAppIndex++;
             }
@@ -107,12 +103,12 @@ library NavView {
     ) internal view returns (TokenBalance[] memory balances) {
         // Get active tokens
         ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(address(this)).getActiveTokens();
-        
+
         // Create memory arrays to track unique tokens and their balances
         address[] memory uniqueTokens = new address[](tokens.activeTokens.length + 100); // Buffer for app tokens
         int256[] memory tokenBalances = new int256[](tokens.activeTokens.length + 100);
         uint256 tokenCount = 0;
-        
+
         // Get application balances
         ExternalApp[] memory apps = getAppTokenBalances(grgStakingProxy, uniV4Posm);
 
@@ -122,7 +118,7 @@ library NavView {
                 if (apps[i].balances[j].amount != 0) {
                     address token = apps[i].balances[j].token;
                     int256 amount = apps[i].balances[j].amount;
-                    
+
                     // Find if token already tracked
                     bool tokenFound = false;
                     for (uint256 k = 0; k < tokenCount; k++) {
@@ -132,7 +128,7 @@ library NavView {
                             break;
                         }
                     }
-                    
+
                     if (!tokenFound) {
                         uniqueTokens[tokenCount] = token;
                         tokenBalances[tokenCount] = amount;
@@ -150,10 +146,13 @@ library NavView {
         }
         // Always add virtual balance for base token
         baseTokenBalance += VirtualBalanceLib.getVirtualBalance(tokens.baseToken);
-        
+
         bool baseTokenFound = false;
         for (uint256 k = 0; k < tokenCount; k++) {
-            if (uniqueTokens[k] == tokens.baseToken || (tokens.baseToken == ZERO_ADDRESS && uniqueTokens[k] == ZERO_ADDRESS)) {
+            if (
+                uniqueTokens[k] == tokens.baseToken ||
+                (tokens.baseToken == ZERO_ADDRESS && uniqueTokens[k] == ZERO_ADDRESS)
+            ) {
                 tokenBalances[k] += baseTokenBalance;
                 baseTokenFound = true;
                 break;
@@ -165,25 +164,25 @@ library NavView {
             tokenBalances[tokenCount] = baseTokenBalance;
             tokenCount++;
         }
-    
+
         // Add active tokens wallet balances + virtual balances
         for (uint256 i = 0; i < tokens.activeTokens.length; i++) {
             address token = tokens.activeTokens[i];
             int256 totalBalance = 0;
-            
+
             // Get wallet balance
             try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
                 totalBalance = int256(_balance);
             } catch {
                 // Continue even if balance read fails, might have virtual balance
             }
-            
+
             // Add virtual balance for this token
             totalBalance += VirtualBalanceLib.getVirtualBalance(token);
-            
+
             // Skip if no balance (wallet + virtual)
             if (totalBalance == 0) continue;
-            
+
             // Find if token already tracked
             bool walletTokenFound = false;
             for (uint256 k = 0; k < tokenCount; k++) {
@@ -193,21 +192,18 @@ library NavView {
                     break;
                 }
             }
-            
+
             if (!walletTokenFound) {
                 uniqueTokens[tokenCount] = token;
                 tokenBalances[tokenCount] = totalBalance;
                 tokenCount++;
             }
         }
-        
+
         // Create result array with actual count
         balances = new TokenBalance[](tokenCount);
         for (uint256 i = 0; i < tokenCount; i++) {
-            balances[i] = TokenBalance({
-                token: uniqueTokens[i],
-                balance: tokenBalances[i]
-            });
+            balances[i] = TokenBalance({token: uniqueTokens[i], balance: tokenBalances[i]});
         }
     }
 
@@ -215,20 +211,17 @@ library NavView {
     /// @param grgStakingProxy Address of the GRG staking proxy
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return navData Struct containing totalValue, unitaryValue, and timestamp
-    function getNavData(
-        address grgStakingProxy,
-        address uniV4Posm
-    ) internal view returns (NavData memory navData) {
+    function getNavData(address grgStakingProxy, address uniV4Posm) internal view returns (NavData memory navData) {
         // Get token balances
         TokenBalance[] memory balances = getTokensAndBalances(grgStakingProxy, uniV4Posm);
-        
+
         // Get pool data
         address baseToken = StorageLib.pool().baseToken;
         uint8 decimals = StorageLib.pool().decimals;
-        
+
         // Calculate total value
         int256 totalValue = 0;
-        
+
         // Count non-base tokens for batch conversion
         uint256 nonBaseTokenCount = 0;
         for (uint256 i = 0; i < balances.length; i++) {
@@ -238,12 +231,12 @@ library NavView {
                 nonBaseTokenCount++;
             }
         }
-        
+
         if (nonBaseTokenCount > 0) {
             address[] memory tokens = new address[](nonBaseTokenCount);
             int256[] memory amounts = new int256[](nonBaseTokenCount);
             uint256 idx = 0;
-            
+
             for (uint256 i = 0; i < balances.length; i++) {
                 if (balances[i].token != baseToken && balances[i].token != ZERO_ADDRESS && balances[i].balance != 0) {
                     tokens[idx] = balances[i].token;
@@ -251,27 +244,25 @@ library NavView {
                     idx++;
                 }
             }
-            
+
             // Convert all non-base tokens to base token value
-            try IEOracle(address(this)).convertBatchTokenAmounts(tokens, amounts, baseToken) returns (int256 convertedValue) {
+            try IEOracle(address(this)).convertBatchTokenAmounts(tokens, amounts, baseToken) returns (
+                int256 convertedValue
+            ) {
                 totalValue += convertedValue;
             } catch {
                 // If conversion fails, return zero
-                return NavData({
-                    totalValue: 0,
-                    unitaryValue: 0,
-                    timestamp: block.timestamp
-                });
+                return NavData({totalValue: 0, unitaryValue: 0, timestamp: block.timestamp});
             }
         }
-        
+
         // Get total supply (actual + virtual)
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint256 totalSupply = poolTokens.totalSupply;
-        
+
         // Add virtual supply for cross-chain transfers (matches MixinPoolValue)
         totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
-        
+
         // Calculate unitary value
         uint256 unitaryValue;
         if (totalSupply == 0) {
@@ -282,7 +273,7 @@ library NavView {
         } else {
             unitaryValue = 10 ** decimals; // Minimum value
         }
-        
+
         navData = NavData({
             totalValue: totalValue > 0 ? uint256(totalValue) : 0,
             unitaryValue: unitaryValue,
@@ -332,9 +323,7 @@ library NavView {
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return balances Array of AppTokenBalance structs
     /// @dev Assumes hooks do not influence liquidity and uses oracle to protect against manipulation
-    function getUniV4PmBalances(
-        address uniV4Posm
-    ) internal view returns (AppTokenBalance[] memory balances) {
+    function getUniV4PmBalances(address uniV4Posm) internal view returns (AppTokenBalance[] memory balances) {
         // Access stored position IDs
         uint256[] memory tokenIds = StorageLib.uniV4TokenIdsSlot().tokenIds;
         uint256 length = tokenIds.length;
@@ -342,7 +331,9 @@ library NavView {
 
         // Maximum of 255 positions can be created, so this loop won't break memory or block limits
         for (uint256 i = 0; i < length; i++) {
-            (PoolKey memory poolKey, PositionInfo info) = IPositionManager(uniV4Posm).getPoolAndPositionInfo(tokenIds[i]);
+            (PoolKey memory poolKey, PositionInfo info) = IPositionManager(uniV4Posm).getPoolAndPositionInfo(
+                tokenIds[i]
+            );
 
             // Accept evaluation error by excluding unclaimed fees, which can be inflated arbitrarily
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(

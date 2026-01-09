@@ -60,16 +60,16 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using VirtualBalanceLib for address;
 
     IAcrossSpokePool private immutable _acrossSpokePool;
-    
+
     /// @notice Maximum allowed nav tolerance in basis points (100% = 10000 bps)
     uint256 private constant MAX_NAV_TOLERANCE_BPS = 10000;
-    
+
     /// @notice Across MulticallHandler addresses
     address internal constant DEFAULT_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
     address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
 
     address private immutable _aIntents;
-    
+
     // Custom errors (inherit UnauthorizedCaller from interface)
     error NavToleranceTooHigh();
     error AdapterNotDeployedOnDestination();
@@ -184,11 +184,12 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             ),
             value: 0
         });
-        
-        return Instructions({
-            calls: calls,
-            fallbackRecipient: address(0) // Revert on failure
-        });
+
+        return
+            Instructions({
+                calls: calls,
+                fallbackRecipient: address(0) // Revert on failure
+            });
     }
 
     /// @dev Executes deposit via multicall handler
@@ -230,10 +231,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // (same token on different chains may have different decimals, e.g., BSC USDC)
         uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
             params.outputToken, // Amount is in this token's decimals
-            params.inputToken,  // Convert to this token's decimals
+            params.inputToken, // Convert to this token's decimals
             params.outputAmount
         );
-        
+
         // Convert to base token value for supply calculations
         address baseToken = StorageLib.pool().baseToken;
         int256 outputValueInBaseInt = IEOracle(address(this)).convertTokenAmount(
@@ -242,17 +243,17 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             baseToken
         );
         uint256 outputValueInBase = outputValueInBaseInt.toUint256();
-        
+
         // Update NAV and get pool state
         ISmartPoolActions(address(this)).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
         uint8 poolDecimals = StorageLib.pool().decimals;
-        
+
         // Convert transfer value to shares using current NAV (same as mint/burn calculation)
         // shares = baseValue / unitaryValue (in pool token units)
         uint256 sharesToBurn = (outputValueInBase * (10 ** poolDecimals)) / poolTokens.unitaryValue;
-        
+
         if (virtualSupply > 0) {
             if (virtualSupply >= sharesToBurn) {
                 // Sufficient virtual supply - burn the exact share amount
@@ -260,10 +261,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             } else {
                 // Insufficient virtual supply - burn all of it, use virtual balance for remainder
                 VirtualBalanceLib.adjustVirtualSupply(-(virtualSupply.toInt256()));
-                
+
                 // Calculate remaining value that wasn't covered by burning virtual supply
-                uint256 remainingValue = ((sharesToBurn - virtualSupply) * poolTokens.unitaryValue) / (10 ** poolDecimals);
-                
+                uint256 remainingValue = ((sharesToBurn - virtualSupply) * poolTokens.unitaryValue) /
+                    (10 ** poolDecimals);
+
                 // Convert remaining base value back to input token units using oracle
                 int256 remainingTokensInt = IEOracle(address(this)).convertTokenAmount(
                     baseToken,
@@ -298,7 +300,8 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     // revert if we do not modify the bitmask, which will prompt updating this method with the newly supported chain.
     function _getAcrossHandler(uint256 chainId) private pure returns (address) {
         // BSC uses different multicall handler
-        if (chainId == 56) { // BSC
+        if (chainId == 56) {
+            // BSC
             return BSC_MULTICALL_HANDLER;
         }
 

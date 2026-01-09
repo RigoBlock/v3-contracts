@@ -45,12 +45,12 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         } else {
             // Calculate effective supply (actual + virtual) - both systems can coexist
             components.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
-            
+
             if (components.totalSupply == 0) {
                 // No supply anywhere - return stored NAV
                 return components;
             }
-            
+
             uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
 
             if (totalPoolValue > 0) {
@@ -121,7 +121,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // initialize pool value as base token balances (wallet balance plus apps balances)
         int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
-        
+
         // Add virtual balances for cross-chain transfers (requirement 1 & 4)
         poolValueInBaseToken += VirtualBalanceLib.getVirtualBalance(baseToken);
 

@@ -17,9 +17,9 @@ interface IENavView {
 
     /// @notice Complete NAV data for a pool
     struct NavData {
-        uint256 totalValue;    // Total pool value in base token
-        uint256 unitaryValue;  // NAV per share
-        uint256 timestamp;     // Block timestamp when calculated
+        uint256 totalValue; // Total pool value in base token
+        uint256 unitaryValue; // NAV per share
+        uint256 timestamp; // Block timestamp when calculated
     }
 
     /// @notice Returns all token balances including virtual balances and application positions

@@ -8,7 +8,7 @@ import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
     error PoolNavNotInRange();
-    
+
     /*
      * EXTERNAL VIEW METHODS
      */

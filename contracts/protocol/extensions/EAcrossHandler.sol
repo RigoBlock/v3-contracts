@@ -53,10 +53,10 @@ contract EAcrossHandler is IEAcrossHandler {
 
     /// @notice Address of the Across SpokePool contract
     address private immutable _acrossSpokePool;
-    
+
     /// @notice Across MulticallHandler addresses (for multicall-based transfers)
     address private immutable _acrossHandler;
-    
+
     /// @dev Passed param is expected to be valid - skip validation
     constructor(address acrossSpokePool, address acrossMulticallHandler) {
         _acrossSpokePool = acrossSpokePool;
@@ -75,10 +75,8 @@ contract EAcrossHandler is IEAcrossHandler {
     /// @inheritdoc IEAcrossHandler
     function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable override {
         bool isLocked = token.getDonationLock();
-        
-        uint256 balance = token == address(0)
-            ? address(this).balance
-            : IERC20(token).balanceOf(address(this));
+
+        uint256 balance = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
 
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
@@ -88,7 +86,7 @@ contract EAcrossHandler is IEAcrossHandler {
 
             // Update unitary value for both Sync and Transfer operations
             ISmartPoolActions(address(this)).updateUnitaryValue();
-            
+
             // Store NAV for later manipulation check
             uint256 currentNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
             token.storeNav(currentNav);
@@ -109,7 +107,7 @@ contract EAcrossHandler is IEAcrossHandler {
         uint256 amountDelta = balance - storedBalance;
 
         // For bridge transactions, amountDelta will be >= amount due to solver surplus
-        // We use amountDelta for virtual balance (captures full value) 
+        // We use amountDelta for virtual balance (captures full value)
         // and amount for validation that we got at least what was expected
         require(amountDelta >= amount, CallerTransferAmount());
 
@@ -123,14 +121,10 @@ contract EAcrossHandler is IEAcrossHandler {
 
         // Only allow tokens from our cross-chain whitelist
         require(CrosschainLib.isAllowedCrosschainToken(token), CrosschainLib.UnsupportedCrossChainToken());
-        
+
         // If token not already owned, activate it (addUnique checks price feed requirement)
         if (!StorageLib.isOwnedToken(token)) {
-            StorageLib.activeTokensSet().addUnique(
-                IEOracle(address(this)), 
-                token, 
-                StorageLib.pool().baseToken
-            );
+            StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
         }
 
         if (params.opType == OpType.Transfer) {
@@ -142,17 +136,17 @@ contract EAcrossHandler is IEAcrossHandler {
         // reset lock
         token.setDonationLock(false);
     }
-    
+
     function _handleTransferMode(address token, uint256 amount, uint256 amountDelta) private {
         // Use stored NAV from initialization for all calculations
         uint256 storedNav = token.getStoredNav();
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
-        
+
         // Check if positive virtual balances exist for this token
         int256 currentVirtualBalance = VirtualBalanceLib.getVirtualBalance(token);
         uint256 remainingAmount = amount;
-        
+
         if (currentVirtualBalance > 0) {
             // Reduce existing positive virtual balance (tokens coming back to this chain)
             uint256 virtualBalanceUint = currentVirtualBalance.toUint256();
@@ -166,44 +160,40 @@ contract EAcrossHandler is IEAcrossHandler {
                 remainingAmount = remainingAmount - virtualBalanceUint;
             }
         }
-        
+
         // Increase virtual supply if there's remaining amount (cross-chain representation)
         if (remainingAmount > 0) {
-            uint256 baseValue = IEOracle(address(this)).convertTokenAmount(
-                token,
-                remainingAmount.toInt256(),
-                baseToken
-            ).toUint256();
-            
+            uint256 baseValue = IEOracle(address(this))
+                .convertTokenAmount(token, remainingAmount.toInt256(), baseToken)
+                .toUint256();
+
             // shares = baseValue / storedNav (in pool token units)
             uint256 virtualSupplyIncrease = (baseValue * (10 ** poolDecimals)) / storedNav;
-            
+
             VirtualBalanceLib.adjustVirtualSupply(virtualSupplyIncrease.toInt256());
         }
-        
-        // CRITICAL: Validate NAV after virtual adjustments 
+
+        // CRITICAL: Validate NAV after virtual adjustments
         // Transfer mode should be NAV-neutral except for surplus from solver
-        
+
         // Update NAV to reflect received tokens before validation
         ISmartPoolActions(address(this)).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint256 finalNav = poolTokens.unitaryValue;
         uint256 expectedNav = storedNav;
-        
+
         if (amountDelta > amount) {
             // Surplus exists (solver kept some value on destination) - this increases NAV
-            uint256 surplusBaseValue = IEOracle(address(this)).convertTokenAmount(
-                token,
-                (amountDelta - amount).toInt256(),
-                baseToken
-            ).toUint256();
-            
+            uint256 surplusBaseValue = IEOracle(address(this))
+                .convertTokenAmount(token, (amountDelta - amount).toInt256(), baseToken)
+                .toUint256();
+
             // Calculate expected NAV increase: surplusValue / effectiveSupply
             poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
             uint256 expectedNavIncrease = (surplusBaseValue * (10 ** poolDecimals)) / poolTokens.totalSupply;
             expectedNav = storedNav + expectedNavIncrease;
         }
-        
+
         require(finalNav == expectedNav, NavManipulationDetected(expectedNav, finalNav));
     }
 }

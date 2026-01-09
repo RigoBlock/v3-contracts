@@ -80,9 +80,7 @@ contract ExtensionsMap is IExtensionsMap {
         // validate immutable constants. Assumes deps are correctly initialized
         assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId);
         assert(
-            _ENAVVIEW_ALL_TOKENS_BALANCES_SELECTOR ^
-                _ENAVVIEW_NAV_DATA_SELECTOR ^
-                _ENAVVIEW_APP_BALANCES_SELECTOR ==
+            _ENAVVIEW_ALL_TOKENS_BALANCES_SELECTOR ^ _ENAVVIEW_NAV_DATA_SELECTOR ^ _ENAVVIEW_APP_BALANCES_SELECTOR ==
                 type(IENavView).interfaceId
         );
         assert(

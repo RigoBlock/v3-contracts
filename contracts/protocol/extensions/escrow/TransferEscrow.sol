@@ -34,7 +34,7 @@ contract TransferEscrow {
 
     /// @notice Emitted when tokens are donated back to the pool
     event TokensDonated(address indexed token, uint256 amount);
-    
+
     /// @notice The pool this escrow is associated with
     address public immutable pool;
 
@@ -62,20 +62,20 @@ contract TransferEscrow {
         }
 
         require(balance > 0, InvalidAmount());
-        
+
         DestinationMessageParams memory params;
         params.opType = OpType.Transfer;
 
         // Store balance before transfer
         IEAcrossHandler(pool).donate(token, 1, params);
-        
+
         // Transfer tokens to pool
         if (token == address(0)) {
             pool.safeTransferNative(balance);
         } else {
             token.safeTransfer(pool, balance);
         }
-        
+
         // Process donation with actual balance
         IEAcrossHandler(pool).donate(token, balance, params);
 

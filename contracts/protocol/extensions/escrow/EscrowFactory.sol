@@ -42,13 +42,10 @@ library EscrowFactory {
     function getEscrowAddress(address pool, OpType opType) internal view returns (address escrowAddress) {
         bytes32 salt = _getSalt(opType);
         bytes32 bytecodeHash = _getBytecodeHash(opType, pool);
-        
-        escrowAddress = address(uint160(uint256(keccak256(abi.encodePacked(
-            bytes1(0xff),
-            address(this),
-            salt,
-            bytecodeHash
-        )))));
+
+        escrowAddress = address(
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, bytecodeHash))))
+        );
     }
 
     /// @notice Deploys an escrow contract using CREATE2 (idempotent)
@@ -57,7 +54,7 @@ library EscrowFactory {
     /// @return escrowContract The deployed escrow contract address
     function deployEscrow(address pool, OpType opType) internal returns (address escrowContract) {
         bytes32 salt = _getSalt(opType);
-        
+
         // Try to deploy - if already exists, CREATE2 will succeed and return existing address
         try new TransferEscrow{salt: salt}(pool) returns (TransferEscrow escrow) {
             escrowContract = address(escrow);
@@ -66,7 +63,7 @@ library EscrowFactory {
             // Escrow already exists at this address - compute and return it
             escrowContract = getEscrowAddress(pool, opType);
         }
-        
+
         require(escrowContract != address(0), DeploymentFailed());
     }
 
@@ -87,10 +84,6 @@ library EscrowFactory {
     /// @dev Gets the bytecode hash for CREATE2 address calculation
     function _getBytecodeHash(OpType /* opType */, address pool) private pure returns (bytes32) {
         // All operations use TransferEscrow for now
-        return keccak256(abi.encodePacked(
-            type(TransferEscrow).creationCode,
-            abi.encode(pool)
-        ));
+        return keccak256(abi.encodePacked(type(TransferEscrow).creationCode, abi.encode(pool)));
     }
-
 }

@@ -51,32 +51,32 @@ library TransientStorage {
         bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
         return slot.asBoolean().tload();
     }
-    
+
     function setDonationLock(address token, bool locked) internal {
         bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
         slot.asBoolean().tstore(locked);
     }
-    
+
     function storeTemporaryBalance(address token, uint256 amount) internal {
         bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
         slot.asUint256().tstore(amount);
     }
-    
+
     function getTemporaryBalance(address token) internal view returns (uint256) {
         bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
         return slot.asUint256().tload();
     }
-    
+
     function clearTemporaryBalance(address token) internal {
         bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
         slot.asUint256().tstore(0);
     }
-    
+
     function storeNav(address token, uint256 nav) internal {
         bytes32 slot = _STORED_NAV_SLOT.deriveMapping(token);
         slot.asUint256().tstore(nav);
     }
-    
+
     function getStoredNav(address token) internal view returns (uint256) {
         bytes32 slot = _STORED_NAV_SLOT.deriveMapping(token);
         return slot.asUint256().tload();

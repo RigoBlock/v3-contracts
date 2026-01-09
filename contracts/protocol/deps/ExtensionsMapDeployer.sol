@@ -52,9 +52,9 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
         return
             DeploymentParams({
                 extensions: Extensions({
-                    eApps: _eApps, 
+                    eApps: _eApps,
                     eNavView: _eNavView,
-                    eOracle: _eOracle, 
+                    eOracle: _eOracle,
                     eUpgrade: _eUpgrade,
                     eAcrossHandler: _eAcrossHandler
                 }),

@@ -55,14 +55,11 @@ contract ENavView is IENavView {
     function getAllTokensAndBalancesView() public view override returns (TokenBalance[] memory balances) {
         // Use NavView library to get all token balances
         NavView.TokenBalance[] memory navBalances = NavView.getTokensAndBalances(grgStakingProxy, uniV4Posm);
-        
+
         // Convert NavView.TokenBalance to IENavView.TokenBalance
         balances = new TokenBalance[](navBalances.length);
         for (uint256 i = 0; i < navBalances.length; i++) {
-            balances[i] = TokenBalance({
-                token: navBalances[i].token,
-                balance: navBalances[i].balance
-            });
+            balances[i] = TokenBalance({token: navBalances[i].token, balance: navBalances[i].balance});
         }
     }
 
@@ -70,7 +67,7 @@ contract ENavView is IENavView {
     function getNavDataView() external view override returns (NavData memory navData) {
         // Use NavView library to get NAV data
         NavView.NavData memory navViewData = NavView.getNavData(grgStakingProxy, uniV4Posm);
-        
+
         // Convert NavView.NavData to IENavView.NavData
         navData = NavData({
             totalValue: navViewData.totalValue,
