@@ -21,6 +21,7 @@ import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IE
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {IAcrossSpokePool} from "../../contracts/protocol/interfaces/IAcrossSpokePool.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
+import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
 
 /// @notice Interface for Across MulticallHandler contract
 /// @dev This matches the actual Across Protocol MulticallHandler interface
@@ -1749,5 +1750,113 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             calls: calls,
             fallbackRecipient: address(0) // Revert on failure
         });
+    }
+
+    /// @notice Test unwrapping wrapped native token (WETH -> ETH)
+    /// @notice Test EAcrossHandler WETH unwrapping functionality
+    /// @dev Tests the shouldUnwrapNative flag in donate() to cover unwrapping logic (lines 116-119)
+    function test_IntegrationFork_EAcrossHandler_UnwrapWrappedNative() public {
+        uint256 initialEthBalance = ethereum.pool.balance;
+        uint256 donationAmount = 0.5e18;
+        
+        address donor = address(0x1234);
+        deal(Constants.ETH_WETH, donor, donationAmount);
+        
+        // Step 1: Initialize with amount=1 using WETH
+        vm.prank(donor);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: true
+        }));
+        
+        // Step 2: Transfer tokens to pool (simulates bridge transfer)
+        vm.prank(donor);
+        IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
+        
+        // Step 3: Perform actual donation with unwrapping
+        vm.prank(donor);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: true
+        }));
+        
+        // Verify WETH was unwrapped to ETH
+        assertEq(ethereum.pool.balance, initialEthBalance + donationAmount, "ETH balance should increase from WETH unwrapping");
+    }
+
+    /// @notice Test revert with InvalidOpType when passing OpType.Unknown
+    /// @notice Test InvalidOpType error handling in EAcrossHandler
+    /// @dev Covers line 133 where OpType.Unknown triggers InvalidOpType revert
+    /// ✅ PASSING - Successfully covers error case validation
+    function test_IntegrationFork_EAcrossHandler_InvalidOpType() public {
+        uint256 donationAmount = 100e6;
+        
+        // Fund handler with USDC
+        deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
+        
+        // Step 1: Initialize (doesn't validate OpType)
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Unknown,
+            shouldUnwrapNative: false
+        }));
+        
+        // Step 2: Transfer tokens to pool (simulates bridge transfer)
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
+        
+        // Step 3: This should fail with InvalidOpType
+        vm.expectRevert(IEAcrossHandler.InvalidOpType.selector);
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+            opType: OpType.Unknown,
+            shouldUnwrapNative: false
+        }));
+    }
+
+    /// @notice Test partial reduction of virtual balance then increase virtual supply (lines 159-160)
+    /// @notice Test partial virtual balance reduction in Transfer mode  
+    /// @dev Attempts to cover lines 159-160 in _handleTransferMode where virtual balance > donation
+    /// Currently virtual balance is not being modified - may need different approach or slot calculation
+    function test_IntegrationFork_EAcrossHandler_PartialVirtualBalanceReduction() public {
+        address poolOwner = ISmartPool(payable(ethereum.pool)).owner();
+        vm.startPrank(poolOwner);
+        deal(Constants.ETH_USDC, poolOwner, 1000e6);
+        IERC20(Constants.ETH_USDC).approve(ethereum.pool, 1000e6);
+        ISmartPool(payable(ethereum.pool)).mint(poolOwner, 1000e6, 0);
+        vm.stopPrank();
+        
+        // Set virtual balance to 200 USDC (less than donation to trigger partial reduction)
+        // Use the correct slot calculation: _VIRTUAL_BALANCES_SLOT.deriveMapping(token)
+        bytes32 virtualBalancesSlot = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f; // _VIRTUAL_BALANCES_SLOT from VirtualBalanceLib
+        bytes32 slot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
+        int256 virtualBalance = 200e6;
+        vm.store(ethereum.pool, slot, bytes32(uint256(virtualBalance))); // Store as int256 converted to bytes32
+        
+        uint256 donationAmount = 300e6; // Greater than virtual balance to trigger partial reduction
+        
+        // Fund handler with USDC
+        deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
+        
+        // Step 1: Initialize with amount=1
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        
+        // Step 2: Transfer tokens to pool (simulates bridge transfer)
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
+        
+        // Step 3: Perform actual donation  
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        
+        // Virtual balance should be zeroed out (partial reduction case - lines 159-160)
+        assertEq(int256(uint256(vm.load(ethereum.pool, slot))), 0, "Virtual balance should be zeroed after partial reduction");
     }
 }

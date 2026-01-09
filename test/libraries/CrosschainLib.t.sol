@@ -106,6 +106,62 @@ contract CrosschainLibTest is Test {
         vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
         CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDC, CrosschainTokens.ETH_WBTC);
     }
+
+    /// forge-config: default.allow_internal_expect_revert = true  
+    /// @notice Test specific require() statements in each validation block - these are the missed lines
+    function test_ValidateBridgeableTokenPair_USDC_InputToken_InvalidOutput() public {
+        // USDC inputToken but non-USDC outputToken -> should hit require() at line 28-35
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDC, CrosschainTokens.ETH_USDT);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_USDC, CrosschainTokens.ARB_WETH);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_USDC, CrosschainTokens.ETH_WBTC);
+    }
+
+    /// forge-config: default.allow_internal_expect_revert = true
+    function test_ValidateBridgeableTokenPair_USDT_InputToken_InvalidOutput() public {
+        // USDT inputToken but non-USDT outputToken -> should hit require() at line 49-55
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDT, CrosschainTokens.ETH_USDC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_USDT, CrosschainTokens.ARB_WETH);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_USDT, CrosschainTokens.POLY_WBTC);
+    }
+
+    /// forge-config: default.allow_internal_expect_revert = true
+    function test_ValidateBridgeableTokenPair_WETH_InputToken_InvalidOutput() public {
+        // WETH inputToken but non-WETH outputToken -> should hit require() at line 70-76
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WETH, CrosschainTokens.ETH_USDC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WETH, CrosschainTokens.ARB_USDT);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_WETH, CrosschainTokens.ETH_WBTC);
+    }
+
+    /// forge-config: default.allow_internal_expect_revert = true
+    function test_ValidateBridgeableTokenPair_WBTC_InputToken_InvalidOutput() public {
+        // WBTC inputToken but non-WBTC outputToken -> should hit require() at line 88-92
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.ETH_USDC);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WBTC, CrosschainTokens.ARB_USDT);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_WBTC, CrosschainTokens.OPT_WETH);
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WBTC, CrosschainTokens.BASE_USDC);
+    }
     
     /// forge-config: default.allow_internal_expect_revert = true
     /// @notice Test completely unsupported token addresses - these should revert
@@ -547,5 +603,55 @@ contract CrosschainLibTest is Test {
             
             assertTrue(hasAllowedToken, "Each supported chain should allow at least one token");
         }
+    }
+
+    /// @notice Test missing branch coverage - WBTC validation edge cases
+    function test_ValidateBridgeableTokenPair_WBTC_EdgeCases() public pure {
+        // Test all WBTC tokens systematically to cover all branches
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.ARB_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.OPT_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.POLY_WBTC);
+        
+        // All WBTC tokens with each other
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WBTC, CrosschainTokens.ETH_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_WBTC, CrosschainTokens.POLY_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WBTC, CrosschainTokens.ARB_WBTC);
+        
+        // Same token pairs
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.ETH_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WBTC, CrosschainTokens.ARB_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_WBTC, CrosschainTokens.OPT_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WBTC, CrosschainTokens.POLY_WBTC);
+    }
+
+    /// @notice Test specific chain conditions that might be missed 
+    function test_IsAllowedCrosschainToken_SpecificChainEdgeCases() public {
+        // Test Ethereum with all its supported tokens
+        vm.chainId(1);
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ETH_USDC), "ETH_USDC on Ethereum");
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ETH_USDT), "ETH_USDT on Ethereum");
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ETH_WETH), "ETH_WETH on Ethereum");
+        assertFalse(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ARB_USDC), "ARB_USDC not on Ethereum");
+        
+        // Test Base specifically (no USDT)
+        vm.chainId(8453);
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.BASE_USDC), "BASE_USDC on Base");
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.BASE_WETH), "BASE_WETH on Base");
+        assertFalse(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.BASE_USDT), "BASE_USDT not supported");
+        assertFalse(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ETH_USDC), "ETH_USDC not on Base");
+        
+        // Test BSC specifically
+        vm.chainId(56);
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.BSC_USDC), "BSC_USDC on BSC");
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.BSC_USDT), "BSC_USDT on BSC");
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.BSC_WETH), "BSC_WETH on BSC");
+        assertFalse(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ETH_USDC), "ETH_USDC not on BSC");
+
+        // Test Unichain specifically (no USDT)
+        vm.chainId(1301);
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.UNI_USDC), "UNI_USDC on Unichain");
+        assertTrue(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.UNI_WETH), "UNI_WETH on Unichain");
+        assertFalse(CrosschainLib.isAllowedCrosschainToken(CrosschainTokens.ETH_USDC), "ETH_USDC not on Unichain");
+        assertFalse(CrosschainLib.isAllowedCrosschainToken(address(0x1234)), "Random token not on Unichain");
     }
 }

@@ -111,6 +111,9 @@ contract EAcrossHandler is IEAcrossHandler {
         // and amount for validation that we got at least what was expected
         require(amountDelta >= amount, CallerTransferAmount());
 
+        // Only allow tokens from our cross-chain whitelist (check before unwrapping)
+        require(CrosschainLib.isAllowedCrosschainToken(token), CrosschainLib.UnsupportedCrossChainToken());
+
         address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
 
         if (token == wrappedNative && params.shouldUnwrapNative) {
@@ -118,9 +121,6 @@ contract EAcrossHandler is IEAcrossHandler {
             IWETH9(wrappedNative).withdraw(amountDelta);
             token = address(0);
         }
-
-        // Only allow tokens from our cross-chain whitelist
-        require(CrosschainLib.isAllowedCrosschainToken(token), CrosschainLib.UnsupportedCrossChainToken());
 
         // If token not already owned, activate it (addUnique checks price feed requirement)
         if (!StorageLib.isOwnedToken(token)) {
