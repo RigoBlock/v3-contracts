@@ -67,16 +67,11 @@ jobs:
             **/node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
 
-      - name: Cache Foundry build (excluding fork cache)
+      - name: Cache Foundry compilation cache
         uses: actions/cache@v5
         with:
-          path: |
-            cache_forge/
-            out/
-          key: ${{ runner.os }}-foundry-${{ hashFiles('foundry.toml', 'remappings.txt') }}-${{ hashFiles('contracts/**/*.sol', 'test/**/*.sol') }}
-          restore-keys: |
-            ${{ runner.os }}-foundry-${{ hashFiles('foundry.toml', 'remappings.txt') }}-
-            ${{ runner.os }}-foundry-
+          path: cache_forge/
+          key: ${{ runner.os }}-foundry-cache-${{ hashFiles('foundry.toml', 'remappings.txt') }}-${{ hashFiles('contracts/**/*.sol') }}
 
       - name: Cache Foundry fork data (persistent)
         uses: actions/cache@v5
@@ -86,16 +81,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-foundry-forks-
 
-      - name: Cache Hardhat build
+      - name: Cache Hardhat compilation cache
         uses: actions/cache@v5
         with:
-          path: |
-            build/
-            cache/
-          key: ${{ runner.os }}-hardhat-${{ hashFiles('hardhat.config.ts', 'package.json') }}-${{ hashFiles('contracts/**/*.sol') }}
-          restore-keys: |
-            ${{ runner.os }}-hardhat-${{ hashFiles('hardhat.config.ts', 'package.json') }}-
-            ${{ runner.os }}-hardhat-
+          path: cache/
+          key: ${{ runner.os }}-hardhat-cache-${{ hashFiles('hardhat.config.ts', 'package.json') }}-${{ hashFiles('contracts/**/*.sol') }}
 
       - run: yarn --frozen-lockfile
 
@@ -108,9 +98,6 @@ jobs:
           rm -rf coverage/
           rm -f lcov.info
           rm -f foundry_lcov.info
-          # Clean only compilation cache, preserve fork cache
-          rm -rf cache_forge/solidity-files-cache.json
-          rm -rf out/
 
       - name: Generate combined coverage report
         env:
