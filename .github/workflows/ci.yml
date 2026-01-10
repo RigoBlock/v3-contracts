@@ -67,12 +67,6 @@ jobs:
             **/node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
 
-      - name: Cache Foundry compilation cache
-        uses: actions/cache@v5
-        with:
-          path: cache_forge/
-          key: ${{ runner.os }}-foundry-cache-${{ hashFiles('foundry.toml', 'remappings.txt') }}-${{ hashFiles('contracts/**/*.sol') }}
-
       - name: Cache Foundry fork data (persistent)
         uses: actions/cache@v5
         with:
@@ -80,12 +74,6 @@ jobs:
           key: ${{ runner.os }}-foundry-forks-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: |
             ${{ runner.os }}-foundry-forks-
-
-      - name: Cache Hardhat compilation cache
-        uses: actions/cache@v5
-        with:
-          path: cache/
-          key: ${{ runner.os }}-hardhat-cache-${{ hashFiles('hardhat.config.ts', 'package.json') }}-${{ hashFiles('contracts/**/*.sol') }}
 
       - run: yarn --frozen-lockfile
 
