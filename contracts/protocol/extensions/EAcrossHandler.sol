@@ -77,7 +77,7 @@ contract EAcrossHandler is IEAcrossHandler {
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
-            token.setDonationLock(true, balance);
+            token.setDonationLock(balance);
 
             // Update unitary value for both Sync and Transfer operations
             ISmartPoolActions(address(this)).updateUnitaryValue();
@@ -127,7 +127,7 @@ contract EAcrossHandler is IEAcrossHandler {
         }
 
         // Unlock donation and clear all temporary storage atomically
-        token.setDonationLock(false, 0);
+        token.setDonationLock(0);
     }
 
     function _handleTransferMode(address token, uint256 amount, uint256 amountDelta) private {
