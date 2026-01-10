@@ -25,7 +25,7 @@
     "coverage:setup": "chmod +x ./scripts/setup-lcov.sh && scripts/setup-lcov.sh",
     "coverage:hardhat": "hardhat coverage 2>&1 | grep -v '|' | grep -v '═' | grep -v '─' | grep -v 'File' | grep -v '% Stmts' | grep -v 'All files' || true",
     "coverage:foundry": "rm -f lcov.info && forge coverage --no-match-coverage \"mocks/|examples/|test/|tokens/|utils/\" --report lcov && mv lcov.info coverage/foundry_lcov.info",
-    "coverage:merge": "lcov --add-tracefile coverage/lcov.info --add-tracefile coverage/foundry_lcov.info --output-file coverage/combined_lcov.info --ignore-errors format,corrupt && sed -i 's|/home/[^/]*/v3-contracts/||g' coverage/combined_lcov.info",
+    "coverage:merge": "lcov --add-tracefile coverage/lcov.info --add-tracefile coverage/foundry_lcov.info --output-file coverage/combined_lcov.info --ignore-errors format,corrupt && sed -i 's|SF:/home/[^/]*/v3-contracts/|SF:|g' coverage/combined_lcov.info",
     "coverage:combined": "yarn coverage:setup && yarn coverage:hardhat && yarn coverage:foundry && yarn coverage:merge && chmod +x ./scripts/display-coverage.sh && ./scripts/display-coverage.sh",
     "coverage:combined:summary": "yarn coverage:setup && yarn coverage:hardhat && yarn coverage:foundry && yarn coverage:merge && yarn coverage:summary",
     "coverage:summary": "genhtml -o coverage/html coverage/combined_lcov.info",
