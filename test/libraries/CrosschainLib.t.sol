@@ -734,4 +734,58 @@ contract CrosschainLibTest is Test {
         vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
         CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WBTC, address(0x4444444444444444444444444444444444444444)); // Use existing contract address
     }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                           SUCCESSFUL VALIDATION TESTS (MISSED LINES)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Test successful USDC validations (line 42 return statement)  
+    /// @dev Tests when inputToken and outputToken are both valid USDC tokens
+    /// ✅ COVERS: Line 42 return; statement in validateBridgeableTokenPair
+    function test_ValidateBridgeableTokenPair_USDC_SuccessfulValidation_Line42() public pure {
+        // These should NOT revert - they hit the return; statement at line 42
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDC, CrosschainTokens.ARB_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_USDC, CrosschainTokens.OPT_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_USDC, CrosschainTokens.BSC_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.UNI_USDC, CrosschainTokens.ETH_USDC);
+        // Same token case
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDC, CrosschainTokens.ETH_USDC);
+    }
+
+    /// @notice Test successful USDT validations (line 63 return statement)
+    /// @dev Tests when inputToken and outputToken are both valid USDT tokens  
+    /// ✅ COVERS: Line 63 return; statement in validateBridgeableTokenPair
+    function test_ValidateBridgeableTokenPair_USDT_SuccessfulValidation_Line63() public pure {
+        // These should NOT revert - they hit the return; statement at line 63
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDT, CrosschainTokens.ARB_USDT);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_USDT, CrosschainTokens.BASE_USDT);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_USDT, CrosschainTokens.BSC_USDT);
+        // Same token case
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDT, CrosschainTokens.ETH_USDT);
+    }
+
+    /// @notice Test successful WETH validations (line 86 return statement)
+    /// @dev Tests when inputToken and outputToken are both valid WETH tokens
+    /// ✅ COVERS: Line 86 return; statement in validateBridgeableTokenPair  
+    function test_ValidateBridgeableTokenPair_WETH_SuccessfulValidation_Line86() public pure {
+        // These should NOT revert - they hit the return; statement at line 86
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WETH, CrosschainTokens.ARB_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_WETH, CrosschainTokens.OPT_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WETH, CrosschainTokens.BSC_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.UNI_WETH, CrosschainTokens.ETH_WETH);
+        // Same token case
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WETH, CrosschainTokens.ETH_WETH);
+    }
+
+    /// @notice Test successful WBTC validations (line 103 return statement)
+    /// @dev Tests when inputToken and outputToken are both valid WBTC tokens
+    /// ✅ COVERS: Line 103 return; statement in validateBridgeableTokenPair
+    function test_ValidateBridgeableTokenPair_WBTC_SuccessfulValidation_Line103() public pure {
+        // These should NOT revert - they hit the return; statement at line 103
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.ARB_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_WBTC, CrosschainTokens.POLY_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WBTC, CrosschainTokens.ETH_WBTC);
+        // Same token case
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.ETH_WBTC);
+    }
 }
