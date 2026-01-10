@@ -47,17 +47,7 @@ jobs:
         with:
           version: nightly
 
-      - name: Cache LCOV installation
-        uses: actions/cache@v5
-        id: cache-lcov
-        with:
-          path: /usr/bin/lcov
-          key: ${{ runner.os }}-lcov-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-lcov-
-
-      - name: Install LCOV (if not cached)
-        if: steps.cache-lcov.outputs.cache-hit != 'true'
+      - name: Install LCOV
         run: |
           sudo apt-get update && sudo apt-get install -y lcov
 
@@ -88,8 +78,6 @@ jobs:
           rm -f foundry_lcov.info
 
       - name: Generate combined coverage report
-        env:
-          LCOV_SKIP_INSTALL: true  # Skip installation since we cached it
         run: yarn coverage:combined
 
       - name: Validate coverage report
