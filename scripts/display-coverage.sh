@@ -9,10 +9,17 @@ fi
 echo ""
 echo "════════════════════════════════════════════════════════════════"
 echo "                    COMBINED COVERAGE REPORT"
+echo "         (Hardhat + Foundry - best coverage per file)"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
-# Parse LCOV and aggregate duplicate entries, then sort and display
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "                    COMBINED COVERAGE REPORT"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+# Parse LCOV file and display per-file coverage
 awk '
 /^SF:/ {
     file = substr($0, 4)
@@ -26,39 +33,20 @@ awk '
 /^FNH:/ { fnh = substr($0, 5) }
 /^end_of_record/ {
     if (file != "" && lf > 0) {
-        # Aggregate by FULL PATH (handles duplicates from Hardhat + Foundry testing same file)
-        # Different files with same name in different folders are kept separate
-        files_lf[file] += lf
-        files_lh[file] += lh
-        files_brf[file] += brf
-        files_brh[file] += brh
-        files_fnf[file] += fnf
-        files_fnh[file] += fnh
-    }
-}
-END {
-    # Print all files
-    for (file in files_lf) {
-        lf = files_lf[file]
-        lh = files_lh[file]
-        brf = files_brf[file]
-        brh = files_brh[file]
-        fnf = files_fnf[file]
-        fnh = files_fnh[file]
-        
         stmt_pct = (lf > 0) ? (lh/lf)*100 : 100
         branch_pct = (brf > 0) ? (brh/brf)*100 : 100
         func_pct = (fnf > 0) ? (fnh/fnf)*100 : 100
         
-        # Output: file|stmt|branch|func|lh|lf (for display)
+        # Output for sorting: file|stmt|branch|func|lh|lf
         printf "%s|%.2f|%.2f|%.2f|%d|%d\n", file, stmt_pct, branch_pct, func_pct, lh, lf
         
         total_lf += lf; total_lh += lh
         total_brf += brf; total_brh += brh
         total_fnf += fnf; total_fnh += fnh
     }
-    
-    # Print totals as special marker
+}
+END {
+    # Print totals
     total_stmt = (total_lf > 0) ? (total_lh/total_lf)*100 : 100
     total_branch = (total_brf > 0) ? (total_brh/total_brf)*100 : 100
     total_func = (total_fnf > 0) ? (total_fnh/total_fnf)*100 : 100
@@ -66,16 +54,16 @@ END {
 }
 ' coverage/combined_lcov.info | sort | awk -F'|' '
 BEGIN {
-    printf "%-70s %8s %8s %8s %12s\n", "File", "Stmts", "Branch", "Funcs", "Lines"
-    printf "%-70s %8s %8s %8s %12s\n", "----", "-----", "------", "-----", "-----"
+    printf "%-70s %8s %8s %8s %15s\n", "File", "Stmts", "Branch", "Funcs", "Lines"
+    printf "%-70s %8s %8s %8s %15s\n", "----", "-----", "------", "-----", "-----"
 }
 $1 == "ZZZTOTAL" {
-    printf "%-70s %8s %8s %8s %12s\n", "----", "-----", "------", "-----", "-----"
-    printf "%-70s %7.2f%% %7.2f%% %7.2f%% %5d/%5d\n", "All files", $2, $3, $4, $5, $6
+    printf "%-70s %8s %8s %8s %15s\n", "----", "-----", "------", "-----", "-----"
+    printf "%-70s %7.2f%% %7.2f%% %7.2f%% %6d/%6d\n", "All files", $2, $3, $4, $5, $6
     next
 }
 {
-    printf "%-70s %7.2f%% %7.2f%% %7.2f%% %5d/%5d\n", $1, $2, $3, $4, $5, $6
+    printf "%-70s %7.2f%% %7.2f%% %7.2f%% %6d/%6d\n", $1, $2, $3, $4, $5, $6
 }
 '
 
