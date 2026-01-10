@@ -53,14 +53,58 @@ jobs:
             **/node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
 
+      - name: Cache Foundry build (excluding fork cache)
+        uses: actions/cache@v5
+        with:
+          path: |
+            cache_forge/
+            out/
+          key: ${{ runner.os }}-foundry-${{ hashFiles('foundry.toml', 'remappings.txt') }}-${{ hashFiles('contracts/**/*.sol', 'test/**/*.sol') }}
+          restore-keys: |
+            ${{ runner.os }}-foundry-${{ hashFiles('foundry.toml', 'remappings.txt') }}-
+            ${{ runner.os }}-foundry-
+
+      - name: Cache Foundry fork data (persistent)
+        uses: actions/cache@v5
+        with:
+          path: ~/.foundry/cache
+          key: ${{ runner.os }}-foundry-forks-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-foundry-forks-
+
+      - name: Cache Hardhat build
+        uses: actions/cache@v5
+        with:
+          path: |
+            build/
+            cache/
+          key: ${{ runner.os }}-hardhat-${{ hashFiles('hardhat.config.ts', 'package.json') }}-${{ hashFiles('contracts/**/*.sol') }}
+          restore-keys: |
+            ${{ runner.os }}-hardhat-${{ hashFiles('hardhat.config.ts', 'package.json') }}-
+            ${{ runner.os }}-hardhat-
+
       - run: yarn --frozen-lockfile
 
       - run: yarn build
 
       - run: yarn test
 
+      - name: Clean previous coverage artifacts
+        run: |
+          rm -rf coverage/
+          rm -f lcov.info
+          rm -f foundry_lcov.info
+          # Clean only compilation cache, preserve fork cache
+          rm -rf cache_forge/solidity-files-cache.json
+          rm -rf out/
+
       - name: Generate combined coverage report
         run: yarn coverage:combined
+
+      - name: Validate coverage report
+        run: |
+          chmod +x ./scripts/validate-coverage.sh
+          ./scripts/validate-coverage.sh
 
       - name: Upload coverage to Codecov
         if: github.actor != 'dependabot[bot]'
@@ -68,5 +112,11 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/combined_lcov.info
+          flags: combined-tests
+          name: codecov-v3-contracts-${{ github.sha }}
           fail_ci_if_error: true
           verbose: true
+          override_branch: ${{ github.head_ref || github.ref_name }}
+          override_commit: ${{ github.sha }}
+          # Disable search to avoid issues with file discovery
+          disable_search: true

@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {RealDeploymentFixture} from "../fixtures/RealDeploymentFixture.sol";
@@ -638,8 +639,34 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Give poolOwner the tokens (like in working test)
         deal(Constants.ETH_USDC, poolOwner, transferAmount);
 
+        // Get initial balances for verification
+        uint256 initialPoolBalance = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
+        uint256 initialSpokePoolBalance = IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL);
+        
+        // Record logs to check for FundsDeposited event
+        vm.recordLogs();
+
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
+
+        // Verify balances changed correctly
+        uint256 finalPoolBalance = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
+        uint256 finalSpokePoolBalance = IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL);
+        
+        assertEq(finalPoolBalance, initialPoolBalance - transferAmount, "Pool balance should decrease by transfer amount");
+        assertEq(finalSpokePoolBalance, initialSpokePoolBalance + transferAmount, "SpokePool balance should increase by transfer amount");
+
+        // Verify FundsDeposited event was emitted
+        bytes32 fundsDepositedSelector = keccak256("FundsDeposited(bytes32,bytes32,uint256,uint256,uint256,uint256,uint32,uint32,uint32,bytes32,bytes32,bytes32,bytes)");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bool eventEmitted = false;
+        for (uint i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == fundsDepositedSelector) {
+                eventEmitted = true;
+                break;
+            }
+        }
+        assertTrue(eventEmitted, "FundsDeposited event should be emitted by SpokePool");
 
         // TODO: would be nice to read instructions from depositV3 output, for proper roundtrip test
         Instructions memory instructions = buildTestInstructions(
@@ -706,8 +733,34 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Give poolOwner the tokens (like in working test)
         deal(Constants.ETH_USDC, poolOwner, transferAmount);
 
+        // Get initial balances for verification
+        uint256 initialPoolBalance = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
+        uint256 initialSpokePoolBalance = IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL);
+        
+        // Record logs to check for FundsDeposited event
+        vm.recordLogs();
+
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
+
+        // Verify balances changed correctly
+        uint256 finalPoolBalance = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
+        uint256 finalSpokePoolBalance = IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL);
+        
+        assertEq(finalPoolBalance, initialPoolBalance - transferAmount, "Pool balance should decrease by transfer amount");
+        assertEq(finalSpokePoolBalance, initialSpokePoolBalance + transferAmount, "SpokePool balance should increase by transfer amount");
+
+        // Verify FundsDeposited event was emitted
+        bytes32 fundsDepositedSelector = keccak256("FundsDeposited(bytes32,bytes32,uint256,uint256,uint256,uint256,uint32,uint32,uint32,bytes32,bytes32,bytes32,bytes)");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bool eventEmitted = false;
+        for (uint i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == fundsDepositedSelector) {
+                eventEmitted = true;
+                break;
+            }
+        }
+        assertTrue(eventEmitted, "FundsDeposited event should be emitted by SpokePool");
 
         // 2. Simulate cross-chain message on Base
         vm.selectFork(baseForkId);
@@ -776,8 +829,32 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Give poolOwner the tokens
         deal(Constants.ETH_USDC, poolOwner, transferAmount);
 
-        vm.prank(poolOwner);
-        IAIntents(pool()).depositV3(params);
+        // Capture balances and verify deposit success
+        {
+            uint256 initialPoolBalance = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
+            uint256 initialSpokePoolBalance = IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL);
+            
+            // Record logs and execute deposit
+            vm.recordLogs();
+            vm.prank(poolOwner);
+            IAIntents(pool()).depositV3(params);
+
+            // Verify balances and event
+            assertEq(IERC20(Constants.ETH_USDC).balanceOf(address(pool())), initialPoolBalance - transferAmount, "Pool balance should decrease");
+            assertEq(IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL), initialSpokePoolBalance + transferAmount, "SpokePool balance should increase");
+
+            // Check FundsDeposited event
+            Vm.Log[] memory logs = vm.getRecordedLogs();
+            bytes32 fundsDepositedSelector = keccak256("FundsDeposited(bytes32,bytes32,uint256,uint256,uint256,uint256,uint32,uint32,uint32,bytes32,bytes32,bytes32,bytes)");
+            bool eventEmitted = false;
+            for (uint i = 0; i < logs.length; i++) {
+                if (logs[i].topics[0] == fundsDepositedSelector) {
+                    eventEmitted = true;
+                    break;
+                }
+            }
+            assertTrue(eventEmitted, "FundsDeposited event should be emitted");
+        }
 
         // 2. Simulate cross-chain message on Base with surplus
         vm.selectFork(baseForkId);
