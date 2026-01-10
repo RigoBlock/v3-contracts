@@ -95,12 +95,3 @@ jobs:
           name: codecov-v3-contracts
           fail_ci_if_error: true
           verbose: true
-          # Use proper branch and commit detection for PR coverage
-          override_branch: ${{ github.head_ref || github.ref_name }}
-          override_commit: ${{ github.event.pull_request.head.sha || github.sha }}
-          # Enable proper PR coverage comparison
-          override_pr: ${{ github.event.number }}
-          # Disable search for more reliable file detection
-          disable_search: true
-          # Use working directory for consistent file paths
-          working-directory: ./

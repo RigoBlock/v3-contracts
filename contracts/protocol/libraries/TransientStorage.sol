@@ -68,7 +68,6 @@ library TransientStorage {
         return (slot.asUint256().tload(), (bytes32(uint256(slot) + 1)).asBoolean().tload());
     }
 
-    // TODO: should we verify we're clearing storedNav after being done with it?
     function storeNav(uint256 nav) internal {
         _STORED_NAV_SLOT.asUint256().tstore(nav);
     }

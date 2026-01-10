@@ -128,6 +128,7 @@ contract EAcrossHandler is IEAcrossHandler {
 
         // Unlock donation and clear all temporary storage atomically
         token.setDonationLock(0);
+        uint256(0).storeNav();
     }
 
     function _handleTransferMode(address token, uint256 amount, uint256 amountDelta) private {
@@ -166,9 +167,6 @@ contract EAcrossHandler is IEAcrossHandler {
 
             VirtualBalanceLib.adjustVirtualSupply(virtualSupplyIncrease.toInt256());
         }
-
-        // CRITICAL: Validate NAV after virtual adjustments
-        // Transfer mode should be NAV-neutral except for surplus from solver
 
         // Update NAV to reflect received tokens before validation
         ISmartPoolActions(address(this)).updateUnitaryValue();
