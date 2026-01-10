@@ -12,26 +12,26 @@ contract MockERC20 {
     string public symbol;
     uint8 public decimals;
     uint256 public totalSupply;
-    
+
     mapping(address => uint256) private balances;
     mapping(address => mapping(address => uint256)) private allowances;
-    
+
     constructor(string memory _name, string memory _symbol, uint8 _decimals) {
         name = _name;
         symbol = _symbol;
         decimals = _decimals;
     }
-    
+
     function mint(address to, uint256 amount) external {
         balances[to] += amount;
         totalSupply += amount;
         emit Transfer(address(0), to, amount);
     }
-    
+
     function balanceOf(address account) external view returns (uint256) {
         return balances[account];
     }
-    
+
     function transfer(address to, uint256 amount) external returns (bool) {
         require(balances[msg.sender] >= amount, "Insufficient balance");
         balances[msg.sender] -= amount;
@@ -39,25 +39,25 @@ contract MockERC20 {
         emit Transfer(msg.sender, to, amount);
         return true;
     }
-    
+
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         require(balances[from] >= amount, "Insufficient balance");
         require(allowances[from][msg.sender] >= amount, "Insufficient allowance");
-        
+
         balances[from] -= amount;
         balances[to] += amount;
         allowances[from][msg.sender] -= amount;
-        
+
         emit Transfer(from, to, amount);
         return true;
     }
-    
+
     function approve(address spender, uint256 amount) external returns (bool) {
         allowances[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
         return true;
     }
-    
+
     function allowance(address owner, address spender) external view returns (uint256) {
         return allowances[owner][spender];
     }
@@ -82,14 +82,14 @@ contract MockAcrossSpokePool {
 
     address public wrappedNativeToken;
     uint32 public immutable fillDeadlineBuffer;
-    
+
     constructor(address _wrappedNativeToken) {
         wrappedNativeToken = _wrappedNativeToken;
         fillDeadlineBuffer = 21600;
     }
 
     receive() external payable {}
-    
+
     function depositV3(
         address depositor,
         address recipient,
@@ -106,7 +106,7 @@ contract MockAcrossSpokePool {
     ) external payable {
         // inputToken should never be address(0) - ETH deposits use WETH address
         require(inputToken != address(0), "Input token cannot be zero address");
-        
+
         // Only transfer tokens if no native value sent
         // When msg.value > 0, the SpokePool wraps ETH to WETH internally
         if (msg.value == 0) {
@@ -119,7 +119,7 @@ contract MockAcrossSpokePool {
             // In real SpokePool, ETH would be wrapped to WETH here
             // For our mock, we just accept the native value
         }
-        
+
         emit V3FundsDeposited(
             inputToken,
             outputToken,
@@ -137,19 +137,9 @@ contract MockAcrossSpokePool {
     }
 
     /// @notice Mock function to simulate filling a deposit and calling handler
-    function simulateFill(
-        address handler,
-        address tokenReceived,
-        uint256 amount,
-        bytes calldata message
-    ) external {
-        (bool success,) = handler.call(
-            abi.encodeWithSignature(
-                "handleV3AcrossMessage(address,uint256,bytes)",
-                tokenReceived,
-                amount,
-                message
-            )
+    function simulateFill(address handler, address tokenReceived, uint256 amount, bytes calldata message) external {
+        (bool success, ) = handler.call(
+            abi.encodeWithSignature("handleV3AcrossMessage(address,uint256,bytes)", tokenReceived, amount, message)
         );
         require(success, "Handler call failed");
     }

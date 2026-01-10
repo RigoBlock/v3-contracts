@@ -46,11 +46,6 @@ library TransientStorage {
         return int24(get(Int256.wrap(_TRANSIENT_TWAP_TICK_SLOT), token));
     }
 
-    /// @notice Toggles donation lock and manages balance/initialized flag atomically
-    /// @dev First call (lock): Sets lock=true, stores balance, sets initialized=true
-    ///      Second call (unlock): Sets lock=false, clears balance and initialized
-    ///      Using slot+1 for initialized flag avoids extra keccak hash
-    ///      Atomic operations prevent reuse in batched transactions
     function setDonationLock(address token, uint256 balance) internal {
         bool newLock = !_DONATION_LOCK_SLOT.asBoolean().tload();
         _DONATION_LOCK_SLOT.asBoolean().tstore(newLock);

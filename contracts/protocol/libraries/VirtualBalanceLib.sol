@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-
 pragma solidity 0.8.28;
 
 import {SlotDerivation} from "./SlotDerivation.sol";

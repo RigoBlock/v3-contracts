@@ -3,9 +3,9 @@ pragma solidity 0.8.28;
 
 import {CrosschainTokens} from "../types/CrosschainTokens.sol";
 
-/// @title CrosschainLib - Library for cross-chain token validation and conversion
-/// @notice Provides utilities for validating bridgeable token pairs and handling BSC decimal conversions
-/// @dev Used by cross-chain adapters to ensure token compatibility and proper decimal handling
+/// @title CrosschainLib - Library for cross-chain token validation and conversion.
+/// @notice Provides utilities for validating bridgeable token pairs and handling BSC decimal conversions.
+/// @dev Used by cross-chain adapters to ensure token compatibility and proper decimal handling.
 library CrosschainLib {
     // Import token addresses from shared constants
     using CrosschainTokens for address;
@@ -14,10 +14,10 @@ library CrosschainLib {
     error UnsupportedCrossChainToken();
     error WrongDestinationToken();
 
-    /// @notice Validates that input and output tokens are compatible for cross-chain bridging
-    /// @dev Only allows bridging between tokens of the same type (USDC↔USDC, USDT↔USDT, etc.)
-    /// @param inputToken Source token address
-    /// @param outputToken Destination token address
+    /// @notice Validates that input and output tokens are compatible for cross-chain bridging.
+    /// @dev Only allows bridging between tokens of the same type (USDC↔USDC, USDT↔USDT, etc.).
+    /// @param inputToken Source token address.
+    /// @param outputToken Destination token address.
     function validateBridgeableTokenPair(address inputToken, address outputToken) internal pure {
         // Allow same token addresses (e.g., WETH on Superchain has same address across chains)
         // Chain ID validation is handled separately in AIntents
@@ -95,12 +95,12 @@ library CrosschainLib {
         }
     }
 
-    /// @notice Applies BSC decimal conversion for USDC/USDT (18 decimals on BSC vs 6 on other chains)
-    /// @dev Handles bidirectional conversion to ensure exact cross-chain virtual balance offsetting
-    /// @param inputToken Source token address
-    /// @param outputToken Destination token address
-    /// @param amount Original amount in source chain decimals
-    /// @return Normalized amount for exact cross-chain virtual balance offsetting
+    /// @notice Applies BSC decimal conversion for USDC/USDT (18 decimals on BSC vs 6 on other chains).
+    /// @dev Handles bidirectional conversion to ensure exact cross-chain virtual balance offsetting.
+    /// @param inputToken Source token address.
+    /// @param outputToken Destination token address.
+    /// @param amount Original amount in source chain decimals.
+    /// @return Normalized amount for exact cross-chain virtual balance offsetting.
     function applyBscDecimalConversion(
         address inputToken,
         address outputToken,
@@ -120,9 +120,9 @@ library CrosschainLib {
         return amount;
     }
 
-    /// @notice Check if a token is allowed for cross-chain operations on the current chain
-    /// @param token The token address to check
-    /// @return True if the token is allowed for cross-chain operations
+    /// @notice Check if a token is allowed for cross-chain operations on the current chain.
+    /// @param token The token address to check.
+    /// @return True if the token is allowed for cross-chain operations.
     function isAllowedCrosschainToken(address token) internal view returns (bool) {
         if (block.chainid == 1) {
             // Ethereum
