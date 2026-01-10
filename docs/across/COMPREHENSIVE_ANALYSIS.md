@@ -329,7 +329,7 @@ if (flag == 1) {
     // Second call - calculate delta
     uint256 initialBalance = token.getTemporaryBalance();
     amount = balance - initialBalance;
-    token.clearTemporaryBalance();
+    token.storeTemporaryBalance(0);
 }
 ```
 

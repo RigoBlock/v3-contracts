@@ -46,39 +46,28 @@ library TransientStorage {
         return int24(get(Int256.wrap(_TRANSIENT_TWAP_TICK_SLOT), token));
     }
 
-    // Cross-chain donation tracking functions
-    function getDonationLock(address token) internal view returns (bool) {
-        bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
-        return slot.asBoolean().tload();
-    }
-
-    function setDonationLock(address token, bool locked) internal {
-        bytes32 slot = _DONATION_LOCK_SLOT.deriveMapping(token);
-        slot.asBoolean().tstore(locked);
-    }
-
-    function storeTemporaryBalance(address token, uint256 amount) internal {
+    function setDonationLock(address token, bool locked, uint256 balance) internal {
+        _DONATION_LOCK_SLOT.asBoolean().tstore(locked);
         bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
-        slot.asUint256().tstore(amount);
+        slot.asUint256().tstore(locked ? balance : 0);
+        (bytes32(uint256(slot) + 1)).asBoolean().tstore(locked);
     }
 
-    function getTemporaryBalance(address token) internal view returns (uint256) {
+    function getDonationLock() internal view returns (bool) {
+        return _DONATION_LOCK_SLOT.asBoolean().tload();
+    }
+
+    function getTemporaryBalance(address token) internal view returns (uint256, bool) {
         bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
-        return slot.asUint256().tload();
+        return (slot.asUint256().tload(), (bytes32(uint256(slot) + 1)).asBoolean().tload());
     }
 
-    function clearTemporaryBalance(address token) internal {
-        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
-        slot.asUint256().tstore(0);
+    // TODO: should we verify we're clearing storedNav after being done with it?
+    function storeNav(uint256 nav) internal {
+        _STORED_NAV_SLOT.asUint256().tstore(nav);
     }
 
-    function storeNav(address token, uint256 nav) internal {
-        bytes32 slot = _STORED_NAV_SLOT.deriveMapping(token);
-        slot.asUint256().tstore(nav);
-    }
-
-    function getStoredNav(address token) internal view returns (uint256) {
-        bytes32 slot = _STORED_NAV_SLOT.deriveMapping(token);
-        return slot.asUint256().tload();
+    function getStoredNav() internal view returns (uint256) {
+        return _STORED_NAV_SLOT.asUint256().tload();
     }
 }

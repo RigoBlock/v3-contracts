@@ -46,10 +46,9 @@ contract EAcrossHandler is IEAcrossHandler {
     using SafeCast for uint256;
     using SafeCast for int256;
     using SlotDerivation for bytes32;
-    using TransientSlot for *;
     using EnumerableSet for AddressSet;
     using VirtualBalanceLib for address;
-    using TransientStorage for address;
+    using TransientStorage for *;
 
     /// @notice Address of the Across SpokePool contract
     address private immutable _acrossSpokePool;
@@ -71,32 +70,29 @@ contract EAcrossHandler is IEAcrossHandler {
 
     /// @inheritdoc IEAcrossHandler
     function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable override {
-        bool isLocked = token.getDonationLock();
+        bool isLocked = TransientStorage.getDonationLock();
 
         uint256 balance = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
 
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
-            token.setDonationLock(true);
-            token.storeTemporaryBalance(balance);
+            token.setDonationLock(true, balance);
 
             // Update unitary value for both Sync and Transfer operations
             ISmartPoolActions(address(this)).updateUnitaryValue();
 
             // Store NAV for later manipulation check
             uint256 currentNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
-            token.storeNav(currentNav);
+            currentNav.storeNav();
             return;
         }
 
         // For actual donation processing
         require(isLocked, DonationLock(isLocked));
 
-        uint256 storedBalance = token.getTemporaryBalance();
-
-        // we must clear before modifying wrapped native token to native currency
-        token.clearTemporaryBalance();
+        (uint256 storedBalance, bool initialized) = token.getTemporaryBalance();
+        require(initialized, TokenNotInitialized());
 
         // ensure balance didn't decrease
         require(balance >= storedBalance, BalanceUnderflow());
@@ -130,13 +126,14 @@ contract EAcrossHandler is IEAcrossHandler {
             revert InvalidOpType();
         }
 
-        // reset lock
-        token.setDonationLock(false);
+        // Unlock donation and clear all temporary storage atomically
+        token.setDonationLock(false, 0);
     }
 
     function _handleTransferMode(address token, uint256 amount, uint256 amountDelta) private {
         // Use stored NAV from initialization for all calculations
-        uint256 storedNav = token.getStoredNav();
+        uint256 storedNav = TransientStorage.getStoredNav();
+        
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
 
@@ -187,6 +184,10 @@ contract EAcrossHandler is IEAcrossHandler {
 
             // Calculate expected NAV increase: surplusValue / effectiveSupply
             poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+            
+            // Safety check: Ensure total supply is not zero
+            require(poolTokens.totalSupply > 0, "Effective total supply is zero - cannot calculate NAV increase");
+            
             uint256 expectedNavIncrease = (surplusBaseValue * (10 ** poolDecimals)) / poolTokens.totalSupply;
             expectedNav = storedNav + expectedNavIncrease;
         }

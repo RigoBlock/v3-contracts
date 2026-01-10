@@ -14,6 +14,7 @@ interface IEAcrossHandler {
     error DonationLock(bool locked);
     error BalanceUnderflow();
     error NavManipulationDetected(uint256 expectedNav, uint256 actualNav);
+    error TokenNotInitialized();
 
     /// @notice Handles cross-chain message from Across SpokePool.
     /// @dev Called via delegatecall from pool when Across fills deposits. Callable by anyone.

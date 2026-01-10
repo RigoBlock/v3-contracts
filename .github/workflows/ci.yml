@@ -47,6 +47,20 @@ jobs:
         with:
           version: nightly
 
+      - name: Cache LCOV installation
+        uses: actions/cache@v5
+        id: cache-lcov
+        with:
+          path: /usr/bin/lcov
+          key: ${{ runner.os }}-lcov-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-lcov-
+
+      - name: Install LCOV (if not cached)
+        if: steps.cache-lcov.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y lcov
+
       - uses: actions/cache@v5
         with:
           path: |
@@ -99,6 +113,8 @@ jobs:
           rm -rf out/
 
       - name: Generate combined coverage report
+        env:
+          LCOV_SKIP_INSTALL: true  # Skip installation since we cached it
         run: yarn coverage:combined
 
       - name: Validate coverage report
@@ -113,10 +129,15 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/combined_lcov.info
           flags: combined-tests
-          name: codecov-v3-contracts-${{ github.sha }}
+          name: codecov-v3-contracts
           fail_ci_if_error: true
           verbose: true
+          # Use proper branch and commit detection for PR coverage
           override_branch: ${{ github.head_ref || github.ref_name }}
-          override_commit: ${{ github.sha }}
-          # Disable search to avoid issues with file discovery
+          override_commit: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Enable proper PR coverage comparison
+          override_pr: ${{ github.event.number }}
+          # Disable search for more reliable file detection
           disable_search: true
+          # Use working directory for consistent file paths
+          working-directory: ./
