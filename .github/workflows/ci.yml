@@ -80,6 +80,13 @@ jobs:
       - name: Generate combined coverage report
         run: yarn coverage:combined
 
+      - name: Clean up individual coverage files
+        run: |
+          rm -f coverage/lcov.info
+          rm -f coverage/foundry_lcov.info
+          rm -f coverage.json
+          rm -f coverage/coverage-final.json
+
       - name: Validate coverage report
         run: |
           chmod +x ./scripts/validate-coverage.sh
@@ -95,3 +102,4 @@ jobs:
           name: codecov-v3-contracts
           fail_ci_if_error: true
           verbose: true
+          disable_search: true
