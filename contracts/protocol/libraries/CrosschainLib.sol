@@ -12,6 +12,7 @@ library CrosschainLib {
 
     // Custom errors
     error UnsupportedCrossChainToken();
+    error WrongDestinationToken();
 
     /// @notice Validates that input and output tokens are compatible for cross-chain bridging
     /// @dev Only allows bridging between tokens of the same type (USDC↔USDC, USDT↔USDT, etc.)
@@ -20,7 +21,6 @@ library CrosschainLib {
     function validateBridgeableTokenPair(address inputToken, address outputToken) internal pure {
         // Allow same token addresses (e.g., WETH on Superchain has same address across chains)
         // Chain ID validation is handled separately in AIntents
-
         // Check USDC bridgeable tokens (includes BSC with 18vs6 decimal conversion)
         if (
             inputToken == CrosschainTokens.ETH_USDC ||
@@ -39,13 +39,9 @@ library CrosschainLib {
                     outputToken == CrosschainTokens.POLY_USDC ||
                     outputToken == CrosschainTokens.BSC_USDC ||
                     outputToken == CrosschainTokens.UNI_USDC,
-                UnsupportedCrossChainToken()
+                WrongDestinationToken()
             );
-            return;
-        }
-
-        // Check USDT bridgeable tokens (includes BSC with 18vs6 decimal conversion)
-        if (
+        } else if (
             inputToken == CrosschainTokens.ETH_USDT ||
             inputToken == CrosschainTokens.ARB_USDT ||
             inputToken == CrosschainTokens.OPT_USDT ||
@@ -60,13 +56,9 @@ library CrosschainLib {
                     outputToken == CrosschainTokens.BASE_USDT ||
                     outputToken == CrosschainTokens.POLY_USDT ||
                     outputToken == CrosschainTokens.BSC_USDT,
-                UnsupportedCrossChainToken()
+                WrongDestinationToken()
             );
-            return;
-        }
-
-        // Check WETH bridgeable tokens
-        if (
+        } else if (
             inputToken == CrosschainTokens.ETH_WETH ||
             inputToken == CrosschainTokens.ARB_WETH ||
             inputToken == CrosschainTokens.OPT_WETH ||
@@ -83,13 +75,9 @@ library CrosschainLib {
                     outputToken == CrosschainTokens.POLY_WETH ||
                     outputToken == CrosschainTokens.BSC_WETH ||
                     outputToken == CrosschainTokens.UNI_WETH,
-                UnsupportedCrossChainToken()
+                WrongDestinationToken()
             );
-            return;
-        }
-
-        // Check WBTC bridgeable tokens (not available on Base, BSC, Unichain)
-        if (
+        } else if (
             inputToken == CrosschainTokens.ETH_WBTC ||
             inputToken == CrosschainTokens.ARB_WBTC ||
             inputToken == CrosschainTokens.OPT_WBTC ||
@@ -100,13 +88,11 @@ library CrosschainLib {
                     outputToken == CrosschainTokens.ARB_WBTC ||
                     outputToken == CrosschainTokens.OPT_WBTC ||
                     outputToken == CrosschainTokens.POLY_WBTC,
-                UnsupportedCrossChainToken()
+                WrongDestinationToken()
             );
-            return;
+        } else {
+            revert UnsupportedCrossChainToken();
         }
-
-        // If we get here, input token is not supported
-        revert UnsupportedCrossChainToken();
     }
 
     /// @notice Applies BSC decimal conversion for USDC/USDT (18 decimals on BSC vs 6 on other chains)

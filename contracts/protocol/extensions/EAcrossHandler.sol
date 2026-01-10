@@ -68,9 +68,6 @@ contract EAcrossHandler is IEAcrossHandler {
     error IncorrectETHAmount();
     error NullAddresS();
     error CallerTransferAmount();
-    error DonationLock(bool locked);
-    error BalanceUnderflow();
-    error NavManipulationDetected(uint256 expectedNav, uint256 actualNav);
 
     /// @inheritdoc IEAcrossHandler
     function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable override {

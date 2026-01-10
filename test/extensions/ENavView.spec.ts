@@ -41,10 +41,10 @@ describe("ENavView", async () => {
             newPoolAddress
         );
         
-        // Get deployed ENavView from setup
+        // Get deployed ENavView from setup  
         const ENavViewInstance = await deployments.get("ENavView");
         const eNavView = await hre.ethers.getContractAt(
-            "ENavView",
+            "ENavView", 
             ENavViewInstance.address
         );
 
@@ -71,124 +71,12 @@ describe("ENavView", async () => {
         };
     });
 
-    describe("getAllTokensAndBalancesView", async () => {
-        it('should return token balances via extension', async () => {
-            const { pool } = await setupTests();
-            
-            // Query balances via the pool (which should delegate to ENavView extension)
-            try {
-                const balances = await pool.callStatic.getAllTokensAndBalancesView();
-                expect(balances.length).to.be.gte(0);
-            } catch (error: any) {
-                // Extension methods may not be available on pool instance in unit tests
-                // This is expected behavior - extension routing needs proper setup
-                console.log("Extension call failed (expected in unit tests):", error.message);
-                expect(error.message).to.include("function");
-            }
-        });
-
-        it('should return balances for pool with base token', async () => {
-            const { pool, grgToken } = await setupTests();
-            
-            // Mint some pool tokens (oracle price feed should now be set up)
-            const mintAmount = parseEther("100");
-            await grgToken.approve(pool.address, mintAmount);
-            await pool.mint(user1.address, mintAmount, 0);
-            
-            try {
-                const balances = await pool.callStatic.getAllTokensAndBalancesView();
-                expect(balances.length).to.be.gte(1);
-                
-                // Should have base token in results
-                const baseToken = await pool.baseToken();
-                const baseTokenBalance = balances.find((b: TokenBalance) => b.token === baseToken);
-                expect(baseTokenBalance).to.not.be.undefined;
-                
-            } catch (error: any) {
-                // Extension methods may not be available in unit test environment
-                console.log("Extension call failed (expected in unit tests):", error.message);
-                expect(error.message).to.include("function");
-            }
-        });
-    });
-
-    describe("getNavDataView", async () => {
-        it('should return NAV data via extension', async () => {
-            const { pool, grgToken } = await setupTests();
-            
-            // Mint to initialize NAV (oracle price feed should now be set up)
-            const mintAmount = parseEther("100");
-            await grgToken.approve(pool.address, mintAmount);
-            await pool.mint(user1.address, mintAmount, 0);
-            
-            try {
-                const navData: NavData = await pool.callStatic.getNavDataView();
-                
-                expect(navData.totalValue).to.be.gte(0);
-                expect(navData.unitaryValue).to.be.gte(parseEther("1"));
-                expect(navData.timestamp).to.be.gt(0);
-                
-            } catch (error: any) {
-                console.log("Extension call failed (expected in unit tests):", error.message);
-            }
-        });
-
-        it('should match updateUnitaryValue result', async () => {
-            const { pool, grgToken } = await setupTests();
-            
-            // Mint pool tokens (oracle price feed should now be set up)
-            const mintAmount = parseEther("100");
-            await grgToken.approve(pool.address, mintAmount);
-            await pool.mint(user1.address, mintAmount, 0);
-            
-            // Transfer additional base token to pool (simulating price increase)
-            const additionalAmount = parseEther("50");
-            await grgToken.transfer(pool.address, additionalAmount);
-            
-            try {
-                // Get NAV using ENavView extension
-                const navData: NavData = await pool.callStatic.getNavDataView();
-                
-                // Update NAV on-chain and read from storage
-                await pool.updateUnitaryValue();
-                const poolTokens = await pool.getPoolTokens();
-                const onchainNav = poolTokens.unitaryValue;
-                
-                // They should be reasonably close (allow for calculation differences)
-                const difference = navData.unitaryValue.sub(onchainNav).abs();
-                const tolerance = BigNumber.from(10).pow(15); // 0.001 tolerance
-                expect(difference).to.be.lte(tolerance);
-                
-            } catch (error: any) {
-                console.log("Extension call failed (expected in unit tests):", error.message);
-                expect(error.message).to.include("function");
-            }
-        });
-    });
-
-    describe("getAppTokensAndBalancesView", async () => {
-        it('should return application balances via extension', async () => {
-            const { pool } = await setupTests();
-            
-            try {
-                // Get active applications
-                const packedApps = await pool.getActiveApplications();
-                
-                // Query application balances
-                const apps = await pool.callStatic.getAppTokensAndBalancesView();
-                expect(apps.length).to.be.gte(0);
-                
-            } catch (error: any) {
-                console.log("Extension call failed (expected in unit tests):", error.message);
-            }
-        });
-    });
-
-    describe("extension functionality", async () => {
-        it('should have correct immutable values', async () => {
+    // Unit tests for ENavView extension functionality through proper pool delegation
+    describe("ENavView functionality through pool", async () => {
+        it('should test extension deployment and immutables', async () => {
             const { eNavView } = await setupTests();
             
-            // Check that immutable addresses are set
+            // Test that immutable addresses are properly set
             const grgStakingProxy = await eNavView.grgStakingProxy();
             const uniV4Posm = await eNavView.uniV4Posm();
             
@@ -196,64 +84,78 @@ describe("ENavView", async () => {
             expect(uniV4Posm).to.not.equal(AddressZero);
         });
 
-        it('should handle edge cases gracefully', async () => {
-            const { eNavView } = await setupTests();
+        it('should return token balances through pool delegation', async () => {
+            const { pool } = await setupTests();
             
-            // Test with invalid addresses (should not revert but return empty)
-            try {
-                const apps = await eNavView.callStatic.getAppTokensAndBalancesView();
-                expect(apps.length).to.be.gte(0);
-            } catch (error: any) {
-                // May revert due to missing context in direct call
-                expect(error.message).to.include("revert");
-            }
+            // Cast pool to IENavView interface to access extension methods
+            const navViewPool = await hre.ethers.getContractAt("IENavView", pool.address);
+            
+            // Should work and return empty array for empty pool
+            const balances = await navViewPool.getAllTokensAndBalancesView();
+            expect(balances).to.be.an('array');
+            // Empty pool should have empty or minimal balances
+            expect(balances.length).to.be.gte(0);
         });
-    });
 
-    describe("integration with pool", async () => {
-        it('should work when called through pool fallback', async () => {
+        it('should return NAV data through pool delegation', async () => {
+            const { pool } = await setupTests();
+            
+            // Cast pool to IENavView interface  
+            const navViewPool = await hre.ethers.getContractAt("IENavView", pool.address);
+            
+            // Should work and return valid NAV data structure
+            const navData = await navViewPool.getNavDataView();
+            expect(navData).to.have.property('totalValue');
+            expect(navData).to.have.property('unitaryValue');
+            expect(navData).to.have.property('timestamp');
+            
+            // Values should be reasonable (0 or positive for empty pool)
+            expect(navData.totalValue).to.be.gte(0);
+            expect(navData.unitaryValue).to.be.gte(0);
+            expect(navData.timestamp).to.be.gt(0);
+        });
+
+        it('should return application balances through pool delegation', async () => {
+            const { pool } = await setupTests();
+            
+            // Cast pool to IENavView interface
+            const navViewPool = await hre.ethers.getContractAt("IENavView", pool.address);
+            
+            // Should work and return array (empty or with applications)
+            const apps = await navViewPool.getAppTokensAndBalancesView();
+            expect(apps).to.be.an('array');
+            expect(apps.length).to.be.gte(0);
+        });
+
+        it('should work with pool that has tokens', async () => {
             const { pool, grgToken } = await setupTests();
             
-            // Set up pool with some tokens (oracle price feed should now be set up)
+            // Add some tokens to the pool
             const mintAmount = parseEther("100");
             await grgToken.approve(pool.address, mintAmount);
             await pool.mint(user1.address, mintAmount, 0);
             
-            // The pool should route calls to ENavView extension
-            // In unit tests this may fail due to extension setup, but in integration tests it should work
-            try {
-                // Test that the pool can handle the extension calls
-                const navData = await pool.callStatic.getNavDataView();
-                const balances = await pool.callStatic.getAllTokensAndBalancesView();
-                
-                expect(navData).to.not.be.undefined;
-                expect(balances).to.not.be.undefined;
-                
-            } catch (error: any) {
-                // Expected in unit test environment - extension routing not fully set up
-                console.log("Pool extension routing not available in unit tests");
-                expect(error.message).to.include("function");
-            }
+            // Update NAV after minting
+            await pool.updateUnitaryValue();
+            
+            // Cast pool to IENavView interface
+            const navViewPool = await hre.ethers.getContractAt("IENavView", pool.address);
+            
+            // Should return token balances (at least the base token)
+            const balances = await navViewPool.getAllTokensAndBalancesView();
+            expect(balances.length).to.be.gte(1); // Should have at least base token
+            
+            const navData = await navViewPool.getNavDataView();
+            // Total value might be 0 for test pools, but unitaryValue should be positive
+            expect(navData.totalValue).to.be.gte(0);
+            expect(navData.unitaryValue).to.be.gt(0); // Should be > 0 after minting
+            expect(navData.timestamp).to.be.gt(0);
+            
+            // Verify we have a valid NAV structure
+            expect(navData.unitaryValue).to.equal(parseEther("1")); // Should be 1.0 for fresh pool
         });
     });
 
-    describe("comparison with original implementation", async () => {
-        it('should provide equivalent functionality to OffchainNav', async () => {
-            const { pool, grgToken } = await setupTests();
-            
-            // This test verifies that ENavView provides the same functionality
-            // as the original OffchainNav contract but as an extension
-            
-            const mintAmount = parseEther("100");
-            await grgToken.approve(pool.address, mintAmount);
-            await pool.mint(user1.address, mintAmount, 0);
-            
-            // The extension-based approach should provide the same data
-            // but in a more efficient and upgradeable manner
-            
-            // Note: Detailed comparison would be done in fork tests
-            // where we can test against actual deployed contracts
-            expect(true).to.be.true; // Placeholder - real comparison in fork tests
-        });
-    });
+    // NOTE: These tests verify ENavView extension works through pool delegation
+    // Fork tests in ENavViewFork.t.sol test against live deployed pools
 });

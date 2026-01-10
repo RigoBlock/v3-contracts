@@ -984,7 +984,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // 4. Final donate should detect NAV manipulation and revert
         // Use expectRevert with just selector to match any parameters
         vm.prank(multicallHandler);
-        vm.expectRevert(EAcrossHandler.NavManipulationDetected.selector);
+        vm.expectRevert(IEAcrossHandler.NavManipulationDetected.selector);
         (bool success4,) = instructions.calls[3].target.call(instructions.calls[3].callData);
 
         console2.log("NavManipulationDetected error properly triggered when NAV manipulated!");
@@ -1137,7 +1137,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(handler);
         vm.expectRevert(
             abi.encodeWithSelector(
-                EAcrossHandler.BalanceUnderflow.selector
+                IEAcrossHandler.BalanceUnderflow.selector
             )
         );
         IEAcrossHandler(pool).donate{value: 0}(usdc, donationAmount, params);
@@ -1830,42 +1830,43 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         });
     }
 
-    /// @notice Test unwrapping wrapped native token (WETH -> ETH)
     /// @notice Test EAcrossHandler WETH unwrapping functionality
     /// @dev Tests the shouldUnwrapNative flag in donate() to cover unwrapping logic (lines 116-119)
     function test_IntegrationFork_EAcrossHandler_UnwrapWrappedNative() public {
         uint256 initialEthBalance = ethereum.pool.balance;
         uint256 donationAmount = 0.5e18;
         
-        address donor = address(0x1234);
+        address donor = Constants.ETH_MULTICALL_HANDLER;
         deal(Constants.ETH_WETH, donor, donationAmount);
         
         // Step 1: Initialize with amount=1 using WETH
         vm.prank(donor);
         IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
-            opType: OpType.Sync,
+            opType: OpType.Transfer,
             shouldUnwrapNative: true
         }));
         
-        // Step 2: Transfer tokens to pool (simulates bridge transfer)
+        // Step 2: Transfer WETH to pool (simulates bridge transfer)
         vm.prank(donor);
         IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
         
         // Step 3: Perform actual donation with unwrapping
         vm.prank(donor);
         IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
-            opType: OpType.Sync,
+            opType: OpType.Transfer,
             shouldUnwrapNative: true
         }));
         
         // Verify WETH was unwrapped to ETH
         assertEq(ethereum.pool.balance, initialEthBalance + donationAmount, "ETH balance should increase from WETH unwrapping");
+        
+        // Verify no WETH remains in pool (it was all unwrapped)
+        assertEq(IERC20(Constants.ETH_WETH).balanceOf(ethereum.pool), 0, "No WETH should remain in pool after unwrapping");
     }
 
     /// @notice Test revert with InvalidOpType when passing OpType.Unknown
     /// @notice Test InvalidOpType error handling in EAcrossHandler
     /// @dev Covers line 133 where OpType.Unknown triggers InvalidOpType revert
-    /// ✅ PASSING - Successfully covers error case validation
     function test_IntegrationFork_EAcrossHandler_InvalidOpType() public {
         uint256 donationAmount = 100e6;
         
@@ -1883,7 +1884,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
         
-        // Step 3: This should fail with InvalidOpType
+        // Step 3: This should fail with InvalidOpType when processing donation
         vm.expectRevert(IEAcrossHandler.InvalidOpType.selector);
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
@@ -1967,5 +1968,110 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 }))
             })
         );
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                        TRANSIENT STORAGE DONATION LOCK TESTS
+                      (THESE WERE NEVER TESTED BEFORE!)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Test DonationInProgress error when trying concurrent donations
+    /// @dev Tests the TransientStorage locking mechanism - this was NEVER tested before!
+    function test_IntegrationFork_EAcrossHandler_DonationInProgress() public {
+        uint256 donationAmount = 100e6;
+        
+        // Fund handler with USDC
+        deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount * 2);
+        
+        // Step 1: Start first donation (this sets the donation lock)
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        
+        // Step 2: Try to start another donation while first is in progress
+        // This should fail with DonationLock because the lock is set
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("DonationLock(bool)")), true));
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+    }
+    
+    /// @notice Test successful donation unlocks and allows next donation
+    /// @dev Tests that TransientStorage lock is properly cleared after successful donation
+    function test_IntegrationFork_EAcrossHandler_LockClearedAfterSuccessfulDonation() public {
+        uint256 donationAmount = 100e6;
+        
+        // Fund handler with USDC
+        deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount * 2);
+        
+        // Complete first donation cycle successfully
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        
+        // Transfer tokens to pool
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
+        
+        // Complete the donation (this should unlock)
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        
+        // Now a new donation should be possible (lock was cleared)
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        
+        // This should succeed without DonationLock error
+        assertTrue(true, "Second donation should succeed after first completed");
+    }
+
+    /// @notice Test donation revert clears lock (prevents permanent lock)
+    /// @dev Tests that TransientStorage lock is cleared even when donation reverts
+    function test_IntegrationFork_EAcrossHandler_LockClearedOnRevert() public {
+        uint256 donationAmount = 100e6;
+        
+        // Fund handler with USDC
+        deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
+        
+        // Step 1: Start donation with invalid OpType (will cause revert during processing)
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,  // Start with valid optype
+            shouldUnwrapNative: false
+        }));
+        
+        // Step 2: Transfer tokens
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
+        
+        // Step 3: Try to complete with invalid OpType (should revert and clear lock)
+        vm.expectRevert(IEAcrossHandler.InvalidOpType.selector);
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+            opType: OpType.Unknown,  // Invalid type - causes revert
+            shouldUnwrapNative: false
+        }));
+        
+        // Step 4: Verify lock was cleared by starting a new donation
+        // If lock wasn't cleared, this would fail with DonationLock
+        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        
+        assertTrue(true, "New donation should succeed after previous reverted (lock cleared)");
     }
 }
