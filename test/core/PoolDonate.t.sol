@@ -31,11 +31,8 @@ contract PoolDonateTest is Test {
     uint256 constant DONATION_AMOUNT = 10000e6; // 10k tokens
     uint256 constant ETH_DONATION_AMOUNT = 1 ether;
 
-    // TODO: this test is, yet again as others, hopeless
     function setUp() public {
-        // Use hardcoded Arbitrum RPC
-        string memory arbitrumRpc = "https://arb1.arbitrum.io/rpc";
-        vm.selectFork(vm.createFork(arbitrumRpc));
+        vm.createSelectFork("mainnet", Constants.MAINNET_BLOCK);
         
         // Use existing test pool
         pool = Constants.TEST_POOL;
@@ -50,7 +47,7 @@ contract PoolDonateTest is Test {
         vm.mockCall(
             mockExtensionsMap,
             abi.encodeWithSignature("wrappedNative()"),
-            abi.encode(Constants.ARB_WETH)
+            abi.encode(Constants.ETH_WETH)
         );
         
         // Mock getExtensionBySelector to return our mock EAcrossHandler for donate selector
@@ -71,7 +68,7 @@ contract PoolDonateTest is Test {
         // Also mock specific revert for USDC (non-owned token) when used in escrow test  
         vm.mockCallRevert(
             mockEAcrossHandler,
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector, Constants.ARB_USDC, 1, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
+            abi.encodeWithSelector(IEAcrossHandler.donate.selector, Constants.ETH_USDC, 1, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
             abi.encodeWithSignature("TokenIsNotOwned()")
         );
         
@@ -268,7 +265,7 @@ contract PoolDonateTest is Test {
         assertTrue(escrowAddress.code.length > 0, "Escrow should be deployed");
         
         // First test: Use non-owned token - should fail with TokenIsNotOwned
-        address testToken = Constants.ARB_USDC; // Use real USDC token
+        address testToken = Constants.ETH_USDC; // Use real USDC token
         uint256 refundAmount = 5000e6; // 5k USDC
         
         // Fund the escrow with tokens (simulating failed transfer refund)

@@ -60,9 +60,7 @@ contract ENavViewForkTest is Test {
     uint256 originalNav;
 
     function setUp() public {
-        mainnetFork = vm.createFork("mainnet", MAINNET_BLOCK);
-        vm.selectFork(mainnetFork);
-
+        mainnetFork = vm.createSelectFork("mainnet", MAINNET_BLOCK);
         console2.log("=== Setting up ENavView Fork Test ===");
 
         // Get original implementation
