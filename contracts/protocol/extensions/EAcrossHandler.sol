@@ -54,7 +54,6 @@ contract EAcrossHandler is IEAcrossHandler {
     /// @inheritdoc IEAcrossHandler
     function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable override {
         bool isLocked = TransientStorage.getDonationLock();
-
         uint256 balance = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
 
         // 1 is flag for initializing temp storage.

@@ -80,14 +80,26 @@ jobs:
       - name: Generate coverage reports
         run: yarn coverage:all
 
-      - name: Upload coverage to Codecov
+      - name: Upload Foundry coverage to Codecov
         if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage/lcov.info,coverage/foundry_lcov.info
-          flags: combined
-          name: codecov-v3-contracts
+          files: ./coverage/foundry_lcov.info
+          flags: foundry
+          name: foundry-coverage
+          fail_ci_if_error: true
+          verbose: true
+          disable_search: true
+
+      - name: Upload Hardhat coverage to Codecov
+        if: github.actor != 'dependabot[bot]'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: hardhat
+          name: hardhat-coverage
           fail_ci_if_error: true
           verbose: true
           disable_search: true

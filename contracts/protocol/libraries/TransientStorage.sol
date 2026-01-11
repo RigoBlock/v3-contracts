@@ -47,11 +47,9 @@ library TransientStorage {
     }
 
     function setDonationLock(address token, uint256 balance) internal {
-        bool newLock = !_DONATION_LOCK_SLOT.asBoolean().tload();
-        _DONATION_LOCK_SLOT.asBoolean().tstore(newLock);
-        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
-        slot.asUint256().tstore(balance);
-        (bytes32(uint256(slot) + 1)).asBoolean().tstore(newLock);
+        bool isUnlocked = getDonationLock();
+        _DONATION_LOCK_SLOT.asBoolean().tstore(!isUnlocked);
+        storeTemporaryBalance(token, balance, !isUnlocked);
     }
 
     function getDonationLock() internal view returns (bool) {
@@ -65,6 +63,12 @@ library TransientStorage {
 
     function storeNav(uint256 nav) internal {
         _STORED_NAV_SLOT.asUint256().tstore(nav);
+    }
+
+    function storeTemporaryBalance(address token, uint256 balance, bool locked) private {
+        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
+        slot.asUint256().tstore(balance);
+        (bytes32(uint256(slot) + 1)).asBoolean().tstore(locked);
     }
 
     function getStoredNav() internal view returns (uint256) {
