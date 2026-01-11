@@ -17,6 +17,8 @@ library Constants {
     /// @notice Base chain block number for fork tests
     uint256 internal constant BASE_BLOCK = 39521323;
 
+    uint256 internal constant POLYGON_BLOCK = 81_000_000;
+
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
     //////////////////////////////////////////////////////////////*/
