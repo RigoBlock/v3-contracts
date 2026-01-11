@@ -15,7 +15,7 @@ import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
-import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
+import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {Call, DestinationMessageParams, Instructions, OpType, SourceMessageParams} from "../../types/Crosschain.sol";
 import {EscrowFactory} from "../escrow/EscrowFactory.sol";
@@ -39,7 +39,8 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     using SafeCast for int256;
     using EnumerableSet for AddressSet;
     using SlotDerivation for bytes32;
-    using VirtualBalanceLib for address;
+    using VirtualStorageLib for address;
+    using VirtualStorageLib for int256;
 
     IAcrossSpokePool private immutable _acrossSpokePool;
 
@@ -229,7 +230,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Update NAV and get pool state
         ISmartPoolActions(address(this)).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-        uint256 virtualSupply = VirtualBalanceLib.getVirtualSupply().toUint256();
+        uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
         uint8 poolDecimals = StorageLib.pool().decimals;
 
         // Convert transfer value to shares using current NAV (same as mint/burn calculation)
@@ -239,10 +240,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         if (virtualSupply > 0) {
             if (virtualSupply >= sharesToBurn) {
                 // Sufficient virtual supply - burn the exact share amount
-                VirtualBalanceLib.updateVirtualSupply(-(sharesToBurn.toInt256()));
+                (-(sharesToBurn.toInt256())).updateVirtualSupply();
             } else {
                 // Insufficient virtual supply - burn all of it, use virtual balance for remainder
-                VirtualBalanceLib.updateVirtualSupply(-(virtualSupply.toInt256()));
+                (-(virtualSupply.toInt256())).updateVirtualSupply();
 
                 // Calculate remaining value that wasn't covered by burning virtual supply
                 uint256 remainingValue = ((sharesToBurn - virtualSupply) * poolTokens.unitaryValue) /
@@ -254,11 +255,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
                     remainingValue.toInt256(),
                     params.inputToken
                 );
-                VirtualBalanceLib.updateVirtualBalance(params.inputToken, remainingTokensInt);
+                (params.inputToken).updateVirtualBalance(remainingTokensInt);
             }
         } else {
             // No virtual supply - use virtual balance entirely to offset the transfer
-            VirtualBalanceLib.updateVirtualBalance(params.inputToken, scaledOutputAmount.toInt256());
+            (params.inputToken).updateVirtualBalance(scaledOutputAmount.toInt256());
         }
     }
 

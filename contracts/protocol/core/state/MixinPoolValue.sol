@@ -10,7 +10,7 @@ import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
-import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
+import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
@@ -44,7 +44,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             components.unitaryValue = 10 ** components.decimals;
         } else {
             // Calculate effective supply (actual + virtual) - both systems can coexist
-            components.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+            components.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
 
             if (components.totalSupply == 0) {
                 // No supply anywhere - return stored NAV
@@ -123,7 +123,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
 
         // Add virtual balances for cross-chain transfers (requirement 1 & 4)
-        poolValueInBaseToken += VirtualBalanceLib.getVirtualBalance(baseToken);
+        poolValueInBaseToken += VirtualStorageLib.getVirtualBalance(baseToken);
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
@@ -136,7 +136,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         for (uint256 i = 0; i < activeTokensLength; i++) {
             tokenAmounts[i] = _getAndClearBalance(activeTokens[i]);
             // Add virtual balances for each active token (cross-chain transfers)
-            tokenAmounts[i] += VirtualBalanceLib.getVirtualBalance(activeTokens[i]);
+            tokenAmounts[i] += VirtualStorageLib.getVirtualBalance(activeTokens[i]);
         }
 
         if (activeTokensLength > 0) {

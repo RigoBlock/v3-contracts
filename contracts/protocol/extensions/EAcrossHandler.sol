@@ -12,7 +12,7 @@ import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {TransientSlot} from "../libraries/TransientSlot.sol";
 import {TransientStorage} from "../libraries/TransientStorage.sol";
-import {VirtualBalanceLib} from "../libraries/VirtualBalanceLib.sol";
+import {VirtualStorageLib} from "../libraries/VirtualStorageLib.sol";
 import {NavImpactLib} from "../libraries/NavImpactLib.sol";
 import {CrosschainLib} from "../libraries/CrosschainLib.sol";
 import {DestinationMessageParams, OpType} from "../types/Crosschain.sol";
@@ -29,7 +29,8 @@ contract EAcrossHandler is IEAcrossHandler {
     using SafeCast for int256;
     using SlotDerivation for bytes32;
     using EnumerableSet for AddressSet;
-    using VirtualBalanceLib for address;
+    using VirtualStorageLib for address;
+    using VirtualStorageLib for int256;
     using TransientStorage for *;
 
     /// @notice Address of the Across SpokePool contract
@@ -121,7 +122,7 @@ contract EAcrossHandler is IEAcrossHandler {
         address baseToken = StorageLib.pool().baseToken;
 
         // Check if positive virtual balances exist for this token
-        int256 currentVirtualBalance = VirtualBalanceLib.getVirtualBalance(token);
+        int256 currentVirtualBalance = token.getVirtualBalance();
         uint256 remainingAmount = amount;
 
         if (currentVirtualBalance > 0) {
@@ -129,11 +130,11 @@ contract EAcrossHandler is IEAcrossHandler {
             uint256 virtualBalanceUint = currentVirtualBalance.toUint256();
             if (virtualBalanceUint >= remainingAmount) {
                 // Sufficient virtual balance to cover net transfer amount
-                VirtualBalanceLib.updateVirtualBalance(token, -(remainingAmount.toInt256()));
+                token.updateVirtualBalance(-(remainingAmount.toInt256()));
                 remainingAmount = 0; // No virtual supply increase needed
             } else {
                 // Partial reduction of virtual balance, then increase virtual supply for remainder
-                VirtualBalanceLib.updateVirtualBalance(token, -currentVirtualBalance); // Zero it out
+                token.updateVirtualBalance(-currentVirtualBalance); // Zero it out
                 remainingAmount = remainingAmount - virtualBalanceUint;
             }
         }
@@ -147,7 +148,7 @@ contract EAcrossHandler is IEAcrossHandler {
             // shares = baseValue / storedNav (in pool token units)
             uint256 virtualSupplyIncrease = (baseValue * (10 ** poolDecimals)) / storedNav;
 
-            VirtualBalanceLib.updateVirtualSupply(virtualSupplyIncrease.toInt256());
+            (virtualSupplyIncrease.toInt256()).updateVirtualSupply();
         }
 
         // Update NAV to reflect received tokens before validation
@@ -163,7 +164,7 @@ contract EAcrossHandler is IEAcrossHandler {
                 .toUint256();
 
             // Calculate expected NAV increase: surplusValue / effectiveSupply
-            poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+            poolTokens.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
 
             // Safety check: Ensure total supply is not zero
             require(poolTokens.totalSupply > 0, "Effective total supply is zero - cannot calculate NAV increase");

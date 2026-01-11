@@ -17,7 +17,7 @@ import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {ApplicationsLib} from "../libraries/ApplicationsLib.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
-import {VirtualBalanceLib} from "../libraries/VirtualBalanceLib.sol";
+import {VirtualStorageLib} from "../libraries/VirtualStorageLib.sol";
 import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
@@ -34,9 +34,6 @@ library NavView {
     using SafeCast for int256;
     using StateLibrary for IPoolManager;
     using PositionInfoLibrary for PositionInfo;
-
-    /// @notice Error thrown for unknown application types
-    error UnknownApplication(uint256 appType);
 
     /// @notice Flag to identify out-of-range positions in Uniswap V4
     int24 internal constant OUT_OF_RANGE_FLAG = -887273;
@@ -145,7 +142,7 @@ library NavView {
             baseTokenBalance = int256(address(this).balance);
         }
         // Always add virtual balance for base token
-        baseTokenBalance += VirtualBalanceLib.getVirtualBalance(tokens.baseToken);
+        baseTokenBalance += VirtualStorageLib.getVirtualBalance(tokens.baseToken);
 
         bool baseTokenFound = false;
         for (uint256 k = 0; k < tokenCount; k++) {
@@ -178,7 +175,7 @@ library NavView {
             }
 
             // Add virtual balance for this token
-            totalBalance += VirtualBalanceLib.getVirtualBalance(token);
+            totalBalance += VirtualStorageLib.getVirtualBalance(token);
 
             // Skip if no balance (wallet + virtual)
             if (totalBalance == 0) continue;
@@ -261,7 +258,7 @@ library NavView {
         uint256 totalSupply = poolTokens.totalSupply;
 
         // Add virtual supply for cross-chain transfers (matches MixinPoolValue)
-        totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+        totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
 
         // Calculate unitary value
         uint256 unitaryValue;
@@ -296,7 +293,8 @@ library NavView {
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
             balances = getUniV4PmBalances(uniV4Posm);
         } else {
-            revert UnknownApplication(uint256(appType));
+            // simple return when new apps are added via adapters and implementation not yet upgraded
+            return balances;
         }
     }
 

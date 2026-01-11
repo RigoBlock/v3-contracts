@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
 import {StorageLib} from "./StorageLib.sol";
-import {VirtualBalanceLib} from "./VirtualBalanceLib.sol";
+import {VirtualStorageLib} from "./VirtualStorageLib.sol";
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 
 /// @title NavImpactLib - Library for validating NAV impact tolerance
@@ -29,7 +29,7 @@ library NavImpactLib {
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
-        poolTokens.totalSupply += VirtualBalanceLib.getVirtualSupply().toUint256();
+        poolTokens.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
         uint256 totalAssetsValue = (poolTokens.unitaryValue * poolTokens.totalSupply) / (10 ** poolDecimals);
 
         // For empty pools (all supply burnt on all chains), allow any transfer. Handles edge case of receiving first tokens on a chain

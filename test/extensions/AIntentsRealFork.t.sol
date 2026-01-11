@@ -23,7 +23,6 @@ import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/
 import {IAcrossSpokePool} from "../../contracts/protocol/interfaces/IAcrossSpokePool.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
 import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
-import {VirtualBalanceLib} from "../../contracts/protocol/libraries/VirtualBalanceLib.sol";
 
 /// @notice Interface for Across MulticallHandler contract
 /// @dev This matches the actual Across Protocol MulticallHandler interface
@@ -1938,8 +1937,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         // Set virtual balance to 200 USDC (less than donation to trigger partial reduction)
-        // Use the correct slot calculation: _VIRTUAL_BALANCES_SLOT.deriveMapping(token)
-        bytes32 virtualBalancesSlot = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f; // _VIRTUAL_BALANCES_SLOT from VirtualBalanceLib
+        bytes32 virtualBalancesSlot = Constants.VIRTUAL_BALANCES_SLOT;
         bytes32 slot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
         int256 virtualBalance = 200e6;
         vm.store(ethereum.pool, slot, bytes32(uint256(virtualBalance))); // Store as int256 converted to bytes32
@@ -1949,23 +1947,17 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Fund handler with USDC
         deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
         
-        // Step 1: Initialize with amount=1
-        vm.prank(Constants.ETH_MULTICALL_HANDLER);
+        vm.startPrank(Constants.ETH_MULTICALL_HANDLER);
         IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
-        
-        // Step 2: Transfer tokens to pool (simulates bridge transfer)
-        vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
-        
-        // Step 3: Perform actual donation  
-        vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
+        vm.stopPrank();
         
         // Virtual balance should be zeroed out (partial reduction case - lines 159-160)
         assertEq(int256(uint256(vm.load(ethereum.pool, slot))), 0, "Virtual balance should be zeroed after partial reduction");

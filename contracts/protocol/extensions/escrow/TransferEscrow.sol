@@ -4,7 +4,6 @@ pragma solidity 0.8.28;
 import {IEAcrossHandler} from "../../extensions/adapters/interfaces/IEAcrossHandler.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
-import {VirtualBalanceLib} from "../../libraries/VirtualBalanceLib.sol";
 import {DestinationMessageParams, OpType} from "../../types/Crosschain.sol";
 
 // TODO: check if should move TransferEscrow our of the extensions folder, as it's not an extension
