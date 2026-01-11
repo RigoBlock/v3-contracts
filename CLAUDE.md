@@ -1,516 +1,380 @@
-# Claude AI Assistant Guidelines for Rigoblock v3-contracts
+# Claude AI Assistant Guidelines - Extended Reference
 
-This document provides comprehensive guidance for AI assistants working with the Rigoblock v3-contracts codebase.
+> **Note**: For quick reference, see [AGENTS.md](./AGENTS.md) which contains the essential guidelines. This file provides deeper explanations and context.
 
-## AI Agent Limitations (CRITICAL)
+## Purpose of This Document
 
-**⚠️ AI-GENERATED SOLIDITY CODE CONTAINS CRITICAL BUGS ⚠️**
+AGENTS.md provides concise, actionable guidelines for AI assistants. This document (CLAUDE.md) provides:
+- Extended explanations of architectural decisions
+- Detailed examples and patterns
+- Historical context for design choices
+- In-depth case studies
 
-- AI agents are NOT proficient at writing secure Solidity code
-- **AI agents have significant difficulty with logic problems and reasoning**
-- Code produced contains security vulnerabilities and logical flaws
-- **AI frequently ignores working solutions and introduces new bugs**  
-- NEVER consider AI-generated code "ready for deployment" or "audit-ready"
-- ALWAYS perform thorough manual security review
-- AI may reintroduce bugs even after they're fixed
-- AI may make incorrect assumptions not based on specifications
-- **AI struggles with complex conditional logic and state management**
-- All code must be treated as containing critical vulnerabilities until proven otherwise
+**When to reference each:**
+- **AGENTS.md**: Quick facts, critical rules, common operations
+- **CLAUDE.md**: Understanding "why", detailed patterns, case studies
 
-## Project Overview
+---
 
-Rigoblock v3-contracts is a decentralized asset management protocol built on EVM-compatible chains. The repository contains:
+## Architecture Deep Dive
 
-- **Protocol contracts**: Smart pool vaults with proxy pattern, extensions, and adapters
-- **Governance contracts**: On-chain governance with strategy and voting mechanisms
-- **Staking contracts**: GRG token staking with proof-of-performance rewards
-- **Token contracts**: RigoToken (GRG) and inflation mechanisms
+### Why Proxy + Extensions + Adapters?
 
-## Architecture Principles
+**Problem**: Smart contracts cannot be upgraded without changing address
 
-### 1. Proxy Pattern with Extensions and Adapters
+**Solution**: Proxy pattern with fallback mechanism
+- **Pool Proxy**: Fixed address, user-facing entry point
+- **Implementation**: Upgradeable logic (via factory)
+- **Extensions**: Chain-specific, immutable per deployment (e.g., price oracles with specific feeds)
+- **Adapters**: Protocol integrations, upgradeable via governance
 
-**Core Components:**
-- **SmartPool (Proxy)**: User-facing contract that delegatecalls to implementation
-- **Implementation**: Core pool logic with fallback mechanism
-- **Extensions**: Called via delegatecall from implementation (stateless, modify caller's storage)
-- **Adapters**: Called via delegatecall from implementation (stateless, can be upgraded by governance)
+**Why separate Extensions and Adapters?**
+1. **Extensions** need chain-specific constructor params (oracle feeds, SpokePool addresses)
+   - Cannot be deployed with same address across chains
+   - Mapped in ExtensionsMap (deployed with chain params)
+   - Example: EAcrossHandler needs chain-specific acrossSpokePool address
 
-**Key Distinction:**
-- **Extensions** are mapped in `ExtensionsMap.sol` (immutable mapping, different addresses per chain)
-- **Adapters** are mapped in `Authority.sol` (can be upgraded via governance)
-- Both execute in the context of the pool proxy (can modify pool storage)
-- Neither should have their own state or be callable directly
+2. **Adapters** are protocol integrations that may need updates
+   - Uniswap V3/V4 router addresses
+   - Governance strategies
+   - Staking mechanisms
+   - Mapped in Authority (governance can update)
 
-**Fallback Chain:**
-```
-Pool Proxy 
-  → delegatecall Implementation 
-    → fallback to Extensions (if selector mapped in ExtensionsMap)
-    → fallback to Adapters (if selector mapped in Authority)
-```
+### ERC-7201 Storage Pattern
 
-### 2. Deterministic Deployment
+**Why namespaced storage?**
+- Proxy pattern means multiple contracts share storage space
+- Traditional storage slots can collide
+- ERC-7201 uses `keccak256("unique.namespace")` for isolation
 
-**Same Address Across Chains:**
-- `Authority.sol`
-- `Registry.sol` 
-- `RigoblockPoolProxyFactory.sol`
-- Core implementation contracts
-- Staking suite contracts
-- Governance core contracts
-
-**Different Addresses Per Chain:**
-- `ExtensionsMap.sol` - because extensions have chain-specific constructor params
-- Individual extension contracts (EApps, EOracle, EUpgrade, EAcrossHandler)
-- Governance strategy contracts
-
-**Deployment Pattern:**
-- Use `ExtensionsMapDeployer.sol` with CREATE2 for deterministic ExtensionsMap deployment
-- Pass arbitrary salt to bump version when selectors or mappings change
-- Extensions take chain-specific params (e.g., wrappedNative, acrossSpokePool addresses)
-
-### 3. Storage Layout (Critical - Never Break!)
-
-**Storage Slots** (defined in `MixinConstants.sol`):
+**Critical implementation detail:**
 ```solidity
-_POOL_INIT_SLOT          = keccak256("pool.proxy.initialization") - 1
-_POOL_VARIABLES_SLOT     = keccak256("pool.proxy.variables") - 1
-_POOL_TOKENS_SLOT        = keccak256("pool.proxy.token") - 1
-_POOL_ACCOUNTS_SLOT      = keccak256("pool.proxy.user.accounts") - 1
-_TOKEN_REGISTRY_SLOT     = keccak256("pool.proxy.token.registry") - 1
-_APPLICATIONS_SLOT       = keccak256("pool.proxy.applications") - 1
-_OPERATOR_BOOLEAN_SLOT   = keccak256("pool.proxy.operator.boolean") - 1
-_ACCEPTED_TOKENS_SLOT    = keccak256("pool.proxy.accepted.tokens") - 1
-_VIRTUAL_BALANCES_SLOT   = keccak256("pool.proxy.virtualBalances") - 1
+// Slot calculation
+bytes32 slot = keccak256("pool.proxy.virtual.balances") - 1;
+
+// Why -1? 
+// Prevents collision with compiler-assigned slots at keccak256(value)
+// Compiler uses keccak256 for mappings/arrays, so we offset by -1
 ```
 
-**NEVER:**
-- Reorder storage variables in existing contracts
-- Change slot calculations
-- Add storage to extensions/adapters (they run in pool context)
-
-**Adding New Storage:**
-- Use ERC-7201 namespaced storage pattern
-- Calculate slot as `keccak256("unique.namespace.name") - 1`
-- Add assertion in `MixinStorage.sol` constructor
-- Define constant in `MixinConstants.sol`
-
-### 4. NAV (Net Asset Value) Calculation
-
-**Real-time NAV** (transient storage for gas efficiency):
-- Calculated by `MixinPoolValue.sol`
-- Includes all owned tokens priced via oracle
-- Formula: `NAV = Σ(token_balance * token_price_in_base_token)`
-- NAV per share: `unitaryValue = NAV / totalSupply`
-
-**Storage NAV** (persistent):
-- Updated via `updateUnitaryValue()` - writes to storage
-- Read via `getPoolTokens().unitaryValue` - reads from storage
-- **Important**: Always call `updateUnitaryValue()` before reading if you need current NAV
-
-**Virtual Balances** (cross-chain accounting):
-- Stored as `mapping(address token => int256 virtualBalance)`
-- Used to offset NAV changes from cross-chain transfers
-- Positive virtual balance = reduce NAV (tokens locked/sent)
-- Negative virtual balance = increase NAV (tokens to be received)
-
-## Working with the Codebase
-
-### File Structure
-
-```
-contracts/
-├── protocol/
-│   ├── SmartPool.sol                    # Main pool proxy
-│   ├── core/
-│   │   ├── immutable/                   # Storage layout definitions
-│   │   │   ├── MixinConstants.sol       # Storage slot constants
-│   │   │   ├── MixinStorage.sol         # Storage slot assertions
-│   │   │   └── MixinImmutables.sol      # Immutable variables
-│   │   └── *.sol                        # Core pool functionality
-│   ├── extensions/
-│   │   ├── EApps.sol                    # Application balance queries
-│   │   ├── EOracle.sol                  # Price feed and conversions
-│   │   ├── EUpgrade.sol                 # Implementation upgrades
-│   │   ├── EAcrossHandler.sol           # Across bridge handler
-│   │   └── adapters/
-│   │       ├── AIntents.sol             # Across bridge adapter
-│   │       ├── AUniswap.sol             # Uniswap integration
-│   │       ├── AStaking.sol             # GRG staking
-│   │       └── interfaces/              # Adapter interfaces
-│   ├── deps/
-│   │   ├── Authority.sol                # Adapter registry
-│   │   ├── ExtensionsMap.sol            # Extension selector mapping
-│   │   └── ExtensionsMapDeployer.sol    # CREATE2 deployer
-│   ├── proxies/
-│   │   ├── RigoblockPoolProxy.sol       # Pool proxy implementation
-│   │   └── RigoblockPoolProxyFactory.sol # Pool factory
-│   ├── interfaces/                      # Protocol interfaces
-│   ├── libraries/                       # Shared libraries
-│   └── types/                           # Type definitions
-├── governance/                          # On-chain governance
-├── staking/                            # GRG token staking
-└── rigoToken/                          # GRG token
-```
-
-### Testing
-
-**Framework:**
-- Hardhat + TypeScript for unit tests (existing)
-- Foundry for integration and fork tests (new)
-
-**Fork Testing Pattern:**
-1. Create fork with `vm.createFork(rpcUrl)`
-2. Most contracts already deployed - use their addresses
-3. Deploy only new contracts (ExtensionsMap, new adapters/extensions)
-4. Use `vm.prank()` to impersonate privileged accounts for setup:
-   - Factory owner to upgrade implementation
-   - Authority whitelister to add adapter methods
-   - Pool owner to execute transactions
-5. Simulate cross-chain with multiple forks and `vm.selectFork()`
-
-**Key Test Addresses:**
+**Testing gotcha - ERC-7201 with explicit structs:**
+When you define storage as:
 ```solidity
-// Deployed on most chains
-address constant AUTHORITY = 0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1;
-address constant FACTORY = 0x4aA9e5A5A244C81C3897558C5cF5b752EBefA88f;
-address constant REGISTRY = 0x19Be0f8D5f35DB8c2d2f50c9a3742C5d1eB88907;
-
-// Existing pool with assets (use for testing)
-address constant TEST_POOL = 0xEfa4bDf566aE50537A507863612638680420645C;
-```
-
-## Across Bridge Integration (Case Study)
-
-The Across integration demonstrates key patterns:
-
-### 1. Adapter (AIntents.sol)
-- Lives in `extensions/adapters/`
-- Initiated by pool owner via `depositV3()`
-- Validates input token is owned by pool
-- Manages virtual balances on source chain
-- Forwards call to Across SpokePool with custom message
-
-### 2. Extension (EAcrossHandler.sol)
-- Lives in `extensions/`
-- Called by Across SpokePool on destination chain
-- **Security**: MUST verify `msg.sender == acrossSpokePool`
-- Validates token has price feed
-- Manages virtual balances on destination chain
-- Handles two modes:
-  - **Transfer**: Offset NAV with virtual balances
-  - **Rebalance**: Verify NAV within tolerance
-
-### 3. Cross-Chain NAV Integrity
-
-**Problem**: Bridging tokens affects NAV on both chains:
-- Source chain: NAV decreases (tokens sent)
-- Destination chain: NAV increases (tokens received)
-
-**Solution - Transfer Mode**:
-- Source: Create positive virtual balance (+locked tokens in base token)
-- Destination: Create negative virtual balance (-received tokens in base token)
-- Net effect: NAV neutral on both chains
-
-**Solution - Rebalance Mode**:
-- Source: NAV actually changes (performance transferred)
-- Destination: Verify NAV matches source (within tolerance)
-- Use normalized NAV to handle different base token decimals
-
-### 4. Security Considerations
-
-**Extension Security:**
-- Extension called via delegatecall (runs in pool context)
-- `msg.sender` is preserved (Across SpokePool)
-- MUST verify `msg.sender == acrossSpokePool` to prevent unauthorized calls
-- Store acrossSpokePool as immutable (gas efficient)
-
-**Token Recovery:**
-- Across V3 lacks direct recovery mechanism
-- `speedUpV3Deposit` is unsafe (can modify params after fill)
-- **Decision**: Don't implement recovery, document as known limitation
-- **Mitigation**: Use reasonable fillDeadline (5-30 minutes)
-
-## Common Tasks
-
-### Adding a New Adapter
-
-1. Create adapter in `contracts/protocol/extensions/adapters/YourAdapter.sol`
-2. Create interface in `contracts/protocol/extensions/adapters/interfaces/IYourAdapter.sol`
-3. Implement with these requirements:
-   - Use `onlyDelegateCall` modifier
-   - Store `_IMPLEMENTATION` address in constructor
-   - Never add storage (operates in pool context)
-   - Use `StorageLib` for pool storage access
-4. Add method selectors to `Authority.sol` (via governance)
-5. Test with fork tests
-
-### Adding a New Extension
-
-1. Create extension in `contracts/protocol/extensions/YourExtension.sol`
-2. Create interface in `contracts/protocol/extensions/adapters/interfaces/IYourExtension.sol`
-3. Store chain-specific immutables in constructor
-4. Add selector to `ExtensionsMap.sol`
-5. Update `ExtensionsMapDeployer.sol` to pass constructor params
-6. Update `DeploymentParams.sol` types
-7. Deploy with new salt via `ExtensionsMapDeployer`
-
-### Adding Storage
-
-1. **Never add to existing storage slots**
-2. Define new namespaced slot:
-   ```solidity
-   bytes32 internal constant _YOUR_SLOT = 
-       bytes32(uint256(keccak256("pool.proxy.your.feature")) - 1);
-   ```
-3. Add assertion in `MixinStorage.sol` constructor:
-   ```solidity
-   assert(_YOUR_SLOT == bytes32(uint256(keccak256("pool.proxy.your.feature")) - 1));
-   ```
-4. Access via:
-   ```solidity
-   function _getYourValue(address key) private view returns (uint256 value) {
-       bytes32 slot = _YOUR_SLOT.deriveMapping(key);
-       assembly { value := sload(slot) }
-   }
-   ```
-
-### Testing Cross-Chain Functionality
-
-```solidity
-function testCrossChain() public {
-    // Setup source chain
-    vm.selectFork(arbFork);
-    // ... deploy/configure contracts
+library VirtualStorageLib {
+    struct VirtualBalances {
+        mapping(address => int256) balances;
+        int256 supply;
+    }
     
-    // Execute source chain transaction
-    vm.prank(poolOwner);
-    pool.depositV3(...);
-    
-    // Simulate Across fill on destination
-    vm.selectFork(optFork);
-    vm.prank(address(spokePool)); // Critical: prank as SpokePool
-    pool.handleV3AcrossMessage(...);
-    
-    // Verify state on both chains
-    vm.selectFork(arbFork);
-    assertEq(getVirtualBalance(...), expectedValue);
-    
-    vm.selectFork(optFork);
-    assertEq(getVirtualBalance(...), expectedValue);
+    function _storage() private pure returns (VirtualBalances storage $) {
+        bytes32 slot = VIRTUAL_BALANCES_SLOT;
+        assembly { $.slot := slot }
+    }
 }
 ```
 
-## Important Patterns
+Each contract calling this library accesses **its own** storage at that slot. Tests calling library functions access the **test contract's storage**, not the pool's storage. This is why we cannot directly manipulate pool storage from tests - we must use actual pool operations.
 
-### 1. Safe Token Operations
+### Virtual Balance System Explained
 
-Use `SafeTransferLib` for all token operations:
-```solidity
-using SafeTransferLib for address;
-
-// Transfer
-token.safeTransfer(to, amount);
-
-// Approve (handles USDT-style tokens)
-token.safeApprove(spender, amount);  // Auto-resets to 0 if needed
+**The Problem:**
+```
+Pool on Arbitrum has 100 USDC (NAV = 100)
+Transfer 50 USDC to Optimism
+- Arbitrum: 50 USDC left (NAV drops to 50) ❌
+- Optimism: 50 USDC received (NAV = 50)
+- Total NAV dropped from 100 to 100? No, it's 150! ❌
 ```
 
-### 2. Oracle Integration
+**The Solution - Virtual Balances:**
+```
+Transfer 50 USDC from Arbitrum to Optimism (Transfer mode)
 
-Always check price feed availability:
-```solidity
-require(IEOracle(address(this)).hasPriceFeed(token), "NO_PRICE_FEED");
+Arbitrum:
+- Physical: 50 USDC
+- Virtual: +50 USDC (in base token units)
+- NAV calculation: (50 + 50) = 100 ✓
 
-int256 baseAmount = IEOracle(address(this)).convertTokenAmount(
-    token,
-    amount.toInt256(),
-    baseToken
-);
+Optimism:
+- Physical: 50 USDC
+- Virtual: -50 USDC (in base token units)
+- NAV calculation: (50 - 50) = 0 ✓
+
+Total NAV: 100 + 0 = 100 ✓
 ```
 
-### 3. NAV Updates
+**Why two systems (Virtual Supply AND Virtual Balances)?**
 
-Update before reading when real-time NAV needed:
+Virtual Supply handles edge case:
+```
+Pool deployed on Arbitrum, totalSupply = 100 tokens
+User bridges 20 pool tokens to Optimism
+- Arbitrum: totalSupply = 100, virtualSupply = 0
+- Optimism: totalSupply = 20, virtualSupply = -20
+- Net global supply: 100 + 0 + 20 + (-20) = 100 ✓
+```
+
+Without virtual supply:
+```
+Transfer USDC from Arbitrum to Optimism
+Optimism has totalSupply = 20 tokens
+
+How much virtual balance to create?
+Need: baseValue / currentNav * 10^poolDecimals
+But if we always used virtual balances, couldn't track cross-chain supply!
+```
+
+**When to use which:**
+- **Virtual Supply**: When reducing pool token holdings on outbound transfer (burn shares on source)
+- **Virtual Balance**: When offsetting token balance changes for NAV neutrality
+
+Both are used together to maintain NAV integrity while tracking true economic position.
+
+---
+
+## Common Patterns Explained
+
+### Safe Token Operations
+
+**Why SafeTransferLib?**
+
+Standard ERC20 has inconsistencies:
 ```solidity
+// USDT approve() reverts if allowance > 0
+token.approve(spender, 100);  // OK
+token.approve(spender, 200);  // REVERTS! ❌
+
+// Some tokens don't return bool
+token.transfer(to, amount);  // No return value
+
+// Some tokens return false instead of reverting
+bool success = token.transfer(to, amount);
+if (!success) { /* need to check! */ }
+```
+
+SafeTransferLib handles all cases:
+```solidity
+token.safeApprove(spender, amount);  // Resets to 0 first if needed
+token.safeTransfer(to, amount);      // Reverts on failure regardless of return
+```
+
+### NAV Updates and Timing
+
+**When to call updateUnitaryValue()?**
+
+NAV is calculated as:
+```
+NAV = (total asset value) / totalSupply
+```
+
+It changes when:
+1. Token prices change
+2. Tokens added/removed from pool
+3. Fees accrued
+
+**Automatic updates:**
+- `deposit()` / `withdraw()` - Always updates NAV
+- State-changing operations update if needed
+
+**Manual updates needed:**
+- Before reading NAV for validation (if may have changed)
+- Before cross-chain transfers (want current NAV)
+- When reading for external queries (may be stale)
+
+```solidity
+// ❌ Wrong - may read stale NAV
+uint256 nav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
+
+// ✓ Correct - ensure current NAV
 ISmartPoolActions(address(this)).updateUnitaryValue();
-ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-uint256 currentNav = poolTokens.unitaryValue;
+uint256 nav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
 ```
 
-### 4. Reentrancy Protection
+---
 
-Use `ReentrancyGuardTransient` for external calls:
+## Case Study: Across Bridge Integration
+
+### Design Decision - Two Operation Modes
+
+**Why have Transfer AND Sync modes?**
+
+Initial design: Only Transfer mode (always NAV-neutral)
+```
+Problem: Solver fills with extra tokens (surplus)
+- Destination NAV increases
+- But we applied negative virtual balance
+- Result: NAV appears LOWER than reality ❌
+```
+
+Solution: Two modes
+1. **Transfer**: Default, NAV-neutral, predictable behavior
+2. **Sync**: For donations/rebalancing, allows NAV changes, validates tolerance
+
+**Why not always use Sync?**
+- Most users want predictable NAV behavior
+- Transfer mode makes cross-chain transfers "just work"
+- Sync mode requires understanding NAV implications
+
+### Security Decision - Handler Verification
+
+**Why must handler verify msg.sender?**
+
+Extension called via delegatecall from pool:
+```
+Malicious actor → Pool.fallback() → delegatecall EAcrossHandler.handleV3AcrossMessage()
+```
+
+In delegatecall context:
+- Code runs as if it's part of pool
+- `msg.sender` is preserved (the attacker)
+- Handler can modify pool storage
+
+**Security requirement:**
 ```solidity
-import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
+if (msg.sender != _ACROSS_SPOKE_POOL) revert UnauthorizedCaller();
+```
 
-contract YourAdapter is ReentrancyGuardTransient {
-    function yourMethod() external nonReentrant {
-        // ... external calls
-    }
+Only Across SpokePool can legitimately call this after fill.
+
+### Testing Challenge - Storage Isolation
+
+**Problem encountered:**
+Test tried to directly set virtual balance:
+```solidity
+// In test
+VirtualStorageLib._setVirtualBalance(poolAddress, token, amount);
+// Doesn't work! Updates test contract's storage, not pool's storage
+```
+
+**Why?**
+Library uses ERC-7201 storage with explicit struct:
+```solidity
+function _storage() private pure returns (VirtualBalances storage $) {
+    bytes32 slot = VIRTUAL_BALANCES_SLOT;
+    assembly { $.slot := slot }  // $ = storage at this slot IN CALLING CONTRACT
 }
 ```
 
-## Code Style
+When test calls library, `$` points to test contract storage at that slot, not pool storage.
 
-- Follow existing Solidity style (0.8.28)
-- Use NatSpec comments for public/external functions
-- Inherit docs with `@inheritdoc` when implementing interfaces
-- **Use `override` keyword** for methods that implement interface functions
-  - Compilation will warn if missing - fix all warnings in new code
-  - Legacy code may have warnings - acceptable, but fix when modifying
-- Keep functions focused and well-named
-- Use libraries for reusable logic
-- Prefer immutables over constants for chain-specific values
-- **Error Handling**: Use custom errors (e.g., `InvalidOpType()`) instead of revert strings
-  - Custom errors save gas and allow parameters for better testing
-  - Format: `error ErrorName(param1Type param1, param2Type param2);`
-  - Legacy code may still have revert strings - update when modifying
-
-### Testing Requirements
-
-**For all new Solidity contracts:**
-1. Create or update unit tests (Hardhat TypeScript in `test/`)
-2. Create or update fork tests if applicable (Foundry in `test/`)
-3. Tests MUST pass before considering implementation complete
-4. Run tests: `npm test` (Hardhat) and `forge test` (Foundry)
-5. Fix all compilation warnings in new code
-
-**When modifying existing contracts:**
-- Ensure existing tests still pass
-- Add tests for new functionality
-- Update tests for changed behavior
-
-### Storage Slot Naming Convention
-
-When defining storage slot constants in `MixinConstants.sol`, use **dot notation**:
+**Solution:**
+Create virtual balance through actual pool operations:
 ```solidity
-// Correct format - use dots to separate namespace components
-bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
-    keccak256("pool.proxy.virtual.balances") - 1;
-
-bytes32 internal constant _CHAIN_NAV_SPREADS_SLOT =
-    keccak256("pool.proxy.chain.nav.spreads") - 1;
-
-// NOT this - avoid mixed dots and camelCase
-bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
-    keccak256("pool.proxy.virtualBalances") - 1; // ❌
+// Use actual protocol operation (donation) to create virtual balance
+vm.prank(address(spokePool));
+EAcrossHandler(pool).handleV3AcrossMessage(
+    token,
+    amount,
+    relayer,
+    encodeMessage(OpType.Transfer, ...)
+);
+// Now pool has virtual balance via legitimate operation
 ```
 
-**When adding new storage slots:**
-1. Define constant in `MixinConstants.sol` with dot notation
-2. Add assertion in `MixinStorage.sol` constructor
-3. Update storage layout assertions for validation
+---
 
-**Storage slot usage:**
-- Adapters can import from `MixinConstants.sol` or define in `StorageLib.sol`
-- Extensions import from `MixinConstants.sol` (extensions deployed with new implementation)
-- Be mindful: modifying `StorageLib.sol` triggers recompilation of all dependent contracts
+## Testing Patterns
 
-### Extensions and shouldDelegatecall
+### Fork Testing Best Practices
 
-Extensions in `ExtensionsMap.sol` can specify call context via `shouldDelegatecall` return value:
+**When to use forks:**
+- Testing with actual deployed contracts
+- Integration testing with real protocols (Uniswap, Across, etc.)
+- Cross-chain scenarios
+
+**Pattern:**
+```solidity
+uint256 arbFork = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
+uint256 optFork = vm.createFork(vm.envString("OPTIMISM_RPC_URL"));
+
+// Test cross-chain flow
+vm.selectFork(arbFork);
+// ... initiate transfer on Arbitrum
+bytes memory message = captureMessage();
+
+vm.selectFork(optFork);
+// ... simulate Across fill on Optimism
+vm.prank(address(spokePool));
+pool.handleV3AcrossMessage(token, amount, relayer, message);
+```
+
+**Critical: Use deployed addresses from Constants.sol**
+- Reduces RPC calls (contracts already deployed)
+- Ensures realistic testing environment
+- Avoids address mismatches
+
+### Unit Testing Libraries
+
+**When libraries show as "uncovered" in codecov:**
+
+Integration tests may use library methods, but codecov needs explicit unit tests:
 
 ```solidity
-function getExtensionBySelector(bytes4 selector) external view 
-    returns (address extension, bool shouldDelegatecall) {
-    if (selector == _EAPPS_BALANCES_SELECTOR) {
-        extension = eApps;
-        shouldDelegatecall = true; // Needs write access to pool storage
-    } else if (selector == _EORACLE_CONVERT_AMOUNT_SELECTOR) {
-        extension = eOracle;
-        shouldDelegatecall = false; // Read-only, no state changes
-    } else if (selector == _EUPGRADE_UPGRADE_SELECTOR) {
-        extension = eUpgrade;
-        shouldDelegatecall = msg.sender == StorageLib.pool().owner; // Conditional
-    }
+// Library
+library TransientStorage {
+    function setDonationLock(bool locked) internal { ... }
 }
+
+// Integration test (uses library indirectly)
+pool.donate(...);  // Internally calls TransientStorage.setDonationLock()
+
+// Codecov: "TransientStorage.setDonationLock() not covered" ❌
+
+// Solution: Add explicit unit test
+function test_SetDonationLock() public {
+    TransientStorage.setDonationLock(true);
+    assertTrue(TransientStorage.getDonationLock());
+}
+// Now codecov sees direct coverage ✓
 ```
 
-**Security consideration**: If extension needs write access (delegatecall), implement caller verification in the extension itself (e.g., `require(msg.sender == acrossSpokePool)`).
+---
 
-## Deployment
+## Documentation Philosophy
 
-See `src/deploy/` for deployment scripts (TypeScript + Hardhat).
+### Why Separate AGENTS.md and CLAUDE.md?
 
-**Key Deployment Steps:**
-1. Deploy deterministic contracts via singleton factory
-2. Deploy extensions with chain-specific params
-3. Deploy ExtensionsMap via ExtensionsMapDeployer with salt
-4. Whitelist adapters in Authority (governance vote)
-5. Upgrade pool implementation if needed (governance vote)
+**AGENTS.md**: Quick reference optimized for AI code generation
+- Critical rules (storage, security)
+- Common operations (copy-paste patterns)
+- Checklists for validation
+- ~400 lines, highly scannable
 
-## Documentation Guidelines
+**CLAUDE.md**: Deeper understanding for complex decisions
+- Why rules exist (context)
+- Detailed explanations
+- Case studies of real problems solved
+- ~500 lines, reference material
 
-### Where to Save Documentation Files
+**Analogy:**
+- AGENTS.md = API reference
+- CLAUDE.md = Architecture guide
 
-**General Documentation** (`/docs/`):
-- Architecture overviews
-- Integration guides
-- Design decisions
-- Known issues/limitations
+### Documentation Consolidation
 
-**Protocol-Specific Documentation** (`/docs/<protocol>/`):
-- Create protocol folder for external integrations (e.g., `/docs/across/`, `/docs/uniswap/`)
-- Keep all files related to that integration in its folder
-- Examples: implementation summaries, deployment guides, test reports
+**Anti-pattern seen:**
+- 15+ .md files for single integration
+- Redundant information across files
+- Outdated analysis files kept around
+- Hard to find current information
 
-**Working Files**:
-- Update existing .md files rather than creating new ones
-- Consolidate related information into single files
-- Use clear, descriptive filenames
+**Better approach:**
+- README.md: Overview and quick reference
+- IMPLEMENTATION_GUIDE.md: Detailed patterns
+- COMPREHENSIVE_ANALYSIS.md: Deep technical dive
+- Delete outdated files
 
-### Documentation Update Pattern
+**Rule of thumb:**
+- 3-5 files per integration maximum
+- Update existing files, don't create new ones for each iteration
+- Move to `/docs/<protocol>/` when complete
+- Clean up working documents
 
-**CRITICAL: STOP CREATING EXCESSIVE .MD FILES**
-
-When working on a feature or integration:
-1. **UPDATE existing files** - do NOT create new files for each iteration
-2. Consolidate information into single comprehensive documents
-3. Save protocol-specific docs in `/docs/<protocol>/` (e.g., `/docs/across/`)
-4. Limit to 3-5 core documentation files maximum per integration
-5. Delete temporary/working documents after consolidation
-
-**Avoid**: Creating 15+ .md files. This creates confusion and clutter.
+---
 
 ## Resources
 
-- **Documentation**: https://docs.rigoblock.com
-- **Deployed Addresses**: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
-- **GitHub**: https://github.com/RigoBlock/v3-contracts
-- **Across Integration**: docs/across/ (cross-chain bridge integration)
-
-## AI Assistant Checklist
-
-When making changes:
-
-- [ ] Preserve storage layout (never reorder/remove storage)
-- [ ] Use existing patterns (extensions, adapters, storage access)
-- [ ] Add storage slot assertions if adding new storage (dot notation in names)
-- [ ] Verify security (delegatecall context, access control)
-- [ ] **Add `override` keyword** to interface implementations
-- [ ] **Fix all compilation warnings** in new code (not required for legacy code)
-- [ ] **Write or update tests** (unit tests, integration tests, fork tests)
-- [ ] **Run tests to ensure they pass** (`forge test` for Foundry, `npm test` for Hardhat)
-- [ ] Test with forks if cross-chain or integration work
-- [ ] Update interfaces and use `@inheritdoc`
-- [ ] Follow existing code style and naming
-- [ ] **Use custom errors** (`error ErrorName(params)`) instead of revert strings
-- [ ] Document known limitations clearly
-- [ ] Consider gas optimization (immutables, transient storage)
-- [ ] Update deployment scripts if adding contracts
-- [ ] Save documentation files in `/docs/` or `/docs/<protocol>/`
-
-## Common Pitfalls to Avoid
-
-1. **Adding storage to extensions/adapters** - They run in pool context, use pool storage
-2. **Direct calls to extensions/adapters** - Always called via delegatecall
-3. **Forgetting security checks** - Verify msg.sender in delegatecall context
-4. **Breaking storage layout** - Never reorder/modify existing storage
-5. **Reading stale NAV** - Call updateUnitaryValue() first if need current value
-6. **Assuming same addresses across chains** - Extensions are chain-specific
-7. **Missing price feed checks** - Always verify hasPriceFeed() for new tokens
-8. **Unsafe token operations** - Use SafeTransferLib for USDT compatibility
-9. **Not testing on forks** - Integration tests should use actual deployed contracts
-10. **Ignoring virtual balances** - Cross-chain transfers must maintain NAV integrity
+- [Rigoblock Documentation](https://docs.rigoblock.com)
+- [Deployed Contracts](https://docs.rigoblock.com/readme-2/deployed-contracts-v4)
+- [GitHub Repository](https://github.com/RigoBlock/v3-contracts)
+- [Across Integration](./docs/across/)

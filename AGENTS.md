@@ -94,7 +94,7 @@ bytes32 internal constant _VIRTUAL_BALANCES_SLOT =
     bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1);
 
 // NOT this - avoid mixed dots and camelCase
-bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
+bytes32 internal constant _WRONG_SLOT = 
     bytes32(uint256(keccak256("pool.proxy.virtualBalances")) - 1); // ❌
 
 // In MixinStorage.sol constructor - assert the slot calculation
@@ -433,10 +433,7 @@ When making changes:
 8. **Unsafe token operations** - Use SafeTransferLib for USDT compatibility
 9. **Not testing on forks** - Integration tests should use actual deployed contracts
 10. **Ignoring virtual balances** - Cross-chain transfers must maintain NAV integrity
-11. **CHANGING CONSTANTS.SOL ADDRESSES** - The addresses in Constants.sol are the CORRECT deployed addresses for fork testing. NEVER change them without verification. They are:
-    - Authority: 0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472
-    - Factory: 0x8DE8895ddD702d9a216E640966A98e08c9228f24  
-    - Registry: 0x06767e8090bA5c4Eca89ED00C3A719909D503ED6
+11. **CHANGING CONSTANTS.SOL ADDRESSES** - The addresses in Constants.sol are the CORRECT deployed addresses for fork testing. NEVER change them without verification. Always refer to Constants.sol as the source of truth.
 12. **ALWAYS USE CONSTANTS.SOL IMPORTS** - NEVER hardcode addresses or block numbers in test files. ALWAYS import from Constants.sol to ensure consistency and reduce RPC calls. Examples:
     - Use `Constants.ARB_USDC` not `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`
     - Use `Constants.AUTHORITY` not hardcoded authority addresses
