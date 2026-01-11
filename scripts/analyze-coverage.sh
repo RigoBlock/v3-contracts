@@ -67,13 +67,27 @@ awk '
 }
 ' coverage/lcov.info > "$temp_hardhat"
 
-# Extract missing lines from Foundry coverage  
+# Extract missing lines from Foundry coverage (deduplicate and only count truly uncovered)
 awk '
 /^SF:/ { current_file = substr($0, 4) }
-/^DA:.*,0$/ { 
-    line_num = substr($0, 4)
-    gsub(/,0$/, "", line_num)
-    print current_file ":" line_num
+/^DA:/ { 
+    split($0, parts, ",")
+    line_num = substr(parts[1], 4)
+    hits = parts[2]
+    # Track maximum hits for each line (deduplication)
+    key = current_file ":" line_num
+    if (!(key in max_hits) || hits > max_hits[key]) {
+        max_hits[key] = hits
+    }
+}
+/^end_of_record/ {
+    # Output only lines with 0 hits after deduplication
+    for (key in max_hits) {
+        if (max_hits[key] == 0) {
+            print key
+        }
+    }
+    delete max_hits
 }
 ' coverage/foundry_lcov.info > "$temp_foundry"
 

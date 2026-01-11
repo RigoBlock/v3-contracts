@@ -101,7 +101,17 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const gasReport = fs.readFileSync('coverage/gas-report.txt', 'utf8');
+            let gasReport;
+            try {
+              gasReport = fs.readFileSync('coverage/gas-report.txt', 'utf8');
+              // Extract only the gas report table section
+              const gasStartIndex = gasReport.indexOf('| Gas');
+              if (gasStartIndex !== -1) {
+                gasReport = gasReport.substring(gasStartIndex).trim();
+              }
+            } catch (error) {
+              gasReport = 'Gas report generation failed';
+            }
             
             // Find existing gas report comment and update it, or create new one
             const comments = await github.rest.issues.listComments({
