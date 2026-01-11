@@ -46,6 +46,7 @@ library StorageLib {
     /// @param token Token address to check
     /// @return True if token is base token or in active tokens set
     function isOwnedToken(address token) internal view returns (bool) {
+        // prompt update
         address baseToken = pool().baseToken;
 
         // Base token is always owned
