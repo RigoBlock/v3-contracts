@@ -77,29 +77,57 @@ jobs:
           rm -f lcov.info
           rm -f foundry_lcov.info
 
-      - name: Generate combined coverage report
-        run: yarn coverage:combined
+      - name: Generate coverage reports
+        run: yarn coverage:all
 
-      - name: Clean up individual coverage files
-        run: |
-          rm -f coverage/lcov.info
-          rm -f coverage/foundry_lcov.info
-          rm -f coverage.json
-          rm -f coverage/coverage-final.json
-
-      - name: Validate coverage report
-        run: |
-          chmod +x ./scripts/validate-coverage.sh
-          ./scripts/validate-coverage.sh
+      - name: Generate gas report
+        run: yarn coverage:foundry:gas
 
       - name: Upload coverage to Codecov
         if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage/combined_lcov.info
-          flags: combined-tests
+          files: coverage/lcov.info,coverage/foundry_lcov.info
+          flags: hardhat,foundry
           name: codecov-v3-contracts
           fail_ci_if_error: true
           verbose: true
           disable_search: true
+
+      - name: Comment gas report on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const gasReport = fs.readFileSync('coverage/gas-report.txt', 'utf8');
+            
+            // Find existing gas report comment and update it, or create new one
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('⛽ Gas Report')
+            );
+            
+            const body = `## ⛽ Gas Report\n\n\`\`\`\n${gasReport}\n\`\`\``;
+            
+            if (botComment) {
+              github.rest.issues.updateComment({
+                comment_id: botComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
