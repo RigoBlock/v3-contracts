@@ -129,11 +129,11 @@ contract EAcrossHandler is IEAcrossHandler {
             uint256 virtualBalanceUint = currentVirtualBalance.toUint256();
             if (virtualBalanceUint >= remainingAmount) {
                 // Sufficient virtual balance to cover net transfer amount
-                VirtualBalanceLib.adjustVirtualBalance(token, -(remainingAmount.toInt256()));
+                VirtualBalanceLib.updateVirtualBalance(token, -(remainingAmount.toInt256()));
                 remainingAmount = 0; // No virtual supply increase needed
             } else {
                 // Partial reduction of virtual balance, then increase virtual supply for remainder
-                VirtualBalanceLib.adjustVirtualBalance(token, -currentVirtualBalance); // Zero it out
+                VirtualBalanceLib.updateVirtualBalance(token, -currentVirtualBalance); // Zero it out
                 remainingAmount = remainingAmount - virtualBalanceUint;
             }
         }
@@ -147,7 +147,7 @@ contract EAcrossHandler is IEAcrossHandler {
             // shares = baseValue / storedNav (in pool token units)
             uint256 virtualSupplyIncrease = (baseValue * (10 ** poolDecimals)) / storedNav;
 
-            VirtualBalanceLib.adjustVirtualSupply(virtualSupplyIncrease.toInt256());
+            VirtualBalanceLib.updateVirtualSupply(virtualSupplyIncrease.toInt256());
         }
 
         // Update NAV to reflect received tokens before validation

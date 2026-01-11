@@ -239,10 +239,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         if (virtualSupply > 0) {
             if (virtualSupply >= sharesToBurn) {
                 // Sufficient virtual supply - burn the exact share amount
-                VirtualBalanceLib.adjustVirtualSupply(-(sharesToBurn.toInt256()));
+                VirtualBalanceLib.updateVirtualSupply(-(sharesToBurn.toInt256()));
             } else {
                 // Insufficient virtual supply - burn all of it, use virtual balance for remainder
-                VirtualBalanceLib.adjustVirtualSupply(-(virtualSupply.toInt256()));
+                VirtualBalanceLib.updateVirtualSupply(-(virtualSupply.toInt256()));
 
                 // Calculate remaining value that wasn't covered by burning virtual supply
                 uint256 remainingValue = ((sharesToBurn - virtualSupply) * poolTokens.unitaryValue) /
@@ -254,11 +254,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
                     remainingValue.toInt256(),
                     params.inputToken
                 );
-                VirtualBalanceLib.adjustVirtualBalance(params.inputToken, remainingTokensInt);
+                VirtualBalanceLib.updateVirtualBalance(params.inputToken, remainingTokensInt);
             }
         } else {
             // No virtual supply - use virtual balance entirely to offset the transfer
-            VirtualBalanceLib.adjustVirtualBalance(params.inputToken, scaledOutputAmount.toInt256());
+            VirtualBalanceLib.updateVirtualBalance(params.inputToken, scaledOutputAmount.toInt256());
         }
     }
 
