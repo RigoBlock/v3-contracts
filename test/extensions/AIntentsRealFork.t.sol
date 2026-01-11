@@ -22,6 +22,7 @@ import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IE
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {IAcrossSpokePool} from "../../contracts/protocol/interfaces/IAcrossSpokePool.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
+import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
 import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
 
 /// @notice Interface for Across MulticallHandler contract
@@ -1937,7 +1938,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         // Set virtual balance to 200 USDC (less than donation to trigger partial reduction)
-        bytes32 virtualBalancesSlot = Constants.VIRTUAL_BALANCES_SLOT;
+        bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
         bytes32 slot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
         int256 virtualBalance = 200e6;
         vm.store(ethereum.pool, slot, bytes32(uint256(virtualBalance))); // Store as int256 converted to bytes32
@@ -2092,5 +2093,222 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         assertTrue(true, "New donation should succeed after previous reverted (lock cleared)");
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                        VIRTUAL SUPPLY MANAGEMENT TESTS
+                      (COVERING AINTENTS LINES 243, 246, 249, 253, 258)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Test no virtual supply case (line 258)
+    /// @dev Tests the path where virtual supply == 0 (default case)
+    /// The entire transfer amount goes to virtual balance
+    /// This is the NORMAL case for outbound transfers when no prior inbound donations exist
+    function test_AIntents_NoVirtualSupply_OutboundTransfer() public {
+        uint256 transferAmount = 100e6; // 100 USDC
+        
+        // Verify no virtual supply exists (should be 0 by default)
+        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
+        uint256 initialVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        assertEq(initialVirtualSupply, 0, "Virtual supply should start at 0");
+        
+        console2.log("Initial virtual supply:", initialVirtualSupply);
+        
+        // Get initial virtual balance for USDC
+        bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
+        bytes32 usdcBalanceSlot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
+        int256 initialVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
+        
+        console2.log("Initial USDC virtual balance:", initialVirtualBalance);
+        
+        // Fund poolOwner with USDC
+        deal(Constants.ETH_USDC, poolOwner, transferAmount);
+        
+        // Prepare depositV3 params for Transfer mode
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+        
+        // Execute depositV3 - should update virtual balance entirely (line 258)
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+        
+        // Verify virtual supply remains 0
+        uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        console2.log("Final virtual supply:", finalVirtualSupply);
+        assertEq(finalVirtualSupply, 0, "Virtual supply should remain 0");
+        
+        // Verify virtual balance was updated with full transfer amount (line 258)
+        int256 finalVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
+        console2.log("Final USDC virtual balance:", finalVirtualBalance);
+        
+        // Virtual balance should increase by the transfer amount (positive = we sent tokens out)
+        assertGt(finalVirtualBalance, initialVirtualBalance, "Virtual balance should increase by transfer amount");
+        assertEq(finalVirtualBalance, int256(transferAmount), "Virtual balance should equal transfer amount");
+        
+        console2.log("No virtual supply test completed - line 258 covered!");
+    }
+
+    /// @notice Test sufficient virtual supply case (line 243)
+    /// @dev Tests the path where virtual supply >= sharesToBurn
+    /// This happens when we had previous inbound donations that created virtual supply,
+    /// and now we're sending tokens back out - the virtual supply offsets the outbound transfer
+    function test_AIntents_SufficientVirtualSupply_OutboundAfterInbound() public {
+        uint256 inboundAmount = 200e6; // 200 USDC inbound first
+        uint256 outboundAmount = 100e6; // Then 100 USDC outbound (less than virtual supply created)
+        
+        // Step 1: Simulate inbound donation to create virtual supply
+        // This donation would have come from destination chain handler
+        address handler = Constants.ETH_MULTICALL_HANDLER;
+        deal(Constants.ETH_USDC, handler, inboundAmount);
+        
+        vm.startPrank(handler);
+        // Initialize donation
+        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        // Transfer tokens to pool
+        IERC20(Constants.ETH_USDC).transfer(pool(), inboundAmount);
+        // Complete donation (creates virtual supply)
+        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        vm.stopPrank();
+        
+        // Verify virtual supply was created
+        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
+        uint256 virtualSupplyAfterInbound = uint256(vm.load(pool(), virtualSupplySlot));
+        console2.log("Virtual supply after inbound donation:", virtualSupplyAfterInbound);
+        assertGt(virtualSupplyAfterInbound, 0, "Inbound donation should create virtual supply");
+        
+        // Step 2: Now do outbound transfer (should burn from virtual supply - line 243)
+        deal(Constants.ETH_USDC, poolOwner, outboundAmount);
+        
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: outboundAmount,
+            outputAmount: outboundAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+        
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+        
+        // Verify virtual supply was reduced but not fully burned (line 243 executed)
+        uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        console2.log("Final virtual supply:", finalVirtualSupply);
+        console2.log("Virtual supply burned:", virtualSupplyAfterInbound - finalVirtualSupply);
+        
+        assertLt(finalVirtualSupply, virtualSupplyAfterInbound, "Virtual supply should decrease");
+        assertGt(finalVirtualSupply, 0, "Some virtual supply should remain (sufficient case)");
+        
+        console2.log("Sufficient virtual supply test completed - line 243 covered!");
+    }
+
+    /// @notice Test insufficient virtual supply case (lines 246, 249, 253)
+    /// @dev Tests the path where 0 < virtual supply < sharesToBurn
+    /// Virtual supply is fully burned, remainder goes to virtual balance
+    /// This happens when outbound transfer exceeds available virtual supply from prior inbound donations
+    function test_AIntents_InsufficientVirtualSupply_LargeOutbound() public {
+        uint256 inboundAmount = 50e6; // 50 USDC inbound first (creates small virtual supply)
+        uint256 outboundAmount = 150e6; // Then 150 USDC outbound (exceeds virtual supply)
+        
+        // Step 1: Simulate small inbound donation to create insufficient virtual supply
+        address handler = Constants.ETH_MULTICALL_HANDLER;
+        deal(Constants.ETH_USDC, handler, inboundAmount);
+        
+        vm.startPrank(handler);
+        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        IERC20(Constants.ETH_USDC).transfer(pool(), inboundAmount);
+        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        }));
+        vm.stopPrank();
+        
+        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
+        uint256 virtualSupplyAfterInbound = uint256(vm.load(pool(), virtualSupplySlot));
+        console2.log("Virtual supply after small inbound:", virtualSupplyAfterInbound);
+        assertGt(virtualSupplyAfterInbound, 0, "Inbound donation should create some virtual supply");
+        
+        // Get initial virtual balance
+        bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
+        bytes32 usdcBalanceSlot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
+        int256 initialVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
+        console2.log("Initial USDC virtual balance:", initialVirtualBalance);
+        
+        // Step 2: Large outbound transfer (exceeds virtual supply - lines 246, 249, 253)
+        deal(Constants.ETH_USDC, poolOwner, outboundAmount);
+        
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: outboundAmount,
+            outputAmount: outboundAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+        
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+        
+        // Verify virtual supply was fully burned (line 246)
+        uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        console2.log("Final virtual supply:", finalVirtualSupply);
+        assertEq(finalVirtualSupply, 0, "Virtual supply should be fully burned (insufficient case)");
+        
+        // Verify virtual balance increased for remainder (line 253)
+        int256 finalVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
+        console2.log("Final USDC virtual balance:", finalVirtualBalance);
+        
+        // Virtual balance should be positive (we sent more than virtual supply could offset)
+        assertGt(finalVirtualBalance, initialVirtualBalance, "Virtual balance should increase with remainder");
+        
+        console2.log("Insufficient virtual supply test completed - lines 246, 249, 253 covered!");
     }
 }

@@ -6,8 +6,48 @@ import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.so
 import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
 
 /// @title CrosschainLib Unit Tests
-/// @notice Comprehensive tests for CrosschainLib token validation
+/// @notice Comprehensive tests for CrosschainLib token validation and handler resolution
 contract CrosschainLibTest is Test {
+    
+    /*//////////////////////////////////////////////////////////////////////////
+                            ACROSS HANDLER RESOLUTION TESTS
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Test getAcrossHandler returns DEFAULT_MULTICALL_HANDLER for most chains
+    function test_GetAcrossHandler_DefaultForMostChains() public pure {
+        address defaultHandler = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+        
+        // Test Ethereum (mainnet)
+        assertEq(CrosschainLib.getAcrossHandler(1), defaultHandler, "Ethereum should use default handler");
+        
+        // Test Arbitrum
+        assertEq(CrosschainLib.getAcrossHandler(42161), defaultHandler, "Arbitrum should use default handler");
+        
+        // Test Optimism
+        assertEq(CrosschainLib.getAcrossHandler(10), defaultHandler, "Optimism should use default handler");
+        
+        // Test Base
+        assertEq(CrosschainLib.getAcrossHandler(8453), defaultHandler, "Base should use default handler");
+        
+        // Test Polygon
+        assertEq(CrosschainLib.getAcrossHandler(137), defaultHandler, "Polygon should use default handler");
+        
+        // Test Unichain
+        assertEq(CrosschainLib.getAcrossHandler(1301), defaultHandler, "Unichain should use default handler");
+    }
+
+    /// @notice Test getAcrossHandler returns BSC_MULTICALL_HANDLER for BSC (chain ID 56)
+    /// @dev This test covers the BSC-specific path that was previously untested
+    function test_GetAcrossHandler_BSCSpecificHandler() public pure {
+        address bscHandler = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
+        
+        // Test BSC (chain ID 56) - should use BSC-specific handler
+        assertEq(CrosschainLib.getAcrossHandler(56), bscHandler, "BSC should use BSC-specific handler");
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                            TOKEN VALIDATION TESTS
+    //////////////////////////////////////////////////////////////////////////*/
     
     /// @notice Test USDC token validation - all valid pairs should pass
     function test_ValidateBridgeableTokenPair_USDC_AllValid() public pure {

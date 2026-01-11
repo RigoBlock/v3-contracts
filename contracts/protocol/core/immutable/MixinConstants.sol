@@ -3,6 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {ISmartPool} from "../../ISmartPool.sol";
 import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
+import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.
@@ -28,10 +29,9 @@ abstract contract MixinConstants is ISmartPool {
     bytes32 internal constant _ACCEPTED_TOKENS_SLOT =
         0xa33198d1011bad6f8d9b4a537f82cf21cfac49b1430cf1a99c11aaf4d7325fc6;
 
-    bytes32 internal constant _VIRTUAL_BALANCES_SLOT =
-        0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
+    bytes32 internal constant _VIRTUAL_BALANCES_SLOT = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
 
-    bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = 0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee3411450f;
+    bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
 
     address internal constant _ZERO_ADDRESS = address(0);
 

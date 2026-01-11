@@ -440,3 +440,7 @@ When making changes:
 12. **ALWAYS USE CONSTANTS.SOL IMPORTS** - NEVER hardcode addresses or block numbers in test files. ALWAYS import from Constants.sol to ensure consistency and reduce RPC calls. Examples:
     - Use `Constants.ARB_USDC` not `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`
     - Use `Constants.AUTHORITY` not hardcoded authority addresses
+13. **DUPLICATING STORAGE SLOTS OR CONSTANTS** - NEVER duplicate hardcoded storage slots, addresses, or other constants across multiple files. ALWAYS define them in a single authoritative location (library or shared constants file) and import/reference them. This prevents inconsistencies when values need to be updated. Examples:
+    - Storage slots: Define in the library (e.g., VirtualStorageLib.VIRTUAL_BALANCES_SLOT) and reference from there
+    - Chain-specific addresses: Define in libraries (e.g., CrosschainLib) or shared types, not in multiple contracts
+    - If a value must be duplicated for technical reasons (e.g., immutable in constructor), document clearly which is the source of truth

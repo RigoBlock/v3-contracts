@@ -47,10 +47,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /// @notice Maximum allowed nav tolerance in basis points (100% = 10000 bps)
     uint256 private constant MAX_NAV_TOLERANCE_BPS = 10000;
 
-    /// @notice Across MulticallHandler addresses
-    address internal constant DEFAULT_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
-    address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
-
     address private immutable _aIntents;
 
     // Custom errors (inherit UnauthorizedCaller from interface)
@@ -147,7 +143,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         // 3. Drain any leftover tokens from MulticallHandler to pool before donating (need correct amount to unwrap)
         calls[2] = Call({
-            target: _getAcrossHandler(params.destinationChainId),
+            target: CrosschainLib.getAcrossHandler(params.destinationChainId),
             callData: abi.encodeWithSelector(
                 IMulticallHandler.drainLeftoverTokens.selector,
                 params.outputToken,
@@ -195,7 +191,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(
             params.depositor,
-            _getAcrossHandler(params.destinationChainId),
+            CrosschainLib.getAcrossHandler(params.destinationChainId),
             params.inputToken,
             params.outputToken,
             params.inputAmount,
@@ -276,19 +272,4 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         }
     }
 
-    /// @dev Returns multicall handler address for given chain
-    /// @dev As we map source and destination token, we will not use a non-existing handler on new chains.
-    // TODO: Requires careful handling when supporting new chains, should revert if chain is not supported.
-    // Could use bitmask flags of supported chains to assert that, so that when we add new chains, this will
-    // revert if we do not modify the bitmask, which will prompt updating this method with the newly supported chain.
-    function _getAcrossHandler(uint256 chainId) private pure returns (address) {
-        // BSC uses different multicall handler
-        if (chainId == 56) {
-            // BSC
-            return BSC_MULTICALL_HANDLER;
-        }
-
-        // Most chains use the standard multicall handler
-        return DEFAULT_MULTICALL_HANDLER;
-    }
 }

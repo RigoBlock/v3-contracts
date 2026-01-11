@@ -149,14 +149,6 @@ library Constants {
     /// @notice Pool initialization storage slot
     bytes32 internal constant POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
 
-    /// @notice Virtual balances for cross-chain NAV management (from MixinConstants.sol)
-    bytes32 internal constant VIRTUAL_BALANCES_SLOT =
-        0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
-
-    /// @notice Virtual supply for cross-chain NAV management (from MixinConstants.sol)
-    bytes32 internal constant VIRTUAL_SUPPLY_SLOT = 
-        0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee3411450f;
-
     /// @notice Active tokens registry slot
     bytes32 internal constant ACTIVE_TOKENS_SLOT = 0xbd68f1d41a93565ce29970ec13a2bc56a87c8bdd0b31366d8baa7620f41eb6cb;
 

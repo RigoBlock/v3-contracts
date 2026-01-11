@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {CrosschainTokens} from "../types/CrosschainTokens.sol";
 
 /// @title CrosschainLib - Library for cross-chain token validation and conversion.
-/// @notice Provides utilities for validating bridgeable token pairs and handling BSC decimal conversions.
+/// @notice Provides utilities for validating bridgeable token pairs, handling BSC decimal conversions, and resolving Across handler addresses.
 /// @dev Used by cross-chain adapters to ensure token compatibility and proper decimal handling.
 library CrosschainLib {
     // Import token addresses from shared constants
@@ -13,6 +13,24 @@ library CrosschainLib {
     // Custom errors
     error UnsupportedCrossChainToken();
     error WrongDestinationToken();
+
+    /// @notice Across MulticallHandler addresses
+    address internal constant DEFAULT_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
+    address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
+
+    /// @notice Get the appropriate Across MulticallHandler address for a given chain.
+    /// @dev BSC (chain ID 56) uses a different handler than other chains.
+    /// @param chainId The destination chain ID.
+    /// @return handler The MulticallHandler address for the specified chain.
+    function getAcrossHandler(uint256 chainId) internal pure returns (address handler) {
+        // BSC uses different multicall handler
+        if (chainId == 56) {
+            return BSC_MULTICALL_HANDLER;
+        }
+
+        // Most chains use the standard multicall handler
+        return DEFAULT_MULTICALL_HANDLER;
+    }
 
     /// @notice Validates that input and output tokens are compatible for cross-chain bridging.
     /// @dev Only allows bridging between tokens of the same type (USDC↔USDC, USDT↔USDT, etc.).

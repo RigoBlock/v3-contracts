@@ -11,10 +11,10 @@ library VirtualStorageLib {
 
     // TODO: check how we can use same as immutable constants without hardcoding here
     /// @notice Storage slot for per-token virtual balances (legacy slot)
-    bytes32 internal constant _VIRTUAL_BALANCES_SLOT =
+    bytes32 constant VIRTUAL_BALANCES_SLOT =
         0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 
-    bytes32 private constant _VIRTUAL_SUPPLY_SLOT =
+    bytes32 constant VIRTUAL_SUPPLY_SLOT =
         0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee3411450f;
 
     struct VirtualBalance {
@@ -23,7 +23,7 @@ library VirtualStorageLib {
 
     function virtualBalance() internal pure returns (VirtualBalance storage s) {
         assembly {
-            s.slot := _VIRTUAL_BALANCES_SLOT
+            s.slot := VIRTUAL_BALANCES_SLOT
         }
     }
 
@@ -33,7 +33,7 @@ library VirtualStorageLib {
 
     function virtualSupply() internal pure returns (VirtualSupply storage s) {
         assembly {
-            s.slot := _VIRTUAL_SUPPLY_SLOT
+            s.slot := VIRTUAL_SUPPLY_SLOT
         }
     }
 

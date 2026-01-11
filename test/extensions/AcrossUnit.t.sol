@@ -35,8 +35,6 @@ contract AcrossUnitTest is Test {
     // Storage slots - need to be hardcoded for inline assembly compatibility
     // NOTE: These must match Constants.sol but cannot import due to assembly limitations
     bytes32 constant POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 constant VIRTUAL_BALANCES_SLOT = 0x19797d8be84f650fe18ebccb97578c2adb7abe9b7c86852694a3ceb69073d1d1;
-    bytes32 constant CHAIN_NAV_SPREADS_SLOT = 0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492d;
     bytes32 constant ACTIVE_TOKENS_SLOT = 0xbd68f1d41a93565ce29970ec13a2bc56a87c8bdd0b31366d8baa7620f41eb6cb;
     
     function setUp() public {
