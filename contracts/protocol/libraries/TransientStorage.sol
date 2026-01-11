@@ -47,7 +47,6 @@ library TransientStorage {
     }
 
     function setDonationLock(address token, uint256 balance) internal {
-        // prompt update
         bool newLock = !_DONATION_LOCK_SLOT.asBoolean().tload();
         _DONATION_LOCK_SLOT.asBoolean().tstore(newLock);
         bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);

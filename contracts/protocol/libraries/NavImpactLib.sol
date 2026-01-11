@@ -47,10 +47,8 @@ library NavImpactLib {
         }
 
         // Calculate percentage impact in basis points: (transferValue * 10000) / totalAssetsValue
-        uint256 transferValueAbs = transferValueInBase >= 0
-            ? uint256(transferValueInBase)
-            : uint256(-transferValueInBase);
-        uint256 impactBps = (transferValueAbs * 10000) / totalAssetsValue;
+        uint256 transferValue = transferValueInBase.toUint256();
+        uint256 impactBps = (transferValue * 10000) / totalAssetsValue;
 
         // Validate impact is within tolerance
         if (impactBps > toleranceBps) {

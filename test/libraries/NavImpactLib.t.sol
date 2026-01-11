@@ -150,18 +150,38 @@ contract NavImpactLibTest is Test {
     }
 
     /// @notice Test negative token conversion (should use absolute value)
-    function test_NavImpactValidation_NegativeConversion() public {
+    /// @notice Test negative conversion reverts with SafeCast error
+    function test_NavImpactValidation_NegativeConversion_Reverts() public {
         // Setup: 1M USDC pool (unitaryValue=1 USDC per token, totalSupply=1M tokens)
         pool.setPoolState(1e6, 1000000e6, 6, USDC);
         
-        // Mock negative conversion (edge case)
+        // Mock negative conversion (invalid edge case - should never happen in practice)
         pool.setTokenConversion(WETH, 1e18, USDC, -3000e6);
         
-        // Transfer 20 WETH (60k USDC equivalent = 6% impact) with 10% tolerance should pass
+        // Transfer 20 WETH with negative conversion should revert
         uint256 transferAmount = 20e18; // 20 WETH  
         uint256 tolerance = 1000; // 10% in basis points
         
-        // This should not revert (uses absolute value)
+        // Should revert with SafeCastOverflowedIntToUint error
+        vm.expectRevert(
+            abi.encodeWithSignature("SafeCastOverflowedIntToUint(int256)", -60000000000)
+        );
+        pool.testValidateNavImpactTolerance(WETH, transferAmount, tolerance);
+    }
+
+    /// @notice Test positive large conversion passes with sufficient tolerance
+    function test_NavImpactValidation_PositiveConversion_Passes() public {
+        // Setup: 1M USDC pool (unitaryValue=1 USDC per token, totalSupply=1M tokens)
+        pool.setPoolState(1e6, 1000000e6, 6, USDC);
+        
+        // Mock positive conversion: 1 WETH = 3000 USDC
+        pool.setTokenConversion(WETH, 1e18, USDC, 3000e6);
+        
+        // Transfer 20 WETH (60k USDC equivalent = 6% impact) with 10% tolerance should pass
+        uint256 transferAmount = 20e18; // 20 WETH  
+        uint256 tolerance = 1000; // 10% in basis points (6% < 10%)
+        
+        // Should succeed - positive conversion within tolerance
         pool.testValidateNavImpactTolerance(WETH, transferAmount, tolerance);
     }
 

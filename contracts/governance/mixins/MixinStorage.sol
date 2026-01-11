@@ -31,7 +31,6 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSAL_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal")) - 1));
         assert(_PROPOSAL_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalcount")) - 1));
         assert(_PROPOSED_ACTION_SLOT == bytes32(uint256(keccak256("governance.proxy.proposedaction")) - 1));
-        // prompt update
     }
 
     function _governanceParameters() internal pure returns (GovernanceParameters storage s) {

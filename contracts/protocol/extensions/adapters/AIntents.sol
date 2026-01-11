@@ -60,7 +60,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     modifier onlyDelegateCall() {
         require(address(this) != _aIntents, DirectCallNotAllowed());
         _;
-        // prompt update
     }
 
     /// @inheritdoc IMinimumVersion
