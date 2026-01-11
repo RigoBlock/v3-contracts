@@ -6,6 +6,7 @@ test = "test"
 cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
+gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNavImpactPool", "TestSafeTransferLib", "ExtensionsMap", "RigoblockPoolProxy.0.8.17"]
 
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]

@@ -25,7 +25,7 @@
     "coverage:setup": "mkdir -p coverage",
     "coverage:hardhat": "hardhat coverage",
     "coverage:foundry": "rm -f lcov.info && forge coverage --no-match-coverage \"mocks/|examples/|test/|tokens/|utils/\" --report lcov && mv lcov.info coverage/foundry_lcov.info",
-    "coverage:foundry:gas": "forge test --no-match-path \"mocks/|examples/|test/|tokens/|utils/\" --gas-report 2>&1 | awk '/^╭/{found=1} found' | tee coverage/gas-report.txt",
+    "coverage:foundry:gas": "forge test --gas-report 2>&1 | awk '/^╭/{found=1} found' | tee coverage/gas-report.txt",
     "coverage:all": "yarn coverage:setup && yarn coverage:hardhat && yarn coverage:foundry && chmod +x ./scripts/analyze-coverage.sh && ./scripts/analyze-coverage.sh",
     "benchmark": "yarn test benchmark/*.ts",
     "deploy-custom": "rm -rf deployments/custom && yarn deploy-all custom",
