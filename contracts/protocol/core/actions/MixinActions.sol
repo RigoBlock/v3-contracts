@@ -74,11 +74,12 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ISmartPoolActions
-    function updateUnitaryValue() external override {
+    function updateUnitaryValue() external override returns (uint256) {
         NavComponents memory components = _updateNav();
 
         // unitary value is updated only with non-dust supply
         require(components.totalSupply >= 1e2, PoolSupplyIsNullOrDust());
+        return components.unitaryValue;
     }
 
     /// @inheritdoc ISmartPoolActions

@@ -49,7 +49,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     address private immutable _aIntents;
 
-    // Custom errors (inherit UnauthorizedCaller from interface)
     error NavToleranceTooHigh();
     error AdapterNotDeployedOnDestination();
     error DestinationPoolNotFound(address poolAddress);
@@ -186,7 +185,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.depositor = address(this);
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
         } else {
-            revert InvalidOpType();
+            revert IEAcrossHandler.InvalidOpType();
         }
 
         _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(
@@ -224,14 +223,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         uint256 outputValueInBase = outputValueInBaseInt.toUint256();
 
         // Update NAV and get pool state
-        ISmartPoolActions(address(this)).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        uint256 unitaryValue = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
         uint8 poolDecimals = StorageLib.pool().decimals;
 
         // Convert transfer value to shares using current NAV (same as mint/burn calculation)
         // shares = baseValue / unitaryValue (in pool token units)
-        uint256 sharesToBurn = (outputValueInBase * (10 ** poolDecimals)) / poolTokens.unitaryValue;
+        uint256 sharesToBurn = (outputValueInBase * (10 ** poolDecimals)) / unitaryValue;
 
         if (virtualSupply > 0) {
             if (virtualSupply >= sharesToBurn) {
@@ -242,7 +240,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
                 (-(virtualSupply.toInt256())).updateVirtualSupply();
 
                 // Calculate remaining value that wasn't covered by burning virtual supply
-                uint256 remainingValue = ((sharesToBurn - virtualSupply) * poolTokens.unitaryValue) /
+                uint256 remainingValue = ((sharesToBurn - virtualSupply) * unitaryValue) /
                     (10 ** poolDecimals);
 
                 // Convert remaining base value back to input token units using oracle

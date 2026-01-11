@@ -19,12 +19,15 @@
 
 pragma solidity >=0.8.0 <0.9.0;
 
+import {IAIntents} from "./IAIntents.sol";
 import {IAGovernance} from "./IAGovernance.sol";
 import {IAMulticall} from "./IAMulticall.sol";
 import {IAStaking} from "./IAStaking.sol";
 import {IAUniswap} from "./IAUniswap.sol";
 import {IAUniswapRouter} from "./IAUniswapRouter.sol";
+import {IEAcrossHandler} from "./IEAcrossHandler.sol";
 import {IEApps} from "./IEApps.sol";
+import {IENavView} from "./IENavView.sol";
 import {IEOracle} from "./IEOracle.sol";
 import {IEUpgrade} from "./IEUpgrade.sol";
 
@@ -33,11 +36,14 @@ import {IEUpgrade} from "./IEUpgrade.sol";
 // solhint-disable-next-line
 interface IRigoblockExtensions is
     IAGovernance,
+    IAIntents,
     IAMulticall,
     IAStaking,
     IAUniswap,
     IAUniswapRouter,
+    IEAcrossHandler,
     IEApps,
+    IENavView,
     IEOracle,
     IEUpgrade
 {}

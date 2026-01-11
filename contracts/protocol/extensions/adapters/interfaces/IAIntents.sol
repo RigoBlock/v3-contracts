@@ -26,10 +26,7 @@ interface IAIntents {
     error DirectCallNotAllowed();
     error NullAddress();
     error TokenNotActive();
-    error InsufficientWrappedNativeBalance();
-    error InvalidOpType();
     error SameChainTransfer();
-    error UnauthorizedCaller();
 
     struct AcrossParams {
         address depositor;
@@ -46,7 +43,9 @@ interface IAIntents {
         bytes message;
     }
 
-    // TODO: add natspec docs and lint
+    /// @notice Executes a crosschain token transfer to across and updated virtual storage.
+    /// @dev Has different method selector than across depositV3 to avoid viaIr compilation.
+    /// @param params Across params encoded as tuple.
     function depositV3(AcrossParams memory params) external;
 
     /// @notice Gets the deterministic escrow address for Transfer operations

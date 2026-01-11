@@ -66,6 +66,12 @@ contract CrosschainLibTest is Test {
         
         // Test same token (valid case)
         CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDC, CrosschainTokens.ETH_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.UNI_USDC, CrosschainTokens.UNI_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_USDC, CrosschainTokens.BASE_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_USDC, CrosschainTokens.ARB_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BSC_USDC, CrosschainTokens.BSC_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_USDC, CrosschainTokens.POLY_USDC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_USDC, CrosschainTokens.OPT_USDC);
     }
     
     /// @notice Test USDT token validation - all valid pairs should pass  
@@ -83,6 +89,11 @@ contract CrosschainLibTest is Test {
         
         // Test same token
         CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_USDT, CrosschainTokens.ETH_USDT);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_USDT, CrosschainTokens.ARB_USDT);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_USDT, CrosschainTokens.OPT_USDT);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_USDT, CrosschainTokens.BASE_USDT);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_USDT, CrosschainTokens.POLY_USDT);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BSC_USDT, CrosschainTokens.BSC_USDT);
     }
     
     /// @notice Test WBTC token validation - all valid pairs should pass
@@ -98,6 +109,9 @@ contract CrosschainLibTest is Test {
         
         // Test same token
         CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WBTC, CrosschainTokens.ETH_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WBTC, CrosschainTokens.ARB_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_WBTC, CrosschainTokens.OPT_WBTC);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WBTC, CrosschainTokens.POLY_WBTC);
     }
     
     /// @notice Test WETH token validation - all valid pairs should pass
@@ -116,6 +130,12 @@ contract CrosschainLibTest is Test {
         
         // Test same token
         CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ETH_WETH, CrosschainTokens.ETH_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.ARB_WETH, CrosschainTokens.ARB_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.OPT_WETH, CrosschainTokens.OPT_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BASE_WETH, CrosschainTokens.BASE_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.POLY_WETH, CrosschainTokens.POLY_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.BSC_WETH, CrosschainTokens.BSC_WETH);
+        CrosschainLib.validateBridgeableTokenPair(CrosschainTokens.UNI_WETH, CrosschainTokens.UNI_WETH);
     }
     
     /// forge-config: default.allow_internal_expect_revert = true

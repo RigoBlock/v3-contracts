@@ -6,11 +6,7 @@ import {DestinationMessageParams} from "../../../types/Crosschain.sol";
 /// @title EAcrossHandler Interface - Handles incoming cross-chain transfers
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IEAcrossHandler {
-    error TokenWithoutPriceFeed();
-    error NavDeviationTooHigh();
     error InvalidOpType();
-    error UnauthorizedCaller();
-    error ChainsNotSynced();
     error DonationLock(bool locked);
     error BalanceUnderflow();
     error NavManipulationDetected(uint256 expectedNav, uint256 actualNav);

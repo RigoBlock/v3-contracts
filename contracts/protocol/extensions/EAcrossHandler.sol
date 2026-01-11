@@ -45,10 +45,6 @@ contract EAcrossHandler is IEAcrossHandler {
         _acrossHandler = acrossMulticallHandler;
     }
 
-    error DonateTransferFromFailer();
-    error TokenIsNotOwned();
-    error IncorrectETHAmount();
-    error NullAddresS();
     error CallerTransferAmount();
 
     /// @inheritdoc IEAcrossHandler
@@ -62,10 +58,7 @@ contract EAcrossHandler is IEAcrossHandler {
             token.setDonationLock(balance);
 
             // Update unitary value for both Sync and Transfer operations
-            ISmartPoolActions(address(this)).updateUnitaryValue();
-
-            // Store NAV for later manipulation check
-            uint256 currentNav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
+            uint256 currentNav = ISmartPoolActions(address(this)).updateUnitaryValue();
             currentNav.storeNav();
             return;
         }
@@ -151,9 +144,7 @@ contract EAcrossHandler is IEAcrossHandler {
         }
 
         // Update NAV to reflect received tokens before validation
-        ISmartPoolActions(address(this)).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-        uint256 finalNav = poolTokens.unitaryValue;
+        uint256 finalNav = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint256 expectedNav = storedNav;
 
         if (amountDelta > amount) {
@@ -163,6 +154,7 @@ contract EAcrossHandler is IEAcrossHandler {
                 .toUint256();
 
             // Calculate expected NAV increase: surplusValue / effectiveSupply
+            ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
             poolTokens.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
 
             // Safety check: Ensure total supply is not zero

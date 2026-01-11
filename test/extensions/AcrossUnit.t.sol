@@ -179,7 +179,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test handler Transfer mode execution using actual contract
-    function test_Handler_TransferMode_MessageParsing() public view {
+    function test_Handler_TransferMode_MessageParsing() public pure {
         // Test that Transfer message can be properly encoded/decoded
         DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
@@ -193,7 +193,7 @@ contract AcrossUnitTest is Test {
     }
     
     /// @notice Test Sync mode message encoding/decoding with NAV
-    function test_Handler_SyncMode_MessageParsing() public view {
+    function test_Handler_SyncMode_MessageParsing() public pure {
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
             shouldUnwrapNative: false
@@ -205,10 +205,8 @@ contract AcrossUnitTest is Test {
         assertEq(uint8(decoded.opType), uint8(OpType.Sync), "OpType should be Sync");
     }
     
-
-    
     /// @notice Test WETH unwrap message construction
-    function test_Handler_UnwrapWETH_MessageSetup() public view {
+    function test_Handler_UnwrapWETH_MessageSetup() public pure {
         DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: true
@@ -298,7 +296,6 @@ contract AcrossUnitTest is Test {
         _setupActiveToken(address(pool), mockBaseToken); // Mark base token as active
         
         uint256 receivedAmount = 100e18; // Use 18 decimals for base token
-        uint256 validSourceAmount = 105e18; // 5% difference - within 10% tolerance
         
         // Mock balanceOf calls for two-step donation process
         vm.mockCall(
@@ -358,8 +355,6 @@ contract AcrossUnitTest is Test {
         
         // Create Transfer message
         uint256 receivedAmount = 100e6;
-        uint256 sourceAmount = 98e6; // Within 10% tolerance
-        
         DestinationMessageParams memory message = DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
@@ -471,6 +466,7 @@ contract AcrossUnitTest is Test {
         pool.callHandlerFromSpokePool(mockWETH, receivedAmount, encodedMessage);
     }
     
+    // TODO: this test is, as many others, hopeless
     /// @notice Test handler with token without price feed (should revert)
     function test_Handler_RejectsTokenWithoutPriceFeed() public {
         // Create a mock pool that will call handler via delegatecall
@@ -776,7 +772,7 @@ contract MockHandlerPool {
     }
 
     /// @notice Mock implementation of ISmartPoolActions.updateUnitaryValue
-    function updateUnitaryValue() external {
+    function updateUnitaryValue() external returns (uint256) {
         // No-op for testing
     }
 

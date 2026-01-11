@@ -606,10 +606,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     function test_IntegrationFork_CrossChain_TransferWithHandler_SameChain() public {
         uint256 transferAmount = 1000e6; // 1000 USDC
 
-        // Get initial pool state
-        ISmartPoolState.PoolTokens memory initialTokens =
-            ISmartPoolState(address(pool())).getPoolTokens();
-
         // Pool already funded with 100k USDC from fixture
 
         SourceMessageParams memory sourceParams = SourceMessageParams({
@@ -700,10 +696,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
     function test_IntegrationFork_CrossChain_TransferWithHandler() public {
         uint256 transferAmount = 1000e6; // 1000 USDC
-
-        // Get initial pool state
-        ISmartPoolState.PoolTokens memory initialTokens =
-            ISmartPoolState(address(pool())).getPoolTokens();
 
         // Pool already funded with 100k USDC from fixture
 
@@ -986,6 +978,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(multicallHandler);
         vm.expectRevert(IEAcrossHandler.NavManipulationDetected.selector);
         (bool success4,) = instructions.calls[3].target.call(instructions.calls[3].callData);
+            console2.log("Call 4 (donate):", success4);
 
         console2.log("NavManipulationDetected error properly triggered when NAV manipulated!");
     }
@@ -1149,7 +1142,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.skip(true);
         vm.selectFork(baseForkId);
         
-        uint256 transferAmount = 500e6; // 500 USDC
+        //uint256 transferAmount = 500e6; // 500 USDC
         
         // Get initial NAV
         ISmartPoolActions(pool()).updateUnitaryValue();
@@ -1157,12 +1150,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             ISmartPoolState(pool()).getPoolTokens();
         
         // Prepare transfer mode message
-        DestinationMessageParams memory message = DestinationMessageParams({
-            opType: OpType.Transfer,
-            shouldUnwrapNative: false
-        });
+        //DestinationMessageParams memory message = DestinationMessageParams({
+        //    opType: OpType.Transfer,
+        //    shouldUnwrapNative: false
+        //});
 
-        bytes memory encodedMessage = abi.encode(message);
+        //bytes memory encodedMessage = abi.encode(message);
         
         // Process transfer
         //vm.prank(base.spokePool);
@@ -1192,16 +1185,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Get current NAV
         ISmartPoolActions(address(pool())).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory currentTokens = 
-            ISmartPoolState(address(pool())).getPoolTokens();
         
         // Prepare sync mode message with matching NAV
-        DestinationMessageParams memory message = DestinationMessageParams({
-            opType: OpType.Sync,
-            shouldUnwrapNative: false
-        });
+        //DestinationMessageParams memory message = DestinationMessageParams({
+        //    opType: OpType.Sync,
+        //    shouldUnwrapNative: false
+        //});
 
-        bytes memory encodedMessage = abi.encode(message);
+        //bytes memory encodedMessage = abi.encode(message);
 
         // pre-transfer the amount to the pool, otherwise the transaction will revert with NavImpactTooHigh()
         uint256 poolBalance = IERC20(Constants.BASE_USDC).balanceOf(pool());
@@ -1225,12 +1216,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 wethAmount = 1 ether;
         
         // Prepare message for WETH handling
-        DestinationMessageParams memory message = DestinationMessageParams({
-            opType: OpType.Transfer,
-            shouldUnwrapNative: true
-        });
+        //DestinationMessageParams memory message = DestinationMessageParams({
+        //    opType: OpType.Transfer,
+        //    shouldUnwrapNative: true
+        //});
 
-        bytes memory encodedMessage = abi.encode(message);
+        //bytes memory encodedMessage = abi.encode(message);
         
         // Fund pool with WETH
         deal(Constants.ETH_WETH, address(pool()), wethAmount);
@@ -1694,8 +1685,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // STEP 1: Source chain (Ethereum) - Build instructions via AIntents
         console2.log("Step 1: Building instructions on Ethereum");
-        
-        address sourcePool = pool();
+
         uint256 transferAmount = 200e6; // 200 USDC
         
         // Create AIntents parameters as they would be used
@@ -1969,7 +1959,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(Constants.ETH_USDC, poolOwner, 500e6);
         
         // Expect the specific InvalidOpType error
-        vm.expectRevert(IAIntents.InvalidOpType.selector); 
+        vm.expectRevert(IEAcrossHandler.InvalidOpType.selector); 
         
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(

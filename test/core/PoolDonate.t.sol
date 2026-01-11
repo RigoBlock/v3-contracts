@@ -31,6 +31,7 @@ contract PoolDonateTest is Test {
     uint256 constant DONATION_AMOUNT = 10000e6; // 10k tokens
     uint256 constant ETH_DONATION_AMOUNT = 1 ether;
 
+    // TODO: this test is, yet again as others, hopeless
     function setUp() public {
         // Use hardcoded Arbitrum RPC
         string memory arbitrumRpc = "https://arb1.arbitrum.io/rpc";
