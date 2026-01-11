@@ -89,7 +89,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info,coverage/foundry_lcov.info
-          flags: hardhat-foundry
+          flags: combined
           name: codecov-v3-contracts
           fail_ci_if_error: true
           verbose: true
