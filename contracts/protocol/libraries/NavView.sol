@@ -115,7 +115,7 @@ library NavView {
         address pool,
         address grgStakingProxy,
         address uniV4Posm
-    ) internal view returns (NavData memory navData) {
+    ) internal view returns (NavData memory) {
         // Get token balances
         AppTokenBalance[] memory balances = _getTokensAndBalances(pool, grgStakingProxy, uniV4Posm);
 
@@ -153,8 +153,8 @@ library NavView {
             try IEOracle(pool).convertBatchTokenAmounts(tokens, amounts, baseToken) returns (int256 convertedValue) {
                 totalValue += convertedValue;
             } catch {
-                // If conversion fails, return zero
-                return NavData({totalValue: 0, unitaryValue: 0, timestamp: block.timestamp});
+                // If conversion fails, early return zero
+                return NavData({totalValue: 0, unitaryValue: 0, timestamp: 0});
             }
         }
 
@@ -168,15 +168,17 @@ library NavView {
         // Calculate unitary value
         uint256 unitaryValue;
         if (totalSupply == 0) {
-            // Use stored value or initial value
+            // Use stored value or initial value of 1.0 (par value)
             unitaryValue = poolTokens.unitaryValue > 0 ? poolTokens.unitaryValue : 10 ** decimals;
         } else if (totalValue > 0) {
             unitaryValue = (uint256(totalValue) * 10 ** decimals) / totalSupply;
         } else {
-            unitaryValue = 10 ** decimals; // Minimum value
+            // Supply exists but value is 0 or negative (worthless or underwater)
+            // Return 0 to prevent new mints until value recovers
+            unitaryValue = 0;
         }
 
-        navData = NavData({
+        return NavData({
             totalValue: totalValue > 0 ? uint256(totalValue) : 0,
             unitaryValue: unitaryValue,
             timestamp: block.timestamp

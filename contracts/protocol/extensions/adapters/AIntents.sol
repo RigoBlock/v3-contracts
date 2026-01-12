@@ -204,6 +204,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
     }
 
+    // TODO: what if outputAmount is null or close to 0?
     function _handleSourceTransfer(AcrossParams memory params) private {
         // Scale outputAmount to inputToken decimals for proper comparison
         // (same token on different chains may have different decimals, e.g., BSC USDC)
@@ -213,47 +214,43 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.outputAmount
         );
 
-        // Convert to base token value for supply calculations
-        address baseToken = StorageLib.pool().baseToken;
-        int256 outputValueInBaseInt = IEOracle(address(this)).convertTokenAmount(
-            params.inputToken,
-            scaledOutputAmount.toInt256(),
-            baseToken
-        );
-        uint256 outputValueInBase = outputValueInBaseInt.toUint256();
-
         // Update NAV and get pool state
         uint256 unitaryValue = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
-        uint8 poolDecimals = StorageLib.pool().decimals;
 
-        // Convert transfer value to shares using current NAV (same as mint/burn calculation)
-        // shares = baseValue / unitaryValue (in pool token units)
-        uint256 sharesToBurn = (outputValueInBase * (10 ** poolDecimals)) / unitaryValue;
-
-        if (virtualSupply > 0) {
-            if (virtualSupply >= sharesToBurn) {
-                // Sufficient virtual supply - burn the exact share amount
-                (-(sharesToBurn.toInt256())).updateVirtualSupply();
-            } else {
-                // Insufficient virtual supply - burn all of it, use virtual balance for remainder
-                (-(virtualSupply.toInt256())).updateVirtualSupply();
-
-                // Calculate remaining value that wasn't covered by burning virtual supply
-                uint256 remainingValue = ((sharesToBurn - virtualSupply) * unitaryValue) / (10 ** poolDecimals);
-
-                // Convert remaining base value back to input token units using oracle
-                int256 remainingTokensInt = IEOracle(address(this)).convertTokenAmount(
-                    baseToken,
-                    remainingValue.toInt256(),
-                    params.inputToken
-                );
-                (params.inputToken).updateVirtualBalance(remainingTokensInt);
-            }
-        } else {
-            // No virtual supply - use virtual balance entirely to offset the transfer
+        // Fast path: no virtual supply, entire amount goes to virtual balance (most common case)
+        if (virtualSupply == 0) {
             (params.inputToken).updateVirtualBalance(scaledOutputAmount.toInt256());
+            return;
         }
+
+        // Virtual supply exists - need to calculate value in base token for comparison
+        address baseToken = StorageLib.pool().baseToken;
+        uint256 outputValueInBase = IEOracle(address(this)).convertTokenAmount(
+            params.inputToken,
+            scaledOutputAmount.toInt256(),
+            baseToken
+        ).toUint256();
+
+        uint8 poolDecimals = StorageLib.pool().decimals;
+        uint256 virtualSupplyValue = (unitaryValue * virtualSupply) / 10 ** poolDecimals;
+ 
+        if (outputValueInBase >= virtualSupplyValue) {
+            // Calculate remainder value and convert back to input token units
+            uint256 remainderValueInBase = outputValueInBase - virtualSupplyValue;
+            int256 remainderInInputToken = IEOracle(address(this)).convertTokenAmount(
+                baseToken,
+                remainderValueInBase.toInt256(),
+                params.inputToken
+            );
+            (params.inputToken).updateVirtualBalance(remainderInInputToken);
+        } else {
+            // Virtual supply fully covers transfer - burn partial supply, nothing to virtual balance
+            // Can safely divide by unitary value as virtual supply value > output token value
+            virtualSupply = (outputValueInBase * (10 ** poolDecimals)) / unitaryValue;
+        }
+
+        (-(virtualSupply.toInt256())).updateVirtualSupply();
     }
 
     /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.
