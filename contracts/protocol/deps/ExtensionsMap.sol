@@ -78,9 +78,7 @@ contract ExtensionsMap is IExtensionsMap {
 
         // validate immutable constants. Assumes deps are correctly initialized
         assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId);
-        assert(
-            _ENAVVIEW_NAV_DATA_SELECTOR ^ _ENAVVIEW_APP_BALANCES_SELECTOR == type(IENavView).interfaceId
-        );
+        assert(_ENAVVIEW_NAV_DATA_SELECTOR ^ _ENAVVIEW_APP_BALANCES_SELECTOR == type(IENavView).interfaceId);
         assert(
             _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ^
                 _EORACLE_CONVERT_AMOUNT_SELECTOR ^
@@ -103,7 +101,6 @@ contract ExtensionsMap is IExtensionsMap {
             shouldDelegatecall = true;
         } else if (selector == _ENAVVIEW_NAV_DATA_SELECTOR || selector == _ENAVVIEW_APP_BALANCES_SELECTOR) {
             extension = eNavView;
-            // TODO: remove this and try to implement as extension, after debugging the refactoring
             shouldDelegatecall = true;
         } else if (
             selector == _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ||

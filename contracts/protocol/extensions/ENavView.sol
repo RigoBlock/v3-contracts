@@ -13,6 +13,8 @@ import {AppTokenBalance} from "../types/ExternalApp.sol";
 /// @dev Designed as an extension to run via delegatecall in pool context for off-chain queries
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract ENavView is IENavView {
+    using NavView for address;
+
     /// @notice Address of the GRG staking proxy
     address private immutable grgStakingProxy;
 
@@ -29,11 +31,11 @@ contract ENavView is IENavView {
 
     /// @inheritdoc IENavView
     function getAppTokensAndBalancesView() external view override returns (AppTokenBalance[] memory balances) {
-        return NavView.getAppTokenBalances(grgStakingProxy, uniV4Posm);
+        return (address(this)).getAppTokenBalances(grgStakingProxy, uniV4Posm);
     }
 
     /// @inheritdoc IENavView
     function getNavDataView() external view override returns (NavView.NavData memory navData) {
-        return NavView.getNavData(grgStakingProxy, uniV4Posm);
+        return (address(this)).getNavData(grgStakingProxy, uniV4Posm);
     }
 }

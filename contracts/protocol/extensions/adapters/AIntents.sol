@@ -240,8 +240,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
                 (-(virtualSupply.toInt256())).updateVirtualSupply();
 
                 // Calculate remaining value that wasn't covered by burning virtual supply
-                uint256 remainingValue = ((sharesToBurn - virtualSupply) * unitaryValue) /
-                    (10 ** poolDecimals);
+                uint256 remainingValue = ((sharesToBurn - virtualSupply) * unitaryValue) / (10 ** poolDecimals);
 
                 // Convert remaining base value back to input token units using oracle
                 int256 remainingTokensInt = IEOracle(address(this)).convertTokenAmount(
@@ -269,5 +268,4 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             token.safeApprove(address(_acrossSpokePool), type(uint256).max);
         }
     }
-
 }

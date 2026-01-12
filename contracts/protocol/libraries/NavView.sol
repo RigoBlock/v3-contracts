@@ -41,7 +41,6 @@ library NavView {
     /// @notice Zero address constant
     address internal constant ZERO_ADDRESS = address(0);
 
-    /// @notice Complete NAV data for a pool
     struct NavData {
         uint256 totalValue; // Total pool value in base token
         uint256 unitaryValue; // NAV per share
@@ -53,6 +52,7 @@ library NavView {
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return balances Array of AppTokenBalance structs with balances
     function getAppTokenBalances(
+        address pool,
         address grgStakingProxy,
         address uniV4Posm
     ) internal view returns (AppTokenBalance[] memory balances) {
@@ -63,7 +63,7 @@ library NavView {
 
         // Populate appBalances array with balances from each active application
         for (uint256 i = 0; i < appsCount; i++) {
-            appBalances[activeAppIndex] = _handleApplication(Applications(i), grgStakingProxy, uniV4Posm);
+            appBalances[activeAppIndex] = _handleApplication(pool, Applications(i), grgStakingProxy, uniV4Posm);
             tokenIndex += appBalances[activeAppIndex++].length;
         }
 
@@ -111,9 +111,13 @@ library NavView {
     /// @param grgStakingProxy Address of the GRG staking proxy
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return navData Struct containing totalValue, unitaryValue, and timestamp
-    function getNavData(address grgStakingProxy, address uniV4Posm) internal view returns (NavData memory navData) {
+    function getNavData(
+        address pool,
+        address grgStakingProxy,
+        address uniV4Posm
+    ) internal view returns (NavData memory navData) {
         // Get token balances
-        AppTokenBalance[] memory balances = _getTokensAndBalances(grgStakingProxy, uniV4Posm);
+        AppTokenBalance[] memory balances = _getTokensAndBalances(pool, grgStakingProxy, uniV4Posm);
 
         // Get pool data
         address baseToken = StorageLib.pool().baseToken;
@@ -146,9 +150,7 @@ library NavView {
             }
 
             // Convert all non-base tokens to base token value
-            try IEOracle(address(this)).convertBatchTokenAmounts(tokens, amounts, baseToken) returns (
-                int256 convertedValue
-            ) {
+            try IEOracle(pool).convertBatchTokenAmounts(tokens, amounts, baseToken) returns (int256 convertedValue) {
                 totalValue += convertedValue;
             } catch {
                 // If conversion fails, return zero
@@ -157,7 +159,7 @@ library NavView {
         }
 
         // Get total supply (actual + virtual)
-        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(pool).getPoolTokens();
         uint256 totalSupply = poolTokens.totalSupply;
 
         // Add virtual supply for cross-chain transfers (matches MixinPoolValue)
@@ -187,12 +189,13 @@ library NavView {
     /// @param uniV4Posm Address of the Uniswap V4 position manager.
     /// @return balances Array of TokenBalAppTokenBalanceance structs.
     function _getTokensAndBalances(
+        address pool,
         address grgStakingProxy,
         address uniV4Posm
     ) private view returns (AppTokenBalance[] memory) {
         // Get active tokens and application balances
-        ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(address(this)).getActiveTokens();
-        AppTokenBalance[] memory appBalances = getAppTokenBalances(grgStakingProxy, uniV4Posm);
+        ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(pool).getActiveTokens();
+        AppTokenBalance[] memory appBalances = getAppTokenBalances(pool, grgStakingProxy, uniV4Posm);
 
         // define new array of max length (active tokens + base token + app tokens)
         uint256 portfolioTokensLength = tokens.activeTokens.length + 1;
@@ -210,7 +213,7 @@ library NavView {
         address token;
 
         for (uint256 k = 0; k < portfolioTokensLength; k++) {
-            if (k == portfolioTokensLength -1) {
+            if (k == portfolioTokensLength - 1) {
                 token = tokens.baseToken;
             } else if (portfolioTokensLength > 1) {
                 token = tokens.activeTokens[k];
@@ -219,12 +222,12 @@ library NavView {
             int256 bal = VirtualStorageLib.getVirtualBalance(token);
 
             if (token == ZERO_ADDRESS) {
-                bal += int256(address(this).balance);
+                bal += int256(address(pool).balance);
             } else {
-                bal += int256(IERC20(token).balanceOf(address(this)));
+                bal += int256(IERC20(token).balanceOf(pool));
             }
 
-            aggregatedBalances[index++] = AppTokenBalance({ token: token, amount: bal });
+            aggregatedBalances[index++] = AppTokenBalance({token: token, amount: bal});
         }
 
         return aggregatedBalances;
@@ -236,14 +239,15 @@ library NavView {
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return balances Array of AppTokenBalance structs
     function _handleApplication(
+        address pool,
         Applications appType,
         address grgStakingProxy,
         address uniV4Posm
     ) private view returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.GRG_STAKING) {
-            balances = _getGrgStakingProxyBalances(grgStakingProxy);
+            balances = _getGrgStakingProxyBalances(pool, grgStakingProxy);
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
-            balances = _getUniV4PmBalances(uniV4Posm);
+            balances = _getUniV4PmBalances(pool, uniV4Posm);
         } else {
             // simple return when new apps are added via adapters and implementation not yet upgraded
             return balances;
@@ -255,17 +259,18 @@ library NavView {
     /// @return balances Array of AppTokenBalance structs
     /// @dev Will return an empty array in case no stake found but unclaimed rewards exist
     function _getGrgStakingProxyBalances(
+        address pool,
         address grgStakingProxy
     ) private view returns (AppTokenBalance[] memory balances) {
-        uint256 stakingBalance = IStaking(grgStakingProxy).getTotalStake(address(this));
+        uint256 stakingBalance = IStaking(grgStakingProxy).getTotalStake(pool);
 
         // Continue querying unclaimed rewards only with positive balance
         if (stakingBalance > 0) {
             balances = new AppTokenBalance[](1);
             balances[0].token = address(IStaking(grgStakingProxy).getGrgContract());
-            bytes32 poolId = IStorage(grgStakingProxy).poolIdByRbPoolAccount(address(this));
+            bytes32 poolId = IStorage(grgStakingProxy).poolIdByRbPoolAccount(pool);
             balances[0].amount += (stakingBalance +
-                IStaking(grgStakingProxy).computeRewardBalanceOfDelegator(poolId, address(this))).toInt256();
+                IStaking(grgStakingProxy).computeRewardBalanceOfDelegator(poolId, pool)).toInt256();
         }
     }
 
@@ -273,7 +278,10 @@ library NavView {
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return balances Array of AppTokenBalance structs
     /// @dev Assumes hooks do not influence liquidity and uses oracle to protect against manipulation
-    function _getUniV4PmBalances(address uniV4Posm) private view returns (AppTokenBalance[] memory balances) {
+    function _getUniV4PmBalances(
+        address pool,
+        address uniV4Posm
+    ) private view returns (AppTokenBalance[] memory balances) {
         // Access stored position IDs
         uint256[] memory tokenIds = StorageLib.uniV4TokenIdsSlot().tokenIds;
         uint256 length = tokenIds.length;
@@ -287,7 +295,7 @@ library NavView {
 
             // Accept evaluation error by excluding unclaimed fees, which can be inflated arbitrarily
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
-                _findCrossPrice(Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1)),
+                _findCrossPrice(pool, Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1)),
                 TickMath.getSqrtPriceAtTick(info.tickLower()),
                 TickMath.getSqrtPriceAtTick(info.tickUpper()),
                 IPositionManager(uniV4Posm).getPositionLiquidity(tokenIds[i])
@@ -304,20 +312,20 @@ library NavView {
     /// @param token0 First token address
     /// @param token1 Second token address
     /// @return sqrtPriceX96 The square root price in X96 format, or 0 if no price feeds available
-    function _findCrossPrice(address token0, address token1) private view returns (uint160 sqrtPriceX96) {
+    function _findCrossPrice(address pool, address token0, address token1) private view returns (uint160 sqrtPriceX96) {
         int24 twap0;
         int24 twap1;
 
-        if (!IEOracle(address(this)).hasPriceFeed(token0)) {
+        if (!IEOracle(pool).hasPriceFeed(token0)) {
             twap0 = OUT_OF_RANGE_FLAG;
         } else {
-            twap0 = IEOracle(address(this)).getTwap(token0);
+            twap0 = IEOracle(pool).getTwap(token0);
         }
 
-        if (!IEOracle(address(this)).hasPriceFeed(token1)) {
+        if (!IEOracle(pool).hasPriceFeed(token1)) {
             twap1 = OUT_OF_RANGE_FLAG;
         } else {
-            twap1 = IEOracle(address(this)).getTwap(token1);
+            twap1 = IEOracle(pool).getTwap(token1);
         }
 
         if (twap0 == OUT_OF_RANGE_FLAG || twap1 == OUT_OF_RANGE_FLAG) {
