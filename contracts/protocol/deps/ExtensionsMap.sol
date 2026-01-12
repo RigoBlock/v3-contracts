@@ -37,7 +37,6 @@ contract ExtensionsMap is IExtensionsMap {
     // mapped selectors. When adding a new selector, make sure its mapping to extension address is added below.
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
     bytes4 private constant _EAPPS_UNIV4_POSITIONS_SELECTOR = IEApps.getUniV4TokenIds.selector;
-    bytes4 private constant _ENAVVIEW_ALL_TOKENS_BALANCES_SELECTOR = IENavView.getAllTokensAndBalancesView.selector;
     bytes4 private constant _ENAVVIEW_NAV_DATA_SELECTOR = IENavView.getNavDataView.selector;
     bytes4 private constant _ENAVVIEW_APP_BALANCES_SELECTOR = IENavView.getAppTokensAndBalancesView.selector;
     bytes4 private constant _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR = IEOracle.convertBatchTokenAmounts.selector;
@@ -80,8 +79,7 @@ contract ExtensionsMap is IExtensionsMap {
         // validate immutable constants. Assumes deps are correctly initialized
         assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId);
         assert(
-            _ENAVVIEW_ALL_TOKENS_BALANCES_SELECTOR ^ _ENAVVIEW_NAV_DATA_SELECTOR ^ _ENAVVIEW_APP_BALANCES_SELECTOR ==
-                type(IENavView).interfaceId
+            _ENAVVIEW_NAV_DATA_SELECTOR ^ _ENAVVIEW_APP_BALANCES_SELECTOR == type(IENavView).interfaceId
         );
         assert(
             _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ^
@@ -103,12 +101,9 @@ contract ExtensionsMap is IExtensionsMap {
         if (selector == _EAPPS_BALANCES_SELECTOR || selector == _EAPPS_UNIV4_POSITIONS_SELECTOR) {
             extension = eApps;
             shouldDelegatecall = true;
-        } else if (
-            selector == _ENAVVIEW_ALL_TOKENS_BALANCES_SELECTOR ||
-            selector == _ENAVVIEW_NAV_DATA_SELECTOR ||
-            selector == _ENAVVIEW_APP_BALANCES_SELECTOR
-        ) {
+        } else if (selector == _ENAVVIEW_NAV_DATA_SELECTOR || selector == _ENAVVIEW_APP_BALANCES_SELECTOR) {
             extension = eNavView;
+            // TODO: remove this and try to implement as extension, after debugging the refactoring
             shouldDelegatecall = true;
         } else if (
             selector == _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ||

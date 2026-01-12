@@ -4,20 +4,21 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
+import {ExtensionsMap} from "../../contracts/protocol/deps/ExtensionsMap.sol";
+import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
-import {ExtensionsMap} from "../../contracts/protocol/deps/ExtensionsMap.sol";
-import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
+import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {IRigoblockPoolProxy} from "../../contracts/protocol/interfaces/IRigoblockPoolProxy.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
-import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
+import {AppTokenBalance, ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 import {DeploymentParams, Extensions} from "../../contracts/protocol/types/DeploymentParams.sol";
 
 /// @title ENavViewFork - Fork-based tests for the ENavView extension
@@ -184,7 +185,7 @@ contract ENavViewForkTest is Test {
         console2.log("=== Testing ENavView.getNavDataView() ===");
 
         // Call getNavDataView via the pool (using fallback to extension)
-        IENavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+        NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
 
         console2.log("NAV Data:");
         console2.log("  Total Value:", navData.totalValue);
@@ -217,19 +218,19 @@ contract ENavViewForkTest is Test {
 
     /// @notice Test that ENavView returns token balances
     function test_ENavView_GetTokensAndBalances() public view {
-        console2.log("=== Testing ENavView.getAllTokensAndBalancesView() ===");
+        console2.log("=== Testing ENavView.getAppTokensAndBalancesView() ===");
 
         // Call getTokensAndBalances via the pool
-        IENavView.TokenBalance[] memory balances = IENavView(TEST_POOL).getAllTokensAndBalancesView();
+        AppTokenBalance[] memory balances = IENavView(TEST_POOL).getAppTokensAndBalancesView();
 
         assertTrue(balances.length > 0, "Should have at least one token balance");
 
         console2.log("Token Balances:");
         for (uint256 i = 0; i < balances.length && i < 10; i++) { // Limit output for readability
             console2.log("  Token:", balances[i].token);
-            console2.log("  Balance:", balances[i].balance >= 0 ? uint256(balances[i].balance) : 0);
-            if (balances[i].balance < 0) {
-                console2.log("  (Negative balance):", uint256(-balances[i].balance));
+            console2.log("  Balance:", balances[i].amount >= 0 ? uint256(balances[i].amount) : 0);
+            if (balances[i].amount < 0) {
+                console2.log("  (Negative balance):", uint256(-balances[i].amount));
             }
         }
 
@@ -246,19 +247,17 @@ contract ENavViewForkTest is Test {
 
         // Call getAppTokensAndBalancesView via the pool (no parameters needed)
         
-        try IENavView(TEST_POOL).getAppTokensAndBalancesView() returns (ExternalApp[] memory apps) {
+        try IENavView(TEST_POOL).getAppTokensAndBalancesView() returns (AppTokenBalance[] memory balances) {
             console2.log("Application Balances:");
-            console2.log("  Number of apps:", apps.length);
+            console2.log("  Number of balances:", balances.length);
 
-            for (uint256 i = 0; i < apps.length; i++) {
-                console2.log("  App type:", apps[i].appType);
-                console2.log("  Balances count:", apps[i].balances.length);
-                
-                for (uint256 j = 0; j < apps[i].balances.length; j++) {
-                    if (apps[i].balances[j].amount != 0) {
-                        console2.log("    Token:", apps[i].balances[j].token);
-                        console2.log("    Amount:", apps[i].balances[j].amount >= 0 ? uint256(apps[i].balances[j].amount) : 0);
-                    }
+            for (uint256 i = 0; i < balances.length; i++) {
+                console2.log("  Balances count:", balances.length);
+
+                // TODO: why does this one return null if balance is negative?
+                if (balances[i].amount != 0) {
+                    console2.log("    Token:", balances[i].token);
+                    console2.log("    Amount:", balances[i].amount >= 0 ? uint256(balances[i].amount) : 0);
                 }
             }
 
@@ -282,7 +281,7 @@ contract ENavViewForkTest is Test {
             uint256 storedNav = poolTokens.unitaryValue;
 
             // Get NAV from ENavView
-            IENavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+            NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
 
             console2.log("NAV Comparison:");
             console2.log("  Stored NAV:", storedNav);
@@ -295,9 +294,8 @@ contract ENavViewForkTest is Test {
                     ? navData.unitaryValue - storedNav 
                     : storedNav - navData.unitaryValue;
                 
-                // Allow up to 0.1% deviation
-                uint256 maxDeviation = storedNav / 1000;
-                assertLe(deviation, maxDeviation, "NAV deviation too high between methods");
+                uint256 maxDeviation = 0;
+                assertLe(deviation, maxDeviation, "NAV deviation from updated stored value!");
                 console2.log("NAV comparison test passed");
             } else {
                 console2.log("Oracle price conversion failed - both methods return zero as expected");
@@ -307,7 +305,7 @@ contract ENavViewForkTest is Test {
             console2.logBytes(reason);
             
             // Test that ENavView handles the failure gracefully
-            IENavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+            NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
             assertEq(navData.totalValue, 0, "Should return zero when oracle fails");
             assertEq(navData.unitaryValue, 0, "Should return zero when oracle fails");
             assertGt(navData.timestamp, 0, "Timestamp should be set even when oracle fails");
@@ -329,7 +327,7 @@ contract ENavViewForkTest is Test {
 
         // Test other selectors
         (extension, shouldDelegatecall) = extensionsMap.getExtensionBySelector(
-            IENavView.getAllTokensAndBalancesView.selector
+            IENavView.getAppTokensAndBalancesView.selector
         );
         assertEq(extension, address(eNavView), "TokensAndBalances selector should route to ENavView");
         assertTrue(shouldDelegatecall, "TokensAndBalances should use delegatecall");
@@ -350,7 +348,7 @@ contract ENavViewForkTest is Test {
         }
 
         // Test that calls work even when pool has minimal state
-        IENavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+        NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
         
         // When oracle fails, NAV calculation returns zero values - this is expected
         if (navData.totalValue == 0 && navData.unitaryValue == 0) {

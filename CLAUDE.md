@@ -284,15 +284,15 @@ EAcrossHandler(pool).handleV3AcrossMessage(
 
 **Pattern:**
 ```solidity
-uint256 arbFork = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
-uint256 optFork = vm.createFork(vm.envString("OPTIMISM_RPC_URL"));
+uint256 ethFork = vm.createFork("ethereum", Constants.MAINNET_BLOCK);
+uint256 baseFork = vm.createFork("base", Constants.BASE_BLOCK);
 
 // Test cross-chain flow
-vm.selectFork(arbFork);
+vm.selectFork(ethFork);
 // ... initiate transfer on Arbitrum
 bytes memory message = captureMessage();
 
-vm.selectFork(optFork);
+vm.selectFork(optFbaseForkork);
 // ... simulate Across fill on Optimism
 vm.prank(address(spokePool));
 pool.handleV3AcrossMessage(token, amount, relayer, message);

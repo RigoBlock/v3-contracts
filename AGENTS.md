@@ -206,11 +206,8 @@ forge test
 ### Fork Testing Pattern
 ```solidity
 // Create forks
-uint256 arbFork = vm.createFork(vm.envString("ARBITRUM_RPC_URL"));
-uint256 optFork = vm.createFork(vm.envString("OPTIMISM_RPC_URL"));
-
-// Switch to fork
-vm.selectFork(arbFork);
+uint256 ethFork = vm.createSelectFork("ethereum", Constants.MAINNET_BLOCK);
+uint256 baseFork = vm.createSelectFork("base", Constants.BASE_BLOCK);
 
 // Use existing contracts (already deployed)
 IRigoblockPoolProxyFactory factory = IRigoblockPoolProxyFactory(FACTORY);

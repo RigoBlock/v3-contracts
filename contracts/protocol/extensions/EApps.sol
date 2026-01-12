@@ -62,26 +62,23 @@ contract EApps is IEApps {
         _uniV4Posm = IPositionManager(univ4Posm);
     }
 
-    struct Application {
-        bool isActive;
-    }
-
     /// @inheritdoc IEApps
     /// @notice Uses temporary storage to cache token prices, which can be used in MixinPoolValue.
     /// @notice Requires delegatecall.
     function getAppTokenBalances(uint256 packedApplications) external override returns (ExternalApp[] memory) {
+        uint256 totalAppsCount = uint256(Applications.COUNT);
         uint256 activeAppCount;
-        Application[] memory apps = new Application[](uint256(Applications.COUNT));
+        bool[] memory activeApps = new bool[](totalAppsCount);
 
         // Count how many applications are active
-        for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
+        for (uint256 i = 0; i < uint256(totalAppsCount); i++) {
             if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
                 activeAppCount++;
-                apps[i].isActive = true;
+                activeApps[i] = true;
                 // grg staking is a pre-existing application. Therefore, we always check staked balance.
             } else if (Applications(i) == Applications.GRG_STAKING) {
                 activeAppCount++;
-                apps[i].isActive = true;
+                activeApps[i] = true;
             } else {
                 continue;
             }
@@ -90,8 +87,8 @@ contract EApps is IEApps {
         ExternalApp[] memory nestedBalances = new ExternalApp[](activeAppCount);
         uint256 activeAppIndex = 0;
 
-        for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
-            if (apps[i].isActive) {
+        for (uint256 i = 0; i < uint256(totalAppsCount); i++) {
+            if (activeApps[i]) {
                 nestedBalances[activeAppIndex].balances = _handleApplication(Applications(i));
                 nestedBalances[activeAppIndex].appType = uint256(Applications(i));
                 activeAppIndex++;

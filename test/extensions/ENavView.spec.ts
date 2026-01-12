@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import hre, { deployments, waffle } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
+import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber } from "ethers";
@@ -21,7 +22,7 @@ describe("ENavView", async () => {
         timestamp: BigNumber;
     }
 
-    const setupTests = deployments.createFixture(async ({ deployments }) => {
+    const setupTests = deployments.createFixture(async (hre: HardhatRuntimeEnvironment) => {
         await deployments.fixture('tests-setup');
         const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory");
         const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory");
@@ -61,6 +62,12 @@ describe("ENavView", async () => {
             hooks: oracle.address 
         };
         await oracle.initializeObservations(poolKey);
+
+        const AuthorityInstance = await deployments.get("Authority")
+        const Authority = await hre.ethers.getContractFactory("Authority")
+        const AStakingInstance = await deployments.get("AStaking")
+        const authority = Authority.attach(AuthorityInstance.address)
+        await authority.addMethod("0xa694fc3a", AStakingInstance.address)
         
         return {
             pool,
@@ -73,17 +80,6 @@ describe("ENavView", async () => {
 
     // Unit tests for ENavView extension functionality through proper pool delegation
     describe("ENavView functionality through pool", async () => {
-        it('should test extension deployment and immutables', async () => {
-            const { eNavView } = await setupTests();
-            
-            // Test that immutable addresses are properly set
-            const grgStakingProxy = await eNavView.grgStakingProxy();
-            const uniV4Posm = await eNavView.uniV4Posm();
-            
-            expect(grgStakingProxy).to.not.equal(AddressZero);
-            expect(uniV4Posm).to.not.equal(AddressZero);
-        });
-
         it('should return token balances through pool delegation', async () => {
             const { pool } = await setupTests();
             
@@ -91,7 +87,7 @@ describe("ENavView", async () => {
             const navViewPool = await hre.ethers.getContractAt("IENavView", pool.address);
             
             // Should work and return empty array for empty pool
-            const balances = await navViewPool.getAllTokensAndBalancesView();
+            const balances = await navViewPool.getAppTokensAndBalancesView();
             expect(balances).to.be.an('array');
             // Empty pool should have empty or minimal balances
             expect(balances.length).to.be.gte(0);
@@ -141,9 +137,14 @@ describe("ENavView", async () => {
             // Cast pool to IENavView interface
             const navViewPool = await hre.ethers.getContractAt("IENavView", pool.address);
             
-            // Should return token balances (at least the base token)
-            const balances = await navViewPool.getAllTokensAndBalancesView();
-            expect(balances.length).to.be.gte(1); // Should have at least base token
+            let balances = await navViewPool.getAppTokensAndBalancesView();
+            expect(balances.length).to.be.gte(0);
+
+            const stakingPool = await hre.ethers.getContractAt("IRigoblockPoolExtended", pool.address);
+            await stakingPool.stake(mintAmount.div(2)); // Stake half the tokens
+
+            balances = await navViewPool.getAppTokensAndBalancesView();
+            expect(balances.length).to.be.gte(1);
             
             const navData = await navViewPool.getNavDataView();
             // Total value might be 0 for test pools, but unitaryValue should be positive
@@ -155,7 +156,4 @@ describe("ENavView", async () => {
             expect(navData.unitaryValue).to.equal(parseEther("1")); // Should be 1.0 for fresh pool
         });
     });
-
-    // NOTE: These tests verify ENavView extension works through pool delegation
-    // Fork tests in ENavViewFork.t.sol test against live deployed pools
 });

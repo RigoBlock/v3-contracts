@@ -41,12 +41,6 @@ library NavView {
     /// @notice Zero address constant
     address internal constant ZERO_ADDRESS = address(0);
 
-    /// @notice Represents a token balance including virtual balances and application positions
-    struct TokenBalance {
-        address token;
-        int256 balance; // Signed to support virtual balances and app positions
-    }
-
     /// @notice Complete NAV data for a pool
     struct NavData {
         uint256 totalValue; // Total pool value in base token
@@ -57,151 +51,60 @@ library NavView {
     /// @notice Gets application token balances for external positions
     /// @param grgStakingProxy Address of the GRG staking proxy
     /// @param uniV4Posm Address of the Uniswap V4 position manager
-    /// @return apps Array of ExternalApp structs with balances
+    /// @return balances Array of AppTokenBalance structs with balances
     function getAppTokenBalances(
         address grgStakingProxy,
         address uniV4Posm
-    ) internal view returns (ExternalApp[] memory apps) {
-        uint256 packedApplications = StorageLib.activeApplications().packedApplications;
-        uint256 activeAppCount;
-        bool[] memory appStates = new bool[](uint256(Applications.COUNT));
+    ) internal view returns (AppTokenBalance[] memory balances) {
+        uint256 appsCount = uint256(Applications.COUNT);
+        AppTokenBalance[][] memory appBalances = new AppTokenBalance[][](appsCount);
+        uint256 activeAppIndex;
+        uint256 tokenIndex;
 
-        // Count active applications
-        for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
-            if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
-                activeAppCount++;
-                appStates[i] = true;
-            } else if (Applications(i) == Applications.GRG_STAKING) {
-                // GRG staking is always checked as a pre-existing application
-                activeAppCount++;
-                appStates[i] = true;
+        // Populate appBalances array with balances from each active application
+        for (uint256 i = 0; i < appsCount; i++) {
+            appBalances[activeAppIndex] = _handleApplication(Applications(i), grgStakingProxy, uniV4Posm);
+            tokenIndex += appBalances[activeAppIndex++].length;
+        }
+
+        // Flatten all app balances into a single array
+        AppTokenBalance[] memory flattenedBalances = new AppTokenBalance[](tokenIndex);
+        tokenIndex = 0;
+
+        for (uint256 i = 0; i < appBalances.length; i++) {
+            for (uint256 j = 0; j < appBalances[i].length; j++) {
+                flattenedBalances[tokenIndex++] = appBalances[i][j];
             }
         }
 
-        apps = new ExternalApp[](activeAppCount);
-        uint256 activeAppIndex = 0;
+        // we write a new array with total length but unique tokens
+        AppTokenBalance[] memory uniqueBalances = new AppTokenBalance[](tokenIndex);
 
-        for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
-            if (appStates[i]) {
-                apps[activeAppIndex].balances = handleApplication(Applications(i), grgStakingProxy, uniV4Posm);
-                apps[activeAppIndex].appType = uint256(Applications(i));
-                activeAppIndex++;
-            }
-        }
-    }
+        uint256 uniqueTokensCount;
 
-    /// @notice Returns all token balances including virtual balances and application positions
-    /// @param grgStakingProxy Address of the GRG staking proxy
-    /// @param uniV4Posm Address of the Uniswap V4 position manager
-    /// @return balances Array of TokenBalance structs
-    function getTokensAndBalances(
-        address grgStakingProxy,
-        address uniV4Posm
-    ) internal view returns (TokenBalance[] memory balances) {
-        // Get active tokens
-        ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(address(this)).getActiveTokens();
+        // Aggregate balances by token
+        for (uint256 i = 0; i < tokenIndex; i++) {
+            bool found;
 
-        // Create memory arrays to track unique tokens and their balances
-        address[] memory uniqueTokens = new address[](tokens.activeTokens.length + 100); // Buffer for app tokens
-        int256[] memory tokenBalances = new int256[](tokens.activeTokens.length + 100);
-        uint256 tokenCount = 0;
-
-        // Get application balances
-        ExternalApp[] memory apps = getAppTokenBalances(grgStakingProxy, uniV4Posm);
-
-        // Process application balances
-        for (uint256 i = 0; i < apps.length; i++) {
-            for (uint256 j = 0; j < apps[i].balances.length; j++) {
-                if (apps[i].balances[j].amount != 0) {
-                    address token = apps[i].balances[j].token;
-                    int256 amount = apps[i].balances[j].amount;
-
-                    // Find if token already tracked
-                    bool tokenFound = false;
-                    for (uint256 k = 0; k < tokenCount; k++) {
-                        if (uniqueTokens[k] == token) {
-                            tokenBalances[k] += amount;
-                            tokenFound = true;
-                            break;
-                        }
-                    }
-
-                    if (!tokenFound) {
-                        uniqueTokens[tokenCount] = token;
-                        tokenBalances[tokenCount] = amount;
-                        tokenCount++;
-                    }
-                }
-            }
-        }
-
-        // Add base token balance: only add native balance if base token is native (address(0))
-        int256 baseTokenBalance = 0;
-        if (tokens.baseToken == ZERO_ADDRESS) {
-            // For native token, add native balance
-            baseTokenBalance = int256(address(this).balance);
-        }
-        // Always add virtual balance for base token
-        baseTokenBalance += VirtualStorageLib.getVirtualBalance(tokens.baseToken);
-
-        bool baseTokenFound = false;
-        for (uint256 k = 0; k < tokenCount; k++) {
-            if (
-                uniqueTokens[k] == tokens.baseToken ||
-                (tokens.baseToken == ZERO_ADDRESS && uniqueTokens[k] == ZERO_ADDRESS)
-            ) {
-                tokenBalances[k] += baseTokenBalance;
-                baseTokenFound = true;
-                break;
-            }
-        }
-
-        if (!baseTokenFound) {
-            uniqueTokens[tokenCount] = tokens.baseToken;
-            tokenBalances[tokenCount] = baseTokenBalance;
-            tokenCount++;
-        }
-
-        // Add active tokens wallet balances + virtual balances
-        for (uint256 i = 0; i < tokens.activeTokens.length; i++) {
-            address token = tokens.activeTokens[i];
-            int256 totalBalance = 0;
-
-            // Get wallet balance
-            try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
-                totalBalance = int256(_balance);
-            } catch {
-                // Continue even if balance read fails, might have virtual balance
-            }
-
-            // Add virtual balance for this token
-            totalBalance += VirtualStorageLib.getVirtualBalance(token);
-
-            // Skip if no balance (wallet + virtual)
-            if (totalBalance == 0) continue;
-
-            // Find if token already tracked
-            bool walletTokenFound = false;
-            for (uint256 k = 0; k < tokenCount; k++) {
-                if (uniqueTokens[k] == token) {
-                    tokenBalances[k] += totalBalance;
-                    walletTokenFound = true;
+            for (uint256 j = 0; j < uniqueTokensCount; j++) {
+                if (uniqueBalances[j].token == flattenedBalances[i].token) {
+                    uniqueBalances[j].amount += flattenedBalances[i].amount;
+                    found = true;
                     break;
                 }
             }
 
-            if (!walletTokenFound) {
-                uniqueTokens[tokenCount] = token;
-                tokenBalances[tokenCount] = totalBalance;
-                tokenCount++;
+            if (!found) {
+                uniqueBalances[uniqueTokensCount++] = flattenedBalances[i];
             }
         }
 
-        // Create result array with actual count
-        balances = new TokenBalance[](tokenCount);
-        for (uint256 i = 0; i < tokenCount; i++) {
-            balances[i] = TokenBalance({token: uniqueTokens[i], balance: tokenBalances[i]});
+        // Resize array to actual unique token count
+        assembly {
+            mstore(uniqueBalances, uniqueTokensCount)
         }
+
+        return uniqueBalances;
     }
 
     /// @notice Returns complete NAV data for the pool
@@ -210,7 +113,7 @@ library NavView {
     /// @return navData Struct containing totalValue, unitaryValue, and timestamp
     function getNavData(address grgStakingProxy, address uniV4Posm) internal view returns (NavData memory navData) {
         // Get token balances
-        TokenBalance[] memory balances = getTokensAndBalances(grgStakingProxy, uniV4Posm);
+        AppTokenBalance[] memory balances = _getTokensAndBalances(grgStakingProxy, uniV4Posm);
 
         // Get pool data
         address baseToken = StorageLib.pool().baseToken;
@@ -222,9 +125,9 @@ library NavView {
         // Count non-base tokens for batch conversion
         uint256 nonBaseTokenCount = 0;
         for (uint256 i = 0; i < balances.length; i++) {
-            if (balances[i].token == baseToken || balances[i].token == ZERO_ADDRESS) {
-                totalValue += balances[i].balance;
-            } else if (balances[i].balance != 0) {
+            if (balances[i].token == baseToken) {
+                totalValue += balances[i].amount;
+            } else if (balances[i].amount != 0) {
                 nonBaseTokenCount++;
             }
         }
@@ -235,9 +138,9 @@ library NavView {
             uint256 idx = 0;
 
             for (uint256 i = 0; i < balances.length; i++) {
-                if (balances[i].token != baseToken && balances[i].token != ZERO_ADDRESS && balances[i].balance != 0) {
+                if (balances[i].token != baseToken && balances[i].token != ZERO_ADDRESS && balances[i].amount != 0) {
                     tokens[idx] = balances[i].token;
-                    amounts[idx] = balances[i].balance;
+                    amounts[idx] = balances[i].amount;
                     idx++;
                 }
             }
@@ -278,20 +181,69 @@ library NavView {
         });
     }
 
+    /// @notice Returns all token balances including virtual balances and application positions.
+    /// @dev Includes virtual balances, may return non-unique token addresses.
+    /// @param grgStakingProxy Address of the GRG staking proxy.
+    /// @param uniV4Posm Address of the Uniswap V4 position manager.
+    /// @return balances Array of TokenBalAppTokenBalanceance structs.
+    function _getTokensAndBalances(
+        address grgStakingProxy,
+        address uniV4Posm
+    ) private view returns (AppTokenBalance[] memory) {
+        // Get active tokens and application balances
+        ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(address(this)).getActiveTokens();
+        AppTokenBalance[] memory appBalances = getAppTokenBalances(grgStakingProxy, uniV4Posm);
+
+        // define new array of max length (active tokens + base token + app tokens)
+        uint256 portfolioTokensLength = tokens.activeTokens.length + 1;
+        uint256 maxLength = portfolioTokensLength + appBalances.length;
+        AppTokenBalance[] memory aggregatedBalances = new AppTokenBalance[](maxLength);
+        uint256 index;
+
+        // store the app balances
+        for (uint256 i = 0; i < appBalances.length; i++) {
+            aggregatedBalances[i] = appBalances[i];
+        }
+
+        // update position to store next token balances
+        index = appBalances.length;
+        address token;
+
+        for (uint256 k = 0; k < portfolioTokensLength; k++) {
+            if (k == portfolioTokensLength -1) {
+                token = tokens.baseToken;
+            } else if (portfolioTokensLength > 1) {
+                token = tokens.activeTokens[k];
+            }
+
+            int256 bal = VirtualStorageLib.getVirtualBalance(token);
+
+            if (token == ZERO_ADDRESS) {
+                bal += int256(address(this).balance);
+            } else {
+                bal += int256(IERC20(token).balanceOf(address(this)));
+            }
+
+            aggregatedBalances[index++] = AppTokenBalance({ token: token, amount: bal });
+        }
+
+        return aggregatedBalances;
+    }
+
     /// @notice Handles balance retrieval for a specific application type
     /// @param appType The application type to handle
     /// @param grgStakingProxy Address of the GRG staking proxy
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return balances Array of AppTokenBalance structs
-    function handleApplication(
+    function _handleApplication(
         Applications appType,
         address grgStakingProxy,
         address uniV4Posm
-    ) internal view returns (AppTokenBalance[] memory balances) {
+    ) private view returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.GRG_STAKING) {
-            balances = getGrgStakingProxyBalances(grgStakingProxy);
+            balances = _getGrgStakingProxyBalances(grgStakingProxy);
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
-            balances = getUniV4PmBalances(uniV4Posm);
+            balances = _getUniV4PmBalances(uniV4Posm);
         } else {
             // simple return when new apps are added via adapters and implementation not yet upgraded
             return balances;
@@ -302,9 +254,9 @@ library NavView {
     /// @param grgStakingProxy Address of the GRG staking proxy
     /// @return balances Array of AppTokenBalance structs
     /// @dev Will return an empty array in case no stake found but unclaimed rewards exist
-    function getGrgStakingProxyBalances(
+    function _getGrgStakingProxyBalances(
         address grgStakingProxy
-    ) internal view returns (AppTokenBalance[] memory balances) {
+    ) private view returns (AppTokenBalance[] memory balances) {
         uint256 stakingBalance = IStaking(grgStakingProxy).getTotalStake(address(this));
 
         // Continue querying unclaimed rewards only with positive balance
@@ -321,7 +273,7 @@ library NavView {
     /// @param uniV4Posm Address of the Uniswap V4 position manager
     /// @return balances Array of AppTokenBalance structs
     /// @dev Assumes hooks do not influence liquidity and uses oracle to protect against manipulation
-    function getUniV4PmBalances(address uniV4Posm) internal view returns (AppTokenBalance[] memory balances) {
+    function _getUniV4PmBalances(address uniV4Posm) private view returns (AppTokenBalance[] memory balances) {
         // Access stored position IDs
         uint256[] memory tokenIds = StorageLib.uniV4TokenIdsSlot().tokenIds;
         uint256 length = tokenIds.length;
@@ -335,7 +287,7 @@ library NavView {
 
             // Accept evaluation error by excluding unclaimed fees, which can be inflated arbitrarily
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
-                findCrossPrice(Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1)),
+                _findCrossPrice(Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1)),
                 TickMath.getSqrtPriceAtTick(info.tickLower()),
                 TickMath.getSqrtPriceAtTick(info.tickUpper()),
                 IPositionManager(uniV4Posm).getPositionLiquidity(tokenIds[i])
@@ -352,7 +304,7 @@ library NavView {
     /// @param token0 First token address
     /// @param token1 Second token address
     /// @return sqrtPriceX96 The square root price in X96 format, or 0 if no price feeds available
-    function findCrossPrice(address token0, address token1) internal view returns (uint160 sqrtPriceX96) {
+    function _findCrossPrice(address token0, address token1) private view returns (uint160 sqrtPriceX96) {
         int24 twap0;
         int24 twap1;
 
