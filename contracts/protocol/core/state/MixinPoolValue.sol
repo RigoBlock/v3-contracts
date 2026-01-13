@@ -47,7 +47,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             components.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
 
             if (components.totalSupply == 0) {
-                // No supply anywhere - return stored NAV
+                // No supply anywhere - return stored NAV without update
                 return components;
             }
 

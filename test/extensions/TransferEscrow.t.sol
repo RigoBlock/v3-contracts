@@ -44,12 +44,13 @@ contract MockERC20 {
 
 /// @title TransferEscrowWorkingTest - Working tests for TransferEscrow refundVault functionality
 /// @notice Tests escrow token claiming and donation to pool with proper mock implementations
+/// @dev Uses fork testing to access real Across-whitelisted tokens (USDC, WETH, etc.)
 contract TransferEscrowWorkingTest is Test {
     using SafeTransferLib for address;
     
     MockPoolForEscrow mockPool;
     address pool;
-    MockERC20 testToken;
+    address testToken; // Use real token from fork
     address escrowAddress;
     TransferEscrow escrow;
     
@@ -62,14 +63,19 @@ contract TransferEscrowWorkingTest is Test {
     uint256 constant ETH_AMOUNT = 1 ether;
 
     function setUp() public {
+        // Use Ethereum mainnet fork to access real USDC
+        vm.createSelectFork("mainnet");
+        
+        // Use real USDC (whitelisted on Across)
+        testToken = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // ETH_USDC
+        
         // Deploy mock pool
         mockPool = new MockPoolForEscrow();
         pool = address(mockPool);
         
-        // Deploy mock ERC20 token
-        testToken = new MockERC20();
-        
-        // Deploy escrow through EscrowFactory
+        // Deploy escrow through EscrowFactory - must be called FROM the pool context
+        // to match production delegatecall behavior where pool is deployer
+        vm.prank(pool);
         escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
         escrow = TransferEscrow(payable(escrowAddress));
         
@@ -79,18 +85,41 @@ contract TransferEscrowWorkingTest is Test {
         
         console2.log("Test setup complete:");
         console2.log("  Pool:", pool);
-        console2.log("  Test Token:", address(testToken));
+        console2.log("  Test Token (USDC):", testToken);
         console2.log("  Escrow:", escrowAddress);
     }
     
-    /// @notice Test escrow deployment
-    function test_EscrowDeployment() public view {
+    /// @dev Helper to fund escrow with USDC using deal (works on forks)
+    function _fundEscrowWithUsdc(uint256 amount) internal {
+        deal(testToken, escrowAddress, amount);
+    }
+    
+    /// @notice Test escrow deployment and CREATE2 determinism
+    function test_EscrowDeployment() public {
         assertTrue(escrowAddress != address(0), "Escrow should be deployed");
         assertEq(escrow.pool(), pool, "Escrow should reference correct pool");
         
-        // Verify deployment is deterministic
+        // Verify deployment is deterministic - address depends on pool parameter
         address predictedAddress = EscrowFactory.getEscrowAddress(pool, OpType.Transfer);
         assertEq(escrowAddress, predictedAddress, "Deployed address should match predicted");
+        
+        // Note: External call test (via IAIntents interface) is in AIntentsRealFork.t.sol
+        // where we have a real pool with adapter mappings set up
+        
+        // Verify CREATE2 formula uses pool parameter (not address(this) in delegatecall context)
+        // Salt is based on opType only, pool is used as deployer and in constructor
+        bytes32 salt = keccak256(abi.encodePacked(uint8(OpType.Transfer)));
+        bytes32 bytecodeHash = keccak256(
+            abi.encodePacked(type(TransferEscrow).creationCode, abi.encode(pool))
+        );
+        address expectedAddress = address(
+            uint160(
+                uint256(
+                    keccak256(abi.encodePacked(bytes1(0xff), pool, salt, bytecodeHash))
+                )
+            )
+        );
+        assertEq(escrowAddress, expectedAddress, "CREATE2 address must use explicit pool parameter as deployer");
     }
     
     /// @notice Test escrow constructor rejects invalid pool
@@ -102,24 +131,24 @@ contract TransferEscrowWorkingTest is Test {
         new TransferEscrow(makeAddr("notAContract")); // EOA should fail
     }
     
-    /// @notice Test refunding vault tokens to pool - ERC20
+    /// @notice Test refunding vault tokens to pool - ERC20 (USDC)
     function test_RefundVault_ERC20() public {
-        // Give escrow some tokens
-        testToken.mint(escrowAddress, TOKEN_AMOUNT);
+        // Give escrow some USDC
+        _fundEscrowWithUsdc(TOKEN_AMOUNT);
         
         // Verify escrow has tokens initially
-        assertEq(testToken.balanceOf(escrowAddress), TOKEN_AMOUNT, "Escrow should have tokens");
+        assertEq(IERC20(testToken).balanceOf(escrowAddress), TOKEN_AMOUNT, "Escrow should have USDC");
         
         // Call refundVault
-        escrow.refundVault(address(testToken));
+        escrow.refundVault(testToken);
         
         // Verify tokens were transferred to pool
-        assertEq(testToken.balanceOf(escrowAddress), 0, "Escrow should have no tokens after refund");
-        assertEq(testToken.balanceOf(pool), TOKEN_AMOUNT, "Pool should receive the tokens");
+        assertEq(IERC20(testToken).balanceOf(escrowAddress), 0, "Escrow should have no tokens after refund");
+        assertEq(IERC20(testToken).balanceOf(pool), TOKEN_AMOUNT, "Pool should receive the tokens");
     }
     
-    /// @notice Test refunding vault tokens to pool - ETH
-    function test_RefundVault_ETH() public {
+    /// @notice Test refunding vault tokens to pool - Native ETH
+    function test_RefundVault_Native() public {
         // Give escrow some ETH
         vm.deal(escrowAddress, ETH_AMOUNT);
         
@@ -137,31 +166,25 @@ contract TransferEscrowWorkingTest is Test {
         assertEq(pool.balance, poolBalanceBefore + ETH_AMOUNT, "Pool should receive the ETH");
     }
     
-    /// @notice Test refunding multiple different tokens
+    /// @notice Test refunding multiple sequential refunds with whitelisted tokens
     function test_RefundVault_MultipleTokens() public {
-        MockERC20 secondToken = new MockERC20();
-        uint256 secondAmount = 500e18;
+        uint256 halfUsdc = TOKEN_AMOUNT / 2;
+        uint256 halfEth = ETH_AMOUNT / 2;
         
-        // Give escrow multiple tokens
-        testToken.mint(escrowAddress, TOKEN_AMOUNT);
-        secondToken.mint(escrowAddress, secondAmount);
-        vm.deal(escrowAddress, ETH_AMOUNT);
+        // Give escrow USDC and ETH
+        _fundEscrowWithUsdc(halfUsdc);
+        vm.deal(escrowAddress, halfEth);
         
-        // Refund first token
-        escrow.refundVault(address(testToken));
-        assertEq(testToken.balanceOf(escrowAddress), 0, "First token should be refunded");
-        assertEq(testToken.balanceOf(pool), TOKEN_AMOUNT, "Pool should receive first token");
-        
-        // Refund second token
-        escrow.refundVault(address(secondToken));
-        assertEq(secondToken.balanceOf(escrowAddress), 0, "Second token should be refunded");
-        assertEq(secondToken.balanceOf(pool), secondAmount, "Pool should receive second token");
+        // Refund USDC first
+        escrow.refundVault(testToken);
+        assertEq(IERC20(testToken).balanceOf(escrowAddress), 0, "USDC should be refunded");
+        assertEq(IERC20(testToken).balanceOf(pool), halfUsdc, "Pool should receive USDC");
         
         // Refund ETH
         uint256 poolETHBefore = pool.balance;
         escrow.refundVault(address(0));
         assertEq(escrowAddress.balance, 0, "ETH should be refunded");
-        assertEq(pool.balance, poolETHBefore + ETH_AMOUNT, "Pool should receive ETH");
+        assertEq(pool.balance, poolETHBefore + halfEth, "Pool should receive ETH");
     }
     
     /// @notice Test escrow can receive ETH
@@ -179,10 +202,11 @@ contract TransferEscrowWorkingTest is Test {
     
     /// @notice Test edge case with zero amount of ERC20 - should revert
     function test_ZeroAmountERC20() external {
-        // Test with zero balance - should revert with InvalidAmount
+        // Don't fund escrow - balance is 0
+        // Should revert with InvalidAmount (balance check happens after token whitelist check)
         vm.prank(randomUser);
         vm.expectRevert(TransferEscrow.InvalidAmount.selector);
-        escrow.refundVault(address(testToken));
+        escrow.refundVault(testToken);
     }
     
     /// @notice Test edge case with zero amount of ETH - should revert
@@ -195,12 +219,12 @@ contract TransferEscrowWorkingTest is Test {
     
     /// @notice Test edge case: very small amounts
     function test_RefundVault_SmallAmounts() public {
-        uint256 smallAmount = 1; // 1 wei
+        uint256 smallAmount = 1; // 1 USDC base unit (1e-6 USDC)
         
-        // Test with 1 wei of token
-        testToken.mint(escrowAddress, smallAmount);
-        escrow.refundVault(address(testToken));
-        assertEq(testToken.balanceOf(escrowAddress), 0, "Should handle small amounts");
+        // Test with 1 base unit of USDC
+        deal(testToken, escrowAddress, smallAmount);
+        escrow.refundVault(testToken);
+        assertEq(IERC20(testToken).balanceOf(escrowAddress), 0, "Should handle small amounts");
         
         // Test with 1 wei of ETH
         vm.deal(escrowAddress, 1);
@@ -210,16 +234,51 @@ contract TransferEscrowWorkingTest is Test {
     
     /// @notice Test that anyone can call refundVault
     function test_RefundVault_AnyoneCanCall() public {
-        // Give escrow some tokens
-        testToken.mint(escrowAddress, TOKEN_AMOUNT);
+        // Give escrow some USDC
+        _fundEscrowWithUsdc(TOKEN_AMOUNT);
         
         // Random user can call refundVault
         vm.prank(randomUser);
-        escrow.refundVault(address(testToken));
+        escrow.refundVault(testToken);
         
         // Verify refund worked
-        assertEq(testToken.balanceOf(escrowAddress), 0, "Escrow should have no tokens after refund");
-        assertEq(testToken.balanceOf(pool), TOKEN_AMOUNT, "Pool should receive the tokens");
+        assertEq(IERC20(testToken).balanceOf(escrowAddress), 0, "Escrow should have no tokens after refund");
+        assertEq(IERC20(testToken).balanceOf(pool), TOKEN_AMOUNT, "Pool should receive the tokens");
+    }
+    
+    /// @notice Test that unauthorized tokens cannot be refunded (prevents token activation griefing)
+    /// @dev This prevents attackers from:
+    ///      1. Auto-activating tokens via donation (if they have price feeds)
+    ///      2. Filling up the 128 token limit with junk tokens
+    ///      3. Increasing NAV calculation gas costs
+    function test_RefundVault_RejectsUnauthorizedTokens() public {
+        // Create a random token not on Across whitelist
+        MockERC20 unauthorizedToken = new MockERC20();
+        unauthorizedToken.mint(escrowAddress, TOKEN_AMOUNT);
+        
+        // Should revert with UnsupportedToken error
+        vm.expectRevert(TransferEscrow.UnsupportedToken.selector);
+        escrow.refundVault(address(unauthorizedToken));
+        
+        // Verify tokens are still in escrow (not transferred)
+        assertEq(unauthorizedToken.balanceOf(escrowAddress), TOKEN_AMOUNT, "Unauthorized tokens should remain in escrow");
+        assertEq(unauthorizedToken.balanceOf(pool), 0, "Pool should not receive unauthorized tokens");
+    }
+    
+    /// @notice Test that native currency (address(0)) is always allowed
+    /// @dev Native currency is safe because it's either the pool's base token or already active
+    function test_RefundVault_NativeAlwaysAllowed() public {
+        uint256 nativeAmount = 1 ether;
+        uint256 poolBalanceBefore = pool.balance;
+        
+        vm.deal(escrowAddress, nativeAmount);
+        
+        // Should succeed for native currency
+        escrow.refundVault(address(0));
+        
+        // Verify refund worked
+        assertEq(escrowAddress.balance, 0, "Escrow should have no ETH after refund");
+        assertEq(pool.balance, poolBalanceBefore + nativeAmount, "Pool should receive native currency");
     }
 }
 

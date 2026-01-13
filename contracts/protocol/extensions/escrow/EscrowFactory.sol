@@ -21,13 +21,13 @@ library EscrowFactory {
     /// @param pool The pool address
     /// @param opType The operation type
     /// @return escrowAddress The deterministic address
-    function getEscrowAddress(address pool, OpType opType) internal view returns (address escrowAddress) {
+    function getEscrowAddress(address pool, OpType opType) internal pure returns (address escrowAddress) {
         bytes32 salt = _getSalt(opType);
         bytes32 bytecodeHash = _getBytecodeHash(opType, pool);
 
-        escrowAddress = address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, bytecodeHash))))
-        );
+        // Use pool as deployer address for CREATE2 calculation
+        // When called via delegatecall from adapter, pool is the actual deployer
+        escrowAddress = address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), pool, salt, bytecodeHash)))));
     }
 
     /// @notice Deploys an escrow contract using CREATE2 (idempotent)

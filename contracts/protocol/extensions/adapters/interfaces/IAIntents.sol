@@ -27,6 +27,7 @@ interface IAIntents {
     error NullAddress();
     error TokenNotActive();
     error SameChainTransfer();
+    error InvalidAmount();
 
     struct AcrossParams {
         address depositor;
@@ -47,9 +48,4 @@ interface IAIntents {
     /// @dev Has different method selector than across depositV3 to avoid viaIr compilation.
     /// @param params Across params encoded as tuple.
     function depositV3(AcrossParams memory params) external;
-
-    /// @notice Gets the deterministic escrow address for Transfer operations
-    /// @param opType The operation type (only Transfer supported)
-    /// @return escrowAddress The deterministic escrow address
-    function getEscrowAddress(OpType opType) external view returns (address escrowAddress);
 }

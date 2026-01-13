@@ -70,19 +70,18 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
     /// @inheritdoc IAIntents
     function depositV3(AcrossParams calldata params) external override nonReentrant onlyDelegateCall {
-        // sanity checks
-        require(!params.inputToken.isAddressZero(), NullAddress());
+        // Validate bridgeable token restriction - ensure input and output tokens are compatible
+        // This also implicitly validates that neither inputToken nor outputToken is address(0)
+        CrosschainLib.validateBridgeableTokenPair(params.inputToken, params.outputToken);
+
+        // Validate exclusive relayer must be zero (we don't use exclusive relaying)
         require(params.exclusiveRelayer.isAddressZero(), NullAddress());
 
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
 
-        // TODO: could use bitmask to assert the destination chainId is supported, so we can revert on
-        // source instead of on destination if it not? although the following token assertion will revert
-        // if new chain's output tokens are not mapped.
-
-        // Validate bridgeable token restriction - ensure input and output tokens are compatible
-        CrosschainLib.validateBridgeableTokenPair(params.inputToken, params.outputToken);
+        // Validate outputAmount is not zero or too small to prevent virtual supply calculation issues
+        require(params.outputAmount > 0, InvalidAmount());
 
         // Validate source message parameters to prevent rogue input
         SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
@@ -94,18 +93,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // This simplifies logic and prevents manipulation via inactive tokens
         require(StorageLib.isOwnedToken(params.inputToken), TokenNotActive());
 
-        _safeApproveToken(params.inputToken);
+        _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
 
         // Always use multicall handler approach for robust pool existence checking
         Instructions memory instructions = _buildMulticallInstructions(params, sourceParams);
         _executeAcrossDeposit(params, sourceParams, instructions);
 
-        _safeApproveToken(params.inputToken);
-    }
-
-    /// @inheritdoc IAIntents
-    function getEscrowAddress(OpType opType) external view onlyDelegateCall returns (address escrowAddress) {
-        return EscrowFactory.getEscrowAddress(address(this), opType);
+        _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
     }
 
     /*
@@ -204,7 +198,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
     }
 
-    // TODO: what if outputAmount is null or close to 0?
     function _handleSourceTransfer(AcrossParams memory params) private {
         // Scale outputAmount to inputToken decimals for proper comparison
         // (same token on different chains may have different decimals, e.g., BSC USDC)
@@ -218,44 +211,43 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         uint256 unitaryValue = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
 
-        // Fast path: no virtual supply, entire amount goes to virtual balance (most common case)
+        // Convert output amount to base token value
+        address baseToken = StorageLib.pool().baseToken;
+        uint256 outputValueInBase = IEOracle(address(this))
+            .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
+            .toUint256();
+
+        // Fast path: no virtual supply, write base token virtual balance (most common case)
         if (virtualSupply == 0) {
-            (params.inputToken).updateVirtualBalance(scaledOutputAmount.toInt256());
+            baseToken.updateVirtualBalance(outputValueInBase.toInt256());
             return;
         }
 
-        // Virtual supply exists - need to calculate value in base token for comparison
-        address baseToken = StorageLib.pool().baseToken;
-        uint256 outputValueInBase = IEOracle(address(this)).convertTokenAmount(
-            params.inputToken,
-            scaledOutputAmount.toInt256(),
-            baseToken
-        ).toUint256();
-
+        // Virtual supply exists - calculate and burn
         uint8 poolDecimals = StorageLib.pool().decimals;
         uint256 virtualSupplyValue = (unitaryValue * virtualSupply) / 10 ** poolDecimals;
- 
+
         if (outputValueInBase >= virtualSupplyValue) {
-            // Calculate remainder value and convert back to input token units
+            // Burn all virtual supply, write remainder to base token VB
             uint256 remainderValueInBase = outputValueInBase - virtualSupplyValue;
-            int256 remainderInInputToken = IEOracle(address(this)).convertTokenAmount(
-                baseToken,
-                remainderValueInBase.toInt256(),
-                params.inputToken
-            );
-            (params.inputToken).updateVirtualBalance(remainderInInputToken);
+            baseToken.updateVirtualBalance(remainderValueInBase.toInt256());
         } else {
-            // Virtual supply fully covers transfer - burn partial supply, nothing to virtual balance
-            // Can safely divide by unitary value as virtual supply value > output token value
+            // Virtual supply fully covers transfer - burn partial supply, no VB write
             virtualSupply = (outputValueInBase * (10 ** poolDecimals)) / unitaryValue;
         }
 
         (-(virtualSupply.toInt256())).updateVirtualSupply();
     }
 
-    /// @dev Approves or revokes token approval. If already approved, revokes; otherwise approves max.
-    function _safeApproveToken(address token) private {
-        if (token.isAddressZero()) return; // Skip if native currency
+    /// @dev Approves or revokes token approval for SpokePool interaction.
+    /// @dev Native ETH: When sourceNativeAmount > 0, ETH is sent via value parameter and WETH address is used as identifier.
+    ///      In this case, skip approval since no ERC20 transfer occurs (only native value transfer).
+    /// @dev ERC20: When sourceNativeAmount == 0, normal ERC20 approval flow (including WETH when used as ERC20).
+    /// @param token The token address to approve
+    /// @param sourceNativeAmount Native ETH amount being sent (0 for ERC20 transfers)
+    function _safeApproveToken(address token, uint256 sourceNativeAmount) private {
+        // Skip approval if native currency or if sending native ETH with WETH wrapper
+        if (token.isAddressZero() || sourceNativeAmount > 0) return;
 
         if (IERC20(token).allowance(address(this), address(_acrossSpokePool)) > 0) {
             // Reset to 0 first for tokens that require it (like USDT)

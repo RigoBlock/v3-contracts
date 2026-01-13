@@ -5,6 +5,8 @@ import {MixinPoolValue} from "../state/MixinPoolValue.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
+import {EscrowFactory} from "../../extensions/escrow/EscrowFactory.sol";
+import {OpType} from "../../types/Crosschain.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
     error PoolNavNotInRange();
@@ -47,6 +49,11 @@ abstract contract MixinPoolState is MixinPoolValue {
 
     function getUserAccount(address who) external view override returns (UserAccount memory) {
         return accounts().userAccounts[who];
+    }
+
+    /// @inheritdoc ISmartPoolState
+    function getEscrowAddress(OpType opType) external view override returns (address escrowAddress) {
+        return EscrowFactory.getEscrowAddress(address(this), opType);
     }
 
     /// @inheritdoc ISmartPoolState

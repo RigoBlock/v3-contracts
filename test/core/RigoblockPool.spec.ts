@@ -470,32 +470,35 @@ describe("Proxy", async () => {
         it('should update storage when caller is any wallet', async () => {
             const { pool } = await setupTests()
             await pool.setOwner(user2.address)
+            // First call initializes NAV to 10^decimals and writes to storage
+            // msg.sender is still user1 (the one calling updateUnitaryValue)
             await expect(pool.updateUnitaryValue())
-                .to.be.revertedWith('PoolSupplyIsNullOrDust()')
+                .to.emit(pool, "NewNav").withArgs(
+                    user1.address,
+                    pool.address,
+                    parseEther("1")
+                )
             const etherAmount = parseEther("0.1")
-            expect(
-                await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            ).to.emit(pool, "NewNav").withArgs(
-                user1.address,
-                pool.address,
-                parseEther("1")
-            )
+            // Mint calls _updateNav() but NAV already initialized, so no NewNav emission
+            await expect(pool.mint(user1.address, etherAmount, 0, { value: etherAmount }))
+                .to.not.emit(pool, "NewNav")
             await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
 
         it('should update storage when caller is owner', async () => {
             const { pool } = await setupTests()
+            // First call initializes NAV to 10^decimals and writes to storage
             await expect(pool.updateUnitaryValue())
-                .to.be.revertedWith('PoolSupplyIsNullOrDust()')
+                .to.emit(pool, "NewNav").withArgs(
+                    user1.address,
+                    pool.address,
+                    parseEther("1")
+                )
             const etherAmount = parseEther("0.1")
-            await expect(
-                pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            ).to.emit(pool, "NewNav").withArgs(
-                user1.address,
-                pool.address,
-                parseEther("1")
-            )
+            // Mint calls _updateNav() but NAV already initialized, so no NewNav emission
+            await expect(pool.mint(user1.address, etherAmount, 0, { value: etherAmount }))
+                .to.not.emit(pool, "NewNav")
             await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
@@ -515,7 +518,7 @@ describe("Proxy", async () => {
                 )
         })
 
-        it('should revert with previously burnt supply', async () => {
+        it('should handle previously burnt supply gracefully', async () => {
             const { pool } = await setupTests()
             let etherAmount = parseEther("0.1")
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
@@ -526,7 +529,8 @@ describe("Proxy", async () => {
             await pool.burn(etherAmount.sub(etherAmount.mul(spread).div(10000)), 1)
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
             expect(ethBalance).to.be.eq(0)
-            await expect(pool.updateUnitaryValue()).to.be.revertedWith('PoolSupplyIsNullOrDust()')
+            // With zero supply, returns stored NAV without revert
+            await expect(pool.updateUnitaryValue()).to.not.emit(pool, "NewNav")
         })
     })
 

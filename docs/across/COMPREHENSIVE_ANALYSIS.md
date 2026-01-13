@@ -97,18 +97,40 @@ Net global supply: (100 + 0) + (20 + (-20)) = 100 ✓
 
 **Definition**: Per-token offsets to physical balances for NAV neutrality
 
-**Units**: Token-specific units (e.g., USDC has 6 decimals, WETH has 18)
+**Units**: Base token units (always denominated in pool's base token, regardless of transferred token)
 
 **Storage**: `mapping(address token => int256 virtualBalance)`
 
-**Purpose**: Offset token transfers that affect NAV
+**Purpose**: Offset token transfers to achieve NAV neutrality on source chain
+
+**Key Design Choice**: Virtual balances are stored in **base token units**, not token-specific units.
+
+**Why Base Token Units?**
+- Simpler implementation (single conversion, single storage write)
+- Lower gas costs (~5,800 gas savings per transfer)
+- Fixed value - doesn't fluctuate with token price changes
+- Performance attribution follows physical custody (destination gets price movements)
+- Better for rebalancing when tokens appreciate (most common case)
 
 **Example**:
 ```
-Pool on Arbitrum sends 1000 USDC to Optimism (Transfer mode)
-- Arbitrum: Physical -1000 USDC, Virtual +1000 USDC → NAV unchanged
-- Optimism: Physical +980 USDC, Virtual -980 USDC → NAV unchanged
-- Bridge fee: 20 USDC (reduces global NAV correctly)
+Pool on Arbitrum (base token: ETH) sends 1000 USDC to Optimism (Transfer mode)
+USDC price: $1.00, ETH price: $2000
+
+Source (Arbitrum):
+- Physical: -1000 USDC
+- Virtual: +0.5 ETH (base token VB = 1000 USDC / $2000 = 0.5 ETH)
+- Net NAV impact: 0 (transfer is NAV-neutral)
+
+Destination (Optimism):
+- Physical: +980 USDC (after 20 USDC bridge fee)
+- Virtual Supply: +0.49 ETH worth of shares (reduces effective supply)
+- Net NAV impact: ~0 (transfer is NAV-neutral)
+
+If USDC appreciates to $1.10:
+- Source NAV: Unchanged (ETH VB is fixed at 0.5 ETH, doesn't change with USDC price)
+- Destination NAV: Increases (real 980 USDC now worth more)
+- Performance attribution: Destination gets the gain ✓
 ```
 
 ### Why Can't We Use Just One System?

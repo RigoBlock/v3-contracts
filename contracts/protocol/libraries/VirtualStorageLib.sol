@@ -9,7 +9,6 @@ import {SlotDerivation} from "./SlotDerivation.sol";
 library VirtualStorageLib {
     using SlotDerivation for bytes32;
 
-    // TODO: check how we can use same as immutable constants without hardcoding here
     /// @notice Storage slot for per-token virtual balances (legacy slot)
     bytes32 constant VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 

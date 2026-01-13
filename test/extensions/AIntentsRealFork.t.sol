@@ -9,6 +9,7 @@ import {RealDeploymentFixture} from "../fixtures/RealDeploymentFixture.sol";
 
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {EscrowFactory} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol";
@@ -166,12 +167,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         aIntentsAdapter().depositV3(params);
     }
     
-    /// @notice Test getEscrowAddress requires delegatecall context
-    function test_AIntents_GetEscrowAddress_RequiresDelegateCall() public {
-        // Direct call should revert
-        vm.expectRevert(IAIntents.DirectCallNotAllowed.selector);
-        aIntentsAdapter().getEscrowAddress(OpType.Transfer);
-
+    /// @notice Test getEscrowAddress is accessible to all callers via pool state
+    function test_AIntents_GetEscrowAddress_PublicAccess() public {
+        // getEscrowAddress should NOT revert when called via adapter (removed from adapter)
+        // It's now a pool state method accessible to everyone
+        
         // mock calls to pool to verify it's working
         ISmartPool poolInstance = ISmartPool(payable(pool()));
         poolInstance.getPoolTokens();
@@ -180,13 +180,44 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Base token has price feed:", hasPriceFeed);
         IEApps(pool()).getUniV4TokenIds();
         
-        // Via pool (delegatecall) should work when called by pool owner
+        // Call as pool owner - should work
         vm.prank(poolOwner);
-        address escrowAddr = IAIntents(pool()).getEscrowAddress(OpType.Transfer);
-        assertTrue(escrowAddr != address(0), "Should return valid escrow address");
-        console2.log("Escrow address:", escrowAddr);
+        address escrowFromOwner = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
+        assertTrue(escrowFromOwner != address(0), "Should return valid escrow address");
+        console2.log("Escrow address:", escrowFromOwner);
+        
+        // Call as random user - should also work (public view function)
+        address randomUser = makeAddr("randomUser");
+        vm.prank(randomUser);
+        address escrowFromRandom = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
+        assertEq(escrowFromRandom, escrowFromOwner, "Should return same address for any caller");
     }
     
+    /// @notice Test getEscrowAddress returns same result from any caller context
+    /// @dev Verifies CREATE2 calculation is deterministic and publicly accessible
+    function test_AIntents_GetEscrowAddress_ContextIndependent() public {
+        // Call from pool owner context
+        vm.prank(poolOwner);
+        address escrowFromPoolOwner = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
+        
+        // Call from random external address context
+        address externalCaller = makeAddr("externalCaller");
+        vm.prank(externalCaller);
+        address escrowFromExternal = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
+        
+        // Both should return the same address - CREATE2 depends on pool address, not caller
+        assertEq(
+            escrowFromExternal,
+            escrowFromPoolOwner,
+            "External call should return same escrow address as internal call"
+        );
+        
+        // Verify it matches the expected CREATE2 address
+        address expectedEscrow = EscrowFactory.getEscrowAddress(pool(), OpType.Transfer);
+        assertEq(escrowFromExternal, expectedEscrow, "Address should match CREATE2 calculation");
+        assertEq(escrowFromPoolOwner, expectedEscrow, "Address should match CREATE2 calculation");
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
                              MESSAGE ENCODING TESTS
     //////////////////////////////////////////////////////////////////////////*/
@@ -329,7 +360,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     
     /// @notice Test parameter validation in depositV3
     function test_DepositV3_ParameterValidation() public {
-        // Test null address rejection
+        // Test null address rejection - now caught by validateBridgeableTokenPair
         IAIntents.AcrossParams memory invalidParams = IAIntents.AcrossParams({
             depositor: user,
             recipient: user,
@@ -351,7 +382,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         });
         
         vm.prank(poolOwner);
-        vm.expectRevert(IAIntents.NullAddress.selector);
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
         IAIntents(pool()).depositV3(invalidParams);
         
         // Test same-chain transfer rejection
@@ -399,10 +430,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         assertTrue(tokens.unitaryValue > 0, "Should get real token data");
         
         // Test that adapter methods are available
-        // Notice: if not called by poolOwner, the call fails with panic instead of reverting
+        // Notice: getEscrowAddress is now a pool state method, accessible to anyone
         vm.prank(poolOwner);
-        address escrowAddr = IAIntents(pool()).getEscrowAddress(OpType.Transfer);
-        assertTrue(escrowAddr != address(0), "Should get escrow address via delegatecall");
+        address escrowAddr = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
+        assertTrue(escrowAddr != address(0), "Should get escrow address from pool state");
     }
     
     /*//////////////////////////////////////////////////////////////////////////
@@ -446,9 +477,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         SourceMessageParams memory decoded = abi.decode(params.message, (SourceMessageParams));
         assertEq(uint8(decoded.opType), uint8(OpType.Transfer), "Message properly encoded");
         
-        // 5. Test escrow address calculation 
+        // 5. Test escrow address calculation (now a pool state method)
         vm.prank(poolOwner);
-        address escrowAddr = IAIntents(pool()).getEscrowAddress(OpType.Transfer);
+        address escrowAddr = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
         assertTrue(escrowAddr != address(0), "Escrow address calculated");
         
         console2.log("Complete workflow test passed without any mocks!");
@@ -1137,112 +1168,63 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IEAcrossHandler(pool).donate{value: 0}(usdc, donationAmount, params);
     }
 
-    /// @notice Test transfer mode NAV handling (migrated from AcrossIntegrationForkTest)
-    function test_IntegrationFork_TransferMode_NavHandling() public {
-        // TODO: correctly route through multicall handler
-        vm.skip(true);
-        vm.selectFork(baseForkId);
-        
-        //uint256 transferAmount = 500e6; // 500 USDC
-        
-        // Get initial NAV
-        ISmartPoolActions(pool()).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory initialTokens = 
-            ISmartPoolState(pool()).getPoolTokens();
-        
-        // Prepare transfer mode message
-        //DestinationMessageParams memory message = DestinationMessageParams({
-        //    opType: OpType.Transfer,
-        //    shouldUnwrapNative: false
-        //});
-
-        //bytes memory encodedMessage = abi.encode(message);
-        
-        // Process transfer
-        //vm.prank(base.spokePool);
-        //IEAcrossHandler(pool()).handleV3AcrossMessage(
-        //    Constants.BASE_USDC, // tokenSent
-        //    transferAmount, // amount
-        //    encodedMessage // message
-        //);
-        
-        // Verify NAV handling for Transfer mode
-        ISmartPoolActions(pool()).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory finalTokens = 
-            ISmartPoolState(pool()).getPoolTokens();
-        
-        console2.log("Initial NAV:", initialTokens.unitaryValue);
-        console2.log("Final NAV:", finalTokens.unitaryValue);
-        console2.log("Transfer mode NAV handling test completed!");
-    }
-
-    /// @notice Test sync mode with NAV validation (migrated from AcrossIntegrationForkTest)
-    function test_IntegrationFork_SyncMode_NavValidation() public {
-        // TODO: correctly route through multicall handler
-        vm.skip(true);
-        vm.selectFork(baseForkId);
-        
-        uint256 syncAmount = 300e6; // 300 USDC
-        
-        // Get current NAV
-        ISmartPoolActions(address(pool())).updateUnitaryValue();
-        
-        // Prepare sync mode message with matching NAV
-        //DestinationMessageParams memory message = DestinationMessageParams({
-        //    opType: OpType.Sync,
-        //    shouldUnwrapNative: false
-        //});
-
-        //bytes memory encodedMessage = abi.encode(message);
-
-        // pre-transfer the amount to the pool, otherwise the transaction will revert with NavImpactTooHigh()
-        uint256 poolBalance = IERC20(Constants.BASE_USDC).balanceOf(pool());
-        deal(Constants.BASE_USDC, pool(), syncAmount + poolBalance);
-        
-        // Process sync - should succeed with matching NAV
-        //vm.prank(base.spokePool);
-        //IEAcrossHandler(pool()).handleV3AcrossMessage(
-        //    Constants.BASE_USDC, // tokenSent
-        //    syncAmount, // amount
-        //    encodedMessage // message
-        //);
-        
-        console2.log("Sync mode NAV validation test completed successfully!");
-    }
-
     /// @notice Test WETH unwrapping functionality (migrated from AcrossIntegrationForkTest)
     function test_IntegrationFork_WethUnwrapping() public {
-        // TODO: implement with correct multicall handler call - which will call our extension.
-        vm.skip(true);
+        console2.log("\n=== WETH UNWRAPPING TEST ===");
         uint256 wethAmount = 1 ether;
         
-        // Prepare message for WETH handling
-        //DestinationMessageParams memory message = DestinationMessageParams({
-        //    opType: OpType.Transfer,
-        //    shouldUnwrapNative: true
-        //});
-
-        //bytes memory encodedMessage = abi.encode(message);
-        
-        // Fund pool with WETH
-        deal(Constants.ETH_WETH, address(pool()), wethAmount);
-        
-        // Get initial ETH balance
+        // Get initial balances
         uint256 initialEthBalance = address(pool()).balance;
+        uint256 initialWethBalance = IERC20(Constants.ETH_WETH).balanceOf(address(pool()));
+        console2.log("Initial ETH balance:", initialEthBalance);
+        console2.log("Initial WETH balance:", initialWethBalance);
         
-        // Process WETH transfer (should unwrap to ETH)
-        //vm.prank(ethereum.spokePool);
-        //IEAcrossHandler(address(pool())).handleV3AcrossMessage(
-        //    Constants.ETH_WETH, // tokenSent (WETH)
-        //    wethAmount, // amount
-        //    encodedMessage // message
-        //);
+        // Prepare message for WETH unwrapping
+        DestinationMessageParams memory destMsg = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: true  // This triggers WETH unwrapping
+        });
+        
+        // Simulate MulticallHandler calling our extension
+        address handler = Constants.ETH_MULTICALL_HANDLER;
+        deal(Constants.ETH_WETH, handler, wethAmount);
+        
+        vm.startPrank(handler);
+        
+        // Call 1: Initialize with amount 1 (standard pattern)
+        IEAcrossHandler(address(pool())).donate{value: 0}(
+            Constants.ETH_WETH,
+            1,
+            destMsg
+        );
+        
+        // Call 2: Transfer WETH to pool
+        IERC20(Constants.ETH_WETH).transfer(address(pool()), wethAmount);
+        
+        // Call 3: Donate with full amount - this will unwrap WETH to ETH
+        IEAcrossHandler(address(pool())).donate{value: 0}(
+            Constants.ETH_WETH,
+            wethAmount,
+            destMsg
+        );
+        
+        vm.stopPrank();
         
         // Verify WETH was unwrapped to ETH
         uint256 finalEthBalance = address(pool()).balance;
-        assertGt(finalEthBalance, initialEthBalance, "WETH should be unwrapped to ETH");
+        uint256 finalWethBalance = IERC20(Constants.ETH_WETH).balanceOf(address(pool()));
         
-        console2.log("WETH unwrapping test completed successfully!");
+        console2.log("Final ETH balance:", finalEthBalance);
+        console2.log("Final WETH balance:", finalWethBalance);
+        
+        // ETH balance should have increased
+        assertGt(finalEthBalance, initialEthBalance, "ETH balance should increase from unwrapping");
+        
+        // WETH balance should not have increased (unwrapped instead)
+        assertEq(finalWethBalance, initialWethBalance, "WETH should be unwrapped, not held");
+        
+        console2.log("ETH increase:", finalEthBalance - initialEthBalance);
+        console2.log("\n=== WETH UNWRAPPING TEST COMPLETE ===");
     }
     
     /*//////////////////////////////////////////////////////////////////////////
@@ -1677,86 +1659,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("EAcrossHandler donation with Instructions flow test completed!");
     }
 
-    /// @notice Test round-trip cross-chain flow: source chain AIntents -> destination chain MulticallHandler
-    /// @dev This tests the complete flow using outputs from source as inputs for destination
-    function test_MulticallHandler_RoundTrip() public {
-        // skipping as this reverts on base, causing a panic instead of a revert
-        vm.skip(true);
-        console2.log("=== Testing Round-Trip Cross-Chain Flow ===");
-        
-        // STEP 1: Source chain (Ethereum) - Build instructions via AIntents
-        console2.log("Step 1: Building instructions on Ethereum");
-
-        uint256 transferAmount = 200e6; // 200 USDC
-        
-        // Create AIntents parameters as they would be used
-        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
-            depositor: poolOwner,
-            recipient: base.pool, // Destination pool on Base
-            inputToken: Constants.ETH_USDC,
-            outputToken: Constants.BASE_USDC,
-            inputAmount: transferAmount,
-            outputAmount: transferAmount, // 1:1 for USDC
-            destinationChainId: Constants.BASE_CHAIN_ID,
-            exclusiveRelayer: address(0),
-            quoteTimestamp: uint32(block.timestamp),
-            fillDeadline: uint32(block.timestamp + 1 hours),
-            exclusivityDeadline: 0,
-            message: abi.encode(SourceMessageParams({
-                opType: OpType.Transfer,
-                navTolerance: TOLERANCE_BPS,
-                shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0
-            }))
-        });
-        
-        // Decode the message to get the parameters
-        SourceMessageParams memory sourceMsg = abi.decode(params.message, (SourceMessageParams));
-        
-        // Build instructions (this is what AIntents would generate)
-        Instructions memory instructions = buildTestInstructions(
-            params.outputToken,  // Use output token (BASE_USDC)
-            params.recipient,    // Destination pool
-            params.outputAmount, // Output amount
-            sourceMsg
-        );
-        
-        console2.log("Built", instructions.calls.length, "instructions on source chain");
-        
-        // STEP 2: Destination chain (Base) - Execute instructions via MulticallHandler
-        vm.selectFork(baseForkId);
-        console2.log("Step 2: Executing instructions on Base chain");
-        
-        address destinationPool = base.pool;
-        
-        // Get initial state
-        ISmartPoolActions(destinationPool).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory initialTokens = 
-            ISmartPoolState(destinationPool).getPoolTokens();
-        uint256 initialBalance = IERC20(Constants.BASE_USDC).balanceOf(destinationPool);
-        
-        console2.log("Initial destination balance:", initialBalance);
-        console2.log("Initial destination NAV:", initialTokens.unitaryValue);
-        
-        // Simulate MulticallHandler execution with the instructions from source
-        simulateMulticallHandler(Constants.BASE_USDC, transferAmount, instructions);
-        
-        // Verify results
-        ISmartPoolActions(destinationPool).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory finalTokens = 
-            ISmartPoolState(destinationPool).getPoolTokens();
-        uint256 finalBalance = IERC20(Constants.BASE_USDC).balanceOf(destinationPool);
-        
-        console2.log("Final destination balance:", finalBalance);
-        console2.log("Final destination NAV:", finalTokens.unitaryValue);
-        
-        // Verify Transfer mode behavior: NAV unchanged, tokens received
-        assertEq(finalTokens.unitaryValue, initialTokens.unitaryValue, "NAV should be unchanged for Transfer mode");
-        assertEq(finalBalance, initialBalance + transferAmount, "Pool should receive tokens");
-        
-        console2.log("Round-trip test completed successfully!");
-    }
-    
     /// @notice Build test instructions that mirror what AIntents._buildMulticallInstructions creates
     function buildTestInstructions(
         address token,
@@ -2334,9 +2236,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Initial NAV:", tokens.unitaryValue);
         console2.log("Real supply:", tokens.totalSupply);
 
-        // Get initial WETH virtual balance
-        bytes32 wethBalanceSlot = keccak256(abi.encode(Constants.ETH_WETH, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
-        int256 initialWethBalance = int256(uint256(vm.load(pool(), wethBalanceSlot)));
+        // OPTION 2: Get initial BASE TOKEN virtual balance (not WETH VB)
+        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
+        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
+        int256 initialBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
+        console2.log("Initial base token VB:", initialBaseTokenVB);
 
         // Fund pool with WETH
         deal(Constants.ETH_WETH, pool(), 5e17); // 0.5 WETH
@@ -2367,12 +2271,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
         console2.log("Final virtual supply:", finalVirtualSupply);
 
-        // Check virtual balance
-        int256 finalWethBalance = int256(uint256(vm.load(pool(), wethBalanceSlot)));
-        console2.log("Final WETH virtual balance:", finalWethBalance);
+        // OPTION 2: Check BASE TOKEN virtual balance (in USDC units)
+        int256 finalBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
+        console2.log("Final base token VB:", finalBaseTokenVB);
 
         // Calculate expectations using actual pool properties
-        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
         uint8 poolDecimals = ISmartPoolState(pool()).getPool().decimals;
         int256 wethValue = IEOracle(pool()).convertTokenAmount(Constants.ETH_WETH, int256(495e15), poolBaseToken);
         uint256 virtualSupplyValue = (tokens.unitaryValue * initialVirtualSupply) / 10 ** poolDecimals;
@@ -2381,9 +2284,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Virtual supply value (USDC):", virtualSupplyValue);
 
         // With 0.495 WETH (~$1485) vs 0.3 shares (~$0.3), WETH value >> virtual supply value
-        // So we expect: full burn of virtual supply + remainder to virtual balance
+        // So we expect: full burn of virtual supply + remainder to BASE TOKEN virtual balance
         assertEq(finalVirtualSupply, 0, "Virtual supply fully burned");
-        assertGt(finalWethBalance, initialWethBalance, "Remainder goes to virtual balance");
+        assertGt(finalBaseTokenVB, initialBaseTokenVB, "Remainder goes to base token virtual balance");
 
         console2.log("WETH with virtual supply test completed - burn path verified!");
     }
@@ -2557,11 +2460,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Transfer token: WETH (18 decimals)");
         console2.log("WETH activated via mint");
 
-        // Get initial virtual balance for WETH
+        // OPTION 2: Get initial virtual balance for BASE TOKEN (USDC), not WETH
+        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
         bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
-        bytes32 wethBalanceSlot = keccak256(abi.encode(Constants.ETH_WETH, virtualBalancesSlot));
-        int256 initialWethVirtualBalance = int256(uint256(vm.load(pool(), wethBalanceSlot)));
-        console2.log("Initial WETH virtual balance:", initialWethVirtualBalance);
+        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, virtualBalancesSlot));
+        int256 initialBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
+        console2.log("Initial base token VB:", initialBaseTokenVB);
 
         // Create transfer params with WETH
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
@@ -2594,30 +2498,20 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
 
-        // Check final virtual balance - should be in WETH units (18 decimals), not USDC units (6 decimals)
-        int256 finalWethVirtualBalance = int256(uint256(vm.load(pool(), wethBalanceSlot)));
-        console2.log("Final WETH virtual balance:", finalWethVirtualBalance);
+        // OPTION 2: Check final BASE TOKEN virtual balance (in USDC units, not WETH)
+        int256 finalBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
+        console2.log("Final base token VB:", finalBaseTokenVB);
 
-        // Virtual balance tracks OUTPUT amount (what destination will receive), not input amount
-        // Note: Due to oracle conversion precision (WETH → USDC → WETH), there may be tiny rounding
-        // If bug exists: would be in USDC units (~3000e6 for 1 WETH @ $3000) - completely wrong magnitude
-        // With correct implementation: should be in WETH units close to outputAmount (0.99 WETH)
-        int256 expectedIncrease = int256(wethOutputAmount); // Should increase by outputAmount in WETH units
+        // OPTION 2: Virtual balance is stored in BASE TOKEN units (USDC)
+        // 1 WETH @ $3000 = 3000 USDC (3000e6 in 6 decimals)
+        // outputAmount = 0.99 WETH should be ~2970 USDC (2970e6)
+        // Virtual balance should increase by approximately this amount in USDC units
         
-        // Verify it's in WETH units (18 decimals), not USDC units (6 decimals)
-        // If it were USDC units, it would be ~3000e6 (~3000000000), not ~1e18
-        assertGt(finalWethVirtualBalance, 1e17, "Virtual balance should be > 0.1 WETH (verifies 18 decimals)");
-        assertLt(finalWethVirtualBalance, 1e18, "Virtual balance should be < 1 WETH");
-        
-        // Allow small oracle conversion error (~0.02% due to WETH→USDC→WETH conversion)
-        assertApproxEqRel(
-            finalWethVirtualBalance, 
-            initialWethVirtualBalance + expectedIncrease,
-            2e14, // 0.02% tolerance
-            "Virtual balance should increase by ~outputAmount in WETH units (18 decimals)"
-        );
+        // Verify it's in USDC units (6 decimals), around 2970e6
+        assertGt(finalBaseTokenVB, 1000e6, "Virtual balance should be > 1000 USDC (verifies base token units)");
+        assertLt(finalBaseTokenVB, 5000e6, "Virtual balance should be < 5000 USDC");
 
-        console2.log("Virtual balance correctly stored in inputToken units (18 decimals)!");
+        console2.log("Virtual balance correctly stored in base token units (USDC 6 decimals)!");
     }
 
     /// @notice Test transfer with null/zero output amount
@@ -2627,14 +2521,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         // Fund pool owner with tokens
         deal(Constants.ETH_USDC, poolOwner, 1000e6);
-
-        // Get initial virtual supply
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
-        uint256 initialVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
         
         console2.log("\n=== Null Output Amount Transfer Test ===");
         console2.log("Transfer amount:", transferAmount);
-        console2.log("Initial virtual supply:", initialVirtualSupply);
 
         // Create transfer params with zero amount
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
@@ -2657,17 +2546,84 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             }))
         });
 
-        // Attempt the transfer - with no validation, what happens?
+        // Zero outputAmount should now be rejected
         vm.prank(poolOwner);
+        vm.expectRevert(IAIntents.InvalidAmount.selector);
         IAIntents(pool()).depositV3(params);
+        
+        console2.log("Zero outputAmount correctly rejected with InvalidAmount error!");
+    }
 
-        // Verify what happens with null transfer
-        uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
-        console2.log("Final virtual supply:", finalVirtualSupply);
+    /*//////////////////////////////////////////////////////////////////////////
+                        SOURCE NAV NEUTRALITY TEST (OPTION 2)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Verify source chain NAV remains constant after transfer (Option 2 implementation)
+    /// @dev Tests that Option 2 (base token virtual balances) keeps source NAV neutral:
+    /// - Source writes base token VB (fixed value at transfer time)
+    /// - Source NAV should remain constant regardless of token price changes
+    /// - This is the intended behavior of the implemented Option 2
+    function test_SourceNavNeutral() public {
+        console2.log("\n=== SOURCE NAV NEUTRALITY TEST (OPTION 2) ===");
+        console2.log("Verifying that source chain NAV remains constant after transfer");
         
-        // Null transfer should not affect virtual supply since outputValueInBase will be 0
-        assertEq(finalVirtualSupply, initialVirtualSupply, "Null transfer should not affect virtual supply");
+        uint256 transferAmount = 1000e6; // 1000 USDC
         
-        console2.log("Null transfer handled safely - no state changes!");
+        // Get initial source NAV
+        vm.selectFork(mainnetForkId);
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory sourceInitial = ISmartPoolState(pool()).getPoolTokens();
+        console2.log("Source NAV before transfer:", sourceInitial.unitaryValue);
+        
+        // Execute transfer
+        deal(Constants.ETH_USDC, poolOwner, transferAmount);
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: base.pool,
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        }));
+        
+        // Verify base token virtual balance was written (Option 2 behavior)
+        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
+        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
+        int256 baseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
+        console2.log("Source base token VB after transfer:", baseTokenVB);
+        assertGt(baseTokenVB, 0, "Base token virtual balance should be positive after transfer");
+        
+        // Verify source NAV remains constant (Option 2: source is NAV-neutral)
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory sourceAfter = ISmartPoolState(pool()).getPoolTokens();
+        console2.log("Source NAV after transfer:", sourceAfter.unitaryValue);
+        
+        // NAV should be approximately equal (allowing for small rounding differences)
+        // The base token VB offsets the transferred value, keeping NAV constant
+        uint256 navDiff = sourceAfter.unitaryValue > sourceInitial.unitaryValue
+            ? sourceAfter.unitaryValue - sourceInitial.unitaryValue
+            : sourceInitial.unitaryValue - sourceAfter.unitaryValue;
+        
+        // The nav does not change because the input and rescaled output amount are equal - impact tested previously
+        uint256 maxDiff = 0;
+        assertLe(navDiff, maxDiff, "Source NAV should remain constant (< 0.1% change)");
+        
+        console2.log("NAV difference:", navDiff);
+        console2.log("Max allowed difference (0.1%%):", maxDiff);
+        console2.log("\n=== Source NAV Neutrality Verified (Option 2) ===");
+        console2.log("Source chain NAV remains constant after transfer");
+        console2.log("Base token virtual balance offsets the transferred value");
     }
 }

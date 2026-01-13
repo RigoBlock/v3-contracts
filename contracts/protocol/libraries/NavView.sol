@@ -63,7 +63,14 @@ library NavView {
 
         // Populate appBalances array with balances from each active application
         for (uint256 i = 0; i < appsCount; i++) {
-            appBalances[activeAppIndex] = _handleApplication(pool, Applications(i), grgStakingProxy, uniV4Posm);
+            if (Applications(i) == Applications.GRG_STAKING) {
+                appBalances[activeAppIndex] = _getGrgStakingProxyBalances(pool, grgStakingProxy);
+            } else if (Applications(i) == Applications.UNIV4_LIQUIDITY) {
+                appBalances[activeAppIndex] = _getUniV4PmBalances(pool, uniV4Posm);
+            } else {
+                continue;
+            }
+
             tokenIndex += appBalances[activeAppIndex++].length;
         }
 
@@ -178,11 +185,12 @@ library NavView {
             unitaryValue = 0;
         }
 
-        return NavData({
-            totalValue: totalValue > 0 ? uint256(totalValue) : 0,
-            unitaryValue: unitaryValue,
-            timestamp: block.timestamp
-        });
+        return
+            NavData({
+                totalValue: totalValue > 0 ? uint256(totalValue) : 0,
+                unitaryValue: unitaryValue,
+                timestamp: block.timestamp
+            });
     }
 
     /// @notice Returns all token balances including virtual balances and application positions.
@@ -233,27 +241,6 @@ library NavView {
         }
 
         return aggregatedBalances;
-    }
-
-    /// @notice Handles balance retrieval for a specific application type
-    /// @param appType The application type to handle
-    /// @param grgStakingProxy Address of the GRG staking proxy
-    /// @param uniV4Posm Address of the Uniswap V4 position manager
-    /// @return balances Array of AppTokenBalance structs
-    function _handleApplication(
-        address pool,
-        Applications appType,
-        address grgStakingProxy,
-        address uniV4Posm
-    ) private view returns (AppTokenBalance[] memory balances) {
-        if (appType == Applications.GRG_STAKING) {
-            balances = _getGrgStakingProxyBalances(pool, grgStakingProxy);
-        } else if (appType == Applications.UNIV4_LIQUIDITY) {
-            balances = _getUniV4PmBalances(pool, uniV4Posm);
-        } else {
-            // simple return when new apps are added via adapters and implementation not yet upgraded
-            return balances;
-        }
     }
 
     /// @notice Gets GRG staking proxy balances

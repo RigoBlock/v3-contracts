@@ -521,4 +521,148 @@ describe("MintWithToken", async () => {
             pool.connect(user2).setAcceptableMintToken(weth.address, true)
         ).to.be.revertedWith('PoolCallerIsNotOwner()')
     })
+
+    describe("Security: Purge Attack Prevention", async () => {
+        it('should prevent NAV manipulation via purge attack', async () => {
+            const { pool, oracle, weth, grgToken } = await setupTests()
+            
+            // Setup oracle observations for base token (grgToken) first
+            const grgPoolKey = {
+                currency0: AddressZero,
+                currency1: grgToken.address,
+                fee: 0,
+                tickSpacing: MAX_TICK_SPACING,
+                hooks: oracle.address
+            }
+            await oracle.initializeObservations(grgPoolKey)
+            
+            // Setup: Initialize pool with base token (grgToken) so NAV is established
+            const initialMint = parseEther("100")
+            await grgToken.approve(pool.address, initialMint)
+            await pool.mint(user1.address, initialMint, 0)
+            
+            // Get initial NAV
+            await pool.updateUnitaryValue()
+            const navBefore = (await pool.getPoolTokens()).unitaryValue
+            expect(navBefore).to.equal(parseEther("1")) // NAV should be 1.0
+            
+            // ATTACK SCENARIO:
+            // 1. Pool operator sets WETH as acceptable mint token
+            const poolKey = {
+                currency0: AddressZero,
+                currency1: weth.address,
+                fee: 0,
+                tickSpacing: MAX_TICK_SPACING,
+                hooks: oracle.address
+            }
+            await oracle.initializeObservations(poolKey)
+            
+            await pool.setAcceptableMintToken(weth.address, true)
+            
+            // Verify WETH is in accepted tokens
+            const acceptedTokens = await pool.getAcceptedMintTokens()
+            expect(acceptedTokens).to.include(weth.address)
+            
+            // 2. No mintWithToken is executed (pool has 0 WETH balance)
+            const wethBalance = await weth.balanceOf(pool.address)
+            expect(wethBalance).to.equal(0)
+            
+            // 3. Anyone calls purgeInactiveTokensAndApps (removes WETH from activeTokensSet because balance is 0)
+            await pool.purgeInactiveTokensAndApps()
+            
+            // 4. Token is still in acceptedTokensSet but removed from activeTokensSet
+            // This is the critical state where the vulnerability would exist
+            
+            // 5. User tries to mintWithToken with WETH
+            const wethAmount = parseEther("10")
+            await weth.deposit({ value: wethAmount })
+            await weth.approve(pool.address, wethAmount)
+            
+            // Travel time for oracle observations
+            await timeTravel({ seconds: 600, mine: true })
+            
+            // BEFORE FIX: This would succeed but NAV would drop because WETH not in activeTokensSet
+            // AFTER FIX: Token is added to activeTokensSet during _mint, NAV remains correct
+            
+            await pool.mintWithToken(user1.address, wethAmount, 0, weth.address)
+            
+            // Verify NAV is still correct (should be ~1.0, allowing for small precision changes)
+            await pool.updateUnitaryValue()
+            const navAfter = (await pool.getPoolTokens()).unitaryValue
+            
+            // NAV should not have dropped significantly
+            // Allow small tolerance for rounding (0.1%)
+            const tolerance = navBefore.mul(1).div(1000) // 0.1%
+            expect(navAfter).to.be.gte(navBefore.sub(tolerance))
+            
+            // Verify WETH is now in activeTokensSet (added during mint)
+            const activeTokensResult = await pool.getActiveTokens()
+            expect(activeTokensResult.activeTokens).to.include(weth.address)
+        })
+
+        it('should handle purge correctly after successful mint', async () => {
+            const { pool, oracle, weth, grgToken } = await setupTests()
+            
+            // Setup oracle for base token first
+            const grgPoolKey = {
+                currency0: AddressZero,
+                currency1: grgToken.address,
+                fee: 0,
+                tickSpacing: MAX_TICK_SPACING,
+                hooks: oracle.address
+            }
+            await oracle.initializeObservations(grgPoolKey)
+            
+            // Setup: Initialize pool with base token
+            const initialMint = parseEther("100")
+            await grgToken.approve(pool.address, initialMint)
+            await pool.mint(user1.address, initialMint, 0)
+            
+            // Setup oracle for WETH
+            const poolKey = {
+                currency0: AddressZero,
+                currency1: weth.address,
+                fee: 0,
+                tickSpacing: MAX_TICK_SPACING,
+                hooks: oracle.address
+            }
+            await oracle.initializeObservations(poolKey)
+            
+            // 1. Set WETH as acceptable and mint with it
+            await pool.setAcceptableMintToken(weth.address, true)
+            
+            const wethAmount = parseEther("10")
+            await weth.deposit({ value: wethAmount })
+            await weth.approve(pool.address, wethAmount)
+            
+            // Travel time for oracle
+            await timeTravel({ seconds: 600, mine: true })
+            
+            await pool.mintWithToken(user1.address, wethAmount, 0, weth.address)
+            
+            // Verify WETH is in activeTokensSet
+            let activeTokensResult = await pool.getActiveTokens()
+            expect(activeTokensResult.activeTokens).to.include(weth.address)
+            
+            // 2. Manually drain WETH from pool (simulating a transfer out)
+            const wethBalanceBefore = await weth.balanceOf(pool.address)
+            await pool.setAcceptableMintToken(weth.address, false) // Make it not acceptable so we can simulate drain
+            
+            // Actually for this test, let's just verify the core behavior:
+            // After a successful mint, WETH is in activeTokensSet
+            // Purge won't remove it because it has a balance
+            
+            // 3. Purge should NOT remove WETH from activeTokensSet (balance > 1)
+            await pool.purgeInactiveTokensAndApps()
+            
+            // Verify WETH is still in activeTokensSet (has balance)
+            activeTokensResult = await pool.getActiveTokens()
+            expect(activeTokensResult.activeTokens).to.include(weth.address)
+            
+            // This demonstrates that after our fix:
+            // - Token is added to activeTokensSet during mint
+            // - Token stays in activeTokensSet while it has a balance
+            // - Purge correctly preserves tokens with balances
+        })
+    })
 })

@@ -194,10 +194,8 @@ contract PolygonDeploymentFixture is Test {
         
         IAuthority authorityInstance = IAuthority(AUTHORITY);
         authorityInstance.addMethod(IAIntents.depositV3.selector, address(adapter));
-        authorityInstance.addMethod(IAIntents.getEscrowAddress.selector, address(adapter));
         assertEq(authorityInstance.getApplicationAdapter(IAIntents.depositV3.selector), address(adapter), "depositV3 selector should be mapped");
-        assertEq(authorityInstance.getApplicationAdapter(IAIntents.getEscrowAddress.selector), address(adapter), "getEscrowAddress selector should be mapped");
-        console2.log("Mapped depositV3 and getEscrowAddress selectors in authority");
+        console2.log("Mapped depositV3 selector in authority");
         
         vm.stopPrank();
         

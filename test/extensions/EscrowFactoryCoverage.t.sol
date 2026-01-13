@@ -18,7 +18,7 @@ contract TestEscrowUser {
         return EscrowFactory.deployEscrowIfNeeded(pool, opType);
     }
     
-    function getEscrowAddress(address pool, OpType opType) external view returns (address) {
+    function getEscrowAddress(address pool, OpType opType) external pure returns (address) {
         return EscrowFactory.getEscrowAddress(pool, opType);
     }
 }

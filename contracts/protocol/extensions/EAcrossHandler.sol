@@ -8,6 +8,7 @@ import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol
 import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
 import {IWETH9} from "../interfaces/IWETH9.sol";
 import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
+import {ReentrancyGuardTransient} from "../libraries/ReentrancyGuardTransient.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {TransientSlot} from "../libraries/TransientSlot.sol";
@@ -24,7 +25,7 @@ import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
 /// @notice This extension manages NAV integrity when receiving cross-chain token transfers.
 /// @dev Called via delegatecall from pool when Across SpokePool or MulticallHandler delivers tokens.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract EAcrossHandler is IEAcrossHandler {
+contract EAcrossHandler is IEAcrossHandler, ReentrancyGuardTransient {
     using SafeCast for uint256;
     using SafeCast for int256;
     using SlotDerivation for bytes32;
@@ -48,7 +49,11 @@ contract EAcrossHandler is IEAcrossHandler {
     error CallerTransferAmount();
 
     /// @inheritdoc IEAcrossHandler
-    function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable override {
+    function donate(
+        address token,
+        uint256 amount,
+        DestinationMessageParams calldata params
+    ) external payable override nonReentrant {
         bool isLocked = TransientStorage.getDonationLock();
         uint256 balance = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
 
@@ -90,10 +95,8 @@ contract EAcrossHandler is IEAcrossHandler {
             token = address(0);
         }
 
-        // If token not already owned, activate it (addUnique checks price feed requirement)
-        if (!StorageLib.isOwnedToken(token)) {
-            StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
-        }
+        // Activate token (addUnique checks price feed requirement and skips if already added)
+        StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
 
         if (params.opType == OpType.Transfer) {
             _handleTransferMode(token, amount, amountDelta);
@@ -113,33 +116,33 @@ contract EAcrossHandler is IEAcrossHandler {
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
 
-        // Check if positive virtual balances exist for this token
-        int256 currentVirtualBalance = token.getVirtualBalance();
-        uint256 remainingAmount = amount;
+        // Convert amount to base token units once at the start to avoid repeated conversions
+        uint256 amountValueInBase = IEOracle(address(this))
+            .convertTokenAmount(token, amount.toInt256(), baseToken)
+            .toUint256();
 
-        if (currentVirtualBalance > 0) {
-            // Reduce existing positive virtual balance (tokens coming back to this chain)
-            uint256 virtualBalanceUint = currentVirtualBalance.toUint256();
-            if (virtualBalanceUint >= remainingAmount) {
-                // Sufficient virtual balance to cover net transfer amount
-                token.updateVirtualBalance(-(remainingAmount.toInt256()));
-                remainingAmount = 0; // No virtual supply increase needed
+        // This represents tokens previously transferred OUT from this chain
+        int256 currentBaseTokenVB = baseToken.getVirtualBalance();
+        uint256 remainingValueInBase = amountValueInBase;
+
+        if (currentBaseTokenVB > 0) {
+            uint256 baseTokenVBUint = currentBaseTokenVB.toUint256();
+
+            if (amountValueInBase >= baseTokenVBUint) {
+                // Sufficient value to fully clear base token VB
+                baseToken.updateVirtualBalance(-currentBaseTokenVB); // Zero it out
+                // Calculate remaining value after clearing VB (already in base token units)
+                remainingValueInBase = amountValueInBase - baseTokenVBUint;
             } else {
-                // Partial reduction of virtual balance, then increase virtual supply for remainder
-                token.updateVirtualBalance(-currentVirtualBalance); // Zero it out
-                remainingAmount = remainingAmount - virtualBalanceUint;
+                // Partial reduction of base token VB
+                baseToken.updateVirtualBalance(-(amountValueInBase.toInt256()));
+                remainingValueInBase = 0; // No virtual supply increase needed
             }
         }
 
-        // Increase virtual supply if there's remaining amount (cross-chain representation)
-        if (remainingAmount > 0) {
-            uint256 baseValue = IEOracle(address(this))
-                .convertTokenAmount(token, remainingAmount.toInt256(), baseToken)
-                .toUint256();
-
-            // shares = baseValue / storedNav (in pool token units)
-            uint256 virtualSupplyIncrease = (baseValue * (10 ** poolDecimals)) / storedNav;
-
+        // Increase virtual supply if there's remaining value
+        if (remainingValueInBase > 0) {
+            uint256 virtualSupplyIncrease = (remainingValueInBase * (10 ** poolDecimals)) / storedNav;
             (virtualSupplyIncrease.toInt256()).updateVirtualSupply();
         }
 
