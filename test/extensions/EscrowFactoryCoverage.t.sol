@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
-import "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
-import "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
+import "../../contracts/protocol/libraries/EscrowFactory.sol";
+import "../../contracts/protocol/deps/Escrow.sol";
 import "../../contracts/protocol/types/Crosschain.sol";
 
 // Test contract that uses EscrowFactory

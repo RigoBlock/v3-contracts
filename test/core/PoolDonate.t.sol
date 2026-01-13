@@ -4,8 +4,8 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Test.sol";
 import "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
-import {EscrowFactory} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
-import {TransferEscrow} from "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
+import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
+import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
@@ -255,7 +255,7 @@ contract PoolDonateTest is Test {
     function test_EscrowIntegration_DeployAndRefund() public {
         // Deploy a Transfer escrow for the pool
         address escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
-        TransferEscrow escrow = TransferEscrow(payable(escrowAddress));
+        Escrow escrow = Escrow(payable(escrowAddress));
         
         console2.log("Deployed escrow:", escrowAddress);
         console2.log("Escrow pool:", escrow.pool());
@@ -284,82 +284,87 @@ contract PoolDonateTest is Test {
         
         console2.log("Confirmed TokenIsNotOwned error as expected");
         
-        // Second test: Use base token (ETH) which is always accepted
-        console2.log("Testing with base token (ETH) - should succeed");
+        // Second test: Use WETH (whitelisted Across token) which should succeed
+        console2.log("Testing with WETH (whitelisted token) - should succeed");
         
-        // Give escrow some ETH
-        uint256 ethAmount = 1 ether;
-        vm.deal(escrowAddress, ethAmount);
+        address weth = Constants.ETH_WETH;
+        uint256 wethAmount = 1 ether;
         
-        // Verify escrow has ETH
-        assertEq(escrowAddress.balance, ethAmount, "Escrow should have ETH");
+        // Give escrow some WETH
+        deal(weth, escrowAddress, wethAmount);
         
-        // Get pool ETH balance before refund
-        uint256 poolEthBefore = pool.balance;
-        console2.log("Pool ETH before refund:", poolEthBefore);
+        // Verify escrow has WETH
+        assertEq(IERC20(weth).balanceOf(escrowAddress), wethAmount, "Escrow should have WETH");
         
-        // Mock the convertTokenAmount call for ETH (base token)
+        // Get pool WETH balance before refund
+        uint256 poolWethBefore = IERC20(weth).balanceOf(pool);
+        console2.log("Pool WETH before refund:", poolWethBefore);
+        
+        // Mock the convertTokenAmount call for WETH
         vm.mockCall(
             pool,
-            abi.encodeWithSignature("convertTokenAmount(address,int256,address)", address(0), int256(ethAmount), address(0)),
-            abi.encode(int256(ethAmount))
+            abi.encodeWithSignature("convertTokenAmount(address,int256,address)", weth, int256(wethAmount), address(0)),
+            abi.encode(int256(wethAmount))
         );
         
-        // Refund ETH to pool - this should succeed since ETH is the base token
+        // Refund WETH to pool - this should succeed since WETH is on Across whitelist
         vm.prank(donor);
-        escrow.refundVault(address(0)); // address(0) means native ETH
+        escrow.refundVault(weth);
         
-        // Verify escrow no longer has ETH
-        assertEq(escrowAddress.balance, 0, "Escrow should have no ETH after refund");
+        // Verify escrow no longer has WETH
+        assertEq(IERC20(weth).balanceOf(escrowAddress), 0, "Escrow should have no WETH after refund");
         
-        // Verify pool received ETH
-        uint256 poolEthAfter = pool.balance;
-        console2.log("Pool ETH after refund:", poolEthAfter);
+        // Verify pool received WETH (through donate function)
+        uint256 poolWethAfter = IERC20(weth).balanceOf(pool);
+        console2.log("Pool WETH after refund:", poolWethAfter);
         
-        assertTrue(poolEthAfter > poolEthBefore, "Pool should have received ETH");
-        assertEq(poolEthAfter - poolEthBefore, ethAmount, "Pool should receive exactly the refund amount");
+        assertTrue(poolWethAfter > poolWethBefore, "Pool should have received WETH");
+        assertEq(poolWethAfter - poolWethBefore, wethAmount, "Pool should receive exactly the refund amount");
         
-        console2.log("ETH escrow refund completed successfully");
+        console2.log("WETH escrow refund completed successfully");
     }
     
-    /// @notice Test escrow refund with native ETH
+    /// @notice Test escrow refund with WETH (matching Across behavior)
+    /// @dev Across refunds expired deposits as WETH, not native ETH
     function test_EscrowIntegration_ETHRefund() public {
         // Deploy escrow
         address escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
-        TransferEscrow escrow = TransferEscrow(payable(escrowAddress));
+        Escrow escrow = Escrow(payable(escrowAddress));
         
-        // Give escrow some ETH
-        uint256 ethAmount = 2 ether;
-        vm.deal(escrowAddress, ethAmount);
+        address weth = Constants.ETH_WETH;
+        uint256 wethAmount = 2 ether;
         
-        assertEq(escrowAddress.balance, ethAmount, "Escrow should have ETH");
+        // Give escrow some WETH (simulating Across refund)
+        deal(weth, escrowAddress, wethAmount);
         
-        // Get pool ETH balance before
-        uint256 poolEthBefore = pool.balance;
-        console2.log("Pool ETH before refund:", poolEthBefore);
+        assertEq(IERC20(weth).balanceOf(escrowAddress), wethAmount, "Escrow should have WETH");
         
-        // Mock the convertTokenAmount call for ETH donation
+        // Get pool WETH balance before
+        uint256 poolWethBefore = IERC20(weth).balanceOf(pool);
+        console2.log("Pool WETH before refund:", poolWethBefore);
+        
+        // Mock the convertTokenAmount call for WETH donation
         vm.mockCall(
             pool,
-            abi.encodeWithSignature("convertTokenAmount(address,int256,address)", address(0), int256(ethAmount), address(0)),
-            abi.encode(int256(ethAmount))
+            abi.encodeWithSignature("convertTokenAmount(address,int256,address)", weth, int256(wethAmount), address(0)),
+            abi.encode(int256(wethAmount))
         );
         
-        // Refund ETH to pool
+        // Refund WETH to pool
         vm.prank(donor);
-        escrow.refundVault(address(0)); // address(0) means native ETH
+        escrow.refundVault(weth);
         
-        // Verify escrow has no ETH
-        assertEq(escrowAddress.balance, 0, "Escrow should have no ETH after refund");
+        // Verify escrow has no WETH
+        assertEq(IERC20(weth).balanceOf(escrowAddress), 0, "Escrow should have no WETH after refund");
         
-        // Verify pool received ETH (through donate function)
-        uint256 poolEthAfter = pool.balance;
-        console2.log("Pool ETH after refund:", poolEthAfter);
+        // Verify pool received WETH (through donate function)
+        uint256 poolWethAfter = IERC20(weth).balanceOf(pool);
+        console2.log("Pool WETH after refund:", poolWethAfter);
         
-        assertTrue(poolEthAfter > poolEthBefore, "Pool should have received ETH");
-        assertEq(poolEthAfter - poolEthBefore, ethAmount, "Pool should receive exactly the refund amount");
+        assertTrue(poolWethAfter > poolWethBefore, "Pool should have received WETH");
+        assertEq(poolWethAfter - poolWethBefore, wethAmount, "Pool should receive exactly the refund amount");
         
-        console2.log("ETH escrow refund completed successfully");
+        console2.log("WETH escrow refund completed successfully");
     }
     
     /// @notice Test multiple escrow deployments have different addresses
@@ -378,8 +383,8 @@ contract PoolDonateTest is Test {
         assertTrue(syncEscrow.code.length > 0, "Sync escrow should be deployed");
         
         // Both should reference the same pool
-        assertEq(TransferEscrow(payable(transferEscrow)).pool(), pool, "Transfer escrow should reference pool");
-        assertEq(TransferEscrow(payable(syncEscrow)).pool(), pool, "Sync escrow should reference pool");
+        assertEq(Escrow(payable(transferEscrow)).pool(), pool, "Transfer escrow should reference pool");
+        assertEq(Escrow(payable(syncEscrow)).pool(), pool, "Sync escrow should reference pool");
         
         console2.log("Transfer escrow:", transferEscrow);
         console2.log("Sync escrow:", syncEscrow);

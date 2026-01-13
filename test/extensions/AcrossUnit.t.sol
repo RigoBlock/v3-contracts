@@ -17,8 +17,8 @@ import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISm
 import {Pool} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {OpType, DestinationMessageParams, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
-import {EscrowFactory} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
-import {TransferEscrow} from "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
+import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
+import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 
 /// @title AcrossUnit - Unit tests for Across integration components
 /// @notice Tests individual contract functionality without cross-chain simulation

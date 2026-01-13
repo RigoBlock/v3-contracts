@@ -4,8 +4,8 @@ pragma solidity 0.8.28;
 import {Test, console2} from "forge-std/Test.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLib.sol";
-import {EscrowFactory, OpType} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
-import {TransferEscrow} from "../../contracts/protocol/extensions/escrow/TransferEscrow.sol";
+import {EscrowFactory, OpType} from "../../contracts/protocol/libraries/EscrowFactory.sol";
+import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 import {DestinationMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 
 /// @title MockERC20 - Simple ERC20 mock for testing
@@ -42,17 +42,17 @@ contract MockERC20 {
     }
 }
 
-/// @title TransferEscrowWorkingTest - Working tests for TransferEscrow refundVault functionality
+/// @title EscrowWorkingTest - Working tests for Escrow refundVault functionality
 /// @notice Tests escrow token claiming and donation to pool with proper mock implementations
 /// @dev Uses fork testing to access real Across-whitelisted tokens (USDC, WETH, etc.)
-contract TransferEscrowWorkingTest is Test {
+contract EscrowWorkingTest is Test {
     using SafeTransferLib for address;
     
     MockPoolForEscrow mockPool;
     address pool;
     address testToken; // Use real token from fork
     address escrowAddress;
-    TransferEscrow escrow;
+    Escrow escrow;
     
     // Test actors
     address donor = makeAddr("donor");
@@ -77,7 +77,7 @@ contract TransferEscrowWorkingTest is Test {
         // to match production delegatecall behavior where pool is deployer
         vm.prank(pool);
         escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
-        escrow = TransferEscrow(payable(escrowAddress));
+        escrow = Escrow(payable(escrowAddress));
         
         // Verify escrow was deployed correctly
         assertEq(escrow.pool(), pool, "Escrow should store correct pool address");
@@ -110,7 +110,7 @@ contract TransferEscrowWorkingTest is Test {
         // Salt is based on opType only, pool is used as deployer and in constructor
         bytes32 salt = keccak256(abi.encodePacked(uint8(OpType.Transfer)));
         bytes32 bytecodeHash = keccak256(
-            abi.encodePacked(type(TransferEscrow).creationCode, abi.encode(pool))
+            abi.encodePacked(type(Escrow).creationCode, abi.encode(pool, OpType.Transfer))
         );
         address expectedAddress = address(
             uint160(
@@ -124,11 +124,11 @@ contract TransferEscrowWorkingTest is Test {
     
     /// @notice Test escrow constructor rejects invalid pool
     function test_EscrowConstructor_RejectsInvalidPool() public {
-        vm.expectRevert(TransferEscrow.InvalidPool.selector);
-        new TransferEscrow(address(0)); // Zero address should fail
+        vm.expectRevert(Escrow.InvalidPool.selector);
+        new Escrow(address(0), OpType.Transfer); // Zero address should fail
         
-        vm.expectRevert(TransferEscrow.InvalidPool.selector);
-        new TransferEscrow(makeAddr("notAContract")); // EOA should fail
+        vm.expectRevert(Escrow.InvalidPool.selector);
+        new Escrow(makeAddr("notAContract"), OpType.Transfer); // EOA should fail
     }
     
     /// @notice Test refunding vault tokens to pool - ERC20 (USDC)
@@ -147,57 +147,56 @@ contract TransferEscrowWorkingTest is Test {
         assertEq(IERC20(testToken).balanceOf(pool), TOKEN_AMOUNT, "Pool should receive the tokens");
     }
     
-    /// @notice Test refunding vault tokens to pool - Native ETH
-    function test_RefundVault_Native() public {
+    /// @notice Test that native ETH refunds are rejected
+    /// @dev EAcrossHandler.donate() rejects native ETH, so Escrow must reject it too
+    function test_RefundVault_Native_Reverts() public {
         // Give escrow some ETH
         vm.deal(escrowAddress, ETH_AMOUNT);
         
         // Verify escrow has ETH initially
         assertEq(escrowAddress.balance, ETH_AMOUNT, "Escrow should have ETH");
         
-        // Get initial pool ETH balance
-        uint256 poolBalanceBefore = pool.balance;
-        
-        // Call refundVault for ETH (token = address(0))
+        // Should revert with UnsupportedToken (native not in Across whitelist)
+        vm.expectRevert(Escrow.UnsupportedToken.selector);
         escrow.refundVault(address(0));
         
-        // Verify ETH was transferred to pool
-        assertEq(escrowAddress.balance, 0, "Escrow should have no ETH after refund");
-        assertEq(pool.balance, poolBalanceBefore + ETH_AMOUNT, "Pool should receive the ETH");
+        // Verify ETH remains in escrow
+        assertEq(escrowAddress.balance, ETH_AMOUNT, "ETH should remain in escrow after revert");
     }
     
     /// @notice Test refunding multiple sequential refunds with whitelisted tokens
-    function test_RefundVault_MultipleTokens() public {
+    function test_RefundVault_MultipleSequentialRefunds() public {
         uint256 halfUsdc = TOKEN_AMOUNT / 2;
-        uint256 halfEth = ETH_AMOUNT / 2;
         
-        // Give escrow USDC and ETH
+        // Give escrow USDC twice
         _fundEscrowWithUsdc(halfUsdc);
-        vm.deal(escrowAddress, halfEth);
         
-        // Refund USDC first
+        // Refund first batch
         escrow.refundVault(testToken);
         assertEq(IERC20(testToken).balanceOf(escrowAddress), 0, "USDC should be refunded");
-        assertEq(IERC20(testToken).balanceOf(pool), halfUsdc, "Pool should receive USDC");
+        assertEq(IERC20(testToken).balanceOf(pool), halfUsdc, "Pool should receive first USDC");
         
-        // Refund ETH
-        uint256 poolETHBefore = pool.balance;
-        escrow.refundVault(address(0));
-        assertEq(escrowAddress.balance, 0, "ETH should be refunded");
-        assertEq(pool.balance, poolETHBefore + halfEth, "Pool should receive ETH");
+        // Give escrow more USDC
+        _fundEscrowWithUsdc(halfUsdc);
+        
+        // Refund second batch
+        escrow.refundVault(testToken);
+        assertEq(IERC20(testToken).balanceOf(escrowAddress), 0, "USDC should be refunded again");
+        assertEq(IERC20(testToken).balanceOf(pool), halfUsdc * 2, "Pool should receive both batches");
     }
     
-    /// @notice Test escrow can receive ETH
-    function test_EscrowReceiveETH() public {
+    /// @notice Test escrow rejects native ETH (no receive() function)
+    /// @dev Since Across refunds WETH (not native ETH), escrow should not accept native ETH
+    function test_EscrowRejectsNativeETH() public {
         uint256 sendAmount = 2 ether;
         
-        // Send ETH to escrow
+        // Try to send ETH to escrow - should fail (no receive() or fallback())
         vm.deal(address(this), sendAmount);
         (bool success,) = escrowAddress.call{value: sendAmount}("");
-        assertTrue(success, "ETH transfer should succeed");
+        assertFalse(success, "ETH transfer should fail - escrow has no receive()");
         
-        // Verify escrow received ETH
-        assertEq(escrowAddress.balance, sendAmount, "Escrow should receive ETH");
+        // Verify escrow did not receive ETH
+        assertEq(escrowAddress.balance, 0, "Escrow should not receive ETH");
     }
     
     /// @notice Test edge case with zero amount of ERC20 - should revert
@@ -205,15 +204,15 @@ contract TransferEscrowWorkingTest is Test {
         // Don't fund escrow - balance is 0
         // Should revert with InvalidAmount (balance check happens after token whitelist check)
         vm.prank(randomUser);
-        vm.expectRevert(TransferEscrow.InvalidAmount.selector);
+        vm.expectRevert(Escrow.InvalidAmount.selector);
         escrow.refundVault(testToken);
     }
     
-    /// @notice Test edge case with zero amount of ETH - should revert
+    /// @notice Test edge case with zero amount of ETH - should revert with UnsupportedToken
     function test_ZeroAmountETH() external {
-        // Test with zero balance - should revert with InvalidAmount
+        // Native ETH is not supported (EAcrossHandler rejects it)
         vm.prank(randomUser);
-        vm.expectRevert(TransferEscrow.InvalidAmount.selector);
+        vm.expectRevert(Escrow.UnsupportedToken.selector);
         escrow.refundVault(address(0));
     }
     
@@ -225,11 +224,6 @@ contract TransferEscrowWorkingTest is Test {
         deal(testToken, escrowAddress, smallAmount);
         escrow.refundVault(testToken);
         assertEq(IERC20(testToken).balanceOf(escrowAddress), 0, "Should handle small amounts");
-        
-        // Test with 1 wei of ETH
-        vm.deal(escrowAddress, 1);
-        escrow.refundVault(address(0));
-        assertEq(escrowAddress.balance, 0, "Should handle small ETH amounts");
     }
     
     /// @notice Test that anyone can call refundVault
@@ -257,7 +251,7 @@ contract TransferEscrowWorkingTest is Test {
         unauthorizedToken.mint(escrowAddress, TOKEN_AMOUNT);
         
         // Should revert with UnsupportedToken error
-        vm.expectRevert(TransferEscrow.UnsupportedToken.selector);
+        vm.expectRevert(Escrow.UnsupportedToken.selector);
         escrow.refundVault(address(unauthorizedToken));
         
         // Verify tokens are still in escrow (not transferred)
@@ -265,20 +259,19 @@ contract TransferEscrowWorkingTest is Test {
         assertEq(unauthorizedToken.balanceOf(pool), 0, "Pool should not receive unauthorized tokens");
     }
     
-    /// @notice Test that native currency (address(0)) is always allowed
-    /// @dev Native currency is safe because it's either the pool's base token or already active
-    function test_RefundVault_NativeAlwaysAllowed() public {
+    /// @notice Test that native currency (address(0)) is rejected
+    /// @dev EAcrossHandler.donate() rejects native ETH, so Escrow must reject it too
+    function test_RefundVault_NativeRejected() public {
         uint256 nativeAmount = 1 ether;
-        uint256 poolBalanceBefore = pool.balance;
         
         vm.deal(escrowAddress, nativeAmount);
         
-        // Should succeed for native currency
+        // Should revert with UnsupportedToken
+        vm.expectRevert(Escrow.UnsupportedToken.selector);
         escrow.refundVault(address(0));
         
-        // Verify refund worked
-        assertEq(escrowAddress.balance, 0, "Escrow should have no ETH after refund");
-        assertEq(pool.balance, poolBalanceBefore + nativeAmount, "Pool should receive native currency");
+        // Verify ETH remains in escrow
+        assertEq(escrowAddress.balance, nativeAmount, "ETH should remain in escrow");
     }
 }
 
@@ -296,7 +289,7 @@ contract MockPoolForEscrow {
         // It doesn't transfer tokens - they are already transferred separately
         // So this mock just accepts the call without doing any token transfers
         
-        // The real TransferEscrow flow:
+        // The real Escrow flow:
         // 1. donate(token, 1, params) - pre-donation NAV update
         // 2. token.safeTransfer(pool, balance) - actual token transfer
         // 3. donate(token, balance, params) - post-donation NAV update

@@ -101,8 +101,11 @@ contract EAcrossHandler is IEAcrossHandler, ReentrancyGuardTransient {
         if (params.opType == OpType.Transfer) {
             _handleTransferMode(token, amount, amountDelta);
         } else if (params.opType != OpType.Sync) {
+            // Only Transfer and Sync are valid - reject anything else
             revert InvalidOpType();
         }
+        // Sync mode: Token activated, NAV updated, but no virtual storage modification
+        // Virtual storage only tracks cross-chain transfers (Transfer), not performance (Sync)
 
         // Unlock donation and clear all temporary storage atomically
         token.setDonationLock(0);

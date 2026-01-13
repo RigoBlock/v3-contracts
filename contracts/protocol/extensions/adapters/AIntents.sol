@@ -18,7 +18,7 @@ import {StorageLib} from "../../libraries/StorageLib.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {Call, DestinationMessageParams, Instructions, OpType, SourceMessageParams} from "../../types/Crosschain.sol";
-import {EscrowFactory} from "../escrow/EscrowFactory.sol";
+import {EscrowFactory} from "../../libraries/EscrowFactory.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
 import {IEAcrossHandler} from "./interfaces/IEAcrossHandler.sol";
@@ -170,13 +170,16 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         SourceMessageParams memory sourceParams,
         Instructions memory instructions
     ) private {
+        // Deploy escrow for both Transfer and Sync to protect against expired deposit exploits:
+        // 1. Native ETH → WETH refund (auto-activation issue)
+        // 2. Purge attack (operator purges token, deposit expires, NAV manipulation)
+        EscrowFactory.deployEscrowIfNeeded(address(this), sourceParams.opType);
+        params.depositor = EscrowFactory.getEscrowAddress(address(this), sourceParams.opType);
+
         // Handle source-side adjustments based on operation type
         if (sourceParams.opType == OpType.Transfer) {
-            EscrowFactory.deployEscrowIfNeeded(address(this), OpType.Transfer);
-            params.depositor = EscrowFactory.getEscrowAddress(address(this), OpType.Transfer);
             _handleSourceTransfer(params);
         } else if (sourceParams.opType == OpType.Sync) {
-            params.depositor = address(this);
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
         } else {
             revert IEAcrossHandler.InvalidOpType();
@@ -243,11 +246,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /// @dev Native ETH: When sourceNativeAmount > 0, ETH is sent via value parameter and WETH address is used as identifier.
     ///      In this case, skip approval since no ERC20 transfer occurs (only native value transfer).
     /// @dev ERC20: When sourceNativeAmount == 0, normal ERC20 approval flow (including WETH when used as ERC20).
-    /// @param token The token address to approve
+    /// @param token The token address to approve (guaranteed non-zero by validateBridgeableTokenPair)
     /// @param sourceNativeAmount Native ETH amount being sent (0 for ERC20 transfers)
     function _safeApproveToken(address token, uint256 sourceNativeAmount) private {
-        // Skip approval if native currency or if sending native ETH with WETH wrapper
-        if (token.isAddressZero() || sourceNativeAmount > 0) return;
+        // Skip approval if sending native ETH with WETH wrapper (no ERC20 transfer)
+        if (sourceNativeAmount > 0) return;
 
         if (IERC20(token).allowance(address(this), address(_acrossSpokePool)) > 0) {
             // Reset to 0 first for tokens that require it (like USDT)

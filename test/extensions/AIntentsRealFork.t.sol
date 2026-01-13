@@ -9,7 +9,7 @@ import {RealDeploymentFixture} from "../fixtures/RealDeploymentFixture.sol";
 
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
-import {EscrowFactory} from "../../contracts/protocol/extensions/escrow/EscrowFactory.sol";
+import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol";

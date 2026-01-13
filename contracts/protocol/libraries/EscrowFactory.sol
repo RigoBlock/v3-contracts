@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
-import {OpType} from "../../types/Crosschain.sol";
-import {TransferEscrow} from "./TransferEscrow.sol";
+import {SlotDerivation} from "./SlotDerivation.sol";
+import {OpType} from "../types/Crosschain.sol";
+import {Escrow} from "../deps/Escrow.sol";
 
 /// @title EscrowFactory - Factory for creating deterministic escrow contracts
 /// @notice Creates escrow contracts using CREATE2 for deterministic addresses
@@ -38,7 +38,7 @@ library EscrowFactory {
         bytes32 salt = _getSalt(opType);
 
         // Try to deploy - if already exists, CREATE2 will succeed and return existing address
-        try new TransferEscrow{salt: salt}(pool) returns (TransferEscrow escrow) {
+        try new Escrow{salt: salt}(pool, opType) returns (Escrow escrow) {
             escrowContract = address(escrow);
             emit EscrowDeployed(pool, opType, escrowContract);
         } catch {
@@ -64,8 +64,8 @@ library EscrowFactory {
     }
 
     /// @dev Gets the bytecode hash for CREATE2 address calculation
-    function _getBytecodeHash(OpType /* opType */, address pool) private pure returns (bytes32) {
-        // All operations use TransferEscrow for now
-        return keccak256(abi.encodePacked(type(TransferEscrow).creationCode, abi.encode(pool)));
+    function _getBytecodeHash(OpType opType, address pool) private pure returns (bytes32) {
+        // Include opType in constructor params for bytecode hash
+        return keccak256(abi.encodePacked(type(Escrow).creationCode, abi.encode(pool, opType)));
     }
 }
