@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {SlotDerivation} from "./SlotDerivation.sol";
+import {IEAcrossHandler} from "../extensions/adapters/interfaces/IEAcrossHandler.sol";
 
 /// @title VirtualStorageLib - Library for managing per-token virtual balances
 /// @notice Provides functions to get and set virtual balances for individual tokens
@@ -36,10 +37,12 @@ library VirtualStorageLib {
 
     function updateVirtualBalance(address token, int256 delta) internal {
         virtualBalance().balanceByToken[token] += delta;
+        emit IEAcrossHandler.VirtualBalanceUpdated(token, delta, virtualBalance().balanceByToken[token]);
     }
 
     function updateVirtualSupply(int256 delta) internal {
         virtualSupply().supply += delta;
+        emit IEAcrossHandler.VirtualSupplyUpdated(delta, virtualSupply().supply);
     }
 
     function getVirtualBalance(address token) internal view returns (int256) {

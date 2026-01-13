@@ -9,18 +9,18 @@ import {OpType} from "../../../types/Crosschain.sol";
 interface IAIntents {
     /// @notice Emitted when tokens are deposited for cross-chain transfer
     /// @param pool Address of the pool initiating the transfer
-    /// @param inputToken Token being sent
-    /// @param outputToken Token to be received on destination
-    /// @param inputAmount Amount sent
-    /// @param outputAmount Expected amount to receive
     /// @param destinationChainId Destination chain ID
+    /// @param inputToken Token being sent
+    /// @param inputAmount Amount sent
+    /// @param opType Operation type (0=Transfer, 1=Sync)
+    /// @param escrow Escrow address receiving refunds
     event CrossChainTransferInitiated(
         address indexed pool,
+        uint256 indexed destinationChainId,
         address indexed inputToken,
-        address indexed outputToken,
         uint256 inputAmount,
-        uint256 outputAmount,
-        uint256 destinationChainId
+        uint8 opType,
+        address escrow
     );
 
     error DirectCallNotAllowed();

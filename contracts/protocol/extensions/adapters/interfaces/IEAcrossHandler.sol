@@ -6,6 +6,29 @@ import {DestinationMessageParams} from "../../../types/Crosschain.sol";
 /// @title EAcrossHandler Interface - Handles incoming cross-chain transfers
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IEAcrossHandler {
+    /// @notice Emitted when cross-chain tokens are received
+    /// @param pool Address of the pool receiving tokens
+    /// @param token Token received
+    /// @param amount Amount received (actual balance delta)
+    /// @param opType Operation type (0=Transfer, 1=Sync)
+    event TokensReceived(
+        address indexed pool,
+        address indexed token,
+        uint256 amount,
+        uint8 indexed opType
+    );
+
+    /// @notice Emitted when virtual balance is modified
+    /// @param token Token whose virtual balance changed
+    /// @param adjustment Signed adjustment (+/-)
+    /// @param newBalance New virtual balance after adjustment
+    event VirtualBalanceUpdated(address indexed token, int256 adjustment, int256 newBalance);
+
+    /// @notice Emitted when virtual supply is modified
+    /// @param adjustment Signed adjustment (+/-)
+    /// @param newSupply New virtual supply after adjustment
+    event VirtualSupplyUpdated(int256 adjustment, int256 newSupply);
+
     error InvalidOpType();
     error DonationLock(bool locked);
     error BalanceUnderflow();

@@ -1630,6 +1630,15 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Step 2 - Transferred tokens to pool");
         
         // Step 3: Final donation call (with actual amount to validate NAV)
+        // Expect TokensReceived event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit IEAcrossHandler.TokensReceived(
+            destinationPool,
+            Constants.ETH_USDC,
+            transferAmount,
+            uint8(OpType.Transfer)
+        );
+        
         vm.prank(multicallHandler);
         try IEAcrossHandler(destinationPool).donate(
             Constants.ETH_USDC,
@@ -1818,10 +1827,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }));
     }
 
-    /// @notice Test partial reduction of virtual balance then increase virtual supply (lines 159-160)
-    /// @notice Test partial virtual balance reduction in Transfer mode  
-    /// @dev Attempts to cover lines 159-160 in _handleTransferMode where virtual balance > donation
-    /// Currently virtual balance is not being modified - may need different approach or slot calculation
+    /// @notice Test partial reduction of virtual balance with NO virtual supply increase (lines 141-142)
+    /// @dev Lines 141-142: amountValueInBase < baseTokenVBUint, so VB partially reduced, remainingValueInBase = 0
     function test_IntegrationFork_EAcrossHandler_PartialVirtualBalanceReduction() public {
         address poolOwner = ISmartPool(payable(ethereum.pool)).owner();
         vm.startPrank(poolOwner);
@@ -1830,13 +1837,13 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         ISmartPool(payable(ethereum.pool)).mint(poolOwner, 1000e6, 0);
         vm.stopPrank();
         
-        // Set virtual balance to 200 USDC (less than donation to trigger partial reduction)
+        // Set virtual balance to 500 USDC (MORE than donation to trigger partial reduction)
         bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
         bytes32 slot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
-        int256 virtualBalance = 200e6;
-        vm.store(ethereum.pool, slot, bytes32(uint256(virtualBalance))); // Store as int256 converted to bytes32
+        int256 virtualBalance = 500e6; // LARGER than donation
+        vm.store(ethereum.pool, slot, bytes32(uint256(virtualBalance)));
         
-        uint256 donationAmount = 300e6; // Greater than virtual balance to trigger partial reduction
+        uint256 donationAmount = 300e6; // LESS than virtual balance for partial reduction
         
         // Fund handler with USDC
         deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
@@ -1847,14 +1854,39 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             shouldUnwrapNative: false
         }));
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
+        
+        // Expect VirtualBalanceUpdated event (partial reduction: 500 -> 200)
+        vm.expectEmit(true, true, true, true);
+        emit IEAcrossHandler.VirtualBalanceUpdated(
+            Constants.ETH_USDC,
+            -300e6, // adjustment: reducing by donation amount
+            200e6   // newBalance: 500 - 300 = 200
+        );
+        
+        // Expect TokensReceived event
+        vm.expectEmit(true, true, true, true);
+        emit IEAcrossHandler.TokensReceived(
+            ethereum.pool,
+            Constants.ETH_USDC,
+            donationAmount,
+            uint8(OpType.Transfer)
+        );
+        
         IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         vm.stopPrank();
         
-        // Virtual balance should be zeroed out (partial reduction case - lines 159-160)
-        assertEq(int256(uint256(vm.load(ethereum.pool, slot))), 0, "Virtual balance should be zeroed after partial reduction");
+        // Virtual balance should be PARTIALLY reduced (500 - 300 = 200)
+        // Lines 141-142: partial reduction, remainingValueInBase = 0 (no VS increase)
+        int256 finalVB = int256(uint256(vm.load(ethereum.pool, slot)));
+        assertEq(finalVB, 200e6, "VB should be partially reduced: 500 - 300 = 200");
+        
+        // Virtual supply should be UNCHANGED (remainingValueInBase = 0)
+        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
+        int256 virtualSupply = int256(uint256(vm.load(ethereum.pool, virtualSupplySlot)));
+        assertEq(virtualSupply, 0, "Virtual supply should remain 0 (lines 141-142: remainingValueInBase = 0)");
     }
 
     function test_AIntents_InvalidOpType_Revert() public {
@@ -2079,6 +2111,21 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }));
         // Transfer tokens to pool
         IERC20(Constants.ETH_USDC).transfer(pool(), inboundAmount);
+        
+        // Expect VirtualSupplyUpdated event (no VB to reduce, so all goes to VS increase)
+        // The exact value depends on NAV, we'll check that it's positive
+        vm.expectEmit(true, false, false, false); // Only check event signature
+        emit IEAcrossHandler.VirtualSupplyUpdated(0, 0); // Will verify manually after
+        
+        // Expect TokensReceived event
+        vm.expectEmit(true, true, true, true);
+        emit IEAcrossHandler.TokensReceived(
+            pool(),
+            Constants.ETH_USDC,
+            inboundAmount,
+            uint8(OpType.Transfer)
+        );
+        
         // Complete donation (creates virtual supply)
         IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
             opType: OpType.Transfer,
@@ -2114,6 +2161,13 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 sourceNativeAmount: 0
             }))
         });
+        
+        // Expect VirtualSupplyUpdated event (burning virtual supply from outbound transfer)
+        vm.expectEmit(true, true, true, true);
+        emit IEAcrossHandler.VirtualSupplyUpdated(
+            -int256(outboundAmount), // adjustment: burning 100e6
+            int256(virtualSupplyAfterInbound) - int256(outboundAmount) // newSupply: 200e6 - 100e6 = 100e6
+        );
         
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
@@ -2494,6 +2548,25 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         if (activeTokens.length > 0) {
             console2.log("First active token:", activeTokens[0]);
         }
+
+        // Calculate expected virtual balance delta
+        // 0.99 WETH @ ~$3066 = ~3033 USDC = 3033435060 in 6 decimals
+        
+        // Expect VirtualBalanceUpdated event FIRST (emitted in _handleSourceTransfer)
+        vm.expectEmit(true, true, true, true);
+        emit IEAcrossHandler.VirtualBalanceUpdated(poolBaseToken, 3033435060, 3033435060);
+
+        // Then expect CrossChainTransferInitiated event (emitted after depositV3 call)
+        address escrowAddress = EscrowFactory.getEscrowAddress(pool(), OpType.Transfer);
+        vm.expectEmit(true, true, true, true);
+        emit IAIntents.CrossChainTransferInitiated(
+            pool(),
+            params.destinationChainId,
+            params.inputToken,
+            params.inputAmount,
+            uint8(OpType.Transfer),
+            escrowAddress
+        );
 
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);

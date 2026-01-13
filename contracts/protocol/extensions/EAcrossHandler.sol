@@ -107,6 +107,13 @@ contract EAcrossHandler is IEAcrossHandler, ReentrancyGuardTransient {
         // Sync mode: Token activated, NAV updated, but no virtual storage modification
         // Virtual storage only tracks cross-chain transfers (Transfer), not performance (Sync)
 
+        emit TokensReceived(
+            address(this), // pool
+            token,
+            amountDelta,
+            uint8(params.opType)
+        );
+
         // Unlock donation and clear all temporary storage atomically
         token.setDonationLock(0);
         uint256(0).storeNav();

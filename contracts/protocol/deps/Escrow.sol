@@ -46,13 +46,8 @@ contract Escrow is ReentrancyGuardTransient {
         // Only allow Across-whitelisted tokens (EAcrossHandler will reject native ETH anyway)
         require(CrosschainLib.isAllowedCrosschainToken(token), UnsupportedToken());
 
-        uint256 balance;
-
-        if (token == address(0)) {
-            balance = address(this).balance;
-        } else {
-            balance = IERC20(token).balanceOf(address(this));
-        }
+        // Get token balance (address(0) case is unreachable - whitelist validation rejects native)
+        uint256 balance = IERC20(token).balanceOf(address(this));
 
         require(balance > 0, InvalidAmount());
 

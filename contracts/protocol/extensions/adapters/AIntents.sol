@@ -199,6 +199,15 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.exclusivityDeadline,
             abi.encode(instructions)
         );
+
+        emit CrossChainTransferInitiated(
+            address(this), // pool
+            params.destinationChainId,
+            params.inputToken,
+            params.inputAmount,
+            uint8(sourceParams.opType),
+            params.depositor // escrow address
+        );
     }
 
     function _handleSourceTransfer(AcrossParams memory params) private {
