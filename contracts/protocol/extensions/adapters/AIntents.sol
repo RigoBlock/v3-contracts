@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IAcrossSpokePool} from "../../interfaces/IAcrossSpokePool.sol";
+import {IMulticallHandler} from "../../interfaces/IMulticallHandler.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
@@ -20,11 +21,6 @@ import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
 import {IECrosschain} from "./interfaces/IECrosschain.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
-
-// TODO: move to an imported interface
-interface IMulticallHandler {
-    function drainLeftoverTokens(address token, address payable destination) external;
-}
 
 /// @title AIntents - Allows cross-chain token transfers via Across Protocol with adapter synchronization.
 /// @notice This adapter enables Rigoblock smart pools to bridge tokens across chains while maintaining NAV integrity.

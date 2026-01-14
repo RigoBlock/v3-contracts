@@ -89,7 +89,6 @@ contract ExtensionsMap is IExtensionsMap {
         assert(_ECROSSCHAIN_DONATE_SELECTOR == type(IECrosschain).interfaceId);
     }
 
-    // TODO: check allow delegatecall is msg.sender == acrossSpokePool in EAcrossIntents
     /// @inheritdoc IExtensionsMap
     /// @dev Should be called by pool with delegatecall
     function getExtensionBySelector(
@@ -97,6 +96,9 @@ contract ExtensionsMap is IExtensionsMap {
     ) external view override returns (address extension, bool shouldDelegatecall) {
         if (selector == _EAPPS_BALANCES_SELECTOR || selector == _EAPPS_UNIV4_POSITIONS_SELECTOR) {
             extension = eApps;
+            shouldDelegatecall = true;
+        } else if (selector == _ECROSSCHAIN_DONATE_SELECTOR) {
+            extension = eCrosschain;
             shouldDelegatecall = true;
         } else if (selector == _ENAVVIEW_NAV_DATA_SELECTOR || selector == _ENAVVIEW_APP_BALANCES_SELECTOR) {
             extension = eNavView;
@@ -113,9 +115,6 @@ contract ExtensionsMap is IExtensionsMap {
             shouldDelegatecall = msg.sender == StorageLib.pool().owner;
         } else if (selector == _EUPGRADE_GET_BEACON_SELECTOR) {
             extension = eUpgrade;
-        } else if (selector == _ECROSSCHAIN_DONATE_SELECTOR) {
-            extension = eCrosschain;
-            shouldDelegatecall = true;
         } else {
             return (address(0), false);
         }
