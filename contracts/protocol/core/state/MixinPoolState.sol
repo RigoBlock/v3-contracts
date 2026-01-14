@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
 import {EscrowFactory} from "../../libraries/EscrowFactory.sol";
@@ -11,9 +12,7 @@ abstract contract MixinPoolState is MixinPoolValue {
     /*
      * EXTERNAL VIEW METHODS
      */
-    /// @dev Returns how many pool tokens a user holds.
-    /// @param who Address of the target account.
-    /// @return Number of pool.
+    /// @inheritdoc IERC20
     function balanceOf(address who) external view override returns (uint256) {
         return accounts().userAccounts[who].userBalance;
     }
@@ -44,6 +43,7 @@ abstract contract MixinPoolState is MixinPoolValue {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
 
+    /// @inheritdoc ISmartPoolState
     function getUserAccount(address who) external view override returns (UserAccount memory) {
         return accounts().userAccounts[who];
     }
@@ -71,8 +71,7 @@ abstract contract MixinPoolState is MixinPoolValue {
     /*
      * PUBLIC VIEW METHODS
      */
-    /// @notice Decimals are initialized at proxy creation.
-    /// @return Number of decimals.
+    /// @inheritdoc IERC20
     function decimals() public view override returns (uint8) {
         return pool().decimals;
     }

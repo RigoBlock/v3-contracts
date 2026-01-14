@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -19,7 +19,7 @@ import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {VirtualStorageLib} from "../libraries/VirtualStorageLib.sol";
 import {Applications} from "../types/Applications.sol";
-import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
+import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 /// @title NavView - Internal library for navigation and application view functionality
