@@ -62,4 +62,9 @@ interface ISmartPoolEvents {
     /// @param operator Address of the operator.
     /// @param approved Boolean the operator is approved by the user.
     event OperatorSet(address indexed holder, address indexed operator, bool approved);
+
+    /// @notice Emitted when a token's active status changes in the pool.
+    /// @param token Address of the token whose status changed.
+    /// @param isActive True if token was activated, false if deactivated.
+    event TokenStatusChanged(address indexed token, bool isActive);
 }

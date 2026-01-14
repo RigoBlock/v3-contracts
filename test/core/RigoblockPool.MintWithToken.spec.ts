@@ -584,7 +584,9 @@ describe("MintWithToken", async () => {
             // BEFORE FIX: This would succeed but NAV would drop because WETH not in activeTokensSet
             // AFTER FIX: Token is added to activeTokensSet during _mint, NAV remains correct
             
-            await pool.mintWithToken(user1.address, wethAmount, 0, weth.address)
+            await expect(pool.mintWithToken(user1.address, wethAmount, 0, weth.address))
+                .to.emit(pool, "TokenStatusChanged")
+                .withArgs(weth.address, true)
             
             // Verify NAV is still correct (should be ~1.0, allowing for small precision changes)
             await pool.updateUnitaryValue()
@@ -638,7 +640,9 @@ describe("MintWithToken", async () => {
             // Travel time for oracle
             await timeTravel({ seconds: 600, mine: true })
             
-            await pool.mintWithToken(user1.address, wethAmount, 0, weth.address)
+            await expect(pool.mintWithToken(user1.address, wethAmount, 0, weth.address))
+                .to.emit(pool, "TokenStatusChanged")
+                .withArgs(weth.address, true)
             
             // Verify WETH is in activeTokensSet
             let activeTokensResult = await pool.getActiveTokens()

@@ -785,8 +785,10 @@ describe("Proxy", async () => {
             expect(activeTokens.length).to.be.eq(1)
             isWethInActiveTokens = activeTokens.includes(weth.address)
             expect(isWethInActiveTokens).to.be.true
-            // will execute and not remove any token
-            await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
+            // will execute and remove the token (balance is 0)
+            await expect(pool.purgeInactiveTokensAndApps())
+                .to.emit(pool, "TokenStatusChanged")
+                .withArgs(weth.address, false)
             activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(0)
         })
