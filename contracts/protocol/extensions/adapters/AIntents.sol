@@ -109,10 +109,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // 1. Store pool's current token balance (for delta calculation)
         calls[0] = Call({
             target: address(this),
-            callData: abi.encodeCall(
-                IECrosschain.donate,
-                (params.outputToken, 1, destParams)
-            ),
+            callData: abi.encodeCall(IECrosschain.donate, (params.outputToken, 1, destParams)),
             value: 0
         });
 
@@ -136,10 +133,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // 4. Donate to pool with virtual balance management
         calls[3] = Call({
             target: address(this),
-            callData: abi.encodeCall(
-                IECrosschain.donate,
-                (params.outputToken, params.outputAmount, destParams)
-            ),
+            callData: abi.encodeCall(IECrosschain.donate, (params.outputToken, params.outputAmount, destParams)),
             value: 0
         });
 
