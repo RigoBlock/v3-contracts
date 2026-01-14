@@ -11,7 +11,7 @@ import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/poo
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
-import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {OpType, DestinationMessageParams, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
@@ -573,12 +573,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         deal(Constants.BASE_USDC, handler, transferAmount);
         
         vm.startPrank(handler);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -728,12 +728,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         deal(Constants.BASE_USDC, handler, transferAmount);
         
         vm.startPrank(handler);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -941,12 +941,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         deal(Constants.BASE_USDC, handler, transferAmount);
         
         vm.startPrank(handler);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1139,12 +1139,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         deal(Constants.BASE_WETH, handler, transferAmount);
         
         vm.startPrank(handler);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1337,12 +1337,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             address handler = Constants.BASE_MULTICALL_HANDLER;
             deal(Constants.BASE_WETH, handler, transferAmount);
             vm.startPrank(handler);
-            IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
+            IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
                 opType: OpType.Transfer,
                 shouldUnwrapNative: false
             }));
             IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
-            IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
+            IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
                 opType: OpType.Transfer,
                 shouldUnwrapNative: false
             }));
@@ -1461,12 +1461,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         deal(Constants.BASE_USDC, handler, transferAmount);
         
         vm.startPrank(handler);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1617,12 +1617,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             deal(Constants.BASE_WETH, handler, transferAmount);
             
             vm.startPrank(handler);
-            IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
+            IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
                 opType: OpType.Transfer,
                 shouldUnwrapNative: false
             }));
             IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
-            IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
+            IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
                 opType: OpType.Transfer,
                 shouldUnwrapNative: false
             }));
@@ -1734,12 +1734,12 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         deal(Constants.BASE_WETH, handler, transferAmount);
         
         vm.startPrank(handler);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
-        IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
+        IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1918,7 +1918,7 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             vm.startPrank(handler);
             
             // First donate (1 wei) to signal transfer start
-            IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
+            IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, 1, DestinationMessageParams({
                 opType: OpType.Transfer,
                 shouldUnwrapNative: false
             }));
@@ -1927,7 +1927,7 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
             
             // Second donate with actual amount - creates negative virtual supply
-            IEAcrossHandler(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
+            IECrosschain(base.pool).donate{value: 0}(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
                 opType: OpType.Transfer,
                 shouldUnwrapNative: false
             }));

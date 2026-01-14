@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
-import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
@@ -30,7 +30,7 @@ contract RealDeploymentFixture is Test {
 
     // Per-chain deployment data
     struct ChainDeployment {
-        EAcrossHandler eAcrossHandler;
+        ECrosschain eCrosschain;
         EApps eApps;
         EOracle eOracle;
         EUpgrade eUpgrade;
@@ -49,9 +49,9 @@ contract RealDeploymentFixture is Test {
     ChainDeployment public base;
     
     // Convenience accessors for current active chain (for backward compatibility)
-    function eAcrossHandler() public view returns (EAcrossHandler) {
-        if (block.chainid == Constants.ETHEREUM_CHAIN_ID) return ethereum.eAcrossHandler;
-        if (block.chainid == Constants.BASE_CHAIN_ID) return base.eAcrossHandler;
+    function eCrosschain() public view returns (ECrosschain) {
+        if (block.chainid == Constants.ETHEREUM_CHAIN_ID) return ethereum.eCrosschain;
+        if (block.chainid == Constants.BASE_CHAIN_ID) return base.eCrosschain;
         revert("Unsupported chain");
     }
     
@@ -153,7 +153,7 @@ contract RealDeploymentFixture is Test {
         deployment.eOracle = new EOracle(config.oracle, config.wrappedNative);
         deployment.eUpgrade = new EUpgrade(Constants.FACTORY);
         deployment.eNavView = new ENavView(config.grgStakingProxy, config.uniV4Posm);
-        deployment.eAcrossHandler = new EAcrossHandler(config.spokePool, config.multicallHandler);
+        deployment.eCrosschain = new ECrosschain();
         console2.log("Deployed extensions successfully");
 
         Extensions memory extensions = Extensions({
@@ -161,7 +161,7 @@ contract RealDeploymentFixture is Test {
             eOracle: address(deployment.eOracle),
             eUpgrade: address(deployment.eUpgrade),
             eNavView: address(deployment.eNavView),
-            eAcrossHandler: address(deployment.eAcrossHandler)
+            eCrosschain: address(deployment.eCrosschain)
         });
 
         // 2. Deploy ExtensionsMapDeployer

@@ -22,15 +22,15 @@ This document consolidates all aspects of the Across bridge integration for Rigo
    - Manages virtual balances on source chain
    - Location: `protocol/extensions/adapters/AIntents.sol`
 
-2. **EAcrossHandler.sol** (Extension)
+2. **ECrosschain.sol** (Extension)
    - Handles incoming transfers on destination chain
    - Called via delegatecall by pool proxy
    - Validates transfers and manages virtual balances
-   - Location: `protocol/extensions/EAcrossHandler.sol`
+   - Location: `protocol/extensions/ECrosschain.sol`
 
 3. **ExtensionsMapDeployer.sol** (Deps)
    - Deploys ExtensionsMap with chain-specific params
-   - Maps EAcrossHandler methods to delegatecall
+   - Maps ECrosschain methods to delegatecall
    - Location: `protocol/deps/ExtensionsMapDeployer.sol`
 
 4. **ENavView.sol** (Utility)
@@ -69,7 +69,7 @@ The integration supports two operation modes via encoded message:
 5. Call Across depositV3 with encoded multicall instructions
 6. Emit CrossChainTransfer event
 
-**Destination Chain (EAcrossHandler.handleV3AcrossMessage → donate):**
+**Destination Chain (ECrosschain.handleV3AcrossMessage → donate):**
 1. Verify caller is Across SpokePool
 2. Decode message and validate type
 3. Store NAV baseline in transient storage
@@ -207,7 +207,7 @@ Stored in pool storage using ERC-7201 namespaced slots with dot notation.
 
 **Issue:** Destination chain must have price feed for received token.
 
-**Handling:** EAcrossHandler reverts if no price feed found.
+**Handling:** ECrosschain reverts if no price feed found.
 
 **Result:** Intent fails, tokens recoverable on source chain.
 
@@ -244,11 +244,11 @@ new ExtensionsMapDeployer({
 deployer.deploy(salt); // Use incremented salt for versions
 ```
 
-#### 3. Deploy EAcrossHandler
+#### 3. Deploy ECrosschain
 
 ```solidity
 // ExtensionsMapDeployer handles this automatically
-// EAcrossHandler immutables set from deployer params
+// ECrosschain immutables set from deployer params
 ```
 
 #### 4. Deploy AIntents

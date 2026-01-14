@@ -6,7 +6,7 @@ import "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
 import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
-import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
@@ -41,7 +41,7 @@ contract PoolDonateTest is Test {
         
         // Deploy new SmartPool implementation with donate function
         address mockExtensionsMap = makeAddr("mockExtensionsMap");
-        address mockEAcrossHandler = makeAddr("mockEAcrossHandler");
+        address mockECrosschain = makeAddr("mockECrosschain");
         
         // Mock ExtensionsMap to return false for shouldDelegatecall
         vm.mockCall(
@@ -50,25 +50,25 @@ contract PoolDonateTest is Test {
             abi.encode(Constants.ETH_WETH)
         );
         
-        // Mock getExtensionBySelector to return our mock EAcrossHandler for donate selector
-        bytes4 donateSelector = IEAcrossHandler.donate.selector;
+        // Mock getExtensionBySelector to return our mock ECrosschain for donate selector
+        bytes4 donateSelector = IECrosschain.donate.selector;
         vm.mockCall(
             mockExtensionsMap,
             abi.encodeWithSignature("getExtensionBySelector(bytes4)", donateSelector),
-            abi.encode(mockEAcrossHandler, true) // Return address and shouldDelegatecall = true
+            abi.encode(mockECrosschain, true) // Return address and shouldDelegatecall = true
         );
         
-        // Mock the donate function on the EAcrossHandler
+        // Mock the donate function on the ECrosschain
         vm.mockCall(
-            mockEAcrossHandler,
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector),
+            mockECrosschain,
+            abi.encodeWithSelector(IECrosschain.donate.selector),
             abi.encode() // Just succeed
         );
         
         // Also mock specific revert for USDC (non-owned token) when used in escrow test  
         vm.mockCallRevert(
-            mockEAcrossHandler,
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector, Constants.ETH_USDC, 1, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
+            mockECrosschain,
+            abi.encodeWithSelector(IECrosschain.donate.selector, Constants.ETH_USDC, 1, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
             abi.encodeWithSignature("TokenIsNotOwned()")
         );
         
@@ -100,7 +100,7 @@ contract PoolDonateTest is Test {
     /// @notice Test that donate function exists and is callable
     function test_Donate_FunctionExists() public view {
         // Verify the function exists by checking the selector
-        bytes4 donateSelector = IEAcrossHandler.donate.selector;
+        bytes4 donateSelector = IECrosschain.donate.selector;
         
         // Get the pool's code and verify it has the function
         bytes memory poolCode = pool.code;
@@ -124,7 +124,7 @@ contract PoolDonateTest is Test {
         console2.log("Calling donate function...");
         // Donate 1 ETH to the pool (baseToken is address(0) for ETH)
         DestinationMessageParams memory params;
-        IEAcrossHandler(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
+        IECrosschain(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
         
         vm.stopPrank();
         
@@ -149,7 +149,7 @@ contract PoolDonateTest is Test {
         vm.prank(donor);
         // Should not revert, just return early
         DestinationMessageParams memory params;
-        IEAcrossHandler(pool).donate(address(0), 0, params);
+        IECrosschain(pool).donate(address(0), 0, params);
         console2.log("Zero amount donation handled correctly");
     }
 
@@ -167,7 +167,7 @@ contract PoolDonateTest is Test {
         
         // Donate ETH
         DestinationMessageParams memory params;
-        IEAcrossHandler(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
+        IECrosschain(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
         
         // Verify balances
         uint256 poolEthAfter = pool.balance;
@@ -194,18 +194,18 @@ contract PoolDonateTest is Test {
         
         // Re-add necessary mocks
         address mockExtensionsMap = makeAddr("mockExtensionsMap");
-        address mockEAcrossHandler = makeAddr("mockEAcrossHandler");
+        address mockECrosschain = makeAddr("mockECrosschain");
         
         vm.mockCall(
             mockExtensionsMap,
-            abi.encodeWithSignature("getExtensionBySelector(bytes4)", IEAcrossHandler.donate.selector),
-            abi.encode(mockEAcrossHandler, true)
+            abi.encodeWithSignature("getExtensionBySelector(bytes4)", IECrosschain.donate.selector),
+            abi.encode(mockECrosschain, true)
         );
         
         // Mock the donate function to revert with TokenIsNotOwned for non-owned tokens
         vm.mockCallRevert(
-            mockEAcrossHandler,
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector, randomToken, 1000, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
+            mockECrosschain,
+            abi.encodeWithSelector(IECrosschain.donate.selector, randomToken, 1000, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
             abi.encodeWithSignature("TokenIsNotOwned()")
         );
         
@@ -215,7 +215,7 @@ contract PoolDonateTest is Test {
         vm.expectRevert(abi.encodeWithSignature("TokenIsNotOwned()"));
         DestinationMessageParams memory params;
         params.opType = OpType.Transfer;
-        IEAcrossHandler(pool).donate(randomToken, 1000, params);
+        IECrosschain(pool).donate(randomToken, 1000, params);
         
         vm.stopPrank();
     }
@@ -226,18 +226,18 @@ contract PoolDonateTest is Test {
         vm.clearMockedCalls();
         
         address mockExtensionsMap = makeAddr("mockExtensionsMap");
-        address mockEAcrossHandler = makeAddr("mockEAcrossHandler");
+        address mockECrosschain = makeAddr("mockECrosschain");
         
         vm.mockCall(
             mockExtensionsMap,
-            abi.encodeWithSignature("getExtensionBySelector(bytes4)", IEAcrossHandler.donate.selector),
-            abi.encode(mockEAcrossHandler, true)
+            abi.encodeWithSignature("getExtensionBySelector(bytes4)", IECrosschain.donate.selector),
+            abi.encode(mockECrosschain, true)
         );
         
         // Mock the donate function to revert with IncorrectETHAmount when msg.value != amount
         vm.mockCallRevert(
-            mockEAcrossHandler,
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector),
+            mockECrosschain,
+            abi.encodeWithSelector(IECrosschain.donate.selector),
             abi.encodeWithSignature("IncorrectETHAmount()")
         );
         
@@ -246,7 +246,7 @@ contract PoolDonateTest is Test {
         // Should revert with IncorrectETHAmount error when msg.value != amount
         vm.expectRevert(abi.encodeWithSignature("IncorrectETHAmount()"));
         DestinationMessageParams memory params;
-        IEAcrossHandler(pool).donate{value: 1 ether}(address(0), 2 ether, params);
+        IECrosschain(pool).donate{value: 1 ether}(address(0), 2 ether, params);
         
         vm.stopPrank();
     }

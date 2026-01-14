@@ -18,14 +18,13 @@ import {NavImpactLib} from "../libraries/NavImpactLib.sol";
 import {CrosschainLib} from "../libraries/CrosschainLib.sol";
 import {DestinationMessageParams, OpType} from "../types/Crosschain.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
-import {IEAcrossHandler} from "./adapters/interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "./adapters/interfaces/IECrosschain.sol";
 
-// TODO: rename in order to avoid confusing with across handler (this is called by the across multicall handler)
-/// @title EAcrossHandler - Handles incoming cross-chain transfers via Across Protocol.
-/// @notice This extension manages NAV integrity when receiving cross-chain token transfers.
-/// @dev Called via delegatecall from pool when Across SpokePool or MulticallHandler delivers tokens.
+/// @title ECrosschain - Handles incoming cross-chain transfers and escrow refunds.
+/// @notice This extension manages NAV integrity when receiving tokens from cross-chain sources.
+/// @dev Called via delegatecall from pool. Can be called by Across messages, Escrow contracts, or anyone with tokens to donate.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-contract EAcrossHandler is IEAcrossHandler, ReentrancyGuardTransient {
+contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
     using SafeCast for uint256;
     using SafeCast for int256;
     using SlotDerivation for bytes32;
@@ -34,21 +33,9 @@ contract EAcrossHandler is IEAcrossHandler, ReentrancyGuardTransient {
     using VirtualStorageLib for int256;
     using TransientStorage for *;
 
-    /// @notice Address of the Across SpokePool contract
-    address private immutable _acrossSpokePool;
-
-    /// @notice Across MulticallHandler addresses (for multicall-based transfers)
-    address private immutable _acrossHandler;
-
-    /// @dev Passed param is expected to be valid - skip validation
-    constructor(address acrossSpokePool, address acrossMulticallHandler) {
-        _acrossSpokePool = acrossSpokePool;
-        _acrossHandler = acrossMulticallHandler;
-    }
-
     error CallerTransferAmount();
 
-    /// @inheritdoc IEAcrossHandler
+    /// @inheritdoc IECrosschain
     function donate(
         address token,
         uint256 amount,

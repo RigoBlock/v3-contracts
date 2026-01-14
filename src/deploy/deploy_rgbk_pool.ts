@@ -75,11 +75,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const acrossSpokePool = config.acrossSpokePool || "0x0000000000000000000000000000000000000000";
-
-  const eAcrossHandler = await deploy("EAcrossHandler", {
+  const eCrosschain = await deploy("ECrosschain", {
     from: deployer,
-    args: [acrossSpokePool],
+    args: [],
     log: true,
     deterministicDeployment: true,
   });
@@ -88,7 +86,7 @@ const deploy: DeployFunction = async function (
     eApps: eApps.address,
     eOracle: eOracle.address,
     eUpgrade: eUpgrade.address,
-    eAcrossHandler: eAcrossHandler.address
+    eCrosschain: eCrosschain.address
   }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {

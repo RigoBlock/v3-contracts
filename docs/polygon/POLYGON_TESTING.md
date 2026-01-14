@@ -61,7 +61,7 @@ These tests are **NOT** run in CI pipelines or standard test scripts. They must 
 
 The `PolygonDeploymentFixture` follows the same pattern as `RealDeploymentFixture` but is simplified for single-chain (Polygon only) testing:
 
-1. Deploys all extensions (EApps, EOracle, EUpgrade, ENavView, EAcrossHandler)
+1. Deploys all extensions (EApps, EOracle, EUpgrade, ENavView, ECrosschain)
 2. Deploys ExtensionsMap with Polygon-specific configuration
 3. Deploys new SmartPool implementation
 4. Updates factory and creates test pool

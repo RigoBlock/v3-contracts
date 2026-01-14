@@ -5,7 +5,7 @@ struct Extensions {
     address eApps;
     address eOracle;
     address eUpgrade;
-    address eAcrossHandler;
+    address eCrosschain;
     address eNavView;
 }
 

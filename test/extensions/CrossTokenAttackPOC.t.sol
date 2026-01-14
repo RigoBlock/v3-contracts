@@ -8,7 +8,7 @@ import {RealDeploymentFixture} from "../fixtures/RealDeploymentFixture.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {OpType, DestinationMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
-import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 
 /// @title Cross-Token Attack Proof of Concept
 /// @notice Demonstrates why temporary balance MUST be per-token, not pool-level
@@ -60,7 +60,7 @@ contract CrossTokenAttackPOC is Test, RealDeploymentFixture {
         
         // Step 1: Initialize donation with USDC
         // This sets lock=true and stores USDC balance
-        IEAcrossHandler(poolAddr).donate(usdc, 1, params);
+        IECrosschain(poolAddr).donate(usdc, 1, params);
         
         console2.log("Lock is now set, USDC balance stored");
         
@@ -76,8 +76,8 @@ contract CrossTokenAttackPOC is Test, RealDeploymentFixture {
         deal(weth, poolAddr, 2 ether); // Pool now has 2 WETH
         
         // Try to process WETH without proper initialization - should REVERT
-        vm.expectRevert(IEAcrossHandler.TokenNotInitialized.selector);
-        IEAcrossHandler(poolAddr).donate(weth, 1 ether, params);
+        vm.expectRevert(IECrosschain.TokenNotInitialized.selector);
+        IECrosschain(poolAddr).donate(weth, 1 ether, params);
         
         vm.stopPrank();
         
@@ -101,7 +101,7 @@ contract CrossTokenAttackPOC is Test, RealDeploymentFixture {
         vm.startPrank(multicallHandler);
         
         // Step 1: Initialize with USDC
-        IEAcrossHandler(poolAddr).donate(usdc, 1, params);
+        IECrosschain(poolAddr).donate(usdc, 1, params);
         
         // Step 2: Process with USDC (SAME token - correct!)
         // Pre-send more USDC
@@ -109,7 +109,7 @@ contract CrossTokenAttackPOC is Test, RealDeploymentFixture {
         
         // This correctly uses storedBalance[USDC] = 1000e6
         // amountDelta = 1500e6 - 1000e6 = 500e6 (correct delta)
-        IEAcrossHandler(poolAddr).donate(usdc, 500e6, params);
+        IECrosschain(poolAddr).donate(usdc, 500e6, params);
         
         vm.stopPrank();
         

@@ -10,7 +10,7 @@ import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
-import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
@@ -52,7 +52,7 @@ contract ENavViewForkTest is Test {
     EApps eApps;
     EOracle eOracle;
     EUpgrade eUpgrade;
-    EAcrossHandler eAcrossHandler;
+    ECrosschain eCrosschain;
     ExtensionsMapDeployer deployer;
     ExtensionsMap extensionsMap;
     SmartPool newImplementation;
@@ -113,9 +113,9 @@ contract ENavViewForkTest is Test {
         eNavView = new ENavView(GRG_STAKING, UNISWAP_V4_POSM);
         console2.log("  New ENavView:", address(eNavView));
 
-        // We'll deploy EAcrossHandler since it's not on mainnet yet
-        eAcrossHandler = new EAcrossHandler(ACROSS_SPOKE_POOL, ACROSS_MULTICALL_HANDLER);
-        console2.log("  New EAcrossHandler:", address(eAcrossHandler));
+        // We'll deploy ECrosschain since it's not on mainnet yet
+        eCrosschain = new ECrosschain();
+        console2.log("  New ECrosschain:", address(eCrosschain));
 
         console2.log("  Using deployed EApps: 0x598Fe2A5a459AA47228088a4206a657Ef8ec3676");
         console2.log("  Using deployed EOracle: 0xd223Ed82D7341aB535673340aDf2A1A39F9b9B91");
@@ -130,7 +130,7 @@ contract ENavViewForkTest is Test {
             eNavView: address(eNavView),
             eOracle: 0xd223Ed82D7341aB535673340aDf2A1A39F9b9B91,
             eUpgrade: 0x6A17ca05b112485Bd5c73215F275Baff7F980ac6,
-            eAcrossHandler: address(eAcrossHandler)
+            eCrosschain: address(eCrosschain)
         });
 
         DeploymentParams memory params = DeploymentParams({

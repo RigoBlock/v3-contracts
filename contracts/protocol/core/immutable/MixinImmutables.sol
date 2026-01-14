@@ -45,7 +45,7 @@ abstract contract MixinImmutables is MixinConstants {
                 IExtensionsMap.eNavView.selector ^
                 IExtensionsMap.eOracle.selector ^
                 IExtensionsMap.eUpgrade.selector ^
-                IExtensionsMap.eAcrossHandler.selector ^
+                IExtensionsMap.eCrosschain.selector ^
                 IExtensionsMap.wrappedNative.selector ^
                 IExtensionsMap.getExtensionBySelector.selector ==
                 type(IExtensionsMap).interfaceId

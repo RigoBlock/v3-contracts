@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
-import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
@@ -30,7 +30,7 @@ contract PolygonDeploymentFixture is Test {
     address public FACTORY = Constants.FACTORY;
 
     struct PolygonChainDeployment {
-        EAcrossHandler eAcrossHandler;
+        ECrosschain eCrosschain;
         EApps eApps;
         EOracle eOracle;
         EUpgrade eUpgrade;
@@ -107,7 +107,7 @@ contract PolygonDeploymentFixture is Test {
         deployment.eOracle = new EOracle(config.oracle, config.wrappedNative);
         deployment.eUpgrade = new EUpgrade(Constants.FACTORY);
         deployment.eNavView = new ENavView(config.grgStakingProxy, config.uniV4Posm);
-        deployment.eAcrossHandler = new EAcrossHandler(config.spokePool, config.multicallHandler);
+        deployment.eCrosschain = new ECrosschain();
         console2.log("Deployed extensions successfully");
 
         Extensions memory extensions = Extensions({
@@ -115,7 +115,7 @@ contract PolygonDeploymentFixture is Test {
             eOracle: address(deployment.eOracle),
             eUpgrade: address(deployment.eUpgrade),
             eNavView: address(deployment.eNavView),
-            eAcrossHandler: address(deployment.eAcrossHandler)
+            eCrosschain: address(deployment.eCrosschain)
         });
 
         // 2. Deploy ExtensionsMapDeployer

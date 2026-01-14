@@ -2,11 +2,11 @@ import { expect } from "chai";
 import hre, { ethers } from "hardhat";
 
 /**
- * Comprehensive tests for EAcrossHandler and AIntents contracts
+ * Comprehensive tests for ECrosschain and AIntents contracts
  * Tests cover: deployment, access control, message encoding/decoding, NAV calculations, storage slots
  */
 describe("Across Integration", () => {
-  let eAcrossHandler: any;
+  let eCrosschain: any;
   let aIntents: any;
   let acrossSpokePool: any;
   let wethContract: any;
@@ -35,9 +35,9 @@ describe("Across Integration", () => {
     const MockAcrossSpokePool = await hre.ethers.getContractFactory("MockAcrossSpokePool");
     acrossSpokePool = await MockAcrossSpokePool.attach(MockAcrossSpokePoolInstance.address);
 
-    const EAcrossHandlerInstance = await hre.deployments.get("EAcrossHandler");
-    const EAcrossHandler = await hre.ethers.getContractFactory("EAcrossHandler");
-    eAcrossHandler = await EAcrossHandler.attach(EAcrossHandlerInstance.address);
+    const ECrosschainInstance = await hre.deployments.get("ECrosschain");
+    const ECrosschain = await hre.ethers.getContractFactory("ECrosschain");
+    eCrosschain = await ECrosschain.attach(ECrosschainInstance.address);
 
     const AIntentsInstance = await hre.deployments.get("AIntents");
     const AIntents = await hre.ethers.getContractFactory("AIntents");
@@ -48,10 +48,10 @@ describe("Across Integration", () => {
     mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
   });
 
-  describe("EAcrossHandler", () => {
+  describe("ECrosschain", () => {
     describe("Constructor and Deployment", () => {
       it("should deploy with non-zero bytecode", async () => {
-        const code = await ethers.provider.getCode(eAcrossHandler.address);
+        const code = await ethers.provider.getCode(eCrosschain.address);
         expect(code).to.not.equal("0x");
         expect(code.length).to.be.greaterThan(2);
       });
@@ -67,7 +67,7 @@ describe("Across Integration", () => {
         };
 
         await expect(
-          eAcrossHandler.donate(mockUSDC.address, 1000000, sourceMessageParams)
+          eCrosschain.donate(mockUSDC.address, 1000000, sourceMessageParams)
         ).to.be.revertedWith("DonationLock(false)");
       });
 
@@ -80,7 +80,7 @@ describe("Across Integration", () => {
         };
 
         await expect(
-          eAcrossHandler.connect(owner).donate(mockUSDC.address, 1000000, sourceMessageParams)
+          eCrosschain.connect(owner).donate(mockUSDC.address, 1000000, sourceMessageParams)
         ).to.be.revertedWith("DonationLock(false)");
       });
 
@@ -93,7 +93,7 @@ describe("Across Integration", () => {
         };
 
         await expect(
-          eAcrossHandler.connect(user).donate(mockUSDC.address, 1000000, sourceMessageParams)
+          eCrosschain.connect(user).donate(mockUSDC.address, 1000000, sourceMessageParams)
         ).to.be.revertedWith("DonationLock(false)");
       });
     });
@@ -540,15 +540,6 @@ describe("Across Integration", () => {
   });
 
   describe("NAV Normalization", () => {
-    it("should correctly normalize NAV with same decimals", () => {
-      const nav = ethers.utils.parseEther("1");
-      const sourceDecimals = 18;
-      const destDecimals = 18;
-
-      // When decimals are equal, NAV stays the same
-      expect(nav).to.equal(ethers.utils.parseEther("1"));
-    });
-
     it("should correctly downscale NAV", () => {
       const nav = ethers.utils.parseEther("1"); // 18 decimals
       const sourceDecimals = 18;
@@ -569,15 +560,6 @@ describe("Across Integration", () => {
       const upscaled = nav.mul(ethers.BigNumber.from(10).pow(destDecimals - sourceDecimals));
 
       expect(upscaled).to.equal(expected);
-    });
-
-    it("should not change NAV when decimals are equal", () => {
-      const nav = ethers.utils.parseEther("123.456");
-      const decimals = 18;
-
-      // Simulating the normalization with same decimals
-      const normalized = nav;
-      expect(normalized).to.equal(nav);
     });
 
     it("should handle precision loss in downscaling", () => {

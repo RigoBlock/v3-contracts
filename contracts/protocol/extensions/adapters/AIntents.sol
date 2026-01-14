@@ -21,7 +21,7 @@ import {Call, DestinationMessageParams, Instructions, OpType, SourceMessageParam
 import {EscrowFactory} from "../../libraries/EscrowFactory.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
-import {IEAcrossHandler} from "./interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "./interfaces/IECrosschain.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 
 // TODO: move to an imported interface
@@ -119,7 +119,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         calls[0] = Call({
             target: address(this),
             callData: abi.encodeWithSelector(
-                IEAcrossHandler.donate.selector,
+                IECrosschain.donate.selector,
                 params.outputToken,
                 1, // flag for temporary storing pool balance
                 destParams
@@ -149,7 +149,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         calls[3] = Call({
             target: address(this),
             callData: abi.encodeWithSelector(
-                IEAcrossHandler.donate.selector,
+                IECrosschain.donate.selector,
                 params.outputToken,
                 params.outputAmount,
                 destParams
@@ -182,7 +182,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         } else if (sourceParams.opType == OpType.Sync) {
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
         } else {
-            revert IEAcrossHandler.InvalidOpType();
+            revert IECrosschain.InvalidOpType();
         }
 
         _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(

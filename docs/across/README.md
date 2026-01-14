@@ -14,8 +14,8 @@ Cross-chain token transfer integration using [Across Protocol V3](https://across
 - Manages source chain virtual adjustments in base token units
 - Encodes destination instructions as multicall
 
-**EAcrossHandler.sol** (Destination Chain Extension)
-- Path: `contracts/protocol/extensions/EAcrossHandler.sol`
+**ECrosschain.sol** (Destination Chain Extension)
+- Path: `contracts/protocol/extensions/ECrosschain.sol`
 - Receives via `handleV3AcrossMessage()` (called by SpokePool)
 - Validates NAV changes and applies virtual supply adjustments
 - Handles Transfer (NAV-neutral) and Sync (NAV change) modes
@@ -81,7 +81,7 @@ function depositV3(
     bytes calldata message
 ) external;
 
-// Destination chain (EAcrossHandler)
+// Destination chain (ECrosschain)
 function handleV3AcrossMessage(
     address tokenSent,
     uint256 amount,
@@ -150,7 +150,7 @@ This approach prioritizes practical operability over conceptual "ownership" attr
 
 ### Gas Optimizations
 
-**Conversion Efficiency** (EAcrossHandler):
+**Conversion Efficiency** (ECrosschain):
 - Single token→base conversion at entry
 - All calculations in base token units
 - No redundant base→token→base conversions
@@ -179,7 +179,7 @@ This approach prioritizes practical operability over conceptual "ownership" attr
 - `test_IntegrationFork_CrossChain_TransferWithHandler` - End-to-end transfer
 - `test_IntegrationFork_Transfer_NonBaseToken` - Non-base token (WETH) transfers
 - `test_AIntents_VirtualSupply_WithNonBaseToken` - Virtual supply burn logic
-- `test_IntegrationFork_EAcrossHandler_PartialVirtualBalanceReduction` - Inbound with existing VB
+- `test_IntegrationFork_ECrosschain_PartialVirtualBalanceReduction` - Inbound with existing VB
 
 All 44 tests passing ✅
 

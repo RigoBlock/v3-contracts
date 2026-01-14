@@ -27,8 +27,8 @@ The Rigoblock v3 protocol implements cross-chain token transfers using the Acros
   - Calls Across SpokePool to bridge tokens
   - Encodes destination instructions as multicall
 
-#### 2. EAcrossHandler.sol (Destination Chain Extension)
-- **Location**: `contracts/protocol/extensions/EAcrossHandler.sol`
+#### 2. ECrosschain.sol (Destination Chain Extension)
+- **Location**: `contracts/protocol/extensions/ECrosschain.sol`
 - **Role**: Receives cross-chain transfers
 - **Execution Context**: Called via delegatecall from pool proxy (triggered by Across SpokePool)
 - **Key Responsibilities**:
@@ -306,7 +306,7 @@ acrossSpokePool.depositV3(
 4. Relayer gets repaid on source chain (or other chain)
 5. Relayer keeps surplus (inputAmount - outputAmount) as fee
 
-#### Phase 3: Destination Chain (EAcrossHandler.donate via handleV3AcrossMessage)
+#### Phase 3: Destination Chain (ECrosschain.donate via handleV3AcrossMessage)
 
 **Step 1: Security Check**
 ```solidity
@@ -758,7 +758,7 @@ token.setDonationLock(false);
 
 #### 3. Direct Handler Call
 
-**Attack**: Call EAcrossHandler.donate() directly instead of via Across
+**Attack**: Call ECrosschain.donate() directly instead of via Across
 
 **Defense**: Caller verification
 ```solidity
@@ -836,7 +836,7 @@ require(IEOracle(address(this)).hasPriceFeed(token), PriceFeedRequired());
 
 5. **Caller Restriction**:
    ```
-   EAcrossHandler.donate() only called by acrossSpokePool
+   ECrosschain.donate() only called by acrossSpokePool
    ```
 
 6. **Transient Storage Cleanup**:

@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 /// @notice Mock Across MulticallHandler for testing
-/// @dev Minimal mock implementation to satisfy EAcrossHandler constructor requirements
+/// @dev Minimal mock implementation to satisfy ECrosschain constructor requirements
 /// and support both foundry and hardhat test environments
 contract MockAcrossMulticallHandler {
     /// @notice Mock multicall function that matches the actual Across Protocol MulticallHandler interface

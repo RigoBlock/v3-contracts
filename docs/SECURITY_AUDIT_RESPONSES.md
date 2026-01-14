@@ -2,9 +2,9 @@
 
 ## Questions & Responses
 
-### 1. Reentrancy Protection in EAcrossHandler.donate - Multiple Calls in Same Transaction
+### 1. Reentrancy Protection in ECrosschain.donate - Multiple Calls in Same Transaction
 
-**Question**: "reentrancy protection in EAcrossHandler.donate allows us to call the method twice, because we're not actually reentering the call, but making two calls in the same transaction (unlock-lock), which is fine?"
+**Question**: "reentrancy protection in ECrosschain.donate allows us to call the method twice, because we're not actually reentering the call, but making two calls in the same transaction (unlock-lock), which is fine?"
 
 **Answer**: ✅ **YES, this is correct and intentional.**
 
@@ -17,14 +17,14 @@ The `nonReentrant` modifier from `ReentrancyGuardTransient` prevents **reentranc
 **How TransferEscrow works**:
 ```solidity
 // First call: Initialize lock and store balance
-IEAcrossHandler(pool).donate(token, 1, params);  // amount == 1
+IECrosschain(pool).donate(token, 1, params);  // amount == 1
 // ✅ Call completes, lock released
 
 // Transfer tokens
 token.safeTransfer(pool, balance);
 
 // Second call: Process donation
-IEAcrossHandler(pool).donate(token, balance, params);  // amount == balance
+IECrosschain(pool).donate(token, balance, params);  // amount == balance
 // ✅ Call completes, lock released
 ```
 
@@ -137,10 +137,10 @@ This ensures test CREATE2 deployment matches production behavior.
 
 **Vulnerability Discovered**:
 
-YES, `EAcrossHandler.donate()` DOES activate tokens automatically:
+YES, `ECrosschain.donate()` DOES activate tokens automatically:
 
 ```solidity
-// Line 95 in EAcrossHandler.sol
+// Line 95 in ECrosschain.sol
 StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
 ```
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {IEAcrossHandler} from "../extensions/adapters/interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 import {CrosschainLib} from "../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../libraries/ReentrancyGuardTransient.sol";
@@ -39,11 +39,11 @@ contract Escrow is ReentrancyGuardTransient {
     ///      1. Gas griefing by filling max token slots (128 tokens)
     ///      2. NAV calculation gas increases from too many active tokens
     ///      3. Unauthorized token activation via donations
-    ///      Note: Native ETH is not supported because EAcrossHandler.donate() rejects it.
+    ///      Note: Native ETH is not supported because ECrosschain.donate() rejects it.
     ///            Across refunds expired deposits in the original token (WETH/USDC/USDT), not native ETH.
     /// @param token The token address to claim
     function refundVault(address token) external nonReentrant {
-        // Only allow Across-whitelisted tokens (EAcrossHandler will reject native ETH anyway)
+        // Only allow Across-whitelisted tokens (ECrosschain will reject native ETH anyway)
         require(CrosschainLib.isAllowedCrosschainToken(token), UnsupportedToken());
 
         // Get token balance (address(0) case is unreachable - whitelist validation rejects native)
@@ -55,13 +55,13 @@ contract Escrow is ReentrancyGuardTransient {
         params.opType = opType; // Use escrow's configured OpType (Transfer or Sync)
 
         // Store balance before transfer
-        IEAcrossHandler(pool).donate(token, 1, params);
+        IECrosschain(pool).donate(token, 1, params);
 
         // Transfer tokens to pool (only ERC20 supported)
         token.safeTransfer(pool, balance);
 
         // Process donation with actual balance
-        IEAcrossHandler(pool).donate(token, balance, params);
+        IECrosschain(pool).donate(token, balance, params);
 
         emit TokensDonated(token, balance);
     }

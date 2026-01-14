@@ -8,7 +8,7 @@ import {Constants} from "../../contracts/test/Constants.sol";
 import {RealDeploymentFixture} from "../fixtures/RealDeploymentFixture.sol";
 
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
-import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
@@ -16,7 +16,7 @@ import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/poo
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
-import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {OpType, DestinationMessageParams, SourceMessageParams, Call, Instructions} from "../../contracts/protocol/types/Crosschain.sol";
 import {IMinimumVersion} from "../../contracts/protocol/extensions/adapters/interfaces/IMinimumVersion.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
@@ -125,10 +125,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         assertEq(minimumVersion, "4.1.0", "Wrong version requirement");
     }
     
-    /// @notice Test EAcrossHandler deployment and configuration
-    function test_EAcrossHandler_DeploymentAndConfiguration() public view {
+    /// @notice Test ECrosschain deployment and configuration
+    function test_ECrosschain_DeploymentAndConfiguration() public view {
         // Verify handler deployment
-        assertTrue(address(eAcrossHandler()) != address(0), "EAcrossHandler should be deployed");
+        assertTrue(address(eCrosschain()) != address(0), "ECrosschain should be deployed");
     }
     
     /*//////////////////////////////////////////////////////////////////////////
@@ -1008,7 +1008,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // 4. Final donate should detect NAV manipulation and revert
         // Use expectRevert with just selector to match any parameters
         vm.prank(multicallHandler);
-        vm.expectRevert(IEAcrossHandler.NavManipulationDetected.selector);
+        vm.expectRevert(IECrosschain.NavManipulationDetected.selector);
         (bool success4,) = instructions.calls[3].target.call(instructions.calls[3].callData);
             console2.log("Call 4 (donate):", success4);
 
@@ -1151,7 +1151,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         // Step 1: Unlock and store balance (amount=1 initializes)
         vm.prank(handler);
-        IEAcrossHandler(pool).donate{value: 0}(usdc, 1, params);
+        IECrosschain(pool).donate{value: 0}(usdc, 1, params);
 
         // Step 2: Remove tokens from pool (decreases balance below stored baseline)
         uint256 stolenAmount = 100e6; // Steal 100 USDC
@@ -1162,10 +1162,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(handler);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IEAcrossHandler.BalanceUnderflow.selector
+                IECrosschain.BalanceUnderflow.selector
             )
         );
-        IEAcrossHandler(pool).donate{value: 0}(usdc, donationAmount, params);
+        IECrosschain(pool).donate{value: 0}(usdc, donationAmount, params);
     }
 
     /// @notice Test WETH unwrapping functionality (migrated from AcrossIntegrationForkTest)
@@ -1192,7 +1192,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(handler);
         
         // Call 1: Initialize with amount 1 (standard pattern)
-        IEAcrossHandler(address(pool())).donate{value: 0}(
+        IECrosschain(address(pool())).donate{value: 0}(
             Constants.ETH_WETH,
             1,
             destMsg
@@ -1202,7 +1202,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_WETH).transfer(address(pool()), wethAmount);
         
         // Call 3: Donate with full amount - this will unwrap WETH to ETH
-        IEAcrossHandler(address(pool())).donate{value: 0}(
+        IECrosschain(address(pool())).donate{value: 0}(
             Constants.ETH_WETH,
             wethAmount,
             destMsg
@@ -1373,7 +1373,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         calls[0] = Call({
             target: destinationPool,
             callData: abi.encodeWithSelector(
-                IEAcrossHandler.donate.selector,
+                IECrosschain.donate.selector,
                 Constants.ETH_USDC,
                 1, // Initialize flag
                 sourceMsg
@@ -1407,7 +1407,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         calls[3] = Call({
             target: destinationPool,
             callData: abi.encodeWithSelector(
-                IEAcrossHandler.donate.selector,
+                IECrosschain.donate.selector,
                 Constants.ETH_USDC,
                 transferAmount, // Actual transfer amount
                 sourceMsg
@@ -1510,7 +1510,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         calls[0] = Call({
             target: destinationPool,
             callData: abi.encodeWithSelector(
-                IEAcrossHandler.donate.selector,
+                IECrosschain.donate.selector,
                 Constants.ETH_USDC,
                 1, // Initialize flag
                 sourceMsg
@@ -1549,7 +1549,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             calls[3] = Call({
                 target: destinationPool,
                 callData: abi.encodeWithSelector(
-                    IEAcrossHandler.donate.selector,
+                    IECrosschain.donate.selector,
                     Constants.ETH_USDC,
                     transferAmount, // Final donation amount
                     sourceMsg
@@ -1581,7 +1581,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// @notice Test direct handleV3AcrossMessage-style call to our extension
     /// @dev This tests our extension receives the call correctly (simulating what MulticallHandler does)  
     function test_HandleV3AcrossMessage_WithInstructions() public {
-        console2.log("=== Testing EAcrossHandler donation with Instructions flow ===");
+        console2.log("=== Testing ECrosschain donation with Instructions flow ===");
         
         uint256 transferAmount = 300e6; // 300 USDC
         address destinationPool = pool();
@@ -1609,7 +1609,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 1: Initialize donation (store initial balance for comparison) 
         // This simulates what the MulticallHandler would do before transferring tokens
         vm.prank(multicallHandler);
-        try IEAcrossHandler(destinationPool).donate(
+        try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             1, // flag amount for initialization 
             DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination })
@@ -1632,7 +1632,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 3: Final donation call (with actual amount to validate NAV)
         // Expect TokensReceived event to be emitted
         vm.expectEmit(true, true, true, true);
-        emit IEAcrossHandler.TokensReceived(
+        emit IECrosschain.TokensReceived(
             destinationPool,
             Constants.ETH_USDC,
             transferAmount,
@@ -1640,7 +1640,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         );
         
         vm.prank(multicallHandler);
-        try IEAcrossHandler(destinationPool).donate(
+        try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             transferAmount, // actual transfer amount
             DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination })
@@ -1665,7 +1665,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // For Transfer mode, the pool should receive tokens
         assertEq(finalBalance, initialBalance + transferAmount, "Pool should receive tokens");
         
-        console2.log("EAcrossHandler donation with Instructions flow test completed!");
+        console2.log("ECrosschain donation with Instructions flow test completed!");
     }
 
     /// @notice Build test instructions that mirror what AIntents._buildMulticallInstructions creates
@@ -1681,7 +1681,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         calls[0] = Call({
             target: recipient,
             callData: abi.encodeWithSelector(
-                IEAcrossHandler.donate.selector,
+                IECrosschain.donate.selector,
                 token,
                 1, // flag for temporary storing pool balance
                 sourceMsg
@@ -1715,7 +1715,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         calls[3] = Call({
             target: recipient,
             callData: abi.encodeWithSelector(
-                IEAcrossHandler.donate.selector,
+                IECrosschain.donate.selector,
                 token,
                 amount,
                 sourceMsg
@@ -1732,9 +1732,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         });
     }
 
-    /// @notice Test EAcrossHandler WETH unwrapping functionality
+    /// @notice Test ECrosschain WETH unwrapping functionality
     /// @dev Tests the shouldUnwrapNative flag in donate() to cover unwrapping logic (lines 116-119)
-    function test_IntegrationFork_EAcrossHandler_UnwrapWrappedNativeSync() public {
+    function test_IntegrationFork_ECrosschain_UnwrapWrappedNativeSync() public {
         uint256 initialEthBalance = ethereum.pool.balance;
         uint256 donationAmount = 0.5e18;
         
@@ -1743,7 +1743,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(donor);
         
         // Step 1: Initialize with amount=1 using WETH
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
             opType: OpType.Sync,
             shouldUnwrapNative: true
         }));
@@ -1752,7 +1752,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
         
         // Step 3: Perform actual donation with unwrapping
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
             opType: OpType.Sync,
             shouldUnwrapNative: true
         }));
@@ -1766,7 +1766,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         assertEq(IERC20(Constants.ETH_WETH).balanceOf(ethereum.pool), 0, "No WETH should remain in pool after unwrapping");
     }
 
-    function test_IntegrationFork_EAcrossHandler_UnwrapWrappedTransfer() public {
+    function test_IntegrationFork_ECrosschain_UnwrapWrappedTransfer() public {
         uint256 initialEthBalance = ethereum.pool.balance;
         uint256 donationAmount = 0.5e18;
         
@@ -1775,7 +1775,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(donor);
         
         // Step 1: Initialize with amount=1 using WETH
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: true
         }));
@@ -1784,7 +1784,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
         
         // Step 3: Perform actual donation with unwrapping
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: true
         }));
@@ -1799,9 +1799,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     }
 
     /// @notice Test revert with InvalidOpType when passing OpType.Unknown
-    /// @notice Test InvalidOpType error handling in EAcrossHandler
+    /// @notice Test InvalidOpType error handling in ECrosschain
     /// @dev Covers line 133 where OpType.Unknown triggers InvalidOpType revert
-    function test_IntegrationFork_EAcrossHandler_InvalidOpType() public {
+    function test_IntegrationFork_ECrosschain_InvalidOpType() public {
         uint256 donationAmount = 100e6;
         
         // Fund handler with USDC
@@ -1809,7 +1809,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 1: Initialize (doesn't validate OpType)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Unknown,
             shouldUnwrapNative: false
         }));
@@ -1819,9 +1819,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
         
         // Step 3: This should fail with InvalidOpType when processing donation
-        vm.expectRevert(IEAcrossHandler.InvalidOpType.selector);
+        vm.expectRevert(IECrosschain.InvalidOpType.selector);
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Unknown,
             shouldUnwrapNative: false
         }));
@@ -1829,7 +1829,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
     /// @notice Test partial reduction of virtual balance with NO virtual supply increase (lines 141-142)
     /// @dev Lines 141-142: amountValueInBase < baseTokenVBUint, so VB partially reduced, remainingValueInBase = 0
-    function test_IntegrationFork_EAcrossHandler_PartialVirtualBalanceReduction() public {
+    function test_IntegrationFork_ECrosschain_PartialVirtualBalanceReduction() public {
         address poolOwner = ISmartPool(payable(ethereum.pool)).owner();
         vm.startPrank(poolOwner);
         deal(Constants.ETH_USDC, poolOwner, 1000e6);
@@ -1849,7 +1849,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
         
         vm.startPrank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1857,7 +1857,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Expect VirtualBalanceUpdated event (partial reduction: 500 -> 200)
         vm.expectEmit(true, true, true, true);
-        emit IEAcrossHandler.VirtualBalanceUpdated(
+        emit IECrosschain.VirtualBalanceUpdated(
             Constants.ETH_USDC,
             -300e6, // adjustment: reducing by donation amount
             200e6   // newBalance: 500 - 300 = 200
@@ -1865,14 +1865,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Expect TokensReceived event
         vm.expectEmit(true, true, true, true);
-        emit IEAcrossHandler.TokensReceived(
+        emit IECrosschain.TokensReceived(
             ethereum.pool,
             Constants.ETH_USDC,
             donationAmount,
             uint8(OpType.Transfer)
         );
         
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1894,7 +1894,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(Constants.ETH_USDC, poolOwner, 500e6);
         
         // Expect the specific InvalidOpType error
-        vm.expectRevert(IEAcrossHandler.InvalidOpType.selector); 
+        vm.expectRevert(IECrosschain.InvalidOpType.selector); 
         
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(
@@ -1927,7 +1927,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
     /// @notice Test DonationInProgress error when trying concurrent donations
     /// @dev Tests the TransientStorage locking mechanism - this was NEVER tested before!
-    function test_IntegrationFork_EAcrossHandler_DonationInProgress() public {
+    function test_IntegrationFork_ECrosschain_DonationInProgress() public {
         uint256 donationAmount = 100e6;
         
         // Fund handler with USDC
@@ -1935,7 +1935,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 1: Start first donation (this sets the donation lock)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1944,7 +1944,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // This should fail with DonationLock because the lock is set
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("DonationLock(bool)")), true));
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1952,7 +1952,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     
     /// @notice Test successful donation unlocks and allows next donation
     /// @dev Tests that TransientStorage lock is properly cleared after successful donation
-    function test_IntegrationFork_EAcrossHandler_LockClearedAfterSuccessfulDonation() public {
+    function test_IntegrationFork_ECrosschain_LockClearedAfterSuccessfulDonation() public {
         uint256 donationAmount = 100e6;
         
         // Fund handler with USDC
@@ -1960,7 +1960,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Complete first donation cycle successfully
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1971,14 +1971,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Complete the donation (this should unlock)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         
         // Now a new donation should be possible (lock was cleared)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1989,7 +1989,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
     /// @notice Test donation revert clears lock (prevents permanent lock)
     /// @dev Tests that TransientStorage lock is cleared even when donation reverts
-    function test_IntegrationFork_EAcrossHandler_LockClearedOnRevert() public {
+    function test_IntegrationFork_ECrosschain_LockClearedOnRevert() public {
         uint256 donationAmount = 100e6;
         
         // Fund handler with USDC
@@ -1997,20 +1997,20 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         vm.startPrank(Constants.ETH_MULTICALL_HANDLER);
         
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,  // Start with valid optype
             shouldUnwrapNative: false
         }));
         
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
         
-        vm.expectRevert(IEAcrossHandler.InvalidOpType.selector);
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        vm.expectRevert(IECrosschain.InvalidOpType.selector);
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Unknown,  // Invalid type - causes revert
             shouldUnwrapNative: false
         }));
 
-        IEAcrossHandler(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -2105,7 +2105,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         vm.startPrank(handler);
         // Initialize donation
-        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -2115,11 +2115,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Expect VirtualSupplyUpdated event (no VB to reduce, so all goes to VS increase)
         // The exact value depends on NAV, we'll check that it's positive
         vm.expectEmit(true, false, false, false); // Only check event signature
-        emit IEAcrossHandler.VirtualSupplyUpdated(0, 0); // Will verify manually after
+        emit IECrosschain.VirtualSupplyUpdated(0, 0); // Will verify manually after
         
         // Expect TokensReceived event
         vm.expectEmit(true, true, true, true);
-        emit IEAcrossHandler.TokensReceived(
+        emit IECrosschain.TokensReceived(
             pool(),
             Constants.ETH_USDC,
             inboundAmount,
@@ -2127,7 +2127,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         );
         
         // Complete donation (creates virtual supply)
-        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
+        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -2164,7 +2164,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Expect VirtualSupplyUpdated event (burning virtual supply from outbound transfer)
         vm.expectEmit(true, true, true, true);
-        emit IEAcrossHandler.VirtualSupplyUpdated(
+        emit IECrosschain.VirtualSupplyUpdated(
             -int256(outboundAmount), // adjustment: burning 100e6
             int256(virtualSupplyAfterInbound) - int256(outboundAmount) // newSupply: 200e6 - 100e6 = 100e6
         );
@@ -2196,12 +2196,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(Constants.ETH_USDC, handler, inboundAmount);
         
         vm.startPrank(handler);
-        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.ETH_USDC).transfer(pool(), inboundAmount);
-        IEAcrossHandler(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
+        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -2554,7 +2554,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Expect VirtualBalanceUpdated event FIRST (emitted in _handleSourceTransfer)
         vm.expectEmit(true, true, true, true);
-        emit IEAcrossHandler.VirtualBalanceUpdated(poolBaseToken, 3033435060, 3033435060);
+        emit IECrosschain.VirtualBalanceUpdated(poolBaseToken, 3033435060, 3033435060);
 
         // Then expect CrossChainTransferInitiated event (emitted after depositV3 call)
         address escrowAddress = EscrowFactory.getEscrowAddress(pool(), OpType.Transfer);

@@ -647,14 +647,7 @@ describe("MintWithToken", async () => {
             // Verify WETH is in activeTokensSet
             let activeTokensResult = await pool.getActiveTokens()
             expect(activeTokensResult.activeTokens).to.include(weth.address)
-            
-            // 2. Manually drain WETH from pool (simulating a transfer out)
-            const wethBalanceBefore = await weth.balanceOf(pool.address)
             await pool.setAcceptableMintToken(weth.address, false) // Make it not acceptable so we can simulate drain
-            
-            // Actually for this test, let's just verify the core behavior:
-            // After a successful mint, WETH is in activeTokensSet
-            // Purge won't remove it because it has a balance
             
             // 3. Purge should NOT remove WETH from activeTokensSet (balance > 1)
             await pool.purgeInactiveTokensAndApps()

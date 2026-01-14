@@ -75,7 +75,7 @@ User → Pool Proxy (delegatecall)→ Implementation
 - `EApps.sol` - Application balance queries
 - `EOracle.sol` - Price feeds and token conversions
 - `EUpgrade.sol` - Implementation upgrades
-- `EAcrossHandler.sol` - Across bridge destination handler
+- `ECrosschain.sol` - Across bridge destination handler
 
 ### Adapters (Upgradeable Mapping)
 - `AIntents.sol` - Across bridge source adapter
@@ -254,7 +254,7 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 
 ### Different Address Per Chain
 - ExtensionsMap (extensions have chain-specific params)
-- Individual extensions (EApps, EOracle, EUpgrade, EAcrossHandler)
+- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain)
 - Governance strategy
 
 ### NAV Integrity in Cross-Chain Transfers
@@ -367,7 +367,7 @@ BASE_RPC_URL=https://...
 
 1. Check existing patterns (especially in core/ and extensions/)
 2. Refer to CLAUDE.md for detailed explanations
-3. Look at AIntents/EAcrossHandler as reference implementation
+3. Look at AIntents/ECrosschain as reference implementation
 4. Test on forks before proposing changes
 5. Never break storage layout!
 

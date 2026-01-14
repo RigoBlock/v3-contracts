@@ -195,9 +195,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const eAcrossHandler = await deploy("EAcrossHandler", {
+  const eCrosschain = await deploy("ECrosschain", {
     from: deployer,
-    args: [acrossSpokePool.address, acrossMulticallHandler.address],
+    args: [],
     log: true,
     deterministicDeployment: true,
   });
@@ -207,7 +207,7 @@ const deploy: DeployFunction = async function (
     eNavView: eNavView.address,
     eOracle: eOracle.address,
     eUpgrade: eUpgrade.address,
-    eAcrossHandler: eAcrossHandler.address
+    eCrosschain: eCrosschain.address
   }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {

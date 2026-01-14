@@ -9,7 +9,7 @@ import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 
 /// @title NavImpactLib - Library for validating NAV impact tolerance
 /// @notice Provides percentage-based NAV impact validation for cross-chain transfers
-/// @dev Used by both AIntents (source) and EAcrossHandler (destination) for consistent validation
+/// @dev Used by both AIntents (source) and ECrosschain (destination) for consistent validation
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 library NavImpactLib {
     using SafeCast for uint256;

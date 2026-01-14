@@ -4,10 +4,10 @@ pragma solidity 0.8.28;
 import {Test, Vm} from "forge-std/Test.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
-import {EAcrossHandler} from "../../contracts/protocol/extensions/EAcrossHandler.sol";
+import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
-import {IEAcrossHandler} from "../../contracts/protocol/extensions/adapters/interfaces/IEAcrossHandler.sol";
+import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
 import {IAcrossSpokePool} from "../../contracts/protocol/interfaces/IAcrossSpokePool.sol";
 import {IWETH9} from "../../contracts/protocol/interfaces/IWETH9.sol";
@@ -25,7 +25,7 @@ import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 /// @notice Tests individual contract functionality without cross-chain simulation
 contract AcrossUnitTest is Test {
     AIntents adapter;
-    EAcrossHandler handler;
+    ECrosschain handler;
     
     address mockSpokePool;
     address mockWETH;
@@ -57,7 +57,7 @@ contract AcrossUnitTest is Test {
         
         // Deploy handler with both required parameters
         address mockMulticallHandler = makeAddr("multicallHandler");
-        handler = new EAcrossHandler(mockSpokePool, mockMulticallHandler);
+        handler = new ECrosschain();
     }
     
     /// @notice Helper to setup pool storage using vm.store with correct packing
@@ -711,7 +711,7 @@ contract AcrossUnitTest is Test {
     }
 }
 
-/// @notice Mock pool contract for testing EAcrossHandler via delegatecall
+/// @notice Mock pool contract for testing ECrosschain via delegatecall
 contract MockHandlerPool {
     address public handler;
     address public spokePool;
@@ -727,7 +727,7 @@ contract MockHandlerPool {
         
         // Step 1: Initialize donation lock with amount = 1
         (bool success1, bytes memory result1) = handler.delegatecall(
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector, token, 1, params)
+            abi.encodeWithSelector(IECrosschain.donate.selector, token, 1, params)
         );
         if (!success1) {
             if (result1.length > 0) {
@@ -741,7 +741,7 @@ contract MockHandlerPool {
         
         // Step 2: Process actual donation  
         (bool success2, bytes memory result2) = handler.delegatecall(
-            abi.encodeWithSelector(IEAcrossHandler.donate.selector, token, amount, params)
+            abi.encodeWithSelector(IECrosschain.donate.selector, token, amount, params)
         );
         if (!success2) {
             if (result2.length > 0) {

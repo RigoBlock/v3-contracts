@@ -32,7 +32,7 @@ AGENTS.md provides concise, actionable guidelines for AI assistants. This docume
 1. **Extensions** need chain-specific constructor params (oracle feeds, SpokePool addresses)
    - Cannot be deployed with same address across chains
    - Mapped in ExtensionsMap (deployed with chain params)
-   - Example: EAcrossHandler needs chain-specific acrossSpokePool address
+   - Example: ECrosschain needs chain-specific acrossSpokePool address
 
 2. **Adapters** are protocol integrations that may need updates
    - Uniswap V3/V4 router addresses
@@ -221,7 +221,7 @@ Solution: Two modes
 
 Extension called via delegatecall from pool:
 ```
-Malicious actor → Pool.fallback() → delegatecall EAcrossHandler.handleV3AcrossMessage()
+Malicious actor → Pool.fallback() → delegatecall ECrosschain.handleV3AcrossMessage()
 ```
 
 In delegatecall context:
@@ -262,7 +262,7 @@ Create virtual balance through actual pool operations:
 ```solidity
 // Use actual protocol operation (donation) to create virtual balance
 vm.prank(address(spokePool));
-EAcrossHandler(pool).handleV3AcrossMessage(
+ECrosschain(pool).handleV3AcrossMessage(
     token,
     amount,
     relayer,

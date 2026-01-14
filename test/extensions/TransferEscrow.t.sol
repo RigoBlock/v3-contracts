@@ -148,7 +148,7 @@ contract EscrowWorkingTest is Test {
     }
     
     /// @notice Test that native ETH refunds are rejected
-    /// @dev EAcrossHandler.donate() rejects native ETH, so Escrow must reject it too
+    /// @dev ECrosschain.donate() rejects native ETH, so Escrow must reject it too
     function test_RefundVault_Native_Reverts() public {
         // Give escrow some ETH
         vm.deal(escrowAddress, ETH_AMOUNT);
@@ -210,7 +210,7 @@ contract EscrowWorkingTest is Test {
     
     /// @notice Test edge case with zero amount of ETH - should revert with UnsupportedToken
     function test_ZeroAmountETH() external {
-        // Native ETH is not supported (EAcrossHandler rejects it)
+        // Native ETH is not supported (ECrosschain rejects it)
         vm.prank(randomUser);
         vm.expectRevert(Escrow.UnsupportedToken.selector);
         escrow.refundVault(address(0));
@@ -260,7 +260,7 @@ contract EscrowWorkingTest is Test {
     }
     
     /// @notice Test that native currency (address(0)) is rejected
-    /// @dev EAcrossHandler.donate() rejects native ETH, so Escrow must reject it too
+    /// @dev ECrosschain.donate() rejects native ETH, so Escrow must reject it too
     function test_RefundVault_NativeRejected() public {
         uint256 nativeAmount = 1 ether;
         
@@ -280,12 +280,12 @@ contract EscrowWorkingTest is Test {
 contract MockPoolForEscrow {
     using SafeTransferLib for address;
     
-    /// @notice Mock donate function that accepts tokens - updated to match EAcrossHandler interface
+    /// @notice Mock donate function that accepts tokens - updated to match ECrosschain interface
     /// @param token Token to donate
     /// @param amount Amount to donate
     /// @param params Destination message parameters (ignored in mock)
     function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable {
-        // In the real EAcrossHandler, donate just updates NAV accounting
+        // In the real ECrosschain, donate just updates NAV accounting
         // It doesn't transfer tokens - they are already transferred separately
         // So this mock just accepts the call without doing any token transfers
         
