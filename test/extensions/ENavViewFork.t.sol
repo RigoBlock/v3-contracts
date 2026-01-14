@@ -41,7 +41,8 @@ contract ENavViewForkTest is Test {
     address constant TEST_POOL = Constants.TEST_POOL;
 
     // Implementation slot from EIP-1967
-    bytes32 constant IMPLEMENTATION_SLOT = Constants.IMPLEMENTATION_SLOT;
+    bytes32 constant IMPLEMENTATION_SLOT =
+        bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
 
     // Fork ID
     uint256 mainnetFork;

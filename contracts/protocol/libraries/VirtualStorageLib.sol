@@ -10,7 +10,6 @@ import {IEAcrossHandler} from "../extensions/adapters/interfaces/IEAcrossHandler
 library VirtualStorageLib {
     using SlotDerivation for bytes32;
 
-    /// @notice Storage slot for per-token virtual balances (legacy slot)
     bytes32 constant VIRTUAL_BALANCES_SLOT = 0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d64f;
 
     bytes32 constant VIRTUAL_SUPPLY_SLOT = 0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee3411450f;

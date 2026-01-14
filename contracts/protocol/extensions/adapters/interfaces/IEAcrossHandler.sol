@@ -11,12 +11,7 @@ interface IEAcrossHandler {
     /// @param token Token received
     /// @param amount Amount received (actual balance delta)
     /// @param opType Operation type (0=Transfer, 1=Sync)
-    event TokensReceived(
-        address indexed pool,
-        address indexed token,
-        uint256 amount,
-        uint8 indexed opType
-    );
+    event TokensReceived(address indexed pool, address indexed token, uint256 amount, uint8 indexed opType);
 
     /// @notice Emitted when virtual balance is modified
     /// @param token Token whose virtual balance changed

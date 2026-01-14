@@ -142,37 +142,6 @@ library Constants {
     address internal constant BSC_WBNB = 0x2170Ed0880ac9A755fd29B2688956BD959F933F8;
 
     /*//////////////////////////////////////////////////////////////
-                        STORAGE SLOTS (ERC-7201)
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Standard implementation slot for proxies
-    bytes32 internal constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-
-    /// @notice Pool initialization storage slot
-    bytes32 internal constant POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-
-    /// @notice Active tokens registry slot
-    bytes32 internal constant ACTIVE_TOKENS_SLOT = 0xbd68f1d41a93565ce29970ec13a2bc56a87c8bdd0b31366d8baa7620f41eb6cb;
-
-    /// @notice Applications storage slot (from MixinConstants.sol)
-    bytes32 internal constant APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
-
-    /// @notice Pool variables storage slot
-    bytes32 internal constant POOL_VARIABLES_SLOT = 0xe3ed9e7d534645c345f2d15f0c405f8de0227b60eb37bbeb25b26db462415dec;
-
-    /// @notice Pool tokens storage slot
-    bytes32 internal constant POOL_TOKENS_SLOT = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;
-
-    /// @notice Pool accounts storage slot
-    bytes32 internal constant POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
-
-    /// @notice Token registry storage slot
-    bytes32 internal constant TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
-
-    /// @notice UniswapV4 token IDs storage slot
-    bytes32 internal constant UNIV4_TOKEN_IDS_SLOT = 0xd87266b00c1e82928c0b0200ad56e2ee648a35d4e9b273d2ac9533471e3b5d3c;
-
-    /*//////////////////////////////////////////////////////////////
                             TEST HELPERS
     //////////////////////////////////////////////////////////////*/
 

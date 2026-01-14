@@ -63,7 +63,6 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         
         address pool = ethereum.pool;
         address usdc = Constants.ETH_USDC;
-        address weth = Constants.ETH_WETH;
         
         // Deploy Sync escrow
         vm.prank(pool);

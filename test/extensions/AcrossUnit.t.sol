@@ -15,6 +15,7 @@ import {ISmartPoolImmutable} from "../../contracts/protocol/interfaces/v4/pool/I
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {Pool} from "../../contracts/protocol/libraries/EnumerableSet.sol";
+import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {OpType, DestinationMessageParams, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
@@ -31,11 +32,6 @@ contract AcrossUnitTest is Test {
     address mockBaseToken;
     address mockInputToken;
     address testPool;
-    
-    // Storage slots - need to be hardcoded for inline assembly compatibility
-    // NOTE: These must match Constants.sol but cannot import due to assembly limitations
-    bytes32 constant POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
-    bytes32 constant ACTIVE_TOKENS_SLOT = 0xbd68f1d41a93565ce29970ec13a2bc56a87c8bdd0b31366d8baa7620f41eb6cb;
     
     function setUp() public {
         mockSpokePool = makeAddr("spokePool");
