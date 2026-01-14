@@ -2,8 +2,7 @@
 pragma solidity 0.8.28;
 
 import {NavView} from "../../../libraries/NavView.sol";
-import {Applications} from "../../../types/Applications.sol";
-import {AppTokenBalance, ExternalApp} from "../../../types/ExternalApp.sol";
+import {AppTokenBalance} from "../../../types/ExternalApp.sol";
 
 /// @title IENavView - Interface for the navigation and application view extension
 /// @notice Provides view methods to retrieve token balances and NAV without modifying state

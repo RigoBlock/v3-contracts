@@ -2,10 +2,7 @@
 pragma solidity 0.8.28;
 
 import {IENavView} from "./adapters/interfaces/IENavView.sol";
-import {ISmartPool} from "../ISmartPool.sol";
 import {NavView} from "../libraries/NavView.sol";
-import {StorageLib} from "../libraries/StorageLib.sol";
-import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 
 /// @title ENavView - Navigation and application view extension for Rigoblock smart pools

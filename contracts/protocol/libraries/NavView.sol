@@ -38,7 +38,6 @@ library NavView {
     /// @notice Flag to identify out-of-range positions in Uniswap V4
     int24 internal constant OUT_OF_RANGE_FLAG = -887273;
 
-    /// @notice Zero address constant
     address internal constant ZERO_ADDRESS = address(0);
 
     struct NavData {
@@ -47,10 +46,6 @@ library NavView {
         uint256 timestamp; // Block timestamp when calculated
     }
 
-    /// @notice Gets application token balances for external positions
-    /// @param grgStakingProxy Address of the GRG staking proxy
-    /// @param uniV4Posm Address of the Uniswap V4 position manager
-    /// @return balances Array of AppTokenBalance structs with balances
     function getAppTokenBalances(
         address pool,
         address grgStakingProxy,
@@ -114,10 +109,6 @@ library NavView {
         return uniqueBalances;
     }
 
-    /// @notice Returns complete NAV data for the pool
-    /// @param grgStakingProxy Address of the GRG staking proxy
-    /// @param uniV4Posm Address of the Uniswap V4 position manager
-    /// @return navData Struct containing totalValue, unitaryValue, and timestamp
     function getNavData(
         address pool,
         address grgStakingProxy,
@@ -193,11 +184,6 @@ library NavView {
             });
     }
 
-    /// @notice Returns all token balances including virtual balances and application positions.
-    /// @dev Includes virtual balances, may return non-unique token addresses.
-    /// @param grgStakingProxy Address of the GRG staking proxy.
-    /// @param uniV4Posm Address of the Uniswap V4 position manager.
-    /// @return balances Array of TokenBalAppTokenBalanceance structs.
     function _getTokensAndBalances(
         address pool,
         address grgStakingProxy,
@@ -232,7 +218,7 @@ library NavView {
             int256 bal = VirtualStorageLib.getVirtualBalance(token);
 
             if (token == ZERO_ADDRESS) {
-                bal += int256(address(pool).balance);
+                bal += int256(pool.balance);
             } else {
                 bal += int256(IERC20(token).balanceOf(pool));
             }
@@ -243,10 +229,6 @@ library NavView {
         return aggregatedBalances;
     }
 
-    /// @notice Gets GRG staking proxy balances
-    /// @param grgStakingProxy Address of the GRG staking proxy
-    /// @return balances Array of AppTokenBalance structs
-    /// @dev Will return an empty array in case no stake found but unclaimed rewards exist
     function _getGrgStakingProxyBalances(
         address pool,
         address grgStakingProxy
@@ -263,10 +245,6 @@ library NavView {
         }
     }
 
-    /// @notice Gets Uniswap V4 position manager balances
-    /// @param uniV4Posm Address of the Uniswap V4 position manager
-    /// @return balances Array of AppTokenBalance structs
-    /// @dev Assumes hooks do not influence liquidity and uses oracle to protect against manipulation
     function _getUniV4PmBalances(
         address pool,
         address uniV4Posm
@@ -297,10 +275,6 @@ library NavView {
         }
     }
 
-    /// @notice Finds cross price between two tokens using oracle TWAPs
-    /// @param token0 First token address
-    /// @param token1 Second token address
-    /// @return sqrtPriceX96 The square root price in X96 format, or 0 if no price feeds available
     function _findCrossPrice(address pool, address token0, address token1) private view returns (uint160 sqrtPriceX96) {
         int24 twap0;
         int24 twap1;

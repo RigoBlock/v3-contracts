@@ -4,13 +4,10 @@ pragma solidity >=0.8.0 <0.9.0;
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
-import {NavComponents} from "../../types/NavComponents.sol";
 import {EscrowFactory} from "../../libraries/EscrowFactory.sol";
 import {OpType} from "../../types/Crosschain.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
-    error PoolNavNotInRange();
-
     /*
      * EXTERNAL VIEW METHODS
      */

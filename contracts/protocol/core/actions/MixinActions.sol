@@ -9,7 +9,7 @@ import {IKyc} from "../../interfaces/IKyc.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
-import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {

@@ -1151,7 +1151,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         // Step 1: Unlock and store balance (amount=1 initializes)
         vm.prank(handler);
-        IECrosschain(pool).donate{value: 0}(usdc, 1, params);
+        IECrosschain(pool).donate(usdc, 1, params);
 
         // Step 2: Remove tokens from pool (decreases balance below stored baseline)
         uint256 stolenAmount = 100e6; // Steal 100 USDC
@@ -1165,7 +1165,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 IECrosschain.BalanceUnderflow.selector
             )
         );
-        IECrosschain(pool).donate{value: 0}(usdc, donationAmount, params);
+        IECrosschain(pool).donate(usdc, donationAmount, params);
     }
 
     /// @notice Test WETH unwrapping functionality (migrated from AcrossIntegrationForkTest)
@@ -1192,7 +1192,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(handler);
         
         // Call 1: Initialize with amount 1 (standard pattern)
-        IECrosschain(address(pool())).donate{value: 0}(
+        IECrosschain(address(pool())).donate(
             Constants.ETH_WETH,
             1,
             destMsg
@@ -1202,7 +1202,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_WETH).transfer(address(pool()), wethAmount);
         
         // Call 3: Donate with full amount - this will unwrap WETH to ETH
-        IECrosschain(address(pool())).donate{value: 0}(
+        IECrosschain(address(pool())).donate(
             Constants.ETH_WETH,
             wethAmount,
             destMsg
@@ -1743,7 +1743,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(donor);
         
         // Step 1: Initialize with amount=1 using WETH
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 1, DestinationMessageParams({
             opType: OpType.Sync,
             shouldUnwrapNative: true
         }));
@@ -1752,7 +1752,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
         
         // Step 3: Perform actual donation with unwrapping
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
             opType: OpType.Sync,
             shouldUnwrapNative: true
         }));
@@ -1775,7 +1775,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(donor);
         
         // Step 1: Initialize with amount=1 using WETH
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: true
         }));
@@ -1784,7 +1784,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
         
         // Step 3: Perform actual donation with unwrapping
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: true
         }));
@@ -1809,7 +1809,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 1: Initialize (doesn't validate OpType)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Unknown,
             shouldUnwrapNative: false
         }));
@@ -1821,7 +1821,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 3: This should fail with InvalidOpType when processing donation
         vm.expectRevert(IECrosschain.InvalidOpType.selector);
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Unknown,
             shouldUnwrapNative: false
         }));
@@ -1849,7 +1849,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
         
         vm.startPrank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1872,7 +1872,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             uint8(OpType.Transfer)
         );
         
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1935,7 +1935,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 1: Start first donation (this sets the donation lock)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1944,7 +1944,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // This should fail with DonationLock because the lock is set
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("DonationLock(bool)")), true));
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1960,7 +1960,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Complete first donation cycle successfully
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1971,14 +1971,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Complete the donation (this should unlock)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         
         // Now a new donation should be possible (lock was cleared)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -1997,7 +1997,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         vm.startPrank(Constants.ETH_MULTICALL_HANDLER);
         
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,  // Start with valid optype
             shouldUnwrapNative: false
         }));
@@ -2005,12 +2005,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
         
         vm.expectRevert(IECrosschain.InvalidOpType.selector);
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Unknown,  // Invalid type - causes revert
             shouldUnwrapNative: false
         }));
 
-        IECrosschain(ethereum.pool).donate{value: 0}(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -2105,7 +2105,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         vm.startPrank(handler);
         // Initialize donation
-        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(pool()).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -2127,7 +2127,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         );
         
         // Complete donation (creates virtual supply)
-        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
+        IECrosschain(pool()).donate(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
@@ -2196,12 +2196,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(Constants.ETH_USDC, handler, inboundAmount);
         
         vm.startPrank(handler);
-        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, 1, DestinationMessageParams({
+        IECrosschain(pool()).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));
         IERC20(Constants.ETH_USDC).transfer(pool(), inboundAmount);
-        IECrosschain(pool()).donate{value: 0}(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
+        IECrosschain(pool()).donate(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         }));

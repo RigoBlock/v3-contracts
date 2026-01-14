@@ -120,9 +120,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
 
         // initialize pool value as base token balances (wallet balance plus apps balances)
-        int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
-
-        // Add virtual balances for cross-chain transfers (requirement 1 & 4)
+        uint256 nativeAmount = msg.value;
+        int256 poolValueInBaseToken = _getAndClearBalance(baseToken, nativeAmount);
         poolValueInBaseToken += VirtualStorageLib.getVirtualBalance(baseToken);
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
@@ -134,7 +133,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // base token is not stored in activeTokens array
         for (uint256 i = 0; i < activeTokensLength; i++) {
-            tokenAmounts[i] = _getAndClearBalance(activeTokens[i]);
+            tokenAmounts[i] = _getAndClearBalance(activeTokens[i], nativeAmount);
             // Add virtual balances for each active token (cross-chain transfers)
             tokenAmounts[i] += VirtualStorageLib.getVirtualBalance(activeTokens[i]);
         }
@@ -152,7 +151,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     }
 
     /// @dev Returns 0 balance if ERC20 call fails.
-    function _getAndClearBalance(address token) private returns (int256 value) {
+    /// @param token The token address to get balance for
+    /// @param nativeAmount The msg.value to subtract from ETH balance (passed to avoid multiple msg.value reads)
+    function _getAndClearBalance(address token, uint256 nativeAmount) private returns (int256 value) {
         value = token.getBalance();
 
         // clear temporary storage if used
@@ -162,7 +163,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // the active tokens list contains unique addresses
         if (token == _ZERO_ADDRESS) {
-            value += (address(this).balance - msg.value).toInt256();
+            value += (address(this).balance - nativeAmount).toInt256();
         } else {
             try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
                 value += _balance.toInt256();

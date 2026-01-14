@@ -55,8 +55,7 @@ contract AcrossUnitTest is Test {
         // Deploy adapter
         adapter = new AIntents(mockSpokePool);
         
-        // Deploy handler with both required parameters
-        address mockMulticallHandler = makeAddr("multicallHandler");
+        // Deploy handler
         handler = new ECrosschain();
     }
     

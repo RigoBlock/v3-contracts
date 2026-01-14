@@ -5,10 +5,7 @@ pragma solidity 0.8.28;
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IAcrossSpokePool} from "../../interfaces/IAcrossSpokePool.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
-import {IWETH9} from "../../interfaces/IWETH9.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
-import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
-import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {CrosschainLib} from "../../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
@@ -50,8 +47,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     address private immutable _aIntents;
 
     error NavToleranceTooHigh();
-    error AdapterNotDeployedOnDestination();
-    error DestinationPoolNotFound(address poolAddress);
 
     modifier onlyDelegateCall() {
         require(address(this) != _aIntents, DirectCallNotAllowed());
@@ -118,11 +113,9 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // 1. Store pool's current token balance (for delta calculation)
         calls[0] = Call({
             target: address(this),
-            callData: abi.encodeWithSelector(
-                IECrosschain.donate.selector,
-                params.outputToken,
-                1, // flag for temporary storing pool balance
-                destParams
+            callData: abi.encodeCall(
+                IECrosschain.donate,
+                (params.outputToken, 1, destParams)
             ),
             value: 0
         });
@@ -130,17 +123,16 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // 2. Transfer expected amount to pool (no approval needed)
         calls[1] = Call({
             target: params.outputToken,
-            callData: abi.encodeWithSelector(IERC20.transfer.selector, params.recipient, params.outputAmount),
+            callData: abi.encodeCall(IERC20.transfer, (params.recipient, params.outputAmount)),
             value: 0
         });
 
         // 3. Drain any leftover tokens from MulticallHandler to pool before donating (need correct amount to unwrap)
         calls[2] = Call({
             target: CrosschainLib.getAcrossHandler(params.destinationChainId),
-            callData: abi.encodeWithSelector(
-                IMulticallHandler.drainLeftoverTokens.selector,
-                params.outputToken,
-                params.recipient
+            callData: abi.encodeCall(
+                IMulticallHandler.drainLeftoverTokens,
+                (params.outputToken, payable(params.recipient))
             ),
             value: 0
         });
@@ -148,11 +140,9 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // 4. Donate to pool with virtual balance management
         calls[3] = Call({
             target: address(this),
-            callData: abi.encodeWithSelector(
-                IECrosschain.donate.selector,
-                params.outputToken,
-                params.outputAmount,
-                destParams
+            callData: abi.encodeCall(
+                IECrosschain.donate,
+                (params.outputToken, params.outputAmount, destParams)
             ),
             value: 0
         });

@@ -11,10 +11,8 @@ import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../libraries/ReentrancyGuardTransient.sol";
 import {SlotDerivation} from "../libraries/SlotDerivation.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
-import {TransientSlot} from "../libraries/TransientSlot.sol";
 import {TransientStorage} from "../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../libraries/VirtualStorageLib.sol";
-import {NavImpactLib} from "../libraries/NavImpactLib.sol";
 import {CrosschainLib} from "../libraries/CrosschainLib.sol";
 import {DestinationMessageParams, OpType} from "../types/Crosschain.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
@@ -40,7 +38,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         address token,
         uint256 amount,
         DestinationMessageParams calldata params
-    ) external payable override nonReentrant {
+    ) external override nonReentrant {
         bool isLocked = TransientStorage.getDonationLock();
         uint256 balance = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
 

@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {IAcrossSpokePool} from "../../../interfaces/IAcrossSpokePool.sol";
-import {OpType} from "../../../types/Crosschain.sol";
-
 /// @title AIntents Interface - Across Protocol integration for cross-chain transfers
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IAIntents {

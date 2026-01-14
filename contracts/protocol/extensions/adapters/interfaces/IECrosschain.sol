@@ -35,5 +35,5 @@ interface IECrosschain {
     /// @param token The token received on this chain.
     /// @param amount The amount received.
     /// @param params The message params from the source calls sent to the across multicall handler.
-    function donate(address token, uint256 amount, DestinationMessageParams calldata params) external payable;
+    function donate(address token, uint256 amount, DestinationMessageParams calldata params) external;
 }

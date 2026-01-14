@@ -24,7 +24,6 @@ import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
 import {IENavView} from "../extensions/adapters/interfaces/IENavView.sol";
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 import {IEUpgrade} from "../extensions/adapters/interfaces/IEUpgrade.sol";
-import {IAuthority} from "../interfaces/IAuthority.sol";
 import {IExtensionsMap} from "../interfaces/IExtensionsMap.sol";
 import {IExtensionsMapDeployer} from "../interfaces/IExtensionsMapDeployer.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";

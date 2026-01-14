@@ -121,10 +121,17 @@ contract PoolDonateTest is Test {
         
         vm.startPrank(donor);
         
-        console2.log("Calling donate function...");
-        // Donate 1 ETH to the pool (baseToken is address(0) for ETH)
+        // First, initialize the donation lock with current balance (amount=1)
         DestinationMessageParams memory params;
-        IECrosschain(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
+        IECrosschain(pool).donate(address(0), 1, params);
+        
+        // Then send ETH to pool (donate is not payable - tokens must be sent separately)
+        (bool success,) = payable(pool).call{value: ETH_DONATION_AMOUNT}("");
+        require(success, "ETH transfer failed");
+        
+        console2.log("Calling donate function...");
+        // Now call donate with actual amount - it checks balance delta
+        IECrosschain(pool).donate(address(0), ETH_DONATION_AMOUNT, params);
         
         vm.stopPrank();
         
@@ -163,11 +170,20 @@ contract PoolDonateTest is Test {
         console2.log("  Pool ETH balance:", poolEthBefore);
         console2.log("  Donor ETH balance:", donorEthBefore);
         
-        vm.prank(donor);
+        vm.startPrank(donor);
         
-        // Donate ETH
+        // First initialize donation lock
         DestinationMessageParams memory params;
-        IECrosschain(pool).donate{value: ETH_DONATION_AMOUNT}(address(0), ETH_DONATION_AMOUNT, params);
+        IECrosschain(pool).donate(address(0), 1, params);
+        
+        // Send ETH to pool (donate is not payable)
+        (bool success,) = payable(pool).call{value: ETH_DONATION_AMOUNT}("");
+        require(success, "ETH transfer failed");
+        
+        // Call donate with actual amount
+        IECrosschain(pool).donate(address(0), ETH_DONATION_AMOUNT, params);
+        
+        vm.stopPrank();
         
         // Verify balances
         uint256 poolEthAfter = pool.balance;
@@ -182,6 +198,35 @@ contract PoolDonateTest is Test {
         
         assertEq(poolEthAfter - poolEthBefore, ETH_DONATION_AMOUNT, "Pool should receive exactly the donation amount");
         assertEq(donorEthBefore - donorEthAfter, ETH_DONATION_AMOUNT, "Donor should lose exactly the donation amount");
+    }
+
+    /// @notice REGRESSION TEST: Verify donate reverts when called with msg.value (non-payable function)
+    /// @dev This prevents the critical bug where ETH sent with donate() call would be stuck in the contract
+    function test_Donate_WithMsgValue_Reverts() public {
+        vm.startPrank(donor);
+        
+        DestinationMessageParams memory params;
+        
+        // Attempt to call donate with ETH value attached - should revert because function is not payable
+        vm.expectRevert();
+        (bool success,) = address(pool).call{value: ETH_DONATION_AMOUNT}(
+            abi.encodeWithSelector(IECrosschain.donate.selector, address(0), ETH_DONATION_AMOUNT, params)
+        );
+        
+        // If expectRevert didn't catch it, check success flag
+        assertFalse(success, "Donate with msg.value should fail (function is non-payable)");
+        
+        console2.log("Correctly reverted when trying to send ETH directly with donate call");
+        
+        // Also test direct ETH transfer without function call - should revert because no receive() function
+        vm.expectRevert();
+        (bool transferSuccess,) = payable(pool).call{value: ETH_DONATION_AMOUNT}("");
+        
+        assertFalse(transferSuccess, "Direct ETH transfer should fail (no receive/fallback function)");
+        
+        vm.stopPrank();
+        
+        console2.log("Correctly reverted when trying to send ETH without function call (no receive function)");
     }
 
     /// @notice Test donation fails with non-owned token
@@ -246,7 +291,7 @@ contract PoolDonateTest is Test {
         // Should revert with IncorrectETHAmount error when msg.value != amount
         vm.expectRevert(abi.encodeWithSignature("IncorrectETHAmount()"));
         DestinationMessageParams memory params;
-        IECrosschain(pool).donate{value: 1 ether}(address(0), 2 ether, params);
+        IECrosschain(pool).donate(address(0), 2 ether, params);
         
         vm.stopPrank();
     }

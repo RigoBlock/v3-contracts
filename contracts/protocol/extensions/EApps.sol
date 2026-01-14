@@ -35,7 +35,7 @@ import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
-import {Applications, TokenIdsSlot} from "../types/Applications.sol";
+import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
 
@@ -71,7 +71,7 @@ contract EApps is IEApps {
         bool[] memory activeApps = new bool[](totalAppsCount);
 
         // Count how many applications are active
-        for (uint256 i = 0; i < uint256(totalAppsCount); i++) {
+        for (uint256 i = 0; i < totalAppsCount; i++) {
             if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
                 activeAppCount++;
                 activeApps[i] = true;
@@ -87,7 +87,7 @@ contract EApps is IEApps {
         ExternalApp[] memory nestedBalances = new ExternalApp[](activeAppCount);
         uint256 activeAppIndex = 0;
 
-        for (uint256 i = 0; i < uint256(totalAppsCount); i++) {
+        for (uint256 i = 0; i < totalAppsCount; i++) {
             if (activeApps[i]) {
                 nestedBalances[activeAppIndex].balances = _handleApplication(Applications(i));
                 nestedBalances[activeAppIndex].appType = uint256(Applications(i));
