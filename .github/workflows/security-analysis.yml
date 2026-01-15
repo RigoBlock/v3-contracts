@@ -1,15 +1,15 @@
 name: Security Analysis
 
 on:
-  pull_request:
+  # Run after main CI completes to avoid compiler download conflicts
+  workflow_run:
+    workflows: ["v3-contracts"]
+    types:
+      - completed
     branches:
       - main
       - development
-    paths:
-      - 'contracts/protocol/**'
-      - 'contracts/governance/**'
-      - 'contracts/staking/**'
-      - '.github/workflows/security-analysis.yml'  # Test workflow changes on PRs
+  # Manual trigger for on-demand analysis
   workflow_dispatch:
     inputs:
       target:
@@ -26,11 +26,10 @@ on:
           - high
           - medium
 
-# Required permissions for security analysis and PR comments
+# Required permissions for security analysis
 permissions:
   contents: read           # Checkout code
   security-events: write   # Upload SARIF to Security tab
-  pull-requests: write     # Post PR comments
 
 # Prevent multiple runs for the same commit
 concurrency:
@@ -95,40 +94,11 @@ jobs:
           sarif_file: ${{ steps.slither-protocol.outputs.sarif }}
           category: slither-protocol
 
-      - name: Generate Markdown Report
+      - name: Analysis Complete
         if: always()
         run: |
-          TARGET="${{ github.event.inputs.target || 'contracts/protocol/' }}"
-          SEVERITY="${{ github.event.inputs.severity || 'all' }}"
-          
-          echo "## 🔍 Slither Static Analysis Report" > slither-report.md
-          echo "" >> slither-report.md
-          echo "Analysis completed for: \`$TARGET\`" >> slither-report.md
-          echo "" >> slither-report.md
-          echo "📊 **Results uploaded to GitHub Security tab** → [View Security Alerts](https://github.com/${{ github.repository }}/security/code-scanning)" >> slither-report.md
-          echo "" >> slither-report.md
-          echo "### Configuration" >> slither-report.md
-          echo "- **Target**: $TARGET" >> slither-report.md
-          echo "- **Severity filter**: $SEVERITY" >> slither-report.md
-          echo "- **Excluded**: Test files, mocks, naming conventions, solc version warnings" >> slither-report.md
-          echo "- **Mode**: Non-blocking (informational)" >> slither-report.md
-          echo "" >> slither-report.md
-          echo "### Report Storage" >> slither-report.md
-          echo "- **GitHub Security Tab**: Permanent record of all findings" >> slither-report.md
-          echo "- **SARIF Format**: Machine-readable, integrated with GitHub code scanning" >> slither-report.md
-          echo "- **Tracks Over Time**: See when issues were introduced/fixed" >> slither-report.md
-          
-      - name: Comment PR with Report Link
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('slither-report.md', 'utf8');
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: report
-            });
+          echo "✅ Slither analysis complete"
+          echo "📊 Results uploaded to: https://github.com/${{ github.repository }}/security/code-scanning"
+          echo ""
+          echo "Target: ${{ github.event.inputs.target || 'contracts/protocol/' }}"
+          echo "Severity: ${{ github.event.inputs.severity || 'all' }}"
