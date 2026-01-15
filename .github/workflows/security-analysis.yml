@@ -1,6 +1,14 @@
 name: Security Analysis
 
 on:
+  # Trigger on PRs to show results as comments
+  pull_request:
+    paths:
+      - 'contracts/protocol/**'
+      - 'contracts/governance/**'
+      - 'contracts/staking/**'
+      - '.github/workflows/security-analysis.yml'
+  
   # Run after main CI completes to avoid compiler download conflicts
   workflow_run:
     workflows: ["v3-contracts"]
@@ -9,7 +17,6 @@ on:
     branches:
       - main
       - development
-      - security/static-analysis-and-fuzzing
 
   # Manual trigger for on-demand analysis
   workflow_dispatch:
@@ -32,6 +39,7 @@ on:
 permissions:
   contents: read           # Checkout code
   security-events: write   # Upload SARIF to Security tab
+  pull-requests: write     # Post PR comments
 
 # Prevent multiple runs for the same commit
 concurrency:
@@ -48,6 +56,7 @@ jobs:
     permissions:
       contents: read
       security-events: write  # Required for GitHub Security tab
+      pull-requests: write    # Required for PR comments
       actions: read
 
     steps:
@@ -68,6 +77,11 @@ jobs:
         run: |
           BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version --ignore-compile'
           SEVERITY="${{ github.event.inputs.severity || 'all' }}"
+          # Add markdown output for PR comments
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_ARGS="$BASE_ARGS --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/"
+          fi
+          
           
           if [ "$SEVERITY" = "high" ]; then
             EXTRA_ARGS="--exclude-medium --exclude-low --exclude-informational"
@@ -96,11 +110,105 @@ jobs:
           sarif_file: ${{ steps.slither-protocol.outputs.sarif }}
           category: slither-protocol
 
+      - name: Parse Slither Results
+        if: always()
+        id: parse-results
+        run: |
+          if [ -f "results-protocol.sarif" ]; then
+            # Count alerts in SARIF file
+            ALERT_COUNT=$(jq '[.runs[].results // []] | add | length' results-protocol.sarif 2>/dev/null || echo "0")
+            echo "alert_count=$ALERT_COUNT" >> $GITHUB_OUTPUT
+            
+            # Generate summary
+            if [ "$ALERT_COUNT" = "0" ]; then
+              echo "status=✅ No security issues found" >> $GITHUB_OUTPUT
+            else
+              echo "status=⚠️ Found $ALERT_COUNT security alert(s)" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "alert_count=unknown" >> $GITHUB_OUTPUT
+            echo "status=❓ SARIF file not generated" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Slither Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slither-report-${{ github.run_id }}
+          pathCreate/update PR comment with Slither report
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        env:
+          REPORT: ${{ steps.slither-protocol.outputs.stdout }}
+        with:
+          script: |
+            const header = '# 🔍 Slither Static Analysis Report';
+            const report = process.env.REPORT || 'No output from Slither';
+            const alertCount = '${{ steps.parse-results.outputs.alert_count }}';
+            const status = '${{ steps.parse-results.outputs.status }}';
+            
+            const body = `${header}
+            
+            **Status:** ${status}
+            **Alerts:** ${alertCount}
+            
+            <details>
+            <summary>📊 Full Slither Report</summary>
+            
+            ${report}
+            
+            </details>
+            
+            ---
+            🔗 [View in Security Tab](https://github.com/${{ github.repository }}/security/code-scanning) | 📦 [Download SARIF](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.number,
+            });
+            
+            const botComment = comments.find(
+              (comment) => comment.user.id === 41898282 && comment.body.startsWith(header)
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.number,
+                body: body,
+              });
+            }
+
       - name: Analysis Complete
         if: always()
         run: |
           echo "✅ Slither analysis complete"
-          echo "📊 Results uploaded to: https://github.com/${{ github.repository }}/security/code-scanning"
+          echo "📊 Results: ${{ steps.parse-results.outputs.status }}"
+          echo ""
+          echo "🔍 View in Security tab: https://github.com/${{ github.repository }}/security/code-scanning"
+          echo "📦 Download full report: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo ""
           echo "Target: ${{ github.event.inputs.target || 'contracts/protocol/' }}"
           echo "Severity: ${{ github.event.inputs.severity || 'all' }}"
+          echo ""
+          if [ "${{ steps.parse-results.outputs.alert_count }}" = "0" ]; then
+            echo "✅ No alerts found - Security tab will be empty (this is good!)"
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "💬 PR comment posted with full markdown report
+          echo "Target: ${{ github.event.inputs.target || 'contracts/protocol/' }}"
+          echo "Severity: ${{ github.event.inputs.severity || 'all' }}"
+          echo ""
+          if [ "${{ steps.parse-results.outputs.alert_count }}" = "0" ]; then
+            echo "✅ No alerts found - Security tab will be empty (this is good!)"
+          fi
