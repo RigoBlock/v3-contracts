@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - development
+      - security/static-analysis-and-fuzzing
+
   # Manual trigger for on-demand analysis
   workflow_dispatch:
     inputs:

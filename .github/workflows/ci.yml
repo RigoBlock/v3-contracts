@@ -60,15 +60,26 @@ jobs:
       - name: Cache Foundry fork data (persistent)
         uses: actions/cache@v5
         with:
-          path: ~/.foundry/cache
+          path: ~/.foundry/cache/rpc
+          # Cache only RPC data, not build artifacts
           # Exact match only - invalidates when fork blocks change
-          key: ${{ runner.os }}-foundry-forks-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
+          key: ${{ runner.os }}-foundry-rpc-v2-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
 
       - run: yarn --frozen-lockfile
 
       - run: yarn build
 
       - run: yarn test
+
+      - name: Check RPC cache after tests
+        run: |
+          echo "=== RPC Cache Status After Tests ==="
+          if [ -d ~/.foundry/cache/rpc ]; then
+            du -sh ~/.foundry/cache/rpc
+            ls -la ~/.foundry/cache/rpc
+          else
+            echo "⚠️ RPC cache directory does not exist!"
+          fi
 
       - name: Clean previous coverage artifacts
         run: |
@@ -79,6 +90,17 @@ jobs:
       - name: Generate coverage reports
         if: github.actor != 'dependabot[bot]'
         run: yarn coverage:all
+
+      - name: Check RPC cache after coverage
+        if: github.actor != 'dependabot[bot]'
+        run: |
+          echo "=== RPC Cache Status After Coverage ==="
+          if [ -d ~/.foundry/cache/rpc ]; then
+            du -sh ~/.foundry/cache/rpc
+            ls -la ~/.foundry/cache/rpc
+          else
+            echo "⚠️ RPC cache directory does not exist!"
+          fi
 
       - name: Upload Foundry coverage to Codecov
         if: github.actor != 'dependabot[bot]'
