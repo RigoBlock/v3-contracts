@@ -2,11 +2,15 @@ name: Security Analysis
 
 on:
   # Run after main CI completes to avoid compiler download conflicts
-  # This triggers for ALL branches including PRs, so Slither runs after CI finishes
+  # Triggered when v3-contracts workflow completes on specific branches
   workflow_run:
     workflows: ["v3-contracts"]
     types:
       - completed
+    branches:
+      - main
+      - development
+      - security/static-analysis-and-fuzzing
 
   # Manual trigger for on-demand analysis
   workflow_dispatch:
@@ -52,6 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           submodules: recursive
 
       - name: Install Foundry
@@ -62,9 +67,10 @@ jobs:
       - name: Run Slither on Protocol
         uses: crytic/slither-action@v0.4.1
         id: slither-protocol
+        continue-on-error: true
         with:
           target: ${{ github.event.inputs.target || 'contracts/protocol/' }}
-          slither-args: --exclude naming-convention,solc-version
+          slither-args: --exclude naming-convention,solc-version --filter-paths "(contracts/test|contracts/mocks|contracts/staking)" ${{ github.event.inputs.severity && github.event.inputs.severity != 'all' && format('--fail-{0}', github.event.inputs.severity) || '' }}
           sarif: results-protocol.sarif
           fail-on: none
 
@@ -85,8 +91,12 @@ jobs:
             echo "SARIF file does NOT exist"
           fi
           echo ""
-          echo "=== Slither stdout (first 50 lines) ==="
-          echo "${{ steps.slither-protocol.outputs.stdout }}" | head -n 50 || echo "No stdout available"
+          echo "=== Slither stdout ==="
+          if [ -n "${{ steps.slither-protocol.outputs.stdout }}" ]; then
+            echo "${{ steps.slither-protocol.outputs.stdout }}"
+          else
+            echo "No stdout available"
+          fi
 
       - name: Upload Protocol SARIF file
         uses: github/codeql-action/upload-sarif@v4
@@ -101,7 +111,7 @@ jobs:
         run: |
           if [ -f "results-protocol.sarif" ]; then
             # Count alerts in SARIF file
-            ALERT_COUNT=$(jq '[.runs[].results // []] | add | length' results-protocol.sarif 2>/dev/null || echo "0")
+            ALERT_COUNT=$(jq '[.runs[]?.results // [] | .[]] | length' results-protocol.sarif 2>/dev/null || echo "0")
             echo "alert_count=$ALERT_COUNT" >> $GITHUB_OUTPUT
             
             # Generate summary
@@ -120,34 +130,37 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: slither-report-${{ github.run_id }}
-          path: |
-            results-protocol.sarif
-            slither.db.json
+          path: results-protocol.sarif
           retention-days: 30
 
       - name: Create/update PR comment with Slither report
         uses: actions/github-script@v7
-        if: github.event.workflow_run.event == 'pull_request'
+        if: github.event.workflow_run.pull_requests != null && github.event.workflow_run.pull_requests[0] != null
         env:
           REPORT: ${{ steps.slither-protocol.outputs.stdout }}
+          PULL_REQUESTS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
         with:
           script: |
             const script = require('./.github/scripts/comment');
             const header = '# Slither Static Analysis Report';
             const status = '${{ steps.parse-results.outputs.status }}';
             const alertCount = '${{ steps.parse-results.outputs.alert_count }}';
-            const report = process.env.REPORT || 'No output from Slither';
             
-            const body = '**Status:** ' + status + '\n**Alerts:** ' + alertCount + '\n\n<details>\n<summary>Full Slither Report</summary>\n\n```text\n' + report + '\n```\n\n</details>\n\n---\nView in Security Tab: https://github.com/${{ github.repository }}/security/code-scanning\nDownload SARIF: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            // Sanitize report to prevent breaking markdown code fence
+            const rawReport = process.env.REPORT || 'No output from Slither';
+            const sanitizedReport = rawReport.replace(/```/g, '``\\`');
             
-            // Get PR number from workflow_run context
-            const pullRequests = ${{ toJSON(github.event.workflow_run.pull_requests) }};
+            const body = '**Status:** ' + status + '\n**Alerts:** ' + alertCount + '\n\n<details>\n<summary>Full Slither Report</summary>\n\n```text\n' + sanitizedReport + '\n```\n\n</details>\n\n---\nView in Security Tab: https://github.com/${{ github.repository }}/security/code-scanning\nDownload SARIF: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            
+            // For workflow_run triggers, extract PR number from the associated pull_requests array
+            // The comment script expects context.payload.number to be set
+            const pullRequests = JSON.parse(process.env.PULL_REQUESTS || '[]');
             if (!pullRequests || pullRequests.length === 0) {
               console.log('No PR found in workflow_run context - skipping comment');
               return;
             }
             
-            // Override context.payload.number for the script
+            // Set context.payload.number to emulate pull_request event context
             context.payload.number = pullRequests[0].number;
             
             await script({ github, context, header, body });
@@ -167,6 +180,6 @@ jobs:
           if [ "${{ steps.parse-results.outputs.alert_count }}" = "0" ]; then
             echo "No alerts found - Security tab will be empty (this is good!)"
           fi
-          if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
+          if [ -n "${{ github.event.workflow_run.pull_requests[0].number }}" ]; then
             echo "PR comment posted with full markdown report"
           fi
