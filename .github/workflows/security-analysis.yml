@@ -1,0 +1,129 @@
+name: Security Analysis
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+    paths:
+      - 'contracts/protocol/**'
+      - 'contracts/governance/**'
+      - 'contracts/staking/**'
+      - '.github/workflows/security-analysis.yml'
+  push:
+    branches:
+      - main
+      - development
+    paths:
+      - 'contracts/protocol/**'
+      - 'contracts/governance/**'
+      - 'contracts/staking/**'
+
+# Prevent multiple runs for the same commit
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  slither-analysis:
+    name: Slither Static Analysis
+    runs-on: ubuntu-latest
+    # Skip for dependabot PRs (they don't modify contracts)
+    if: github.actor != 'dependabot[bot]'
+    
+    permissions:
+      contents: read
+      security-events: write  # Required for GitHub Security tab
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Run Slither on Protocol
+        uses: crytic/slither-action@v0.4.0
+        id: slither-protocol
+        continue-on-error: true
+        with:
+          target: 'contracts/protocol/'
+          slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
+          sarif: results-protocol.sarif
+          fail-on: none
+
+      - name: Upload Protocol SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ steps.slither-protocol.outputs.sarif }}
+          category: slither-protocol
+
+      # Optional: Run on governance (uncomment when ready)
+      # - name: Run Slither on Governance
+      #   uses: crytic/slither-action@v0.4.0
+      #   id: slither-governance
+      #   continue-on-error: true
+      #   with:
+      #     target: 'contracts/governance/'
+      #     slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
+      #     sarif: results-governance.sarif
+      #     fail-on: none
+
+      # - name: Upload Governance SARIF file
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   if: always()
+      #   with:
+      #     sarif_file: ${{ steps.slither-governance.outputs.sarif }}
+      #     category: slither-governance
+
+      # Optional: Run on staking (uncomment when ready)
+      # - name: Run Slither on Staking
+      #   uses: crytic/slither-action@v0.4.0
+      #   id: slither-staking
+      #   continue-on-error: true
+      #   with:
+      #     target: 'contracts/staking/'
+      #     slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
+      #     sarif: results-staking.sarif
+      #     fail-on: none
+
+      # - name: Upload Staking SARIF file
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   if: always()
+      #   with:
+      #     sarif_file: ${{ steps.slither-staking.outputs.sarif }}
+      #     category: slither-staking
+
+      - name: Generate Markdown Report
+        if: always()
+        run: |
+          echo "## 🔍 Slither Static Analysis Report" > slither-report.md
+          echo "" >> slither-report.md
+          echo "Analysis completed for: \`contracts/protocol/\`" >> slither-report.md
+          echo "" >> slither-report.md
+          echo "📊 **Results uploaded to GitHub Security tab** → [View Security Alerts](https://github.com/${{ github.repository }}/security/code-scanning)" >> slither-report.md
+          echo "" >> slither-report.md
+          echo "### Configuration" >> slither-report.md
+          echo "- **Target**: Protocol contracts" >> slither-report.md
+          echo "- **Excluded**: Test files, mocks, naming conventions, solc version warnings" >> slither-report.md
+          echo "- **Mode**: Non-blocking (informational)" >> slither-report.md
+          
+      - name: Comment PR with Report Link
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('slither-report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
