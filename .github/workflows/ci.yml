@@ -57,13 +57,12 @@ jobs:
             **/node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
 
-      - name: Cache Foundry fork data (persistent)
-        uses: actions/cache@v5
-        with:
-          path: ~/.foundry/cache/rpc
-          # Cache only RPC data, not build artifacts
-          # Exact match only - invalidates when fork blocks change
-          key: ${{ runner.os }}-foundry-rpc-v2-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
+      # TODO: Re-enable RPC caching after debugging coverage inconsistencies
+      # - name: Cache Foundry fork data (persistent)
+      #   uses: actions/cache@v5
+      #   with:
+      #     path: ~/.foundry/cache/rpc
+      #     key: ${{ runner.os }}-foundry-rpc-v2-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
 
       - run: yarn --frozen-lockfile
 
@@ -76,7 +75,7 @@ jobs:
           echo "=== RPC Cache Status After Tests ==="
           if [ -d ~/.foundry/cache/rpc ]; then
             du -sh ~/.foundry/cache/rpc
-            ls -la ~/.foundry/cache/rpc
+            find ~/.foundry/cache/rpc -type f | wc -l
           else
             echo "⚠️ RPC cache directory does not exist!"
           fi
@@ -89,7 +88,7 @@ jobs:
 
       - name: Generate coverage reports
         if: github.actor != 'dependabot[bot]'
-        run: yarn coverage:all
+        run: yarn coverage:clean
 
       - name: Check RPC cache after coverage
         if: github.actor != 'dependabot[bot]'
@@ -97,9 +96,9 @@ jobs:
           echo "=== RPC Cache Status After Coverage ==="
           if [ -d ~/.foundry/cache/rpc ]; then
             du -sh ~/.foundry/cache/rpc
-            ls -la ~/.foundry/cache/rpc
+            find ~/.foundry/cache/rpc -type f | wc -l
           else
-            echo "⚠️ RPC cache directory does not exist!"
+            echo "✅ RPC cache cleared as expected"
           fi
 
       - name: Upload Foundry coverage to Codecov
