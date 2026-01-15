@@ -42,7 +42,7 @@
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "prepack": "yarn build",
     "prepare": "chmod +x ./.husky/pre-commit && husky install",
-    "prepublish": "yarn rimraf build:hardhat && yarn build:hardhat && yarn build:ts"
+    "prepublish": "yarn rimraf build && yarn build:ts"
   },
   "repository": {
     "type": "git",
