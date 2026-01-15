@@ -1,106 +1,33 @@
-name: Security Analysis
+name: Slither Analysis
 
 on:
-  # Run after main CI completes to avoid compiler download conflicts
-  workflow_run:
-    workflows: ["v3-contracts"]
-    types:
-      - completed
-    branches:
-      - main
-      - development
-      - security/static-analysis-and-fuzzing
-
-  # Manual trigger for on-demand analysis
-  workflow_dispatch:
-    inputs:
-      target:
-        description: 'Target to analyze (e.g., contracts/protocol/)'
-        required: false
-        default: 'contracts/protocol/'
-      severity:
-        description: 'Minimum severity to report'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - high
-          - medium
-
-# Required permissions for security analysis
-permissions:
-  contents: read           # Checkout code
-  security-events: write   # Upload SARIF to Security tab
-
-# Prevent multiple runs for the same commit
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  push:
+    branches: [ main, development ]
+  pull_request:
 
 jobs:
-  slither-analysis:
-    name: Slither Static Analysis
+  analyze:
     runs-on: ubuntu-latest
-    # Skip for dependabot PRs (they don't modify contracts)
-    if: github.actor != 'dependabot[bot]'
-    
-    permissions:
-      contents: read
-      security-events: write  # Required for GitHub Security tab
-      actions: read
-
     steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: recursive
+    - name: Checkout repository
+      uses: actions/checkout@v6
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
+    - name: Run Slither
+      uses: crytic/slither-action@v0.4.1
+      id: slither
+      with:
+        node-version: 16
+        fail-on: none
+        slither-args: --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/
 
-      - name: Compile Contracts
-        run: forge build --build-info
-
-      - name: Build Slither Arguments
-        id: slither-args
-        run: |
-          BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version --ignore-compile'
-          SEVERITY="${{ github.event.inputs.severity || 'all' }}"
-          
-          if [ "$SEVERITY" = "high" ]; then
-            EXTRA_ARGS="--exclude-medium --exclude-low --exclude-informational"
-          elif [ "$SEVERITY" = "medium" ]; then
-            EXTRA_ARGS="--exclude-low --exclude-informational"
-          else
-            EXTRA_ARGS=""
-          fi
-          
-          echo "args=$BASE_ARGS $EXTRA_ARGS" >> $GITHUB_OUTPUT
-
-      - name: Run Slither on Protocol
-        uses: crytic/slither-action@v0.4.0
-        id: slither-protocol
-        continue-on-error: true
-        with:
-          target: ${{ github.event.inputs.target || 'contracts/protocol/' }}
-          slither-args: ${{ steps.slither-args.outputs.args }}
-          sarif: results-protocol.sarif
-          fail-on: none
-
-      - name: Upload Protocol SARIF file
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: ${{ steps.slither-protocol.outputs.sarif }}
-          category: slither-protocol
-
-      - name: Analysis Complete
-        if: always()
-        run: |
-          echo "✅ Slither analysis complete"
-          echo "📊 Results uploaded to: https://github.com/${{ github.repository }}/security/code-scanning"
-          echo ""
-          echo "Target: ${{ github.event.inputs.target || 'contracts/protocol/' }}"
-          echo "Severity: ${{ github.event.inputs.severity || 'all' }}"
+    - name: Create/update checklist as PR comment
+      uses: actions/github-script@v7
+      if: github.event_name == 'pull_request'
+      env:
+        REPORT: ${{ steps.slither.outputs.stdout }}
+      with:
+        script: |
+          const script = require('.github/scripts/comment')
+          const header = '# Slither report'
+          const body = process.env.REPORT
+          await script({ github, context, header, body })
