@@ -52,6 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           submodules: recursive
 
       - name: Install Foundry
@@ -68,7 +69,6 @@ jobs:
           if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
             BASE_ARGS="$BASE_ARGS --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.workflow_run.head_sha }}/"
           fi
-          
           
           if [ "$SEVERITY" = "high" ]; then
             EXTRA_ARGS="--exclude-medium --exclude-low --exclude-informational"
@@ -160,11 +160,83 @@ jobs:
             
             // Get PR number from workflow_run pull_requests
             const pullRequests = ${{ toJSON(github.event.workflow_run.pull_requests) }};
+            
+            console.log('Workflow run event:', '${{ github.event.workflow_run.event }}');
+            console.log('Pull requests:', JSON.stringify(pullRequests));
+            console.log('Head branch:', '${{ github.event.workflow_run.head_branch }}');
+            
             if (!pullRequests || pullRequests.length === 0) {
-              console.log('No pull request found in workflow_run context');
+              console.log('⚠️ No pull request found in workflow_run context - trying to find PR by commit SHA');
+              
+              // Fallback: search for PR by commit SHA
+              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: '${{ github.event.workflow_run.head_sha }}'
+              });
+              
+              if (prs.length === 0) {
+                console.log('❌ No PR found for this commit - skipping PR comment');
+                return;
+              }
+              
+              const prNumber = prs[0].number;
+              console.log('✅ Found PR #' + prNumber + ' via commit SHA');
+              
+              const body = `${header}
+              
+              **Status:** ${status}
+              **Alerts:** ${alertCount}
+              
+              <details>
+              <summary>📊 Full Slither Report</summary>
+              
+              \`\`\`text
+              ${report}
+              \`\`\`
+              
+              </details>
+              
+              ---
+              🔗 [View in Security Tab](https://github.com/${{ github.repository }}/security/code-scanning) | 📦 [Download SARIF](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              `;
+              
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+              
+              const botComment = comments.find(
+                (comment) =>
+                  comment.user &&
+                  comment.user.type === 'Bot' &&
+                  comment.user.login === 'github-actions[bot]' &&
+                  comment.body.startsWith(header)
+              );
+              
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: body,
+                });
+                console.log('✅ Updated existing comment');
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: body,
+                });
+                console.log('✅ Created new comment');
+              }
               return;
             }
+            
             const prNumber = pullRequests[0].number;
+            console.log('✅ Found PR #' + prNumber + ' from workflow_run context');
             
             const body = `${header}
             
@@ -174,7 +246,9 @@ jobs:
             <details>
             <summary>📊 Full Slither Report</summary>
             
+            \`\`\`text
             ${report}
+            \`\`\`
             
             </details>
             
@@ -189,7 +263,11 @@ jobs:
             });
             
             const botComment = comments.find(
-              (comment) => comment.user.id === 41898282 && comment.body.startsWith(header)
+              (comment) =>
+                comment.user &&
+                comment.user.type === 'Bot' &&
+                comment.user.login === 'github-actions[bot]' &&
+                comment.body.startsWith(header)
             );
             
             if (botComment) {
@@ -199,6 +277,7 @@ jobs:
                 comment_id: botComment.id,
                 body: body,
               });
+              console.log('✅ Updated existing comment');
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -206,6 +285,7 @@ jobs:
                 issue_number: prNumber,
                 body: body,
               });
+              console.log('✅ Created new comment');
             }
 
       - name: Analysis Complete
