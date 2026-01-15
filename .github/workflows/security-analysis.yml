@@ -16,7 +16,7 @@ jobs:
       uses: crytic/slither-action@v0.4.1
       id: slither
       with:
-        node-version: 18
+        node-version: 20
         fail-on: none
         slither-args: --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/
 
