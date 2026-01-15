@@ -10,14 +10,6 @@ on:
       - 'contracts/governance/**'
       - 'contracts/staking/**'
       - '.github/workflows/security-analysis.yml'  # Test workflow changes on PRs
-  push:
-    branches:
-      - main
-      - development
-    paths:
-      - 'contracts/protocol/**'
-      - 'contracts/governance/**'
-      - 'contracts/staking/**'
   workflow_dispatch:
     inputs:
       target:
@@ -33,6 +25,12 @@ on:
           - all
           - high
           - medium
+
+# Required permissions for security analysis and PR comments
+permissions:
+  contents: read           # Checkout code
+  security-events: write   # Upload SARIF to Security tab
+  pull-requests: write     # Post PR comments
 
 # Prevent multiple runs for the same commit
 concurrency:
@@ -52,7 +50,7 @@ jobs:
       actions: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
