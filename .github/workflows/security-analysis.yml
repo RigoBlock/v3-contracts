@@ -1,22 +1,12 @@
 name: Security Analysis
 
 on:
-  # Trigger on PRs to show results as comments
-  pull_request:
-    paths:
-      - 'contracts/protocol/**'
-      - 'contracts/governance/**'
-      - 'contracts/staking/**'
-      - '.github/workflows/security-analysis.yml'
-  
   # Run after main CI completes to avoid compiler download conflicts
+  # This triggers for ALL branches including PRs, so Slither runs after CI finishes
   workflow_run:
     workflows: ["v3-contracts"]
     types:
       - completed
-    branches:
-      - main
-      - development
 
   # Manual trigger for on-demand analysis
   workflow_dispatch:
@@ -72,11 +62,11 @@ jobs:
       - name: Build Slither Arguments
         id: slither-args
         run: |
-          BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
+          BASE_ARGS='--filter-paths "lib/|node_modules/" --exclude naming-convention,solc-version'
           SEVERITY="${{ github.event.inputs.severity || 'all' }}"
           # Add markdown output for PR comments
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_ARGS="$BASE_ARGS --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/"
+          if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
+            BASE_ARGS="$BASE_ARGS --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.workflow_run.head_sha }}/"
           fi
           
           
@@ -91,20 +81,39 @@ jobs:
           echo "args=$BASE_ARGS $EXTRA_ARGS" >> $GITHUB_OUTPUT
 
       - name: Run Slither on Protocol
-        uses: crytic/slither-action@v0.4.0
+        uses: crytic/slither-action@v0.4.1
         id: slither-protocol
-        continue-on-error: true
         with:
           target: ${{ github.event.inputs.target || 'contracts/protocol/' }}
           slither-args: ${{ steps.slither-args.outputs.args }}
           sarif: results-protocol.sarif
           fail-on: none
 
+      - name: Debug Slither Output
+        if: always()
+        run: |
+          echo "=== Slither Execution Status ==="
+          echo "Exit code: ${{ steps.slither-protocol.outcome }}"
+          echo "SARIF output path: ${{ steps.slither-protocol.outputs.sarif }}"
+          echo ""
+          echo "=== Files in workspace ==="
+          ls -la
+          echo ""
+          if [ -f "results-protocol.sarif" ]; then
+            echo "✅ SARIF file exists"
+            echo "Size: $(wc -c < results-protocol.sarif) bytes"
+          else
+            echo "❌ SARIF file does NOT exist"
+          fi
+          echo ""
+          echo "=== Slither stdout (first 50 lines) ==="
+          echo "${{ steps.slither-protocol.outputs.stdout }}" | head -n 50 || echo "No stdout available"
+
       - name: Upload Protocol SARIF file
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: always() && hashFiles('results-protocol.sarif') != ''
         with:
-          sarif_file: ${{ steps.slither-protocol.outputs.sarif }}
+          sarif_file: results-protocol.sarif
           category: slither-protocol
 
       - name: Parse Slither Results
@@ -128,7 +137,7 @@ jobs:
           fi
 
       - name: Upload Slither Report Artifact
-        if: always()
+        if: always() && hashFiles('results-protocol.sarif') != ''
         uses: actions/upload-artifact@v4
         with:
           name: slither-report-${{ github.run_id }}
@@ -139,7 +148,7 @@ jobs:
 
       - name: Create/update PR comment with Slither report
         uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
+        if: github.event.workflow_run.event == 'pull_request'
         env:
           REPORT: ${{ steps.slither-protocol.outputs.stdout }}
         with:
@@ -148,6 +157,14 @@ jobs:
             const report = process.env.REPORT || 'No output from Slither';
             const alertCount = '${{ steps.parse-results.outputs.alert_count }}';
             const status = '${{ steps.parse-results.outputs.status }}';
+            
+            // Get PR number from workflow_run pull_requests
+            const pullRequests = ${{ toJSON(github.event.workflow_run.pull_requests) }};
+            if (!pullRequests || pullRequests.length === 0) {
+              console.log('No pull request found in workflow_run context');
+              return;
+            }
+            const prNumber = pullRequests[0].number;
             
             const body = `${header}
             
@@ -168,7 +185,7 @@ jobs:
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: prNumber,
             });
             
             const botComment = comments.find(
@@ -186,7 +203,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: prNumber,
                 body: body,
               });
             }
@@ -206,6 +223,6 @@ jobs:
           if [ "${{ steps.parse-results.outputs.alert_count }}" = "0" ]; then
             echo "✅ No alerts found - Security tab will be empty (this is good!)"
           fi
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
             echo "💬 PR comment posted with full markdown report"
           fi
