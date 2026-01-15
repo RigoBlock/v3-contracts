@@ -61,10 +61,13 @@ jobs:
         with:
           version: nightly
 
+      - name: Compile Contracts
+        run: forge build --build-info
+
       - name: Build Slither Arguments
         id: slither-args
         run: |
-          BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
+          BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version --ignore-compile'
           SEVERITY="${{ github.event.inputs.severity || 'all' }}"
           
           if [ "$SEVERITY" = "high" ]; then
