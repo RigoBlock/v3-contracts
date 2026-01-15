@@ -188,7 +188,7 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const acrossMulticallHandler = await deploy("MockAcrossMulticallHandler", {
+  await deploy("MockAcrossMulticallHandler", {
     from: deployer,
     args: [],
     log: true,

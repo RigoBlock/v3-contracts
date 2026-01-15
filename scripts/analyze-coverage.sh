@@ -32,7 +32,6 @@ else
 fi
 echo "   Lines: $hardhat_hit_lines/$hardhat_total_lines ($hardhat_pct%)"
 
-# Analyze Foundry coverage  
 echo ""
 echo "⚡ FOUNDRY COVERAGE:"
 foundry_total_lines=$(grep -c "^DA:" coverage/foundry_lcov.info || echo "0")
@@ -43,6 +42,19 @@ else
     foundry_pct="0.00"
 fi
 echo "   Lines: $foundry_hit_lines/$foundry_total_lines ($foundry_pct%)"
+
+# Check if Foundry coverage is suspiciously low (possible fork test failures)
+if [ "$foundry_total_lines" -gt 0 ]; then
+    foundry_pct_int=$(echo "$foundry_pct" | awk '{print int($1)}')
+    if [ "$foundry_pct_int" -lt 20 ]; then
+        echo ""
+        echo "⚠️  WARNING: Foundry coverage is unusually low ($foundry_pct%)"
+        echo "   This may indicate that fork tests failed due to RPC issues."
+        echo "   Check that RPC URLs are properly configured and accessible."
+        echo "   Fork tests: ENavViewFork.t.sol, TransferEscrow.t.sol, PoolDonate.t.sol"
+        echo ""
+    fi
+fi
 
 echo ""
 echo "📋 FILES WITH MISSING COVERAGE (uncovered by BOTH Hardhat and Foundry):"

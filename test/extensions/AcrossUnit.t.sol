@@ -71,7 +71,7 @@ contract AcrossUnitTest is Test {
     
     /// @notice Helper to setup pool storage with specific decimals and lock state
     function _setupPoolStorageWithLockState(address pool, address baseToken, uint8 decimals, bool unlocked) internal {
-        bytes32 poolInitSlot = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
+        bytes32 poolInitSlot = StorageLib.POOL_INIT_SLOT;
         
         // Based on RigoblockPool.StorageAccessible.spec.ts test:
         // The pool struct is packed across 3 slots total

@@ -95,7 +95,7 @@ contract EscrowWorkingTest is Test {
     }
     
     /// @notice Test escrow deployment and CREATE2 determinism
-    function test_EscrowDeployment() public {
+    function test_EscrowDeployment() public view {
         assertTrue(escrowAddress != address(0), "Escrow should be deployed");
         assertEq(escrow.pool(), pool, "Escrow should reference correct pool");
         

@@ -253,7 +253,7 @@ contract MockNavImpactPool {
         
         // Set the exact storage that StorageLib.pool() reads from
         // Based on AcrossUnit.t.sol implementation
-        bytes32 poolInitSlot = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
+        bytes32 poolInitSlot = StorageLib.POOL_INIT_SLOT;
         
         // Use vm.store approach (note: this won't work in mock, but let's try a different approach)
         // Let's implement a simpler approach by directly using the struct pattern

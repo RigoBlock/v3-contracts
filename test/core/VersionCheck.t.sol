@@ -12,7 +12,7 @@ contract VersionCheckTest is Test {
 
     /// @notice Test that lower major version returns false
     /// @dev This covers VersionLib.sol line 16 (return false path) - major version
-    function test_VersionLib_LowerMajorVersion_ReturnsFalse() public {
+    function test_VersionLib_LowerMajorVersion_ReturnsFalse() public pure {
         console2.log("\n=== Testing Lower Major Version ===");
         
         string memory givenVersion = "4.0.0";
@@ -31,7 +31,7 @@ contract VersionCheckTest is Test {
 
     /// @notice Test that lower minor version returns false
     /// @dev This also covers VersionLib.sol line 16 (return false path) - minor version
-    function test_VersionLib_LowerMinorVersion_ReturnsFalse() public {
+    function test_VersionLib_LowerMinorVersion_ReturnsFalse() public pure {
         console2.log("\n=== Testing Lower Minor Version ===");
         
         string memory givenVersion = "4.0.0";
@@ -49,7 +49,7 @@ contract VersionCheckTest is Test {
 
     /// @notice Test that lower patch version returns false
     /// @dev This also covers VersionLib.sol line 16 (return false path) - patch version
-    function test_VersionLib_LowerPatchVersion_ReturnsFalse() public {
+    function test_VersionLib_LowerPatchVersion_ReturnsFalse() public pure {
         console2.log("\n=== Testing Lower Patch Version ===");
         
         string memory givenVersion = "4.0.0";
@@ -66,7 +66,7 @@ contract VersionCheckTest is Test {
     }
 
     /// @notice Test that equal versions returns true
-    function test_VersionLib_EqualVersions_ReturnsTrue() public {
+    function test_VersionLib_EqualVersions_ReturnsTrue() public pure {
         console2.log("\n=== Testing Equal Versions ===");
         
         string memory givenVersion = "4.0.0";
@@ -83,7 +83,7 @@ contract VersionCheckTest is Test {
     }
 
     /// @notice Test that higher version returns true
-    function test_VersionLib_HigherVersion_ReturnsTrue() public {
+    function test_VersionLib_HigherVersion_ReturnsTrue() public pure {
         console2.log("\n=== Testing Higher Version ===");
         
         string memory givenVersion = "5.0.0";
@@ -100,7 +100,7 @@ contract VersionCheckTest is Test {
     }
 
     /// @notice Test edge case with multi-digit versions
-    function test_VersionLib_MultiDigitVersions() public {
+    function test_VersionLib_MultiDigitVersions() public pure {
         console2.log("\n=== Testing Multi-Digit Versions ===");
         
         // Test that 4.10.0 > 4.9.0 (not lexicographic comparison)

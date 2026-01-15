@@ -72,11 +72,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const acrossSpokePool = config.acrossSpokePool || "0x0000000000000000000000000000000000000000";
-
   const eCrosschain = await deploy("ECrosschain", {
     from: deployer,
-    args: [acrossSpokePool],
+    args: [],
     log: true,
     deterministicDeployment: true,
   });
