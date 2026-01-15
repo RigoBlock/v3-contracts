@@ -18,6 +18,21 @@ on:
       - 'contracts/protocol/**'
       - 'contracts/governance/**'
       - 'contracts/staking/**'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target to analyze (e.g., contracts/protocol/)'
+        required: false
+        default: 'contracts/protocol/'
+      severity:
+        description: 'Minimum severity to report'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - high
+          - medium
 
 # Prevent multiple runs for the same commit
 concurrency:
@@ -51,8 +66,8 @@ jobs:
         id: slither-protocol
         continue-on-error: true
         with:
-          target: 'contracts/protocol/'
-          slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
+          target: ${{ github.event.inputs.target || 'contracts/protocol/' }}
+          slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version ${{ github.event.inputs.severity == "high" && "--exclude-medium --exclude-low --exclude-informational" || "" }} ${{ github.event.inputs.severity == "medium" && "--exclude-low --exclude-informational" || "" }}'
           sarif: results-protocol.sarif
           fail-on: none
 
@@ -102,16 +117,25 @@ jobs:
       - name: Generate Markdown Report
         if: always()
         run: |
+          TARGET="${{ github.event.inputs.target || 'contracts/protocol/' }}"
+          SEVERITY="${{ github.event.inputs.severity || 'all' }}"
+          
           echo "## 🔍 Slither Static Analysis Report" > slither-report.md
           echo "" >> slither-report.md
-          echo "Analysis completed for: \`contracts/protocol/\`" >> slither-report.md
+          echo "Analysis completed for: \`$TARGET\`" >> slither-report.md
           echo "" >> slither-report.md
           echo "📊 **Results uploaded to GitHub Security tab** → [View Security Alerts](https://github.com/${{ github.repository }}/security/code-scanning)" >> slither-report.md
           echo "" >> slither-report.md
           echo "### Configuration" >> slither-report.md
-          echo "- **Target**: Protocol contracts" >> slither-report.md
+          echo "- **Target**: $TARGET" >> slither-report.md
+          echo "- **Severity filter**: $SEVERITY" >> slither-report.md
           echo "- **Excluded**: Test files, mocks, naming conventions, solc version warnings" >> slither-report.md
           echo "- **Mode**: Non-blocking (informational)" >> slither-report.md
+          echo "" >> slither-report.md
+          echo "### Report Storage" >> slither-report.md
+          echo "- **GitHub Security Tab**: Permanent record of all findings" >> slither-report.md
+          echo "- **SARIF Format**: Machine-readable, integrated with GitHub code scanning" >> slither-report.md
+          echo "- **Tracks Over Time**: See when issues were introduced/fixed" >> slither-report.md
           
       - name: Comment PR with Report Link
         if: github.event_name == 'pull_request'
