@@ -52,7 +52,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           submodules: recursive
 
       - name: Install Foundry
@@ -60,32 +59,12 @@ jobs:
         with:
           version: nightly
 
-      - name: Build Slither Arguments
-        id: slither-args
-        run: |
-          BASE_ARGS='--filter-paths "lib/|node_modules/" --exclude naming-convention,solc-version'
-          SEVERITY="${{ github.event.inputs.severity || 'all' }}"
-          # Add markdown output for PR comments
-          if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
-            BASE_ARGS="$BASE_ARGS --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.workflow_run.head_sha }}/"
-          fi
-          
-          if [ "$SEVERITY" = "high" ]; then
-            EXTRA_ARGS="--exclude-medium --exclude-low --exclude-informational"
-          elif [ "$SEVERITY" = "medium" ]; then
-            EXTRA_ARGS="--exclude-low --exclude-informational"
-          else
-            EXTRA_ARGS=""
-          fi
-          
-          echo "args=$BASE_ARGS $EXTRA_ARGS" >> $GITHUB_OUTPUT
-
       - name: Run Slither on Protocol
         uses: crytic/slither-action@v0.4.1
         id: slither-protocol
         with:
           target: ${{ github.event.inputs.target || 'contracts/protocol/' }}
-          slither-args: ${{ steps.slither-args.outputs.args }}
+          slither-args: --exclude naming-convention,solc-version
           sarif: results-protocol.sarif
           fail-on: none
 
@@ -100,10 +79,10 @@ jobs:
           ls -la
           echo ""
           if [ -f "results-protocol.sarif" ]; then
-            echo "✅ SARIF file exists"
+            echo "SARIF file exists"
             echo "Size: $(wc -c < results-protocol.sarif) bytes"
           else
-            echo "❌ SARIF file does NOT exist"
+            echo "SARIF file does NOT exist"
           fi
           echo ""
           echo "=== Slither stdout (first 50 lines) ==="
@@ -127,13 +106,13 @@ jobs:
             
             # Generate summary
             if [ "$ALERT_COUNT" = "0" ]; then
-              echo "status=✅ No security issues found" >> $GITHUB_OUTPUT
+              echo "status=No security issues found" >> $GITHUB_OUTPUT
             else
-              echo "status=⚠️ Found $ALERT_COUNT security alert(s)" >> $GITHUB_OUTPUT
+              echo "status=Found $ALERT_COUNT security alert(s)" >> $GITHUB_OUTPUT
             fi
           else
             echo "alert_count=unknown" >> $GITHUB_OUTPUT
-            echo "status=❓ SARIF file not generated" >> $GITHUB_OUTPUT
+            echo "status=SARIF file not generated" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload Slither Report Artifact
@@ -153,156 +132,41 @@ jobs:
           REPORT: ${{ steps.slither-protocol.outputs.stdout }}
         with:
           script: |
-            const header = '# 🔍 Slither Static Analysis Report';
-            const report = process.env.REPORT || 'No output from Slither';
-            const alertCount = '${{ steps.parse-results.outputs.alert_count }}';
+            const script = require('./.github/scripts/comment');
+            const header = '# Slither Static Analysis Report';
             const status = '${{ steps.parse-results.outputs.status }}';
+            const alertCount = '${{ steps.parse-results.outputs.alert_count }}';
+            const report = process.env.REPORT || 'No output from Slither';
             
-            // Get PR number from workflow_run pull_requests
+            const body = '**Status:** ' + status + '\n**Alerts:** ' + alertCount + '\n\n<details>\n<summary>Full Slither Report</summary>\n\n```text\n' + report + '\n```\n\n</details>\n\n---\nView in Security Tab: https://github.com/${{ github.repository }}/security/code-scanning\nDownload SARIF: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            
+            // Get PR number from workflow_run context
             const pullRequests = ${{ toJSON(github.event.workflow_run.pull_requests) }};
-            
-            console.log('Workflow run event:', '${{ github.event.workflow_run.event }}');
-            console.log('Pull requests:', JSON.stringify(pullRequests));
-            console.log('Head branch:', '${{ github.event.workflow_run.head_branch }}');
-            
             if (!pullRequests || pullRequests.length === 0) {
-              console.log('⚠️ No pull request found in workflow_run context - trying to find PR by commit SHA');
-              
-              // Fallback: search for PR by commit SHA
-              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                commit_sha: '${{ github.event.workflow_run.head_sha }}'
-              });
-              
-              if (prs.length === 0) {
-                console.log('❌ No PR found for this commit - skipping PR comment');
-                return;
-              }
-              
-              const prNumber = prs[0].number;
-              console.log('✅ Found PR #' + prNumber + ' via commit SHA');
-              
-              const body = `${header}
-              
-              **Status:** ${status}
-              **Alerts:** ${alertCount}
-              
-              <details>
-              <summary>📊 Full Slither Report</summary>
-              
-              \`\`\`text
-              ${report}
-              \`\`\`
-              
-              </details>
-              
-              ---
-              🔗 [View in Security Tab](https://github.com/${{ github.repository }}/security/code-scanning) | 📦 [Download SARIF](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-              `;
-              
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-              });
-              
-              const botComment = comments.find(
-                (comment) =>
-                  comment.user &&
-                  comment.user.type === 'Bot' &&
-                  comment.user.login === 'github-actions[bot]' &&
-                  comment.body.startsWith(header)
-              );
-              
-              if (botComment) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: botComment.id,
-                  body: body,
-                });
-                console.log('✅ Updated existing comment');
-              } else {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: body,
-                });
-                console.log('✅ Created new comment');
-              }
+              console.log('No PR found in workflow_run context - skipping comment');
               return;
             }
             
-            const prNumber = pullRequests[0].number;
-            console.log('✅ Found PR #' + prNumber + ' from workflow_run context');
+            // Override context.payload.number for the script
+            context.payload.number = pullRequests[0].number;
             
-            const body = `${header}
-            
-            **Status:** ${status}
-            **Alerts:** ${alertCount}
-            
-            <details>
-            <summary>📊 Full Slither Report</summary>
-            
-            \`\`\`text
-            ${report}
-            \`\`\`
-            
-            </details>
-            
-            ---
-            🔗 [View in Security Tab](https://github.com/${{ github.repository }}/security/code-scanning) | 📦 [Download SARIF](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            `;
-            
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-            });
-            
-            const botComment = comments.find(
-              (comment) =>
-                comment.user &&
-                comment.user.type === 'Bot' &&
-                comment.user.login === 'github-actions[bot]' &&
-                comment.body.startsWith(header)
-            );
-            
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: body,
-              });
-              console.log('✅ Updated existing comment');
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body: body,
-              });
-              console.log('✅ Created new comment');
-            }
+            await script({ github, context, header, body });
 
       - name: Analysis Complete
         if: always()
         run: |
-          echo "✅ Slither analysis complete"
-          echo "📊 Results: ${{ steps.parse-results.outputs.status }}"
+          echo "Slither analysis complete"
+          echo "Results: ${{ steps.parse-results.outputs.status }}"
           echo ""
-          echo "🔍 View in Security tab: https://github.com/${{ github.repository }}/security/code-scanning"
-          echo "📦 Download full report: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "View in Security tab: https://github.com/${{ github.repository }}/security/code-scanning"
+          echo "Download full report: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo ""
           echo "Target: ${{ github.event.inputs.target || 'contracts/protocol/' }}"
           echo "Severity: ${{ github.event.inputs.severity || 'all' }}"
           echo ""
           if [ "${{ steps.parse-results.outputs.alert_count }}" = "0" ]; then
-            echo "✅ No alerts found - Security tab will be empty (this is good!)"
+            echo "No alerts found - Security tab will be empty (this is good!)"
           fi
           if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
-            echo "💬 PR comment posted with full markdown report"
+            echo "PR comment posted with full markdown report"
           fi
