@@ -9,7 +9,7 @@ on:
       - 'contracts/protocol/**'
       - 'contracts/governance/**'
       - 'contracts/staking/**'
-      - '.github/workflows/security-analysis.yml'
+      - '.github/workflows/security-analysis.yml'  # Test workflow changes on PRs
   push:
     branches:
       - main
@@ -77,42 +77,6 @@ jobs:
         with:
           sarif_file: ${{ steps.slither-protocol.outputs.sarif }}
           category: slither-protocol
-
-      # Optional: Run on governance (uncomment when ready)
-      # - name: Run Slither on Governance
-      #   uses: crytic/slither-action@v0.4.0
-      #   id: slither-governance
-      #   continue-on-error: true
-      #   with:
-      #     target: 'contracts/governance/'
-      #     slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
-      #     sarif: results-governance.sarif
-      #     fail-on: none
-
-      # - name: Upload Governance SARIF file
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   if: always()
-      #   with:
-      #     sarif_file: ${{ steps.slither-governance.outputs.sarif }}
-      #     category: slither-governance
-
-      # Optional: Run on staking (uncomment when ready)
-      # - name: Run Slither on Staking
-      #   uses: crytic/slither-action@v0.4.0
-      #   id: slither-staking
-      #   continue-on-error: true
-      #   with:
-      #     target: 'contracts/staking/'
-      #     slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
-      #     sarif: results-staking.sarif
-      #     fail-on: none
-
-      # - name: Upload Staking SARIF file
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   if: always()
-      #   with:
-      #     sarif_file: ${{ steps.slither-staking.outputs.sarif }}
-      #     category: slither-staking
 
       - name: Generate Markdown Report
         if: always()
