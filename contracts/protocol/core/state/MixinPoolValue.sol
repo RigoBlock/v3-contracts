@@ -134,8 +134,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // base token is not stored in activeTokens array
         for (uint256 i = 0; i < activeTokensLength; i++) {
             tokenAmounts[i] = _getAndClearBalance(activeTokens[i], nativeAmount);
-            // Add virtual balances for each active token (cross-chain transfers)
-            tokenAmounts[i] += VirtualStorageLib.getVirtualBalance(activeTokens[i]);
         }
 
         if (activeTokensLength > 0) {
