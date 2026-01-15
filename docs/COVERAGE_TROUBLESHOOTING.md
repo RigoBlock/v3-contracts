@@ -46,31 +46,42 @@ When you see this low percentage, fork tests have failed, causing files like:
 
 ### Solutions Implemented
 
-#### 1. **Explicit Failure Detection** ([package.json](../package.json)) - **THE REAL FIX**
+#### 1. **Explicit Failure Detection + Proper Error Propagation** ([package.json](../package.json) + [.github/workflows/ci.yml](../.github/workflows/ci.yml)) - **THE REAL FIX**
 
+The fix required TWO changes:
+
+**A) Detect failures in forge coverage output:**
 ```bash
-# forge coverage exits 0 even with test failures, so we check the output
-forge coverage ... 2>&1 | tee /tmp/forge_coverage.log && \
+# forge coverage exits 0 even with test failures
+forge coverage ... 2>&1 | tee /tmp/forge_coverage.log
 if grep -q 'failing test' /tmp/forge_coverage.log; then 
-  echo '❌ ERROR: Fork tests failed'; 
-  exit 1; 
+  echo '❌ ERROR: Fork tests failed' >&2
+  exit 1
 fi
 ```
 
-**This is the critical fix**: The CI job now **fails immediately** if fork tests fail, preventing bad coverage from being uploaded to Codecov.
-
-#### 2. **Per-PR Fork Cache** ([.github/workflows/ci.yml](../.github/workflows/ci.yml))
-
+**B) Ensure error propagates in CI (yarn swallows exit codes):**
 ```yaml
-# Cache shared across all commits in the same PR/branch
-# Avoids expensive RPC re-syncing on every commit
-key: ${{ runner.os }}-foundry-forks-${{ github.head_ref || github.ref_name }}
-restore-keys: |
-  ${{ runner.os }}-foundry-forks-main
-  ${{ runner.os }}-foundry-forks-development
+# In CI, call commands directly, not via yarn coverage:all
+run: |
+  set -eo pipefail  # Exit on any error
+  yarn coverage:foundry  # Will exit 1 if fork tests fail
+  # CI step fails here, preventing upload
 ```
 
-This prevents unnecessary RPC calls while still refreshing cache when switching PRs/branches.
+**Before:** Fork tests failed → bash exits 1 → yarn exits 0 → CI continues → bad coverage uploaded ❌  
+**After:** Fork tests failed → bash exits 1 → set -eo pipefail catches it → CI fails → no upload ✅
+
+#### 2. **Cache Invalidation on Fork Block Changes** ([.github/workflows/ci.yml](../.github/workflows/ci.yml))
+
+```yaml
+# Include ForkBlocks.sol (not full Constants.sol) in cache key
+# Cache only invalidates when fork block numbers actually change
+# Other constant changes don't trigger re-sync
+key: ${{ runner.os }}-foundry-forks-${{ github.head_ref || github.ref_name }}-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
+```
+
+Fork block numbers are isolated in [ForkBlocks.sol](../contracts/test/ForkBlocks.sol) and re-exported from Constants.sol for backward compatibility. This prevents cache invalidation when other constants change.
 
 #### 3. **Codecov Merge Configuration** ([.codecov.yml](../.codecov.yml))
 

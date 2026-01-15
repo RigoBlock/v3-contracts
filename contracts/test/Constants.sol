@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {CrosschainTokens} from "../protocol/types/CrosschainTokens.sol";
+import {ForkBlocks} from "./ForkBlocks.sol";
 
 /// @title Constants - Shared constants for testing and deployment
 /// @notice Centralizes hardcoded values used across tests to reduce duplication and RPC load
@@ -12,12 +13,16 @@ library Constants {
 
     /// @notice Mainnet block number after oracle deployment (22,425,175)
     /// @dev Use this for tests requiring oracle price feeds
-    uint256 internal constant MAINNET_BLOCK = 24_000_000;
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant MAINNET_BLOCK = ForkBlocks.MAINNET_BLOCK;
 
     /// @notice Base chain block number for fork tests
-    uint256 internal constant BASE_BLOCK = 39521323;
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant BASE_BLOCK = ForkBlocks.BASE_BLOCK;
 
-    uint256 internal constant POLYGON_BLOCK = 81_000_000;
+    /// @notice Polygon chain block number for fork tests
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant POLYGON_BLOCK = ForkBlocks.POLYGON_BLOCK;
 
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
