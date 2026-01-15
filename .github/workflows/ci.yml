@@ -61,12 +61,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.foundry/cache
-          # Key: branch + ForkBlocks.sol hash
-          # Cache shared across commits in same PR, invalidates when fork blocks change
-          key: ${{ runner.os }}-foundry-forks-${{ github.head_ref || github.ref_name }}-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
-          restore-keys: |
-            ${{ runner.os }}-foundry-forks-${{ github.head_ref || github.ref_name }}-
-            ${{ runner.os }}-foundry-forks-
+          # Exact match only - invalidates when fork blocks change
+          key: ${{ runner.os }}-foundry-forks-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
 
       - run: yarn --frozen-lockfile
 
