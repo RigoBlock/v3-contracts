@@ -61,13 +61,29 @@ jobs:
         with:
           version: nightly
 
+      - name: Build Slither Arguments
+        id: slither-args
+        run: |
+          BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
+          SEVERITY="${{ github.event.inputs.severity || 'all' }}"
+          
+          if [ "$SEVERITY" = "high" ]; then
+            EXTRA_ARGS="--exclude-medium --exclude-low --exclude-informational"
+          elif [ "$SEVERITY" = "medium" ]; then
+            EXTRA_ARGS="--exclude-low --exclude-informational"
+          else
+            EXTRA_ARGS=""
+          fi
+          
+          echo "args=$BASE_ARGS $EXTRA_ARGS" >> $GITHUB_OUTPUT
+
       - name: Run Slither on Protocol
         uses: crytic/slither-action@v0.4.0
         id: slither-protocol
         continue-on-error: true
         with:
           target: ${{ github.event.inputs.target || 'contracts/protocol/' }}
-          slither-args: '--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version ${{ github.event.inputs.severity == "high" && "--exclude-medium --exclude-low --exclude-informational" || "" }} ${{ github.event.inputs.severity == "medium" && "--exclude-low --exclude-informational" || "" }}'
+          slither-args: ${{ steps.slither-args.outputs.args }}
           sarif: results-protocol.sarif
           fail-on: none
 
