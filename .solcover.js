@@ -1,8 +1,10 @@
 module.exports = {
     skipFiles: [
-        './examples',
-        './tokens',
-        './utils',
+        './examples/',
+        './tokens/',
+        './utils/',
+        './mocks/',
+        './test/',
         './protocol/libraries/SlotDerivation.sol',
         './protocol/libraries/ReentrancyGuardTransient.sol',
         './protocol/libraries/TransientSlot.sol'

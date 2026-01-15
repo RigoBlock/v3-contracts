@@ -1,0 +1,51 @@
+# Codecov Configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+# Require both uploads before processing
+codecov:
+  require_ci_to_pass: true
+  # Wait for both hardhat and foundry uploads before reporting
+  # This prevents showing partial coverage when one upload is delayed
+  notify:
+    wait_for_ci: true
+
+# Coverage reporting configuration
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%  # Allow 1% variance
+        # Only update status after receiving all flags
+        flags:
+          - hardhat
+          - foundry
+
+# Flag configuration - ensures both reports are required
+flag_management:
+  default_rules:
+    carryforward: false  # Don't carry forward old coverage if new upload fails
+  individual_flags:
+    - name: hardhat
+      carryforward: false
+      statuses:
+        - type: project
+          target: auto
+    - name: foundry
+      carryforward: false
+      statuses:
+        - type: project
+          target: auto
+
+# Ignore paths (not in contracts/)
+ignore:
+  - "test/**/*"
+  - "lib/**/*"
+  - "node_modules/**/*"
+  - "scripts/**/*"
+
+# Comment configuration
+comment:
+  layout: "diff, flags, files"
+  behavior: default
+  require_changes: false

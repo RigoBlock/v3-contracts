@@ -138,11 +138,18 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc ISmartPoolOwnerActions
     function setAcceptableMintToken(address token, bool isAccepted) external override onlyOwner {
-        AddressSet storage set = acceptedTokensSet();
+        // acceptedTokensSet: controls mintWithToken permission (operator decision)
+        // activeTokensSet: added when token is actually minted (see MixinActions._mint)
+        AddressSet storage acceptedSet = acceptedTokensSet();
+
         if (isAccepted) {
-            set.addUnique(IEOracle(address(this)), token, pool().baseToken);
+            acceptedSet.addUnique(IEOracle(address(this)), token, pool().baseToken);
+            // DO NOT add to activeTokensSet here - it will be added in _mint when tokens arrive
+            // This prevents attack: accept token -> purge (removes from active) -> mint (NAV drops)
         } else {
-            set.remove(token);
+            // Only remove from acceptedTokensSet, NOT from activeTokensSet
+            // Removing from activeTokensSet would break NAV if pool owns the token
+            acceptedSet.remove(token);
         }
     }
 

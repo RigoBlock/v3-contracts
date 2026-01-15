@@ -1,22 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-/*
-
- Copyright 2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
 pragma solidity 0.8.28;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
@@ -35,7 +17,7 @@ import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
-import {Applications, TokenIdsSlot} from "../types/Applications.sol";
+import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
 
@@ -62,26 +44,23 @@ contract EApps is IEApps {
         _uniV4Posm = IPositionManager(univ4Posm);
     }
 
-    struct Application {
-        bool isActive;
-    }
-
     /// @inheritdoc IEApps
     /// @notice Uses temporary storage to cache token prices, which can be used in MixinPoolValue.
     /// @notice Requires delegatecall.
     function getAppTokenBalances(uint256 packedApplications) external override returns (ExternalApp[] memory) {
+        uint256 totalAppsCount = uint256(Applications.COUNT);
         uint256 activeAppCount;
-        Application[] memory apps = new Application[](uint256(Applications.COUNT));
+        bool[] memory activeApps = new bool[](totalAppsCount);
 
         // Count how many applications are active
-        for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
+        for (uint256 i = 0; i < totalAppsCount; i++) {
             if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
                 activeAppCount++;
-                apps[i].isActive = true;
+                activeApps[i] = true;
                 // grg staking is a pre-existing application. Therefore, we always check staked balance.
             } else if (Applications(i) == Applications.GRG_STAKING) {
                 activeAppCount++;
-                apps[i].isActive = true;
+                activeApps[i] = true;
             } else {
                 continue;
             }
@@ -90,8 +69,8 @@ contract EApps is IEApps {
         ExternalApp[] memory nestedBalances = new ExternalApp[](activeAppCount);
         uint256 activeAppIndex = 0;
 
-        for (uint256 i = 0; i < uint256(Applications.COUNT); i++) {
-            if (apps[i].isActive) {
+        for (uint256 i = 0; i < totalAppsCount; i++) {
+            if (activeApps[i]) {
                 nestedBalances[activeAppIndex].balances = _handleApplication(Applications(i));
                 nestedBalances[activeAppIndex].appType = uint256(Applications(i));
                 activeAppIndex++;

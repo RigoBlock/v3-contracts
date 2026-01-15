@@ -150,7 +150,9 @@ describe("AStaking", async () => {
             await fullPool.mint(user1.address, amount, 0, { value: amount })
             // first mint only initialized value in storage, need to mint again to update active tokens
             expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
-            await fullPool.mint(user1.address, amount, 0, { value: amount })
+            await expect(fullPool.mint(user1.address, amount, 0, { value: amount }))
+                .to.emit(fullPool, "TokenStatusChanged")
+                .withArgs(grgToken.address, true)
             const activeTokens = (await fullPool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(1)
             expect(activeTokens[0]).to.be.eq(grgToken.address)

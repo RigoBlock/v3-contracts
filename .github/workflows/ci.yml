@@ -27,32 +27,86 @@ jobs:
       SOLIDITY_VERSION: ${{ matrix.solidity }}
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
       PROD: ""
+      MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+      BNB_MAINNET_RPC_URL: ${{ secrets.BNB_MAINNET_RPC_URL }}
+      OPTIMISM_MAINNET_RPC_URL: ${{ secrets.OPTIMISM_MAINNET_RPC_URL }}
+      ARBITRUM_MAINNET_RPC_URL: ${{ secrets.ARBITRUM_MAINNET_RPC_URL }}
+      BASE_MAINNET_RPC_URL: ${{ secrets.BASE_MAINNET_RPC_URL }}
+      POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: 'recursive'
+
       - uses: actions/setup-node@v6
         with:
           node-version: 22.12.0
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install LCOV
+        run: |
+          sudo apt-get update && sudo apt-get install -y lcov
+
       - uses: actions/cache@v5
         with:
           path: |
             **/node_modules
-            **/.foundry
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
-      - name: Install Foundry
-        uses: onbjerg/foundry-toolchain@v1
+
+      - name: Cache Foundry fork data (persistent)
+        uses: actions/cache@v5
         with:
-          version: nightly
+          path: ~/.foundry/cache
+          # Exact match only - invalidates when fork blocks change
+          key: ${{ runner.os }}-foundry-forks-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
+
       - run: yarn --frozen-lockfile
-      # Skip foundry build due to unfixed bugs in their solar linter
-      #- run: yarn build
+
+      - run: yarn build
+
       - run: yarn test
-      - run: yarn coverage
-      - name: Upload coverage to Codecov
+
+      - name: Clean previous coverage artifacts
+        run: |
+          rm -rf coverage/
+          rm -f lcov.info
+          rm -f foundry_lcov.info
+
+      - name: Generate coverage reports
+        if: github.actor != 'dependabot[bot]'
+        run: yarn coverage:all
+
+      - name: Upload Foundry coverage to Codecov
         if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/foundry_lcov.info
+          flags: foundry
+          name: foundry-coverage
           fail_ci_if_error: true
           verbose: true
+          disable_search: true
+
+      - name: Upload Hardhat coverage to Codecov
+        if: github.actor != 'dependabot[bot]'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: hardhat
+          name: hardhat-coverage
+          fail_ci_if_error: true
+          verbose: true
+          disable_search: true
+
+      - name: Verify both coverage files were uploaded
+        if: github.actor != 'dependabot[bot]'
+        run: |
+          echo "✅ Both coverage reports uploaded successfully"
+          echo "Codecov will merge them automatically"
+          echo "Check: https://app.codecov.io/gh/${{ github.repository }}/commit/${{ github.sha }}"

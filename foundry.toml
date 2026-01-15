@@ -6,6 +6,18 @@ test = "test"
 cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
+gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNavImpactPool", "TestSafeTransferLib", "ExtensionsMap", "RigoblockPoolProxy.0.8.17"]
+
+# add via_ir profile
+additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
+ 
+# enforce compiling tests without via_ir and only some heavy contract with via_ir
+# note: it will only work if tests are using vm.deployCode to deploy contract
+# note: the logged warning is because MockAcrossSpokePool is also found in the second path, define more restrictive paths to silence
+compilation_restrictions = [
+    { paths = "contracts/mocks/MockAcrossSpokePool.sol", via_ir = true },
+    { paths = "contracts/**", via_ir = false },
+]
 
 [profile.fmt]
 line_length = 120
@@ -15,3 +27,12 @@ int_types = "long"
 
 [profile.lint]
 ignore = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
+lint_on_build = false
+
+[rpc_endpoints]
+mainnet = "${MAINNET_RPC_URL}"
+bnb = "${BNB_MAINNET_RPC_URL}"
+optimism = "${OPTIMISM_MAINNET_RPC_URL}"
+arbitrum = "${ARBITRUM_MAINNET_RPC_URL}"
+base = "${BASE_MAINNET_RPC_URL}"
+polygon = "${POLYGON_MAINNET_RPC_URL}"

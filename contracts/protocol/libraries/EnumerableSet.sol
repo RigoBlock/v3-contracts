@@ -20,6 +20,7 @@
 pragma solidity ^0.8.28;
 
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
+import {ISmartPoolEvents} from "../interfaces/v4/pool/ISmartPoolEvents.sol";
 
 struct AddressSet {
     // List of stored addresses
@@ -70,6 +71,9 @@ library EnumerableSet {
                 // update storage
                 set.addresses.push(token);
                 set.positions[token] = set.addresses.length;
+
+                // emit event for token activation
+                emit ISmartPoolEvents.TokenStatusChanged(token, true);
             }
         }
     }
@@ -96,6 +100,9 @@ library EnumerableSet {
 
             // Delete the tracked position for the deleted slot without clearing storage
             set.positions[token] = REMOVED_ADDRESS_FLAG;
+
+            // emit event for token deactivation
+            emit ISmartPoolEvents.TokenStatusChanged(token, false);
             return;
         }
     }

@@ -144,9 +144,11 @@ describe("BaseTokenProxy", async () => {
             poolData = await pool.getPoolTokens()
             // spread is applied on mint
             expect(poolData.totalSupply).to.be.eq(TEN_ETHER.sub(markup).mul(2))
+            const updatedValue = await pool.callStatic.updateUnitaryValue()
             await pool.updateUnitaryValue()
             poolData = await pool.getPoolTokens()
             expect(poolData.unitaryValue).to.be.eq(parseEther("1"))
+            expect(updatedValue.toString()).to.be.eq(poolData.unitaryValue.toString())
         })
     })
 
@@ -516,10 +518,12 @@ describe("BaseTokenProxy", async () => {
             // Notice: if weth amount is smaller, the amounts will need to be adjusted
             // pool has enough tokens to pay with base token
             // update and verify the pool unitary value before the burn
+            const updatedValue = await pool.callStatic.updateUnitaryValue()
             await pool.updateUnitaryValue()
             const { unitaryValue } = await pool.getPoolTokens()
             // TODO: what is affecting unitary value calculation here?
             expect(unitaryValue).to.be.eq(parseEther("6.005005005005005005"))
+            expect(updatedValue.toString()).to.be.eq(unitaryValue.toString())
             // Notice: sometimes, changing order of tx affects twaps, and the amount needed to revert this must be adjusted
             await expect(pool.burnForToken(parseEther("16.7"), 0, weth.address)).to.be.revertedWith('TokenTransferFailed()')
             const wethBalanceBefore = await weth.balanceOf(user1.address)

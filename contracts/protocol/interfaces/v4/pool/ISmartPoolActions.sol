@@ -48,7 +48,8 @@ interface ISmartPoolActions {
     ) external returns (uint256 netRevenue);
 
     /// @notice Allows anyone to store an up-to-date pool price.
-    function updateUnitaryValue() external;
+    /// @return updatedValue Value of the new stored unitary value.
+    function updateUnitaryValue() external returns (uint256 updatedValue);
 
     /// @notice Sets or removes an operator for the caller.
     /// @param operator The address of the operator.

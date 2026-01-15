@@ -9,7 +9,7 @@ import {IKyc} from "../../interfaces/IKyc.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
-import {Currency, SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
@@ -27,7 +27,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolMintAmountIn();
     error PoolMintInvalidRecipient();
     error PoolMintOutputAmount();
-    error PoolSupplyIsNullOrDust();
     error PoolTokenNotActive();
     error InvalidOperator();
     error PoolMintTokenNotActive();
@@ -51,8 +50,9 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         uint256 amountOutMin,
         address tokenIn
     ) external payable override nonReentrant returns (uint256 recipientAmount) {
-        // early revert if token does not have price feed, REMOVED_ADDRESS_FLAG is sentinel for token not being active.
+        // Check owner has explicitly accepted this token for minting
         require(acceptedTokensSet().isActive(tokenIn), PoolMintTokenNotActive());
+        // Token will be added to activeTokensSet in _mint after transfer completes
 
         recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
     }
@@ -74,11 +74,12 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ISmartPoolActions
-    function updateUnitaryValue() external override nonReentrant {
+    function updateUnitaryValue() external override returns (uint256) {
         NavComponents memory components = _updateNav();
 
-        // unitary value is updated only with non-dust supply
-        require(components.totalSupply >= 1e2, PoolSupplyIsNullOrDust());
+        // Division by zero already handled in _updateNav() -> MixinPoolValue._updatePoolValue()
+        // Zero supply returns stored NAV without update
+        return components.unitaryValue;
     }
 
     /// @inheritdoc ISmartPoolActions
@@ -143,6 +144,10 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
             tokenIn.safeTransfer(_getTokenJar(), spread);
         }
+
+        // Add token to activeTokensSet now that pool actually owns it
+        // This prevents vulnerability where token is accepted but removed by purge before first mint
+        activeTokensSet().addUnique(IEOracle(address(this)), tokenIn, components.baseToken);
 
         amountIn -= spread;
 

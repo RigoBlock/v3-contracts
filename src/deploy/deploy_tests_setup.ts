@@ -1,5 +1,6 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import "hardhat-deploy/dist/src/type-extensions";
 import { extensionsMapSalt } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
@@ -173,7 +174,41 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
+  const eNavView = await deploy("ENavView", {
+    from: deployer,
+    args: [stakingProxy.address, univ4Posm.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const acrossSpokePool = await deploy("MockAcrossSpokePool", {
+    from: deployer,
+    args: [weth.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await deploy("MockAcrossMulticallHandler", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const eCrosschain = await deploy("ECrosschain", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const extensions = {
+    eApps: eApps.address,
+    eNavView: eNavView.address,
+    eOracle: eOracle.address,
+    eUpgrade: eUpgrade.address,
+    eCrosschain: eCrosschain.address
+  }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
@@ -205,7 +240,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  // implementation address is different on each chain as extensionsMap is different, but proxies will have the same address
+  // TODO: make sure the token jar is deployed at same address across all chains. Otherwise, we must store its address
+  // Notice: when updating extensions, make sure the ExtensionsMap setup is correct, when updating storage slot definitions, make sure they are correct.
+  // implementation will have same address on all chains as long as args are the same
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
     args: [authority.address, extensionsMapAddress, mockTokenJar.address],
@@ -283,6 +320,17 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   })
+
+  const aIntents = await deploy("AIntents", {
+    from: deployer,
+    args: [
+      acrossSpokePool.address
+    ],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  await authorityInstance.setAdapter(aIntents.address, true)
 };
 
 deploy.tags = ['tests-setup', 'l2-suite', 'main-suite']

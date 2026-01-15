@@ -119,7 +119,9 @@ describe("AUniswapRouter", async () => {
       ).to.be.revertedWith('InsufficientNativeBalance()')
       const etherAmount = ethers.utils.parseEther("12")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
-      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      await expect(extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value }))
+        .to.emit(pool, "TokenStatusChanged")
+        .withArgs(wethAddress, true)
       // first mint does not prompt nav calculations, so lp tokens are not included in active tokens
       let activeTokens = (await pool.getActiveTokens()).activeTokens
       expect(activeTokens.length).to.be.eq(1)

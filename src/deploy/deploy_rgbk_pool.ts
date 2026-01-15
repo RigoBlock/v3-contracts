@@ -10,7 +10,8 @@ const deploy: DeployFunction = async function (
   const { deploy } = deployments;
 
   const chainId = await getChainId();
-  if (!chainId || !chainConfig[chainId]) {
+  const chainIdNum = parseInt(chainId, 10);
+  if (!chainId || !chainConfig[chainIdNum]) {
     if (chainId === "31337") {
       console.log("Skipping for Hardhat Network");
       return;
@@ -19,7 +20,7 @@ const deploy: DeployFunction = async function (
     }
   }
 
-  const config = chainConfig[chainId];
+  const config = chainConfig[chainIdNum];
 
   const authority = await deploy("Authority", {
     from: deployer,
@@ -60,7 +61,7 @@ const deploy: DeployFunction = async function (
   const wethAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const eOracle = await deploy("EOracle", {
     from: deployer,
-    args: [config.oracleAddress, wethAddress],
+    args: [config.oracle, wethAddress],
     log: true,
     deterministicDeployment: true,
   });
@@ -74,7 +75,19 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  const extensions = {eApps: eApps.address, eOracle: eOracle.address, eUpgrade: eUpgrade.address}
+  const eCrosschain = await deploy("ECrosschain", {
+    from: deployer,
+    args: [],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  const extensions = {
+    eApps: eApps.address,
+    eOracle: eOracle.address,
+    eUpgrade: eUpgrade.address,
+    eCrosschain: eCrosschain.address
+  }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
