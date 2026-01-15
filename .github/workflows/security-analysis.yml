@@ -135,7 +135,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: slither-report-${{ github.run_id }}
-          pathCreate/update PR comment with Slither report
+          path: |
+            results-protocol.sarif
+            slither.db.json
+          retention-days: 30
+
+      - name: Create/update PR comment with Slither report
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
         env:
@@ -166,7 +171,7 @@ jobs:
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.number,
+              issue_number: context.issue.number,
             });
             
             const botComment = comments.find(
@@ -184,7 +189,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.number,
+                issue_number: context.issue.number,
                 body: body,
               });
             }
@@ -205,10 +210,5 @@ jobs:
             echo "✅ No alerts found - Security tab will be empty (this is good!)"
           fi
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "💬 PR comment posted with full markdown report
-          echo "Target: ${{ github.event.inputs.target || 'contracts/protocol/' }}"
-          echo "Severity: ${{ github.event.inputs.severity || 'all' }}"
-          echo ""
-          if [ "${{ steps.parse-results.outputs.alert_count }}" = "0" ]; then
-            echo "✅ No alerts found - Security tab will be empty (this is good!)"
+            echo "💬 PR comment posted with full markdown report"
           fi
