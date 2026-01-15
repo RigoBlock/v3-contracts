@@ -44,6 +44,7 @@ library VirtualStorageLib {
         emit IECrosschain.VirtualSupplyUpdated(delta, virtualSupply().supply);
     }
 
+    // TODO: after further tests, check define virtual balance slot as base token instead of token mapping (we only use base token for correct performance attribution)
     function getVirtualBalance(address token) internal view returns (int256) {
         return virtualBalance().balanceByToken[token];
     }

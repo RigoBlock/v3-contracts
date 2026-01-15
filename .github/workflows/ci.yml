@@ -57,13 +57,6 @@ jobs:
             **/node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
 
-      - name: Cache Foundry fork data (persistent)
-        uses: actions/cache@v5
-        with:
-          path: ~/.foundry/cache
-          # Exact match only - invalidates when fork blocks change
-          key: ${{ runner.os }}-foundry-forks-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
-
       - run: yarn --frozen-lockfile
 
       - run: yarn build
@@ -78,7 +71,7 @@ jobs:
 
       - name: Generate coverage reports
         if: github.actor != 'dependabot[bot]'
-        run: yarn coverage:all
+        run: yarn coverage:clean
 
       - name: Upload Foundry coverage to Codecov
         if: github.actor != 'dependabot[bot]'
