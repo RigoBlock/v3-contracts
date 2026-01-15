@@ -18,6 +18,7 @@ jobs:
       with:
         node-version: 20
         fail-on: none
+        target: 'contracts/protocol/'
         slither-args: --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/
 
     - name: Create/update checklist as PR comment
