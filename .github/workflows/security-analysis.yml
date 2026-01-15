@@ -69,13 +69,10 @@ jobs:
         with:
           version: nightly
 
-      - name: Compile Contracts
-        run: forge build --build-info
-
       - name: Build Slither Arguments
         id: slither-args
         run: |
-          BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version --ignore-compile'
+          BASE_ARGS='--filter-paths "contracts/test|contracts/mocks" --exclude naming-convention,solc-version'
           SEVERITY="${{ github.event.inputs.severity || 'all' }}"
           # Add markdown output for PR comments
           if [ "${{ github.event_name }}" = "pull_request" ]; then
