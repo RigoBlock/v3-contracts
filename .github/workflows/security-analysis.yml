@@ -1,10 +1,17 @@
 name: Slither Analysis
 
 on:
-  #push:
-  #  branches: [ main, development ]
-  pull_request:
+  #pull_request:
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to comment on (leave empty for no PR comment)'
+        required: false
+        type: number
+      ref:
+        description: 'Git ref to analyze (branch, tag, or SHA). Defaults to current branch'
+        required: false
+        type: string
 
 jobs:
   analyze:
@@ -17,6 +24,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
+        ref: ${{ inputs.ref || github.ref }}
         fetch-depth: 0
         submodules: recursive
 
@@ -37,45 +45,65 @@ jobs:
         pip3 install slither-analyzer==0.11.4
         slither --version
 
+    - name: Compile contracts with Foundry
+      run: |
+        echo "Compiling contracts to reuse artifacts..."
+        forge build --build-info
+      env:
+        FOUNDRY_DISABLE_NIGHTLY_WARNING: true
+    
     - name: Run Slither
       id: slither
       continue-on-error: true
       run: |
-        # Generate markdown checklist for PR comments
+        # Generate markdown checklist for PR comments (reuse compilation)
         slither contracts/protocol/ \
           --checklist \
           --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/ \
           --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking|contracts/governance|contracts/rigoToken|lib/" \
-          > slither-report-raw.md 2>&1 || true
+          --ignore-compile \
+          > slither-report-raw.md 2>/dev/null || true
         
         # Filter and truncate markdown for PR comment (GitHub limit: 65536 chars)
         if [ -f slither-report-raw.md ]; then
           RAW_SIZE=$(wc -c < slither-report-raw.md)
           echo "Raw markdown size: $RAW_SIZE bytes"
           
+          # Remove everything before "INFO:Detectors:" to clean up the report
+          if grep -q "INFO:Detectors:" slither-report-raw.md; then
+            sed -n '/INFO:Detectors:/,$p' slither-report-raw.md > slither-report-clean.md
+          else
+            # If no detectors found, keep the raw report
+            cp slither-report-raw.md slither-report-clean.md
+          fi
+          
+          CLEAN_SIZE=$(wc -c < slither-report-clean.md)
+          echo "Clean markdown size: $CLEAN_SIZE bytes"
+          
           # If still too large, truncate and add notice
-          if [ "$RAW_SIZE" -gt 60000 ]; then
+          if [ "$CLEAN_SIZE" -gt 60000 ]; then
             echo "Report too large, truncating to 60KB..."
-            head -c 60000 slither-report-raw.md > slither-report.md
+            head -c 60000 slither-report-clean.md > slither-report.md
             echo "" >> slither-report.md
             echo "" >> slither-report.md
             echo "---" >> slither-report.md
-            echo "**Note:** Report truncated due to size (${RAW_SIZE} bytes). See [Security tab](/${{ github.repository }}/security/code-scanning) for full SARIF results." >> slither-report.md
+            echo "**Note:** Report truncated due to size (${CLEAN_SIZE} bytes). See [Security tab](/${{ github.repository }}/security/code-scanning) for full SARIF results." >> slither-report.md
           else
-            cp slither-report-raw.md slither-report.md
+            mv slither-report-clean.md slither-report.md
           fi
           
           FINAL_SIZE=$(wc -c < slither-report.md)
           echo "Final markdown size: $FINAL_SIZE bytes"
         fi
         
-        # Generate SARIF for Security tab
+        # Generate SARIF for Security tab (reuse compilation)
         slither contracts/protocol/ \
           --sarif results.sarif \
           --exclude naming-convention,solc-version \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking" \
-          2>&1 || true
+          --ignore-compile \
+          2>/dev/null || true
         
         echo "Reports generated"
       env:
@@ -99,11 +127,22 @@ jobs:
 
     - name: Create/update checklist as PR comment
       uses: actions/github-script@v7
-      if: always() && github.event_name == 'pull_request' && hashFiles('slither-report.md') != ''
+      if: always() && inputs.pr_number && hashFiles('slither-report.md') != ''
       with:
         script: |
           const fs = require('fs');
           const script = require('.github/scripts/comment');
           const header = '# Slither report';
           const body = fs.readFileSync('slither-report.md', 'utf8');
-          await script({ github, context, header, body });
+          
+          // Override context.payload.number with manual input
+          // Ensure payload object exists before spreading
+          const modifiedContext = {
+            ...context,
+            payload: {
+              ...(context.payload || {}),
+              number: ${{ inputs.pr_number }}
+            }
+          };
+          
+          await script({ github, context: modifiedContext, header, body });
