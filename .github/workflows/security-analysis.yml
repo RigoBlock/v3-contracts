@@ -45,24 +45,16 @@ jobs:
         pip3 install slither-analyzer==0.11.4
         slither --version
 
-    - name: Compile contracts with Foundry
-      run: |
-        echo "Compiling contracts to reuse artifacts..."
-        forge build --build-info
-      env:
-        FOUNDRY_DISABLE_NIGHTLY_WARNING: true
-    
     - name: Run Slither
       id: slither
       continue-on-error: true
       run: |
-        # Generate markdown checklist for PR comments (reuse compilation)
+        # Generate markdown checklist for PR comments
         slither contracts/protocol/ \
           --checklist \
           --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/ \
           --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking|contracts/governance|contracts/rigoToken|lib/" \
-          --ignore-compile \
           > slither-report-raw.md 2>/dev/null || true
         
         # Filter and truncate markdown for PR comment (GitHub limit: 65536 chars)
@@ -97,12 +89,11 @@ jobs:
           echo "Final markdown size: $FINAL_SIZE bytes"
         fi
         
-        # Generate SARIF for Security tab (reuse compilation)
+        # Generate SARIF for Security tab
         slither contracts/protocol/ \
           --sarif results.sarif \
           --exclude naming-convention,solc-version \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking" \
-          --ignore-compile \
           2>/dev/null || true
         
         echo "Reports generated"
@@ -135,14 +126,8 @@ jobs:
           const header = '# Slither report';
           const body = fs.readFileSync('slither-report.md', 'utf8');
           
-          // Override context.payload.number with manual input
-          // Ensure payload object exists before spreading
-          const modifiedContext = {
-            ...context,
-            payload: {
-              ...(context.payload || {}),
-              number: ${{ inputs.pr_number }}
-            }
-          };
+          // Set PR number from manual input
+          if (!context.payload) context.payload = {};
+          context.payload.number = ${{ inputs.pr_number }};
           
-          await script({ github, context: modifiedContext, header, body });
+          await script({ github, context, header, body });
