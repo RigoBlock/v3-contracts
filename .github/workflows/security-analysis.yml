@@ -12,6 +12,20 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Verify foundry.toml exists
+      run: |
+        ls -la
+        if [ -f "foundry.toml" ]; then
+          echo "✓ foundry.toml found"
+          cat foundry.toml
+        else
+          echo "✗ foundry.toml NOT found"
+          exit 1
+        fi
 
     - name: Run Slither
       uses: crytic/slither-action@v0.4.1
@@ -21,6 +35,7 @@ jobs:
         fail-on: none
         target: 'contracts/protocol/'
         slither-args: --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/
+        internal-github-workspace: ${{ github.workspace }}
 
     - name: Create/update checklist as PR comment
       uses: actions/github-script@v7
