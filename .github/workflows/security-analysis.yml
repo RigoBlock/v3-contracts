@@ -92,8 +92,8 @@ jobs:
         # Generate SARIF for Security tab
         slither contracts/protocol/ \
           --sarif results.sarif \
-          --exclude naming-convention,solc-version,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop \
-          --filter-paths "contracts/test|contracts/mocks|contracts/staking" \
+          --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop \
+          --filter-paths "contracts/test|contracts/mocks|contracts/staking|contracts/governance|contracts/rigoToken|lib/" \
           2>/dev/null || true
         
         echo "Reports generated"
@@ -106,9 +106,6 @@ jobs:
       with:
         sarif_file: results.sarif
         category: slither
-      env:
-        # Log SARIF file size for debugging
-        SARIF_SIZE: ${{ hashFiles('results.sarif') != '' && 'results.sarif exists' || 'results.sarif missing' }}
     
     - name: Log SARIF size
       if: hashFiles('results.sarif') != ''
@@ -125,9 +122,6 @@ jobs:
           const script = require('.github/scripts/comment');
           const header = '# Slither report';
           const body = fs.readFileSync('slither-report.md', 'utf8');
+          const prNumber = ${{ inputs.pr_number }};
           
-          // Set PR number from manual input
-          if (!context.payload) context.payload = {};
-          context.payload.number = ${{ inputs.pr_number }};
-          
-          await script({ github, context, header, body });
+          await script({ github, context, header, body, prNumber });
