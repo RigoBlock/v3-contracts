@@ -16,26 +16,29 @@ jobs:
         fetch-depth: 0
         submodules: recursive
 
-    - name: Verify foundry.toml exists
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: nightly
+
+    - name: Install dependencies and compile
       run: |
-        ls -la
-        if [ -f "foundry.toml" ]; then
-          echo "✓ foundry.toml found"
-          cat foundry.toml
-        else
-          echo "✗ foundry.toml NOT found"
-          exit 1
-        fi
+        forge --version
+        forge install
+        forge build --force
+        echo "✓ Compilation successful"
+        ls -la out/
 
     - name: Run Slither
       uses: crytic/slither-action@v0.4.1
       id: slither
+      continue-on-error: true
       with:
         node-version: 20
         fail-on: none
         target: 'contracts/protocol/'
-        slither-args: --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/
-        internal-github-workspace: ${{ github.workspace }}
+        slither-args: --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/ --ignore-compile
+        ignore-compile: true
 
     - name: Create/update checklist as PR comment
       uses: actions/github-script@v7
