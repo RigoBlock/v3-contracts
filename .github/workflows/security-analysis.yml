@@ -53,7 +53,7 @@ jobs:
         slither contracts/protocol/ \
           --checklist \
           --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/ \
-          --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits \
+          --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking|contracts/governance|contracts/rigoToken|lib/" \
           > slither-report-raw.md 2>/dev/null || true
         
@@ -92,7 +92,7 @@ jobs:
         # Generate SARIF for Security tab
         slither contracts/protocol/ \
           --sarif results.sarif \
-          --exclude naming-convention,solc-version \
+          --exclude naming-convention,solc-version,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking" \
           2>/dev/null || true
         

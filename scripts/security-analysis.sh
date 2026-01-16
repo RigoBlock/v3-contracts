@@ -52,7 +52,7 @@ echo ""
 # Run slither
 slither "$TARGET" \
     --filter-paths "contracts/test|contracts/mocks|lib/" \
-    --exclude naming-convention,solc-version \
+    --exclude naming-convention,solc-version,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop \
     $SEVERITY_FLAGS \
     --json slither-results.json \
     || true

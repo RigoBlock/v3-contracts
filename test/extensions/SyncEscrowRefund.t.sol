@@ -30,8 +30,8 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         
         // Deploy both escrow types
         vm.startPrank(pool);
-        address transferEscrow = EscrowFactory.deployEscrowIfNeeded(pool, OpType.Transfer);
-        address syncEscrow = EscrowFactory.deployEscrowIfNeeded(pool, OpType.Sync);
+        address transferEscrow = EscrowFactory.deployEscrow(pool, OpType.Transfer);
+        address syncEscrow = EscrowFactory.deployEscrow(pool, OpType.Sync);
         vm.stopPrank();
         
         // Verify different addresses
@@ -66,7 +66,7 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         
         // Deploy Sync escrow
         vm.prank(pool);
-        address syncEscrow = EscrowFactory.deployEscrowIfNeeded(pool, OpType.Sync);
+        address syncEscrow = EscrowFactory.deployEscrow(pool, OpType.Sync);
         
         // Get initial NAV
         ISmartPoolActions(pool).updateUnitaryValue();
@@ -111,7 +111,7 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         
         // Deploy Transfer escrow
         vm.prank(pool);
-        address transferEscrow = EscrowFactory.deployEscrowIfNeeded(pool, OpType.Transfer);
+        address transferEscrow = EscrowFactory.deployEscrow(pool, OpType.Transfer);
         
         // First, we need to create a virtual balance by doing a cross-chain transfer
         // For this test, we'll simulate the state manually
@@ -155,8 +155,8 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         
         // Deploy both escrows
         vm.startPrank(ethereum.pool);
-        address transferEscrow = EscrowFactory.deployEscrowIfNeeded(ethereum.pool, OpType.Transfer);
-        address syncEscrow = EscrowFactory.deployEscrowIfNeeded(ethereum.pool, OpType.Sync);
+        address transferEscrow = EscrowFactory.deployEscrow(ethereum.pool, OpType.Transfer);
+        address syncEscrow = EscrowFactory.deployEscrow(ethereum.pool, OpType.Sync);
         vm.stopPrank();
         
         address unauthorizedToken = makeAddr("unauthorizedToken");
@@ -193,8 +193,8 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         
         // Deploy both escrows
         vm.startPrank(ethereum.pool);
-        address transferEscrow = EscrowFactory.deployEscrowIfNeeded(ethereum.pool, OpType.Transfer);
-        address syncEscrow = EscrowFactory.deployEscrowIfNeeded(ethereum.pool, OpType.Sync);
+        address transferEscrow = EscrowFactory.deployEscrow(ethereum.pool, OpType.Transfer);
+        address syncEscrow = EscrowFactory.deployEscrow(ethereum.pool, OpType.Sync);
         vm.stopPrank();
         
         // Send funds to both

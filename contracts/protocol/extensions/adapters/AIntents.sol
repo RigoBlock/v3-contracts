@@ -153,8 +153,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Deploy escrow for both Transfer and Sync to protect against expired deposit exploits:
         // 1. Native ETH → WETH refund (auto-activation issue)
         // 2. Purge attack (operator purges token, deposit expires, NAV manipulation)
-        EscrowFactory.deployEscrowIfNeeded(address(this), sourceParams.opType);
-        params.depositor = EscrowFactory.getEscrowAddress(address(this), sourceParams.opType);
+        params.depositor = EscrowFactory.deployEscrow(address(this), sourceParams.opType);
 
         // Handle source-side adjustments based on operation type
         if (sourceParams.opType == OpType.Transfer) {
