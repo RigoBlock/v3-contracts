@@ -29,6 +29,7 @@ interface IECrosschain {
     error BalanceUnderflow();
     error NavManipulationDetected(uint256 expectedNav, uint256 actualNav);
     error TokenNotInitialized();
+    error EffectiveSupplyZero();
 
     /// @notice Handles receiving tokens from a cross-chain message or an escrow refund.
     /// @dev Called via delegatecall from pool. Callable by anyone.

@@ -2,45 +2,12 @@
 pragma solidity 0.8.28;
 
 import {Test, console2} from "forge-std/Test.sol";
+import {MockERC20} from "../../contracts/mocks/MockERC20.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLib.sol";
 import {EscrowFactory, OpType} from "../../contracts/protocol/libraries/EscrowFactory.sol";
 import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 import {DestinationMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
-
-/// @title MockERC20 - Simple ERC20 mock for testing
-contract MockERC20 {
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    
-    string public name = "Test Token";
-    string public symbol = "TEST";
-    uint8 public decimals = 18;
-    uint256 public totalSupply;
-    
-    function mint(address to, uint256 amount) external {
-        balanceOf[to] += amount;
-        totalSupply += amount;
-    }
-    
-    function transfer(address to, uint256 amount) external returns (bool) {
-        balanceOf[msg.sender] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-    
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        allowance[from][msg.sender] -= amount;
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-    
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        return true;
-    }
-}
 
 /// @title EscrowWorkingTest - Working tests for Escrow refundVault functionality
 /// @notice Tests escrow token claiming and donation to pool with proper mock implementations
@@ -247,7 +214,7 @@ contract EscrowWorkingTest is Test {
     ///      3. Increasing NAV calculation gas costs
     function test_RefundVault_RejectsUnauthorizedTokens() public {
         // Create a random token not on Across whitelist
-        MockERC20 unauthorizedToken = new MockERC20();
+        MockERC20 unauthorizedToken = new MockERC20("Test Token", "TEST", 18);
         unauthorizedToken.mint(escrowAddress, TOKEN_AMOUNT);
         
         // Should revert with UnsupportedToken error

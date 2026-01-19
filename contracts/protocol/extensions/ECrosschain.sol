@@ -21,6 +21,7 @@ import {IECrosschain} from "./adapters/interfaces/IECrosschain.sol";
 /// @title ECrosschain - Handles incoming cross-chain transfers and escrow refunds.
 /// @notice This extension manages NAV integrity when receiving tokens from cross-chain sources.
 /// @dev Called via delegatecall from pool. Can be called by Across messages, Escrow contracts, or anyone with tokens to donate.
+/// @dev Direct calls will fail naturally because the contract does not implement `updateUnitaryValue`.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
     using SafeCast for uint256;
@@ -32,7 +33,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
     using TransientStorage for *;
 
     error CallerTransferAmount();
-
+    
     /// @inheritdoc IECrosschain
     function donate(
         address token,
@@ -46,9 +47,8 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
             token.setDonationLock(balance);
-
-            // Update unitary value for both Sync and Transfer operations
-            uint256 currentNav = ISmartPoolActions(address(this)).updateUnitaryValue();
+            // TODO: check if should pass slot as first param (although will need to define extra using lib for)
+            uint256 currentNav = CrosschainLib.checkAndUpdateUnitaryValue(token, balance, StorageLib.POOL_TOKENS_SLOT);
             currentNav.storeNav();
             return;
         }
@@ -125,7 +125,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
 
             if (amountValueInBase >= baseTokenVBUint) {
                 // Sufficient value to fully clear base token VB
-                baseToken.updateVirtualBalance(-currentBaseTokenVB); // Zero it out
+                baseToken.updateVirtualBalance(-currentBaseTokenVB);
                 // Calculate remaining value after clearing VB (already in base token units)
                 remainingValueInBase = amountValueInBase - baseTokenVBUint;
             } else {
@@ -143,25 +143,22 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
 
         // Update NAV to reflect received tokens before validation
         uint256 finalNav = ISmartPoolActions(address(this)).updateUnitaryValue();
-        uint256 expectedNav = storedNav;
+
+        // Get effective supply for validation (real + virtual)
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        poolTokens.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
+
+        // TODO: this should always be true by design, because we add virtual supply. Verify if the require is necessary (could be simple assert)
+        // Safety check: Ensure total supply is not zero for NAV calculations
+        require(poolTokens.totalSupply > 0, EffectiveSupplyZero());
 
         if (amountDelta > amount) {
-            // Surplus exists (solver kept some value on destination) - this increases NAV
             uint256 surplusBaseValue = IEOracle(address(this))
                 .convertTokenAmount(token, (amountDelta - amount).toInt256(), baseToken)
                 .toUint256();
-
-            // Calculate expected NAV increase: surplusValue / effectiveSupply
-            ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
-            poolTokens.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
-
-            // Safety check: Ensure total supply is not zero
-            require(poolTokens.totalSupply > 0, "Effective total supply is zero - cannot calculate NAV increase");
-
-            uint256 expectedNavIncrease = (surplusBaseValue * (10 ** poolDecimals)) / poolTokens.totalSupply;
-            expectedNav = storedNav + expectedNavIncrease;
+            storedNav += (surplusBaseValue * (10 ** poolDecimals)) / poolTokens.totalSupply;
         }
 
-        require(finalNav == expectedNav, NavManipulationDetected(expectedNav, finalNav));
+        require(finalNav == storedNav, NavManipulationDetected(storedNav, finalNav));
     }
 }
