@@ -109,14 +109,14 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.store(pool, positionSlot, bytes32(uint256(1))); // 1-based index
     }
     
-    /// @notice Test handler deployment (stateless)
+    /// @notice Test extension deployment (stateless)
     function test_Setup_Deployment() public view {
         assertTrue(address(deployment.implementation).code.length > 0, "Implementation should be deployed");
         assertTrue(deployment.pool.code.length > 0, "Proxy should be deployed");
         assertTrue(address(deployment.eCrosschain).code.length > 0, "Extension should be deployed");
     }
 
-    /// @notice Test handler requires pool to be unlocked to execute
+    /// @notice Test extension requires pool to be unlocked to execute
     function test_ECrosschain_RevertsDirectCall() public {
         // Create valid Transfer params
         DestinationMessageParams memory params = DestinationMessageParams({
@@ -129,7 +129,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         IECrosschain(deployment.eCrosschain).donate(mockBaseToken, 1, params);
     }
     
-    /// @notice Test handler Transfer mode execution using actual contract
+    /// @notice Test extension Transfer mode execution using actual contract
     function test_ECrosschain_TransferMode_MessageParsing() public pure {
         // Test that Transfer message can be properly encoded/decoded
         DestinationMessageParams memory params = DestinationMessageParams({
@@ -170,7 +170,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         assertEq(uint8(decoded.opType), uint8(OpType.Transfer), "OpType should be Transfer");
     }
 
-    /// @notice Test handler requires pool to be unlocked to execute
+    /// @notice Test extension requires pool to be unlocked to execute
     function test_ECrosschain_RequiresPoolUnlocked() public {
         _setupActiveToken(deployment.pool, mockBaseToken);
         
@@ -196,7 +196,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.clearMockedCalls();
     }
 
-    /// @notice Test handler rejects unsupported token
+    /// @notice Test extension rejects unsupported token
     function test_ECrosschain_RejectsUnsupportedToken() public {
         _setupActiveToken(deployment.pool, mockInputToken); // Mark input token as Active
 
@@ -228,8 +228,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.clearMockedCalls();
     }
 
-    // TODO: these tests will result in price for token always being 1 - check if that prevents correct testing
-    /// @notice Test handler rejects invalid OpType
+    /// @notice Test extension rejects invalid OpType
     function test_ECrosschain_RejectsInvalidOpType() public {
         _setupActiveToken(deployment.pool, Constants.ETH_USDC); // Mark input token as active
         
@@ -287,7 +286,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.clearMockedCalls();
     }
 
-    /// @notice Test handler accepts source amount within tolerance range  
+    /// @notice Test extension accepts source amount within tolerance range  
     function test_ECrosschain_RevertsIfTokenPriceFeedDoesNotExist() public {
         _setupActiveToken(deployment.pool, mockBaseToken); // Mark base token as active
         
@@ -311,17 +310,17 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.mockCall(
             Constants.ETH_USDT,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(100e18)
+            abi.encode(receivedAmount)
         );
 
         vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, Constants.ETH_USDT));
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 100e18, params);
+        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, receivedAmount, params);
 
         vm.clearMockedCalls();
         vm.chainId(31337);
     }
 
-    /// @notice Test handler accepts source amount within tolerance range  
+    /// @notice Test extension accepts source amount within tolerance range  
     function test_ECrosschain_AcceptsSourceAmountWithinTolerance() public {
         _setupActiveToken(deployment.pool, mockBaseToken); // Mark base token as active
         
@@ -341,10 +340,12 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 1, params);
         vm.chainId(1);
 
+        uint256 transferAmount = 100e18;
+
         vm.mockCall(
             Constants.ETH_USDT,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(100e18 + 1e8)
+            abi.encode(transferAmount)
         );
         
         // Warp time forward to avoid underflow in oracle lookback
@@ -369,13 +370,85 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         );
 
         // Should succeed - donation with proper oracle setup
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 100e18, params);
+        vm.expectEmit(true, true, true, true);
+        emit IECrosschain.TokensReceived(
+            deployment.pool,
+            Constants.ETH_USDT,
+            transferAmount,
+            uint8(OpType.Transfer)
+        );
+        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, transferAmount - 1e8, params);
 
         vm.clearMockedCalls();
         vm.chainId(31337);
     }
-    
-    /// @notice Test handler Transfer mode with proper delegatecall context
+
+    /// @notice Test extension accepts source amount within tolerance range  
+    function test_ECrosschain_PassesWithNullSupplyAndPositiveBalance() public {
+        _setupActiveToken(deployment.pool, mockBaseToken); // Mark base token as active
+        
+        // Mock balanceOf calls for two-step donation process
+        vm.mockCall(
+            Constants.ETH_USDT,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
+            abi.encode(2000e8)
+        );
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        // First donation to unlock the pool
+        // TODO: check if emits some log so we can assert tokenJar transfer
+        // Whatever the previous token balance was, should be burnt for GRG
+        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 1, params);
+        vm.chainId(1);
+
+        uint256 transferAmount = 100e18;
+
+        vm.mockCall(
+            Constants.ETH_USDT,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
+            abi.encode(transferAmount)
+        );
+        
+        // Warp time forward to avoid underflow in oracle lookback
+        vm.warp(block.timestamp + 100);
+        
+        // Initialize observations to avoid division by zero in oracle
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_USDT),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // Mock base token balance (needed for updateUnitaryValue after donation)
+        vm.mockCall(
+            mockBaseToken,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
+            abi.encode(0)
+        );
+
+        // Should succeed - donation with proper oracle setup
+        vm.expectEmit(true, true, true, true);
+        emit IECrosschain.TokensReceived(
+            deployment.pool,
+            Constants.ETH_USDT,
+            transferAmount,
+            uint8(params.opType)
+        );
+        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, transferAmount - 1e8, params);
+
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+
+    /// @notice Test extension Transfer mode with proper delegatecall context
     function test_ECrosschain_TransferMode_WithDelegatecall() public {
         _setupActiveToken(deployment.pool, mockBaseToken);
         
@@ -426,7 +499,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.chainId(31337);
     }
     
-    /// @notice Test handler Sync mode with proper delegatecall context
+    /// @notice Test extension Sync mode with proper delegatecall context
     function test_ECrosschain_SyncMode_WithDelegatecall() public {
         _setupActiveToken(deployment.pool, mockBaseToken);
         
@@ -474,7 +547,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.chainId(31337);
     }
     
-    /// @notice Test handler with WETH unwrapping
+    /// @notice Test extension with WETH unwrapping
     function test_ECrosschain_WithWETHUnwrap_WithDelegatecall() public {
         _setupActiveToken(deployment.pool, mockBaseToken);
         
@@ -528,7 +601,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.chainId(31337);
     }
     
-    /// @notice Test handler adds token with price feed to active set
+    /// @notice Test extension adds token with price feed to active set
     function test_ECrosschain_AddsTokenWithPriceFeed() public {
         // Start with no active tokens
         _setupActiveToken(deployment.pool, mockBaseToken);

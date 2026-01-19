@@ -23,7 +23,7 @@ library CrosschainLib {
     address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
 
     // if pool tokens slot empty, clear any pre-existing balance and initialize storage to default value
-    function checkAndUpdateUnitaryValue(address token, uint256 balance, bytes32 poolTokensSlot) internal returns (uint256 currentNav) {
+    function checkAndUpdateUnitaryValue(address token, uint256 balance, bytes32 poolTokensSlot) internal returns (uint256, uint256) {
         // TODO: check use IStorageAccessible
         uint256 priceAndSupply;
         assembly {
@@ -42,10 +42,13 @@ library CrosschainLib {
             } else {
                 token.safeTransfer(tokenJar, balance);
             }
+
+            balance = 0;
         }
 
         // Update unitary value and store NAV in transient storage (will inintialize storage if empty)
-        currentNav = ISmartPoolActions(address(this)).updateUnitaryValue();
+        uint256 nav = ISmartPoolActions(address(this)).updateUnitaryValue();
+        return (nav, balance);
     }
 
     /// @notice Check if a token is allowed for cross-chain operations on the current chain.

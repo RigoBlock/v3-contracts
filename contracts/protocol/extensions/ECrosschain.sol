@@ -46,9 +46,10 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
-            token.setDonationLock(balance);
+            uint256 currentNav;
             // TODO: check if should pass slot as first param (although will need to define extra using lib for)
-            uint256 currentNav = CrosschainLib.checkAndUpdateUnitaryValue(token, balance, StorageLib.POOL_TOKENS_SLOT);
+            (currentNav, balance) = CrosschainLib.checkAndUpdateUnitaryValue(token, balance, StorageLib.POOL_TOKENS_SLOT);
+            token.setDonationLock(balance);
             currentNav.storeNav();
             return;
         }
@@ -61,8 +62,11 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
 
         // ensure balance didn't decrease
         require(balance >= storedBalance, BalanceUnderflow());
+        uint256 amountDelta;
 
-        uint256 amountDelta = balance - storedBalance;
+        unchecked {
+            amountDelta = balance - storedBalance;
+        }
 
         // For bridge transactions, amountDelta will be >= amount due to solver surplus
         // We use amountDelta for virtual balance (captures full value)
