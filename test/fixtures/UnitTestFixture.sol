@@ -16,6 +16,7 @@ import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {DeploymentParams, Extensions} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {MockOracle} from "../../contracts/test/MockOracle.sol";
 
 /// @title UnitTestFixture - Minimal deployment for unit tests without forks
 /// @notice Deploys real SmartPool implementation and pool proxy on local network
@@ -33,6 +34,7 @@ contract UnitTestFixture is Test {
         address factory;
         address tokenJar;
         address wrappedNative;
+        MockOracle mockOracle;
     }
 
     Deployment public deployment;
@@ -82,11 +84,11 @@ contract UnitTestFixture is Test {
         _deployStakingSuite();
     
         address mockUniv4Posm = deployCode("out/MockUniswapNpm.sol/MockUniswapNpm.json", abi.encode(deployment.wrappedNative));
-        address mockOracle = deployCode("out/MockOracle.sol/MockOracle.json");
+        deployment.mockOracle = MockOracle(deployCode("out/MockOracle.sol/MockOracle.json"));
 
         // Deploy extensions - will require mockCall or, as for EOracle.getTwap, mockCall on the oracle contract (due to foundry limitation on mockCall for internal calls)
         deployment.eApps = new EApps(stakingProxy, mockUniv4Posm);
-        deployment.eOracle = new EOracle(mockOracle, deployment.wrappedNative);
+        deployment.eOracle = new EOracle(address(deployment.mockOracle), deployment.wrappedNative);
         deployment.eUpgrade = new EUpgrade(deployment.factory);
         deployment.eCrosschain = new ECrosschain();
         deployment.eNavView = new ENavView(stakingProxy, mockUniv4Posm);
