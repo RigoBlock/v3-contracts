@@ -2,8 +2,10 @@
 pragma solidity ^0.8.28;
 
 import {SafeTransferLib} from "./SafeTransferLib.sol";
+import {VirtualStorageLib} from "./VirtualStorageLib.sol";
 import {ISmartPoolActions} from "../interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol";
+import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
 import {CrosschainTokens} from "../types/CrosschainTokens.sol";
 
 /// @title CrosschainLib - Library for cross-chain token validation and conversion.
@@ -13,6 +15,8 @@ library CrosschainLib {
     // Import token addresses from shared constants
     using CrosschainTokens for address;
     using SafeTransferLib for address;
+    using VirtualStorageLib for address;
+    using VirtualStorageLib for int256;
 
     // Custom errors
     error UnsupportedCrossChainToken();
@@ -23,17 +27,20 @@ library CrosschainLib {
     address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
 
     // if pool tokens slot empty, clear any pre-existing balance and initialize storage to default value
-    function checkAndUpdateUnitaryValue(address token, uint256 balance, bytes32 poolTokensSlot) internal returns (uint256, uint256) {
-        // TODO: check use IStorageAccessible
-        uint256 priceAndSupply;
-        assembly {
-            priceAndSupply := sload(poolTokensSlot)
-        }
-
-        // DOS Prevention: Check if storage slot is uninitialized
-        // If unitaryValue storage = 0 AND there are pre-existing assets,
+    function checkAndUpdateUnitaryValue(address token, uint256 balance, bytes32 /* poolTokensSlot */) internal returns (uint256, uint256) {
+        // DOS Prevention: Check if pool has zero effective supply (real + virtual)
+        // If effective supply = 0 AND there are pre-existing assets,
         // neutralize them by transferring to tokenJar for GRG buyback-and-burn.
-        if (priceAndSupply == 0 && balance > 0) {
+        // This handles both uninitialized pools (unitaryValue=0) AND pools where all supply was burned (unitaryValue>0).
+        // Critical: Must check BEFORE virtual supply is created, to prevent attacker tokens from affecting NAV.
+        ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
+        int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+        
+        // Calculate effective supply (real + virtual)
+        // Use int256 for safety since virtualSupply can be negative
+        int256 effectiveSupply = int256(poolTokens.totalSupply) + virtualSupply;
+        
+        if (effectiveSupply == 0 && balance > 0) {
             // Read tokenJar from immutable (accessible in delegatecall context)
             address tokenJar = ISmartPoolImmutable(address(this)).tokenJar();
 
@@ -46,7 +53,7 @@ library CrosschainLib {
             balance = 0;
         }
 
-        // Update unitary value and store NAV in transient storage (will inintialize storage if empty)
+        // Update unitary value and store NAV in transient storage (will initialize storage if empty)
         uint256 nav = ISmartPoolActions(address(this)).updateUnitaryValue();
         return (nav, balance);
     }
