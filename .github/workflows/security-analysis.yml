@@ -52,7 +52,7 @@ jobs:
         FOUNDRY_DISABLE_NIGHTLY_WARNING: true
 
     - name: Create/update checklist as PR comment
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       if: github.event_name == 'pull_request' && hashFiles('slither-report.md') != ''
       with:
         script: |
