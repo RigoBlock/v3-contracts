@@ -47,9 +47,12 @@ interface ISmartPoolActions {
         address tokenOut
     ) external returns (uint256 netRevenue);
 
+    // TODO: check return struct, or directly components tuple
     /// @notice Allows anyone to store an up-to-date pool price.
-    /// @return updatedValue Value of the new stored unitary value.
-    function updateUnitaryValue() external returns (uint256 updatedValue);
+    /// @return unitaryValue Value of the new stored unitary value.
+    /// @return netTotalValue The net total pool value in base token units.
+    /// @return netTotalLiabilities The net total liabilities in base token units.
+    function updateUnitaryValue() external returns (uint256 unitaryValue, uint256 netTotalValue, uint256 netTotalLiabilities);
 
     /// @notice Sets or removes an operator for the caller.
     /// @param operator The address of the operator.

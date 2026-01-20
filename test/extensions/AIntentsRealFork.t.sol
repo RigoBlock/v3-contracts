@@ -2412,7 +2412,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Call updateUnitaryValue() from pool to mimic what depositV3 will do
         // This updates NAV to include the WETH we just added
         vm.prank(pool());
-        uint256 navWithWeth = ISmartPoolActions(pool()).updateUnitaryValue();
+        (uint256 navWithWeth, , ) = ISmartPoolActions(pool()).updateUnitaryValue();
         console2.log("NAV with WETH (before transfer):", navWithWeth);
         
         // Get pool properties

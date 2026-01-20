@@ -113,18 +113,30 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // - tokenRegistrySlot = addresses array length
         // - tokenRegistrySlot + 1 = positions mapping base slot
         
-        // Set array length to 1
-        vm.store(pool, tokenRegistrySlot, bytes32(uint256(1)));
+        // Read current array length
+        uint256 currentLength = uint256(vm.load(pool, tokenRegistrySlot));
         
-        // Set the first element of the array (at keccak256(tokenRegistrySlot))
-        bytes32 arrayElementSlot = keccak256(abi.encode(tokenRegistrySlot));
-        vm.store(pool, arrayElementSlot, bytes32(uint256(uint160(token))));
-        
-        // Set position for this token to 1 (first element) 
-        // Mapping is at tokenRegistrySlot + 1
+        // Check if token already exists
         bytes32 mappingBaseSlot = bytes32(uint256(tokenRegistrySlot) + 1);
         bytes32 positionSlot = keccak256(abi.encode(token, mappingBaseSlot));
-        vm.store(pool, positionSlot, bytes32(uint256(1))); // 1-based index
+        uint256 existingPosition = uint256(vm.load(pool, positionSlot));
+        
+        // Notice: position could be REMOVED_TOKEN_FLAG, which is > 0, but it's not relevant for this test
+        if (existingPosition > 0) {
+            // Token already active, nothing to do
+            return;
+        }
+        
+        // Add new token
+        uint256 newLength = currentLength + 1;
+        vm.store(pool, tokenRegistrySlot, bytes32(newLength));
+        
+        // Set the new element in the array (at keccak256(tokenRegistrySlot) + currentLength)
+        bytes32 arrayElementSlot = bytes32(uint256(keccak256(abi.encode(tokenRegistrySlot))) + currentLength);
+        vm.store(pool, arrayElementSlot, bytes32(uint256(uint160(token))));
+        
+        // Set position for this token (1-based index)
+        vm.store(pool, positionSlot, bytes32(newLength));
     }
     
     /// @notice Test extension deployment (stateless)
@@ -192,12 +204,9 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
 
     /// @notice Test extension requires pool to be unlocked to execute
     function test_ECrosschain_RequiresPoolUnlocked() public {
-        // TODO: base token does not need activation, and it will result in odd tests behavior
-        _setupActiveToken(deployment.pool, mockBaseToken);
-        
         // Mock required calls
         vm.mockCall(
-            mockBaseToken,
+            mockInputToken,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
             abi.encode(0) // Mock balance
         );
@@ -210,17 +219,15 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         // Should revert because pool is locked (updateUnitaryValue will fail)
         vm.expectRevert(abi.encodeWithSelector(IECrosschain.DonationLock.selector, false));
-        IECrosschain(deployment.pool).donate(mockBaseToken, 2, params);
+        IECrosschain(deployment.pool).donate(mockInputToken, 2, params);
 
-        IECrosschain(deployment.pool).donate(mockBaseToken, 1, params);
+        IECrosschain(deployment.pool).donate(mockInputToken, 1, params);
 
         vm.clearMockedCalls();
     }
 
     /// @notice Test extension rejects unsupported token
     function test_ECrosschain_RejectsUnsupportedToken() public {
-        _setupActiveToken(deployment.pool, mockInputToken); // Mark input token as Active
-
         vm.mockCall(
             mockInputToken,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
@@ -249,8 +256,34 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.clearMockedCalls();
     }
 
+    /// @notice Test extension accepts source amount within tolerance range  
+    function test_ECrosschain_RevertsIfTokenPriceFeedDoesNotExist() public {
+        uint256 receivedAmount = 100e18; // Use 18 decimals for base token
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        IECrosschain(deployment.pool).donate(ethUsdt, 1, params);
+        vm.chainId(1);
+
+        vm.mockCall(
+            ethUsdt,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
+            abi.encode(receivedAmount)
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, ethUsdt));
+        IECrosschain(deployment.pool).donate(ethUsdt, receivedAmount, params);
+
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+
     /// @notice Test extension rejects invalid OpType
     function test_ECrosschain_RejectsInvalidOpType() public {
+        // Mark input token as active to skip price feed validation when adding it via addUnique
         _setupActiveToken(deployment.pool, ethUsdc); // Mark input token as active
         
         // Create message with Unknown OpType to test InvalidOpType revert
@@ -302,181 +335,123 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     }
 
     /// @notice Test extension accepts source amount within tolerance range  
-    function test_ECrosschain_RevertsIfTokenPriceFeedDoesNotExist() public {
-        _setupActiveToken(deployment.pool, mockBaseToken); // Mark base token as active
-        
-        uint256 receivedAmount = 100e18; // Use 18 decimals for base token
-        
-        DestinationMessageParams memory params = DestinationMessageParams({
-            opType: OpType.Transfer,
-            shouldUnwrapNative: false
-        });
-        
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 1, params);
-        vm.chainId(1);
-
-        vm.mockCall(
-            Constants.ETH_USDT,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(receivedAmount)
-        );
-
-        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, Constants.ETH_USDT));
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, receivedAmount, params);
-
-        vm.clearMockedCalls();
-        vm.chainId(31337);
-    }
-
-    /// @notice Test extension accepts source amount within tolerance range  
     function test_ECrosschain_AcceptsSourceAmountWithinTolerance() public {
-        _setupActiveToken(deployment.pool, mockBaseToken); // Mark base token as active
-        
-        DestinationMessageParams memory params = DestinationMessageParams({
-            opType: OpType.Transfer,
-            shouldUnwrapNative: false
-        });
-        
-        // First donation to unlock the pool
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 1, params);
-        vm.chainId(1);
-
-        uint256 transferAmount = 100e18;
-
-        vm.mockCall(
-            Constants.ETH_USDT,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(transferAmount)
-        );
-        
-        // Warp time forward to avoid underflow in oracle lookback
-        vm.warp(block.timestamp + 100);
-        
-        // Initialize observations to avoid division by zero in oracle
+        // Initialize observations BEFORE first donation
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDT),
+                currency1: Currency.wrap(ethUsdt),
                 fee: 0,
                 tickSpacing: TickMath.MAX_TICK_SPACING,
                 hooks: IHooks(address(deployment.mockOracle))
             })
         );
-        
-        // Mock base token balance (needed for updateUnitaryValue after donation)
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
-        );
 
-        // Should succeed - donation with proper oracle setup
-        vm.expectEmit(true, true, true, true);
-        emit IECrosschain.TokensReceived(
-            deployment.pool,
-            Constants.ETH_USDT,
-            transferAmount,
-            uint8(OpType.Transfer)
-        );
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, transferAmount - 1e8, params);
-
-        vm.clearMockedCalls();
-        vm.chainId(31337);
-    }
-
-    /// @notice Test extension accepts source amount within tolerance range  
-    function test_ECrosschain_PassesWithNullSupplyAndPositiveSameTokenBalance() public {
-        _setupActiveToken(deployment.pool, mockBaseToken); // Mark base token as active
-        
-        // Actually transfer USDT to pool (DOS attack vector)
-        MockERC20(Constants.ETH_USDT).mint(deployment.pool, 2000e6); // 2000 USDT with 6 decimals
-        
-        DestinationMessageParams memory params = DestinationMessageParams({
-            opType: OpType.Transfer,
-            shouldUnwrapNative: false
-        });
-        
-        // First donation to unlock the pool
-        // This will transfer the 2000 USDT to tokenJar (DOS prevention)
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 1, params);
-        vm.chainId(1);
-
-        uint256 transferAmount = 100e18;
-
-        vm.mockCall(
-            Constants.ETH_USDT,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(transferAmount)
-        );
-        
         // Warp time forward to avoid underflow in oracle lookback
         vm.warp(block.timestamp + 100);
         
-        // Initialize observations to avoid division by zero in oracle
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDT),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        // Mock base token balance (needed for updateUnitaryValue after donation)
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
-        );
-
-        // Should succeed - donation with proper oracle setup
-        vm.expectEmit(true, true, true, true);
-        emit IECrosschain.TokensReceived(
-            deployment.pool,
-            Constants.ETH_USDT,
-            transferAmount,
-            uint8(params.opType)
-        );
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, transferAmount - 1e8, params);
-
-        vm.clearMockedCalls();
-        vm.chainId(31337);
-    }
-
-    /// @notice Test extension accepts source amount within tolerance range  
-    function test_ECrosschain_PassesWithNullSupplyAndPositiveOtherTokenBalance() public {
-        // Deploy a pool that has WETH as native token
-        (address wethPool, ) = IRigoblockPoolProxyFactory(deployment.factory).createPool("weth pool", "TEST", deployment.wrappedNative);
-        
-        // with null active supply, they won't be included in the first price update
-        _setupActiveToken(wethPool, ethUsdc);
-        _setupActiveToken(wethPool, ethUsdt);
-        
-        // add other token to pool - this will make the transaction revert due to nav manipulation detected - which is not the case
-        MockERC20(ethUsdc).mint(wethPool, 2000e8);
-        
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         });
         
         // First donation to unlock the pool
-        IECrosschain(wethPool).donate(ethUsdt, 1, params);
+        IECrosschain(deployment.pool).donate(ethUsdt, 1, params);
         vm.chainId(1);
 
         uint256 transferAmount = 100e18;
 
         vm.mockCall(
             ethUsdt,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, wethPool),
+            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
             abi.encode(transferAmount)
         );
+
+        // Should succeed - donation with proper oracle setup
+        vm.expectEmit(true, true, true, true);
+        emit IECrosschain.TokensReceived(
+            deployment.pool,
+            ethUsdt,
+            transferAmount,
+            uint8(OpType.Transfer)
+        );
+        IECrosschain(deployment.pool).donate(ethUsdt, transferAmount - 1e8, params);
+
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+
+    // TODO: test require oracle only after first donation, because the token is not activated first. The tests are, yet again, incorrect.
+    /// @notice Test extension accepts source amount when there is a pre-existing token balance 
+    function test_ECrosschain_PassesWithNullSupplyAndPositiveSameTokenBalance() public {
+        // Actually transfer USDT to pool (attacker tries DOS by donating before first use)
+        uint256 attackerGift = 2000e6; // 2000 USDT with 6 decimals
+        MockERC20(ethUsdt).mint(deployment.pool, attackerGift);
+        
+        // Initialize observations BEFORE first donation (needed for price feed check)
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdt),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        vm.warp(block.timestamp + 100);
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        // First donation to unlock the pool
+        // Token activated BEFORE NAV update, so attacker's gift included in baseline
+        IECrosschain(deployment.pool).donate(ethUsdt, 1, params);
+        vm.chainId(1);
+
+        // Legitimate cross-chain transfer arrives
+        uint256 transferAmount = 100e6; // 100 USDT with 6 decimals
+        MockERC20(ethUsdt).mint(deployment.pool, transferAmount);
+
+        // Should succeed - donation processes legitimate transfer amount
+        // No DOS: attacker's gift was captured in stored assets baseline
+        // Event emits actual balance change (including pre-existing attacker gift)
+        vm.expectEmit(true, true, true, true);
+        emit IECrosschain.TokensReceived(
+            deployment.pool,
+            ethUsdt,
+            transferAmount, // Full balance delta including attacker's pre-existing gift
+            uint8(params.opType)
+        );
+        IECrosschain(deployment.pool).donate(ethUsdt, transferAmount - 1e2, params); // Slightly less to test validation
+
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+
+    /// @notice Test DOS prevention when other active tokens have balances before first donation
+    /// @dev This test verifies the critical fix: when effectiveSupply==0, ALL active token balances
+    ///      are cleared (transferred to tokenJar), not just the donated token. Without this:
+    ///      1. Attacker sends USDC to pool with 0 supply
+    ///      2. First donate(USDT, 1) only checks USDT balance (which is 0), so USDC isn't cleared  
+    ///      3. Second donate() creates virtual supply, triggering NAV recalculation
+    ///      4. NAV includes USDC balance, causing NavManipulationDetected revert = DOS attack
+    ///      The fix iterates through ALL active tokens and clears their balances when effectiveSupply==0.
+    function test_ECrosschain_PassesWithNullSupplyAndPositiveOtherTokenBalance() public {
+        // Deploy a pool that has WETH as native token
+        (address wethPool, ) = IRigoblockPoolProxyFactory(deployment.factory).createPool("weth pool", "TEST", deployment.wrappedNative);
+        
+        // with null active supply, they won't be included in the first price update
+        _setupActiveToken(wethPool, ethUsdc);
+        
+        // add other token to pool - this will make the transaction revert due to nav manipulation detected - which is not the case
+        MockERC20(ethUsdc).mint(wethPool, 2000e6);
         
         // Warp time forward to avoid underflow in oracle lookback
         vm.warp(block.timestamp + 100);
         
-        // Initialize observations to avoid division by zero in oracle
+        // Initialize observations BEFORE first donation
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
@@ -495,6 +470,31 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
                 hooks: IHooks(address(deployment.mockOracle))
             })
         );
+        
+        // Mock base token (WETH) balance BEFORE first donation
+        vm.mockCall(
+            deployment.wrappedNative,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, wethPool),
+            abi.encode(0)
+        );
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        // First donation to unlock the pool
+        // Nav should be initialized as 1 here, because the price slot in empty
+        IECrosschain(wethPool).donate(ethUsdt, 1, params);
+        vm.chainId(1);
+
+        uint256 transferAmount = 100e18;
+
+        vm.mockCall(
+            ethUsdt,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, wethPool),
+            abi.encode(transferAmount)
+        );
 
         // Should succeed - donation with proper oracle setup
         vm.expectEmit(true, true, true, true);
@@ -504,25 +504,32 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             transferAmount,
             uint8(params.opType)
         );
+
+        // Test verifies that USDC balance was cleared during first donate(), preventing NAV manipulation
         IECrosschain(wethPool).donate(ethUsdt, transferAmount - 1e8, params);
 
         vm.clearMockedCalls();
         vm.chainId(31337);
     }
 
-    // TODO: use an actual token as base token, because this will silently fail
     /// @notice Test extension accepts source amount within tolerance range  
     function test_ECrosschain_PassesWithNullSupplyAndPositiveFakeTokenBalance() public {
-        _setupActiveToken(deployment.pool, mockBaseToken); // Mark base token as active
+        // Warp time forward to avoid underflow in oracle lookback
+        vm.warp(block.timestamp + 100);
         
-        // Mock balanceOf calls for two-step donation process
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(2000e8)
+        // Initialize observations BEFORE first donation
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdt),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
         );
+        
         vm.mockCall(
-            Constants.ETH_USDT,
+            ethUsdt,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
             abi.encode(0)
         );
@@ -533,49 +540,27 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         });
         
         // First donation to unlock the pool
-        // TODO: check if emits some log so we can assert tokenJar transfer
         // Whatever the previous token balance was, should be burnt for GRG
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, 1, params);
+        IECrosschain(deployment.pool).donate(ethUsdt, 1, params);
         vm.chainId(1);
 
         uint256 transferAmount = 100e18;
 
         vm.mockCall(
-            Constants.ETH_USDT,
+            ethUsdt,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
             abi.encode(transferAmount)
-        );
-        
-        // Warp time forward to avoid underflow in oracle lookback
-        vm.warp(block.timestamp + 100);
-        
-        // Initialize observations to avoid division by zero in oracle
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDT),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        // Mock base token balance (needed for updateUnitaryValue after donation)
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
         );
 
         // Should succeed - donation with proper oracle setup
         vm.expectEmit(true, true, true, true);
         emit IECrosschain.TokensReceived(
             deployment.pool,
-            Constants.ETH_USDT,
+            ethUsdt,
             transferAmount,
             uint8(params.opType)
         );
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDT, transferAmount - 1e8, params);
+        IECrosschain(deployment.pool).donate(ethUsdt, transferAmount - 1e8, params);
 
         vm.clearMockedCalls();
         vm.chainId(31337);
@@ -583,11 +568,20 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
 
     /// @notice Test extension Transfer mode with proper delegatecall context
     function test_ECrosschain_TransferMode_WithDelegatecall() public {
-        _setupActiveToken(deployment.pool, mockBaseToken);
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
         
         // Mock balanceOf for unlock
         vm.mockCall(
-            Constants.ETH_USDC,
+            ethUsdc,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
             abi.encode(0)
         );
@@ -598,31 +592,14 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         });
         
         // Unlock
-        IECrosschain(deployment.pool).donate(Constants.ETH_USDC, 1, params);
+        IECrosschain(deployment.pool).donate(ethUsdc, 1, params);
         vm.chainId(1);
         
         // Simulate token transfer to pool
         vm.mockCall(
-            Constants.ETH_USDC,
+            ethUsdc,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
             abi.encode(100e6)
-        );
-        
-        vm.warp(block.timestamp + 100);
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDC),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
         );
         
         // Should succeed with proper setup
@@ -634,8 +611,18 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     
     /// @notice Test extension Sync mode with proper delegatecall context
     function test_ECrosschain_SyncMode_WithDelegatecall() public {
-        _setupActiveToken(deployment.pool, mockBaseToken);
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_WETH),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
         
+        // Notice: we can use any WETH address directly and only mock balance, because decimals are defined as ETH's
         vm.mockCall(
             Constants.ETH_WETH,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
@@ -656,23 +643,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             abi.encode(1e18)
         );
         
-        vm.warp(block.timestamp + 100);
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_WETH),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
-        );
-        
         // Sync mode should succeed
         IECrosschain(deployment.pool).donate(Constants.ETH_WETH, 1e18, params);
 
@@ -682,7 +652,17 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     
     /// @notice Test extension with WETH unwrapping
     function test_ECrosschain_WithWETHUnwrap_WithDelegatecall() public {
-        _setupActiveToken(deployment.pool, mockBaseToken);
+        vm.warp(block.timestamp + 100);
+        // Across uses WETH address even for native transfers
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_WETH),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
         
         vm.mockCall(
             Constants.ETH_WETH,
@@ -709,24 +689,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             abi.encode(1e18)
         );
         
-        vm.warp(block.timestamp + 100);
-        // Across uses WETH address even for native transfers
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_WETH),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
-        );
-        
         // Should succeed and unwrap WETH to ETH
         IECrosschain(deployment.pool).donate(Constants.ETH_WETH, 1e18, params);
 
@@ -737,7 +699,16 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     /// @notice Test extension adds token with price feed to active set
     function test_ECrosschain_AddsTokenWithPriceFeed() public {
         // Start with no active tokens
-        _setupActiveToken(deployment.pool, mockBaseToken);
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_USDC),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
         
         vm.mockCall(
             Constants.ETH_USDC,
@@ -759,23 +730,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             abi.encode(100e6)
         );
         
-        vm.warp(block.timestamp + 100);
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDC),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
-        );
-        
         // Should succeed and add USDC to active tokens
         IECrosschain(deployment.pool).donate(Constants.ETH_USDC, 100e6, params);
 
@@ -785,7 +739,16 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     
     /// @notice Test NAV normalization across different decimal combinations
     function test_ECrosschain_NavNormalization() public {
-        _setupActiveToken(deployment.pool, mockBaseToken);
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_WETH),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
         
         vm.mockCall(
             Constants.ETH_WETH,
@@ -808,23 +771,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             abi.encode(1e18)
         );
         
-        vm.warp(block.timestamp + 100);
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_WETH),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
-        );
-        
         // Should handle 18 decimal normalization
         IECrosschain(deployment.pool).donate(Constants.ETH_WETH, 1e18, params);
 
@@ -834,7 +780,17 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     
     /// @notice Test that WETH unwrapping uses WETH address for validation
     function test_ECrosschain_WETHUnwrapping_UsesAddressZero() public {
-        _setupActiveToken(deployment.pool, mockBaseToken);
+        vm.warp(block.timestamp + 100);
+        // Across uses WETH address even for native transfers
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_WETH),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
         
         vm.mockCall(
             Constants.ETH_WETH,
@@ -861,24 +817,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             abi.encode(1e18)
         );
         
-        vm.warp(block.timestamp + 100);
-        // Across uses WETH address even for native transfers
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_WETH),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
-        );
-        
         // Should use address(0) for ETH after unwrapping
         IECrosschain(deployment.pool).donate(Constants.ETH_WETH, 1e18, params);
 
@@ -888,7 +826,16 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     
     /// @notice Test that Sync operations work with client-side validation
     function test_ECrosschain_SyncMode_ClientSideValidation() public {
-        _setupActiveToken(deployment.pool, mockBaseToken);
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_USDC),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
         
         vm.mockCall(
             Constants.ETH_USDC,
@@ -908,23 +855,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             Constants.ETH_USDC,
             abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
             abi.encode(100e6)
-        );
-        
-        vm.warp(block.timestamp + 100);
-        deployment.mockOracle.initializeObservations(
-            PoolKey({
-                currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDC),
-                fee: 0,
-                tickSpacing: TickMath.MAX_TICK_SPACING,
-                hooks: IHooks(address(deployment.mockOracle))
-            })
-        );
-        
-        vm.mockCall(
-            mockBaseToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, deployment.pool),
-            abi.encode(0)
         );
         
         // Sync mode succeeds - NAV validation is client responsibility

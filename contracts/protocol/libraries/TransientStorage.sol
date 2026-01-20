@@ -16,7 +16,9 @@ library TransientStorage {
     bytes32 internal constant _TRANSIENT_TWAP_TICK_SLOT = bytes32(uint256(keccak256("transient.tick.slot")) - 1);
 
     // Transient storage slots for cross-chain donation tracking
+    // TODO: do we need _STORED_NAV_SLOT now?
     bytes32 internal constant _STORED_NAV_SLOT = bytes32(uint256(keccak256("eacross.stored.nav")) - 1);
+    bytes32 internal constant _STORED_ASSETS_SLOT = bytes32(uint256(keccak256("eacross.stored.assets")) - 1);
     bytes32 internal constant _TEMP_BALANCE_SLOT = bytes32(uint256(keccak256("eacross.temp.balance")) - 1);
     bytes32 internal constant _DONATION_LOCK_SLOT = bytes32(uint256(keccak256("eacross.donation.lock")) - 1);
 
@@ -65,6 +67,10 @@ library TransientStorage {
         _STORED_NAV_SLOT.asUint256().tstore(nav);
     }
 
+    function storeAssets(uint256 assets) internal {
+        _STORED_ASSETS_SLOT.asUint256().tstore(assets);
+    }
+
     function storeTemporaryBalance(address token, uint256 balance, bool locked) private {
         bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
         slot.asUint256().tstore(balance);
@@ -73,5 +79,9 @@ library TransientStorage {
 
     function getStoredNav() internal view returns (uint256) {
         return _STORED_NAV_SLOT.asUint256().tload();
+    }
+
+    function getStoredAssets() internal view returns (uint256) {
+        return _STORED_ASSETS_SLOT.asUint256().tload();
     }
 }

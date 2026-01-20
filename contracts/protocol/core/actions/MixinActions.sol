@@ -75,12 +75,12 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
     /// @inheritdoc ISmartPoolActions
     /// @dev Reentrancy protection provided by calling functions (mint, burn, depositV3, donate)
-    function updateUnitaryValue() external override returns (uint256) {
+    function updateUnitaryValue() external override returns (uint256, uint256, uint256) {
         NavComponents memory components = _updateNav();
 
         // Division by zero already handled in _updateNav() -> MixinPoolValue._updatePoolValue()
         // Zero supply returns stored NAV without update
-        return components.unitaryValue;
+        return (components.unitaryValue, components.netTotalValue, components.netTotalLiabilities);
     }
 
     /// @inheritdoc ISmartPoolActions

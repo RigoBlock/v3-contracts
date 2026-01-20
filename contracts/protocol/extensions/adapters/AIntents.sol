@@ -199,7 +199,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
 
         // Update NAV and get pool state
-        uint256 unitaryValue = ISmartPoolActions(address(this)).updateUnitaryValue();
+        (uint256 unitaryValue, , ) = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
 
         // Convert output amount to base token value
