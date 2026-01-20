@@ -36,7 +36,7 @@ jobs:
         FOUNDRY_DISABLE_NIGHTLY_WARNING: true
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
 
@@ -114,7 +114,7 @@ jobs:
         echo "SARIF file location: $(pwd)/results.sarif"
 
     - name: Create/update checklist as PR comment
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       if: always() && inputs.pr_number && hashFiles('slither-report.md') != ''
       with:
         script: |
