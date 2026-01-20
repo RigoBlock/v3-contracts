@@ -15,6 +15,7 @@ import {StorageLib} from "../libraries/StorageLib.sol";
 import {TransientStorage} from "../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../libraries/VirtualStorageLib.sol";
 import {DestinationMessageParams, OpType} from "../types/Crosschain.sol";
+import {NetAssetsValue} from "../types/NavComponents.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IECrosschain} from "./adapters/interfaces/IECrosschain.sol";
 
@@ -49,9 +50,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
             token.setDonationLock(balance);
             
             // If token has pre-existing balance but isn't active, it won't be in storedAssets
-            (uint256 nav, uint256 currentAssets, ) = ISmartPoolActions(address(this)).updateUnitaryValue();
-            nav.storeNav();
-            currentAssets.storeAssets();
+            NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
+            navParams.unitaryValue.storeNav();
+            navParams.netTotalValue.storeAssets();
             return;
         }
 
@@ -123,63 +124,56 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
     ) private {
         address baseToken = StorageLib.pool().baseToken;
         
-        // Use amount (donated) for virtual supply tracking
-        uint256 amountValueInBase = IEOracle(address(this))
+        // Convert amount to base token value - reuse 'amount' variable for amountValueInBase
+        amount = IEOracle(address(this))
             .convertTokenAmount(token, amount.toInt256(), baseToken)
             .toUint256();
         
-        // Track how much virtual balance was reduced (affects asset validation)
-        uint256 vbReductionValueInBase = 0;
+        // Reuse 'storedBalance' for vbReductionValueInBase tracking
+        // Save original storedBalance in amountDelta temporarily (we'll restore it later)
+        if (!previouslyActive) {
+            amountDelta += storedBalance;
+        }
+        storedBalance = 0; // Now use storedBalance for vbReductionValueInBase
         
-        // Manage virtual balances and supply with donated amount
+        // Manage virtual balances - currentBaseTokenVB is reused later
         int256 currentBaseTokenVB = baseToken.getVirtualBalance();
-        uint256 remainingValueInBase = amountValueInBase;
 
         if (currentBaseTokenVB > 0) {
-            uint256 baseTokenVBUint = currentBaseTokenVB.toUint256();
-            if (amountValueInBase >= baseTokenVBUint) {
+            // amount holds amountValueInBase, check against VB
+            if (amount >= currentBaseTokenVB.toUint256()) {
                 baseToken.updateVirtualBalance(-currentBaseTokenVB);
-                remainingValueInBase = amountValueInBase - baseTokenVBUint;
-                vbReductionValueInBase = baseTokenVBUint;
+                storedBalance = currentBaseTokenVB.toUint256(); // vbReductionValueInBase
+                amount -= storedBalance; // amount now holds remainingValueInBase
             } else {
-                baseToken.updateVirtualBalance(-(amountValueInBase.toInt256()));
-                remainingValueInBase = 0;
-                vbReductionValueInBase = amountValueInBase;
+                baseToken.updateVirtualBalance(-(amount.toInt256()));
+                storedBalance = amount; // vbReductionValueInBase
+                amount = 0; // remainingValueInBase is 0
             }
         }
 
-        if (remainingValueInBase > 0) {
-            uint256 storedNav = TransientStorage.getStoredNav();
-            uint256 virtualSupplyIncrease = (remainingValueInBase * (10 ** StorageLib.pool().decimals)) / storedNav;
-            (virtualSupplyIncrease.toInt256()).updateVirtualSupply();
+        // If remaining value > 0, update virtual supply (amount holds remainingValueInBase)
+        if (amount > 0) {
+            // Reuse currentBaseTokenVB for virtualSupplyIncrease calculation
+            currentBaseTokenVB = ((amount * (10 ** StorageLib.pool().decimals)) / TransientStorage.getStoredNav()).toInt256();
+            currentBaseTokenVB.updateVirtualSupply();
         }
 
-        (, uint256 finalAssets, ) = ISmartPoolActions(address(this)).updateUnitaryValue();
+        NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
 
-        uint256 storedAssets = TransientStorage.getStoredAssets();
+        // Reuse 'amount' for storedAssets
+        amount = TransientStorage.getStoredAssets();
 
-        // Two cases:
-        // 1. Token was already active → storedAssets includes storedBalance, only add amountDelta
-        // 2. Token was NOT active → storedAssets excludes storedBalance, add full balance (storedBalance + amountDelta)
-        if (!previouslyActive) {
-            // Case 2: Add full current balance
-            amountDelta += storedBalance;
-        }
-
-        // Convert the delta to base token and add to expected assets (skip oracle call if no change)
-        // Subtract any VB reduction since that's already reflected in finalAssets via updateUnitaryValue
+        // Convert amountDelta to base and subtract VB reduction
         if (amountDelta > 0) {
-            uint256 amountDeltaValueInBase = IEOracle(address(this))
-                .convertTokenAmount(token, amountDelta.toInt256(), baseToken)
-                .toUint256();
+            // Reuse currentBaseTokenVB for amountDeltaValueInBase
+            currentBaseTokenVB = IEOracle(address(this))
+                .convertTokenAmount(token, amountDelta.toInt256(), baseToken);
             
-            // VB reduction is already reflected in finalAssets, so don't double-count
-            // Note: amountDeltaValueInBase >= vbReductionValueInBase is always true because:
-            // - VB reduction is capped by amountValueInBase (converted from amount)
-            // - We require amountDelta >= amount (line 75), so amountDeltaValueInBase >= vbReductionValueInBase
-            storedAssets += amountDeltaValueInBase - vbReductionValueInBase;
+            // storedBalance holds vbReductionValueInBase
+            amount += currentBaseTokenVB.toUint256() - storedBalance;
         }
 
-        require(finalAssets == storedAssets, NavManipulationDetected(storedAssets, finalAssets));
+        require(navParams.netTotalValue == amount, NavManipulationDetected(amount, navParams.netTotalValue));
     }
 }

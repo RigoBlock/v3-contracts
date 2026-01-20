@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
+import {NetAssetsValue} from "../../../types/NavComponents.sol";
+
 /// @title Rigoblock V3 Pool Actions Interface - Allows interaction with the pool contract.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
@@ -47,12 +49,9 @@ interface ISmartPoolActions {
         address tokenOut
     ) external returns (uint256 netRevenue);
 
-    // TODO: check return struct, or directly components tuple
     /// @notice Allows anyone to store an up-to-date pool price.
-    /// @return unitaryValue Value of the new stored unitary value.
-    /// @return netTotalValue The net total pool value in base token units.
-    /// @return netTotalLiabilities The net total liabilities in base token units.
-    function updateUnitaryValue() external returns (uint256 unitaryValue, uint256 netTotalValue, uint256 netTotalLiabilities);
+    /// @return navParams Tuple of unitary value, net total value, net total liabilities.
+    function updateUnitaryValue() external returns (NetAssetsValue memory navParams);
 
     /// @notice Sets or removes an operator for the caller.
     /// @param operator The address of the operator.

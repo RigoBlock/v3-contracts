@@ -10,7 +10,7 @@ import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol"
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
-import {NavComponents} from "../../types/NavComponents.sol";
+import {NavComponents, NetAssetsValue} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeTransferLib for address;
@@ -75,12 +75,16 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
     /// @inheritdoc ISmartPoolActions
     /// @dev Reentrancy protection provided by calling functions (mint, burn, depositV3, donate)
-    function updateUnitaryValue() external override returns (uint256, uint256, uint256) {
+    function updateUnitaryValue() external override returns (NetAssetsValue memory navParams) {
         NavComponents memory components = _updateNav();
 
         // Division by zero already handled in _updateNav() -> MixinPoolValue._updatePoolValue()
         // Zero supply returns stored NAV without update
-        return (components.unitaryValue, components.netTotalValue, components.netTotalLiabilities);
+        navParams = NetAssetsValue({
+            unitaryValue: components.unitaryValue,
+            netTotalValue: components.netTotalValue,
+            netTotalLiabilities: components.netTotalLiabilities
+        });
     }
 
     /// @inheritdoc ISmartPoolActions

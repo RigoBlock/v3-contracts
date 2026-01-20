@@ -26,6 +26,7 @@ import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.so
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
 import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
+import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
 
 /// @notice Interface for Across MulticallHandler contract
 /// @dev This matches the actual Across Protocol MulticallHandler interface
@@ -46,6 +47,23 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
     uint256 constant LARGE_AMOUNT = 10000e6; // 10,000 USDC
     
+    bytes32 constant virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
+    bytes32 constant virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
+
+    address ethMulticallHandler = Constants.ETH_MULTICALL_HANDLER;
+    address baseMulticallHandler = Constants.BASE_MULTICALL_HANDLER;
+    
+    // Storage variables to avoid stack too deep (reused across tests)
+    uint256 private s_amount;
+    uint256 private s_supply;
+    uint256 private s_value;
+    uint256 private s_result;
+    int256 private s_virtualSupply;
+    address private s_tempAddr;
+    bytes32 private s_slot;
+    bytes32 private s_storageValue;
+    ISmartPoolState.PoolTokens private s_poolTokens;
+    
     /// @notice Simulate MulticallHandler execution of Instructions (simplified version)
     /// @dev This mimics what the real Across MulticallHandler would do
     function simulateMulticallHandler(
@@ -56,15 +74,13 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // For testing, we'll just execute the key calls directly
         // This avoids complex EVM interactions that might cause crashes
         
-        address multicallHandler = Constants.BASE_MULTICALL_HANDLER;
-        
         // Give the handler the tokens first
-        deal(token, multicallHandler, amount);
+        deal(token, ethMulticallHandler, amount);
         
         console2.log("Simulating", instructions.calls.length, "calls from MulticallHandler");
         
         // Execute each call as if from the MulticallHandler
-        vm.startPrank(multicallHandler);
+        vm.startPrank(ethMulticallHandler);
         
         // Call 1: Initialize donation (amount=1)
         if (instructions.calls.length > 0) {
@@ -734,12 +750,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             params.outputAmount,    // Output amount
             sourceParams
         );
-
-        // same address as base multicall address
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
         
         // Fund Base pool with USDC for the handler
-        deal(Constants.ETH_USDC, multicallHandler, transferAmount);
+        deal(Constants.ETH_USDC, ethMulticallHandler, transferAmount);
 
         // Handler processes the cross-chain message
         // Transfer mode should succeed with NAV neutrality through virtual balances:
@@ -747,7 +760,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // 2. Second call applies virtual balance offset BEFORE NAV update
         // 3. NAV remains unchanged, validating proper transfer mode operation
         vm.prank(user);
-        IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+        IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
             Constants.ETH_USDC, // tokenSent
             transferAmount, // amount
             user,
@@ -827,11 +840,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             sourceParams
         );
 
-        // same address as base multicall address
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
-
         // Fund Base pool with USDC for the handler
-        deal(Constants.BASE_USDC, multicallHandler, transferAmount);
+        deal(Constants.BASE_USDC, ethMulticallHandler, transferAmount);
 
         // Handler processes the cross-chain message
         // Transfer mode should succeed with NAV neutrality through virtual balances:
@@ -839,7 +849,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // 2. Second call applies virtual balance offset BEFORE NAV update
         // 3. NAV remains unchanged, validating proper transfer mode operation
         vm.prank(user);
-        IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+        IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
             Constants.BASE_USDC, // tokenSent // use Constants.BASE_USDC when correctly using base
             transferAmount, // amount
             user,
@@ -925,13 +935,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             sourceParams
         );
 
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
-
         // Verify amounts: totalReceived > transferAmount (surplus exists)
         assertGt(totalReceived, transferAmount, "Total received should be greater than transfer amount");
         
         // Fund with MORE than expected (surplus scenario)
-        deal(Constants.BASE_USDC, multicallHandler, totalReceived);
+        deal(Constants.BASE_USDC, ethMulticallHandler, totalReceived);
 
         // Handler processes the cross-chain message
         // The donate function will calculate:
@@ -940,7 +948,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // - surplus = 50 USDC
         // Expected behavior: NAV should increase by (50 USDC / effectiveSupply)
         vm.prank(user);
-        IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+        IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
             Constants.BASE_USDC,
             transferAmount, // amount parameter (what pool expects)
             user,
@@ -1008,13 +1016,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             sourceParams
         );
 
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
-
         // Fund handler with exact amount (no surplus)
-        deal(Constants.BASE_USDC, multicallHandler, transferAmount);
+        deal(Constants.BASE_USDC, ethMulticallHandler, transferAmount);
 
         // Execute first 3 calls (initialize, transfer, drain) but NOT the final donate
-        vm.startPrank(multicallHandler);
+        vm.startPrank(ethMulticallHandler);
         
         // Call 1: Initialize (stores NAV baseline)
         (bool success1,) = instructions.calls[0].target.call(instructions.calls[0].callData);
@@ -1038,7 +1044,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         // 4. Final donate should detect NAV manipulation and revert
         // Use expectRevert with just selector to match any parameters
-        vm.prank(multicallHandler);
+        vm.prank(ethMulticallHandler);
         vm.expectRevert(IECrosschain.NavManipulationDetected.selector);
         (bool success4,) = instructions.calls[3].target.call(instructions.calls[3].callData);
             console2.log("Call 4 (donate):", success4);
@@ -1128,15 +1134,13 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             sourceParams
         );
 
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
-
         // Fund handler with USDC for the destination
-        deal(Constants.BASE_USDC, multicallHandler, transferAmount);
+        deal(Constants.BASE_USDC, ethMulticallHandler, transferAmount);
 
         // Handler processes the cross-chain message in Sync mode
         // Sync mode: No virtual balance adjustments, NAV increases naturally
         vm.prank(user);
-        IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+        IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
             Constants.BASE_USDC,
             transferAmount,
             user,
@@ -1168,11 +1172,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Setup: Get pool and relevant tokens
         address pool = ethereum.pool;
         address usdc = Constants.ETH_USDC;
-        address handler = Constants.ETH_MULTICALL_HANDLER;
 
         // Fund handler with USDC to donate
         uint256 donationAmount = 1000e6; // 1000 USDC
-        deal(usdc, handler, donationAmount);
+        deal(usdc, ethMulticallHandler, donationAmount);
 
         // Prepare destination params (Transfer mode)
         DestinationMessageParams memory params = DestinationMessageParams({
@@ -1181,7 +1184,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         });
 
         // Step 1: Unlock and store balance (amount=1 initializes)
-        vm.prank(handler);
+        vm.prank(ethMulticallHandler);
         IECrosschain(pool).donate(usdc, 1, params);
 
         // Step 2: Remove tokens from pool (decreases balance below stored baseline)
@@ -1190,7 +1193,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(usdc).transfer(address(0xdead), stolenAmount);
 
         // Step 3: Execute donate - should detect balance underflow
-        vm.prank(handler);
+        vm.prank(ethMulticallHandler);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IECrosschain.BalanceUnderflow.selector
@@ -1217,10 +1220,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         });
         
         // Simulate MulticallHandler calling our extension
-        address handler = Constants.ETH_MULTICALL_HANDLER;
-        deal(Constants.ETH_WETH, handler, wethAmount);
+        deal(Constants.ETH_WETH, ethMulticallHandler, wethAmount);
         
-        vm.startPrank(handler);
+        vm.startPrank(ethMulticallHandler);
         
         // Call 1: Initialize with amount 1 (standard pattern)
         IECrosschain(address(pool())).donate(
@@ -1326,7 +1328,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         uint256 transferAmount = 400e6; // 400 USDC
         address destinationPool = pool();
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
         
         // Get initial state
         ISmartPoolActions(destinationPool).updateUnitaryValue();
@@ -1338,11 +1339,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Initial NAV:", initialTokens.unitaryValue);
         
         // Fund the MulticallHandler (simulating Across bridge delivery)
-        deal(Constants.ETH_USDC, multicallHandler, transferAmount);
+        deal(Constants.ETH_USDC, ethMulticallHandler, transferAmount);
         console2.log("Funded MulticallHandler with", transferAmount, "USDC");
         
         // Test each call sequence progressively
-        _testSequentialCalls(destinationPool, multicallHandler, transferAmount);
+        _testSequentialCalls(destinationPool, transferAmount);
         
         // Verify final state
         ISmartPoolActions(destinationPool).updateUnitaryValue();
@@ -1371,7 +1372,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         uint256 transferAmount = 350e6; // 350 USDC
         address destinationPool = pool();
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
         address relayer = address(0x1234567890123456789012345678901234567890); // Any relayer address
         
         // Get initial state
@@ -1383,10 +1383,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Initial pool balance:", initialBalance);
         console2.log("Initial NAV:", initialTokens.unitaryValue);
         console2.log("Relayer address:", relayer);
-        console2.log("MulticallHandler:", multicallHandler);
+        console2.log("MulticallHandler:", ethMulticallHandler);
         
         // Fund the MulticallHandler (simulating Across bridge delivery to handler)
-        deal(Constants.ETH_USDC, multicallHandler, transferAmount);
+        deal(Constants.ETH_USDC, ethMulticallHandler, transferAmount);
         console2.log("Funded MulticallHandler with", transferAmount, "USDC");
         
         // Create source message parameters for Transfer mode
@@ -1425,7 +1425,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // 3. Drain any leftover tokens
         calls[2] = Call({
-            target: multicallHandler,
+            target: ethMulticallHandler,
             callData: abi.encodeWithSelector(
                 IMulticallHandler.drainLeftoverTokens.selector,
                 Constants.ETH_USDC,
@@ -1459,7 +1459,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // RELAYER CALLS MULTICALL HANDLER
         // This is the key test - a relayer (not SpokePool) calling the handler
         vm.prank(relayer);
-        try IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+        try IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
             Constants.ETH_USDC,    // token
             transferAmount,        // amount
             relayer,              // originSender (relayer as origin)
@@ -1499,7 +1499,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     }
     
     /// @notice Helper function to test sequential call building
-    function _testSequentialCalls(address destinationPool, address multicallHandler, uint256 transferAmount) internal {
+    function _testSequentialCalls(address destinationPool, uint256 transferAmount) internal {
         SourceMessageParams memory sourceMsg = SourceMessageParams({
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
@@ -1507,30 +1507,29 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             sourceNativeAmount: 0
         });
         
-        address originSender = multicallHandler;
+        address originSender = ethMulticallHandler;
         
         // Test 1: Initialize only
         console2.log("\n=== Test 1: Initialize Call Only ===");
-        _testWithCallCount(1, destinationPool, multicallHandler, transferAmount, sourceMsg, originSender);
+        _testWithCallCount(1, destinationPool, transferAmount, sourceMsg, originSender);
         
         // Test 2: Initialize + Transfer
         console2.log("\n=== Test 2: Initialize + Transfer Calls ===");
-        _testWithCallCount(2, destinationPool, multicallHandler, transferAmount, sourceMsg, originSender);
+        _testWithCallCount(2, destinationPool, transferAmount, sourceMsg, originSender);
         
         // Test 3: Initialize + Transfer + Drain
         console2.log("\n=== Test 3: Initialize + Transfer + Drain Calls ===");
-        _testWithCallCount(3, destinationPool, multicallHandler, transferAmount, sourceMsg, originSender);
+        _testWithCallCount(3, destinationPool, transferAmount, sourceMsg, originSender);
         
         // Test 4: Complete sequence
         console2.log("\n=== Test 4: Complete Call Sequence ===");
-        _testWithCallCount(4, destinationPool, multicallHandler, transferAmount, sourceMsg, originSender);
+        _testWithCallCount(4, destinationPool, transferAmount, sourceMsg, originSender);
     }
     
     /// @notice Helper function to test with specific number of calls
     function _testWithCallCount(
         uint256 callCount,
         address destinationPool,
-        address multicallHandler, 
         uint256 transferAmount,
         SourceMessageParams memory sourceMsg,
         address originSender
@@ -1565,7 +1564,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         if (callCount >= 3) {
             // Call 3: Drain leftover tokens
             calls[2] = Call({
-                target: multicallHandler,
+                target: ethMulticallHandler,
                 callData: abi.encodeWithSelector(
                     IMulticallHandler.drainLeftoverTokens.selector,
                     Constants.ETH_USDC,
@@ -1597,7 +1596,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         bytes memory encodedMessage = abi.encode(instructions);
         
         vm.prank(Constants.ETH_SPOKE_POOL);
-        try IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+        try IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
             Constants.ETH_USDC, transferAmount, originSender, encodedMessage
         ) {
             console2.log("Test", callCount, ": SUCCESS");
@@ -1616,7 +1615,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         uint256 transferAmount = 300e6; // 300 USDC
         address destinationPool = pool();
-        address multicallHandler = Constants.ETH_MULTICALL_HANDLER;
         
         // Get initial state
         ISmartPoolActions(destinationPool).updateUnitaryValue();
@@ -1639,7 +1637,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 1: Initialize donation (store initial balance for comparison) 
         // This simulates what the MulticallHandler would do before transferring tokens
-        vm.prank(multicallHandler);
+        vm.prank(ethMulticallHandler);
         try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             1, // flag amount for initialization 
@@ -1655,8 +1653,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 2: Transfer tokens to pool (simulating MulticallHandler token transfer)
         // Give tokens to multicall handler and then transfer to pool to simulate real bridge flow
-        deal(Constants.ETH_USDC, multicallHandler, transferAmount);
-        vm.prank(multicallHandler);
+        deal(Constants.ETH_USDC, ethMulticallHandler, transferAmount);
+        vm.prank(ethMulticallHandler);
         IERC20(Constants.ETH_USDC).transfer(destinationPool, transferAmount);
         console2.log("Step 2 - Transferred tokens to pool");
         
@@ -1670,7 +1668,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             uint8(OpType.Transfer)
         );
         
-        vm.prank(multicallHandler);
+        vm.prank(ethMulticallHandler);
         try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             transferAmount, // actual transfer amount
@@ -1869,7 +1867,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         // Set virtual balance to 500 USDC (MORE than donation to trigger partial reduction)
-        bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
         bytes32 slot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
         int256 virtualBalance = 500e6; // LARGER than donation
         vm.store(ethereum.pool, slot, bytes32(uint256(virtualBalance)));
@@ -1915,7 +1912,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         assertEq(finalVB, 200e6, "VB should be partially reduced: 500 - 300 = 200");
         
         // Virtual supply should be UNCHANGED (remainingValueInBase = 0)
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
         int256 virtualSupply = int256(uint256(vm.load(ethereum.pool, virtualSupplySlot)));
         assertEq(virtualSupply, 0, "Virtual supply should remain 0 (lines 141-142: remainingValueInBase = 0)");
     }
@@ -2064,14 +2060,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 transferAmount = 100e6; // 100 USDC
         
         // Verify no virtual supply exists (should be 0 by default)
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
         uint256 initialVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
         assertEq(initialVirtualSupply, 0, "Virtual supply should start at 0");
         
         console2.log("Initial virtual supply:", initialVirtualSupply);
         
         // Get initial virtual balance for USDC
-        bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
         bytes32 usdcBalanceSlot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
         int256 initialVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
         
@@ -2131,10 +2125,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 1: Simulate inbound donation to create virtual supply
         // This donation would have come from destination chain handler
-        address handler = Constants.ETH_MULTICALL_HANDLER;
-        deal(Constants.ETH_USDC, handler, inboundAmount);
+        deal(Constants.ETH_USDC, ethMulticallHandler, inboundAmount);
         
-        vm.startPrank(handler);
+        vm.startPrank(ethMulticallHandler);
         // Initialize donation
         IECrosschain(pool()).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
@@ -2165,7 +2158,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         // Verify virtual supply was created
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
         uint256 virtualSupplyAfterInbound = uint256(vm.load(pool(), virtualSupplySlot));
         console2.log("Virtual supply after inbound donation:", virtualSupplyAfterInbound);
         assertGt(virtualSupplyAfterInbound, 0, "Inbound donation should create virtual supply");
@@ -2223,10 +2215,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 outboundAmount = 150e6; // Then 150 USDC outbound (exceeds virtual supply)
         
         // Step 1: Simulate small inbound donation to create insufficient virtual supply
-        address handler = Constants.ETH_MULTICALL_HANDLER;
-        deal(Constants.ETH_USDC, handler, inboundAmount);
+        deal(Constants.ETH_USDC, ethMulticallHandler, inboundAmount);
         
-        vm.startPrank(handler);
+        vm.startPrank(ethMulticallHandler);
         IECrosschain(pool()).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
@@ -2238,13 +2229,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }));
         vm.stopPrank();
         
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
         uint256 virtualSupplyAfterInbound = uint256(vm.load(pool(), virtualSupplySlot));
         console2.log("Virtual supply after small inbound:", virtualSupplyAfterInbound);
         assertGt(virtualSupplyAfterInbound, 0, "Inbound donation should create some virtual supply");
         
         // Get initial virtual balance
-        bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
         bytes32 usdcBalanceSlot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
         int256 initialVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
         console2.log("Initial USDC virtual balance:", initialVirtualBalance);
@@ -2307,7 +2296,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         // Set virtual supply AFTER NAV update (to simulate prior inbound donation)
         // Use small amount: 0.1 WETH worth (~$300 at $3000/ETH = 300e6 USDC = 0.3 pool shares at NAV 1.0)
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
         // TODO: assert that we cannot have virtual supply bigger than total supply (seems test panics in that case)
         // virtual supply is in base token units (USDC), and can never be bigger than total supply
         uint256 initialVirtualSupply = 30e6; // 0.3 pool shares worth
@@ -2386,67 +2374,60 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("\n=== WETH Partial Virtual Supply Burn Test ===");
 
         // Activate WETH
-        bytes32 activeTokensSlot = StorageLib.TOKEN_REGISTRY_SLOT;
-        vm.store(pool(), activeTokensSlot, bytes32(uint256(1)));
-        vm.store(pool(), keccak256(abi.encode(activeTokensSlot)), bytes32(uint256(uint160(Constants.ETH_WETH))));
-        vm.store(pool(), keccak256(abi.encode(Constants.ETH_WETH, bytes32(uint256(activeTokensSlot) + 1))), bytes32(uint256(1)));
+        s_slot = StorageLib.TOKEN_REGISTRY_SLOT;
+        vm.store(pool(), s_slot, bytes32(uint256(1)));
+        vm.store(pool(), keccak256(abi.encode(s_slot)), bytes32(uint256(uint160(Constants.ETH_WETH))));
+        vm.store(pool(), keccak256(abi.encode(Constants.ETH_WETH, bytes32(uint256(s_slot) + 1))), bytes32(uint256(1)));
 
-        // Get initial NAV (before adding WETH)
+        // Get initial NAV
         ISmartPoolActions(pool()).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(pool()).getPoolTokens();
-        console2.log("Initial NAV (without WETH):", initialTokens.unitaryValue);
+        s_poolTokens = ISmartPoolState(pool()).getPoolTokens();
+        console2.log("Initial NAV (without WETH):", s_poolTokens.unitaryValue);
         
         // Set virtual supply
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
-        uint256 initialVirtualSupply = 3000e6; // 3000 USDC worth
-        vm.store(pool(), virtualSupplySlot, bytes32(initialVirtualSupply));
+        s_supply = 3000e6; // 3000 USDC worth
+        vm.store(pool(), virtualSupplySlot, bytes32(s_supply));
         
-        // Fund pool with small WETH amount - 0.01 WETH (~30 USDC)
-        uint256 wethAmount = 1e16; // 0.01 WETH
-        deal(Constants.ETH_WETH, pool(), wethAmount);
+        // Fund pool with small WETH amount
+        s_amount = 1e16; // 0.01 WETH
+        deal(Constants.ETH_WETH, pool(), s_amount);
         
-        // Calculate values that the contract will see during depositV3
-        // The contract calls updateUnitaryValue() AFTER we deal() WETH, so it sees the new balance
-        uint256 outputAmount = 99e14; // 0.0099 WETH with 1% slippage
+        // Calculate output amount
+        s_value = 99e14; // 0.0099 WETH with 1% slippage
         
-        // Call updateUnitaryValue() from pool to mimic what depositV3 will do
-        // This updates NAV to include the WETH we just added
+        // Update NAV to include the WETH
         vm.prank(pool());
-        (uint256 navWithWeth, , ) = ISmartPoolActions(pool()).updateUnitaryValue();
-        console2.log("NAV with WETH (before transfer):", navWithWeth);
+        NetAssetsValue memory navParams = ISmartPoolActions(pool()).updateUnitaryValue();
+        console2.log("NAV with WETH:", navParams.unitaryValue);
         
         // Get pool properties
-        uint8 poolDecimals = ISmartPoolState(pool()).getPool().decimals;
-        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
+        s_tempAddr = ISmartPoolState(pool()).getPool().baseToken;
         
-        // Calculate what the contract will calculate
-        int256 outputValueInBase = IEOracle(pool()).convertTokenAmount(
+        // Calculate output value
+        s_virtualSupply = IEOracle(pool()).convertTokenAmount(
             Constants.ETH_WETH,
-            int256(outputAmount),
-            poolBaseToken
+            int256(s_value),
+            s_tempAddr
         );
-        console2.log("Transfer value (base token):", uint256(outputValueInBase));
+        console2.log("Transfer value (base token):", uint256(s_virtualSupply));
         
-        uint256 virtualSupplyValue = (navWithWeth * initialVirtualSupply) / 10 ** poolDecimals;
-        console2.log("Virtual supply value (base token):", virtualSupplyValue);
-        console2.log("Is partial burn?", uint256(outputValueInBase) < virtualSupplyValue);
-        
-        // Calculate expected shares to burn using the NAV the contract will see
-        uint256 expectedSharesBurned = (uint256(outputValueInBase) * (10 ** poolDecimals)) / navWithWeth;
-        console2.log("Expected shares burned:", expectedSharesBurned);
+        // Calculate expected shares burned
+        uint8 poolDecimals = ISmartPoolState(pool()).getPool().decimals;
+        s_result = (uint256(s_virtualSupply) * (10 ** poolDecimals)) / navParams.unitaryValue;
+        console2.log("Expected shares burned:", s_result);
 
-        // Get initial WETH virtual balance
-        bytes32 wethBalanceSlot = keccak256(abi.encode(Constants.ETH_WETH, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
-        int256 initialWethBalance = int256(uint256(vm.load(pool(), wethBalanceSlot)));
-        // Execute small transfer
+        // Get initial WETH virtual balance  
+        s_storageValue = keccak256(abi.encode(Constants.ETH_WETH, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
+        
+        // Execute transfer
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(IAIntents.AcrossParams({
             depositor: address(this),
             recipient: pool(),
             inputToken: Constants.ETH_WETH,
             outputToken: Constants.BASE_WETH,
-            inputAmount: wethAmount,
-            outputAmount: outputAmount,
+            inputAmount: s_amount,
+            outputAmount: s_value,
             destinationChainId: Constants.BASE_CHAIN_ID,
             exclusiveRelayer: address(0),
             quoteTimestamp: uint32(block.timestamp),
@@ -2462,28 +2443,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         // Check results
         uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
-        int256 finalWethBalance = int256(uint256(vm.load(pool(), wethBalanceSlot)));
         
         console2.log("Final virtual supply:", finalVirtualSupply);
-        console2.log("Final WETH balance:", finalWethBalance);
-        console2.log("Actual change:", int256(initialVirtualSupply) - int256(finalVirtualSupply));
-        
-        // Calculate expected shares burned: (outputValueInBase * 10^poolDecimals) / unitaryValue
-        console2.log("Expected shares burned:", expectedSharesBurned);
-        console2.log("Actual shares burned:", initialVirtualSupply - finalVirtualSupply);
+        console2.log("Actual shares burned:", s_supply - finalVirtualSupply);
 
-        // Partial burn path assertions (transfer value < virtual supply value)
-        assertLt(finalVirtualSupply, initialVirtualSupply, "Virtual supply should decrease");
-        assertGt(finalVirtualSupply, 0, "Virtual supply should not reach zero (partial burn)");
-        assertEq(finalWethBalance, initialWethBalance, "No virtual balance change in partial burn");
-        
-        // Exact match - oracle is deterministic within a block
-        uint256 actualBurned = initialVirtualSupply - finalVirtualSupply;
-        assertEq(
-            actualBurned,
-            expectedSharesBurned,
-            "Burned amount should match expected exactly"
-        );
+        // Partial burn assertions
+        assertLt(finalVirtualSupply, s_supply, "Virtual supply should decrease");
+        assertGt(finalVirtualSupply, 0, "Virtual supply should not reach zero");
+        assertEq(s_supply - finalVirtualSupply, s_result, "Burned amount should match expected");
 
         console2.log("Partial burn test completed!");
     }
@@ -2501,56 +2468,49 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// would execute correctly if the SpokePool transfer succeeded. The logic converts base token value  
     /// back to inputToken units before storing, which is critical for tokens with different decimals.
     function test_IntegrationFork_Transfer_NonBaseToken() public {
-        uint256 wethAmount = 1e18; // 1 WETH
-        uint256 wethOutputAmount = 99e16; // 0.99 WETH on destination (1% slippage)
+        s_amount = 1e18; // 1 WETH
+        s_value = 99e16; // 0.99 WETH on destination (1% slippage)
 
         // Manually activate WETH by writing to active tokens storage
-        // AddressSet has: address[] addresses and mapping(address => uint256) positions
-        bytes32 activeTokensSlot = StorageLib.TOKEN_REGISTRY_SLOT;
-        bytes32 lengthSlot = activeTokensSlot; // addresses.length
-        bytes32 firstElementSlot = keccak256(abi.encode(lengthSlot)); // addresses[0]
-        bytes32 positionsSlot = bytes32(uint256(activeTokensSlot) + 1); // mapping slot
+        s_slot = StorageLib.TOKEN_REGISTRY_SLOT;
+        s_storageValue = s_slot; // addresses.length
+        bytes32 firstElementSlot = keccak256(abi.encode(s_storageValue));
+        bytes32 positionsSlot = bytes32(uint256(s_slot) + 1);
         bytes32 wethPositionSlot = keccak256(abi.encode(Constants.ETH_WETH, positionsSlot));
         
         // Set addresses.length to 1
-        vm.store(pool(), lengthSlot, bytes32(uint256(1)));
+        vm.store(pool(), s_storageValue, bytes32(uint256(1)));
         // Store WETH address in addresses[0]
         vm.store(pool(), firstElementSlot, bytes32(uint256(uint160(Constants.ETH_WETH))));
-        // Store position 1 in positions[WETH] (position 0 means not added, 1 means index 0)
+        // Store position 1 in positions[WETH]
         vm.store(pool(), wethPositionSlot, bytes32(uint256(1)));
         
         // Verify WETH is active
         console2.log("WETH position value:", uint256(vm.load(pool(), wethPositionSlot)));
-        console2.log("Active tokens length:", uint256(vm.load(pool(), lengthSlot)));
+        console2.log("Active tokens length:", uint256(vm.load(pool(), s_storageValue)));
         console2.log("First token in array:", address(uint160(uint256(vm.load(pool(), firstElementSlot)))));
         
-        // Check if WETH has a price feed (required for isOwnedToken)
+        // Check if WETH has a price feed
         try IEOracle(pool()).hasPriceFeed(Constants.ETH_WETH) returns (bool hasFeed) {
             console2.log("WETH has price feed:", hasFeed);
         } catch {
             console2.log("Price feed check failed");
         }
         
-        // Fund pool with WETH and approve SpokePool
-        deal(Constants.ETH_WETH, pool(), wethAmount);
+        // Fund pool with WETH
+        deal(Constants.ETH_WETH, pool(), s_amount);
         
-        // The pool's _safeApproveToken will handle the approval, but we need to ensure
-        // transferFrom will work - the tokens are in the pool but need to be accessible
-        // In practice, this would come from actual pool holdings from swaps/donations
-        // For the test, just verify the initial state is set up
-        assertEq(IERC20(Constants.ETH_WETH).balanceOf(pool()), wethAmount, "Pool should have WETH balance");
+        assertEq(IERC20(Constants.ETH_WETH).balanceOf(pool()), s_amount, "Pool should have WETH balance");
         
         console2.log("\n=== Non-Base Token Transfer Test ===");
         console2.log("Pool base token: USDC (6 decimals)");
         console2.log("Transfer token: WETH (18 decimals)");
-        console2.log("WETH activated via mint");
 
-        // OPTION 2: Get initial virtual balance for BASE TOKEN (USDC), not WETH
-        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
-        bytes32 virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
-        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, virtualBalancesSlot));
-        int256 initialBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
-        console2.log("Initial base token VB:", initialBaseTokenVB);
+        // Get initial virtual balance for BASE TOKEN
+        s_tempAddr = ISmartPoolState(pool()).getPool().baseToken;
+        s_slot = keccak256(abi.encode(s_tempAddr, virtualBalancesSlot));
+        s_virtualSupply = int256(uint256(vm.load(pool(), s_slot)));
+        console2.log("Initial base token VB:", s_virtualSupply);
 
         // Create transfer params with WETH
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
@@ -2558,8 +2518,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             recipient: pool(),
             inputToken: Constants.ETH_WETH,
             outputToken: Constants.BASE_WETH,
-            inputAmount: wethAmount,
-            outputAmount: wethOutputAmount,
+            inputAmount: s_amount,
+            outputAmount: s_value,
             destinationChainId: Constants.BASE_CHAIN_ID,
             exclusiveRelayer: address(0),
             quoteTimestamp: uint32(block.timestamp),
@@ -2583,12 +2543,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Calculate expected virtual balance delta
         // 0.99 WETH @ ~$3066 = ~3033 USDC = 3033435060 in 6 decimals
         
-        // Expect VirtualBalanceUpdated event FIRST (emitted in _handleSourceTransfer)
+        // Expect VirtualBalanceUpdated event
         vm.expectEmit(true, true, true, true);
-        emit IECrosschain.VirtualBalanceUpdated(poolBaseToken, 3033435060, 3033435060);
+        emit IECrosschain.VirtualBalanceUpdated(s_tempAddr, 3033435060, 3033435060);
 
-        // Then expect CrossChainTransferInitiated event (emitted after depositV3 call)
-        address escrowAddress = EscrowFactory.getEscrowAddress(pool(), OpType.Transfer);
+        // Expect CrossChainTransferInitiated event
         vm.expectEmit(true, true, true, true);
         emit IAIntents.CrossChainTransferInitiated(
             pool(),
@@ -2596,26 +2555,22 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             params.inputToken,
             params.inputAmount,
             uint8(OpType.Transfer),
-            escrowAddress
+            EscrowFactory.getEscrowAddress(pool(), OpType.Transfer)
         );
 
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
 
-        // OPTION 2: Check final BASE TOKEN virtual balance (in USDC units, not WETH)
-        int256 finalBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
-        console2.log("Final base token VB:", finalBaseTokenVB);
+        // Check final BASE TOKEN virtual balance
+        s_result = uint256(vm.load(pool(), s_slot));
+        console2.log("Final base token VB:", s_result);
 
-        // OPTION 2: Virtual balance is stored in BASE TOKEN units (USDC)
-        // 1 WETH @ $3000 = 3000 USDC (3000e6 in 6 decimals)
-        // outputAmount = 0.99 WETH should be ~2970 USDC (2970e6)
-        // Virtual balance should increase by approximately this amount in USDC units
-        
+        // Virtual balance stored in BASE TOKEN units (USDC)
         // Verify it's in USDC units (6 decimals), around 2970e6
-        assertGt(finalBaseTokenVB, 1000e6, "Virtual balance should be > 1000 USDC (verifies base token units)");
-        assertLt(finalBaseTokenVB, 5000e6, "Virtual balance should be < 5000 USDC");
+        assertGt(s_result, 1000e6, "Virtual balance should be > 1000 USDC");
+        assertLt(s_result, 5000e6, "Virtual balance should be < 5000 USDC");
 
-        console2.log("Virtual balance correctly stored in base token units (USDC 6 decimals)!");
+        console2.log("Virtual balance correctly stored in base token units!");
     }
 
     /// @notice Test surplus donation when totalSupply = 0 (edge case)
@@ -2654,16 +2609,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Total received:", totalReceived);
         
         // Check initial virtual supply (should be 0)
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
         int256 initialVirtualSupply = int256(uint256(vm.load(base.pool, virtualSupplySlot)));
         console2.log("Initial virtual supply:", initialVirtualSupply);
         
         // Fund handler with surplus
-        address handler = Constants.BASE_MULTICALL_HANDLER;
-        deal(Constants.BASE_USDC, handler, totalReceived);
+        deal(Constants.BASE_USDC, baseMulticallHandler, totalReceived);
         console2.log("Handler funded with USDC:", totalReceived);
         
-        vm.startPrank(handler);
+        vm.startPrank(baseMulticallHandler);
         
         // First donate (1 wei) to initialize and store NAV
         console2.log("Step 1: Initialize donation with amount = 1");
@@ -2736,68 +2689,61 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Testing on Base fork (destination chain)");
         
         // Step 1: Burn all pool tokens to get totalSupply = 0
-        ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(base.pool).getPoolTokens();
-        uint256 totalSupply = initialTokens.totalSupply;
-        console2.log("Initial total supply:", totalSupply);
-        console2.log("Initial unitaryValue:", initialTokens.unitaryValue);
+        s_poolTokens = ISmartPoolState(base.pool).getPoolTokens();
+        s_supply = s_poolTokens.totalSupply;
+        console2.log("Initial total supply:", s_supply);
+        console2.log("Initial unitaryValue:", s_poolTokens.unitaryValue);
         
         // Transfer all supply to a burner and burn it
-        address burner = address(0xBBBB);
-        deal(base.pool, burner, totalSupply);
+        s_tempAddr = address(0xBBBB);
+        deal(base.pool, s_tempAddr, s_supply);
         
-        vm.prank(burner);
-        uint256 burnResult = ISmartPoolActions(base.pool).burn(totalSupply, 0);
-        console2.log("Burn result:", burnResult);
+        vm.prank(s_tempAddr);
+        s_result = ISmartPoolActions(base.pool).burn(s_supply, 0);
+        console2.log("Burn result:", s_result);
         
-        uint256 supplyAfterBurn = ISmartPoolState(base.pool).getPoolTokens().totalSupply;
-        console2.log("Total supply after burn:", supplyAfterBurn);
-        assertEq(supplyAfterBurn, 0, "Total supply should be zero");
+        s_supply = ISmartPoolState(base.pool).getPoolTokens().totalSupply;
+        console2.log("Total supply after burn:", s_supply);
+        assertEq(s_supply, 0, "Total supply should be zero");
         
         // Step 2: Clear unitaryValue storage slot to simulate completely fresh pool
-        // _POOL_TOKENS_SLOT stores the PoolTokens struct (unitaryValue uint88 + totalSupply uint256)
-        bytes32 poolTokensSlot = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;
+        s_slot = StorageLib.POOL_TOKENS_SLOT;
         
         // Store 0 to clear both unitaryValue and totalSupply
-        vm.store(base.pool, poolTokensSlot, bytes32(0));
+        vm.store(base.pool, s_slot, bytes32(0));
         
         // Read storage directly to verify it's actually 0
-        bytes32 rawStorageValue = vm.load(base.pool, poolTokensSlot);
+        s_storageValue = vm.load(base.pool, s_slot);
         console2.log("Raw storage value after clearing:");
-        console2.logBytes32(rawStorageValue);
-        assertEq(uint256(rawStorageValue), 0, "Storage should be completely cleared");
+        console2.logBytes32(s_storageValue);
+        assertEq(uint256(s_storageValue), 0, "Storage should be completely cleared");
         
         // getPoolTokens() will return 10^decimals for unitaryValue when storage is 0
-        // This is by design - line 110 in MixinPoolState.sol initializes NAV if zero
-        ISmartPoolState.PoolTokens memory clearedTokens = ISmartPoolState(base.pool).getPoolTokens();
-        console2.log("UnitaryValue from getPoolTokens() (auto-initialized):", clearedTokens.unitaryValue);
-        console2.log("TotalSupply from getPoolTokens():", clearedTokens.totalSupply);
-        assertEq(clearedTokens.totalSupply, 0, "TotalSupply should be zero");
-        // NOTE: unitaryValue will be 10^decimals (1000000) even though storage is 0
-        // This tests that donate() handles the case where storage NAV = 0 but getter returns initialized value
+        s_poolTokens = ISmartPoolState(base.pool).getPoolTokens();
+        console2.log("UnitaryValue from getPoolTokens() (auto-initialized):", s_poolTokens.unitaryValue);
+        console2.log("TotalSupply from getPoolTokens():", s_poolTokens.totalSupply);
+        assertEq(s_poolTokens.totalSupply, 0, "TotalSupply should be zero");
         
         // Step 3: Receive donation with surplus (amountDelta > amount)
-        uint256 expectedAmount = 100e6; // 100 USDC expected
-        uint256 surplusAmount = 10e6;   // 10 USDC surplus (solver kept 10%)
-        uint256 totalReceived = expectedAmount + surplusAmount; // 110 USDC actually received
+        s_amount = 100e6; // 100 USDC expected
+        s_value = 10e6;   // 10 USDC surplus (solver kept 10%)
+        s_result = s_amount + s_value; // 110 USDC actually received
         
-        console2.log("Expected amount:", expectedAmount);
-        console2.log("Surplus amount:", surplusAmount);
-        console2.log("Total received:", totalReceived);
+        console2.log("Expected amount:", s_amount);
+        console2.log("Surplus amount:", s_value);
+        console2.log("Total received:", s_result);
         
         // Check initial virtual supply (should be 0)
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
-        int256 initialVirtualSupply = int256(uint256(vm.load(base.pool, virtualSupplySlot)));
-        console2.log("Initial virtual supply:", initialVirtualSupply);
+        s_virtualSupply = int256(uint256(vm.load(base.pool, virtualSupplySlot)));
+        console2.log("Initial virtual supply:", s_virtualSupply);
         
         // Fund handler with surplus
-        address handler = Constants.BASE_MULTICALL_HANDLER;
-        deal(Constants.BASE_USDC, handler, totalReceived);
-        console2.log("Handler funded with USDC:", totalReceived);
+        deal(Constants.BASE_USDC, baseMulticallHandler, s_result);
+        console2.log("Handler funded with USDC:", s_result);
         
-        vm.startPrank(handler);
+        vm.startPrank(baseMulticallHandler);
         
         // First donate (1 wei) to initialize and store NAV
-        // This should initialize unitaryValue since it's 0
         console2.log("Step 1: Initialize donation with amount = 1 (should initialize NAV)");
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
@@ -2805,17 +2751,17 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }));
         
         // Verify NAV was initialized
-        ISmartPoolState.PoolTokens memory afterInitTokens = ISmartPoolState(base.pool).getPoolTokens();
-        console2.log("UnitaryValue after initialization:", afterInitTokens.unitaryValue);
-        assertGt(afterInitTokens.unitaryValue, 0, "UnitaryValue should be initialized to 10^decimals");
+        s_poolTokens = ISmartPoolState(base.pool).getPoolTokens();
+        console2.log("UnitaryValue after initialization:", s_poolTokens.unitaryValue);
+        assertGt(s_poolTokens.unitaryValue, 0, "UnitaryValue should be initialized to 10^decimals");
         
         // Transfer tokens to pool
         console2.log("Step 2: Transfer tokens to pool");
-        IERC20(Constants.BASE_USDC).transfer(base.pool, totalReceived);
+        IERC20(Constants.BASE_USDC).transfer(base.pool, s_result);
         
         // Second donate with actual amount - should create virtual supply from surplus
         console2.log("Step 3: Complete donation with expected amount");
-        try IECrosschain(base.pool).donate(Constants.BASE_USDC, expectedAmount, DestinationMessageParams({
+        try IECrosschain(base.pool).donate(Constants.BASE_USDC, s_amount, DestinationMessageParams({
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         })) {
@@ -2832,33 +2778,32 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         // Step 4: Verify virtual supply was created from the surplus
-        int256 finalVirtualSupply = int256(uint256(vm.load(base.pool, virtualSupplySlot)));
-        console2.log("Final virtual supply:", finalVirtualSupply);
+        s_virtualSupply = int256(uint256(vm.load(base.pool, virtualSupplySlot)));
+        console2.log("Final virtual supply:", s_virtualSupply);
         
         // Virtual supply should be positive (created from surplus value)
-        assertGt(finalVirtualSupply, 0, "Virtual supply should be created from surplus");
+        assertGt(s_virtualSupply, 0, "Virtual supply should be created from surplus");
         
         // Step 5: Verify that future NAV will benefit from this virtual supply
-        // When someone mints new tokens, they'll get the benefit of the surplus
         console2.log("\nStep 5: Mint new tokens to verify surplus benefit");
-        uint256 mintAmount = 50e6; // 50 USDC mint
-        deal(Constants.BASE_USDC, user, mintAmount);
+        s_amount = 50e6; // 50 USDC mint
+        deal(Constants.BASE_USDC, user, s_amount);
         
         vm.startPrank(user);
-        IERC20(Constants.BASE_USDC).approve(base.pool, mintAmount);
-        uint256 poolTokensReceived = ISmartPoolActions(base.pool).mint(user, mintAmount, 0);
+        IERC20(Constants.BASE_USDC).approve(base.pool, s_amount);
+        s_result = ISmartPoolActions(base.pool).mint(user, s_amount, 0);
         vm.stopPrank();
         
-        console2.log("Pool tokens received from mint:", poolTokensReceived);
+        console2.log("Pool tokens received from mint:", s_result);
         
         // The minter should get the benefit of the pre-existing virtual supply
-        ISmartPoolState.PoolTokens memory finalTokens = ISmartPoolState(base.pool).getPoolTokens();
-        console2.log("Final NAV:", finalTokens.unitaryValue);
-        console2.log("Final total supply:", finalTokens.totalSupply);
+        s_poolTokens = ISmartPoolState(base.pool).getPoolTokens();
+        console2.log("Final NAV:", s_poolTokens.unitaryValue);
+        console2.log("Final total supply:", s_poolTokens.totalSupply);
         
         // Verify the virtual supply mechanism worked correctly
-        assertTrue(finalTokens.totalSupply > 0, "Pool should have supply after mint");
-        assertTrue(poolTokensReceived > 0, "Minter should receive pool tokens");
+        assertTrue(s_poolTokens.totalSupply > 0, "Pool should have supply after mint");
+        assertTrue(s_result > 0, "Minter should receive pool tokens");
         
         console2.log("Fresh pool with surplus test completed - NAV initialized and virtual supply correctly created!");
     }
@@ -2883,10 +2828,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 surplusAmount = 10e6;
         uint256 totalReceived = expectedAmount + surplusAmount;
         
-        address handler = Constants.BASE_MULTICALL_HANDLER;
-        deal(Constants.BASE_USDC, handler, totalReceived);
+        deal(Constants.BASE_USDC, baseMulticallHandler, totalReceived);
         
-        vm.startPrank(handler);
+        vm.startPrank(baseMulticallHandler);
         
         // Initialize donation
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
@@ -2927,7 +2871,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Before clearing - UnitaryValue:", beforeClear.unitaryValue);
         
         // Step 1: Clear the entire _POOL_TOKENS_SLOT to simulate brand new pool
-        bytes32 poolTokensSlot = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;
+        bytes32 poolTokensSlot = StorageLib.POOL_TOKENS_SLOT;
         
         console2.log("\nClearing pool tokens storage slot...");
         
@@ -2956,11 +2900,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 2: Donate tokens to empty pool (simulates first cross-chain transfer)
         uint256 donationAmount = 100e6; // 100 USDC
         
-        address handler = Constants.ETH_MULTICALL_HANDLER;
-        deal(Constants.ETH_USDC, handler, donationAmount);
+        deal(Constants.ETH_USDC, ethMulticallHandler, donationAmount);
         console2.log("Handler funded with USDC:", donationAmount);
         
-        vm.startPrank(handler);
+        vm.startPrank(ethMulticallHandler);
         
         // First donate call (amount=1) - this will trigger updateUnitaryValue
         // which will write the initialized NAV (10^decimals) to storage
@@ -2986,7 +2929,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
         
         // Check virtual supply before second donate
-        bytes32 virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
         int256 vsBeforeDonate = int256(uint256(vm.load(ethereum.pool, virtualSupplySlot)));
         console2.log("Virtual supply before second donate:", vsBeforeDonate);
         
@@ -3049,10 +2991,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Legitimate transfer arrives
         console2.log("\nLegitimate 1000 USDC transfer arrives...");
         uint256 legitimateTransferAmount = 1000e6;
-        address handler = Constants.ETH_MULTICALL_HANDLER;
-        deal(Constants.ETH_USDC, handler, legitimateTransferAmount);
+        deal(Constants.ETH_USDC, ethMulticallHandler, legitimateTransferAmount);
         
-        vm.startPrank(handler);
+        vm.startPrank(ethMulticallHandler);
         
         // Initialize donation - FIX ensures NAV is written to storage
         console2.log("First donate(1) - initializes NAV to default (1e6)");

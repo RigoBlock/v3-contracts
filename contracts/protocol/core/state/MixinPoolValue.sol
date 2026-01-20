@@ -49,9 +49,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             components.netTotalLiabilities = uint256(-netValue);
         }
 
-        // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
-        //uint256 absTotalAssets = uint256(poolValueInBaseToken) > 0 ? uint256poolValueInBaseToken: 1;
-
         // first mint skips nav calculation
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
