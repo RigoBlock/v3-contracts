@@ -177,7 +177,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
 
         emit CrossChainTransferInitiated(
-            msg.sender, // Initiator (pool owner or authorized caller)
+            msg.sender,
             params.destinationChainId,
             params.inputToken,
             params.inputAmount,
