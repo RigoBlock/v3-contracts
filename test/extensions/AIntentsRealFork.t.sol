@@ -862,9 +862,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// @notice Test Transfer mode with solver surplus (amountDelta > amount)
     /// @dev This tests that the NAV increase from surplus is correctly calculated and validated
     function test_IntegrationFork_CrossChain_TransferWithSurplus() public {
-        uint256 transferAmount = 1000e6; // 1000 USDC expected
-        uint256 surplusAmount = 50e6;    // 50 USDC surplus (solver keeps 5%)
-        uint256 totalReceived = transferAmount + surplusAmount; // 1050 USDC actually received
+        s_amount = 1000e6; // 1000 USDC expected
+        s_value = 50e6;    // 50 USDC surplus (solver keeps 5%)
+        s_supply = s_amount + s_value; // 1050 USDC actually received
 
         // Pool already funded with 100k USDC from fixture
 
@@ -881,8 +881,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             recipient: address(this),
             inputToken: Constants.ETH_USDC,
             outputToken: Constants.BASE_USDC,
-            inputAmount: transferAmount,
-            outputAmount: transferAmount, // Expect 1000 USDC
+            inputAmount: s_amount,
+            outputAmount: s_amount, // Expect 1000 USDC
             destinationChainId: Constants.BASE_CHAIN_ID,
             exclusiveRelayer: address(0),
             quoteTimestamp: uint32(block.timestamp),
@@ -892,12 +892,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         });
         
         // Give poolOwner the tokens
-        deal(Constants.ETH_USDC, poolOwner, transferAmount);
+        deal(Constants.ETH_USDC, poolOwner, s_amount);
 
         // Capture balances and verify deposit success
         {
-            uint256 initialPoolBalance = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
-            uint256 initialSpokePoolBalance = IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL);
+            s_result = IERC20(Constants.ETH_USDC).balanceOf(address(pool()));
+            s_virtualSupply = int256(IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL));
             
             // Record logs and execute deposit
             vm.recordLogs();
@@ -905,15 +905,15 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             IAIntents(pool()).depositV3(params);
 
             // Verify balances and event
-            assertEq(IERC20(Constants.ETH_USDC).balanceOf(address(pool())), initialPoolBalance - transferAmount, "Pool balance should decrease");
-            assertEq(IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL), initialSpokePoolBalance + transferAmount, "SpokePool balance should increase");
+            assertEq(IERC20(Constants.ETH_USDC).balanceOf(address(pool())), s_result - s_amount, "Pool balance should decrease");
+            assertEq(IERC20(Constants.ETH_USDC).balanceOf(Constants.ETH_SPOKE_POOL), uint256(s_virtualSupply) + s_amount, "SpokePool balance should increase");
 
             // Check FundsDeposited event
             Vm.Log[] memory logs = vm.getRecordedLogs();
-            bytes32 fundsDepositedSelector = keccak256("FundsDeposited(bytes32,bytes32,uint256,uint256,uint256,uint256,uint32,uint32,uint32,bytes32,bytes32,bytes32,bytes)");
+            s_slot = keccak256("FundsDeposited(bytes32,bytes32,uint256,uint256,uint256,uint256,uint32,uint32,uint32,bytes32,bytes32,bytes32,bytes)");
             bool eventEmitted = false;
             for (uint i = 0; i < logs.length; i++) {
-                if (logs[i].topics[0] == fundsDepositedSelector) {
+                if (logs[i].topics[0] == s_slot) {
                     eventEmitted = true;
                     break;
                 }
@@ -925,8 +925,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.selectFork(baseForkId);
         
         // Capture initial NAV before surplus
-        ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(pool()).getPoolTokens();
-        uint256 initialNav = initialTokens.unitaryValue;
+        s_poolTokens = ISmartPoolState(pool()).getPoolTokens();
 
         Instructions memory instructions = buildTestInstructions(
             params.outputToken,
@@ -936,10 +935,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         );
 
         // Verify amounts: totalReceived > transferAmount (surplus exists)
-        assertGt(totalReceived, transferAmount, "Total received should be greater than transfer amount");
+        assertGt(s_supply, s_amount, "Total received should be greater than transfer amount");
         
         // Fund with MORE than expected (surplus scenario)
-        deal(Constants.BASE_USDC, ethMulticallHandler, totalReceived);
+        deal(Constants.BASE_USDC, ethMulticallHandler, s_supply);
 
         // Handler processes the cross-chain message
         // The donate function will calculate:
@@ -950,20 +949,19 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(user);
         IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
             Constants.BASE_USDC,
-            transferAmount, // amount parameter (what pool expects)
+            s_amount, // amount parameter (what pool expects)
             user,
             abi.encode(instructions)
         );
         
         // Verify NAV increased due to surplus
         ISmartPoolState.PoolTokens memory finalTokens = ISmartPoolState(pool()).getPoolTokens();
-        uint256 finalNav = finalTokens.unitaryValue;
-        assertGt(finalNav, initialNav, "NAV should increase due to surplus");
+        assertGt(finalTokens.unitaryValue, s_poolTokens.unitaryValue, "NAV should increase due to surplus");
 
         console2.log("Cross-chain transfer with surplus - NAV increase correctly calculated and validated!");
-        console2.log("Initial NAV:", initialNav);
-        console2.log("Final NAV:", finalNav);
-        console2.log("Surplus amount:", surplusAmount);
+        console2.log("Initial NAV:", s_poolTokens.unitaryValue);
+        console2.log("Final NAV:", finalTokens.unitaryValue);
+        console2.log("Surplus amount:", s_value);
     }
 
     /// @notice Test that NavManipulationDetected is triggered when NAV is manipulated between unlock and execute
@@ -1370,24 +1368,23 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     function test_RelayerCallsMulticallHandler() public {
         console2.log("=== Testing Relayer Calls MulticallHandler ===");
         
-        uint256 transferAmount = 350e6; // 350 USDC
-        address destinationPool = pool();
-        address relayer = address(0x1234567890123456789012345678901234567890); // Any relayer address
+        s_amount = 350e6; // 350 USDC
+        s_tempAddr = pool();
+        address relayer = address(0x1234567890123456789012345678901234567890);
         
         // Get initial state
-        ISmartPoolActions(destinationPool).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory initialTokens = 
-            ISmartPoolState(destinationPool).getPoolTokens();
-        uint256 initialBalance = IERC20(Constants.ETH_USDC).balanceOf(destinationPool);
+        ISmartPoolActions(s_tempAddr).updateUnitaryValue();
+        s_poolTokens = ISmartPoolState(s_tempAddr).getPoolTokens();
+        s_result = IERC20(Constants.ETH_USDC).balanceOf(s_tempAddr);
         
-        console2.log("Initial pool balance:", initialBalance);
-        console2.log("Initial NAV:", initialTokens.unitaryValue);
+        console2.log("Initial pool balance:", s_result);
+        console2.log("Initial NAV:", s_poolTokens.unitaryValue);
         console2.log("Relayer address:", relayer);
         console2.log("MulticallHandler:", ethMulticallHandler);
         
-        // Fund the MulticallHandler (simulating Across bridge delivery to handler)
-        deal(Constants.ETH_USDC, ethMulticallHandler, transferAmount);
-        console2.log("Funded MulticallHandler with", transferAmount, "USDC");
+        // Fund the MulticallHandler
+        deal(Constants.ETH_USDC, ethMulticallHandler, s_amount);
+        console2.log("Funded MulticallHandler with", s_amount, "USDC");
         
         // Create source message parameters for Transfer mode
         SourceMessageParams memory sourceMsg = SourceMessageParams({
@@ -1397,50 +1394,46 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             sourceNativeAmount: 0
         });
         
-        // Build complete instruction sequence (what AIntents would generate)
+        // Build complete instruction sequence
         Call[] memory calls = new Call[](4);
         
-        // 1. Initialize donation (store pool balance)
         calls[0] = Call({
-            target: destinationPool,
+            target: s_tempAddr,
             callData: abi.encodeWithSelector(
                 IECrosschain.donate.selector,
                 Constants.ETH_USDC,
-                1, // Initialize flag
+                1,
                 sourceMsg
             ),
             value: 0
         });
         
-        // 2. Transfer tokens from handler to pool
         calls[1] = Call({
             target: Constants.ETH_USDC,
             callData: abi.encodeWithSelector(
                 IERC20.transfer.selector,
-                destinationPool,
-                transferAmount
+                s_tempAddr,
+                s_amount
             ),
             value: 0
         });
         
-        // 3. Drain any leftover tokens
         calls[2] = Call({
             target: ethMulticallHandler,
             callData: abi.encodeWithSelector(
                 IMulticallHandler.drainLeftoverTokens.selector,
                 Constants.ETH_USDC,
-                payable(destinationPool)
+                payable(s_tempAddr)
             ),
             value: 0
         });
         
-        // 4. Final donation with NAV integrity check
         calls[3] = Call({
-            target: destinationPool,
+            target: s_tempAddr,
             callData: abi.encodeWithSelector(
                 IECrosschain.donate.selector,
                 Constants.ETH_USDC,
-                transferAmount, // Actual transfer amount
+                s_amount,
                 sourceMsg
             ),
             value: 0
@@ -1448,22 +1441,21 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         Instructions memory instructions = Instructions({
             calls: calls,
-            fallbackRecipient: payable(destinationPool)
+            fallbackRecipient: payable(s_tempAddr)
         });
         
-        bytes memory encodedMessage = abi.encode(instructions);
+        s_storageValue = bytes32(abi.encode(instructions).length);
         
         console2.log("Built", instructions.calls.length, "instructions");
-        console2.log("Encoded message size:", encodedMessage.length, "bytes");
+        console2.log("Encoded message size:", uint256(s_storageValue), "bytes");
         
         // RELAYER CALLS MULTICALL HANDLER
-        // This is the key test - a relayer (not SpokePool) calling the handler
         vm.prank(relayer);
         try IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
-            Constants.ETH_USDC,    // token
-            transferAmount,        // amount
-            relayer,              // originSender (relayer as origin)
-            encodedMessage        // message (encoded Instructions)
+            Constants.ETH_USDC,
+            s_amount,
+            relayer,
+            abi.encode(instructions)
         ) {
             console2.log("SUCCESS: Relayer successfully called MulticallHandler!");
         } catch Error(string memory reason) {
@@ -1476,20 +1468,19 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }
         
         // Verify the execution results
-        ISmartPoolActions(destinationPool).updateUnitaryValue();
-        ISmartPoolState.PoolTokens memory finalTokens = 
-            ISmartPoolState(destinationPool).getPoolTokens();
-        uint256 finalBalance = IERC20(Constants.ETH_USDC).balanceOf(destinationPool);
+        ISmartPoolActions(s_tempAddr).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory finalTokens = ISmartPoolState(s_tempAddr).getPoolTokens();
+        s_value = IERC20(Constants.ETH_USDC).balanceOf(s_tempAddr);
         
         console2.log("\n=== Execution Results ===");
-        console2.log("Final pool balance:", finalBalance);
+        console2.log("Final pool balance:", s_value);
         console2.log("Final NAV:", finalTokens.unitaryValue);
-        console2.log("Balance change:", finalBalance > initialBalance ? finalBalance - initialBalance : 0);
-        console2.log("NAV change:", finalTokens.unitaryValue > initialTokens.unitaryValue ? finalTokens.unitaryValue - initialTokens.unitaryValue : 0);
+        console2.log("Balance change:", s_value > s_result ? s_value - s_result : 0);
+        console2.log("NAV change:", finalTokens.unitaryValue > s_poolTokens.unitaryValue ? finalTokens.unitaryValue - s_poolTokens.unitaryValue : 0);
         
         // Assert successful execution
-        if (finalBalance > initialBalance) {
-            assertEq(finalBalance, initialBalance + transferAmount, "Pool should receive exact transfer amount");
+        if (s_value > s_result) {
+            assertEq(s_value, s_result + s_amount, "Pool should receive exact transfer amount");
             console2.log("SUCCESS: Pool received tokens from relayer-initiated MulticallHandler execution!");
         } else {
             console2.log("WARNING: No tokens transferred - relayer call may have failed");
@@ -1662,7 +1653,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Expect TokensReceived event to be emitted
         vm.expectEmit(true, true, true, true);
         emit IECrosschain.TokensReceived(
-            destinationPool,
+            ethMulticallHandler, // msg.sender (multicall handler)
             Constants.ETH_USDC,
             transferAmount,
             uint8(OpType.Transfer)
@@ -1894,7 +1885,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Expect TokensReceived event
         vm.expectEmit(true, true, true, true);
         emit IECrosschain.TokensReceived(
-            ethereum.pool,
+            Constants.ETH_MULTICALL_HANDLER, // msg.sender (multicall handler)
             Constants.ETH_USDC,
             donationAmount,
             uint8(OpType.Transfer)
@@ -2144,7 +2135,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Expect TokensReceived event
         vm.expectEmit(true, true, true, true);
         emit IECrosschain.TokensReceived(
-            pool(),
+            ethMulticallHandler, // msg.sender (multicall handler)
             Constants.ETH_USDC,
             inboundAmount,
             uint8(OpType.Transfer)
@@ -2550,7 +2541,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Expect CrossChainTransferInitiated event
         vm.expectEmit(true, true, true, true);
         emit IAIntents.CrossChainTransferInitiated(
-            pool(),
+            poolOwner, // msg.sender (pool owner via vm.prank)
             params.destinationChainId,
             params.inputToken,
             params.inputAmount,

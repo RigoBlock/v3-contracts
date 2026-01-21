@@ -61,6 +61,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                 return components;
             }
 
+            // TODO: this does not guarantee that the value won't be 0, because a small balance divided by a big supply could result in 0
             if (components.netTotalValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue = (uint256(components.netTotalValue) * 10 ** components.decimals) / components.totalSupply;
@@ -88,10 +89,11 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
     function _computeTotalPoolValue(address baseToken) private returns (int256 poolValue) {
-        AddressSet storage values = activeTokensSet();
+        uint256 packedApps = activeApplications().packedApplications;
 
-        ApplicationsSlot storage appsBitmap = activeApplications();
-        uint256 packedApps = appsBitmap.packedApplications;
+        // Declare reusable variables outside loops to reduce stack depth
+        address token;
+        int256 amount;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
@@ -107,20 +109,25 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                         activeApplications().storeApplication(apps[i].appType);
                     }
 
+                    // Reuse variables to minimize stack depth
+                    amount = apps[i].balances[j].amount;
+                    
                     // Always add or update the balance from positions
-                    if (apps[i].balances[j].amount != 0) {
+                    if (amount != 0) {
+                        token = apps[i].balances[j].token;
+                        
                         // cache balances in temporary storage
-                        int256 storedBalance = apps[i].balances[j].token.getBalance();
+                        int256 storedBalance = token.getBalance();
 
                         // verify token in active tokens set, add it otherwise (relevant for pool deployed before v4)
                         if (storedBalance == 0) {
                             // will add to set only if not already stored
-                            values.addUnique(IEOracle(address(this)), apps[i].balances[j].token, baseToken);
+                            activeTokensSet().addUnique(IEOracle(address(this)), token, baseToken);
                         }
 
-                        storedBalance += apps[i].balances[j].amount;
+                        storedBalance += amount;
                         // store balance and make sure slot is not cleared to prevent trying to add token again
-                        apps[i].balances[j].token.storeBalance(storedBalance != 0 ? storedBalance : int256(1));
+                        token.storeBalance(storedBalance != 0 ? storedBalance : int256(1));
                     }
                 }
             }

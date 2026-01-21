@@ -103,7 +103,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // Virtual storage only tracks cross-chain transfers (Transfer), not performance (Sync)
 
         emit TokensReceived(
-            address(this), // pool
+            msg.sender, // SpokePool or initiator
             token,
             amountDelta,
             uint8(params.opType)

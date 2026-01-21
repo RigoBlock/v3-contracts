@@ -10,10 +10,12 @@ gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNav
 
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
- 
+
 # enforce compiling tests without via_ir and only some heavy contract with via_ir
 # note: it will only work if tests are using vm.deployCode to deploy contract
 # note: the logged warning is because MockAcrossSpokePool is also found in the second path, define more restrictive paths to silence
+# NOTE: MockAcrossSpokePool requires via_ir due to stack depth.
+# Without compilation_restrictions, all contracts compile with via_ir by default.
 compilation_restrictions = [
     { paths = "contracts/mocks/MockAcrossSpokePool.sol", via_ir = true },
     { paths = "contracts/**", via_ir = false },

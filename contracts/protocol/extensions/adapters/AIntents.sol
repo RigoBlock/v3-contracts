@@ -176,9 +176,8 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             abi.encode(instructions)
         );
 
-        // TODO: why do we log address(this) - what's the benefit?
         emit CrossChainTransferInitiated(
-            address(this), // pool
+            msg.sender, // Initiator (pool owner or authorized caller)
             params.destinationChainId,
             params.inputToken,
             params.inputAmount,

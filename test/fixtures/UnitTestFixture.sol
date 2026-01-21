@@ -18,26 +18,27 @@ import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISm
 import {DeploymentParams, Extensions} from "../../contracts/protocol/types/DeploymentParams.sol";
 import {MockOracle} from "../../contracts/test/MockOracle.sol";
 
+interface IERC20Proxy {
+    function addAuthorizedAddress(address target) external;
+}
+
 /// @title UnitTestFixture - Minimal deployment for unit tests without forks
 /// @notice Deploys real SmartPool implementation and pool proxy on local network
 contract UnitTestFixture is Test {
+    address public constant originalImplementationAddress = 0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516;
+
     struct Deployment {
         SmartPool implementation;
-        ECrosschain eCrosschain;
-        EUpgrade eUpgrade;
-        EOracle eOracle;
-        ENavView eNavView;
-        EApps eApps;
-        ExtensionsMap extensionsMap;
-        address pool;
         address authority;
         address factory;
         address tokenJar;
         address wrappedNative;
         MockOracle mockOracle;
+        ExtensionsMap extensionsMap;
     }
 
     Deployment public deployment;
+    Extensions public extensions;
 
     address public registry;
     address public stakingProxy;
@@ -45,11 +46,10 @@ contract UnitTestFixture is Test {
     /// @notice Deploy minimal infrastructure for unit tests
     function deployFixture() public virtual {
         console2.log("=== Deploying Unit Test Fixture ===");
-        address deployer = address(this);
 
         // Deploy minimal mock authority (needs code at address)
         deployment.authority = deployCode("out/Authority.sol/Authority.json", abi.encode(address(this)));
-        IAuthority(deployment.authority).setWhitelister(deployer, true);
+        IAuthority(deployment.authority).setWhitelister(address(this), true);
 
         // TODO: update if we implement tokenJar in this package
         deployment.tokenJar = address(0);
@@ -57,7 +57,6 @@ contract UnitTestFixture is Test {
         // TODO: it turns out implementation needs upgrade extension which needs factory, which needs implementation - recursive.
         // It was implemented so because originally we only had adapters (mapped from authority). Review deployment flow in a future major release.
         registry = deployCode("out/PoolRegistry.sol/PoolRegistry.json", abi.encode(deployment.authority, address(this)));
-        address originalImplementationAddress = 0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516;
         deployment.factory = deployCode("out/RigoblockPoolProxyFactory.sol/RigoblockPoolProxyFactory.json", abi.encode(originalImplementationAddress, registry));
         IAuthority(deployment.authority).setFactory(deployment.factory, true);
 
@@ -87,26 +86,26 @@ contract UnitTestFixture is Test {
         deployment.mockOracle = MockOracle(deployCode("out/MockOracle.sol/MockOracle.json"));
 
         // Deploy extensions - will require mockCall or, as for EOracle.getTwap, mockCall on the oracle contract (due to foundry limitation on mockCall for internal calls)
-        deployment.eApps = new EApps(stakingProxy, mockUniv4Posm);
-        deployment.eOracle = new EOracle(address(deployment.mockOracle), deployment.wrappedNative);
-        deployment.eUpgrade = new EUpgrade(deployment.factory);
-        deployment.eCrosschain = new ECrosschain();
-        deployment.eNavView = new ENavView(stakingProxy, mockUniv4Posm);
+        extensions.eApps = address(new EApps(stakingProxy, mockUniv4Posm));
+        extensions.eOracle = address(new EOracle(address(deployment.mockOracle), deployment.wrappedNative));
+        extensions.eUpgrade = address(new EUpgrade(deployment.factory));
+        extensions.eCrosschain = address(new ECrosschain());
+        extensions.eNavView = address(new ENavView(stakingProxy, mockUniv4Posm));
 
-        console2.log("Deployed EApps:", address(deployment.eApps));
-        console2.log("Deployed EOracle:", address(deployment.eOracle));
-        console2.log("Deployed EUpgrade:", address(deployment.eUpgrade));
-        console2.log("Deployed ECrosschain:", address(deployment.eCrosschain));
-        console2.log("Deployed ENavView:", address(deployment.eNavView));
+        console2.log("Deployed EApps:", extensions.eApps);
+        console2.log("Deployed EOracle:", extensions.eOracle);
+        console2.log("Deployed EUpgrade:", extensions.eUpgrade);
+        console2.log("Deployed ECrosschain:", extensions.eCrosschain);
+        console2.log("Deployed ENavView:", extensions.eNavView);
 
         ExtensionsMapDeployer deployer = new ExtensionsMapDeployer();
 
-        Extensions memory extensions = Extensions({
-            eApps: address(deployment.eApps),
-            eOracle: address(deployment.eOracle),
-            eUpgrade: address(deployment.eUpgrade),
-            eCrosschain: address(deployment.eCrosschain),
-            eNavView: address(deployment.eNavView)
+        extensions = Extensions({
+            eApps: address(extensions.eApps),
+            eOracle: address(extensions.eOracle),
+            eUpgrade: address(extensions.eUpgrade),
+            eCrosschain: address(extensions.eCrosschain),
+            eNavView: address(extensions.eNavView)
         });
 
         DeploymentParams memory params = DeploymentParams({
@@ -129,9 +128,5 @@ contract UnitTestFixture is Test {
         address staking = deployCode("out/Staking.sol/Staking.json", abi.encode(grgVault, registry, grg));
         stakingProxy = deployCode("out/StakingProxy.sol/StakingProxy.json", abi.encode(staking, address(this)));
     }
-}
-
-interface IERC20Proxy {
-    function addAuthorizedAddress(address target) external;
 }
 
