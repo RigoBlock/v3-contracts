@@ -5,14 +5,14 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IAIntents {
     /// @notice Emitted when tokens are deposited for cross-chain transfer
-    /// @param pool Address of the pool initiating the transfer
+    /// @param from Address that initiated the transfer
     /// @param destinationChainId Destination chain ID
     /// @param inputToken Token being sent
     /// @param inputAmount Amount sent
     /// @param opType Operation type (0=Transfer, 1=Sync)
     /// @param escrow Escrow address receiving refunds
     event CrossChainTransferInitiated(
-        address indexed pool,
+        address indexed from,
         uint256 indexed destinationChainId,
         address indexed inputToken,
         uint256 inputAmount,

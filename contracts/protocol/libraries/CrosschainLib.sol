@@ -18,6 +18,75 @@ library CrosschainLib {
     address internal constant DEFAULT_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
     address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
 
+    /// @notice Check if a token is allowed for cross-chain operations on the current chain.
+    /// @param token The token address to check.
+    /// @return True if the token is allowed for cross-chain operations.
+    function isAllowedCrosschainToken(address token) internal view returns (bool) {
+        if (block.chainid == 1) {
+            // Ethereum
+            return
+                token == CrosschainTokens.ETH_USDC ||
+                token == CrosschainTokens.ETH_USDT ||
+                token == CrosschainTokens.ETH_WETH;
+        } else if (block.chainid == 42161) {
+            // Arbitrum
+            return
+                token == CrosschainTokens.ARB_USDC ||
+                token == CrosschainTokens.ARB_USDT ||
+                token == CrosschainTokens.ARB_WETH;
+        } else if (block.chainid == 10) {
+            // Optimism
+            return
+                token == CrosschainTokens.OPT_USDC ||
+                token == CrosschainTokens.OPT_USDT ||
+                token == CrosschainTokens.OPT_WETH;
+        } else if (block.chainid == 8453) {
+            // Base
+            return token == CrosschainTokens.BASE_USDC || token == CrosschainTokens.BASE_WETH; // No USDT on Base
+        } else if (block.chainid == 137) {
+            // Polygon
+            return
+                token == CrosschainTokens.POLY_USDC ||
+                token == CrosschainTokens.POLY_USDT ||
+                token == CrosschainTokens.POLY_WETH;
+        } else if (block.chainid == 56) {
+            // BSC
+            return
+                token == CrosschainTokens.BSC_USDC ||
+                token == CrosschainTokens.BSC_USDT ||
+                token == CrosschainTokens.BSC_WETH;
+        } else if (block.chainid == 1301) {
+            // Unichain
+            return token == CrosschainTokens.UNI_USDC || token == CrosschainTokens.UNI_WETH;
+        }
+        return false;
+    }
+
+    /// @notice Applies BSC decimal conversion for USDC/USDT (18 decimals on BSC vs 6 on other chains).
+    /// @dev Handles bidirectional conversion to ensure exact cross-chain virtual balance offsetting.
+    /// @param inputToken Source token address.
+    /// @param outputToken Destination token address.
+    /// @param amount Original amount in source chain decimals.
+    /// @return Normalized amount for exact cross-chain virtual balance offsetting.
+    function applyBscDecimalConversion(
+        address inputToken,
+        address outputToken,
+        uint256 amount
+    ) internal pure returns (uint256) {
+        // From BSC (18 decimals) -> normalize to 6 decimals
+        if (inputToken == CrosschainTokens.BSC_USDC || inputToken == CrosschainTokens.BSC_USDT) {
+            return amount / 1e12; // Convert 18 decimals to 6 decimals
+        }
+
+        // To BSC (6 decimals) -> convert to 18 decimals
+        if (outputToken == CrosschainTokens.BSC_USDC || outputToken == CrosschainTokens.BSC_USDT) {
+            return amount * 1e12; // Convert 6 decimals to 18 decimals
+        }
+
+        // No BSC involved - no conversion needed
+        return amount;
+    }
+
     /// @notice Get the appropriate Across MulticallHandler address for a given chain.
     /// @dev BSC (chain ID 56) uses a different handler than other chains.
     /// @param chainId The destination chain ID.
@@ -111,74 +180,5 @@ library CrosschainLib {
         } else {
             revert UnsupportedCrossChainToken();
         }
-    }
-
-    /// @notice Applies BSC decimal conversion for USDC/USDT (18 decimals on BSC vs 6 on other chains).
-    /// @dev Handles bidirectional conversion to ensure exact cross-chain virtual balance offsetting.
-    /// @param inputToken Source token address.
-    /// @param outputToken Destination token address.
-    /// @param amount Original amount in source chain decimals.
-    /// @return Normalized amount for exact cross-chain virtual balance offsetting.
-    function applyBscDecimalConversion(
-        address inputToken,
-        address outputToken,
-        uint256 amount
-    ) internal pure returns (uint256) {
-        // From BSC (18 decimals) -> normalize to 6 decimals
-        if (inputToken == CrosschainTokens.BSC_USDC || inputToken == CrosschainTokens.BSC_USDT) {
-            return amount / 1e12; // Convert 18 decimals to 6 decimals
-        }
-
-        // To BSC (6 decimals) -> convert to 18 decimals
-        if (outputToken == CrosschainTokens.BSC_USDC || outputToken == CrosschainTokens.BSC_USDT) {
-            return amount * 1e12; // Convert 6 decimals to 18 decimals
-        }
-
-        // No BSC involved - no conversion needed
-        return amount;
-    }
-
-    /// @notice Check if a token is allowed for cross-chain operations on the current chain.
-    /// @param token The token address to check.
-    /// @return True if the token is allowed for cross-chain operations.
-    function isAllowedCrosschainToken(address token) internal view returns (bool) {
-        if (block.chainid == 1) {
-            // Ethereum
-            return
-                token == CrosschainTokens.ETH_USDC ||
-                token == CrosschainTokens.ETH_USDT ||
-                token == CrosschainTokens.ETH_WETH;
-        } else if (block.chainid == 42161) {
-            // Arbitrum
-            return
-                token == CrosschainTokens.ARB_USDC ||
-                token == CrosschainTokens.ARB_USDT ||
-                token == CrosschainTokens.ARB_WETH;
-        } else if (block.chainid == 10) {
-            // Optimism
-            return
-                token == CrosschainTokens.OPT_USDC ||
-                token == CrosschainTokens.OPT_USDT ||
-                token == CrosschainTokens.OPT_WETH;
-        } else if (block.chainid == 8453) {
-            // Base
-            return token == CrosschainTokens.BASE_USDC || token == CrosschainTokens.BASE_WETH; // No USDT on Base
-        } else if (block.chainid == 137) {
-            // Polygon
-            return
-                token == CrosschainTokens.POLY_USDC ||
-                token == CrosschainTokens.POLY_USDT ||
-                token == CrosschainTokens.POLY_WETH;
-        } else if (block.chainid == 56) {
-            // BSC
-            return
-                token == CrosschainTokens.BSC_USDC ||
-                token == CrosschainTokens.BSC_USDT ||
-                token == CrosschainTokens.BSC_WETH;
-        } else if (block.chainid == 1301) {
-            // Unichain
-            return token == CrosschainTokens.UNI_USDC || token == CrosschainTokens.UNI_WETH;
-        }
-        return false;
     }
 }

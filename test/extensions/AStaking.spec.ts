@@ -147,13 +147,15 @@ describe("AStaking", async () => {
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
-            await fullPool.mint(user1.address, amount, 0, { value: amount })
-            // first mint only initialized value in storage, need to mint again to update active tokens
-            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
             await expect(fullPool.mint(user1.address, amount, 0, { value: amount }))
                 .to.emit(fullPool, "TokenStatusChanged")
                 .withArgs(grgToken.address, true)
-            const activeTokens = (await fullPool.getActiveTokens()).activeTokens
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            let activeTokens = (await fullPool.getActiveTokens()).activeTokens
+            expect(activeTokens[0]).to.be.eq(grgToken.address)
+            await expect(fullPool.mint(user1.address, amount, 0, { value: amount }))
+                .to.not.emit(fullPool, "TokenStatusChanged")
+            activeTokens = (await fullPool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(1)
             expect(activeTokens[0]).to.be.eq(grgToken.address)
         })

@@ -29,6 +29,8 @@ contract PolygonDeploymentFixture is Test {
     address public AUTHORITY = Constants.AUTHORITY;
     address public FACTORY = Constants.FACTORY;
 
+    // TODO: this tuple will result in coverage stack-too-deep error if the contract is included.
+    // Currently excluded from coverage and just used for running local tests to assert polygon chain compatibility.
     struct PolygonChainDeployment {
         ECrosschain eCrosschain;
         EApps eApps;

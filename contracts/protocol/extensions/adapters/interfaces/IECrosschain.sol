@@ -7,11 +7,11 @@ import {DestinationMessageParams} from "../../../types/Crosschain.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface IECrosschain {
     /// @notice Emitted when cross-chain tokens are received
-    /// @param pool Address of the pool receiving tokens
+    /// @param from Address that initiated the cross-chain transfer (SpokePool)
     /// @param token Token received
     /// @param amount Amount received (actual balance delta)
     /// @param opType Operation type (0=Transfer, 1=Sync)
-    event TokensReceived(address indexed pool, address indexed token, uint256 amount, uint8 indexed opType);
+    event TokensReceived(address indexed from, address indexed token, uint256 amount, uint8 indexed opType);
 
     /// @notice Emitted when virtual balance is modified
     /// @param token Token whose virtual balance changed

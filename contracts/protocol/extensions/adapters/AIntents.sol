@@ -17,6 +17,7 @@ import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {Call, DestinationMessageParams, Instructions, OpType, SourceMessageParams} from "../../types/Crosschain.sol";
 import {EscrowFactory} from "../../libraries/EscrowFactory.sol";
+import {NetAssetsValue} from "../../types/NavComponents.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAIntents} from "./interfaces/IAIntents.sol";
 import {IECrosschain} from "./interfaces/IECrosschain.sol";
@@ -150,12 +151,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         SourceMessageParams memory sourceParams,
         Instructions memory instructions
     ) private {
-        // Deploy escrow for both Transfer and Sync to protect against expired deposit exploits:
-        // 1. Native ETH → WETH refund (auto-activation issue)
-        // 2. Purge attack (operator purges token, deposit expires, NAV manipulation)
-        EscrowFactory.deployEscrowIfNeeded(address(this), sourceParams.opType);
-        params.depositor = EscrowFactory.getEscrowAddress(address(this), sourceParams.opType);
-
         // Handle source-side adjustments based on operation type
         if (sourceParams.opType == OpType.Transfer) {
             _handleSourceTransfer(params);
@@ -165,6 +160,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             revert IECrosschain.InvalidOpType();
         }
 
+        params.depositor = EscrowFactory.deployEscrow(address(this), sourceParams.opType);
         _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(
             params.depositor,
             CrosschainLib.getAcrossHandler(params.destinationChainId),
@@ -181,7 +177,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
 
         emit CrossChainTransferInitiated(
-            address(this), // pool
+            msg.sender,
             params.destinationChainId,
             params.inputToken,
             params.inputAmount,
@@ -200,7 +196,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
 
         // Update NAV and get pool state
-        uint256 unitaryValue = ISmartPoolActions(address(this)).updateUnitaryValue();
+        NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
 
         // Convert output amount to base token value
@@ -217,7 +213,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         // Virtual supply exists - calculate and burn
         uint8 poolDecimals = StorageLib.pool().decimals;
-        uint256 virtualSupplyValue = (unitaryValue * virtualSupply) / 10 ** poolDecimals;
+        uint256 virtualSupplyValue = (navParams.unitaryValue * virtualSupply) / 10 ** poolDecimals;
 
         if (outputValueInBase >= virtualSupplyValue) {
             // Burn all virtual supply, write remainder to base token VB
@@ -225,7 +221,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             baseToken.updateVirtualBalance(remainderValueInBase.toInt256());
         } else {
             // Virtual supply fully covers transfer - burn partial supply, no VB write
-            virtualSupply = (outputValueInBase * (10 ** poolDecimals)) / unitaryValue;
+            virtualSupply = (outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue;
         }
 
         (-(virtualSupply.toInt256())).updateVirtualSupply();

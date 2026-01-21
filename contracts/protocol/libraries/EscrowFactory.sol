@@ -13,8 +13,6 @@ library EscrowFactory {
 
     /// @notice Emitted when a new escrow contract is deployed
     event EscrowDeployed(address indexed pool, OpType indexed opType, address escrowContract);
-
-    error InvalidOpType();
     error DeploymentFailed();
 
     /// @notice Gets the deterministic address for an escrow contract
@@ -47,14 +45,6 @@ library EscrowFactory {
         }
 
         require(escrowContract != address(0), DeploymentFailed());
-    }
-
-    /// @notice Deploys escrow if needed (idempotent)
-    /// @param pool The pool address
-    /// @param opType The operation type
-    /// @return escrowContract The escrow contract address (existing or newly deployed)
-    function deployEscrowIfNeeded(address pool, OpType opType) internal returns (address escrowContract) {
-        return deployEscrow(pool, opType);
     }
 
     /// @dev Gets the salt for CREATE2 deployment

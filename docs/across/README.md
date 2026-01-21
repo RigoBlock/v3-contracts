@@ -64,6 +64,7 @@ Cross-chain token transfer integration using [Across Protocol V3](https://across
 - **[PERFORMANCE_ATTRIBUTION.md](PERFORMANCE_ATTRIBUTION.md)** - Detailed explanation of performance attribution model
 - **[COMPREHENSIVE_ANALYSIS.md](COMPREHENSIVE_ANALYSIS.md)** - Deep technical analysis of virtual systems
 - **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** - Implementation details, testing, deployment
+- **[ZERO_SUPPLY_DOS_VULNERABILITY.md](ZERO_SUPPLY_DOS_VULNERABILITY.md)** - Fixed DOS vulnerability analysis (resolved Jan 2026)
 
 ## Quick Reference
 

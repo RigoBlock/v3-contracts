@@ -14,10 +14,6 @@ contract TestEscrowUser {
         return EscrowFactory.deployEscrow(pool, opType);
     }
     
-    function deployEscrowIfNeeded(address pool, OpType opType) external returns (address) {
-        return EscrowFactory.deployEscrowIfNeeded(pool, opType);
-    }
-    
     function getEscrowAddress(address pool, OpType opType) external pure returns (address) {
         return EscrowFactory.getEscrowAddress(pool, opType);
     }
@@ -36,19 +32,19 @@ contract EscrowFactoryCoverageTest is Test {
         address firstEscrow = testContract.deployEscrow(mockPool, OpType.Transfer);
         assertNotEq(firstEscrow, address(0));
         
-        // Try to deploy the same escrow again - should hit catch statement on line 62
+        // Try to deploy the same escrow again - should hit catch statement and return existing
         address secondEscrow = testContract.deployEscrow(mockPool, OpType.Transfer);
         
         // Should be the same address (existing escrow returned by catch block)
         assertEq(firstEscrow, secondEscrow);
     }
     
-    function test_DeployEscrowIfNeeded_AlreadyExists() public {
+    function test_DeployEscrow_Idempotent() public {
         // Deploy first escrow
-        address escrowAddress = testContract.deployEscrowIfNeeded(mockPool, OpType.Transfer);
+        address escrowAddress = testContract.deployEscrow(mockPool, OpType.Transfer);
         
-        // Deploy "again" - should return existing
-        address sameEscrow = testContract.deployEscrowIfNeeded(mockPool, OpType.Transfer);
+        // Deploy "again" - deployEscrow is idempotent, should return existing
+        address sameEscrow = testContract.deployEscrow(mockPool, OpType.Transfer);
         
         assertEq(escrowAddress, sameEscrow);
     }

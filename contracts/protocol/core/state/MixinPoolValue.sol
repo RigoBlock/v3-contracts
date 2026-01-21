@@ -39,6 +39,16 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // v3 vaults have a price feed, we could move the following assertion to the following block, i.e. executing it only on the first mint.
         require(IEOracle(address(this)).hasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
 
+        // TODO: this will return 1 when assets are 0. Check if should return actual int256 and do handling in the following blocks
+        // Always compute net total assets (used for cross-chain donation validation)
+        int256 netValue = _computeTotalPoolValue(components.baseToken);
+
+        if (netValue >= 0) {
+            components.netTotalValue = uint256(netValue);
+        } else {
+            components.netTotalLiabilities = uint256(-netValue);
+        }
+
         // first mint skips nav calculation
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
@@ -51,16 +61,19 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                 return components;
             }
 
-            uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
-
-            if (totalPoolValue > 0) {
+            // TODO: this does not guarantee that the value won't be 0, because a small balance divided by a big supply could result in 0
+            if (components.netTotalValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
-                components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / components.totalSupply;
+                components.unitaryValue =
+                    (uint256(components.netTotalValue) * 10 ** components.decimals) /
+                    components.totalSupply;
             } else {
+                // early return
                 return components;
             }
         }
 
+        // TODO: this assertion is probably unnecessary, because we early return for all other cases
         // unitary value cannot be null
         assert(components.unitaryValue > 0);
 
@@ -77,11 +90,12 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     /// @dev Assumes the stored list contain unique elements.
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
-    function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue) {
-        AddressSet storage values = activeTokensSet();
+    function _computeTotalPoolValue(address baseToken) private returns (int256 poolValue) {
+        uint256 packedApps = activeApplications().packedApplications;
 
-        ApplicationsSlot storage appsBitmap = activeApplications();
-        uint256 packedApps = appsBitmap.packedApplications;
+        // Declare reusable variables outside loops to reduce stack depth
+        address token;
+        int256 amount;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
@@ -97,20 +111,25 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                         activeApplications().storeApplication(apps[i].appType);
                     }
 
+                    // Reuse variables to minimize stack depth
+                    amount = apps[i].balances[j].amount;
+
                     // Always add or update the balance from positions
-                    if (apps[i].balances[j].amount != 0) {
+                    if (amount != 0) {
+                        token = apps[i].balances[j].token;
+
                         // cache balances in temporary storage
-                        int256 storedBalance = apps[i].balances[j].token.getBalance();
+                        int256 storedBalance = token.getBalance();
 
                         // verify token in active tokens set, add it otherwise (relevant for pool deployed before v4)
                         if (storedBalance == 0) {
                             // will add to set only if not already stored
-                            values.addUnique(IEOracle(address(this)), apps[i].balances[j].token, baseToken);
+                            activeTokensSet().addUnique(IEOracle(address(this)), token, baseToken);
                         }
 
-                        storedBalance += apps[i].balances[j].amount;
+                        storedBalance += amount;
                         // store balance and make sure slot is not cleared to prevent trying to add token again
-                        apps[i].balances[j].token.storeBalance(storedBalance != 0 ? storedBalance : int256(1));
+                        token.storeBalance(storedBalance != 0 ? storedBalance : int256(1));
                     }
                 }
             }
@@ -121,8 +140,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // initialize pool value as base token balances (wallet balance plus apps balances)
         uint256 nativeAmount = msg.value;
-        int256 poolValueInBaseToken = _getAndClearBalance(baseToken, nativeAmount);
-        poolValueInBaseToken += VirtualStorageLib.getVirtualBalance(baseToken);
+        poolValue = _getAndClearBalance(baseToken, nativeAmount);
+        poolValue += VirtualStorageLib.getVirtualBalance(baseToken);
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
@@ -137,15 +156,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
 
         if (activeTokensLength > 0) {
-            poolValueInBaseToken += IEOracle(address(this)).convertBatchTokenAmounts(
-                activeTokens,
-                tokenAmounts,
-                baseToken
-            );
+            poolValue += IEOracle(address(this)).convertBatchTokenAmounts(activeTokens, tokenAmounts, baseToken);
         }
-
-        // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
-        return (uint256(poolValueInBaseToken) > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
     /// @dev Returns 0 balance if ERC20 call fails.

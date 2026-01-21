@@ -1,10 +1,13 @@
-module.exports = async ({ github, context, header, body }) => {
+module.exports = async ({ github, context, header, body, prNumber }) => {
   const comment = [header, body].join("\n");
+
+  // Use provided prNumber or fall back to context (for backward compatibility)
+  const issueNumber = prNumber || context.payload.number;
 
   const { data: comments } = await github.rest.issues.listComments({
     owner: context.repo.owner,
     repo: context.repo.repo,
-    issue_number: context.payload.number,
+    issue_number: issueNumber,
   });
 
   const botComment = comments.find(
@@ -21,6 +24,6 @@ module.exports = async ({ github, context, header, body }) => {
     body: comment,
     ...(botComment
       ? { comment_id: botComment.id }
-      : { issue_number: context.payload.number }),
+      : { issue_number: issueNumber }),
   });
 };
