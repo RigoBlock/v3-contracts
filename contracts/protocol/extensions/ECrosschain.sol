@@ -34,7 +34,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
     using TransientStorage for *;
 
     error CallerTransferAmount();
-    
+
     /// @inheritdoc IECrosschain
     function donate(
         address token,
@@ -48,7 +48,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
             token.setDonationLock(balance);
-            
+
             // If token has pre-existing balance but isn't active, it won't be in storedAssets
             NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
             navParams.unitaryValue.storeNav();
@@ -86,7 +86,6 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
             token = address(0);
         }
 
-        // TODO: seems we could optimize, as we're going to read pool tokens slot twice, but probably out of scope for now
         // define a boolean to be used in nav manipulation assertion
         bool previouslyActive = StorageLib.isOwnedToken(token);
 
@@ -123,19 +122,17 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         bool previouslyActive
     ) private {
         address baseToken = StorageLib.pool().baseToken;
-        
+
         // Convert amount to base token value - reuse 'amount' variable for amountValueInBase
-        amount = IEOracle(address(this))
-            .convertTokenAmount(token, amount.toInt256(), baseToken)
-            .toUint256();
-        
+        amount = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken).toUint256();
+
         // Reuse 'storedBalance' for vbReductionValueInBase tracking
         // Save original storedBalance in amountDelta temporarily (we'll restore it later)
         if (!previouslyActive) {
             amountDelta += storedBalance;
         }
         storedBalance = 0; // Now use storedBalance for vbReductionValueInBase
-        
+
         // Manage virtual balances - currentBaseTokenVB is reused later
         int256 currentBaseTokenVB = baseToken.getVirtualBalance();
 
@@ -155,7 +152,8 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // If remaining value > 0, update virtual supply (amount holds remainingValueInBase)
         if (amount > 0) {
             // Reuse currentBaseTokenVB for virtualSupplyIncrease calculation
-            currentBaseTokenVB = ((amount * (10 ** StorageLib.pool().decimals)) / TransientStorage.getStoredNav()).toInt256();
+            currentBaseTokenVB = ((amount * (10 ** StorageLib.pool().decimals)) / TransientStorage.getStoredNav())
+                .toInt256();
             currentBaseTokenVB.updateVirtualSupply();
         }
 
@@ -167,9 +165,8 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // Convert amountDelta to base and subtract VB reduction
         if (amountDelta > 0) {
             // Reuse currentBaseTokenVB for amountDeltaValueInBase
-            currentBaseTokenVB = IEOracle(address(this))
-                .convertTokenAmount(token, amountDelta.toInt256(), baseToken);
-            
+            currentBaseTokenVB = IEOracle(address(this)).convertTokenAmount(token, amountDelta.toInt256(), baseToken);
+
             // storedBalance holds vbReductionValueInBase
             amount += currentBaseTokenVB.toUint256() - storedBalance;
         }

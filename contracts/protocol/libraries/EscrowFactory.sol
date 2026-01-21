@@ -13,9 +13,6 @@ library EscrowFactory {
 
     /// @notice Emitted when a new escrow contract is deployed
     event EscrowDeployed(address indexed pool, OpType indexed opType, address escrowContract);
-
-    // TODO: not sure we're using this error here, and not sure it's the right location for it?
-    error InvalidOpType();
     error DeploymentFailed();
 
     /// @notice Gets the deterministic address for an escrow contract
@@ -49,8 +46,6 @@ library EscrowFactory {
 
         require(escrowContract != address(0), DeploymentFailed());
     }
-
-
 
     /// @dev Gets the salt for CREATE2 deployment
     function _getSalt(OpType opType) private pure returns (bytes32) {

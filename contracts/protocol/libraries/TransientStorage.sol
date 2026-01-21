@@ -16,7 +16,7 @@ library TransientStorage {
     bytes32 internal constant _TRANSIENT_TWAP_TICK_SLOT = bytes32(uint256(keccak256("transient.tick.slot")) - 1);
 
     // Transient storage slots for cross-chain donation tracking
-    // TODO: do we need _STORED_NAV_SLOT now?
+    // TODO: do we need _STORED_NAV_SLOT now - because we're using VBs, and can read nav from second update in ECrosschain?
     bytes32 internal constant _STORED_NAV_SLOT = bytes32(uint256(keccak256("eacross.stored.nav")) - 1);
     bytes32 internal constant _STORED_ASSETS_SLOT = bytes32(uint256(keccak256("eacross.stored.assets")) - 1);
     bytes32 internal constant _TEMP_BALANCE_SLOT = bytes32(uint256(keccak256("eacross.temp.balance")) - 1);

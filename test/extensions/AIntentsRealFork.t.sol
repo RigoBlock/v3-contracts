@@ -694,7 +694,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             sourceNativeAmount: 0
         });
 
-        // TODO: depositor must be pool
         // 1. Prepare transfer on source chain (Ethereum)
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
             depositor: address(this),
@@ -3020,6 +3019,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Verify attacker tokens were transferred to tokenJar
         address tokenJar = ISmartPool(payable(ethereum.pool)).tokenJar();
         uint256 tokenJarBalance = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
+        // TODO: why is this test passing? tokens are not transferred to tokenJar now!!!!!!!!!!!
+        // It's probably passing because tokenJar is address(0), which holds a lot of USDC!
+        // As in most cases, ai-generated tests must be line-by-line checked
         assertGe(tokenJarBalance, attackAmount, "Attacker tokens should be in tokenJar");
         
         assertTrue(true, "DOS attack successfully mitigated");

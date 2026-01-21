@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
-// TODO: check if could remove uv,ntv,nlv from NavComponents and use NetAssetsValue directly
-// Also TODO: consider too big types can result in stack-too-deep errors
 struct NavComponents {
     uint256 unitaryValue;
     uint256 totalSupply;

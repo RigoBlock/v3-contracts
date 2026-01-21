@@ -64,7 +64,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             // TODO: this does not guarantee that the value won't be 0, because a small balance divided by a big supply could result in 0
             if (components.netTotalValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
-                components.unitaryValue = (uint256(components.netTotalValue) * 10 ** components.decimals) / components.totalSupply;
+                components.unitaryValue =
+                    (uint256(components.netTotalValue) * 10 ** components.decimals) /
+                    components.totalSupply;
             } else {
                 // early return
                 return components;
@@ -111,11 +113,11 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
                     // Reuse variables to minimize stack depth
                     amount = apps[i].balances[j].amount;
-                    
+
                     // Always add or update the balance from positions
                     if (amount != 0) {
                         token = apps[i].balances[j].token;
-                        
+
                         // cache balances in temporary storage
                         int256 storedBalance = token.getBalance();
 
@@ -154,11 +156,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
 
         if (activeTokensLength > 0) {
-            poolValue += IEOracle(address(this)).convertBatchTokenAmounts(
-                activeTokens,
-                tokenAmounts,
-                baseToken
-            );
+            poolValue += IEOracle(address(this)).convertBatchTokenAmounts(activeTokens, tokenAmounts, baseToken);
         }
     }
 

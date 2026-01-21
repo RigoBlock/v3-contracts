@@ -40,6 +40,7 @@
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:ts": "eslint --max-warnings 0 .",
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
+    "fmt:sol:protocol": "prettier 'contracts/protocol/**/*.sol' -w",
     "prepack": "yarn build",
     "prepare": "chmod +x ./.husky/pre-commit && husky install",
     "prepublish": "yarn rimraf build && yarn build:ts"
