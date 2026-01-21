@@ -46,14 +46,14 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
 
         // tokens expected by the calls (weth already deployed in the fixture)
         deployCodeTo(
-            "out/MockERC20.sol/MockERC20.json",
+            "out/MockERC20.sol/MockERC20.0.8.28.json",
             abi.encode("USD Coin", "USDC", 6),
             Constants.ETH_USDC
         );
         ethUsdc = Constants.ETH_USDC;
         
         deployCodeTo(
-            "out/MockERC20.sol/MockERC20.json",
+            "out/MockERC20.sol/MockERC20.0.8.28.json",
             abi.encode("Tether USD", "USDT", 6),
             Constants.ETH_USDT
         );

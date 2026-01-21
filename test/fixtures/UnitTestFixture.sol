@@ -83,7 +83,7 @@ contract UnitTestFixture is Test {
         _deployStakingSuite();
     
         address mockUniv4Posm = deployCode("out/MockUniswapNpm.sol/MockUniswapNpm.json", abi.encode(deployment.wrappedNative));
-        deployment.mockOracle = MockOracle(deployCode("out/MockOracle.sol/MockOracle.json"));
+        deployment.mockOracle = MockOracle(deployCode("out/MockOracle.sol/MockOracle.0.8.28.json"));
 
         // Deploy extensions - will require mockCall or, as for EOracle.getTwap, mockCall on the oracle contract (due to foundry limitation on mockCall for internal calls)
         extensions.eApps = address(new EApps(stakingProxy, mockUniv4Posm));
