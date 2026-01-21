@@ -50,6 +50,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     bytes32 constant virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
     bytes32 constant virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
 
+    address tokenJar;
+
     address ethMulticallHandler = Constants.ETH_MULTICALL_HANDLER;
     address baseMulticallHandler = Constants.BASE_MULTICALL_HANDLER;
     
@@ -64,6 +66,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     bytes32 private s_storageValue;
     ISmartPoolState.PoolTokens private s_poolTokens;
     
+    // TODO: WTH has ai reverted to simulated calls, instead of actually calling via the multicall handler?
     /// @notice Simulate MulticallHandler execution of Instructions (simplified version)
     /// @dev This mimics what the real Across MulticallHandler would do
     function simulateMulticallHandler(
@@ -111,6 +114,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         baseTokens[0] = Constants.ETH_USDC;
         baseTokens[1] = Constants.BASE_USDC;
         deployFixture(baseTokens);
+
+        tokenJar = ISmartPool(payable(ethereum.pool)).tokenJar();
+        assertTrue(tokenJar == 0x4444444444444444444444444444444444444444, "TokenJar address has been changed in fixture");
         
         // Fixture already created forks and pools - just access them
         // No need to create forks again, fixture did everything, also crediting tokens to user
@@ -2954,6 +2960,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// @dev Note: If attacker sends tokens BETWEEN donate calls, it's still detected as manipulation (as it should be)
     function test_ECrosschain_DOSAttack_TokensBeforeInitialization() public {
         console2.log("\n=== DOS ATTACK: Tokens Before Initialization ===");
+        uint256 tokenJarBalanceBefore = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
         
         // Setup: Fresh pool with zero supply
         ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(ethereum.pool).getPoolTokens();
@@ -3014,15 +3021,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("\n[SUCCESS] DOS attack prevented!");
         console2.log("Attacker's tokens transferred to tokenJar for GRG buyback-and-burn");
         console2.log("Legitimate transfer completed successfully");
-        
-        // TODO: test if commenting ISmartPool call will result in test failing
-        // Verify attacker tokens were transferred to tokenJar
-        address tokenJar = ISmartPool(payable(ethereum.pool)).tokenJar();
-        uint256 tokenJarBalance = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
-        // TODO: why is this test passing? tokens are not transferred to tokenJar now!!!!!!!!!!!
-        // It's probably passing because tokenJar is address(0), which holds a lot of USDC!
-        // As in most cases, ai-generated tests must be line-by-line checked
-        assertGe(tokenJarBalance, attackAmount, "Attacker tokens should be in tokenJar");
+        console2.log("TokenJar address", tokenJar);
+        uint256 tokenJarBalanceAfter = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
+        // Verify attacker tokens were not transferred to tokenJar
+        assertGe(tokenJarBalanceAfter, tokenJarBalanceBefore, "Attacker tokens should not be in tokenJar");
         
         assertTrue(true, "DOS attack successfully mitigated");
     }

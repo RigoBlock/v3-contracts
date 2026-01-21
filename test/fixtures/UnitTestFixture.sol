@@ -31,7 +31,6 @@ contract UnitTestFixture is Test {
         SmartPool implementation;
         address authority;
         address factory;
-        address tokenJar;
         address wrappedNative;
         MockOracle mockOracle;
         ExtensionsMap extensionsMap;
@@ -52,7 +51,7 @@ contract UnitTestFixture is Test {
         IAuthority(deployment.authority).setWhitelister(address(this), true);
 
         // TODO: update if we implement tokenJar in this package
-        deployment.tokenJar = address(0);
+        address tokenJar = makeAddr("tokenJar");
 
         // TODO: it turns out implementation needs upgrade extension which needs factory, which needs implementation - recursive.
         // It was implemented so because originally we only had adapters (mapped from authority). Review deployment flow in a future major release.
@@ -67,7 +66,7 @@ contract UnitTestFixture is Test {
         deployment.implementation = new SmartPool(
             deployment.authority,
             address(deployment.extensionsMap),
-            deployment.tokenJar
+            tokenJar
         );
         console2.log("Deployed SmartPool implementation:", address(deployment.implementation));
 
