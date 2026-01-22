@@ -2887,7 +2887,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// @dev Note: If attacker sends tokens BETWEEN donate calls, it's still detected as manipulation (as it should be)
     function test_ECrosschain_DOSAttack_TokensBeforeInitialization() public {
         console2.log("\n=== DOS ATTACK: Tokens Before Initialization ===");
-        uint256 tokenJarBalanceBefore = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
         
         // Setup: Fresh pool with zero supply
         ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(ethereum.pool).getPoolTokens();
@@ -2898,6 +2897,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(ethereum.pool, burner, totalSupply);
         vm.prank(burner);
         ISmartPoolActions(ethereum.pool).burn(totalSupply, 0);
+
+        // checking balance after burn, since burn transfers spread tokens to tokenJar
+        uint256 tokenJarBalanceBefore = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
         
         uint256 supplyAfterBurn = ISmartPoolState(ethereum.pool).getPoolTokens().totalSupply;
         console2.log("Pool total supply after burn:", supplyAfterBurn);
@@ -2951,7 +2953,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("TokenJar address", tokenJar);
         uint256 tokenJarBalanceAfter = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
         // Verify attacker tokens were not transferred to tokenJar
-        assertGe(tokenJarBalanceAfter, tokenJarBalanceBefore, "Attacker tokens should not be in tokenJar");
+        assertEq(tokenJarBalanceAfter, tokenJarBalanceBefore, "Attacker tokens should not be in tokenJar");
         
         assertTrue(true, "DOS attack successfully mitigated");
     }
