@@ -48,7 +48,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     uint256 constant LARGE_AMOUNT = 10000e6; // 10,000 USDC
     
     bytes32 constant virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
-    bytes32 constant virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
 
     address tokenJar;
 
@@ -2360,9 +2359,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint8 poolDecimals = ISmartPoolState(pool()).getPool().decimals;
         s_result = (uint256(s_virtualSupply) * (10 ** poolDecimals)) / navParams.unitaryValue;
         console2.log("Expected shares burned:", s_result);
-
-        // Get initial WETH virtual balance  
-        s_storageValue = keccak256(abi.encode(Constants.ETH_WETH, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
         
         // Execute transfer
         vm.prank(poolOwner);

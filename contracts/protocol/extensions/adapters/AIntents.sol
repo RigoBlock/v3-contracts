@@ -131,7 +131,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             value: 0
         });
 
-        // 4. Donate to pool with virtual balance management
+        // 4. Donate to pool with virtual supply management
         calls[3] = Call({
             target: address(this),
             callData: abi.encodeCall(IECrosschain.donate, (params.outputToken, params.outputAmount, destParams)),

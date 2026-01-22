@@ -1,263 +1,222 @@
-# Performance Attribution Model
+# Performance Attribution Model (VS-Only)
 
 ## Overview
 
-The Rigoblock cross-chain system uses **base token denominated virtual balances** to achieve correct performance attribution between chains. This document explains how performance is attributed and why this approach was chosen.
+The Rigoblock cross-chain system uses **Virtual Supply (VS) only** to maintain NAV integrity during cross-chain transfers. This document explains how performance is attributed with this simplified model.
 
 ## Core Principle
 
-**Performance follows physical custody**: The chain holding the real tokens gets the price performance attribution.
+**Performance is shared proportionally**: Both source and destination chains share trading gains/losses based on their effective supply ratios.
 
 ## How It Works
+
+### Virtual Supply Model
+
+**Key Formula:**
+```
+Effective Supply = Total Supply + Virtual Supply
+
+Where:
+- Virtual Supply < 0 on source (shares sent to other chains)
+- Virtual Supply > 0 on destination (shares received from other chains)
+```
+
+**NAV Calculation:**
+```
+NAV = Total Pool Value / Effective Supply
+```
 
 ### Transfer Flow
 
 **Setup:**
-- Pool A on Arbitrum (base token: ETH)
-- Transfers 1000 USDC to Pool B on Optimism
-- USDC price at transfer: $1.00
-- ETH price: $2000
+- Pool A on Arbitrum (source chain)
+- Pool B on Optimism (destination chain)
+- Transfer 1000 USDC from A to B
+- USDC price: $1.00, NAV: $1.00, Total Supply: 10,000 shares
 
-**Source Chain (Arbitrum):**
+**Source Chain (Arbitrum) - AIntents:**
 ```
-Real Balance: -1000 USDC (sent via bridge)
-Virtual Balance: +0.5 ETH (base token units)
-  
-Calculation:
-  1000 USDC @ $1.00 = $1000
-  $1000 / $2000 per ETH = 0.5 ETH
-  Store: ETH virtual balance = +0.5 ETH (FIXED)
+Before Transfer:
+  Real Balance: 10,000 USDC
+  Virtual Supply: 0
+  Effective Supply: 10,000 shares
+  NAV: $10,000 / 10,000 = $1.00
 
-NAV Impact: 0 (transfer is NAV-neutral)
-```
-
-**Destination Chain (Optimism):**
-```
-Real Balance: +980 USDC (after bridge fees)
-Virtual Supply: +0.49 ETH worth of shares
-
-Calculation:
-  980 USDC @ $1.00 = $980
-  $980 / NAV = X shares
-  Store: Virtual Supply = X shares (FIXED in share units)
-
-NAV Impact: ~0 (transfer is NAV-neutral)
+After Transfer:
+  Real Balance: 9,000 USDC (sent 1000)
+  Virtual Supply: -1,000 shares (outputValue / NAV)
+  Effective Supply: 10,000 + (-1,000) = 9,000 shares
+  NAV: $9,000 / 9,000 = $1.00 ✓ (unchanged)
 ```
 
-### Price Movement Scenarios
-
-#### Scenario 1: USDC Appreciates to $1.10
-
-**Source Chain (Arbitrum):**
+**Destination Chain (Optimism) - ECrosschain:**
 ```
-NAV Calculation:
-  Real: 0 USDC (all transferred)
-  Virtual: +0.5 ETH = +0.5 ETH (unchanged!)
-  
-NAV Change: 0 (base token VB is FIXED)
-```
+Before Transfer:
+  Real Balance: 5,000 USDC
+  Virtual Supply: 0
+  Effective Supply: 5,000 shares
+  NAV: $5,000 / 5,000 = $1.00
 
-**Destination Chain (Optimism):**
-```
-NAV Calculation:
-  Real: 980 USDC × $1.10 = $1,078
-  Virtual Supply: -0.49 ETH (unchanged)
-  
-NAV Change: +$98 increase
+After Transfer:
+  Real Balance: 5,980 USDC (received 980 after fees)
+  Virtual Supply: +980 shares (receivedValue / NAV)
+  Effective Supply: 5,000 + 980 = 5,980 shares
+  NAV: $5,980 / 5,980 = $1.00 ✓ (unchanged)
 ```
 
-**Result:** Destination gets all the appreciation ✅
+## Performance Attribution Scenarios
 
-#### Scenario 2: USDC Depreciates to $0.90
+### Scenario 1: Trading Gains on Destination
 
-**Source Chain (Arbitrum):**
-```
-NAV Change: 0 (base token VB is FIXED)
-```
-
-**Destination Chain (Optimism):**
-```
-NAV Calculation:
-  Real: 980 USDC × $0.90 = $882
-  Virtual Supply: -0.49 ETH (unchanged)
-  
-NAV Change: -$98 decrease
-```
-
-**Result:** Destination takes all the loss, source avoids it ✅
-
-#### Scenario 3: Trading Gains (Constant Price)
-
-**Destination generates 500 USDC yield from trading (USDC price constant at $1.00):**
+**Destination generates 500 USDC yield from trading:**
 
 ```
-Destination NAV:
-  Real: 1480 USDC × $1.00 = $1,480
-  Virtual Supply: -0.49 ETH = -$980
-  Net contribution: $500
-  
-Split pro-rata:
-  Local holders: (supply / (supply + VS)) × $500
-  Virtual holders: (VS / (supply + VS)) × $500
+Destination Pool State:
+  Real: 6,480 USDC
+  Virtual Supply: +980 shares
+  Effective Supply: 5,980 shares
+  Total Value: $6,480
+  NAV: $6,480 / 5,980 = $1.084
+
+Performance Attribution:
+  Total Gain: $500
+  Local holders: (5,000 / 5,980) × $500 = $418
+  Virtual holders: (980 / 5,980) × $500 = $82
 ```
 
-**Result:** Gains split fairly between chains via virtual supply ✅
+**Result:** Gains split proportionally by effective supply ✅
 
-## Why Base Token Units?
+### Scenario 2: Price Appreciation
 
-### Alternative: Token Unit Virtual Balances (Not Implemented)
+**USDC appreciates to $1.10:**
 
-**If we stored VB in token units (1000 USDC):**
-
-**When USDC appreciates to $1.10:**
-- Source VB: 1000 USDC × $1.10 = $1,100 → NAV increases by $100
-- Destination: Neutralized via offsetting entries → NAV constant
-
-**Result:** Source gets performance, but source doesn't hold the tokens!
-
-**Problem:** Cannot rebalance when source has no tokens:
-- To sync gains from source → destination: Need to transfer from source
-- But source has 0 USDC (all transferred)
-- Requires 2-step: First transfer back to source, then sync
-
-### With Base Token Units (Implemented)
-
-**When USDC appreciates:**
-- Source VB: 0.5 ETH (FIXED) → NAV constant
-- Destination: Real balance appreciates → NAV increases
-
-**Result:** Destination gets performance AND holds the tokens ✅
-
-**Benefit:** Can rebalance directly (1-step):
-- Destination has high NAV and has tokens
-- Transfer directly from destination to source
-
-## Trade-offs
-
-### Advantages
-
-1. **Operational Simplicity**
-   - Can rebalance when tokens appreciate (most common)
-   - Performance on chain with physical custody
-   - Direct 1-step rebalancing
-
-2. **Gas Efficiency**
-   - Single conversion (token → base)
-   - Single storage write per chain
-   - ~5,800 gas savings vs alternative
-
-3. **Code Simplicity**
-   - No special case handling
-   - Fewer storage operations
-   - Easier to audit and understand
-
-### Disadvantages
-
-1. **Conceptual Complexity**
-   - Source "loses" ownership of appreciation
-   - May seem unintuitive at first
-   - Performance doesn't follow "origin"
-
-2. **Rare Edge Case**
-   - When tokens depreciate AND all tokens transferred
-   - Requires 2-step rebalancing (dest→source→dest)
-   - Uncommon in practice
-
-## Rebalancing Scenarios
-
-### Scenario 1: Token Appreciates (Common)
-
-**State:**
-- Source: Normal NAV, 0 tokens
-- Destination: High NAV, has all tokens
-
-**Rebalancing:**
 ```
-Step 1: Transfer from destination to source (OpType.Transfer)
-  - Moves tokens from high-NAV chain to normal-NAV chain
-  - 1-step process ✅
+Source Chain:
+  Real: 9,000 USDC × $1.10 = $9,900
+  Virtual Supply: -1,000 shares
+  Effective Supply: 9,000 shares
+  NAV: $9,900 / 9,000 = $1.10 ✓
+
+Destination Chain:
+  Real: 5,980 USDC × $1.10 = $6,578
+  Virtual Supply: +980 shares
+  Effective Supply: 5,980 shares
+  NAV: $6,578 / 5,980 = $1.10 ✓
 ```
 
-### Scenario 2: Token Depreciates (Uncommon)
+**Result:** Both chains see proportional NAV increase ✅
 
-**State:**
-- Source: Normal NAV, 0 tokens
-- Destination: Low NAV, has all tokens
+### Scenario 3: Price Depreciation
 
-**Rebalancing:**
+**USDC depreciates to $0.90:**
+
 ```
-Step 1: Transfer from destination to source (OpType.Transfer)
-  - Gets tokens to source
-  
-Step 2: Transfer from source to destination (OpType.Sync)
-  - Moves performance attribution
-  - 2-step process ⚠️
+Source Chain:
+  Real: 9,000 USDC × $0.90 = $8,100
+  Virtual Supply: -1,000 shares
+  Effective Supply: 9,000 shares
+  NAV: $8,100 / 9,000 = $0.90
+
+Destination Chain:
+  Real: 5,980 USDC × $0.90 = $5,382
+  Virtual Supply: +980 shares
+  Effective Supply: 5,980 shares
+  NAV: $5,382 / 5,980 = $0.90
 ```
 
-### Scenario 3: Regular Syncing (No Edge Case)
+**Result:** Both chains see proportional NAV decrease ✅
 
-**State:**
-- Source: Has some tokens (not all transferred)
-- Destination: Has some tokens
+## Safety Constraints
 
-**Rebalancing:**
+### 10% Effective Supply Buffer
+
+**Rule:** Negative VS cannot exceed 90% of total supply.
+
+```solidity
+// In NavImpactLib.validateNavImpact()
+int256 effectiveSupply = int256(totalSupply) + virtualSupply - sharesLeaving;
+require(effectiveSupply >= int256(totalSupply / 10), EffectiveSupplyTooLow());
 ```
-Always 1-step in either direction ✅
+
+**Why:** Prevents supply exhaustion and ensures pool remains operational.
+
+### Post-Burn Protection
+
+**Rule:** Burns cannot push effective supply below 10% threshold.
+
+```solidity
+// In MixinActions._burn()
+int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+if (virtualSupply < 0) {
+    int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
+    require(effectiveSupply >= int256(newTotalSupply / 10), EffectiveSupplyTooLowAfterBurn());
+}
 ```
+
+**Why:** Prevents bypassing the 10% constraint via sequential burns.
+
+## Comparison with Previous VB+VS Model
+
+| Aspect | VS-Only (Current) | VB+VS (Previous) |
+|--------|-------------------|------------------|
+| **Storage writes** | 1 per side (VS only) | 2 per side (VB + VS) |
+| **Performance attribution** | Shared proportionally | Destination gets price movements |
+| **Complexity** | Simpler | More complex |
+| **Rebalancing** | Always 1-step | 2-step in edge cases |
+| **Gas cost** | Lower | Higher |
+| **Synchronization** | None needed | VB must sync with VS |
 
 ## Mathematical Verification
 
-### Source NAV Calculation
+### NAV Invariant (Transfer Mode)
 
+For transfers to be NAV-neutral:
 ```
-NAV = (Σ(token_i × price_i) + Σ(VB_baseToken × price_baseToken)) / supply
+NAV_before = NAV_after
 
 Where:
-  token_i = real token balances
-  VB_baseToken = base token virtual balance (FIXED)
-  price_i = token prices
+  NAV = TotalValue / EffectiveSupply
+  EffectiveSupply = TotalSupply + VirtualSupply
 ```
 
-**When transferred token price changes:**
-- `token_i` is 0 (transferred away)
-- `VB_baseToken` is FIXED (doesn't change)
-- **NAV remains constant** ✓
-
-### Destination NAV Calculation
-
+**Proof:**
 ```
-NAV = Σ(token_i × price_i) / (supply + VS)
-
-Where:
-  token_i = real token balances (including transferred tokens)
-  VS = virtual supply (FIXED in share units)
+Before: NAV = V / S
+After:  NAV = (V - ΔV) / (S + (-ΔV/NAV))
+           = (V - ΔV) / (S - ΔV/NAV)
+           = (V - ΔV) / ((S×NAV - ΔV) / NAV)
+           = (V - ΔV) × NAV / (S×NAV - ΔV)
+           = (V - ΔV) × NAV / (V - ΔV)
+           = NAV ✓
 ```
 
-**When transferred token price changes:**
-- `token_i` includes the transferred tokens
-- Price change affects numerator directly
-- `VS` is FIXED (doesn't change)
-- **NAV changes with token price** ✓
+### Effective Supply Constraint
 
-## Comparison with Alternative Approaches
+```
+VS_min = -0.9 × TotalSupply
+EffectiveSupply_min = TotalSupply + VS_min = 0.1 × TotalSupply
+```
 
-| Aspect | Base Token VB (Implemented) | Token Unit VB (Not Implemented) |
-|--------|---------------------------|--------------------------------|
-| **Performance attribution** | Destination | Source |
-| **Rebalancing (appreciate)** | ✅ 1-step | ⚠️ 2-step |
-| **Rebalancing (depreciate)** | ⚠️ 2-step | ✅ 1-step |
-| **Gas cost** | Lower (~8,900) | Higher (~14,700) |
-| **Code complexity** | Simpler | More complex |
-| **Storage writes** | 1-2 per side | 3 on destination |
-| **Special cases** | None | token == baseToken |
+This ensures at least 10% of supply remains for pool operations.
+
+## Sync Mode
+
+**Sync mode (OpType.Sync)** allows NAV changes:
+- No VS adjustments on either chain
+- NAV impacts both chains naturally
+- Used for: donations, performance rebalancing, gas refunds
+
+```
+Source: Tokens leave → NAV decreases
+Destination: Tokens arrive → NAV increases
+```
 
 ## Conclusion
 
-**Base token virtual balances** provide:
-- ✅ Correct zero-sum attribution
-- ✅ Practical rebalancing for common case (appreciation)
+The **VS-only model** provides:
+- ✅ Simpler implementation (single storage per chain)
+- ✅ Proportional performance attribution
 - ✅ Lower gas costs
-- ✅ Simpler implementation
-- ⚠️ Rare edge case (depreciation + full transfer) requires 2-step
-
-This approach prioritizes practical operability and gas efficiency while maintaining mathematically correct performance attribution.
+- ✅ No synchronization complexity
+- ✅ 10% safety buffer prevents supply exhaustion
+- ✅ Post-burn protection prevents constraint bypass

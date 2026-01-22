@@ -71,7 +71,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         // For bridge transactions, amountDelta will be >= amount due to solver surplus
-        // We use amountDelta for virtual balance (captures full value)
+        // We use amountDelta for virtual supply calculation (captures full value)
         // and amount for validation that we got at least what was expected
         require(amountDelta >= amount, CallerTransferAmount());
 

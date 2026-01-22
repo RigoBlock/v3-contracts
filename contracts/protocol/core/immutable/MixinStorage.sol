@@ -19,7 +19,6 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
         assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
         assert(_UNIV4_TOKEN_IDS_SLOT == bytes32(uint256(keccak256("pool.proxy.uniV4.tokenIds")) - 1));
-        assert(_VIRTUAL_BALANCES_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1));
         assert(_VIRTUAL_SUPPLY_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1));
     }
 

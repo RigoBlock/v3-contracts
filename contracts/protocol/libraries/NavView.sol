@@ -213,12 +213,11 @@ library NavView {
                 token = tokens.activeTokens[k];
             }
 
-            int256 bal = VirtualStorageLib.getVirtualBalance(token);
-
+            int256 bal;
             if (token == ZERO_ADDRESS) {
-                bal += int256(pool.balance);
+                bal = int256(pool.balance);
             } else {
-                bal += int256(IERC20(token).balanceOf(pool));
+                bal = int256(IERC20(token).balanceOf(pool));
             }
 
             aggregatedBalances[index++] = AppTokenBalance({token: token, amount: bal});

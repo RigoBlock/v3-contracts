@@ -10,6 +10,7 @@ import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol"
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {NavComponents, NetAssetsValue} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
@@ -18,6 +19,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeCast for uint256;
 
     error BaseTokenBalance();
+    error EffectiveSupplyTooLowAfterBurn();
     error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
     error PoolBurnNotEnough();
     error PoolBurnNullAmount();
@@ -219,6 +221,17 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn, userAccount.userBalance);
         poolTokens().totalSupply -= burntAmount;
+
+        // Post-burn safety check: ensure effective supply doesn't drop below 10% of new total supply
+        // This prevents bypassing the EffectiveSupplyTooLow check via sequential burns
+        int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+        if (virtualSupply < 0) {
+            uint256 newTotalSupply = poolTokens().totalSupply;
+            int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
+            if (effectiveSupply < int256(newTotalSupply / 10)) {
+                revert EffectiveSupplyTooLowAfterBurn();
+            }
+        }
 
         netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 

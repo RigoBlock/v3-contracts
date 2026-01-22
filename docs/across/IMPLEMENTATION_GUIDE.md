@@ -1,372 +1,289 @@
-# Across Bridge Integration - Complete Guide
+# Technical Implementation Guide
 
-This document consolidates all aspects of the Across bridge integration for Rigoblock smart pools.
+## Overview
 
-## Table of Contents
-1. [Architecture Overview](#architecture-overview)
-2. [Implementation Details](#implementation-details)
-3. [Known Issues & Edge Cases](#known-issues--edge-cases)
-4. [Deployment Guide](#deployment-guide)
-5. [Testing Strategy](#testing-strategy)
-6. [Risk Assessment](#risk-assessment)
+This guide covers the technical implementation of the Across Protocol integration for Rigoblock Smart Pools using the VS-only model.
 
----
-
-## Architecture Overview
+## Architecture
 
 ### Components
 
-1. **AIntents.sol** (Adapter)
-   - Entry point for cross-chain transfers
-   - Validates inputs and prepares Across deposits
-   - Manages virtual balances on source chain
-   - Location: `protocol/extensions/adapters/AIntents.sol`
+1. **AIntents.sol** (Source Chain Adapter)
+   - Path: `contracts/protocol/extensions/adapters/AIntents.sol`
+   - Initiates cross-chain transfers via Across `depositV3()`
+   - Writes negative Virtual Supply for Transfer mode
+   - Validates NAV impact for Sync mode
 
-2. **ECrosschain.sol** (Extension)
-   - Handles incoming transfers on destination chain
-   - Called via delegatecall by pool proxy
-   - Validates transfers and manages virtual balances
-   - Location: `protocol/extensions/ECrosschain.sol`
+2. **ECrosschain.sol** (Destination Chain Extension)
+   - Path: `contracts/protocol/extensions/ECrosschain.sol`
+   - Receives tokens via `handleV3AcrossMessage()`
+   - Writes positive Virtual Supply for Transfer mode
+   - Validates NAV integrity
 
-3. **ExtensionsMapDeployer.sol** (Deps)
-   - Deploys ExtensionsMap with chain-specific params
-   - Maps ECrosschain methods to delegatecall
-   - Location: `protocol/deps/ExtensionsMapDeployer.sol`
+3. **VirtualStorageLib.sol** (Storage Library)
+   - Path: `contracts/protocol/libraries/VirtualStorageLib.sol`
+   - Manages Virtual Supply storage slot
+   - Provides `getVirtualSupply()` and `updateVirtualSupply()`
 
-4. **ENavView.sol** (Utility)
-   - Provides offchain nav calculations
-   - Returns token balances and nav values
-   - Location: `protocol/extensions/ENavView.sol`
+4. **NavImpactLib.sol** (NAV Validation)
+   - Path: `contracts/protocol/libraries/NavImpactLib.sol`
+   - Validates Sync mode NAV impact
+   - Enforces 10% effective supply constraint
 
-### Message Types
+## Transfer Flow
 
-The integration supports two operation modes via encoded message:
+### Source Chain (AIntents)
 
-#### Type 1: Transfer (OpType.Transfer)
-- Source chain NAV made neutral via virtual adjustments
-- Destination chain NAV made neutral via virtual adjustments
-- Bridge fees reduce global NAV (real economic cost)
-- Use case: Moving assets between chains without affecting NAV
-
-#### Type 2: Sync (OpType.Sync)
-- No virtual adjustments on either chain
-- NAV changes allowed (donations, rebalancing)
-- NavImpactLib validates NAV tolerance on source
-- Destination validates NAV is within expected range
-- Use case: Donations, performance transfers, allowing solver surplus to benefit holders
-
----
-
-## Implementation Details
-
-### Transfer Flow (OpType.Transfer)
-
-**Source Chain (AIntents.depositV3):**
-1. Validate inputs (amount, token, destination chain)
-2. Wrap native currency if needed
-3. Approve token to Across SpokePool
-4. Adjust virtual balances/supply (NAV-neutral)
-5. Call Across depositV3 with encoded multicall instructions
-6. Emit CrossChainTransfer event
-
-**Destination Chain (ECrosschain.handleV3AcrossMessage → donate):**
-1. Verify caller is Across SpokePool
-2. Decode message and validate type
-3. Store NAV baseline in transient storage
-4. For Transfer mode: Apply virtual balance/supply adjustments (NAV-neutral)
-5. Verify token has price feed
-6. Validate final NAV matches expected (stored NAV + solver surplus)
-
-### Sync Flow (OpType.Sync)
-
-**Source Chain:**
-1. Calculate NAV before transfer
-2. Validate NAV impact is within tolerance (NavImpactLib)
-3. Encode Sync mode in message
-4. Execute transfer (NAV decreases naturally)
-
-**Destination Chain:**
-1. Store NAV baseline in transient storage
-2. No virtual adjustments (allow NAV to increase)
-3. Validate NAV is within tolerance of expected
-4. Solver surplus increases NAV (benefits holders)
-
-### Virtual Balance & Supply Management
-
-Virtual balances and virtual supply ensure NAV integrity for transfers:
-
-**Virtual Supply** (global cross-chain share tracking):
 ```solidity
-// Denominated in pool token units (shares)
-// Tracks pool tokens that exist on other chains
-int256 virtualSupply;
-```
-
-**Virtual Balances** (per-token NAV offsets):
-```solidity
-// Denominated in token-specific units
-// Offsets physical balance changes for NAV neutrality
-mapping(address token => int256 virtualBalance);
-```
-
-**Source Chain (Transfer Mode)**:
-```solidity
-// Try to burn virtual supply first (if exists)
-if (virtualSupply >= sharesToBurn) {
-    adjustVirtualSupply(-sharesToBurn);
-} else if (virtualSupply > 0) {
-    // Burn all virtual supply, use virtual balance for remainder
-    adjustVirtualSupply(-virtualSupply);
-    adjustVirtualBalance(token, remainderInTokenUnits);
-} else {
-    // No virtual supply - use virtual balance entirely
-    adjustVirtualBalance(token, scaledOutputAmount);
+function depositV3(AcrossParams calldata params) external {
+    // 1. Validate bridgeable token pair
+    CrosschainLib.validateBridgeableTokenPair(params.inputToken, params.outputToken);
+    
+    // 2. Parse source parameters
+    SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
+    
+    // 3. Build multicall instructions for destination
+    Instructions memory instructions = _buildMulticallInstructions(params, sourceParams);
+    
+    // 4. Handle source-side adjustments
+    if (sourceParams.opType == OpType.Transfer) {
+        _handleSourceTransfer(params);  // Writes negative VS
+        params.depositor = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
+    } else if (sourceParams.opType == OpType.Sync) {
+        NavImpactLib.validateNavImpact(...);  // No VS adjustment
+        params.depositor = address(this);
+    }
+    
+    // 5. Execute Across deposit
+    _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(...);
 }
 ```
 
-**Destination Chain (Transfer Mode)**:
+### Destination Chain (ECrosschain)
+
 ```solidity
-// Reduce positive virtual balances first (tokens returning)
-if (virtualBalance > 0) {
-    adjustVirtualBalance(token, -min(amount, virtualBalance));
+function handleV3AcrossMessage(
+    address tokenSent,
+    uint256 amount,
+    address relayer,
+    bytes memory message
+) external {
+    // 1. Validate caller is SpokePool
+    require(msg.sender == address(_spokePool), OnlySpokePoolAllowed());
+    
+    // 2. Store initial state for validation
+    token.setDonationLock(amount);
+    TransientStorage.storeNav(currentNav);
+    TransientStorage.storeAssets(currentAssets);
+    
+    // 3. Execute multicall instructions
+    // ... (transfer tokens to pool, call donate())
+    
+    // 4. In donate(): Apply virtual adjustments
+    if (params.opType == OpType.Transfer) {
+        _handleTransferMode(...);  // Writes positive VS
+    } else if (params.opType == OpType.Sync) {
+        _handleSyncMode();  // No VS adjustment
+    }
+}
+```
+
+## Virtual Supply Management
+
+### Storage
+
+```solidity
+// VirtualStorageLib.sol
+bytes32 internal constant VIRTUAL_SUPPLY_SLOT = 
+    bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1);
+
+function getVirtualSupply() internal view returns (int256 virtualSupply) {
+    bytes32 slot = VIRTUAL_SUPPLY_SLOT;
+    assembly { virtualSupply := sload(slot) }
 }
 
-// Increase virtual supply for remaining amount
-if (remainingAmount > 0) {
-    uint256 shares = convertTokensToShares(remainingAmount, storedNav);
-    adjustVirtualSupply(shares);
+function updateVirtualSupply(int256 adjustment) internal {
+    bytes32 slot = VIRTUAL_SUPPLY_SLOT;
+    int256 current;
+    assembly { current := sload(slot) }
+    int256 updated = current + adjustment;
+    assembly { sstore(slot, updated) }
 }
 ```
 
-Stored in pool storage using ERC-7201 namespaced slots with dot notation.
-
----
-
-## Known Issues & Edge Cases
-
-### 1. Unfilled Intent Recovery
-
-**Issue:** If an Across intent is not filled within deadline, tokens should be recoverable.
-
-**Current State:** No direct recovery mechanism implemented.
-
-**Implications:**
-- Tokens remain in virtual balance accounting
-- Pool operator could potentially inflate nav by:
-  1. Setting very short deadline
-  2. Locking tokens (creating positive virtual balance)
-  3. Receiving refund without clearing virtual balance
-
-**Mitigation:**
-- Document as known issue
-- Recommend reasonable deadlines at client level
-- Consider monitoring for suspicious patterns
-
-**Risk Level:** 4/10 (requires pool operator malfeasance, limited by audit trail)
-
-### 2. External Token Returns
-
-**Issue:** If Across returns tokens directly to pool (edge case), nav accounting breaks.
-
-**Current State:** Not handled automatically.
-
-**Implications:**
-- Virtual balance remains, offsetting real tokens
-- Nav calculation temporarily incorrect
-- Requires manual intervention
-
-**Mitigation:**
-- Document as edge case
-- Provide manual recovery process if needed
-- Monitor for such occurrences
-
-**Risk Level:** 2/10 (very rare, affects single pool, reversible)
-
-### 3. Wrapper Contract Consideration
-
-**Complexity Assessment:** 7/10
-
-**Approach:**
-- Deploy per-pool wrapper contract
-- Pool deploys wrapper on-demand
-- Wrapper executes Across transfer
-- Refunds go to wrapper, not pool
-- Pool can claim from wrapper with virtual balance update
-
-**Cons:**
-- Increases implementation size (deploy bytecode)
-- Higher gas costs (extra deployment + contract)
-- Additional complexity in recovery logic
-- Requires wrapper state management
-
-**Risk Reduction:** 2/10 → 1/10 (minimal improvement)
-
-**Conclusion:** Not worth the complexity given low baseline risk.
-
-### 4. Price Feed Requirement
-
-**Issue:** Destination chain must have price feed for received token.
-
-**Handling:** ECrosschain reverts if no price feed found.
-
-**Result:** Intent fails, tokens recoverable on source chain.
-
-**Risk Level:** 0/10 (safe failure mode)
-
----
-
-## Deployment Guide
-
-### Prerequisites
-
-All chains must have:
-- Across SpokePool deployed
-- Rigoblock infrastructure (Authority, Registry, Factory)
-- Price oracle with token feeds
-
-### Deployment Steps
-
-#### 1. Deploy ExtensionsMapDeployer
+### Source Chain Logic
 
 ```solidity
-// Deploy on each chain with chain-specific params
-new ExtensionsMapDeployer({
-    wrappedNativeToken: WETH_ADDRESS,
-    acrossSpokePool: SPOKE_POOL_ADDRESS,
-    // ... other params
-});
+// AIntents._handleSourceTransfer()
+function _handleSourceTransfer(AcrossParams memory params) private {
+    // Get output value in base token terms
+    (uint256 outputValueInBase, ) = _getOutputValueInBase(params);
+
+    // Update NAV and get pool state
+    NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
+    uint8 poolDecimals = StorageLib.pool().decimals;
+
+    // Calculate shares leaving: outputValue / NAV
+    int256 sharesLeaving = ((outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue).toInt256();
+
+    // Write negative VS
+    (-sharesLeaving).updateVirtualSupply();
+}
 ```
 
-#### 2. Deploy ExtensionsMap
+### Destination Chain Logic
 
 ```solidity
-// Call from deployer
-deployer.deploy(salt); // Use incremented salt for versions
+// ECrosschain._handleTransferMode()
+function _handleTransferMode(...) private {
+    // Convert amount to base token value
+    uint256 amountValueInBase = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken).toUint256();
+
+    // Get current VS state
+    int256 currentVS = VirtualStorageLib.getVirtualSupply();
+    uint256 storedNav = TransientStorage.getStoredNav();
+
+    // Calculate shares arriving: amountValue / NAV
+    int256 sharesArriving = ((amountValueInBase * (10 ** poolDecimals)) / storedNav).toInt256();
+
+    // If negative VS exists, clear it first
+    if (currentVS < 0) {
+        // Arriving shares may partially or fully clear negative VS
+        sharesArriving.updateVirtualSupply();
+    } else {
+        // Add positive VS
+        sharesArriving.updateVirtualSupply();
+    }
+}
 ```
 
-#### 3. Deploy ECrosschain
+## NAV Calculation with Virtual Supply
+
+### Effective Supply
 
 ```solidity
-// ExtensionsMapDeployer handles this automatically
-// ECrosschain immutables set from deployer params
+// MixinPoolTokens._calculateUnitaryValue()
+int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+
+// Effective supply includes virtual supply (can be negative or positive)
+int256 effectiveSupply = int256(poolTokens().totalSupply) + virtualSupply;
+
+// Safety check: effective supply must be positive
+if (effectiveSupply <= 0) {
+    // Use graceful degradation
+    return nav / totalSupply;  // Ignore VS
+}
+
+unitaryValue = nav / uint256(effectiveSupply);
 ```
 
-#### 4. Deploy AIntents
+### 10% Constraint
 
 ```solidity
-// Same address on all chains (deterministic)
-new AIntents();
+// NavImpactLib.validateNavImpact()
+int256 currentVS = VirtualStorageLib.getVirtualSupply();
+int256 sharesLeaving = (outputValue * 10**decimals / nav).toInt256();
+
+int256 newVS = currentVS - sharesLeaving;  // More negative
+int256 effectiveSupply = int256(totalSupply) + newVS;
+
+// Must maintain at least 10% of total supply
+require(effectiveSupply >= int256(totalSupply / 10), EffectiveSupplyTooLow());
 ```
 
-#### 5. Register Adapter Methods
+## Operation Types
+
+### Transfer Mode (NAV-neutral)
+
+```
+Source:
+  - Writes negative VS (shares leaving)
+  - NAV unchanged (value decreases, supply decreases proportionally)
+  - Uses escrow as depositor (for NAV-neutral refunds)
+
+Destination:
+  - Writes positive VS (shares arriving)
+  - NAV unchanged (value increases, supply increases proportionally)
+  - Validates NAV integrity
+```
+
+### Sync Mode (NAV-impacting)
+
+```
+Source:
+  - No VS adjustment
+  - NAV decreases (tokens leave, supply unchanged)
+  - Pool is depositor (direct refund)
+
+Destination:
+  - No VS adjustment
+  - NAV increases (tokens arrive, supply unchanged)
+  - Validates within tolerance
+```
+
+## Security Considerations
+
+### Caller Verification
 
 ```solidity
-// Via governance vote
-authority.addMethod(
-    DEPOSITV3_SELECTOR,
-    address(aIntents),
-    IAuthority.MethodPermission.PoolOperator
-);
+// ECrosschain.donate()
+require(msg.sender == address(_spokePool) || msg.sender == _multicallHandler, OnlySpokePoolAllowed());
 ```
 
-#### 6. Deploy New Implementation
+### Donation Lock
 
 ```solidity
-// Factory upgrade to implementation using new ExtensionsMap
-factory.setImplementation(newImplementation);
+// Prevent reentrancy and manipulation
+function setDonationLock(uint256 amount) internal {
+    if (amount == 1) {
+        // First call - store state
+        TransientStorage.storeNav(currentNav);
+        return;
+    }
+    // Second call - process donation
+    require(getDonationLock() > 0, NoDonationInProgress());
+}
 ```
 
-### Verification
+### NAV Manipulation Detection
 
-- Test transfer Type 1 on testnet
-- Test rebalance Type 2 on testnet
-- Verify virtual balances update correctly
-- Verify nav calculations remain accurate
-- Test price feed validation
+```solidity
+// Validate no unexpected NAV changes during donation
+require(navParams.netTotalValue == expectedAssets, NavManipulationDetected(expectedAssets, navParams.netTotalValue));
+```
 
----
+## Testing
 
-## Testing Strategy
+### Unit Tests
 
-### Unit Tests (Hardhat/TypeScript)
+```bash
+# Run all Across tests
+forge test --match-path "test/extensions/*" -vv
 
-**File:** `test/offchain/offchainNav.test.ts`
+# Run specific VS model tests
+forge test --match-contract VSOnlyModelTest -vvv
+```
 
-Tests for OffchainNav contract:
-- Token balances return correctly
-- Nav calculations match storage values
-- Virtual balances included in calculations
-- Multiple token scenarios
+### Fork Tests
 
-**File:** `test/adapters/aIntents.test.ts` (TBD)
+```bash
+# Test on Arbitrum fork
+forge test --match-path test/extensions/AIntentsRealFork.t.sol --fork-url $ARBITRUM_RPC_URL -vvv
+```
 
-Tests for AIntents:
-- Deposit validation
-- Virtual balance creation
-- Message encoding
-- Event emission
+## Gas Costs
 
-### Fork Tests (Foundry)
+| Operation | Gas Cost |
+|-----------|----------|
+| Source VS write | ~5,000 |
+| Destination VS write | ~5,000 |
+| NAV calculation | ~3,000 |
+| Total per transfer | ~13,000 |
 
-**File:** `test/AcrossFork.t.sol`
+## Deployment
 
-Tests on mainnet/arbitrum forks:
-- Full transfer flow (Type 1)
-- Full rebalance flow (Type 2)
-- Nav sync between chains
-- Error conditions (no price feed, invalid params)
-- Direct call prevention (security)
-
-**Setup Requirements:**
-- Fork at recent block
-- Use existing vault or deploy new one
-- Prank as pool operator
-- Mock Across SpokePool responses
-
-### Integration Tests
-
-**Manual Testing:**
-- Deploy on testnet (Sepolia)
-- Execute real cross-chain transfer
-- Verify tokens received
-- Verify nav calculations
-- Test recovery scenarios
-
----
-
-## Risk Assessment
-
-### Overall Risk Profile
-
-**Current Implementation Risk:** 3.5/10
-
-**Primary Risks:**
-1. Unfilled intent nav inflation (4/10) - requires operator malfeasance
-2. External token returns (2/10) - very rare edge case
-3. Nav sync edge cases (3/10) - mitigated by delta tracking
-4. Price feed failures (0/10) - safe revert
-
-**Recommended Monitoring:**
-- Track virtual balances vs actual balances
-- Monitor intent fill rates
-- Alert on unusual deadline patterns
-- Track nav divergence between chains
-
-**Future Improvements:**
-1. Implement intent recovery mechanism (if Across adds support)
-2. Add virtual balance reconciliation tool
-3. Enhanced nav sync verification
-4. Automated monitoring dashboard
-
----
-
-## References
-
-- [Across Protocol Docs](https://docs.across.to/)
-- [Rigoblock Docs](https://docs.rigoblock.com/)
-- [Deployed Contracts](https://docs.rigoblock.com/readme-2/deployed-contracts-v4)
-
----
-
-*Last Updated: 2025-12-11*
-*Integration Version: 1.0.0*
+1. Deploy AIntents adapter with SpokePool address
+2. Register in Authority
+3. Deploy ECrosschain extension with SpokePool and MulticallHandler addresses
+4. Register in ExtensionsMap
+5. Test end-to-end transfer

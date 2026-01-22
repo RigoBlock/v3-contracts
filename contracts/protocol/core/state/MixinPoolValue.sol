@@ -152,7 +152,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // initialize pool value as base token balances (wallet balance plus apps balances)
         uint256 nativeAmount = msg.value;
         poolValue = _getAndClearBalance(baseToken, nativeAmount);
-        poolValue += VirtualStorageLib.getVirtualBalance(baseToken);
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
