@@ -158,13 +158,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.depositor = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
         } else if (sourceParams.opType == OpType.Sync) {
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
-            // Auto-detect: VS > 0 means other chains have claims → NAV-neutral on source
-            bool shouldWriteVB = _handleSourceSync(params);
-            // If VB offset written (NAV-neutral), use Transfer escrow for proper refund handling
-            // Otherwise, pool is depositor (NAV impacts naturally, direct refund)
-            params.depositor = shouldWriteVB
-                ? EscrowFactory.deployEscrow(address(this), OpType.Transfer)
-                : address(this);
+            // Sync mode: NAV impacts both chains naturally (no VS offset on source)
+            // Pool is depositor - failed intents return tokens directly, NAV restores naturally
+            _handleSourceSync();
+            params.depositor = address(this);
         } else {
             revert IECrosschain.InvalidOpType();
         }
@@ -216,59 +213,33 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     function _handleSourceTransfer(AcrossParams memory params) private {
+        // VS-only model: Write negative VS on source (shares leaving this chain)
+        // This reduces effective supply, keeping NAV unchanged
+
         // Get output value in base token terms
-        (uint256 outputValueInBase, address baseToken) = _getOutputValueInBase(params);
+        (uint256 outputValueInBase, ) = _getOutputValueInBase(params);
 
-        // Update NAV and get pool state
+        // Update NAV and get pool state for share calculation
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
-        uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
-
-        // Fast path: no virtual supply, write base token virtual balance (most common case)
-        if (virtualSupply == 0) {
-            baseToken.updateVirtualBalance(outputValueInBase.toInt256());
-            return;
-        }
-
-        // Virtual supply exists - calculate and burn
         uint8 poolDecimals = StorageLib.pool().decimals;
-        uint256 virtualSupplyValue = (navParams.unitaryValue * virtualSupply) / 10 ** poolDecimals;
 
-        if (outputValueInBase >= virtualSupplyValue) {
-            // Burn all virtual supply, write remainder to base token VB
-            uint256 remainderValueInBase = outputValueInBase - virtualSupplyValue;
-            baseToken.updateVirtualBalance(remainderValueInBase.toInt256());
-        } else {
-            // Virtual supply fully covers transfer - burn partial supply, no VB write
-            virtualSupply = (outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue;
-        }
+        // Calculate shares equivalent: outputValue / NAV = shares
+        // shares = (outputValueInBase * 10^decimals) / unitaryValue
+        int256 sharesLeaving = ((outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue).toInt256();
 
-        (-(virtualSupply.toInt256())).updateVirtualSupply();
+        // Write negative VS (shares leaving this chain → reduces effective supply)
+        (-sharesLeaving).updateVirtualSupply();
     }
 
-    /// @dev Handles Sync mode: auto-detects VB offset need based on Virtual Supply state.
-    /// @dev VS > 0 means other chains have claims on this chain's assets → write VB offset (NAV-neutral on source).
-    /// @dev VS ≤ 0 means no cross-chain claims → no VB offset (NAV impacts both chains naturally).
-    /// @param params The across params containing token and amount info.
-    /// @return shouldWriteVB True if VB offset was written (escrow needed for refunds), false otherwise.
-    function _handleSourceSync(AcrossParams memory params) private returns (bool shouldWriteVB) {
-        // Check Virtual Supply state to determine behavior
-        int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
-
-        // TODO: VS is uint, can't be negative
-        // VS ≤ 0: no cross-chain claims, NAV impacts both chains naturally
-        if (virtualSupply <= 0) {
-            return false;
-        }
-
-        // VS > 0: other chains have claims, write VB offset to keep source NAV unchanged
-        (uint256 outputValueInBase, address baseToken) = _getOutputValueInBase(params);
-
-        // Write VB to offset the transfer (keeps source NAV unchanged)
-        if (outputValueInBase > 0) {
-            baseToken.updateVirtualBalance(outputValueInBase.toInt256());
-        }
-
-        return true;
+    /// @dev Handles Sync mode: no virtual storage adjustments on source.
+    /// @dev Sync is NAV-impacting on both chains - tokens leave source and arrive on destination.
+    /// @dev No VS offset written, so NAV decreases on source and increases on destination.
+    function _handleSourceSync() private pure {
+        // Sync mode: no virtual storage adjustments on source
+        // NAV impacts both chains naturally:
+        // - Source: NAV decreases as tokens leave
+        // - Destination: NAV increases as tokens arrive
+        // This allows performance to flow correctly between chains.
     }
 
     /// @dev Approves or revokes token approval for SpokePool interaction.
@@ -290,20 +261,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         }
     }
 
-    /// @inheritdoc IAIntents
-    function acknowledgeVirtualBalanceLoss(uint256 reduction) external override onlyDelegateCall {
-        // Must have positive virtual balance to reduce
-        address baseToken = StorageLib.pool().baseToken;
-        int256 currentVB = baseToken.getVirtualBalance();
-        require(currentVB > 0, IAIntents.NoPositiveVirtualBalance());
-
-        // Reduction cannot exceed current balance
-        uint256 currentVBUint = currentVB.toUint256();
-        require(reduction <= currentVBUint, IAIntents.ReductionExceedsBalance(reduction, currentVBUint));
-
-        // Apply reduction (negative adjustment)
-        baseToken.updateVirtualBalance(-(reduction.toInt256()));
-
-        emit VirtualBalanceLossAcknowledged(reduction, currentVB - reduction.toInt256());
-    }
+    // Note: acknowledgeVirtualBalanceLoss removed - VS-only model doesn't use VB
+    // Failed Sync intents return tokens directly to pool (natural NAV restoration)
+    // Failed Transfer intents go to escrow which refunds via ECrosschain (VS clearing)
 }

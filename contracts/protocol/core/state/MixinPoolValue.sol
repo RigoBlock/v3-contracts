@@ -25,6 +25,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using SafeCast for int256;
 
     error BaseTokenPriceFeedError();
+    error EffectiveSupplyTooLow();
 
     /// @notice Uses transient storage to keep track of unique token balances.
     /// @dev With null total supply a pool will return the last stored value.
@@ -53,13 +54,23 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
         } else {
-            // Calculate effective supply (actual + virtual) - both systems can coexist
-            components.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
+            // Calculate effective supply using signed arithmetic (VS can be negative)
+            int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+            int256 effectiveSupply = int256(components.totalSupply) + virtualSupply;
 
-            if (components.totalSupply == 0) {
-                // No supply anywhere - return stored NAV without update
+            // Effective supply must be positive (at least 10% of total supply when VS is negative)
+            if (effectiveSupply <= 0) {
+                // No effective supply - return stored NAV without update
                 return components;
             }
+
+            // Safety check: when VS is negative, ensure at least 10% of TS remains as effective supply
+            // This prevents extreme edge cases and ensures local redemptions can be honored
+            if (virtualSupply < 0 && effectiveSupply < int256(components.totalSupply / 10)) {
+                revert EffectiveSupplyTooLow();
+            }
+
+            components.totalSupply = uint256(effectiveSupply);
 
             // TODO: this does not guarantee that the value won't be 0, because a small balance divided by a big supply could result in 0
             if (components.netTotalValue > 0) {

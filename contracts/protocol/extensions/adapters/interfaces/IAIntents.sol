@@ -25,13 +25,6 @@ interface IAIntents {
     error TokenNotActive();
     error SameChainTransfer();
     error InvalidAmount();
-    error NoPositiveVirtualBalance();
-    error ReductionExceedsBalance(uint256 reduction, uint256 currentBalance);
-
-    /// @notice Emitted when pool operator acknowledges virtual balance loss
-    /// @param reduction Amount of virtual balance reduced (positive value)
-    /// @param newBalance New virtual balance after reduction
-    event VirtualBalanceLossAcknowledged(uint256 reduction, int256 newBalance);
 
     struct AcrossParams {
         address depositor;
@@ -52,10 +45,4 @@ interface IAIntents {
     /// @dev Has different method selector than across depositV3 to avoid viaIr compilation.
     /// @param params Across params encoded as tuple.
     function depositV3(AcrossParams memory params) external;
-
-    /// @notice Allows pool operator to reduce positive virtual balance to acknowledge cross-chain losses.
-    /// @dev Only callable via delegatecall (pool owner context). For failed Sync intents where VB offset remains.
-    /// @dev This reduces NAV proportionally for all holders. Use when Sync intent expires and tokens return to pool.
-    /// @param reduction Amount to reduce virtual balance (positive value, will be subtracted from VB).
-    function acknowledgeVirtualBalanceLoss(uint256 reduction) external;
 }

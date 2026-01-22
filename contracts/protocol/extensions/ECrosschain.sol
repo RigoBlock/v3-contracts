@@ -121,67 +121,61 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         uint256 storedBalance,
         bool previouslyActive
     ) private {
+        // VS-only model: Write positive VS on destination (shares arriving on this chain)
+        // This increases effective supply, keeping NAV unchanged
         address baseToken = StorageLib.pool().baseToken;
 
-        // Convert amount to base token value - reuse 'amount' variable for amountValueInBase
-        amount = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken).toUint256();
+        // Convert amount to base token value for share calculation
+        uint256 amountValueInBase = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken).toUint256();
 
-        // Reuse 'storedBalance' for vbReductionValueInBase tracking
-        // Save original storedBalance in amountDelta temporarily (we'll restore it later)
+        // Get current VS state (may be negative from prior outbound transfers)
+        int256 currentVS = VirtualStorageLib.getVirtualSupply();
+        uint8 poolDecimals = StorageLib.pool().decimals;
+        uint256 storedNav = TransientStorage.getStoredNav();
+
+        // Calculate shares equivalent: amountValue / NAV = shares
+        int256 sharesArriving = ((amountValueInBase * (10 ** poolDecimals)) / storedNav).toInt256();
+
+        // If negative VS exists (shares were sent from this chain), clear it first
+        if (currentVS < 0) {
+            int256 negVS = -currentVS; // positive value
+            if (sharesArriving >= negVS) {
+                // Arriving shares fully cover negative VS - clear it, write remainder as positive
+                sharesArriving -= negVS; // remainder
+                // Clear negative VS and add remainder
+                sharesArriving.updateVirtualSupply(); // Will set VS to sharesArriving (since current is negative)
+            } else {
+                // Arriving shares partially reduce negative VS
+                sharesArriving.updateVirtualSupply(); // Adds to negative, making it less negative
+                sharesArriving = 0; // No remainder
+            }
+        } else {
+            // No negative VS - just add positive VS
+            sharesArriving.updateVirtualSupply();
+        }
+
+        // Validate NAV integrity
+        NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
+
+        // Calculate expected assets
+        uint256 expectedAssets = TransientStorage.getStoredAssets();
         if (!previouslyActive) {
             amountDelta += storedBalance;
         }
-        storedBalance = 0; // Now use storedBalance for vbReductionValueInBase
-
-        // Manage virtual balances - currentBaseTokenVB is reused later
-        int256 currentBaseTokenVB = baseToken.getVirtualBalance();
-
-        if (currentBaseTokenVB > 0) {
-            // amount holds amountValueInBase, check against VB
-            if (amount >= currentBaseTokenVB.toUint256()) {
-                baseToken.updateVirtualBalance(-currentBaseTokenVB);
-                storedBalance = currentBaseTokenVB.toUint256(); // vbReductionValueInBase
-                amount -= storedBalance; // amount now holds remainingValueInBase
-            } else {
-                baseToken.updateVirtualBalance(-(amount.toInt256()));
-                storedBalance = amount; // vbReductionValueInBase
-                amount = 0; // remainingValueInBase is 0
-            }
-        }
-
-        // If remaining value > 0, update virtual supply (amount holds remainingValueInBase)
-        if (amount > 0) {
-            // Reuse currentBaseTokenVB for virtualSupplyIncrease calculation
-            currentBaseTokenVB = ((amount * (10 ** StorageLib.pool().decimals)) / TransientStorage.getStoredNav())
-                .toInt256();
-            currentBaseTokenVB.updateVirtualSupply();
-        }
-
-        NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
-
-        // Reuse 'amount' for storedAssets
-        amount = TransientStorage.getStoredAssets();
-
-        // Convert amountDelta to base and subtract VB reduction
         if (amountDelta > 0) {
-            // Reuse currentBaseTokenVB for amountDeltaValueInBase
-            currentBaseTokenVB = IEOracle(address(this)).convertTokenAmount(token, amountDelta.toInt256(), baseToken);
-
-            // storedBalance holds vbReductionValueInBase
-            amount += currentBaseTokenVB.toUint256() - storedBalance;
+            expectedAssets += IEOracle(address(this)).convertTokenAmount(token, amountDelta.toInt256(), baseToken).toUint256();
         }
 
-        require(navParams.netTotalValue == amount, NavManipulationDetected(amount, navParams.netTotalValue));
+        require(navParams.netTotalValue == expectedAssets, NavManipulationDetected(expectedAssets, navParams.netTotalValue));
     }
 
     /// @dev Handles Sync mode: destination simply receives tokens, NAV increases naturally.
-    /// @dev Sync 0%: NAV impacts both chains (no VB on source, no VB clearing here)
-    /// @dev Sync 100%: NAV-neutral on source (VB offset there), NAV increases here
-    /// @dev No VB/VS adjustments on destination for Sync - tokens just arrive and increase NAV.
+    /// @dev Sync mode is NAV-impacting on both chains - no VS adjustments needed.
     function _handleSyncMode() private pure {
         // Sync mode: no virtual storage adjustments on destination
-        // - Sync 0%: NAV changes on both chains (tokens leave source, arrive here)
-        // - Sync 100%: Source wrote VB offset (NAV unchanged there), we just receive (NAV increases)
-        // In both cases, destination NAV increases by received amount - no special handling needed.
+        // NAV impacts both chains naturally:
+        // - Source: NAV decreased as tokens left (no VS offset written)
+        // - Destination: NAV increases as tokens arrive (natural balance increase)
+        // This allows performance to flow correctly between chains.
     }
 }

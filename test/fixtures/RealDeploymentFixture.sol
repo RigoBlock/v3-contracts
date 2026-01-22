@@ -245,11 +245,6 @@ contract RealDeploymentFixture is Test {
         assertEq(authorityInstance.getApplicationAdapter(IAIntents.depositV3.selector), address(adapter), "depositV3 selector should be mapped");
         console2.log("Mapped depositV3 selector in authority");
         
-        // Also map acknowledgeVirtualBalanceLoss for testing
-        authorityInstance.addMethod(IAIntents.acknowledgeVirtualBalanceLoss.selector, address(adapter));
-        assertEq(authorityInstance.getApplicationAdapter(IAIntents.acknowledgeVirtualBalanceLoss.selector), address(adapter), "acknowledgeVirtualBalanceLoss selector should be mapped");
-        console2.log("Mapped acknowledgeVirtualBalanceLoss selector in authority");
-        
         vm.stopPrank();
         
         // Fund the pool for testing

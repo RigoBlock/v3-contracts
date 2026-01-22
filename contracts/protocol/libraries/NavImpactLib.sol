@@ -29,8 +29,15 @@ library NavImpactLib {
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(address(this)).getPoolTokens();
         uint8 poolDecimals = StorageLib.pool().decimals;
         address baseToken = StorageLib.pool().baseToken;
-        poolTokens.totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
-        uint256 totalAssetsValue = (poolTokens.unitaryValue * poolTokens.totalSupply) / (10 ** poolDecimals);
+
+        // Calculate effective supply using signed arithmetic (VS can be negative)
+        int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+        int256 effectiveSupply = int256(poolTokens.totalSupply) + virtualSupply;
+        if (effectiveSupply <= 0) {
+            return; // No effective supply, allow any transfer
+        }
+
+        uint256 totalAssetsValue = (poolTokens.unitaryValue * uint256(effectiveSupply)) / (10 ** poolDecimals);
 
         // For empty pools (all supply burnt on all chains), allow any transfer. Handles edge case of receiving first tokens on a chain
         if (totalAssetsValue == 0) {
