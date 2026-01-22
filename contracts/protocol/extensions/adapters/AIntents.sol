@@ -104,8 +104,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         Call[] memory calls = new Call[](4);
         DestinationMessageParams memory destParams = DestinationMessageParams({
             opType: sourceParams.opType,
-            shouldUnwrapNative: sourceParams.shouldUnwrapOnDestination,
-            syncMultiplier: sourceParams.syncMultiplier
+            shouldUnwrapNative: sourceParams.shouldUnwrapOnDestination
         });
 
         // 1. Store pool's current token balance (for delta calculation)
@@ -158,18 +157,14 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             // Transfer mode: use escrow as depositor (for NAV-neutral refunds)
             params.depositor = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
         } else if (sourceParams.opType == OpType.Sync) {
-            // Sync multiplier must be binary: 0 (NAV impacts both) or 10000 (NAV-neutral on source)
-            require(
-                sourceParams.syncMultiplier == 0 || sourceParams.syncMultiplier == 10000,
-                IAIntents.InvalidSyncMultiplier()
-            );
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
-            _handleSourceSync(params, sourceParams.syncMultiplier);
-            // Sync 0%: pool as depositor (NAV changes, natural refund)
-            // Sync 100%: Transfer escrow as depositor (VB offset, escrow handles refund)
-            params.depositor = sourceParams.syncMultiplier == 0
-                ? address(this)
-                : EscrowFactory.deployEscrow(address(this), OpType.Transfer);
+            // Auto-detect: VS > 0 means other chains have claims → NAV-neutral on source
+            bool shouldWriteVB = _handleSourceSync(params);
+            // If VB offset written (NAV-neutral), use Transfer escrow for proper refund handling
+            // Otherwise, pool is depositor (NAV impacts naturally, direct refund)
+            params.depositor = shouldWriteVB
+                ? EscrowFactory.deployEscrow(address(this), OpType.Transfer)
+                : address(this);
         } else {
             revert IECrosschain.InvalidOpType();
         }
@@ -199,7 +194,12 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
     }
 
-    function _handleSourceTransfer(AcrossParams memory params) private {
+    /// @dev Calculates the base token equivalent value of the output amount.
+    /// @dev Handles BSC decimal conversion and oracle price lookup.
+    /// @param params The across params containing token and amount info.
+    /// @return outputValueInBase The output amount converted to base token value.
+    /// @return baseToken The pool's base token address.
+    function _getOutputValueInBase(AcrossParams memory params) private view returns (uint256 outputValueInBase, address baseToken) {
         // Scale outputAmount to inputToken decimals for proper comparison
         // (same token on different chains may have different decimals, e.g., BSC USDC)
         uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
@@ -208,15 +208,20 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.outputAmount
         );
 
+        // Convert output amount to base token value
+        baseToken = StorageLib.pool().baseToken;
+        outputValueInBase = IEOracle(address(this))
+            .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
+            .toUint256();
+    }
+
+    function _handleSourceTransfer(AcrossParams memory params) private {
+        // Get output value in base token terms
+        (uint256 outputValueInBase, address baseToken) = _getOutputValueInBase(params);
+
         // Update NAV and get pool state
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
-
-        // Convert output amount to base token value
-        address baseToken = StorageLib.pool().baseToken;
-        uint256 outputValueInBase = IEOracle(address(this))
-            .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
-            .toUint256();
 
         // Fast path: no virtual supply, write base token virtual balance (most common case)
         if (virtualSupply == 0) {
@@ -240,34 +245,30 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         (-(virtualSupply.toInt256())).updateVirtualSupply();
     }
 
-    /// @dev Handles Sync mode: applies multiplier-based VB offset to keep source NAV partially/fully neutral.
+    /// @dev Handles Sync mode: auto-detects VB offset need based on Virtual Supply state.
+    /// @dev VS > 0 means other chains have claims on this chain's assets → write VB offset (NAV-neutral on source).
+    /// @dev VS ≤ 0 means no cross-chain claims → no VB offset (NAV impacts both chains naturally).
     /// @param params The across params containing token and amount info.
-    /// @param syncMultiplier Percentage (0-10000 bps) of transfer value to neutralize via VB offset.
-    function _handleSourceSync(AcrossParams memory params, uint256 syncMultiplier) private {
-        // 0% multiplier = current behavior (no VB offset, full NAV impact)
-        if (syncMultiplier == 0) return;
+    /// @return shouldWriteVB True if VB offset was written (escrow needed for refunds), false otherwise.
+    function _handleSourceSync(AcrossParams memory params) private returns (bool shouldWriteVB) {
+        // Check Virtual Supply state to determine behavior
+        int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
 
-        // Scale outputAmount to inputToken decimals
-        uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
-            params.outputToken,
-            params.inputToken,
-            params.outputAmount
-        );
-
-        // Convert to base token value
-        address baseToken = StorageLib.pool().baseToken;
-        uint256 outputValueInBase = IEOracle(address(this))
-            .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
-            .toUint256();
-
-        // Calculate neutralized amount based on multiplier
-        uint256 neutralizedAmount = (outputValueInBase * syncMultiplier) / 10000;
-
-        // Write VB to offset the neutralized portion (keeps source NAV higher)
-        if (neutralizedAmount > 0) {
-            baseToken.updateVirtualBalance(neutralizedAmount.toInt256());
+        // TODO: VS is uint, can't be negative
+        // VS ≤ 0: no cross-chain claims, NAV impacts both chains naturally
+        if (virtualSupply <= 0) {
+            return false;
         }
-        // Non-neutralized portion (outputValueInBase - neutralizedAmount) will decrease NAV naturally
+
+        // VS > 0: other chains have claims, write VB offset to keep source NAV unchanged
+        (uint256 outputValueInBase, address baseToken) = _getOutputValueInBase(params);
+
+        // Write VB to offset the transfer (keeps source NAV unchanged)
+        if (outputValueInBase > 0) {
+            baseToken.updateVirtualBalance(outputValueInBase.toInt256());
+        }
+
+        return true;
     }
 
     /// @dev Approves or revokes token approval for SpokePool interaction.

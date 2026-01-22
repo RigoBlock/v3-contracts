@@ -12,13 +12,11 @@ struct SourceMessageParams {
     uint256 navTolerance;
     uint256 sourceNativeAmount;
     bool shouldUnwrapOnDestination;
-    uint256 syncMultiplier; // 0-10000 bps, only used for Sync mode. 0 = no VB offset, 10000 = full NAV neutral
 }
 
 struct DestinationMessageParams {
     OpType opType;
     bool shouldUnwrapNative;
-    uint256 syncMultiplier; // 0-10000 bps, passed from source for Sync mode VB clearing
 }
 
 /*//////////////////////////////////////////////////////////////

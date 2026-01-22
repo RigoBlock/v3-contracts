@@ -25,7 +25,6 @@ interface IAIntents {
     error TokenNotActive();
     error SameChainTransfer();
     error InvalidAmount();
-    error InvalidSyncMultiplier();
     error NoPositiveVirtualBalance();
     error ReductionExceedsBalance(uint256 reduction, uint256 currentBalance);
 

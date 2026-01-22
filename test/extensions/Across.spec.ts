@@ -61,8 +61,7 @@ describe("Across Integration", () => {
       it("should reject calls from non-SpokePool addresses", async () => {
         const destMessageParams = {
           opType: OpType.Transfer,
-          shouldUnwrapNative: false,
-          syncMultiplier: 0
+          shouldUnwrapNative: false
         };
 
         await expect(
@@ -73,8 +72,7 @@ describe("Across Integration", () => {
       it("should reject calls from deployer", async () => {
         const destMessageParams = {
           opType: OpType.Transfer,
-          shouldUnwrapNative: false,
-          syncMultiplier: 0
+          shouldUnwrapNative: false
         };
 
         await expect(
@@ -85,8 +83,7 @@ describe("Across Integration", () => {
       it("should reject calls from arbitrary user", async () => {
         const destMessageParams = {
           opType: OpType.Transfer,
-          shouldUnwrapNative: false,
-          syncMultiplier: 0
+          shouldUnwrapNative: false
         };
 
         await expect(

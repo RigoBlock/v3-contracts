@@ -154,8 +154,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create valid Transfer params
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         // Should revert silently because extension does not implement updateUnitaryValue method
@@ -168,8 +167,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Test that Transfer message can be properly encoded/decoded
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         bytes memory encodedMessage = abi.encode(params);
@@ -182,8 +180,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     function test_ECrosschain_SyncMode_MessageParsing() public pure {
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         bytes memory encoded = abi.encode(params);
@@ -196,8 +193,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     function test_ECrosschain_UnwrapWETH_MessageSetup() public pure {
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true,
-        syncMultiplier: 0
+            shouldUnwrapNative: true
         });
         
         bytes memory encoded = abi.encode(params);
@@ -219,8 +215,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create valid Transfer params
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         // Should revert because pool is locked (updateUnitaryValue will fail)
@@ -243,8 +238,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create message with Unknown OpType to test InvalidOpType revert
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
 
         // unlock
@@ -269,8 +263,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         IECrosschain(poolProxy).donate(ethUsdt, 1, params);
@@ -297,8 +290,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create message with Unknown OpType to test InvalidOpType revert
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
 
         // unlock
@@ -331,8 +323,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create message with Unknown OpType to test InvalidOpType revert
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
 
         // unlock
@@ -362,8 +353,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         // First donation to unlock the pool
@@ -413,8 +403,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         // First donation to unlock the pool
@@ -492,8 +481,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         // First donation to unlock the pool
@@ -549,8 +537,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         // First donation to unlock the pool
@@ -602,8 +589,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         // Unlock
@@ -646,8 +632,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -693,8 +678,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true,
-        syncMultiplier: 0
+            shouldUnwrapNative: true
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -735,8 +719,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, params);
@@ -776,8 +759,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -824,8 +806,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true,
-        syncMultiplier: 0
+            shouldUnwrapNative: true
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -865,8 +846,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, params);
@@ -912,8 +892,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory syncParams = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-            syncMultiplier: 10000 // 100%
+            shouldUnwrapNative: false
         });
         
         // Initialize donation
@@ -968,8 +947,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory syncParams = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-            syncMultiplier: 0 // 0% - legacy behavior
+            shouldUnwrapNative: false
         });
         
         // Initialize donation
@@ -1015,8 +993,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory syncParams = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-            syncMultiplier: 5000 // 50%
+            shouldUnwrapNative: false
         });
         
         // Initialize donation

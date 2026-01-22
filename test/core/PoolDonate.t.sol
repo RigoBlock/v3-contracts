@@ -68,7 +68,7 @@ contract PoolDonateTest is Test {
         // Also mock specific revert for USDC (non-owned token) when used in escrow test  
         vm.mockCallRevert(
             mockECrosschain,
-            abi.encodeWithSelector(IECrosschain.donate.selector, Constants.ETH_USDC, 1, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false, syncMultiplier: 0})),
+            abi.encodeWithSelector(IECrosschain.donate.selector, Constants.ETH_USDC, 1, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
             abi.encodeWithSignature("TokenIsNotOwned()")
         );
         
@@ -250,7 +250,7 @@ contract PoolDonateTest is Test {
         // Mock the donate function to revert with TokenIsNotOwned for non-owned tokens
         vm.mockCallRevert(
             mockECrosschain,
-            abi.encodeWithSelector(IECrosschain.donate.selector, randomToken, 1000, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false, syncMultiplier: 0})),
+            abi.encodeWithSelector(IECrosschain.donate.selector, randomToken, 1000, DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: false})),
             abi.encodeWithSignature("TokenIsNotOwned()")
         );
         

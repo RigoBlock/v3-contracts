@@ -53,8 +53,7 @@ contract CrossTokenAttackPOC is Test, RealDeploymentFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         vm.startPrank(multicallHandler);
@@ -96,8 +95,7 @@ contract CrossTokenAttackPOC is Test, RealDeploymentFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false,
-            syncMultiplier: 0
+            shouldUnwrapNative: false
         });
         
         vm.startPrank(multicallHandler);

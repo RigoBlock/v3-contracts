@@ -175,8 +175,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
         
@@ -197,8 +196,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Create proper DestinationMessageParams
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
 
         // TODO: check if we can make a better revert than just "Revert"
@@ -284,8 +282,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
         
         bytes memory encoded = abi.encode(transferMsg);
@@ -303,8 +300,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Sync,
             navTolerance: 0, // No tolerance for sync
             shouldUnwrapOnDestination: true,
-            sourceNativeAmount: 1 ether,
-        syncMultiplier: 0
+            sourceNativeAmount: 1 ether
         });
         
         bytes memory encoded = abi.encode(syncMsg);
@@ -330,8 +326,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: tolerances[i],
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             });
             
             bytes memory encoded = abi.encode(testMsg);
@@ -435,8 +430,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
         
@@ -526,8 +520,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
         
@@ -653,8 +646,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: 100,
                 sourceNativeAmount: 0,
-                shouldUnwrapOnDestination: false,
-                syncMultiplier: 0
+                shouldUnwrapOnDestination: false
             }))
         });
         
@@ -705,8 +697,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
 
         // 1. Prepare transfer on source chain (Ethereum)
@@ -793,8 +784,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
 
         // 1. Prepare transfer on source chain (Ethereum)
@@ -887,8 +877,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
 
         // 1. Prepare transfer on source chain (Ethereum)
@@ -995,8 +984,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
 
         // 1. Prepare transfer on source chain (Ethereum)
@@ -1093,8 +1081,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Sync,
             navTolerance: TOLERANCE_BPS, // 1% tolerance (100 bps)
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
 
         // 1. Prepare Sync transfer on source chain (Ethereum)
@@ -1196,8 +1183,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Prepare destination params (Transfer mode)
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         });
 
         // Step 1: Unlock and store balance (amount=1 initializes)
@@ -1233,8 +1219,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Prepare message for WETH unwrapping
         DestinationMessageParams memory destMsg = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true,  // This triggers WETH unwrapping
-            syncMultiplier: 0
+            shouldUnwrapNative: true  // This triggers WETH unwrapping
         });
         
         // Simulate MulticallHandler calling our extension
@@ -1304,8 +1289,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
         
         // Build instructions
@@ -1412,8 +1396,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
         
         // Build complete instruction sequence
@@ -1517,8 +1500,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
         
         address originSender = ethMulticallHandler;
@@ -1644,19 +1626,22 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             opType: OpType.Transfer,
             navTolerance: TOLERANCE_BPS,
             shouldUnwrapOnDestination: false,
-            sourceNativeAmount: 0,
-        syncMultiplier: 0
+            sourceNativeAmount: 0
         });
         
         console2.log("Testing Transfer mode with tolerance:", TOLERANCE_BPS, "bps");
         
         // Step 1: Initialize donation (store initial balance for comparison) 
         // This simulates what the MulticallHandler would do before transferring tokens
+        DestinationMessageParams memory destParams = DestinationMessageParams({
+            opType: sourceMsg.opType,
+            shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination
+        });
         vm.prank(ethMulticallHandler);
         try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             1, // flag amount for initialization 
-            DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination, syncMultiplier: 0 })
+            destParams
         ) {
             console2.log("Step 1 - Initialize donation: SUCCESS");
         } catch Error(string memory reason) {
@@ -1687,7 +1672,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             transferAmount, // actual transfer amount
-            DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination, syncMultiplier: 0 })
+            destParams
         ) {
             console2.log("Step 3 - Final donation: SUCCESS");
         } catch Error(string memory reason) {
@@ -1789,8 +1774,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 1: Initialize with amount=1 using WETH
         IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 1, DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: true,
-        syncMultiplier: 0
+            shouldUnwrapNative: true
         }));
         
         // Step 2: Transfer WETH to pool (simulates bridge transfer)
@@ -1799,8 +1783,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 3: Perform actual donation with unwrapping
         IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: true,
-        syncMultiplier: 0
+            shouldUnwrapNative: true
         }));
 
         vm.stopPrank();
@@ -1823,8 +1806,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 1: Initialize with amount=1 using WETH
         IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true,
-        syncMultiplier: 0
+            shouldUnwrapNative: true
         }));
         
         // Step 2: Transfer WETH to pool (simulates bridge transfer)
@@ -1833,8 +1815,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Step 3: Perform actual donation with unwrapping
         IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true,
-        syncMultiplier: 0
+            shouldUnwrapNative: true
         }));
 
         vm.stopPrank();
@@ -1859,8 +1840,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Step 2: Transfer tokens to pool (simulates bridge transfer)
@@ -1872,8 +1852,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
     }
 
@@ -1900,8 +1879,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
         
@@ -1924,8 +1902,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         vm.stopPrank();
         
@@ -1964,8 +1941,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                     opType: OpType.Unknown, // This should trigger InvalidOpType at line 210
                     navTolerance: TOLERANCE_BPS,
                     shouldUnwrapOnDestination: false,
-                    sourceNativeAmount: 0,
-                syncMultiplier: 0
+                    sourceNativeAmount: 0
                 }))
             })
         );
@@ -1988,8 +1964,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Step 2: Try to start another donation while first is in progress
@@ -1998,8 +1973,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
     }
     
@@ -2015,8 +1989,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Transfer tokens to pool
@@ -2027,16 +2000,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Now a new donation should be possible (lock was cleared)
         vm.prank(Constants.ETH_MULTICALL_HANDLER);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // This should succeed without DonationLock error
@@ -2055,8 +2026,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,  // Start with valid optype
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
@@ -2064,14 +2034,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.expectRevert(IECrosschain.InvalidOpType.selector);
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Unknown,  // Invalid type - causes revert
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
 
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
 
         vm.stopPrank();
@@ -2123,8 +2091,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
         
@@ -2164,8 +2131,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Initialize donation
         IECrosschain(pool()).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         // Transfer tokens to pool
         IERC20(Constants.ETH_USDC).transfer(pool(), inboundAmount);
@@ -2187,8 +2153,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Complete donation (creates virtual supply)
         IECrosschain(pool()).donate(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         vm.stopPrank();
         
@@ -2216,8 +2181,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
         
@@ -2256,14 +2220,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.startPrank(ethMulticallHandler);
         IECrosschain(pool()).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         IERC20(Constants.ETH_USDC).transfer(pool(), inboundAmount);
         IECrosschain(pool()).donate(Constants.ETH_USDC, inboundAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         vm.stopPrank();
         
@@ -2295,8 +2257,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
         
@@ -2375,8 +2336,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         }));
 
@@ -2477,8 +2437,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         }));
 
@@ -2570,8 +2529,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
 
@@ -2664,8 +2622,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Step 1: Initialize donation with amount = 1");
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Transfer tokens to pool
@@ -2676,8 +2633,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Step 3: Complete donation with expected amount");
         try IECrosschain(base.pool).donate(Constants.BASE_USDC, expectedAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         })) {
             console2.log("Donation completed successfully");
         } catch Error(string memory reason) {
@@ -2791,8 +2747,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Step 1: Initialize donation with amount = 1 (should initialize NAV)");
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Verify NAV was initialized
@@ -2808,8 +2763,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Step 3: Complete donation with expected amount");
         try IECrosschain(base.pool).donate(Constants.BASE_USDC, s_amount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         })) {
             console2.log("Donation completed successfully");
         } catch Error(string memory reason) {
@@ -2881,8 +2835,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Initialize donation
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Transfer tokens
@@ -2891,8 +2844,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Should succeed - virtual supply created from surplus makes effectiveSupply > 0
         IECrosschain(base.pool).donate(Constants.BASE_USDC, expectedAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         vm.stopPrank();
@@ -2960,8 +2912,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         // Verify NAV was written to storage (first action initialized it)
@@ -2990,8 +2941,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         try IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donationAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         })) {
             console2.log("Donation succeeded");
         } catch (bytes memory) {
@@ -3050,8 +3000,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("First donate(1) - initializes NAV to default (1e6)");
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         uint256 navAfterInit = ISmartPoolState(ethereum.pool).getPoolTokens().unitaryValue;
@@ -3068,8 +3017,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, legitimateTransferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false,
-        syncMultiplier: 0
+            shouldUnwrapNative: false
         }));
         
         vm.stopPrank();
@@ -3113,8 +3061,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         });
 
@@ -3166,8 +3113,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0,
-            syncMultiplier: 0
+                sourceNativeAmount: 0
             }))
         }));
         

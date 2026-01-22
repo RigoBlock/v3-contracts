@@ -51,11 +51,11 @@ contract Escrow is ReentrancyGuardTransient {
 
         require(balance > 0, InvalidAmount());
 
-        DestinationMessageParams memory params;
-        // Escrow is only used for Transfer mode - Sync uses pool directly
-        params.opType = OpType.Transfer;
-        params.shouldUnwrapNative = false;
-        params.syncMultiplier = 0;
+        // isImpactingNav will make Sync behave like Transfer on EAcross
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: opType,
+            shouldUnwrapNative: false
+        });
 
         // Store balance before transfer
         IECrosschain(pool).donate(token, 1, params);
