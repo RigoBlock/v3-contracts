@@ -154,7 +154,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create valid Transfer params
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         // Should revert silently because extension does not implement updateUnitaryValue method
@@ -167,7 +168,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Test that Transfer message can be properly encoded/decoded
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         bytes memory encodedMessage = abi.encode(params);
@@ -180,7 +182,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     function test_ECrosschain_SyncMode_MessageParsing() public pure {
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         bytes memory encoded = abi.encode(params);
@@ -193,7 +196,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     function test_ECrosschain_UnwrapWETH_MessageSetup() public pure {
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true
+            shouldUnwrapNative: true,
+        syncMultiplier: 0
         });
         
         bytes memory encoded = abi.encode(params);
@@ -215,7 +219,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create valid Transfer params
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         // Should revert because pool is locked (updateUnitaryValue will fail)
@@ -238,7 +243,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create message with Unknown OpType to test InvalidOpType revert
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
 
         // unlock
@@ -263,7 +269,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         IECrosschain(poolProxy).donate(ethUsdt, 1, params);
@@ -290,7 +297,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create message with Unknown OpType to test InvalidOpType revert
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
 
         // unlock
@@ -323,7 +331,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Create message with Unknown OpType to test InvalidOpType revert
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Unknown,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
 
         // unlock
@@ -353,7 +362,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         // First donation to unlock the pool
@@ -403,7 +413,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         // First donation to unlock the pool
@@ -481,7 +492,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         // First donation to unlock the pool
@@ -537,7 +549,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         // First donation to unlock the pool
@@ -589,7 +602,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         // Unlock
@@ -632,7 +646,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -678,7 +693,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true
+            shouldUnwrapNative: true,
+        syncMultiplier: 0
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -719,7 +735,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, params);
@@ -759,7 +776,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -806,7 +824,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: true
+            shouldUnwrapNative: true,
+        syncMultiplier: 0
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
@@ -846,7 +865,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         DestinationMessageParams memory params = DestinationMessageParams({
             opType: OpType.Sync,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         });
         
         IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, params);
@@ -861,6 +881,164 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Sync mode succeeds - NAV validation is client responsibility
         IECrosschain(poolProxy).donate(Constants.ETH_USDC, 100e6, params);
 
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+
+    /// @notice Test Sync mode with 100% multiplier attempts to clear VB
+    /// @dev This test verifies the code path is executed correctly with mocked oracle
+    function test_ECrosschain_SyncWithMultiplier_AttemptsClearVB() public {
+        // Pool is already set up in setUp()
+        
+        // Setup mock oracle for USDC price feed
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_USDC),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        vm.chainId(1); // Set to Ethereum for USDC whitelist
+        
+        // Mock initial balance
+        vm.mockCall(
+            Constants.ETH_USDC,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(1000e6)
+        );
+        
+        DestinationMessageParams memory syncParams = DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: false,
+            syncMultiplier: 10000 // 100%
+        });
+        
+        // Initialize donation
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, syncParams);
+        
+        // Mock increased balance (simulating received tokens)
+        vm.mockCall(
+            Constants.ETH_USDC,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(1200e6)
+        );
+        
+        // Mock convertTokenAmount to return a fixed value (avoids oracle complexity in unit test)
+        // 200e6 USDC -> 200e6 in base value (1:1 for simplicity)
+        vm.mockCall(
+            poolProxy,
+            abi.encodeWithSelector(IEOracle.convertTokenAmount.selector),
+            abi.encode(int256(200e6))
+        );
+        
+        // Receive tokens via Sync with 100% multiplier
+        // This should succeed and attempt to clear VB (no VB exists in this test, so just activates token)
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 200e6, syncParams);
+        
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+    
+    /// @notice Test Sync mode with 0% multiplier (legacy behavior - no VB clearing)
+    function test_ECrosschain_SyncWithZeroMultiplier_LegacyBehavior() public {
+        // Pool is already set up in setUp()
+        
+        // Setup mock oracle for USDC price feed
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_USDC),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        vm.chainId(1);
+        
+        // Mock initial balance
+        vm.mockCall(
+            Constants.ETH_USDC,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(1000e6)
+        );
+        
+        DestinationMessageParams memory syncParams = DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: false,
+            syncMultiplier: 0 // 0% - legacy behavior
+        });
+        
+        // Initialize donation
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, syncParams);
+        
+        // Mock increased balance
+        vm.mockCall(
+            Constants.ETH_USDC,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(1200e6)
+        );
+        
+        // Receive tokens via Sync with 0% multiplier - should succeed with no VB clearing
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 200e6, syncParams);
+
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+    
+    /// @notice Test Sync mode with 50% multiplier (partial VB clearing)
+    function test_ECrosschain_SyncWithPartialMultiplier() public {
+        // Pool is already set up in setUp()
+        
+        // Setup mock oracle for USDC price feed
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_USDC),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        vm.chainId(1);
+        
+        // Mock initial balance
+        vm.mockCall(
+            Constants.ETH_USDC,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(1000e6)
+        );
+        
+        DestinationMessageParams memory syncParams = DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: false,
+            syncMultiplier: 5000 // 50%
+        });
+        
+        // Initialize donation
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, syncParams);
+        
+        // Mock increased balance
+        vm.mockCall(
+            Constants.ETH_USDC,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(1200e6)
+        );
+        
+        // Mock convertTokenAmount to return a fixed value
+        vm.mockCall(
+            poolProxy,
+            abi.encodeWithSelector(IEOracle.convertTokenAmount.selector),
+            abi.encode(int256(200e6))
+        );
+        
+        // Receive tokens via Sync with 50% multiplier - should succeed
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 200e6, syncParams);
+        
         vm.clearMockedCalls();
         vm.chainId(31337);
     }

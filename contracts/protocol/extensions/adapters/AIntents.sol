@@ -104,7 +104,8 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         Call[] memory calls = new Call[](4);
         DestinationMessageParams memory destParams = DestinationMessageParams({
             opType: sourceParams.opType,
-            shouldUnwrapNative: sourceParams.shouldUnwrapOnDestination
+            shouldUnwrapNative: sourceParams.shouldUnwrapOnDestination,
+            syncMultiplier: sourceParams.syncMultiplier
         });
 
         // 1. Store pool's current token balance (for delta calculation)
@@ -156,6 +157,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             _handleSourceTransfer(params);
         } else if (sourceParams.opType == OpType.Sync) {
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
+            _handleSourceSync(params, sourceParams.syncMultiplier);
         } else {
             revert IECrosschain.InvalidOpType();
         }
@@ -225,6 +227,36 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         }
 
         (-(virtualSupply.toInt256())).updateVirtualSupply();
+    }
+
+    /// @dev Handles Sync mode: applies multiplier-based VB offset to keep source NAV partially/fully neutral.
+    /// @param params The across params containing token and amount info.
+    /// @param syncMultiplier Percentage (0-10000 bps) of transfer value to neutralize via VB offset.
+    function _handleSourceSync(AcrossParams memory params, uint256 syncMultiplier) private {
+        // 0% multiplier = current behavior (no VB offset, full NAV impact)
+        if (syncMultiplier == 0) return;
+
+        // Scale outputAmount to inputToken decimals
+        uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
+            params.outputToken,
+            params.inputToken,
+            params.outputAmount
+        );
+
+        // Convert to base token value
+        address baseToken = StorageLib.pool().baseToken;
+        uint256 outputValueInBase = IEOracle(address(this))
+            .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
+            .toUint256();
+
+        // Calculate neutralized amount based on multiplier
+        uint256 neutralizedAmount = (outputValueInBase * syncMultiplier) / 10000;
+
+        // Write VB to offset the neutralized portion (keeps source NAV higher)
+        if (neutralizedAmount > 0) {
+            baseToken.updateVirtualBalance(neutralizedAmount.toInt256());
+        }
+        // Non-neutralized portion (outputValueInBase - neutralizedAmount) will decrease NAV naturally
     }
 
     /// @dev Approves or revokes token approval for SpokePool interaction.

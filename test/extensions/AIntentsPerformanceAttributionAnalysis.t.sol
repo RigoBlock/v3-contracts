@@ -549,7 +549,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0
+                sourceNativeAmount: 0,
+            syncMultiplier: 0
             }))
         }));
         
@@ -575,12 +576,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         vm.startPrank(handler);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         vm.stopPrank();
         
@@ -704,7 +707,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0
+                sourceNativeAmount: 0,
+            syncMultiplier: 0
             }))
         }));
         
@@ -730,12 +734,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         vm.startPrank(handler);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         vm.stopPrank();
         
@@ -923,7 +929,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0
+                sourceNativeAmount: 0,
+            syncMultiplier: 0
             }))
         }));
         
@@ -943,12 +950,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         vm.startPrank(handler);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         vm.stopPrank();
         
@@ -1120,7 +1129,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0
+                sourceNativeAmount: 0,
+            syncMultiplier: 0
             }))
         }));
 
@@ -1141,12 +1151,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         vm.startPrank(handler);
         IECrosschain(base.pool).donate(Constants.BASE_WETH, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
         IECrosschain(base.pool).donate(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         vm.stopPrank();
         
@@ -1318,7 +1330,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                     opType: OpType.Transfer,
                     navTolerance: TOLERANCE_BPS,
                     shouldUnwrapOnDestination: false,
-                    sourceNativeAmount: 0
+                    sourceNativeAmount: 0,
+                syncMultiplier: 0
                 }))
             }));
             vm.stopPrank();
@@ -1339,12 +1352,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             vm.startPrank(handler);
             IECrosschain(base.pool).donate(Constants.BASE_WETH, 1, DestinationMessageParams({
                 opType: OpType.Transfer,
-                shouldUnwrapNative: false
+                shouldUnwrapNative: false,
+            syncMultiplier: 0
             }));
             IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
             IECrosschain(base.pool).donate(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
                 opType: OpType.Transfer,
-                shouldUnwrapNative: false
+                shouldUnwrapNative: false,
+            syncMultiplier: 0
             }));
             vm.stopPrank();
             
@@ -1443,7 +1458,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                 opType: OpType.Transfer,
                 navTolerance: TOLERANCE_BPS,
                 shouldUnwrapOnDestination: false,
-                sourceNativeAmount: 0
+                sourceNativeAmount: 0,
+            syncMultiplier: 0
             }))
         }));
         
@@ -1463,12 +1479,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         vm.startPrank(handler);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         IERC20(Constants.BASE_USDC).transfer(base.pool, transferAmount);
         IECrosschain(base.pool).donate(Constants.BASE_USDC, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         vm.stopPrank();
         
@@ -1596,7 +1614,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                     opType: OpType.Transfer,
                     navTolerance: TOLERANCE_BPS,
                     shouldUnwrapOnDestination: false,
-                    sourceNativeAmount: 0
+                    sourceNativeAmount: 0,
+                syncMultiplier: 0
                 }))
             }));
             vm.stopPrank();
@@ -1619,12 +1638,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             vm.startPrank(handler);
             IECrosschain(base.pool).donate(Constants.BASE_WETH, 1, DestinationMessageParams({
                 opType: OpType.Transfer,
-                shouldUnwrapNative: false
+                shouldUnwrapNative: false,
+            syncMultiplier: 0
             }));
             IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
             IECrosschain(base.pool).donate(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
                 opType: OpType.Transfer,
-                shouldUnwrapNative: false
+                shouldUnwrapNative: false,
+            syncMultiplier: 0
             }));
             vm.stopPrank();
             
@@ -1709,7 +1730,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                     opType: OpType.Transfer,
                     navTolerance: TOLERANCE_BPS,
                     shouldUnwrapOnDestination: false,
-                    sourceNativeAmount: 0
+                    sourceNativeAmount: 0,
+                syncMultiplier: 0
                 }))
             }));
             vm.stopPrank();
@@ -1736,12 +1758,14 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         vm.startPrank(handler);
         IECrosschain(base.pool).donate(Constants.BASE_WETH, 1, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         IERC20(Constants.BASE_WETH).transfer(base.pool, transferAmount);
         IECrosschain(base.pool).donate(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
             opType: OpType.Transfer,
-            shouldUnwrapNative: false
+            shouldUnwrapNative: false,
+        syncMultiplier: 0
         }));
         vm.stopPrank();
         
@@ -1874,7 +1898,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
                     opType: OpType.Transfer,
                     navTolerance: TOLERANCE_BPS,
                     shouldUnwrapOnDestination: false,
-                    sourceNativeAmount: 0
+                    sourceNativeAmount: 0,
+                syncMultiplier: 0
                 }))
             }));
             vm.stopPrank();
@@ -1920,7 +1945,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             // First donate (1 wei) to signal transfer start
             IECrosschain(base.pool).donate(Constants.BASE_WETH, 1, DestinationMessageParams({
                 opType: OpType.Transfer,
-                shouldUnwrapNative: false
+                shouldUnwrapNative: false,
+            syncMultiplier: 0
             }));
             
             // Transfer tokens
@@ -1929,7 +1955,8 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             // Second donate with actual amount - creates negative virtual supply
             IECrosschain(base.pool).donate(Constants.BASE_WETH, transferAmount, DestinationMessageParams({
                 opType: OpType.Transfer,
-                shouldUnwrapNative: false
+                shouldUnwrapNative: false,
+            syncMultiplier: 0
             }));
             
             vm.stopPrank();

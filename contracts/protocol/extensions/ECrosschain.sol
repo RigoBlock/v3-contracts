@@ -94,12 +94,12 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
 
         if (params.opType == OpType.Transfer) {
             _handleTransferMode(token, amount, amountDelta, storedBalance, previouslyActive);
-        } else if (params.opType != OpType.Sync) {
+        } else if (params.opType == OpType.Sync) {
+            _handleSyncMode(token, amount, params.syncMultiplier);
+        } else {
             // Only Transfer and Sync are valid - reject anything else
             revert InvalidOpType();
         }
-        // Sync mode: Token activated, NAV updated, but no virtual storage modification
-        // Virtual storage only tracks cross-chain transfers (Transfer), not performance (Sync)
 
         emit TokensReceived(
             msg.sender,
@@ -172,5 +172,38 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         require(navParams.netTotalValue == amount, NavManipulationDetected(amount, navParams.netTotalValue));
+    }
+
+    /// @dev Handles Sync mode: clears positive VB up to the neutralized amount from source.
+    /// @dev The neutralized amount (amount * syncMultiplier / 10000) can clear VB.
+    /// @dev Any remaining received value (non-neutralized + VB not cleared) increases NAV naturally.
+    /// @param token The token received.
+    /// @param amount The received amount (in token units).
+    /// @param syncMultiplier Percentage (0-10000 bps) that was neutralized on source via VB offset.
+    function _handleSyncMode(address token, uint256 amount, uint256 syncMultiplier) private {
+        // 0% multiplier = no VB clearing (legacy behavior: NAV increases by full received amount)
+        if (syncMultiplier == 0) return;
+
+        address baseToken = StorageLib.pool().baseToken;
+
+        // Convert received amount to base token value
+        uint256 amountInBase = IEOracle(address(this))
+            .convertTokenAmount(token, amount.toInt256(), baseToken)
+            .toUint256();
+
+        // Calculate neutralized amount (same calculation as source)
+        uint256 neutralizedAmount = (amountInBase * syncMultiplier) / 10000;
+
+        // Clear positive VB up to neutralized amount
+        // This allows NAV to increase by the received tokens minus VB cleared
+        int256 currentVB = baseToken.getVirtualBalance();
+
+        if (currentVB > 0 && neutralizedAmount > 0) {
+            uint256 currentVBUint = currentVB.toUint256();
+            uint256 vbToClear = neutralizedAmount > currentVBUint ? currentVBUint : neutralizedAmount;
+            baseToken.updateVirtualBalance(-(vbToClear.toInt256()));
+        }
+        // Remaining value (received tokens - VB cleared) increases NAV naturally
+        // No additional VS adjustment needed - performance flows correctly
     }
 }
