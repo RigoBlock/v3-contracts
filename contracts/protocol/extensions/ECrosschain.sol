@@ -95,7 +95,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         if (params.opType == OpType.Transfer) {
             _handleTransferMode(token, amount, amountDelta, storedBalance, previouslyActive);
         } else if (params.opType == OpType.Sync) {
-            _handleSyncMode(token, amount, params.syncMultiplier);
+            _handleSyncMode();
         } else {
             // Only Transfer and Sync are valid - reject anything else
             revert InvalidOpType();
@@ -174,36 +174,14 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         require(navParams.netTotalValue == amount, NavManipulationDetected(amount, navParams.netTotalValue));
     }
 
-    /// @dev Handles Sync mode: clears positive VB up to the neutralized amount from source.
-    /// @dev The neutralized amount (amount * syncMultiplier / 10000) can clear VB.
-    /// @dev Any remaining received value (non-neutralized + VB not cleared) increases NAV naturally.
-    /// @param token The token received.
-    /// @param amount The received amount (in token units).
-    /// @param syncMultiplier Percentage (0-10000 bps) that was neutralized on source via VB offset.
-    function _handleSyncMode(address token, uint256 amount, uint256 syncMultiplier) private {
-        // 0% multiplier = no VB clearing (legacy behavior: NAV increases by full received amount)
-        if (syncMultiplier == 0) return;
-
-        address baseToken = StorageLib.pool().baseToken;
-
-        // Convert received amount to base token value
-        uint256 amountInBase = IEOracle(address(this))
-            .convertTokenAmount(token, amount.toInt256(), baseToken)
-            .toUint256();
-
-        // Calculate neutralized amount (same calculation as source)
-        uint256 neutralizedAmount = (amountInBase * syncMultiplier) / 10000;
-
-        // Clear positive VB up to neutralized amount
-        // This allows NAV to increase by the received tokens minus VB cleared
-        int256 currentVB = baseToken.getVirtualBalance();
-
-        if (currentVB > 0 && neutralizedAmount > 0) {
-            uint256 currentVBUint = currentVB.toUint256();
-            uint256 vbToClear = neutralizedAmount > currentVBUint ? currentVBUint : neutralizedAmount;
-            baseToken.updateVirtualBalance(-(vbToClear.toInt256()));
-        }
-        // Remaining value (received tokens - VB cleared) increases NAV naturally
-        // No additional VS adjustment needed - performance flows correctly
+    /// @dev Handles Sync mode: destination simply receives tokens, NAV increases naturally.
+    /// @dev Sync 0%: NAV impacts both chains (no VB on source, no VB clearing here)
+    /// @dev Sync 100%: NAV-neutral on source (VB offset there), NAV increases here
+    /// @dev No VB/VS adjustments on destination for Sync - tokens just arrive and increase NAV.
+    function _handleSyncMode() private pure {
+        // Sync mode: no virtual storage adjustments on destination
+        // - Sync 0%: NAV changes on both chains (tokens leave source, arrive here)
+        // - Sync 100%: Source wrote VB offset (NAV unchanged there), we just receive (NAV increases)
+        // In both cases, destination NAV increases by received amount - no special handling needed.
     }
 }

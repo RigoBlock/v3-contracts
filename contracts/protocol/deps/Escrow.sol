@@ -20,7 +20,7 @@ contract Escrow is ReentrancyGuardTransient {
     /// @notice The pool this escrow is associated with
     address public immutable pool;
 
-    /// @notice The operation type this escrow handles (Transfer or Sync)
+    /// @notice The operation type this escrow handles (Transfer only - Sync uses pool directly)
     OpType public immutable opType;
 
     error InvalidAmount();
@@ -52,7 +52,10 @@ contract Escrow is ReentrancyGuardTransient {
         require(balance > 0, InvalidAmount());
 
         DestinationMessageParams memory params;
-        params.opType = opType; // Use escrow's configured OpType (Transfer or Sync)
+        // Escrow is only used for Transfer mode - Sync uses pool directly
+        params.opType = OpType.Transfer;
+        params.shouldUnwrapNative = false;
+        params.syncMultiplier = 0;
 
         // Store balance before transfer
         IECrosschain(pool).donate(token, 1, params);

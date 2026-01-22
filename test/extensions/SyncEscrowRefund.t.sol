@@ -12,8 +12,11 @@ import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
 import {OpType} from "../../contracts/protocol/types/Crosschain.sol";
 
-/// @title SyncEscrowRefund - Tests for Sync escrow refund with NAV impact
-/// @notice Verifies that Sync mode refunds IMPACT NAV (unlike Transfer which is NAV-neutral)
+/// @title SyncEscrowRefund - Tests for escrow refund behavior
+/// @notice Verifies the binary Sync model:
+///         - Transfer mode: uses Transfer escrow for NAV-neutral refunds
+///         - Sync 0%: uses pool as depositor (NAV impacts both chains, natural refund)
+///         - Sync 100%: uses Transfer escrow as depositor (NAV-neutral on source, escrow handles refund)
 contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
 
     function setUp() public {
@@ -23,7 +26,8 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         deployFixture(baseTokens);
     }
 
-    /// @notice Test that Sync and Transfer escrows store different OpTypes
+    /// @notice Test that Transfer escrow is deployed separately from Sync
+    /// @dev Note: Sync mode no longer uses escrow - pool is depositor directly
     function test_Sync_And_Transfer_StoreCorrectOpTypes() public {
         // Use ethereum deployment from fixture
         address pool = ethereum.pool;
@@ -56,35 +60,31 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         console.log("Sync Escrow:", syncEscrow, "OpType:", uint8(syncEscrowContract.opType()));
     }
 
-    /// @notice Test that Sync escrow refund INCREASES NAV (performance gain)
-    /// @dev This is KEY difference from Transfer mode which is NAV-neutral
-    function test_Sync_Refund_Increases_NAV() public {
+    /// @notice Test that Sync 0% mode expired deposits return directly to pool
+    /// @dev Sync 0% uses pool as depositor - failed intents return tokens to pool naturally
+    ///      NAV increases on return (mirrors the NAV decrease when tokens left)
+    function test_Sync_Direct_Refund_To_Pool() public {
         
         
         address pool = ethereum.pool;
         address usdc = Constants.ETH_USDC;
         
-        // Deploy Sync escrow
-        vm.prank(pool);
-        address syncEscrow = EscrowFactory.deployEscrow(pool, OpType.Sync);
-        
         // Get initial NAV
         ISmartPoolActions(pool).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(pool).getPoolTokens();
         uint256 initialNav = initialTokens.unitaryValue;
+        uint256 initialBalance = IERC20(usdc).balanceOf(pool);
         
-        console.log("=== Sync Refund NAV Impact Test ===");
+        console.log("=== Sync Direct Refund Test ===");
         console.log("Initial NAV:", initialNav);
-        console.log("Initial pool balance:", IERC20(usdc).balanceOf(pool));
+        console.log("Initial pool balance:", initialBalance);
         
-        // Simulate expired Sync deposit refund - 100 USDC to escrow
-        deal(usdc, syncEscrow, 100e6);
+        // Simulate expired Sync deposit refund - 100 USDC directly to pool
+        // (Since Sync uses pool as depositor, Across would refund directly to pool)
+        uint256 refundAmount = 100e6;
+        deal(usdc, pool, initialBalance + refundAmount);
         
-        console.log("Simulated 100 USDC refund to Sync escrow");
-        
-        // Refund to pool via escrow
-        vm.prank(makeAddr("relayer"));
-        Escrow(payable(syncEscrow)).refundVault(usdc);
+        console.log("Simulated 100 USDC direct refund to pool");
         
         // Update and get new NAV
         ISmartPoolActions(pool).updateUnitaryValue();
@@ -95,10 +95,13 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         console.log("Final pool balance:", IERC20(usdc).balanceOf(pool));
         console.log("NAV change:", int256(finalNav) - int256(initialNav));
         
-        // CRITICAL: Sync mode should INCREASE NAV (unlike Transfer which is NAV-neutral)
-        assertTrue(finalNav > initialNav, "Sync refund should INCREASE NAV (performance gain)");
+        // Sync 0% direct refund increases NAV because:
+        // 1. Tokens left source (NAV decreased there)
+        // 2. Tokens return directly (NAV increases back to original)
+        // This is correct behavior: Sync 0% impacts NAV on both chains symmetrically
+        assertTrue(finalNav > initialNav, "Direct refund to pool should INCREASE NAV");
         
-        console.log("=== Sync Mode: NAV INCREASES (Performance Tracked) ===");
+        console.log("=== Sync 0%: NAV impacts both chains symmetrically ===");
     }
 
     /// @notice Test that Transfer escrow refund is NAV-NEUTRAL

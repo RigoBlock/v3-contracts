@@ -155,14 +155,25 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Handle source-side adjustments based on operation type
         if (sourceParams.opType == OpType.Transfer) {
             _handleSourceTransfer(params);
+            // Transfer mode: use escrow as depositor (for NAV-neutral refunds)
+            params.depositor = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
         } else if (sourceParams.opType == OpType.Sync) {
+            // Sync multiplier must be binary: 0 (NAV impacts both) or 10000 (NAV-neutral on source)
+            require(
+                sourceParams.syncMultiplier == 0 || sourceParams.syncMultiplier == 10000,
+                IAIntents.InvalidSyncMultiplier()
+            );
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
             _handleSourceSync(params, sourceParams.syncMultiplier);
+            // Sync 0%: pool as depositor (NAV changes, natural refund)
+            // Sync 100%: Transfer escrow as depositor (VB offset, escrow handles refund)
+            params.depositor = sourceParams.syncMultiplier == 0
+                ? address(this)
+                : EscrowFactory.deployEscrow(address(this), OpType.Transfer);
         } else {
             revert IECrosschain.InvalidOpType();
         }
 
-        params.depositor = EscrowFactory.deployEscrow(address(this), sourceParams.opType);
         _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(
             params.depositor,
             CrosschainLib.getAcrossHandler(params.destinationChainId),
@@ -276,5 +287,22 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             // Approve max amount
             token.safeApprove(address(_acrossSpokePool), type(uint256).max);
         }
+    }
+
+    /// @inheritdoc IAIntents
+    function acknowledgeVirtualBalanceLoss(uint256 reduction) external override onlyDelegateCall {
+        // Must have positive virtual balance to reduce
+        address baseToken = StorageLib.pool().baseToken;
+        int256 currentVB = baseToken.getVirtualBalance();
+        require(currentVB > 0, IAIntents.NoPositiveVirtualBalance());
+
+        // Reduction cannot exceed current balance
+        uint256 currentVBUint = currentVB.toUint256();
+        require(reduction <= currentVBUint, IAIntents.ReductionExceedsBalance(reduction, currentVBUint));
+
+        // Apply reduction (negative adjustment)
+        baseToken.updateVirtualBalance(-(reduction.toInt256()));
+
+        emit VirtualBalanceLossAcknowledged(reduction, currentVB - reduction.toInt256());
     }
 }

@@ -59,41 +59,38 @@ describe("Across Integration", () => {
 
     describe("Access Control", () => {
       it("should reject calls from non-SpokePool addresses", async () => {
-        const sourceMessageParams = {
+        const destMessageParams = {
           opType: OpType.Transfer,
-          navTolerance: 100,
-          shouldUnwrapOnDestination: false,
-          sourceNativeAmount: 0
+          shouldUnwrapNative: false,
+          syncMultiplier: 0
         };
 
         await expect(
-          eCrosschain.donate(mockUSDC.address, 1000000, sourceMessageParams)
+          eCrosschain.donate(mockUSDC.address, 1000000, destMessageParams)
         ).to.be.revertedWith("DonationLock(false)");
       });
 
       it("should reject calls from deployer", async () => {
-        const sourceMessageParams = {
+        const destMessageParams = {
           opType: OpType.Transfer,
-          navTolerance: 100,
-          shouldUnwrapOnDestination: false,
-          sourceNativeAmount: 0
+          shouldUnwrapNative: false,
+          syncMultiplier: 0
         };
 
         await expect(
-          eCrosschain.connect(owner).donate(mockUSDC.address, 1000000, sourceMessageParams)
+          eCrosschain.connect(owner).donate(mockUSDC.address, 1000000, destMessageParams)
         ).to.be.revertedWith("DonationLock(false)");
       });
 
       it("should reject calls from arbitrary user", async () => {
-        const sourceMessageParams = {
+        const destMessageParams = {
           opType: OpType.Transfer,
-          navTolerance: 100,
-          shouldUnwrapOnDestination: false,
-          sourceNativeAmount: 0
+          shouldUnwrapNative: false,
+          syncMultiplier: 0
         };
 
         await expect(
-          eCrosschain.connect(user).donate(mockUSDC.address, 1000000, sourceMessageParams)
+          eCrosschain.connect(user).donate(mockUSDC.address, 1000000, destMessageParams)
         ).to.be.revertedWith("DonationLock(false)");
       });
     });
