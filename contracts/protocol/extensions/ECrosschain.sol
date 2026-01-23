@@ -94,10 +94,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
 
         if (params.opType == OpType.Transfer) {
             _handleTransferMode(token, amount, amountDelta, storedBalance, previouslyActive);
-        } else if (params.opType == OpType.Sync) {
-            _handleSyncMode();
-        } else {
-            // Only Transfer and Sync are valid - reject anything else
+        } else if (params.opType != OpType.Sync) {
             revert InvalidOpType();
         }
 
@@ -121,61 +118,35 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         uint256 storedBalance,
         bool previouslyActive
     ) private {
-        // VS-only model: Write positive VS on destination (shares arriving on this chain)
         // This increases effective supply, keeping NAV unchanged
         address baseToken = StorageLib.pool().baseToken;
 
         // Convert amount to base token value for share calculation
         uint256 amountValueInBase = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken).toUint256();
 
-        // Get current VS state (may be negative from prior outbound transfers)
-        int256 currentVS = VirtualStorageLib.getVirtualSupply();
         uint8 poolDecimals = StorageLib.pool().decimals;
         uint256 storedNav = TransientStorage.getStoredNav();
 
         // Calculate shares equivalent: amountValue / NAV = shares
-        int256 sharesArriving = ((amountValueInBase * (10 ** poolDecimals)) / storedNav).toInt256();
+        uint256 mintedAmount = ((amountValueInBase * (10 ** poolDecimals)) / storedNav);
 
-        // If negative VS exists (shares were sent from this chain), clear it first
-        if (currentVS < 0) {
-            int256 negVS = -currentVS; // positive value
-            if (sharesArriving >= negVS) {
-                // Arriving shares fully cover negative VS - clear it, write remainder as positive
-                sharesArriving -= negVS; // remainder
-                // Clear negative VS and add remainder
-                sharesArriving.updateVirtualSupply(); // Will set VS to sharesArriving (since current is negative)
-            } else {
-                // Arriving shares partially reduce negative VS
-                sharesArriving.updateVirtualSupply(); // Adds to negative, making it less negative
-                sharesArriving = 0; // No remainder
-            }
-        } else {
-            // No negative VS - just add positive VS
-            sharesArriving.updateVirtualSupply();
-        }
+        // Update virtual supply directly (works for both positive and negative current VS)
+        mintedAmount.toInt256().updateVirtualSupply();
 
         // Validate NAV integrity
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
 
         // Calculate expected assets
         uint256 expectedAssets = TransientStorage.getStoredAssets();
+
         if (!previouslyActive) {
             amountDelta += storedBalance;
         }
+
         if (amountDelta > 0) {
             expectedAssets += IEOracle(address(this)).convertTokenAmount(token, amountDelta.toInt256(), baseToken).toUint256();
         }
 
         require(navParams.netTotalValue == expectedAssets, NavManipulationDetected(expectedAssets, navParams.netTotalValue));
-    }
-
-    /// @dev Handles Sync mode: destination simply receives tokens, NAV increases naturally.
-    /// @dev Sync mode is NAV-impacting on both chains - no VS adjustments needed.
-    function _handleSyncMode() private pure {
-        // Sync mode: no virtual storage adjustments on destination
-        // NAV impacts both chains naturally:
-        // - Source: NAV decreased as tokens left (no VS offset written)
-        // - Destination: NAV increases as tokens arrive (natural balance increase)
-        // This allows performance to flow correctly between chains.
     }
 }

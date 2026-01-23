@@ -72,6 +72,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
 
+        // TODO: on destination, we allow a null amount, so check if this is necessary - might be necessary for small amount transfers
         // Validate outputAmount is not zero or too small to prevent virtual supply calculation issues
         require(params.outputAmount > 0, InvalidAmount());
 
@@ -158,9 +159,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.depositor = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
         } else if (sourceParams.opType == OpType.Sync) {
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
-            // Sync mode: NAV impacts both chains naturally (no VS offset on source)
-            // Pool is depositor - failed intents return tokens directly, NAV restores naturally
-            _handleSourceSync();
             params.depositor = address(this);
         } else {
             revert IECrosschain.InvalidOpType();
@@ -213,33 +211,16 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     function _handleSourceTransfer(AcrossParams memory params) private {
-        // VS-only model: Write negative VS on source (shares leaving this chain)
-        // This reduces effective supply, keeping NAV unchanged
-
-        // Get output value in base token terms
         (uint256 outputValueInBase, ) = _getOutputValueInBase(params);
-
-        // Update NAV and get pool state for share calculation
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint8 poolDecimals = StorageLib.pool().decimals;
 
         // Calculate shares equivalent: outputValue / NAV = shares
         // shares = (outputValueInBase * 10^decimals) / unitaryValue
-        int256 sharesLeaving = ((outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue).toInt256();
+        int256 burntAmount = ((outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue).toInt256();
 
         // Write negative VS (shares leaving this chain → reduces effective supply)
-        (-sharesLeaving).updateVirtualSupply();
-    }
-
-    /// @dev Handles Sync mode: no virtual storage adjustments on source.
-    /// @dev Sync is NAV-impacting on both chains - tokens leave source and arrive on destination.
-    /// @dev No VS offset written, so NAV decreases on source and increases on destination.
-    function _handleSourceSync() private pure {
-        // Sync mode: no virtual storage adjustments on source
-        // NAV impacts both chains naturally:
-        // - Source: NAV decreases as tokens leave
-        // - Destination: NAV increases as tokens arrive
-        // This allows performance to flow correctly between chains.
+        (-burntAmount).updateVirtualSupply();
     }
 
     /// @dev Approves or revokes token approval for SpokePool interaction.
@@ -260,8 +241,4 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             token.safeApprove(address(_acrossSpokePool), type(uint256).max);
         }
     }
-
-    // Note: acknowledgeVirtualBalanceLoss removed - VS-only model doesn't use VB
-    // Failed Sync intents return tokens directly to pool (natural NAV restoration)
-    // Failed Transfer intents go to escrow which refunds via ECrosschain (VS clearing)
 }

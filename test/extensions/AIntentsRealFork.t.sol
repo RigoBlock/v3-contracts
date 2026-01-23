@@ -2948,7 +2948,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         console2.log("\n[SUCCESS] DOS attack prevented!");
-        console2.log("Attacker's tokens transferred to tokenJar for GRG buyback-and-burn");
         console2.log("Legitimate transfer completed successfully");
         console2.log("TokenJar address", tokenJar);
         uint256 tokenJarBalanceAfter = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);

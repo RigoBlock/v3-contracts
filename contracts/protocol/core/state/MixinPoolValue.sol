@@ -8,6 +8,7 @@ import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
+import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
@@ -25,7 +26,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using SafeCast for int256;
 
     error BaseTokenPriceFeedError();
-    error EffectiveSupplyTooLow();
 
     /// @notice Uses transient storage to keep track of unique token balances.
     /// @dev With null total supply a pool will return the last stored value.
@@ -54,20 +54,13 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
         } else {
-            // Calculate effective supply using signed arithmetic (VS can be negative)
+            // Calculate effective supply and check if valid for NAV calculation
             int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
-            int256 effectiveSupply = int256(components.totalSupply) + virtualSupply;
+            int256 effectiveSupply = NavImpactLib.validateEffectiveSupply(components.totalSupply, virtualSupply);
 
-            // Effective supply must be positive (at least 10% of total supply when VS is negative)
+            // If effective supply is not valid (<=0), return stored NAV without update
             if (effectiveSupply <= 0) {
-                // No effective supply - return stored NAV without update
                 return components;
-            }
-
-            // Safety check: when VS is negative, ensure at least 10% of TS remains as effective supply
-            // This prevents extreme edge cases and ensures local redemptions can be honored
-            if (virtualSupply < 0 && effectiveSupply < int256(components.totalSupply / 10)) {
-                revert EffectiveSupplyTooLow();
             }
 
             components.totalSupply = uint256(effectiveSupply);

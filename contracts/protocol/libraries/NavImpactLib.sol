@@ -15,9 +15,15 @@ library NavImpactLib {
     using SafeCast for uint256;
     using SafeCast for int256;
 
+    error EffectiveSupplyTooLow();
+
     /// @notice Thrown when transfer amount exceeds maximum allowed NAV impact
     /// @dev Impact is calculated as (transferValue * 10000) / totalAssetsValue in basis points
     error NavImpactTooHigh();
+
+    /// @notice Minimum ratio of effective supply to total supply (1/8 = 12.5%)
+    /// @dev When virtual supply is negative, effective supply must be at least totalSupply / MINIMUM_SUPPLY_RATIO
+    uint256 internal constant MINIMUM_SUPPLY_RATIO = 8;
 
     /// @notice Validates that transfer amount doesn't exceed NAV impact tolerance
     /// @dev Calculates percentage impact: (transferValue * 10000) / totalAssetsValue vs toleranceBps
@@ -61,5 +67,22 @@ library NavImpactLib {
         if (impactBps > toleranceBps) {
             revert NavImpactTooHigh();
         }
+    }
+
+    /// @notice Validates that effective supply meets minimum threshold when virtual supply is negative
+    /// @dev Only reverts when:
+    ///      - Virtual supply is negative AND effective supply < totalSupply / MINIMUM_SUPPLY_RATIO
+    /// @param totalSupply The total token supply
+    /// @param virtualSupply The virtual supply (can be negative)
+    function validateEffectiveSupply(uint256 totalSupply, int256 virtualSupply) internal pure returns (int256) {
+        int256 effectiveSupply = int256(totalSupply) + virtualSupply;
+
+        // Safety check: when VS is negative, ensure at least MINIMUM_SUPPLY_RATIO of TS remains
+        // This prevents extreme edge cases and ensures local redemptions can be honored
+        if (virtualSupply < 0 && effectiveSupply < int256(totalSupply / MINIMUM_SUPPLY_RATIO)) {
+            revert EffectiveSupplyTooLow();
+        }
+
+        return effectiveSupply;
     }
 }

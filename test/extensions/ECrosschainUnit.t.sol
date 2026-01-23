@@ -18,6 +18,7 @@ import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmar
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {EnumerableSet, Pool} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
+import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {OpType, DestinationMessageParams, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
@@ -596,6 +597,10 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         IECrosschain(poolProxy).donate(ethUsdc, 1, params);
         vm.chainId(1);
         
+        // Verify initial virtual supply is 0
+        int256 initialVS = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(initialVS, 0, "Virtual supply should start at 0");
+        
         // Simulate token transfer to pool
         vm.mockCall(
             ethUsdc,
@@ -605,9 +610,209 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         // Should succeed with proper setup
         IECrosschain(poolProxy).donate(Constants.ETH_USDC, 100e6, params);
+        
+        // Verify virtual supply increased (should be positive after inbound transfer)
+        int256 finalVS = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertGt(finalVS, 0, "Virtual supply should be positive after inbound transfer");
+        assertEq(finalVS - initialVS, finalVS, "Virtual supply delta should equal final VS");
 
         vm.clearMockedCalls();
         vm.chainId(31337);
+    }
+    
+    /// @notice Test that virtual supply delta is correctly calculated when VS is already non-zero
+    /// @dev This tests the fix for the bug where negative VS clearing logic was incorrect
+    function test_ECrosschain_TransferMode_WithExistingVirtualSupply() public {
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // Mock balanceOf for unlock
+        vm.mockCall(
+            ethUsdc,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(0)
+        );
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        // Unlock
+        IECrosschain(poolProxy).donate(ethUsdc, 1, params);
+        vm.chainId(1);
+        
+        // First donation to establish initial virtual supply
+        vm.mockCall(
+            ethUsdc,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(100e6)
+        );
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 100e6, params);
+        
+        int256 vsAfterFirst = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertGt(vsAfterFirst, 0, "First donation should create positive VS");
+        
+        // Second donation - VS should add to existing
+        uint256 secondDonation = 50e6;
+        vm.mockCall(
+            ethUsdc,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(100e6) // Still show 100e6 as stored balance from first donation
+        );
+        
+        // Unlock for second donation
+        IECrosschain(poolProxy).donate(ethUsdc, 1, params);
+        
+        // Now mock the new balance (150e6 total)
+        vm.mockCall(
+            ethUsdc,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(150e6)
+        );
+        
+        // Second donation
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, secondDonation, params);
+        
+        int256 vsAfterSecond = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        int256 expectedDelta = (vsAfterSecond - vsAfterFirst);
+        
+        // The delta should be positive and approximately equal to the second donation in share terms
+        // With NAV=1 and decimals=6, 50e6 USDC = 50e6 shares
+        assertGt(expectedDelta, 0, "Second donation should increase VS");
+        assertApproxEqRel(uint256(expectedDelta), secondDonation, 0.01e18, "VS delta should match donated amount");
+        
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+    
+    /// @notice Test that virtual supply correctly handles negative VS (from prior outbound transfers)
+    /// @dev This is the critical case that the bug would have affected
+    function test_ECrosschain_TransferMode_WithNegativeVirtualSupply() public {
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // Setup pool with some initial balance to match the negative VS we'll set
+        vm.mockCall(
+            ethUsdc,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(0)
+        );
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        // Unlock
+        IECrosschain(poolProxy).donate(ethUsdc, 1, params);
+        vm.chainId(1);
+        
+        // Simulate a prior outbound transfer that created negative VS of -500e6 shares
+        // In reality this would come from an AIntents.depositV3() call
+        int256 initialNegativeVS = -500e6;
+        vm.store(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT, bytes32(uint256(initialNegativeVS)));
+        
+        // Verify the negative VS was set
+        int256 vsBeforeDonation = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(vsBeforeDonation, initialNegativeVS, "Should have negative VS");
+        
+        // Now receive an inbound transfer of 800e6 USDC
+        // Expected: -500e6 + 800e6 = +300e6 (net positive)
+        uint256 inboundAmount = 800e6;
+        
+        vm.mockCall(
+            ethUsdc,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
+            abi.encode(inboundAmount)
+        );
+        
+        IECrosschain(poolProxy).donate(Constants.ETH_USDC, inboundAmount, params);
+        
+        int256 vsAfterDonation = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        
+        // With the bug, this would be -200e6 (wrong!)
+        // With the fix, this should be +300e6 (correct!)
+        int256 expectedFinalVS = initialNegativeVS + int256(inboundAmount);
+        
+        assertEq(vsAfterDonation, expectedFinalVS, "VS should be sum of initial + donated");
+        assertGt(vsAfterDonation, 0, "VS should be net positive after large inbound donation");
+        assertApproxEqAbs(vsAfterDonation, 300e6, 1e6, "VS should be approximately +300e6");
+        
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+    
+    /// @notice Test that burn reverts when effective supply would drop below minimum threshold
+    /// @dev This tests EffectiveSupplyLib.validateEffectiveSupply in burn flow
+    function test_ECrosschain_BurnRevertsWithLowEffectiveSupply() public {
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // Setup: First, do an actual mint to create real totalSupply
+        // We need to:
+        // 1. Give pool some base token balance
+        // 2. Use ISmartPoolActions.mint() to create real shares
+        
+        address poolBaseToken = ISmartPoolState(poolProxy).getPool().baseToken;
+        assertTrue(poolBaseToken == address(0), "Pool base token should be ETH (address 0)");
+        
+        // Give the pool some ETH to simulate NAV
+        vm.deal(poolProxy, 1000 ether);
+        
+        // First mint - this creates totalSupply
+        vm.deal(address(this), 2000 ether);
+        uint256 mintAmount = 1000 ether;
+        ISmartPoolActions(poolProxy).mint{value: mintAmount}(address(this), mintAmount, 0);
+        
+        // Verify totalSupply is now non-zero
+        uint256 totalSupply = ISmartPoolState(poolProxy).getPoolTokens().totalSupply;
+        assertGt(totalSupply, 0, "totalSupply should be non-zero after mint");
+        
+        // Simulate negative VS that puts effective supply in the danger zone (0 < ES < TS/8)
+        // totalSupply = 1000e18, threshold = 1000e18 / 8 = 125e18
+        // Set VS = -(totalSupply - threshold/2) to get ES = threshold/2 (below threshold but positive)
+        int256 threshold = int256(totalSupply / 8);
+        int256 targetEffectiveSupply = threshold / 2;  // 50% of threshold = 6.25% of TS
+        int256 largeNegativeVS = -(int256(totalSupply) - targetEffectiveSupply);
+        
+        vm.store(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT, bytes32(uint256(largeNegativeVS)));
+        
+        // Verify our math
+        int256 actualVS = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(actualVS, largeNegativeVS, "VS should be stored correctly");
+        
+        int256 expectedEffectiveSupply = int256(totalSupply) + largeNegativeVS;
+        assertGt(expectedEffectiveSupply, 0, "Effective supply should be positive");
+        assertLt(expectedEffectiveSupply, threshold, "Effective supply should be below threshold");
+        
+        // This should revert when calculating NAV because effective supply is positive but below threshold
+        vm.expectRevert(abi.encodeWithSignature("EffectiveSupplyTooLow()"));
+        ISmartPoolActions(poolProxy).updateUnitaryValue();
     }
     
     /// @notice Test extension Sync mode with proper delegatecall context
@@ -684,6 +889,9 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1, params);
         vm.chainId(1);
         
+        // Track initial virtual supply
+        int256 initialVS = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        
         vm.mockCall(
             Constants.ETH_WETH,
             abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
@@ -692,6 +900,11 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         // Should succeed and unwrap WETH to ETH
         IECrosschain(poolProxy).donate(Constants.ETH_WETH, 1e18, params);
+        
+        // Verify virtual supply increased correctly
+        int256 finalVS = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        int256 vsDelta = finalVS - initialVS;
+        assertGt(vsDelta, 0, "Virtual supply should increase after inbound transfer");
 
         vm.clearMockedCalls();
         vm.chainId(31337);
