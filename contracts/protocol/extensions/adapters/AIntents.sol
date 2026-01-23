@@ -86,10 +86,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // (e.g., setting inputToken=USDT with sourceNativeAmount>0 would bypass USDT activation check)
         address tokenToValidate = params.inputToken;
         if (sourceParams.sourceNativeAmount > 0) {
-            require(
-                params.inputToken == ISmartPoolImmutable(address(this)).wrappedNative(),
-                InvalidInputToken()
-            );
+            require(params.inputToken == ISmartPoolImmutable(address(this)).wrappedNative(), InvalidInputToken());
             tokenToValidate = address(0);
         }
         require(StorageLib.isOwnedToken(tokenToValidate), TokenNotActive());
@@ -206,7 +203,9 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /// @param params The across params containing token and amount info.
     /// @return outputValueInBase The output amount converted to base token value.
     /// @return baseToken The pool's base token address.
-    function _getOutputValueInBase(AcrossParams memory params) private view returns (uint256 outputValueInBase, address baseToken) {
+    function _getOutputValueInBase(
+        AcrossParams memory params
+    ) private view returns (uint256 outputValueInBase, address baseToken) {
         // Scale outputAmount to inputToken decimals for proper comparison
         // (same token on different chains may have different decimals, e.g., BSC USDC)
         uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(

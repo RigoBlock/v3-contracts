@@ -225,16 +225,17 @@ Use cases:
 
 ### 3.3 Safety Constraints
 
-**10% Effective Supply Buffer:**
+**Effective Supply Buffer (1/MINIMUM_SUPPLY_RATIO = 12.5%):**
 
 To prevent supply exhaustion and maintain pool operability:
 
 ```solidity
+// MINIMUM_SUPPLY_RATIO = 8 (defined in NavImpactLib.sol)
 int256 effectiveSupply = int256(totalSupply) + virtualSupply - sharesLeaving;
-require(effectiveSupply >= int256(totalSupply / 10), EffectiveSupplyTooLow());
+require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 
-This ensures at least 10% of supply remains available for redemptions.
+This ensures at least 1/MINIMUM_SUPPLY_RATIO (currently 12.5%) of supply remains available for redemptions.
 
 **Post-Burn Protection:**
 
@@ -247,7 +248,8 @@ function _burn(address user, uint256 amount) private {
     int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
     if (virtualSupply < 0) {
         int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
-        require(effectiveSupply >= int256(newTotalSupply / 10), 
+        // MINIMUM_SUPPLY_RATIO = 8 (12.5%)
+        require(effectiveSupply >= int256(newTotalSupply / MINIMUM_SUPPLY_RATIO), 
             EffectiveSupplyTooLowAfterBurn());
     }
 }
@@ -625,7 +627,7 @@ Actual: Maximum deviation < 0.0001%
 
 ### 10.1 Current Limitations
 
-1. **10% Transfer Limit**: Cannot transfer more than 90% of effective supply in a single transaction
+1. **Transfer Limit (1 - 1/MINIMUM_SUPPLY_RATIO)**: Cannot transfer more than 87.5% of effective supply in a single transaction (MINIMUM_SUPPLY_RATIO = 8)
 2. **Bridge Dependency**: Relies on Across Protocol availability
 3. **Price Feed Requirement**: All tokens must have Chainlink feeds
 4. **Same Token Pairs**: Cross-chain transfers limited to same-token bridges (USDC↔USDC)

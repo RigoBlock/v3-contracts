@@ -98,12 +98,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
             revert InvalidOpType();
         }
 
-        emit TokensReceived(
-            msg.sender,
-            token,
-            amountDelta,
-            uint8(params.opType)
-        );
+        emit TokensReceived(msg.sender, token, amountDelta, uint8(params.opType));
 
         // Unlock donation and clear all temporary storage atomically
         token.setDonationLock(0);
@@ -122,7 +117,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         address baseToken = StorageLib.pool().baseToken;
 
         // Convert amount to base token value for share calculation
-        uint256 amountValueInBase = IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken).toUint256();
+        uint256 amountValueInBase = IEOracle(address(this))
+            .convertTokenAmount(token, amount.toInt256(), baseToken)
+            .toUint256();
 
         uint8 poolDecimals = StorageLib.pool().decimals;
         uint256 storedNav = TransientStorage.getStoredNav();
@@ -144,9 +141,14 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         if (amountDelta > 0) {
-            expectedAssets += IEOracle(address(this)).convertTokenAmount(token, amountDelta.toInt256(), baseToken).toUint256();
+            expectedAssets += IEOracle(address(this))
+                .convertTokenAmount(token, amountDelta.toInt256(), baseToken)
+                .toUint256();
         }
 
-        require(navParams.netTotalValue == expectedAssets, NavManipulationDetected(expectedAssets, navParams.netTotalValue));
+        require(
+            navParams.netTotalValue == expectedAssets,
+            NavManipulationDetected(expectedAssets, navParams.netTotalValue)
+        );
     }
 }

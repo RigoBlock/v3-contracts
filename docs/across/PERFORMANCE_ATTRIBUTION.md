@@ -128,28 +128,30 @@ Destination Chain:
 
 ## Safety Constraints
 
-### 10% Effective Supply Buffer
+### Effective Supply Buffer (1/MINIMUM_SUPPLY_RATIO)
 
-**Rule:** Negative VS cannot exceed 90% of total supply.
+**Rule:** Negative VS cannot exceed (1 - 1/MINIMUM_SUPPLY_RATIO) of total supply (currently 87.5%).
 
 ```solidity
-// In NavImpactLib.validateNavImpact()
+// In NavImpactLib.validateSupply()
+// MINIMUM_SUPPLY_RATIO = 8 (12.5%)
 int256 effectiveSupply = int256(totalSupply) + virtualSupply - sharesLeaving;
-require(effectiveSupply >= int256(totalSupply / 10), EffectiveSupplyTooLow());
+require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 
 **Why:** Prevents supply exhaustion and ensures pool remains operational.
 
 ### Post-Burn Protection
 
-**Rule:** Burns cannot push effective supply below 10% threshold.
+**Rule:** Burns cannot push effective supply below 1/MINIMUM_SUPPLY_RATIO threshold (currently 12.5%).
 
 ```solidity
 // In MixinActions._burn()
+// MINIMUM_SUPPLY_RATIO = 8 (12.5%)
 int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
 if (virtualSupply < 0) {
     int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
-    require(effectiveSupply >= int256(newTotalSupply / 10), EffectiveSupplyTooLowAfterBurn());
+    require(effectiveSupply >= int256(newTotalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLowAfterBurn());
 }
 ```
 

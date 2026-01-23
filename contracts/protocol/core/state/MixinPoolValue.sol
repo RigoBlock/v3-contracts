@@ -54,7 +54,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             components.unitaryValue = 10 ** components.decimals;
         } else {
             int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
-            
+
             // revert if abs virtual supply below a minimum threshold of total supply. Also means effective supply must be non-negative.
             NavImpactLib.validateSupply(components.totalSupply, virtualSupply);
             int256 effectiveSupply = int256(components.totalSupply) + virtualSupply;
@@ -69,7 +69,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             if (components.netTotalValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue =
-                    (components.netTotalValue * 10 ** components.decimals) / components.totalSupply;
+                    (components.netTotalValue * 10 ** components.decimals) /
+                    components.totalSupply;
             } else {
                 // No net value, return stored NAV
                 return components;

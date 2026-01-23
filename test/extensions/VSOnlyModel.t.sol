@@ -18,7 +18,7 @@ import {OpType, DestinationMessageParams} from "../../contracts/protocol/types/C
 ///         - Transfer: NAV-neutral on source (negative VS written), positive VS on destination
 ///         - Sync: NAV-impacting on both chains (no VS adjustments)
 ///         - Effective supply = totalSupply + virtualSupply (can be negative)
-///         - 10% cap: effective supply must be >= 10% of totalSupply when VS < 0
+///         - Effective supply cap: must be >= totalSupply / MINIMUM_SUPPLY_RATIO (currently 12.5%) when VS < 0
 contract VSOnlyModelTest is Test, RealDeploymentFixture {
 
     // Storage slot for virtual supply (from MixinConstants)

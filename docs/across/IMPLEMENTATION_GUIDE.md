@@ -28,7 +28,7 @@ This guide covers the technical implementation of the Across Protocol integratio
 4. **NavImpactLib.sol** (NAV Validation)
    - Path: `contracts/protocol/libraries/NavImpactLib.sol`
    - Validates Sync mode NAV impact
-   - Enforces 10% effective supply constraint
+   - Enforces 1/MINIMUM_SUPPLY_RATIO effective supply constraint (currently 12.5% with MINIMUM_SUPPLY_RATIO = 8)
 
 ## Transfer Flow
 
@@ -187,8 +187,8 @@ int256 sharesLeaving = (outputValue * 10**decimals / nav).toInt256();
 int256 newVS = currentVS - sharesLeaving;  // More negative
 int256 effectiveSupply = int256(totalSupply) + newVS;
 
-// Must maintain at least 10% of total supply
-require(effectiveSupply >= int256(totalSupply / 10), EffectiveSupplyTooLow());
+// Must maintain at least 1/MINIMUM_SUPPLY_RATIO of total supply (currently 12.5%)
+require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 
 ## Operation Types

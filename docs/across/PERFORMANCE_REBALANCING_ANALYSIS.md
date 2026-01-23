@@ -80,18 +80,18 @@ For each source chain:
 2. Source ends with negative VS = 100% of supply sent
 3. Destination accumulates positive VS
 
-Note: 10% constraint limits single transfer to 90% of effective supply
+Note: MINIMUM_SUPPLY_RATIO constraint (currently 8 = 12.5%) limits single transfer to 87.5% of effective supply
 ```
 
 ## Safety Constraints
 
-### 10% Effective Supply Buffer
+### Effective Supply Buffer (1/MINIMUM_SUPPLY_RATIO)
 
-**Rule:** Cannot transfer more than 90% of effective supply in a single Transfer.
+**Rule:** Cannot transfer more than (1 - 1/MINIMUM_SUPPLY_RATIO) of effective supply in a single Transfer.
 
 ```
 Effective Supply = Total Supply + Virtual Supply
-Minimum Required: 10% of Total Supply
+Minimum Required: 1/MINIMUM_SUPPLY_RATIO of Total Supply (currently 12.5% with MINIMUM_SUPPLY_RATIO = 8)
 ```
 
 **Why:** Ensures pool remains functional with positive effective supply.
@@ -104,7 +104,7 @@ Minimum Required: 10% of Total Supply
 
 ### Post-Burn Protection
 
-Burns cannot push effective supply below 10% threshold. This prevents:
+Burns cannot push effective supply below 1/MINIMUM_SUPPLY_RATIO threshold (currently 12.5%). This prevents:
 - Bypassing transfer constraint via burn + transfer
 - Supply exhaustion attacks
 
@@ -123,6 +123,6 @@ The VS-only model provides:
 - ✅ Simpler rebalancing (no VB to coordinate)
 - ✅ Proportional performance sharing by default
 - ✅ Clear distinction between Transfer (NAV-neutral) and Sync (NAV-impacting)
-- ✅ Single constraint to manage (10% effective supply)
+- ✅ Single constraint to manage (1/MINIMUM_SUPPLY_RATIO effective supply, currently 12.5%)
 
 Sync mode enables intentional NAV changes for performance rebalancing, while Transfer mode maintains NAV neutrality for liquidity movement.
