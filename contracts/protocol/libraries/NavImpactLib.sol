@@ -64,9 +64,7 @@ library NavImpactLib {
         uint256 impactBps = (transferValue * 10000) / totalAssetsValue;
 
         // Validate impact is within tolerance
-        if (impactBps > toleranceBps) {
-            revert NavImpactTooHigh();
-        }
+        require(impactBps <= toleranceBps, NavImpactTooHigh());
     }
 
     /// @notice Validates that effective supply meets minimum threshold when virtual supply is negative

@@ -1,36 +1,34 @@
-# Performance Attribution Model (VS-Only)
+# Performance Attribution & Rebalancing (VS-Only Model)
 
 ## Overview
 
-The Rigoblock cross-chain system uses **Virtual Supply (VS) only** to maintain NAV integrity during cross-chain transfers. This document explains how performance is attributed with this simplified model.
+The Rigoblock cross-chain system uses **Virtual Supply (VS) only** to maintain NAV integrity during cross-chain transfers. This document explains:
+1. How performance is attributed across chains
+2. How to rebalance performance when needed
 
 ## Core Principle
 
 **Performance is shared proportionally**: Both source and destination chains share trading gains/losses based on their effective supply ratios.
 
-## How It Works
+## Virtual Supply Model
 
-### Virtual Supply Model
+### Key Formulas
 
-**Key Formula:**
 ```
 Effective Supply = Total Supply + Virtual Supply
 
 Where:
 - Virtual Supply < 0 on source (shares sent to other chains)
 - Virtual Supply > 0 on destination (shares received from other chains)
-```
 
-**NAV Calculation:**
-```
 NAV = Total Pool Value / Effective Supply
 ```
 
-### Transfer Flow
+### Transfer Flow Example
 
 **Setup:**
 - Pool A on Arbitrum (source chain)
-- Pool B on Optimism (destination chain)
+- Pool B on Optimism (destination chain)  
 - Transfer 1000 USDC from A to B
 - USDC price: $1.00, NAV: $1.00, Total Supply: 10,000 shares
 
@@ -63,6 +61,8 @@ After Transfer:
   Effective Supply: 5,000 + 980 = 5,980 shares
   NAV: $5,980 / 5,980 = $1.00 ✓ (unchanged)
 ```
+
+---
 
 ## Performance Attribution Scenarios
 
@@ -126,28 +126,108 @@ Destination Chain:
 
 **Result:** Both chains see proportional NAV decrease ✅
 
+---
+
+## Transfer vs Sync Modes
+
+### Transfer Mode (OpType.Transfer) - NAV Neutral
+
+**Behavior:**
+- Source: Writes **negative VS** (shares leaving)
+- Destination: Writes **positive VS** (shares arriving)
+- Both chains: NAV unchanged
+
+**Use for:**
+- Moving liquidity between chains
+- NAV-neutral token movement
+
+### Sync Mode (OpType.Sync) - NAV Changes
+
+**Behavior:**
+- Source: No VS adjustment → NAV decreases (tokens leave)
+- Destination: No VS adjustment → NAV increases (tokens arrive)
+- Both chains: NAV changes naturally
+
+**Use for:**
+- Performance rebalancing
+- Donations
+- Intentional NAV adjustments
+
+---
+
+## Rebalancing Scenarios
+
+### Scenario A: Equalizing Chain NAVs
+
+**Situation:**
+- Chain A: NAV = 1.0, low activity
+- Chain B: NAV = 1.2, high trading gains
+
+**Goal:** Share performance from B to A
+
+**Solution:** Use Sync mode
+```
+1. Initiate Sync transfer from B to A
+2. B sends tokens (NAV decreases from 1.2)
+3. A receives tokens (NAV increases from 1.0)
+4. NAVs converge toward equilibrium
+```
+
+### Scenario B: Emergency Liquidity
+
+**Situation:**
+- Chain A: Needs liquidity, NAV = 1.0
+- Chain B: Excess liquidity, NAV = 1.0
+
+**Goal:** Move liquidity without NAV impact
+
+**Solution:** Use Transfer mode
+```
+1. Initiate Transfer from B to A
+2. B writes negative VS (effective supply decreases)
+3. A writes positive VS (effective supply increases)
+4. Both NAVs remain at 1.0
+```
+
+### Scenario C: Consolidating Assets
+
+**Situation:**
+- Pool has assets scattered across 5 chains
+- Want to consolidate on one chain
+
+**Solution:** Sequential Transfers
+```
+For each source chain:
+1. Transfer tokens to destination (Transfer mode)
+2. Source ends with negative VS
+3. Destination accumulates positive VS
+
+Note: Effective supply constraint limits single transfer to 87.5% of effective supply
+```
+
+---
+
 ## Safety Constraints
 
 ### Effective Supply Buffer (1/MINIMUM_SUPPLY_RATIO)
 
-**Rule:** Negative VS cannot exceed (1 - 1/MINIMUM_SUPPLY_RATIO) of total supply (currently 87.5%).
+**Rule:** Cannot transfer more than 87.5% of effective supply in a single Transfer.
 
 ```solidity
-// In NavImpactLib.validateSupply()
+// NavImpactLib.validateSupply()
 // MINIMUM_SUPPLY_RATIO = 8 (12.5%)
 int256 effectiveSupply = int256(totalSupply) + virtualSupply - sharesLeaving;
 require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 
-**Why:** Prevents supply exhaustion and ensures pool remains operational.
+**Why:** Ensures pool remains functional with positive effective supply.
 
 ### Post-Burn Protection
 
-**Rule:** Burns cannot push effective supply below 1/MINIMUM_SUPPLY_RATIO threshold (currently 12.5%).
+**Rule:** Burns cannot push effective supply below 12.5% threshold.
 
 ```solidity
-// In MixinActions._burn()
-// MINIMUM_SUPPLY_RATIO = 8 (12.5%)
+// MixinActions._burn()
 int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
 if (virtualSupply < 0) {
     int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
@@ -155,18 +235,16 @@ if (virtualSupply < 0) {
 }
 ```
 
-**Why:** Prevents bypassing the 10% constraint via sequential burns.
+**Why:** Prevents bypassing the constraint via sequential burns.
 
-## Comparison with Previous VB+VS Model
+### Workaround for Full Consolidation
 
-| Aspect | VS-Only (Current) | VB+VS (Previous) |
-|--------|-------------------|------------------|
-| **Storage writes** | 1 per side (VS only) | 2 per side (VB + VS) |
-| **Performance attribution** | Shared proportionally | Destination gets price movements |
-| **Complexity** | Simpler | More complex |
-| **Rebalancing** | Always 1-step | 2-step in edge cases |
-| **Gas cost** | Lower | Higher |
-| **Synchronization** | None needed | VB must sync with VS |
+1. Transfer 80%
+2. Users burn shares, reducing total supply
+3. Transfer remaining 80% of new effective supply
+4. Repeat until consolidated
+
+---
 
 ## Mathematical Verification
 
@@ -192,33 +270,15 @@ After:  NAV = (V - ΔV) / (S + (-ΔV/NAV))
            = NAV ✓
 ```
 
-### Effective Supply Constraint
+---
 
-```
-VS_min = -0.9 × TotalSupply
-EffectiveSupply_min = TotalSupply + VS_min = 0.1 × TotalSupply
-```
-
-This ensures at least 10% of supply remains for pool operations.
-
-## Sync Mode
-
-**Sync mode (OpType.Sync)** allows NAV changes:
-- No VS adjustments on either chain
-- NAV impacts both chains naturally
-- Used for: donations, performance rebalancing, gas refunds
-
-```
-Source: Tokens leave → NAV decreases
-Destination: Tokens arrive → NAV increases
-```
-
-## Conclusion
+## Summary
 
 The **VS-only model** provides:
 - ✅ Simpler implementation (single storage per chain)
-- ✅ Proportional performance attribution
-- ✅ Lower gas costs
+- ✅ Proportional performance attribution by default
+- ✅ Lower gas costs (1 SSTORE per side)
 - ✅ No synchronization complexity
-- ✅ 10% safety buffer prevents supply exhaustion
+- ✅ 12.5% safety buffer prevents supply exhaustion
 - ✅ Post-burn protection prevents constraint bypass
+- ✅ Clear distinction between Transfer (NAV-neutral) and Sync (NAV-impacting)

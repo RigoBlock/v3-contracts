@@ -470,9 +470,9 @@ describe("Across Integration", () => {
   });
 
   describe("Storage Slots", () => {
-    it("should have correct virtual balances slot", () => {
+    it("should have correct virtual supply slot", () => {
       const expectedSlot = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes("pool.proxy.virtual.balances")
+        ethers.utils.toUtf8Bytes("pool.proxy.virtual.supply")
       );
       const adjustedSlot = ethers.BigNumber.from(expectedSlot).sub(1);
       
@@ -480,39 +480,19 @@ describe("Across Integration", () => {
       expect(adjustedSlot).to.not.equal(0);
     });
 
-    it("should have correct chain nav spreads slot", () => {
-      const expectedSlot = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes("pool.proxy.chain.nav.spreads")
-      );
-      const adjustedSlot = ethers.BigNumber.from(expectedSlot).sub(1);
-      
-      // Verify the slot calculation matches ERC-7201 pattern
-      expect(adjustedSlot).to.not.equal(0);
-    });
-
-    it("should calculate virtual balances slot correctly", () => {
+    it("should calculate virtual supply slot correctly", () => {
       const slot = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes("pool.proxy.virtual.balances")
+        ethers.utils.toUtf8Bytes("pool.proxy.virtual.supply")
       );
-      const expected = "0x52fe1e3ba959a28a9d52ea27285aed82cfb0b6d02d0df76215ab2acc4b84d650";
-      expect(slot).to.equal(expected);
-    });
-
-    it("should calculate chain nav spreads slot correctly", () => {
-      const slot = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes("pool.proxy.chain.nav.spreads")
-      );
-      const expected = "0x1effae8a79ec0c3b88754a639dc07316aa9c4de89b6b9794fb7c1d791c43492e";
+      const expected = "0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee34114510";
       expect(slot).to.equal(expected);
     });
 
     it("should use ERC-7201 pattern with dot notation", () => {
-      const virtualBalancesString = "pool.proxy.virtual.balances";
-      const chainNavSpreadsString = "pool.proxy.chain.nav.spreads";
+      const virtualSupplyString = "pool.proxy.virtual.supply";
 
       // Verify dot notation is used (not camelCase)
-      expect(virtualBalancesString.split(".").length).to.equal(4);
-      expect(chainNavSpreadsString.split(".").length).to.equal(5);
+      expect(virtualSupplyString.split(".").length).to.equal(4);
     });
   });
 

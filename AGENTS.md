@@ -15,7 +15,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 2. **Extensions/Adapters**: Never add storage (they run via delegatecall in pool context)
 3. **Storage Slots**: Always assert new slots in `MixinStorage.sol` constructor (use dot notation)
 4. **Security**: Extensions MUST verify `msg.sender` in delegatecall context
-5. **NAV Integrity**: Cross-chain transfers MUST manage virtual balances
+5. **NAV Integrity**: Cross-chain transfers MUST manage virtual supply
 6. **Testing**: Always write/update tests when modifying .sol files - tests must pass
 7. **Error Handling**: Use custom errors (`error ErrorName(params)`) instead of revert strings
 8. **Override Keyword**: Add `override` to interface implementations - fix compilation warnings
@@ -90,24 +90,24 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 ```solidity
 // In MixinConstants.sol - use dots to separate namespace components
-bytes32 internal constant _VIRTUAL_BALANCES_SLOT = 
-    bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1);
+bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = 
+    bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1);
 
 // NOT this - avoid mixed dots and camelCase
 bytes32 internal constant _WRONG_SLOT = 
-    bytes32(uint256(keccak256("pool.proxy.virtualBalances")) - 1); // ❌
+    bytes32(uint256(keccak256("pool.proxy.virtualSupply")) - 1); // ❌
 
 // In MixinStorage.sol constructor - assert the slot calculation
-assert(_VIRTUAL_BALANCES_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.balances")) - 1));
+assert(_VIRTUAL_SUPPLY_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1));
 
 // Access in contracts
 function _getValue(address key) private view returns (uint256 value) {
-    bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(key);
+    bytes32 slot = _VIRTUAL_SUPPLY_SLOT;
     assembly { value := sload(slot) }
 }
 
 function _setValue(address key, uint256 value) private {
-    bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(key);
+    bytes32 slot = _VIRTUAL_SUPPLY_SLOT.deriveMapping(key);
     assembly { sstore(slot, value) }
 }
 ```
@@ -262,23 +262,27 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 **Problem**: Bridging affects NAV on both chains
 
 **Solution - Transfer Mode** (NAV neutral):
-- Source: `virtualBalance[baseToken] += sentAmount` (in base token)
-- Dest: `virtualBalance[baseToken] -= receivedAmount` (in base token)
+- Source: Writes **negative Virtual Supply** (shares = outputValue / NAV)
+- Dest: Writes **positive Virtual Supply** (shares = receivedValue / NAV)
+- NAV unchanged on both chains (effectiveSupply adjusts proportionally)
 
-**Solution - Rebalance Mode** (NAV changes):
-- Source: NAV changes naturally (performance transferred)
-- Dest: Verify `|destNav - sourceNav| <= tolerance`
+**Solution - Sync Mode** (NAV changes):
+- No virtual supply adjustments
+- NAV changes naturally (tokens leave source, arrive at destination)
+- Use for donations/rebalancing
 
 **Implementation**:
 ```solidity
-// Virtual balance storage
-bytes32 slot = _VIRTUAL_BALANCES_SLOT.deriveMapping(token);
+// Virtual supply storage (single slot per pool)
+bytes32 slot = VIRTUAL_SUPPLY_SLOT;
 
-// Get
-assembly { value := sload(slot) }
+// Get current virtual supply
+int256 vs;
+assembly { vs := sload(slot) }
 
-// Set
-assembly { sstore(slot, value) }
+// Update virtual supply
+int256 newVs = vs + delta;
+assembly { sstore(slot, newVs) }
 ```
 
 ## Security Checklist
@@ -292,7 +296,7 @@ When modifying code:
 - [ ] Price feed checked before token operations
 - [ ] NAV updated before reading (if need current value)
 - [ ] Reentrancy protection for external calls
-- [ ] Virtual balances managed for cross-chain transfers
+- [ ] Virtual supply managed for cross-chain transfers
 - [ ] **Tests written/updated for modified functionality**
 - [ ] **Tests pass** (`forge test` or `yarn test`)
 - [ ] **Custom errors used** (not revert strings)
@@ -429,12 +433,12 @@ When making changes:
 7. **Missing price feed checks** - Always verify hasPriceFeed() for new tokens
 8. **Unsafe token operations** - Use SafeTransferLib for USDT compatibility
 9. **Not testing on forks** - Integration tests should use actual deployed contracts
-10. **Ignoring virtual balances** - Cross-chain transfers must maintain NAV integrity
+10. **Ignoring virtual supply** - Cross-chain transfers must maintain NAV integrity via VS
 11. **CHANGING CONSTANTS.SOL ADDRESSES** - The addresses in Constants.sol are the CORRECT deployed addresses for fork testing. NEVER change them without verification. Always refer to Constants.sol as the source of truth.
 12. **ALWAYS USE CONSTANTS.SOL IMPORTS** - NEVER hardcode addresses or block numbers in test files. ALWAYS import from Constants.sol to ensure consistency and reduce RPC calls. Examples:
     - Use `Constants.ARB_USDC` not `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`
     - Use `Constants.AUTHORITY` not hardcoded authority addresses
 13. **DUPLICATING STORAGE SLOTS OR CONSTANTS** - NEVER duplicate hardcoded storage slots, addresses, or other constants across multiple files. ALWAYS define them in a single authoritative location (library or shared constants file) and import/reference them. This prevents inconsistencies when values need to be updated. Examples:
-    - Storage slots: Define in the library (e.g., VirtualStorageLib.VIRTUAL_BALANCES_SLOT) and reference from there
+    - Storage slots: Define in the library (e.g., VirtualStorageLib.VIRTUAL_SUPPLY_SLOT) and reference from there
     - Chain-specific addresses: Define in libraries (e.g., CrosschainLib) or shared types, not in multiple contracts
     - If a value must be duplicated for technical reasons (e.g., immutable in constructor), document clearly which is the source of truth

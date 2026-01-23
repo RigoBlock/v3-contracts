@@ -60,9 +60,8 @@ With VS-only model, both chains share performance proportionally:
 
 ## Documentation
 
-- **[PERFORMANCE_ATTRIBUTION.md](PERFORMANCE_ATTRIBUTION.md)** - Detailed explanation of performance attribution model
-- **[COMPREHENSIVE_ANALYSIS.md](COMPREHENSIVE_ANALYSIS.md)** - Deep technical analysis of virtual systems
-- **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** - Implementation details, testing, deployment
+- **[PERFORMANCE.md](PERFORMANCE.md)** - Performance attribution model and rebalancing guide
+- **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** - Technical implementation details
 - **[ZERO_SUPPLY_DOS_VULNERABILITY.md](ZERO_SUPPLY_DOS_VULNERABILITY.md)** - Fixed DOS vulnerability analysis (resolved Jan 2026)
 
 ## Quick Reference
@@ -95,7 +94,7 @@ function handleV3AcrossMessage(
 1. **Handler verification**: Only Across SpokePool can call handler
 2. **Price feed validation**: Token must have price feed before acceptance
 3. **NAV validation**: Final NAV checked against expected value
-4. **Virtual balance consistency**: Read and update within same transaction
+4. **Virtual supply consistency**: Read and update within same transaction
 
 ### Testing
 
@@ -119,7 +118,7 @@ Across SpokePool addresses vary by chain - see Constants.sol
 ## Known Limitations
 
 1. **No recovery mechanism**: Across V3 lacks direct token recovery
-2. **Effective supply constraint**: Negative VS limited to 90% of total supply
+2. **Effective supply constraint**: Negative VS limited to 87.5% of total supply (MINIMUM_SUPPLY_RATIO = 8)
 3. **Bridge fees**: Always reduce NAV (real economic cost)
 4. **Solver surplus**: Small NAV increase in Sync mode (benefits holders)
 
@@ -137,10 +136,10 @@ The implementation uses **Virtual Supply (VS) only** rather than the previous VB
 - ✅ Lower gas costs (one storage write per side)
 - ✅ No VB/VS synchronization complexity
 - ✅ Performance shared proportionally between chains
-- ✅ 10% safety buffer prevents supply exhaustion
+- ✅ 12.5% safety buffer prevents supply exhaustion (MINIMUM_SUPPLY_RATIO = 8)
 
 **Trade-off:**
-- ⚠️ Source cannot send more than 90% of effective supply in a single transfer
+- ⚠️ Source cannot send more than 87.5% of effective supply in a single transfer
 - ⚠️ Post-burn check required to prevent bypassing effective supply limit
 
 ## Resources
