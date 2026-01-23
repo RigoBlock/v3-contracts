@@ -24,7 +24,7 @@ interface IAIntents {
     error NullAddress();
     error TokenNotActive();
     error SameChainTransfer();
-    error InvalidAmount();
+    error InvalidInputToken();
 
     struct AcrossParams {
         address depositor;

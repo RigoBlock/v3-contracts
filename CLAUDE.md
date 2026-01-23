@@ -50,7 +50,7 @@ AGENTS.md provides concise, actionable guidelines for AI assistants. This docume
 **Critical implementation detail:**
 ```solidity
 // Slot calculation
-bytes32 slot = keccak256("pool.proxy.virtual.balances") - 1;
+bytes32 slot = keccak256("pool.proxy.virtual.supply") - 1;
 
 // Why -1? 
 // Prevents collision with compiler-assigned slots at keccak256(value)
@@ -61,13 +61,12 @@ bytes32 slot = keccak256("pool.proxy.virtual.balances") - 1;
 When you define storage as:
 ```solidity
 library VirtualStorageLib {
-    struct VirtualBalances {
-        mapping(address => int256) balances;
+    struct VirtualSupply {
         int256 supply;
     }
     
-    function _storage() private pure returns (VirtualBalances storage $) {
-        bytes32 slot = VIRTUAL_BALANCES_SLOT;
+    function _storage() private pure returns (VirtualSupply storage $) {
+        bytes32 slot = VIRTUAL_SUPPLY_SLOT;
         assembly { $.slot := slot }
     }
 }
@@ -75,60 +74,54 @@ library VirtualStorageLib {
 
 Each contract calling this library accesses **its own** storage at that slot. Tests calling library functions access the **test contract's storage**, not the pool's storage. This is why we cannot directly manipulate pool storage from tests - we must use actual pool operations.
 
-### Virtual Balance System Explained
+### Virtual Supply System Explained
 
 **The Problem:**
 ```
-Pool on Arbitrum has 100 USDC (NAV = 100)
+Pool on Arbitrum has 100 USDC, totalSupply = 100 shares (NAV = $1.00)
 Transfer 50 USDC to Optimism
-- Arbitrum: 50 USDC left (NAV drops to 50) ❌
-- Optimism: 50 USDC received (NAV = 50)
-- Total NAV dropped from 100 to 100? No, it's 150! ❌
+
+Without virtual supply:
+- Arbitrum: 50 USDC left, 100 shares → NAV = $0.50 ❌
+- Optimism: 50 USDC received, 50 shares → NAV = $1.00
+- NAVs diverge! ❌
 ```
 
-**The Solution - Virtual Balances:**
+**The Solution - Virtual Supply (VS-Only Model):**
 ```
 Transfer 50 USDC from Arbitrum to Optimism (Transfer mode)
 
-Arbitrum:
+Arbitrum (source):
 - Physical: 50 USDC
-- Virtual: +50 USDC (in base token units)
-- NAV calculation: (50 + 50) = 100 ✓
+- Total Supply: 100 shares
+- Virtual Supply: -50 shares (outputValue / NAV)
+- Effective Supply: 100 + (-50) = 50 shares
+- NAV: 50 USDC / 50 shares = $1.00 ✓
 
-Optimism:
+Optimism (destination):
+- Physical: 50 USDC (received)
+- Total Supply: 50 shares  
+- Virtual Supply: +50 shares (receivedValue / NAV)
+- Effective Supply: 50 + 50 = 100 shares
+- NAV: 50 USDC / 100 shares = $0.50... wait!
+```
+
+**Wait, destination NAV is wrong?**
+No! Destination already had assets before. Full picture:
+```
+Optimism BEFORE transfer:
 - Physical: 50 USDC
-- Virtual: -50 USDC (in base token units)
-- NAV calculation: (50 - 50) = 0 ✓
+- Total Supply: 50 shares
+- NAV: 50 / 50 = $1.00
 
-Total NAV: 100 + 0 = 100 ✓
+Optimism AFTER transfer (receives 49 USDC after fees):
+- Physical: 99 USDC
+- Virtual Supply: +49 shares (49 USDC / $1.00 NAV)
+- Effective Supply: 50 + 49 = 99 shares
+- NAV: 99 USDC / 99 shares = $1.00 ✓
 ```
 
-**Why two systems (Virtual Supply AND Virtual Balances)?**
-
-Virtual Supply handles edge case:
-```
-Pool deployed on Arbitrum, totalSupply = 100 tokens
-User bridges 20 pool tokens to Optimism
-- Arbitrum: totalSupply = 100, virtualSupply = 0
-- Optimism: totalSupply = 20, virtualSupply = -20
-- Net global supply: 100 + 0 + 20 + (-20) = 100 ✓
-```
-
-Without virtual supply:
-```
-Transfer USDC from Arbitrum to Optimism
-Optimism has totalSupply = 20 tokens
-
-How much virtual balance to create?
-Need: baseValue / currentNav * 10^poolDecimals
-But if we always used virtual balances, couldn't track cross-chain supply!
-```
-
-**When to use which:**
-- **Virtual Supply**: When reducing pool token holdings on outbound transfer (burn shares on source)
-- **Virtual Balance**: When offsetting token balance changes for NAV neutrality
-
-Both are used together to maintain NAV integrity while tracking true economic position.
+**Key insight:** VS adjusts effective supply to maintain NAV. Performance is shared proportionally across chains through the effective supply mechanism.
 
 ---
 
@@ -201,19 +194,22 @@ uint256 nav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
 Initial design: Only Transfer mode (always NAV-neutral)
 ```
 Problem: Solver fills with extra tokens (surplus)
-- Destination NAV increases
-- But we applied negative virtual balance
-- Result: NAV appears LOWER than reality ❌
+- Destination NAV increases naturally
+- But we wrote positive VS (shares arriving)
+- Result: Effective supply increases → NAV diluted
+
+Actually, this is correct! VS model shares performance.
 ```
 
 Solution: Two modes
-1. **Transfer**: Default, NAV-neutral, predictable behavior
-2. **Sync**: For donations/rebalancing, allows NAV changes, validates tolerance
+1. **Transfer**: Default, NAV-neutral via VS adjustments
+2. **Sync**: For donations/rebalancing, no VS adjustments, NAV changes naturally
 
 **Why not always use Sync?**
 - Most users want predictable NAV behavior
 - Transfer mode makes cross-chain transfers "just work"
 - Sync mode requires understanding NAV implications
+- Sync mode validated against tolerance (prevents large NAV manipulation)
 
 ### Security Decision - Handler Verification
 
@@ -239,18 +235,18 @@ Only Across SpokePool can legitimately call this after fill.
 ### Testing Challenge - Storage Isolation
 
 **Problem encountered:**
-Test tried to directly set virtual balance:
+Test tried to directly set virtual supply:
 ```solidity
 // In test
-VirtualStorageLib._setVirtualBalance(poolAddress, token, amount);
+VirtualStorageLib.updateVirtualSupply(delta);
 // Doesn't work! Updates test contract's storage, not pool's storage
 ```
 
 **Why?**
 Library uses ERC-7201 storage with explicit struct:
 ```solidity
-function _storage() private pure returns (VirtualBalances storage $) {
-    bytes32 slot = VIRTUAL_BALANCES_SLOT;
+function _storage() private pure returns (VirtualSupply storage $) {
+    bytes32 slot = VIRTUAL_SUPPLY_SLOT;
     assembly { $.slot := slot }  // $ = storage at this slot IN CALLING CONTRACT
 }
 ```
@@ -258,9 +254,9 @@ function _storage() private pure returns (VirtualBalances storage $) {
 When test calls library, `$` points to test contract storage at that slot, not pool storage.
 
 **Solution:**
-Create virtual balance through actual pool operations:
+Create virtual supply through actual pool operations:
 ```solidity
-// Use actual protocol operation (donation) to create virtual balance
+// Use actual protocol operation (donation) to create virtual supply
 vm.prank(address(spokePool));
 ECrosschain(pool).handleV3AcrossMessage(
     token,
@@ -268,7 +264,7 @@ ECrosschain(pool).handleV3AcrossMessage(
     relayer,
     encodeMessage(OpType.Transfer, ...)
 );
-// Now pool has virtual balance via legitimate operation
+// Now pool has virtual supply via legitimate operation
 ```
 
 ---

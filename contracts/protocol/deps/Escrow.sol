@@ -3,13 +3,12 @@ pragma solidity 0.8.28;
 
 import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
-import {CrosschainLib} from "../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../libraries/SafeTransferLib.sol";
 import {DestinationMessageParams, OpType} from "../types/Crosschain.sol";
 
 /// @title Escrow - Generic escrow for cross-chain operation refunds (Transfer and Sync)
-/// @notice Manages refunds from failed Transfer/Sync operations with NAV-neutral donations
+/// @notice Manages refunds to pool via escrow, like across expired deposits.
 /// @dev Deployed per pool per OpType via CREATE2 for deterministic addressing
 contract Escrow is ReentrancyGuardTransient {
     using SafeTransferLib for address;
@@ -27,42 +26,26 @@ contract Escrow is ReentrancyGuardTransient {
     error InvalidPool();
     error UnsupportedToken();
 
+    /// @dev The passed pool must be a Rigoblock pool, i.e. implement `donate` with unlock.
     constructor(address _pool, OpType _opType) {
         require(_pool.code.length > 0, InvalidPool()); // pool must be a smart contract
         pool = _pool;
         opType = _opType;
     }
 
-    /// @notice Allows anyone to claim refund tokens and send them to the pool
-    /// @dev Only allows Across-whitelisted tokens to prevent unauthorized token activation.
-    ///      This protects against:
-    ///      1. Gas griefing by filling max token slots (128 tokens)
-    ///      2. NAV calculation gas increases from too many active tokens
-    ///      3. Unauthorized token activation via donations
-    ///      Note: Native ETH is not supported because ECrosschain.donate() rejects it.
-    ///            Across refunds expired deposits in the original token (WETH/USDC/USDT), not native ETH.
-    /// @param token The token address to claim
+    /// @notice Allows anyone to send owned to the target Rigoblock pool.
+    /// @param token The token address to claim.
     function refundVault(address token) external nonReentrant {
-        // Only allow Across-whitelisted tokens (ECrosschain will reject native ETH anyway)
-        require(CrosschainLib.isAllowedCrosschainToken(token), UnsupportedToken());
-
-        // Get token balance (address(0) case is unreachable - whitelist validation rejects native)
+        require(token != address(0), UnsupportedToken());
         uint256 balance = IERC20(token).balanceOf(address(this));
-
         require(balance > 0, InvalidAmount());
 
-        DestinationMessageParams memory params;
-        params.opType = opType; // Use escrow's configured OpType (Transfer or Sync)
+        DestinationMessageParams memory params = DestinationMessageParams({opType: opType, shouldUnwrapNative: false});
 
-        // Store balance before transfer
+        // unlock and execute transfer flow
         IECrosschain(pool).donate(token, 1, params);
-
-        // Transfer tokens to pool (only ERC20 supported)
         token.safeTransfer(pool, balance);
-
-        // Process donation with actual balance
         IECrosschain(pool).donate(token, balance, params);
-
         emit TokensDonated(token, balance);
     }
 }

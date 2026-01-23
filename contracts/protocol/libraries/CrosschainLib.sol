@@ -63,11 +63,11 @@ library CrosschainLib {
     }
 
     /// @notice Applies BSC decimal conversion for USDC/USDT (18 decimals on BSC vs 6 on other chains).
-    /// @dev Handles bidirectional conversion to ensure exact cross-chain virtual balance offsetting.
+    /// @dev Handles bidirectional conversion to ensure exact cross-chain value calculation.
     /// @param inputToken Source token address.
     /// @param outputToken Destination token address.
     /// @param amount Original amount in source chain decimals.
-    /// @return Normalized amount for exact cross-chain virtual balance offsetting.
+    /// @return Normalized amount for correct cross-chain virtual supply calculation.
     function applyBscDecimalConversion(
         address inputToken,
         address outputToken,

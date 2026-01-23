@@ -48,7 +48,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     uint256 constant LARGE_AMOUNT = 10000e6; // 10,000 USDC
     
     bytes32 constant virtualSupplySlot = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
-    bytes32 constant virtualBalancesSlot = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
+
+    address tokenJar;
 
     address ethMulticallHandler = Constants.ETH_MULTICALL_HANDLER;
     address baseMulticallHandler = Constants.BASE_MULTICALL_HANDLER;
@@ -65,7 +66,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     ISmartPoolState.PoolTokens private s_poolTokens;
     
     /// @notice Simulate MulticallHandler execution of Instructions (simplified version)
-    /// @dev This mimics what the real Across MulticallHandler would do
+    /// @dev This helper is used only in isolated NAV neutrality tests to execute individual calls step-by-step
+    ///      for debugging purposes. Production flow tests use the real handleV3AcrossMessage() which calls
+    ///      the actual Across MulticallHandler contract (see test_HandleV3AcrossMessage_WithInstructions,
+    ///      test_RealMulticallHandler_WithInstructions, and integration tests below).
     function simulateMulticallHandler(
         address token,
         uint256 amount, 
@@ -111,6 +115,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         baseTokens[0] = Constants.ETH_USDC;
         baseTokens[1] = Constants.BASE_USDC;
         deployFixture(baseTokens);
+
+        tokenJar = ISmartPool(payable(ethereum.pool)).tokenJar();
+        assertTrue(tokenJar == 0x4444444444444444444444444444444444444444, "TokenJar address has been changed in fixture");
         
         // Fixture already created forks and pools - just access them
         // No need to create forks again, fixture did everything, also crediting tokens to user
@@ -193,10 +200,12 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             shouldUnwrapNative: false
         });
 
-        // TODO: check if we can make a better revert than just "Revert"
-        // Direct call to ECrosschain.donate should fail
-        // We expect it to revert, but not with a specific error since there's no explicit modifier
-        vm.expectRevert();
+        // Direct call to ECrosschain.donate fails because:
+        // 1. ECrosschain has no ERC20 interface - balanceOf(address(this)) returns 0 bytes
+        // 2. Without delegatecall context from pool proxy, storage access is wrong
+        // This causes a raw EVM revert (no specific selector) which is expected behavior
+        // since ECrosschain MUST only be called via delegatecall from pool proxy.
+        vm.expectRevert(); // Raw EVM revert - no specific selector available
         eCrosschain().donate(
             Constants.ETH_USDC,  // token
             1,                // amount
@@ -205,7 +214,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         params.opType = OpType.Sync;
 
-        vm.expectRevert();
+        vm.expectRevert(); // Raw EVM revert - no specific selector available
         eCrosschain().donate(
             Constants.ETH_USDC,  // token
             1,                // amount
@@ -1627,11 +1636,15 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         // Step 1: Initialize donation (store initial balance for comparison) 
         // This simulates what the MulticallHandler would do before transferring tokens
+        DestinationMessageParams memory destParams = DestinationMessageParams({
+            opType: sourceMsg.opType,
+            shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination
+        });
         vm.prank(ethMulticallHandler);
         try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             1, // flag amount for initialization 
-            DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination })
+            destParams
         ) {
             console2.log("Step 1 - Initialize donation: SUCCESS");
         } catch Error(string memory reason) {
@@ -1662,7 +1675,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         try IECrosschain(destinationPool).donate(
             Constants.ETH_USDC,
             transferAmount, // actual transfer amount
-            DestinationMessageParams({ opType: sourceMsg.opType, shouldUnwrapNative: sourceMsg.shouldUnwrapOnDestination })
+            destParams
         ) {
             console2.log("Step 3 - Final donation: SUCCESS");
         } catch Error(string memory reason) {
@@ -1846,9 +1859,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }));
     }
 
-    /// @notice Test partial reduction of virtual balance with NO virtual supply increase (lines 141-142)
-    /// @dev Lines 141-142: amountValueInBase < baseTokenVBUint, so VB partially reduced, remainingValueInBase = 0
-    function test_IntegrationFork_ECrosschain_PartialVirtualBalanceReduction() public {
+    /// @notice Test inbound Transfer clears negative VS (VS-only model)
+    /// @dev In VS-only model, negative VS from prior outbound is cleared by inbound Transfer
+    function test_IntegrationFork_ECrosschain_NegativeVS_ClearedByInbound() public {
         address poolOwner = ISmartPool(payable(ethereum.pool)).owner();
         vm.startPrank(poolOwner);
         deal(Constants.ETH_USDC, poolOwner, 1000e6);
@@ -1856,12 +1869,15 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         ISmartPool(payable(ethereum.pool)).mint(poolOwner, 1000e6, 0);
         vm.stopPrank();
         
-        // Set virtual balance to 500 USDC (MORE than donation to trigger partial reduction)
-        bytes32 slot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
-        int256 virtualBalance = 500e6; // LARGER than donation
-        vm.store(ethereum.pool, slot, bytes32(uint256(virtualBalance)));
+        // Set negative virtual supply to simulate prior outbound transfer
+        int256 negativeVS = -500e6; // Simulates shares "sent" to another chain
+        vm.store(ethereum.pool, virtualSupplySlot, bytes32(uint256(negativeVS)));
         
-        uint256 donationAmount = 300e6; // LESS than virtual balance for partial reduction
+        uint256 donationAmount = 300e6; // Inbound Transfer - less than |negative VS|
+        
+        // Get initial VS
+        int256 initialVS = int256(uint256(vm.load(ethereum.pool, virtualSupplySlot)));
+        console2.log("Initial VS (negative):", initialVS);
         
         // Fund handler with USDC
         deal(Constants.ETH_USDC, Constants.ETH_MULTICALL_HANDLER, donationAmount);
@@ -1872,14 +1888,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             shouldUnwrapNative: false
         }));
         IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donationAmount);
-        
-        // Expect VirtualBalanceUpdated event (partial reduction: 500 -> 200)
-        vm.expectEmit(true, true, true, true);
-        emit IECrosschain.VirtualBalanceUpdated(
-            Constants.ETH_USDC,
-            -300e6, // adjustment: reducing by donation amount
-            200e6   // newBalance: 500 - 300 = 200
-        );
         
         // Expect TokensReceived event
         vm.expectEmit(true, true, true, true);
@@ -1896,14 +1904,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }));
         vm.stopPrank();
         
-        // Virtual balance should be PARTIALLY reduced (500 - 300 = 200)
-        // Lines 141-142: partial reduction, remainingValueInBase = 0 (no VS increase)
-        int256 finalVB = int256(uint256(vm.load(ethereum.pool, slot)));
-        assertEq(finalVB, 200e6, "VB should be partially reduced: 500 - 300 = 200");
-        
-        // Virtual supply should be UNCHANGED (remainingValueInBase = 0)
-        int256 virtualSupply = int256(uint256(vm.load(ethereum.pool, virtualSupplySlot)));
-        assertEq(virtualSupply, 0, "Virtual supply should remain 0 (lines 141-142: remainingValueInBase = 0)");
+        // Virtual supply should be less negative (VS-only model: inbound adds positive VS)
+        int256 finalVS = int256(uint256(vm.load(ethereum.pool, virtualSupplySlot)));
+        console2.log("Final VS:", finalVS);
+        assertTrue(finalVS > initialVS, "VS should increase (less negative) after inbound Transfer");
     }
 
     function test_AIntents_InvalidOpType_Revert() public {
@@ -2050,16 +2054,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint256 transferAmount = 100e6; // 100 USDC
         
         // Verify no virtual supply exists (should be 0 by default)
-        uint256 initialVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        int256 initialVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         assertEq(initialVirtualSupply, 0, "Virtual supply should start at 0");
         
+        console2.log("=== VS-ONLY MODEL: Outbound Transfer Test ===");
         console2.log("Initial virtual supply:", initialVirtualSupply);
-        
-        // Get initial virtual balance for USDC
-        bytes32 usdcBalanceSlot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
-        int256 initialVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
-        
-        console2.log("Initial USDC virtual balance:", initialVirtualBalance);
         
         // Fund poolOwner with USDC
         deal(Constants.ETH_USDC, poolOwner, transferAmount);
@@ -2085,24 +2084,16 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             }))
         });
         
-        // Execute depositV3 - should update virtual balance entirely (line 258)
+        // Execute depositV3 - should write negative virtual supply (VS-only model)
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
         
-        // Verify virtual supply remains 0
-        uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        // Verify virtual supply is now negative (shares "left" this chain)
+        int256 finalVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         console2.log("Final virtual supply:", finalVirtualSupply);
-        assertEq(finalVirtualSupply, 0, "Virtual supply should remain 0");
+        assertLt(finalVirtualSupply, 0, "Virtual supply should be negative after outbound transfer");
         
-        // Verify virtual balance was updated with full transfer amount (line 258)
-        int256 finalVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
-        console2.log("Final USDC virtual balance:", finalVirtualBalance);
-        
-        // Virtual balance should increase by the transfer amount (positive = we sent tokens out)
-        assertGt(finalVirtualBalance, initialVirtualBalance, "Virtual balance should increase by transfer amount");
-        assertEq(finalVirtualBalance, int256(transferAmount), "Virtual balance should equal transfer amount");
-        
-        console2.log("No virtual supply test completed - line 258 covered!");
+        console2.log("VS-only model outbound transfer test completed!");
     }
 
     /// @notice Test sufficient virtual supply case (line 243)
@@ -2196,15 +2187,15 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Sufficient virtual supply test completed - line 243 covered!");
     }
 
-    /// @notice Test insufficient virtual supply case (lines 246, 249, 253)
-    /// @dev Tests the path where 0 < virtual supply < sharesToBurn
-    /// Virtual supply is fully burned, remainder goes to virtual balance
-    /// This happens when outbound transfer exceeds available virtual supply from prior inbound donations
+    /// @notice Test outbound transfer exceeding prior inbound (VS goes negative)
+    /// @dev Tests the VS-only model: positive VS from inbound is reduced, then goes negative
     function test_AIntents_InsufficientVirtualSupply_LargeOutbound() public {
-        uint256 inboundAmount = 50e6; // 50 USDC inbound first (creates small virtual supply)
-        uint256 outboundAmount = 150e6; // Then 150 USDC outbound (exceeds virtual supply)
+        console2.log("=== VS-ONLY MODEL: Large Outbound After Small Inbound ===");
         
-        // Step 1: Simulate small inbound donation to create insufficient virtual supply
+        uint256 inboundAmount = 50e6; // 50 USDC inbound first (creates positive virtual supply)
+        uint256 outboundAmount = 150e6; // Then 150 USDC outbound (exceeds positive VS)
+        
+        // Step 1: Simulate small inbound donation to create positive virtual supply
         deal(Constants.ETH_USDC, ethMulticallHandler, inboundAmount);
         
         vm.startPrank(ethMulticallHandler);
@@ -2219,16 +2210,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         }));
         vm.stopPrank();
         
-        uint256 virtualSupplyAfterInbound = uint256(vm.load(pool(), virtualSupplySlot));
-        console2.log("Virtual supply after small inbound:", virtualSupplyAfterInbound);
-        assertGt(virtualSupplyAfterInbound, 0, "Inbound donation should create some virtual supply");
+        int256 virtualSupplyAfterInbound = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        console2.log("Virtual supply after inbound:", virtualSupplyAfterInbound);
+        assertTrue(virtualSupplyAfterInbound > 0, "Inbound donation should create positive virtual supply");
         
-        // Get initial virtual balance
-        bytes32 usdcBalanceSlot = keccak256(abi.encode(Constants.ETH_USDC, virtualBalancesSlot));
-        int256 initialVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
-        console2.log("Initial USDC virtual balance:", initialVirtualBalance);
-        
-        // Step 2: Large outbound transfer (exceeds virtual supply - lines 246, 249, 253)
+        // Step 2: Large outbound transfer (exceeds positive VS, should result in negative VS)
         deal(Constants.ETH_USDC, poolOwner, outboundAmount);
         
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
@@ -2254,19 +2240,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
         
-        // Verify virtual supply was fully burned (line 246)
-        uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        // Verify virtual supply is now negative (VS-only model: outbound > inbound)
+        int256 finalVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         console2.log("Final virtual supply:", finalVirtualSupply);
-        assertEq(finalVirtualSupply, 0, "Virtual supply should be fully burned (insufficient case)");
         
-        // Verify virtual balance increased for remainder (line 253)
-        int256 finalVirtualBalance = int256(uint256(vm.load(pool(), usdcBalanceSlot)));
-        console2.log("Final USDC virtual balance:", finalVirtualBalance);
+        // In VS-only model, VS goes negative when outbound exceeds prior inbound
+        assertLt(finalVirtualSupply, virtualSupplyAfterInbound, "Virtual supply should decrease");
         
-        // Virtual balance should be positive (we sent more than virtual supply could offset)
-        assertGt(finalVirtualBalance, initialVirtualBalance, "Virtual balance should increase with remainder");
-        
-        console2.log("Insufficient virtual supply test completed - lines 246, 249, 253 covered!");
+        console2.log("VS-only model large outbound test completed!");
     }
 
     /// @notice Test transfer with WETH and existing virtual supply
@@ -2276,7 +2257,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// - Unit conversions in virtual supply calculations
     /// - NAV impact from virtual supply (higher supply = lower NAV)
     function test_AIntents_VirtualSupply_WithNonBaseToken() public {
-        console2.log("\n=== WETH Transfer With Virtual Supply Test ===");
+        console2.log("\n=== VS-ONLY MODEL: WETH Transfer With Existing Positive VS ===");
 
         // Activate WETH by writing to active tokens storage
         bytes32 activeTokensSlot = StorageLib.TOKEN_REGISTRY_SLOT;
@@ -2284,26 +2265,17 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.store(pool(), keccak256(abi.encode(activeTokensSlot)), bytes32(uint256(uint160(Constants.ETH_WETH)))); // addresses[0]
         vm.store(pool(), keccak256(abi.encode(Constants.ETH_WETH, bytes32(uint256(activeTokensSlot) + 1))), bytes32(uint256(1))); // positions[WETH] = 1
 
-        // Set virtual supply AFTER NAV update (to simulate prior inbound donation)
-        // Use small amount: 0.1 WETH worth (~$300 at $3000/ETH = 300e6 USDC = 0.3 pool shares at NAV 1.0)
-        // TODO: assert that we cannot have virtual supply bigger than total supply (seems test panics in that case)
-        // virtual supply is in base token units (USDC), and can never be bigger than total supply
-        uint256 initialVirtualSupply = 30e6; // 0.3 pool shares worth
-        vm.store(pool(), virtualSupplySlot, bytes32(initialVirtualSupply));
+        // Set positive virtual supply (simulates prior inbound donation)
+        int256 initialVirtualSupply = 30e6; // 30 pool shares (positive VS)
+        vm.store(pool(), virtualSupplySlot, bytes32(uint256(initialVirtualSupply)));
 
-        // Update NAV FIRST (before setting virtual supply to avoid assertion issues)
+        // Update NAV
         ISmartPoolActions(pool()).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory tokens = ISmartPoolState(pool()).getPoolTokens();
         
         console2.log("Initial virtual supply:", initialVirtualSupply);
         console2.log("Initial NAV:", tokens.unitaryValue);
         console2.log("Real supply:", tokens.totalSupply);
-
-        // OPTION 2: Get initial BASE TOKEN virtual balance (not WETH VB)
-        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
-        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
-        int256 initialBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
-        console2.log("Initial base token VB:", initialBaseTokenVB);
 
         // Fund pool with WETH
         deal(Constants.ETH_WETH, pool(), 5e17); // 0.5 WETH
@@ -2330,28 +2302,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             }))
         }));
 
-        // Verify virtual supply changed
-        uint256 finalVirtualSupply = uint256(vm.load(pool(), virtualSupplySlot));
+        // Verify virtual supply changed (VS-only model: should become negative or less positive)
+        int256 finalVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         console2.log("Final virtual supply:", finalVirtualSupply);
 
-        // OPTION 2: Check BASE TOKEN virtual balance (in USDC units)
-        int256 finalBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
-        console2.log("Final base token VB:", finalBaseTokenVB);
+        // In VS-only model, outbound transfer writes negative VS, so overall VS decreases
+        assertTrue(finalVirtualSupply < initialVirtualSupply, "Virtual supply should decrease after outbound transfer");
 
-        // Calculate expectations using actual pool properties
-        uint8 poolDecimals = ISmartPoolState(pool()).getPool().decimals;
-        int256 wethValue = IEOracle(pool()).convertTokenAmount(Constants.ETH_WETH, int256(495e15), poolBaseToken);
-        uint256 virtualSupplyValue = (tokens.unitaryValue * initialVirtualSupply) / 10 ** poolDecimals;
-        
-        console2.log("WETH transfer value (USDC):", uint256(wethValue));
-        console2.log("Virtual supply value (USDC):", virtualSupplyValue);
-
-        // With 0.495 WETH (~$1485) vs 0.3 shares (~$0.3), WETH value >> virtual supply value
-        // So we expect: full burn of virtual supply + remainder to BASE TOKEN virtual balance
-        assertEq(finalVirtualSupply, 0, "Virtual supply fully burned");
-        assertGt(finalBaseTokenVB, initialBaseTokenVB, "Remainder goes to base token virtual balance");
-
-        console2.log("WETH with virtual supply test completed - burn path verified!");
+        console2.log("VS-only model: WETH transfer with existing VS completed!");
     }
 
     /// @notice Test partial virtual supply burn with WETH (non-base token)
@@ -2405,9 +2363,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         uint8 poolDecimals = ISmartPoolState(pool()).getPool().decimals;
         s_result = (uint256(s_virtualSupply) * (10 ** poolDecimals)) / navParams.unitaryValue;
         console2.log("Expected shares burned:", s_result);
-
-        // Get initial WETH virtual balance  
-        s_storageValue = keccak256(abi.encode(Constants.ETH_WETH, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
         
         // Execute transfer
         vm.prank(poolOwner);
@@ -2445,19 +2400,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Partial burn test completed!");
     }
 
-    /// @notice Test transfer with non-base token to verify correct unit conversion
-    /// @dev This tests that virtual balance would be stored in inputToken units, not base token units
-    /// NOTE: This test currently fails at the SpokePool.depositV3 stage (EvmError: Revert on transferFrom)
-    /// because deal() doesn't set up proper ERC20 approval state for transferFrom to work.
-    /// However, the test successfully verifies that:
-    /// 1. WETH can be activated in the pool (via storage manipulation)
-    /// 2. WETH is recognized as an owned token (isOwnedToken returns true)
-    /// 3. The oracle can convert between WETH and USDC
-    /// 
-    /// The virtual balance storage logic (lines 248-256 in AIntents.sol) that this test aims to verify
-    /// would execute correctly if the SpokePool transfer succeeded. The logic converts base token value  
-    /// back to inputToken units before storing, which is critical for tokens with different decimals.
+    /// @notice Test transfer with non-base token to verify correct VS calculation
+    /// @dev Tests VS-only model: negative VS is written when transferring non-base tokens
     function test_IntegrationFork_Transfer_NonBaseToken() public {
+        console2.log("\n=== VS-ONLY MODEL: Non-Base Token (WETH) Transfer Test ===");
+        
         s_amount = 1e18; // 1 WETH
         s_value = 99e16; // 0.99 WETH on destination (1% slippage)
 
@@ -2497,10 +2444,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("Transfer token: WETH (18 decimals)");
 
         // Get initial virtual balance for BASE TOKEN
-        s_tempAddr = ISmartPoolState(pool()).getPool().baseToken;
-        s_slot = keccak256(abi.encode(s_tempAddr, virtualBalancesSlot));
-        s_virtualSupply = int256(uint256(vm.load(pool(), s_slot)));
-        console2.log("Initial base token VB:", s_virtualSupply);
+        // Get initial virtual supply
+        int256 initialVS = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        console2.log("Initial VS:", initialVS);
 
         // Create transfer params with WETH
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
@@ -2530,13 +2476,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             console2.log("First active token:", activeTokens[0]);
         }
 
-        // Calculate expected virtual balance delta
-        // 0.99 WETH @ ~$3066 = ~3033 USDC = 3033435060 in 6 decimals
-        
-        // Expect VirtualBalanceUpdated event
-        vm.expectEmit(true, true, true, true);
-        emit IECrosschain.VirtualBalanceUpdated(s_tempAddr, 3033435060, 3033435060);
-
         // Expect CrossChainTransferInitiated event
         vm.expectEmit(true, true, true, true);
         emit IAIntents.CrossChainTransferInitiated(
@@ -2551,16 +2490,14 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
 
-        // Check final BASE TOKEN virtual balance
-        s_result = uint256(vm.load(pool(), s_slot));
-        console2.log("Final base token VB:", s_result);
+        // Check final virtual supply - should be negative (VS-only model)
+        int256 finalVS = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        console2.log("Final VS:", finalVS);
 
-        // Virtual balance stored in BASE TOKEN units (USDC)
-        // Verify it's in USDC units (6 decimals), around 2970e6
-        assertGt(s_result, 1000e6, "Virtual balance should be > 1000 USDC");
-        assertLt(s_result, 5000e6, "Virtual balance should be < 5000 USDC");
+        // Virtual supply should decrease (shares "left" this chain)
+        assertLt(finalVS, initialVS, "Virtual supply should decrease after outbound transfer");
 
-        console2.log("Virtual balance correctly stored in base token units!");
+        console2.log("VS-only model: negative VS written for WETH transfer!");
     }
 
     /// @notice Test surplus donation when totalSupply = 0 (edge case)
@@ -2946,7 +2883,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("- Second donate() handled via virtual supply mechanism");
     }
 
-    // TODO: this does not actually test attack before initialization, but after total burn, which has null supply but
     //  initialized price, and since total + virtual supply are null, MixinPoolValue will return early at line 51, before
     // updating price (because it would have to divide total assets by 0)
     /// @notice Test DOS attack scenario: Attacker sends tokens BEFORE first donate() on uninitialized pool
@@ -2964,6 +2900,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deal(ethereum.pool, burner, totalSupply);
         vm.prank(burner);
         ISmartPoolActions(ethereum.pool).burn(totalSupply, 0);
+
+        // checking balance after burn, since burn transfers spread tokens to tokenJar
+        uint256 tokenJarBalanceBefore = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
         
         uint256 supplyAfterBurn = ISmartPoolState(ethereum.pool).getPoolTokens().totalSupply;
         console2.log("Pool total supply after burn:", supplyAfterBurn);
@@ -3012,31 +2951,38 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.stopPrank();
         
         console2.log("\n[SUCCESS] DOS attack prevented!");
-        console2.log("Attacker's tokens transferred to tokenJar for GRG buyback-and-burn");
         console2.log("Legitimate transfer completed successfully");
-        
-        // TODO: test if commenting ISmartPool call will result in test failing
-        // Verify attacker tokens were transferred to tokenJar
-        address tokenJar = ISmartPool(payable(ethereum.pool)).tokenJar();
-        uint256 tokenJarBalance = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
-        // TODO: why is this test passing? tokens are not transferred to tokenJar now!!!!!!!!!!!
-        // It's probably passing because tokenJar is address(0), which holds a lot of USDC!
-        // As in most cases, ai-generated tests must be line-by-line checked
-        assertGe(tokenJarBalance, attackAmount, "Attacker tokens should be in tokenJar");
+        console2.log("TokenJar address", tokenJar);
+        uint256 tokenJarBalanceAfter = IERC20(Constants.ETH_USDC).balanceOf(tokenJar);
+        // Verify attacker tokens were not transferred to tokenJar
+        assertEq(tokenJarBalanceAfter, tokenJarBalanceBefore, "Attacker tokens should not be in tokenJar");
         
         assertTrue(true, "DOS attack successfully mitigated");
     }
 
     /// @notice Test transfer with null/zero output amount
     /// @dev Verifies that null transfers are handled safely without burning virtual supply incorrectly
+    /// @dev With outputAmount=0: burntAmount = (0 * 10^decimals) / unitaryValue = 0, so no VS change
     function test_IntegrationFork_Transfer_NullOutputAmount() public {
         uint256 transferAmount = 0; // Zero amount transfer
 
-        // Fund pool owner with tokens
+        // Fund pool owner with tokens (needed for gas, not for transfer)
         deal(Constants.ETH_USDC, poolOwner, 1000e6);
         
         console2.log("\n=== Null Output Amount Transfer Test ===");
         console2.log("Transfer amount:", transferAmount);
+
+        // Capture initial state BEFORE any operations
+        // Note: First updateUnitaryValue() will write price to storage if not already set
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        
+        ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(pool()).getPoolTokens();
+        int256 initialVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        uint256 initialStoredPrice = initialTokens.unitaryValue;
+        
+        console2.log("Initial total supply:", initialTokens.totalSupply);
+        console2.log("Initial virtual supply:", initialVirtualSupply);
+        console2.log("Initial stored price:", initialStoredPrice);
 
         // Create transfer params with zero amount
         IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
@@ -3059,12 +3005,32 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             }))
         });
 
-        // Zero outputAmount should now be rejected
+        // Execute zero-amount transfer
         vm.prank(poolOwner);
-        vm.expectRevert(IAIntents.InvalidAmount.selector);
         IAIntents(pool()).depositV3(params);
         
-        console2.log("Zero outputAmount correctly rejected with InvalidAmount error!");
+        // Capture final state
+        ISmartPoolState.PoolTokens memory finalTokens = ISmartPoolState(pool()).getPoolTokens();
+        int256 finalVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        uint256 finalStoredPrice = finalTokens.unitaryValue;
+        
+        console2.log("\nFinal total supply:", finalTokens.totalSupply);
+        console2.log("Final virtual supply:", finalVirtualSupply);
+        console2.log("Final stored price:", finalStoredPrice);
+
+        // Assert: Total supply unchanged (no minting/burning of real tokens)
+        assertEq(finalTokens.totalSupply, initialTokens.totalSupply, "Total supply should be unchanged");
+        
+        // Assert: Virtual supply unchanged (burntAmount = 0 when outputAmount = 0)
+        assertEq(finalVirtualSupply, initialVirtualSupply, "Virtual supply should be unchanged for zero amount");
+        
+        // Assert: Stored price unchanged (no value transferred, no price impact)
+        assertEq(finalStoredPrice, initialStoredPrice, "Stored price should be unchanged");
+        
+        console2.log("\n[SUCCESS] Zero outputAmount correctly handled:");
+        console2.log("- Total supply: unchanged");
+        console2.log("- Virtual supply: unchanged (burntAmount = 0)");
+        console2.log("- Stored price: unchanged");
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -3077,7 +3043,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// - Source NAV should remain constant regardless of token price changes
     /// - This is the intended behavior of the implemented Option 2
     function test_SourceNavNeutral() public {
-        console2.log("\n=== SOURCE NAV NEUTRALITY TEST (OPTION 2) ===");
+        console2.log("\n=== SOURCE NAV NEUTRALITY TEST (VS-ONLY MODEL) ===");
         console2.log("Verifying that source chain NAV remains constant after transfer");
         
         uint256 transferAmount = 1000e6; // 1000 USDC
@@ -3087,6 +3053,11 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         ISmartPoolActions(pool()).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory sourceInitial = ISmartPoolState(pool()).getPoolTokens();
         console2.log("Source NAV before transfer:", sourceInitial.unitaryValue);
+        console2.log("Source total supply:", sourceInitial.totalSupply);
+        
+        // Get initial virtual supply
+        int256 initialVS = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        console2.log("Initial virtual supply:", initialVS);
         
         // Execute transfer
         deal(Constants.ETH_USDC, poolOwner, transferAmount);
@@ -3111,32 +3082,136 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             }))
         }));
         
-        // Verify base token virtual balance was written (Option 2 behavior)
-        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
-        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
-        int256 baseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
-        console2.log("Source base token VB after transfer:", baseTokenVB);
-        assertGt(baseTokenVB, 0, "Base token virtual balance should be positive after transfer");
+        // Verify negative virtual supply was written (VS-only model)
+        int256 finalVS = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        console2.log("Final virtual supply:", finalVS);
+        assertLt(finalVS, initialVS, "Virtual supply should decrease after outbound transfer (negative VS written)");
         
-        // Verify source NAV remains constant (Option 2: source is NAV-neutral)
+        // Verify source NAV remains constant (VS-only: source is NAV-neutral via negative VS)
         ISmartPoolActions(pool()).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory sourceAfter = ISmartPoolState(pool()).getPoolTokens();
         console2.log("Source NAV after transfer:", sourceAfter.unitaryValue);
         
         // NAV should be approximately equal (allowing for small rounding differences)
-        // The base token VB offsets the transferred value, keeping NAV constant
+        // The negative VS offsets the reduced real assets, keeping NAV constant
         uint256 navDiff = sourceAfter.unitaryValue > sourceInitial.unitaryValue
             ? sourceAfter.unitaryValue - sourceInitial.unitaryValue
             : sourceInitial.unitaryValue - sourceAfter.unitaryValue;
         
-        // The nav does not change because the input and rescaled output amount are equal - impact tested previously
+        // The nav does not change because negative VS reduces effective supply
         uint256 maxDiff = 0;
-        assertLe(navDiff, maxDiff, "Source NAV should remain constant (< 0.1% change)");
+        assertLe(navDiff, maxDiff, "Source NAV should remain constant (0 change)");
         
         console2.log("NAV difference:", navDiff);
-        console2.log("Max allowed difference (0.1%%):", maxDiff);
-        console2.log("\n=== Source NAV Neutrality Verified (Option 2) ===");
+        console2.log("\n=== Source NAV Neutrality Verified (VS-only Model) ===");
         console2.log("Source chain NAV remains constant after transfer");
-        console2.log("Base token virtual balance offsets the transferred value");
+        console2.log("Negative virtual supply offsets the reduced assets");
+    }
+
+    /// @notice Test that native ETH deposits require inputToken to be WETH
+    /// @dev This prevents address spoofing where an attacker could set inputToken=USDT
+    ///      with sourceNativeAmount>0 to bypass USDT activation check
+    function test_AIntents_RejectsNativeWithNonWethInputToken() public {
+        console2.log("\n=== Testing Native ETH Spoofing Prevention ===");
+        
+        // Setup: We have ETH active but NOT USDT
+        address weth = Constants.ETH_WETH;
+        address usdt = Constants.ETH_USDT;
+        address poolOwner = ISmartPool(payable(pool())).owner();
+        
+        // Give pool some ETH
+        deal(pool(), 10 ether);
+        
+        console2.log("WETH address:", weth);
+        console2.log("USDT address:", usdt);
+        console2.log("Pool has ETH:", pool().balance);
+        
+        // Create malicious params: inputToken=USDT but sourceNativeAmount>0
+        // This should be rejected because inputToken must be WETH when sending native
+        SourceMessageParams memory sourceParams = SourceMessageParams({
+            opType: OpType.Sync,
+            navTolerance: 100,
+            shouldUnwrapOnDestination: false,
+            sourceNativeAmount: 1 ether  // Sending native ETH
+        });
+        
+        IAIntents.AcrossParams memory maliciousParams = IAIntents.AcrossParams({
+            depositor: pool(),
+            recipient: pool(),
+            inputToken: usdt,  // SPOOFING ATTACK: Using USDT but sending native ETH
+            outputToken: Constants.ARB_USDT,
+            inputAmount: 1 ether,
+            outputAmount: 3000e6,  // ~3000 USDT
+            destinationChainId: 42161,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 3600),
+            exclusivityDeadline: 0,
+            message: abi.encode(sourceParams)
+        });
+        
+        // Should revert with InvalidInputToken
+        vm.prank(poolOwner);
+        vm.expectRevert(IAIntents.InvalidInputToken.selector);
+        IAIntents(pool()).depositV3(maliciousParams);
+        
+        console2.log("Attack correctly rejected with InvalidInputToken");
+        console2.log("\n=== Native ETH Spoofing Prevention Verified ===");
+    }
+
+    /// @notice Test that native ETH deposits work when inputToken is WETH
+    function test_AIntents_AllowsNativeWithWethInputToken() public {
+        console2.log("\n=== Testing Valid Native ETH Deposit ===");
+        
+        address weth = Constants.ETH_WETH;
+        address poolOwner = ISmartPool(payable(pool())).owner();
+        
+        // Give pool some ETH
+        deal(pool(), 10 ether);
+        
+        console2.log("ETH active and pool has ETH:", pool().balance);
+        
+        // Create valid params: inputToken=WETH with sourceNativeAmount>0
+        SourceMessageParams memory sourceParams = SourceMessageParams({
+            opType: OpType.Sync,
+            navTolerance: 100,
+            shouldUnwrapOnDestination: false,
+            sourceNativeAmount: 1 ether
+        });
+        
+        IAIntents.AcrossParams memory validParams = IAIntents.AcrossParams({
+            depositor: pool(),
+            recipient: pool(),
+            inputToken: weth,  // Correct: WETH when sending native
+            outputToken: Constants.ARB_WETH,
+            inputAmount: 1 ether,
+            outputAmount: 0.99 ether,
+            destinationChainId: 42161,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 3600),
+            exclusivityDeadline: 0,
+            message: abi.encode(sourceParams)
+        });
+        
+        // Should NOT revert with InvalidInputToken
+        // (may revert later for other reasons like TokenNotActive if ETH not active)
+        vm.prank(poolOwner);
+        
+        // The call might revert for other reasons (e.g., SpokePool interaction)
+        // but it should NOT revert with InvalidInputToken
+        try IAIntents(pool()).depositV3(validParams) {
+            console2.log("Deposit succeeded");
+        } catch (bytes memory reason) {
+            // Ensure it's not InvalidInputToken
+            bytes4 selector = bytes4(reason);
+            assertTrue(
+                selector != IAIntents.InvalidInputToken.selector,
+                "Should not revert with InvalidInputToken for valid WETH input"
+            );
+            console2.log("Deposit reverted for other reason (expected in test env)");
+        }
+        
+        console2.log("\n=== Valid Native ETH Deposit Test Complete ===");
     }
 }

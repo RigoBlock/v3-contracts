@@ -8,8 +8,10 @@ import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
+import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {NavComponents, NetAssetsValue} from "../../types/NavComponents.sol";
 
 abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
@@ -219,6 +221,11 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn, userAccount.userBalance);
         poolTokens().totalSupply -= burntAmount;
+
+        // Post-burn safety check: ensure effective supply doesn't drop below minimum threshold
+        // This prevents bypassing the EffectiveSupplyTooLow check via sequential burns
+        int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+        NavImpactLib.validateSupply(poolTokens().totalSupply, virtualSupply);
 
         netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Cross-chain token transfer integration using [Across Protocol V3](https://across.to/), maintaining NAV (Net Asset Value) integrity through virtual balance system.
+Cross-chain token transfer integration using [Across Protocol V3](https://across.to/), maintaining NAV (Net Asset Value) integrity through Virtual Supply (VS) system.
 
 ## Architecture
 
@@ -11,30 +11,32 @@ Cross-chain token transfer integration using [Across Protocol V3](https://across
 **AIntents.sol** (Source Chain Adapter)
 - Path: `contracts/protocol/extensions/adapters/AIntents.sol`
 - Initiates transfers via `depositV3()`
-- Manages source chain virtual adjustments in base token units
+- Writes **negative VS** on source (shares leaving this chain)
 - Encodes destination instructions as multicall
 
 **ECrosschain.sol** (Destination Chain Extension)
 - Path: `contracts/protocol/extensions/ECrosschain.sol`
 - Receives via `handleV3AcrossMessage()` (called by SpokePool)
+- Writes **positive VS** on destination (shares arriving)
 - Validates NAV changes and applies virtual supply adjustments
 - Handles Transfer (NAV-neutral) and Sync (NAV change) modes
 
-**Virtual System**
-- **Virtual Supply**: Pool token shares representing cross-chain holdings (in pool token units)
-- **Virtual Balances**: Base token adjustments for transferred tokens (in base token units)
-- Maintains NAV integrity and correct performance attribution during cross-chain operations
+**Virtual Supply (VS-Only Model)**
+- **Virtual Supply**: Pool token shares representing cross-chain holdings
+- **Source chain**: Negative VS (shares sent away → reduces effective supply)
+- **Destination chain**: Positive VS (shares received → increases effective supply)
+- Maintains NAV integrity during cross-chain operations
 
 ### Transfer Modes
 
 **Transfer Mode (OpType.Transfer)** - Default, NAV-neutral
-- **Source chain**: Writes positive base token virtual balance (fixed value at transfer time)
-  - Source NAV remains constant regardless of token price changes
-  - Virtual balance in base token units does not fluctuate with token price
-- **Destination chain**: Writes virtual supply (reduces effective token supply)
-  - Destination NAV changes with token price movements
-  - Destination gets all price performance attribution
-- **Bridge fees**: Reduce NAV (real economic cost, split between chains)
+- **Source chain**: Writes **negative VS** (shares = outputValue / NAV)
+  - Source NAV remains constant (tokens leave, but supply effectively decreases)
+  - Effective supply = totalSupply + virtualSupply (where VS is negative)
+- **Destination chain**: Writes **positive VS** (shares = receivedValue / NAV)
+  - Destination NAV remains constant (tokens arrive, supply effectively increases)
+  - VS may clear existing negative VS if chain had prior outbound transfers
+- **Bridge fees**: Reduce NAV (real economic cost)
 - **Use for**: Moving liquidity between chains
 
 **Sync Mode (OpType.Sync)** - Allows NAV changes
@@ -45,15 +47,12 @@ Cross-chain token transfer integration using [Across Protocol V3](https://across
 
 ### Performance Attribution
 
-**Price Appreciation** (e.g., USDC $1.00 → $1.10):
-- Source NAV: Constant (base token VB fixed at transfer price)
-- Destination NAV: Increases (real tokens appreciate)
-- **Winner**: Destination chain holders
+With VS-only model, both chains share performance proportionally:
+- Trading gains/losses split by effective supply ratios
+- Local holders: (supply / effectiveSupply) × gains
+- Virtual holders: (|VS| / effectiveSupply) × gains
 
-**Price Depreciation** (e.g., USDC $1.00 → $0.90):
-- Source NAV: Constant (base token VB fixed at transfer price)
-- Destination NAV: Decreases (real tokens depreciate)
-- **Winner**: Source chain holders (avoided loss)
+**Price Changes**: Affect both chains proportionally through the effective supply mechanism
 
 **Trading Gains/Losses** (constant token price):
 - Split pro-rata between local and virtual supply holders
@@ -61,9 +60,8 @@ Cross-chain token transfer integration using [Across Protocol V3](https://across
 
 ## Documentation
 
-- **[PERFORMANCE_ATTRIBUTION.md](PERFORMANCE_ATTRIBUTION.md)** - Detailed explanation of performance attribution model
-- **[COMPREHENSIVE_ANALYSIS.md](COMPREHENSIVE_ANALYSIS.md)** - Deep technical analysis of virtual systems
-- **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** - Implementation details, testing, deployment
+- **[PERFORMANCE.md](PERFORMANCE.md)** - Performance attribution model and rebalancing guide
+- **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** - Technical implementation details
 - **[ZERO_SUPPLY_DOS_VULNERABILITY.md](ZERO_SUPPLY_DOS_VULNERABILITY.md)** - Fixed DOS vulnerability analysis (resolved Jan 2026)
 
 ## Quick Reference
@@ -96,7 +94,7 @@ function handleV3AcrossMessage(
 1. **Handler verification**: Only Across SpokePool can call handler
 2. **Price feed validation**: Token must have price feed before acceptance
 3. **NAV validation**: Final NAV checked against expected value
-4. **Virtual balance consistency**: Read and update within same transaction
+4. **Virtual supply consistency**: Read and update within same transaction
 
 ### Testing
 
@@ -120,26 +118,29 @@ Across SpokePool addresses vary by chain - see Constants.sol
 ## Known Limitations
 
 1. **No recovery mechanism**: Across V3 lacks direct token recovery
-2. **Virtual balance atomicity**: Must read/update in same transaction
+2. **Effective supply constraint**: Negative VS limited to 87.5% of total supply (MINIMUM_SUPPLY_RATIO = 8)
 3. **Bridge fees**: Always reduce NAV (real economic cost)
 4. **Solver surplus**: Small NAV increase in Sync mode (benefits holders)
-5. **Rebalancing edge case**: When all tokens transferred and prices depreciate, requires 2-step rebalancing (destination→source, then source→destination)
 
-## Key Design Decision: Base Token Virtual Balances
+## Key Design Decision: Virtual Supply Only Model
 
-The implementation uses **base token denominated virtual balances** on the source chain rather than token-denominated balances. This design choice:
+The implementation uses **Virtual Supply (VS) only** rather than the previous VB+VS dual system. This design choice:
+
+**How it works:**
+- **Source chain**: Writes negative VS (shares leaving → effective supply decreases)
+- **Destination chain**: Writes positive VS (shares arriving → effective supply increases)
+- NAV = totalValue / effectiveSupply, where effectiveSupply = totalSupply + virtualSupply
 
 **Benefits:**
-- ✅ Simpler implementation (single VB write, single VS write)
-- ✅ Lower gas costs (~5,800 gas savings per transfer)
-- ✅ Performance follows physical custody (destination gets price movements)
-- ✅ Direct rebalancing possible when tokens appreciate (most common case)
+- ✅ Simpler implementation (single VS adjustment per chain)
+- ✅ Lower gas costs (one storage write per side)
+- ✅ No VB/VS synchronization complexity
+- ✅ Performance shared proportionally between chains
+- ✅ 12.5% safety buffer prevents supply exhaustion (MINIMUM_SUPPLY_RATIO = 8)
 
 **Trade-off:**
-- ⚠️ Destination chain gets price performance (not source)
-- ⚠️ Requires 2-step rebalancing when tokens depreciate AND all tokens transferred (rare)
-
-This approach prioritizes practical operability over conceptual "ownership" attribution, as the chain holding the tokens is better positioned to rebalance.
+- ⚠️ Source cannot send more than 87.5% of effective supply in a single transfer
+- ⚠️ Post-burn check required to prevent bypassing effective supply limit
 
 ## Resources
 
@@ -158,31 +159,26 @@ This approach prioritizes practical operability over conceptual "ownership" attr
 - Saves ~3,000 gas per transfer
 
 **Storage Efficiency**:
-- Source: 1 SSTORE (base token VB)
-- Destination: 1-2 SSTORE (VS, optionally clear base token VB)
-- Total: ~8,900 gas for virtual accounting
-
-**vs Previous Approach** (Option 4 - not implemented):
-- Would require 3 SSTORE operations on destination
-- Additional ~5,800 gas per transfer
-- More complex logic (special case handling)
+- Source: 1 SSTORE (negative VS)
+- Destination: 1 SSTORE (positive VS, clears existing negative VS if any)
+- Total: ~5,000 gas for virtual accounting
 
 ### Testing Strategy
 
-**Unit Tests** (`test/extensions/AIntentsRealFork.t.sol`):
+**Integration Tests** (`test/extensions/AIntentsRealFork.t.sol`):
 - Fork-based tests using real deployed contracts
 - Tests both USDC (6 decimals) and WETH (18 decimals)
-- Verifies base token unit storage
+- Verifies VS-only model behavior
 - Tests virtual supply management
 - Cross-chain integration scenarios
 
 **Key Test Cases**:
 - `test_IntegrationFork_CrossChain_TransferWithHandler` - End-to-end transfer
 - `test_IntegrationFork_Transfer_NonBaseToken` - Non-base token (WETH) transfers
-- `test_AIntents_VirtualSupply_WithNonBaseToken` - Virtual supply burn logic
-- `test_IntegrationFork_ECrosschain_PartialVirtualBalanceReduction` - Inbound with existing VB
+- `test_AIntents_VirtualSupply_WithNonBaseToken` - Virtual supply management
+- Effective supply constraint tests
 
-All 44 tests passing ✅
+## Resources
 
 - [Across Protocol Docs](https://docs.across.to/)
 - [Rigoblock Docs](https://docs.rigoblock.com)

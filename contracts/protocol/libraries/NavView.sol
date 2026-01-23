@@ -156,20 +156,18 @@ library NavView {
             }
         }
 
-        // Get total supply (actual + virtual)
+        // Get total supply (actual + virtual) using signed arithmetic
         ISmartPoolState.PoolTokens memory poolTokens = ISmartPoolState(pool).getPoolTokens();
-        uint256 totalSupply = poolTokens.totalSupply;
-
-        // Add virtual supply for cross-chain transfers (matches MixinPoolValue)
-        totalSupply += VirtualStorageLib.getVirtualSupply().toUint256();
+        int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+        int256 effectiveSupply = int256(poolTokens.totalSupply) + virtualSupply;
 
         // Calculate unitary value
         uint256 unitaryValue;
-        if (totalSupply == 0) {
+        if (effectiveSupply <= 0) {
             // Use stored value or initial value of 1.0 (par value)
             unitaryValue = poolTokens.unitaryValue > 0 ? poolTokens.unitaryValue : 10 ** decimals;
         } else if (totalValue > 0) {
-            unitaryValue = (uint256(totalValue) * 10 ** decimals) / totalSupply;
+            unitaryValue = (uint256(totalValue) * 10 ** decimals) / uint256(effectiveSupply);
         } else {
             // Supply exists but value is 0 or negative (worthless or underwater)
             // Return 0 to prevent new mints until value recovers
@@ -215,12 +213,11 @@ library NavView {
                 token = tokens.activeTokens[k];
             }
 
-            int256 bal = VirtualStorageLib.getVirtualBalance(token);
-
+            int256 bal;
             if (token == ZERO_ADDRESS) {
-                bal += int256(pool.balance);
+                bal = int256(pool.balance);
             } else {
-                bal += int256(IERC20(token).balanceOf(pool));
+                bal = int256(IERC20(token).balanceOf(pool));
             }
 
             aggregatedBalances[index++] = AppTokenBalance({token: token, amount: bal});

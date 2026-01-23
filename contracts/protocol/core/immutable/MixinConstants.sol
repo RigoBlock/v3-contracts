@@ -32,8 +32,6 @@ abstract contract MixinConstants is ISmartPool {
     bytes32 internal constant _UNIV4_TOKEN_IDS_SLOT =
         0xd87266b00c1e82928c0b0200ad56e2ee648a35d4e9b273d2ac9533471e3b5d3c;
 
-    bytes32 internal constant _VIRTUAL_BALANCES_SLOT = VirtualStorageLib.VIRTUAL_BALANCES_SLOT;
-
     bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
 
     address internal constant _ZERO_ADDRESS = address(0);

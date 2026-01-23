@@ -553,11 +553,10 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             }))
         }));
         
-        // Verify source base token VB
-        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
-        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
-        int256 sourceBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
-        console2.log("Source base token VB:", sourceBaseTokenVB);
+        // Verify source negative VS (VS-only model)
+        int256 sourceVS = int256(uint256(vm.load(pool(), VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        console2.log("Source VS (should be negative):", sourceVS);
+        assertTrue(sourceVS < 0, "Source VS should be negative after outbound transfer");
         
         ISmartPoolActions(pool()).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory sourceAfterTransfer = ISmartPoolState(pool()).getPoolTokens();
@@ -708,11 +707,10 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
             }))
         }));
         
-        // Check source virtual balance (in BASE TOKEN units - Option 2)
-        address poolBaseToken = ISmartPoolState(pool()).getPool().baseToken;
-        bytes32 baseTokenBalanceSlot = keccak256(abi.encode(poolBaseToken, VirtualStorageLib.VIRTUAL_BALANCES_SLOT));
-        int256 sourceBaseTokenVB = int256(uint256(vm.load(pool(), baseTokenBalanceSlot)));
-        console2.log("Source base token VB (USDC value in ETH, 6 decimals):", sourceBaseTokenVB);
+        // Check source virtual supply (VS-only model)
+        int256 sourceVS = int256(uint256(vm.load(pool(), VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        console2.log("Source VS (should be negative):", sourceVS);
+        assertTrue(sourceVS < 0, "Source VS should be negative after outbound transfer");
         
         ISmartPoolActions(pool()).updateUnitaryValue();
         ISmartPoolState.PoolTokens memory sourceAfter = ISmartPoolState(pool()).getPoolTokens();
@@ -1098,7 +1096,6 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         ISmartPoolOwnerActions(pool()).setAcceptableMintToken(Constants.ETH_WETH, true);
         ISmartPoolActions(pool()).mintWithToken(poolOwner, transferAmount * 2, 0, Constants.ETH_WETH);
 
-        // TODO: this is a case of full transfer, we should test partial transfer (also nav on source will be affected)
         ISmartPoolActions(pool()).updateUnitaryValue();
         sourceNavBefore = ISmartPoolState(pool()).getPoolTokens().unitaryValue;
         console2.log("Source NAV before transfer:", sourceNavBefore);

@@ -7,6 +7,7 @@ import {IAcrossSpokePool} from "../../interfaces/IAcrossSpokePool.sol";
 import {IMulticallHandler} from "../../interfaces/IMulticallHandler.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {CrosschainLib} from "../../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
@@ -72,18 +73,23 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
 
-        // Validate outputAmount is not zero or too small to prevent virtual supply calculation issues
-        require(params.outputAmount > 0, InvalidAmount());
-
         // Validate source message parameters to prevent rogue input
         SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
 
         // Validate nav tolerance is within reasonable limits
         require(sourceParams.navTolerance <= MAX_NAV_TOLERANCE_BPS, NavToleranceTooHigh());
 
-        // Ensure input token is active on source chain for cross-chain transfers
-        // This simplifies logic and prevents manipulation via inactive tokens
-        require(StorageLib.isOwnedToken(params.inputToken), TokenNotActive());
+        // Ensure token being spent is active on source chain
+        // When sending native ETH (sourceNativeAmount > 0), validate ETH (address(0)) is active
+        // since pool's ETH balance decreases, not WETH (inputToken is WETH for Across compatibility)
+        // SECURITY: Must verify inputToken == wrappedNative to prevent token spoofing
+        // (e.g., setting inputToken=USDT with sourceNativeAmount>0 would bypass USDT activation check)
+        address tokenToValidate = params.inputToken;
+        if (sourceParams.sourceNativeAmount > 0) {
+            require(params.inputToken == ISmartPoolImmutable(address(this)).wrappedNative(), InvalidInputToken());
+            tokenToValidate = address(0);
+        }
+        require(StorageLib.isOwnedToken(tokenToValidate), TokenNotActive());
 
         _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
 
@@ -131,7 +137,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             value: 0
         });
 
-        // 4. Donate to pool with virtual balance management
+        // 4. Donate to pool with virtual supply management
         calls[3] = Call({
             target: address(this),
             callData: abi.encodeCall(IECrosschain.donate, (params.outputToken, params.outputAmount, destParams)),
@@ -160,7 +166,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             revert IECrosschain.InvalidOpType();
         }
 
+        // Always use escrow as depositor for proper refund handling
+        // Ensures tokens are activated via donate() on refund, regardless of current portfolio state
+        // Note: There's a delay between Across refund to escrow and refundVault() call,
+        // during which NAV may be temporarily understated. This counterbalances the inverse attack
+        // where an operator creates unfillable deposits to temporarily reduce NAV.
         params.depositor = EscrowFactory.deployEscrow(address(this), sourceParams.opType);
+
         _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(
             params.depositor,
             CrosschainLib.getAcrossHandler(params.destinationChainId),
@@ -186,7 +198,14 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
     }
 
-    function _handleSourceTransfer(AcrossParams memory params) private {
+    /// @dev Calculates the base token equivalent value of the output amount.
+    /// @dev Handles BSC decimal conversion and oracle price lookup.
+    /// @param params The across params containing token and amount info.
+    /// @return outputValueInBase The output amount converted to base token value.
+    /// @return baseToken The pool's base token address.
+    function _getOutputValueInBase(
+        AcrossParams memory params
+    ) private view returns (uint256 outputValueInBase, address baseToken) {
         // Scale outputAmount to inputToken decimals for proper comparison
         // (same token on different chains may have different decimals, e.g., BSC USDC)
         uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
@@ -195,36 +214,24 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.outputAmount
         );
 
-        // Update NAV and get pool state
-        NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
-        uint256 virtualSupply = VirtualStorageLib.getVirtualSupply().toUint256();
-
         // Convert output amount to base token value
-        address baseToken = StorageLib.pool().baseToken;
-        uint256 outputValueInBase = IEOracle(address(this))
+        baseToken = StorageLib.pool().baseToken;
+        outputValueInBase = IEOracle(address(this))
             .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
             .toUint256();
+    }
 
-        // Fast path: no virtual supply, write base token virtual balance (most common case)
-        if (virtualSupply == 0) {
-            baseToken.updateVirtualBalance(outputValueInBase.toInt256());
-            return;
-        }
-
-        // Virtual supply exists - calculate and burn
+    function _handleSourceTransfer(AcrossParams memory params) private {
+        (uint256 outputValueInBase, ) = _getOutputValueInBase(params);
+        NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint8 poolDecimals = StorageLib.pool().decimals;
-        uint256 virtualSupplyValue = (navParams.unitaryValue * virtualSupply) / 10 ** poolDecimals;
 
-        if (outputValueInBase >= virtualSupplyValue) {
-            // Burn all virtual supply, write remainder to base token VB
-            uint256 remainderValueInBase = outputValueInBase - virtualSupplyValue;
-            baseToken.updateVirtualBalance(remainderValueInBase.toInt256());
-        } else {
-            // Virtual supply fully covers transfer - burn partial supply, no VB write
-            virtualSupply = (outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue;
-        }
+        // Calculate shares equivalent: outputValue / NAV = shares
+        // shares = (outputValueInBase * 10^decimals) / unitaryValue
+        int256 burntAmount = ((outputValueInBase * (10 ** poolDecimals)) / navParams.unitaryValue).toInt256();
 
-        (-(virtualSupply.toInt256())).updateVirtualSupply();
+        // Write negative VS (shares leaving this chain → reduces effective supply)
+        (-burntAmount).updateVirtualSupply();
     }
 
     /// @dev Approves or revokes token approval for SpokePool interaction.
