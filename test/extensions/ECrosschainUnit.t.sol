@@ -10,7 +10,10 @@ import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.so
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
+import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
 import {IAcrossSpokePool} from "../../contracts/protocol/interfaces/IAcrossSpokePool.sol";
+import {NavImpactLib} from "../../contracts/protocol/libraries/NavImpactLib.sol";
+import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IWETH9} from "../../contracts/protocol/interfaces/IWETH9.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {ISmartPoolImmutable} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolImmutable.sol";
@@ -23,6 +26,7 @@ import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/
 import {OpType, DestinationMessageParams, SourceMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
 import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
+import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLib.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
@@ -1500,5 +1504,169 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         uint256 totalSupplyAfter = ISmartPoolState(poolProxy).getPoolTokens().totalSupply;
         assertGt(totalSupplyAfter, 0, "Mint should succeed on empty pool");
+    }
+
+    /// @notice Test that AIntents.depositV3 with Sync mode reverts with NavImpactTooHigh when impact exceeds tolerance
+    /// @dev This tests the actual revert path in NavImpactLib.validateNavImpact
+    function test_AIntents_SyncMode_RevertsWithNavImpactTooHigh() public {
+        vm.warp(block.timestamp + 100);
+        
+        // Deploy MockAcrossSpokePool and AIntents adapter
+        address mockSpokePool = deployCode("out/MockAcrossSpokePool.sol/MockAcrossSpokePool.json", abi.encode(Constants.ETH_WETH));
+        AIntents aIntentsAdapter = new AIntents(mockSpokePool);
+        
+        // Whitelist and register AIntents adapter with authority
+        IAuthority(deployment.authority).setAdapter(address(aIntentsAdapter), true);
+        IAuthority(deployment.authority).addMethod(IAIntents.depositV3.selector, address(aIntentsAdapter));
+        
+        // Initialize oracle for ETH WETH (we'll use the real ETH_WETH address)
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_WETH),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // Create an ETH-based pool (baseToken = address(0)), so we can mint with ETH
+        (address ethPool, ) = IRigoblockPoolProxyFactory(deployment.factory).createPool("eth pool", "ETH", address(0));
+        
+        // Mint pool tokens to establish totalSupply and NAV
+        vm.deal(ethPool, 100 ether);
+        vm.deal(address(this), 300 ether);
+        ISmartPoolActions(ethPool).mint{value: 100 ether}(address(this), 100 ether, 0);
+        
+        // Verify pool has supply and NAV
+        uint256 totalSupply = ISmartPoolState(ethPool).getPoolTokens().totalSupply;
+        uint256 unitaryValue = ISmartPoolState(ethPool).getPoolTokens().unitaryValue;
+        assertGt(totalSupply, 0, "Pool should have supply");
+        assertGt(unitaryValue, 0, "Pool should have NAV");
+        
+        // Mark ETH_WETH as active token (so we can bridge WETH out)
+        _setupActiveToken(ethPool, Constants.ETH_WETH);
+        
+        // Deploy a mock WETH at the ETH_WETH address and give pool some WETH to transfer
+        deployCodeTo(
+            "out/MockERC20.sol/MockERC20.0.8.28.json",
+            abi.encode("Wrapped Ether", "WETH", 18),
+            Constants.ETH_WETH
+        );
+        uint256 transferAmount = 50 ether; // 50% of pool value - will exceed 10% tolerance
+        MockERC20(Constants.ETH_WETH).mint(ethPool, transferAmount);
+        
+        // Set chainId to Ethereum (1) so CrosschainLib.isAllowedCrosschainToken passes
+        vm.chainId(1);
+        
+        // Build AcrossParams for a Sync operation with 10% tolerance (1000 bps)
+        // Transfer 50 WETH on a ~100 ETH pool = 50% impact, exceeds 10% tolerance
+        SourceMessageParams memory sourceParams = SourceMessageParams({
+            opType: OpType.Sync,
+            navTolerance: 1000, // 10% tolerance in bps
+            sourceNativeAmount: 0,
+            shouldUnwrapOnDestination: false
+        });
+        
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(0),
+            inputToken: Constants.ETH_WETH,
+            outputToken: Constants.ETH_WETH,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount - 1e16, // Slight slippage
+            destinationChainId: 8453, // Base
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: 0,
+            exclusivityDeadline: 0,
+            message: abi.encode(sourceParams)
+        });
+        
+        // Should revert with NavImpactTooHigh because 50% > 10% tolerance
+        vm.expectRevert(NavImpactLib.NavImpactTooHigh.selector);
+        IAIntents(ethPool).depositV3(params);
+        
+        // Reset chainId
+        vm.chainId(31337);
+    }
+
+    /// @notice Test that AIntents.depositV3 with Sync mode succeeds when impact is within tolerance
+    function test_AIntents_SyncMode_PassesNavImpactCheckWithinTolerance() public {
+        vm.warp(block.timestamp + 100);
+        
+        // Deploy MockAcrossSpokePool and AIntents adapter  
+        address mockSpokePool = deployCode("out/MockAcrossSpokePool.sol/MockAcrossSpokePool.json", abi.encode(Constants.ETH_WETH));
+        AIntents aIntentsAdapter = new AIntents(mockSpokePool);
+        
+        // Whitelist and register AIntents adapter with authority
+        IAuthority(deployment.authority).setAdapter(address(aIntentsAdapter), true);
+        IAuthority(deployment.authority).addMethod(IAIntents.depositV3.selector, address(aIntentsAdapter));
+        
+        // Initialize oracle for ETH WETH
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(Constants.ETH_WETH),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // Create an ETH-based pool (baseToken = address(0)), so we can mint with ETH
+        (address ethPool, ) = IRigoblockPoolProxyFactory(deployment.factory).createPool("eth pool5", "ETH", address(0));
+        
+        // Mint pool tokens to establish totalSupply and NAV
+        vm.deal(ethPool, 100 ether);
+        vm.deal(address(this), 200 ether);
+        ISmartPoolActions(ethPool).mint{value: 100 ether}(address(this), 100 ether, 0);
+        
+        // Mark ETH_WETH as active token (so we can bridge WETH out)
+        _setupActiveToken(ethPool, Constants.ETH_WETH);
+        
+        // Deploy a mock WETH at the ETH_WETH address and give pool some WETH to transfer
+        // 5% transfer on ~100 ETH pool - within 10% tolerance
+        deployCodeTo(
+            "out/MockERC20.sol/MockERC20.0.8.28.json",
+            abi.encode("Wrapped Ether", "WETH", 18),
+            Constants.ETH_WETH
+        );
+        uint256 transferAmount = 5 ether; // 5% of pool value - within 10% tolerance
+        MockERC20(Constants.ETH_WETH).mint(ethPool, transferAmount);
+        
+        // Set chainId to Ethereum (1) so CrosschainLib.isAllowedCrosschainToken passes
+        vm.chainId(1);
+        
+        SourceMessageParams memory sourceParams = SourceMessageParams({
+            opType: OpType.Sync,
+            navTolerance: 1000, // 10% tolerance
+            sourceNativeAmount: 0,
+            shouldUnwrapOnDestination: false
+        });
+        
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(0),
+            inputToken: Constants.ETH_WETH,
+            outputToken: Constants.ETH_WETH,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount - 1e14,
+            destinationChainId: 8453,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: 0,
+            exclusivityDeadline: 0,
+            message: abi.encode(sourceParams)
+        });
+        
+        // The test verifies that NavImpactLib.validateNavImpact passes (does not revert with NavImpactTooHigh)
+        // 5% impact is within 10% tolerance, so the call should succeed (MockSpokePool accepts without real transfer)
+        vm.expectEmit(false, false, false, false);
+        emit IAIntents.CrossChainTransferInitiated(address(this), 8453, Constants.ETH_WETH, transferAmount, uint8(OpType.Sync), address(0));
+        IAIntents(ethPool).depositV3(params);
+        
+        // Reset chainId
+        vm.chainId(31337);
     }
 }
