@@ -255,7 +255,6 @@ contract ENavViewForkTest is Test {
             for (uint256 i = 0; i < balances.length; i++) {
                 console2.log("  Balances count:", balances.length);
 
-                // TODO: why does this one return null if balance is negative?
                 if (balances[i].amount != 0) {
                     console2.log("    Token:", balances[i].token);
                     console2.log("    Amount:", balances[i].amount >= 0 ? uint256(balances[i].amount) : 0);

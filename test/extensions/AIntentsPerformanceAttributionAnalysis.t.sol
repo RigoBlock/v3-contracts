@@ -1096,7 +1096,6 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         ISmartPoolOwnerActions(pool()).setAcceptableMintToken(Constants.ETH_WETH, true);
         ISmartPoolActions(pool()).mintWithToken(poolOwner, transferAmount * 2, 0, Constants.ETH_WETH);
 
-        // TODO: this is a case of full transfer, we should test partial transfer (also nav on source will be affected)
         ISmartPoolActions(pool()).updateUnitaryValue();
         sourceNavBefore = ISmartPoolState(pool()).getPoolTokens().unitaryValue;
         console2.log("Source NAV before transfer:", sourceNavBefore);

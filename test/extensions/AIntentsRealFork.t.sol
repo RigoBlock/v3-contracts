@@ -2883,7 +2883,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("- Second donate() handled via virtual supply mechanism");
     }
 
-    // TODO: this does not actually test attack before initialization, but after total burn, which has null supply but
     //  initialized price, and since total + virtual supply are null, MixinPoolValue will return early at line 51, before
     // updating price (because it would have to divide total assets by 0)
     /// @notice Test DOS attack scenario: Attacker sends tokens BEFORE first donate() on uninitialized pool

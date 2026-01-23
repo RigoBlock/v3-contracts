@@ -1237,5 +1237,88 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.clearMockedCalls();
         vm.chainId(31337);
     }
-}
 
+    /// @notice Test that updateUnitaryValue reverts when VS makes effectiveSupply negative
+    /// @dev This catches any future refactoring that might skip the validateEffectiveSupply check
+    function test_ECrosschain_RevertsWhenVSMakesEffectiveSupplyNegative() public {
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // Give the pool some ETH and mint tokens
+        vm.deal(poolProxy, 1000 ether);
+        vm.deal(address(this), 2000 ether);
+        uint256 mintAmount = 1000 ether;
+        ISmartPoolActions(poolProxy).mint{value: mintAmount}(address(this), mintAmount, 0);
+        
+        uint256 totalSupply = ISmartPoolState(poolProxy).getPoolTokens().totalSupply;
+        assertGt(totalSupply, 0, "totalSupply should be non-zero after mint");
+        
+        // Set VS to make effectiveSupply negative (VS = -(TS + 1))
+        // This simulates a bug where VS becomes way too negative
+        int256 veryNegativeVS = -(int256(totalSupply) + 1 ether);
+        
+        vm.store(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT, bytes32(uint256(veryNegativeVS)));
+        
+        // This should revert because effective supply would be negative
+        vm.expectRevert(abi.encodeWithSignature("EffectiveSupplyTooLow()"));
+        ISmartPoolActions(poolProxy).updateUnitaryValue();
+    }
+
+    /// @notice Test that updateNav works correctly when totalSupply=0 but virtualSupply>0
+    /// @dev This is the destination chain scenario: received tokens via cross-chain but no local mints yet
+    function test_ECrosschain_UpdateNavWorksWithZeroTotalSupplyAndPositiveVirtualSupply() public {
+        vm.warp(block.timestamp + 100);
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // First, mint some tokens to set unitaryValue (so we're not in first-mint path)
+        vm.deal(poolProxy, 1000 ether);
+        vm.deal(address(this), 2000 ether);
+        ISmartPoolActions(poolProxy).mint{value: 1000 ether}(address(this), 1000 ether, 0);
+        
+        uint256 navAfterMint = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        assertGt(navAfterMint, 0, "NAV should be set after mint");
+        
+        // Use vm.store to set totalSupply to 0 directly (simulates pool where all tokens were burned)
+        // POOL_TOKENS_SLOT layout: slot = unitaryValue, slot+1 = totalSupply
+        bytes32 poolTokensSlot = StorageLib.POOL_TOKENS_SLOT;
+        vm.store(poolProxy, bytes32(uint256(poolTokensSlot) + 1), bytes32(uint256(0)));
+        
+        // Verify total supply is now 0
+        uint256 totalSupplyAfterStore = ISmartPoolState(poolProxy).getPoolTokens().totalSupply;
+        assertEq(totalSupplyAfterStore, 0, "Total supply should be 0 after vm.store");
+        
+        // unitaryValue should still be set from previous mint
+        uint256 unitaryValueBefore = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        assertGt(unitaryValueBefore, 0, "unitaryValue should still be set");
+        
+        // Set positive virtual supply (simulating destination chain received tokens)
+        int256 positiveVS = 500 ether;
+        vm.store(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT, bytes32(uint256(positiveVS)));
+        
+        // Add some ETH to pool to have net value (effectiveSupply = 0 + 500 = 500 ether)
+        vm.deal(poolProxy, 500 ether);
+        
+        // This should NOT revert - effectiveSupply = 0 + 500 ether = 500 ether (positive)
+        ISmartPoolActions(poolProxy).updateUnitaryValue();
+        
+        // NAV should be calculated correctly using effectiveSupply
+        uint256 navAfterUpdate = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        assertGt(navAfterUpdate, 0, "NAV should be calculated when effectiveSupply > 0");
+    }
+}

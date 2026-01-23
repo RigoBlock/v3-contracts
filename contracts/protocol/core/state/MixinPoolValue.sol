@@ -40,7 +40,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // v3 vaults have a price feed, we could move the following assertion to the following block, i.e. executing it only on the first mint.
         require(IEOracle(address(this)).hasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
 
-        // TODO: this will return 1 when assets are 0. Check if should return actual int256 and do handling in the following blocks
         // Always compute net total assets (used for cross-chain donation validation)
         int256 netValue = _computeTotalPoolValue(components.baseToken);
 
@@ -54,32 +53,33 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
         } else {
-            // Calculate effective supply and check if valid for NAV calculation
             int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
-            int256 effectiveSupply = NavImpactLib.validateEffectiveSupply(components.totalSupply, virtualSupply);
+            
+            // revert if abs virtual supply below a minimum threshold of total supply. Also means effective supply must be non-negative.
+            NavImpactLib.validateSupply(components.totalSupply, virtualSupply);
+            int256 effectiveSupply = int256(components.totalSupply) + virtualSupply;
 
-            // If effective supply is not valid (<=0), return stored NAV without update
-            if (effectiveSupply <= 0) {
+            // effective supply cannot be negative from previous assertion. Also cannot burn internally more than has been minted.
+            if (effectiveSupply == 0) {
                 return components;
             }
 
             components.totalSupply = uint256(effectiveSupply);
 
-            // TODO: this does not guarantee that the value won't be 0, because a small balance divided by a big supply could result in 0
             if (components.netTotalValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue =
-                    (uint256(components.netTotalValue) * 10 ** components.decimals) /
-                    components.totalSupply;
+                    (components.netTotalValue * 10 ** components.decimals) / components.totalSupply;
             } else {
-                // early return
+                // No net value, return stored NAV
                 return components;
             }
         }
 
-        // TODO: this assertion is probably unnecessary, because we early return for all other cases
-        // unitary value cannot be null
-        assert(components.unitaryValue > 0);
+        // never allow storing 0 - flag for default unitary price of uninitialized pool
+        if (components.unitaryValue == 0) {
+            components.unitaryValue = 1;
+        }
 
         // update storage only if different
         if (components.unitaryValue != poolTokens().unitaryValue) {

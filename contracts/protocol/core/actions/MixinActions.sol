@@ -225,7 +225,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         // Post-burn safety check: ensure effective supply doesn't drop below minimum threshold
         // This prevents bypassing the EffectiveSupplyTooLow check via sequential burns
         int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
-        NavImpactLib.validateEffectiveSupply(poolTokens().totalSupply, virtualSupply);
+        NavImpactLib.validateSupply(poolTokens().totalSupply, virtualSupply);
 
         netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 

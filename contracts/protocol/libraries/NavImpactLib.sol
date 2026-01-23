@@ -70,19 +70,11 @@ library NavImpactLib {
     }
 
     /// @notice Validates that effective supply meets minimum threshold when virtual supply is negative
-    /// @dev Only reverts when:
-    ///      - Virtual supply is negative AND effective supply < totalSupply / MINIMUM_SUPPLY_RATIO
-    /// @param totalSupply The total token supply
-    /// @param virtualSupply The virtual supply (can be negative)
-    function validateEffectiveSupply(uint256 totalSupply, int256 virtualSupply) internal pure returns (int256) {
-        int256 effectiveSupply = int256(totalSupply) + virtualSupply;
-
-        // Safety check: when VS is negative, ensure at least MINIMUM_SUPPLY_RATIO of TS remains
-        // This prevents extreme edge cases and ensures local redemptions can be honored
-        if (virtualSupply < 0 && effectiveSupply < int256(totalSupply / MINIMUM_SUPPLY_RATIO)) {
-            revert EffectiveSupplyTooLow();
+    function validateSupply(uint256 totalSupply, int256 virtualSupply) internal pure {
+        if (virtualSupply < 0) {
+            if (uint256(-virtualSupply) * MINIMUM_SUPPLY_RATIO > totalSupply * (MINIMUM_SUPPLY_RATIO - 1)) {
+                revert EffectiveSupplyTooLow();
+            }
         }
-
-        return effectiveSupply;
     }
 }
