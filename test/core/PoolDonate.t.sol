@@ -208,6 +208,7 @@ contract PoolDonateTest is Test {
         DestinationMessageParams memory params;
         
         // Attempt to call donate with ETH value attached - should revert because function is not payable
+        // Raw EVM revert (no selector) because Solidity rejects msg.value on non-payable functions
         vm.expectRevert();
         (bool success,) = address(pool).call{value: ETH_DONATION_AMOUNT}(
             abi.encodeWithSelector(IECrosschain.donate.selector, address(0), ETH_DONATION_AMOUNT, params)
@@ -219,6 +220,7 @@ contract PoolDonateTest is Test {
         console2.log("Correctly reverted when trying to send ETH directly with donate call");
         
         // Also test direct ETH transfer without function call - should revert because no receive() function
+        // Raw EVM revert (no selector) because pool has no receive() or fallback() function
         vm.expectRevert();
         (bool transferSuccess,) = payable(pool).call{value: ETH_DONATION_AMOUNT}("");
         

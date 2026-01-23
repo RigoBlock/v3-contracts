@@ -151,6 +151,10 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     }
 
     /// @notice Test extension requires pool to be unlocked to execute
+    /// @dev ECrosschain.donate() called directly (not via delegatecall) fails because:
+    ///      1. ECrosschain has no ERC20 interface - balanceOf(address(this)) returns 0 bytes
+    ///      2. Without delegatecall context from pool proxy, storage access is wrong
+    ///      This causes a raw EVM revert (no specific selector) which is expected behavior.
     function test_ECrosschain_RevertsDirectCall() public {
         // Create valid Transfer params
         DestinationMessageParams memory params = DestinationMessageParams({
@@ -158,7 +162,8 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             shouldUnwrapNative: false
         });
         
-        // Should revert silently because extension does not implement updateUnitaryValue method
+        // Raw EVM revert - no specific selector available because ECrosschain
+        // tries to call balanceOf on itself (which doesn't exist)
         vm.expectRevert();
         IECrosschain(extensions.eCrosschain).donate(mockBaseToken, 1, params);
     }

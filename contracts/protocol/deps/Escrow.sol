@@ -3,7 +3,6 @@ pragma solidity 0.8.28;
 
 import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
-import {CrosschainLib} from "../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../libraries/SafeTransferLib.sol";
 import {DestinationMessageParams, OpType} from "../types/Crosschain.sol";
@@ -20,7 +19,7 @@ contract Escrow is ReentrancyGuardTransient {
     /// @notice The pool this escrow is associated with
     address public immutable pool;
 
-    /// @notice The operation type this escrow handles (Transfer only - Sync uses pool directly)
+    /// @notice The operation type this escrow handles (Transfer or Sync)
     OpType public immutable opType;
 
     error InvalidAmount();
@@ -34,19 +33,20 @@ contract Escrow is ReentrancyGuardTransient {
     }
 
     /// @notice Allows anyone to claim refund tokens and send them to the pool
-    /// @dev Only allows Across-whitelisted tokens to prevent unauthorized token activation.
-    ///      This protects against:
-    ///      1. Gas griefing by filling max token slots (128 tokens)
-    ///      2. NAV calculation gas increases from too many active tokens
-    ///      3. Unauthorized token activation via donations
-    ///      Note: Native ETH is not supported because ECrosschain.donate() rejects it.
-    ///            Across refunds expired deposits in the original token (WETH/USDC/USDT), not native ETH.
+    /// @dev Token validation is delegated to ECrosschain.donate() which checks:
+    ///      1. Token is in the cross-chain whitelist (prevents unauthorized activation)
+    ///      2. Token is not native ETH (address(0))
+    ///      This approach ensures:
+    ///      - Single source of truth for token validation (ECrosschain, which is upgradeable)
+    ///      - No risk of tokens getting stuck if whitelist changes
+    ///      - Escrow remains simple and forward-compatible
     /// @param token The token address to claim
     function refundVault(address token) external nonReentrant {
-        // Only allow Across-whitelisted tokens (ECrosschain will reject native ETH anyway)
-        require(CrosschainLib.isAllowedCrosschainToken(token), UnsupportedToken());
+        // Validate token is not native ETH (ECrosschain.donate will reject it anyway,
+        // but we fail early to save gas on the transfer attempt)
+        require(token != address(0), UnsupportedToken());
 
-        // Get token balance (address(0) case is unreachable - whitelist validation rejects native)
+        // Get token balance
         uint256 balance = IERC20(token).balanceOf(address(this));
 
         require(balance > 0, InvalidAmount());

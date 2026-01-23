@@ -10,6 +10,8 @@ import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmar
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 import {EscrowFactory} from "../../contracts/protocol/libraries/EscrowFactory.sol";
+import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
+import {MockERC20} from "../../contracts/mocks/MockERC20.sol";
 import {OpType} from "../../contracts/protocol/types/Crosschain.sol";
 
 /// @title SyncEscrowRefund - Tests for escrow refund behavior
@@ -152,38 +154,43 @@ contract SyncEscrowRefundTest is Test, RealDeploymentFixture {
         console.log("Note: Full NAV-neutral behavior requires prior cross-chain transfer");
     }
 
-    /// @notice Test that both escrow types validate token whitelist
-    function test_Both_Escrows_Validate_Whitelist() public {
-        
-        
+    /// @notice Test that escrow delegates token validation to ECrosschain
+    /// @dev Uses real ERC20 tokens to test the actual CrosschainLib.UnsupportedCrossChainToken() error
+    function test_Escrow_DelegatesTokenValidationToECrosschain() public {
         // Deploy both escrows
         vm.startPrank(ethereum.pool);
         address transferEscrow = EscrowFactory.deployEscrow(ethereum.pool, OpType.Transfer);
         address syncEscrow = EscrowFactory.deployEscrow(ethereum.pool, OpType.Sync);
         vm.stopPrank();
         
-        address unauthorizedToken = makeAddr("unauthorizedToken");
+        // Deploy a real ERC20 token that's NOT on the Across whitelist
+        MockERC20 unauthorizedToken = new MockERC20("Unauthorized Token", "UNAUTH", 18);
         
-        // Mock token balance for both escrows
-        vm.mockCall(
-            unauthorizedToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, transferEscrow),
-            abi.encode(1000e18)
-        );
-        vm.mockCall(
-            unauthorizedToken,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, syncEscrow),
-            abi.encode(1000e18)
-        );
+        // Mint tokens to both escrows
+        unauthorizedToken.mint(transferEscrow, 1000e18);
+        unauthorizedToken.mint(syncEscrow, 1000e18);
         
-        // Both should reject unauthorized token
+        // Verify tokens are in escrows
+        assertEq(unauthorizedToken.balanceOf(transferEscrow), 1000e18, "Transfer escrow should have tokens");
+        assertEq(unauthorizedToken.balanceOf(syncEscrow), 1000e18, "Sync escrow should have tokens");
+        
+        // Both calls proceed to ECrosschain.donate() which validates the token.
+        // With real ERC20 tokens, we get the actual CrosschainLib.UnsupportedCrossChainToken() error.
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        Escrow(payable(transferEscrow)).refundVault(address(unauthorizedToken));
+        
+        vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
+        Escrow(payable(syncEscrow)).refundVault(address(unauthorizedToken));
+
+        // Native ETH (address(0)) is rejected by Escrow itself (not ECrosschain)
         vm.expectRevert(Escrow.UnsupportedToken.selector);
-        Escrow(payable(transferEscrow)).refundVault(unauthorizedToken);
-        
+        Escrow(payable(transferEscrow)).refundVault(address(0));
+
         vm.expectRevert(Escrow.UnsupportedToken.selector);
-        Escrow(payable(syncEscrow)).refundVault(unauthorizedToken);
+        Escrow(payable(syncEscrow)).refundVault(address(0));
         
-        console.log("Both escrow types correctly reject unauthorized tokens");
+        console.log("Token validation correctly delegated to ECrosschain");
+        console.log("Unauthorized tokens rejected with CrosschainLib.UnsupportedCrossChainToken()");
     }
 
     /// @notice Test native ETH refund for Sync escrow

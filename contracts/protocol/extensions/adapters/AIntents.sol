@@ -7,6 +7,7 @@ import {IAcrossSpokePool} from "../../interfaces/IAcrossSpokePool.sol";
 import {IMulticallHandler} from "../../interfaces/IMulticallHandler.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {CrosschainLib} from "../../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
@@ -72,19 +73,26 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
 
-        // TODO: on destination, we allow a null amount, so check if this is necessary - might be necessary for small amount transfers
-        // Validate outputAmount is not zero or too small to prevent virtual supply calculation issues
-        require(params.outputAmount > 0, InvalidAmount());
-
         // Validate source message parameters to prevent rogue input
         SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
 
         // Validate nav tolerance is within reasonable limits
         require(sourceParams.navTolerance <= MAX_NAV_TOLERANCE_BPS, NavToleranceTooHigh());
 
-        // Ensure input token is active on source chain for cross-chain transfers
-        // This simplifies logic and prevents manipulation via inactive tokens
-        require(StorageLib.isOwnedToken(params.inputToken), TokenNotActive());
+        // Ensure token being spent is active on source chain
+        // When sending native ETH (sourceNativeAmount > 0), validate ETH (address(0)) is active
+        // since pool's ETH balance decreases, not WETH (inputToken is WETH for Across compatibility)
+        // SECURITY: Must verify inputToken == wrappedNative to prevent token spoofing
+        // (e.g., setting inputToken=USDT with sourceNativeAmount>0 would bypass USDT activation check)
+        address tokenToValidate = params.inputToken;
+        if (sourceParams.sourceNativeAmount > 0) {
+            require(
+                params.inputToken == ISmartPoolImmutable(address(this)).wrappedNative(),
+                InvalidInputToken()
+            );
+            tokenToValidate = address(0);
+        }
+        require(StorageLib.isOwnedToken(tokenToValidate), TokenNotActive());
 
         _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
 
@@ -155,14 +163,18 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Handle source-side adjustments based on operation type
         if (sourceParams.opType == OpType.Transfer) {
             _handleSourceTransfer(params);
-            // Transfer mode: use escrow as depositor (for NAV-neutral refunds)
-            params.depositor = EscrowFactory.deployEscrow(address(this), OpType.Transfer);
         } else if (sourceParams.opType == OpType.Sync) {
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
-            params.depositor = address(this);
         } else {
             revert IECrosschain.InvalidOpType();
         }
+
+        // Always use escrow as depositor for proper refund handling
+        // Ensures tokens are activated via donate() on refund, regardless of current portfolio state
+        // Note: There's a delay between Across refund to escrow and refundVault() call,
+        // during which NAV may be temporarily understated. This counterbalances the inverse attack
+        // where an operator creates unfillable deposits to temporarily reduce NAV.
+        params.depositor = EscrowFactory.deployEscrow(address(this), sourceParams.opType);
 
         _acrossSpokePool.depositV3{value: sourceParams.sourceNativeAmount}(
             params.depositor,
