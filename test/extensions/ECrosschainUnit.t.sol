@@ -628,12 +628,12 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.clearMockedCalls();
         vm.chainId(31337);
     }
-    
+
     /// @notice Test that solver surplus increases NAV in Transfer mode (surplus goes to shareholders)
     /// @dev This is critical: we use `amount` for VS, not `amountDelta`, so surplus increases NAV
     /// @dev If we incorrectly used `amountDelta` for VS, NAV would remain unchanged (NAV-neutral)
     /// @dev This test verifies VS changes by `amount`, not `amountDelta`, proving surplus benefits shareholders
-    function test_ECrosschain_TransferMode_SurplusIncreasesNav() public {
+    function test_ECrosschain_TransferMode_SurplusIncreasesNavNullInitialPoolBalance() public {
         vm.warp(block.timestamp + 100);
         
         // Setup oracle for USDC
@@ -651,9 +651,11 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             opType: OpType.Transfer,
             shouldUnwrapNative: false
         });
+
+        uint256 poolBalance = 0;
         
         // Unlock with 0 balance
-        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(0));
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(poolBalance));
         IECrosschain(poolProxy).donate(ethUsdc, 1, params);
         vm.chainId(1);
         
@@ -665,8 +667,10 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Surplus = 10e6 USDC (10%)
         uint256 expectedAmount = 100e6;  // What sender specified (used for VS)
         uint256 actualReceived = 110e6;  // What solver delivered (surplus)
+
+        poolBalance += actualReceived;
         
-        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(actualReceived));
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(poolBalance));
         
         // Donate with expected amount (less than actual balance)
         IECrosschain(poolProxy).donate(ethUsdc, expectedAmount, params);
@@ -674,18 +678,17 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Get VS after donation
         int256 vsAfter = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
         
-        // CRITICAL ASSERTION: VS should increase by `amount` (100e6), NOT by `amountDelta` (110e6)
+        // CRITICAL ASSERTION: VS should EXACTLY equal `amount` (100e6), NOT `amountDelta` (110e6)
         // This proves surplus goes to existing shareholders (NAV increase), not to phantom shares
-        // With NAV=1e6 (1:1 for 6 decimals), shares minted = amount * 10^decimals / NAV = 100e6
-        assertApproxEqRel(
+        // With NAV=1e18 and pool decimals=18, shares = amount * 10^18 / 1e18 = amount
+        assertEq(
             uint256(vsAfter), 
-            expectedAmount,  // VS delta should equal expectedAmount
-            0.01e18,         // 1% tolerance for rounding
-            "Virtual supply should increase by EXPECTED amount (100e6), not by actual received (110e6)"
+            expectedAmount,
+            "Virtual supply should EXACTLY equal expected amount (100e6), not actual received (110e6)"
         );
         
-        // If we incorrectly used amountDelta, VS would be ~110e6 instead of ~100e6
-        // The difference (10e6 shares worth) would mean surplus created phantom shares instead of NAV increase
+        // If we incorrectly used amountDelta, VS would be 110e6 instead of 100e6
+        // The difference (10e6 shares) would mean surplus created phantom shares instead of NAV increase
         assertTrue(
             uint256(vsAfter) < actualReceived, 
             "VS must be less than amountDelta - surplus should NOT create virtual shares"
@@ -695,6 +698,174 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.chainId(31337);
     }
     
+    /// @notice Test surplus with pre-existing untracked token balance (token NOT yet active)
+    /// @dev Tests first-use scenario where NAV=1, so VS == expectedAmount
+    function test_ECrosschain_TransferMode_SurplusIncreasesNav_WithPreExistingBalance_FirstUse() public {
+        vm.warp(block.timestamp + 100);
+        
+        // Setup oracle for USDC
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+
+        uint256 poolBalance = 2000e6;
+        
+        // Unlock with pre-existing balance (but no prior supply, so NAV will be 1)
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(poolBalance));
+        IECrosschain(poolProxy).donate(ethUsdc, 1, params);
+        vm.chainId(1);
+        
+        // Verify NAV is 1e18 (first use - no prior supply)
+        uint256 navAtUnlock = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        assertEq(navAtUnlock, 1e18, "NAV should be 1e18 for first use (no prior supply)");
+        
+        // Get VS before donation
+        int256 vsBefore = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(vsBefore, 0, "VS should start at 0");
+        
+        // Simulate surplus: amountDelta = 110e6, but amount (expected) = 100e6
+        uint256 expectedAmount = 100e6;
+        uint256 actualReceived = 110e6;
+        poolBalance += actualReceived;
+        
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(poolBalance));
+        
+        // Donate with expected amount (less than actual balance)
+        IECrosschain(poolProxy).donate(ethUsdc, expectedAmount, params);
+        
+        // Get VS after donation
+        int256 vsAfter = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        
+        // With NAV=1e18 and pool decimals=18: shares = amount * 10^18 / 1e18 = amount
+        // So VS should exactly equal expectedAmount (100e6)
+        assertEq(
+            uint256(vsAfter), 
+            expectedAmount,
+            "VS should EXACTLY equal expected amount when NAV=1"
+        );
+        
+        // Verify VS < actualReceived (surplus NOT creating phantom shares)
+        assertTrue(uint256(vsAfter) < actualReceived, "VS must be less than amountDelta");
+        
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+    
+    /// @notice Test surplus with established pool (NAV != 1) - the realistic scenario
+    /// @dev This tests the common case: pool has prior supply and NAV > 1
+    /// @dev CRITICAL: This test verifies the exact NAV increase from surplus, not just "NAV increased"
+    function test_ECrosschain_TransferMode_SurplusIncreasesNav_WithEstablishedPool() public {
+        vm.warp(block.timestamp + 100);
+        
+        // Setup oracle for USDC
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        // First, establish the pool with real supply so NAV != 1
+        // Mint some shares using ETH (base token is address(0))
+        vm.deal(poolProxy, 100 ether);
+        vm.deal(address(this), 100 ether);
+        ISmartPoolActions(poolProxy).mint{value: 100 ether}(address(this), 100 ether, 0);
+        
+        uint256 totalSupply = ISmartPoolState(poolProxy).getPoolTokens().totalSupply;
+        assertGt(totalSupply, 0, "Pool should have supply");
+        assertEq(ISmartPoolState(poolProxy).getPoolTokens().unitaryValue, 1e18, "NAV should be 1e18 after initial mint");
+        
+        // Now add some USDC to the pool to make NAV increase
+        MockERC20(ethUsdc).mint(poolProxy, 2000e6);
+        _setupActiveToken(poolProxy, ethUsdc);
+        
+        // Update NAV to include the USDC
+        ISmartPoolActions(poolProxy).updateUnitaryValue();
+        uint256 storedNav = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        
+        // ASSERTION 1: NAV must be > 1e18 for this to be a valid "established pool" test
+        assertGt(storedNav, 1e18, "NAV must be > 1e18 for established pool test to be valid");
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        // Unlock - storedNav will capture the current NAV
+        IECrosschain(poolProxy).donate(ethUsdc, 1, params);
+        vm.chainId(1);
+        
+        // Get VS before donation (should be 0)
+        int256 vsBefore = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(vsBefore, 0, "VS should be 0 before first cross-chain donation");
+        
+        // Simulate surplus: actualReceived = 110e6, but expectedAmount = 100e6
+        // Surplus = 10e6 USDC (10% extra from solver)
+        uint256 expectedAmount = 100e6;
+        uint256 actualReceived = 110e6;
+        MockERC20(ethUsdc).mint(poolProxy, actualReceived);
+        
+        // Donate with expected amount (VS will be updated using expectedAmount, not actualReceived)
+        IECrosschain(poolProxy).donate(ethUsdc, expectedAmount, params);
+        
+        // Get VS after donation
+        int256 vsAfter = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        
+        // CRITICAL ASSERTION 2: VS should be based on expectedAmount, not actualReceived
+        // shares = amount * 10^poolDecimals / storedNav
+        // With poolDecimals=18: expectedShares = 100e6 * 1e18 / storedNav
+        uint256 expectedVs = expectedAmount * 1e18 / storedNav;
+        uint256 wrongVs = actualReceived * 1e18 / storedNav; // What VS would be if we used actualReceived
+        
+        assertEq(uint256(vsAfter), expectedVs, "VS must EXACTLY equal shares from expectedAmount");
+        assertTrue(uint256(vsAfter) < wrongVs, "VS must be less than what it would be with actualReceived");
+        
+        // CRITICAL ASSERTION 3: NAV should increase by exactly the surplus value per share
+        // 
+        // NAV formula: NAV = totalAssets / effectiveSupply
+        // effectiveSupply = totalSupply + VS = totalSupply + expectedVs
+        //
+        // With CORRECT impl (expectedAmount for VS): NAV increases (assets > proportional new shares)
+        // With WRONG impl (actualReceived for VS): NAV stays the same (NAV-neutral)
+        //
+        // The NAV increase equals: surplusValue / effectiveSupply
+        
+        uint256 navAfter = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        
+        // Convert surplus to base token (ETH) terms
+        int256 surplusInBase = IEOracle(poolProxy).convertTokenAmount(
+            ethUsdc,
+            int256(actualReceived - expectedAmount), // surplus = 10e6 USDC
+            address(0) // base token is ETH
+        );
+        assertGt(surplusInBase, 0, "Surplus should convert to positive base token amount");
+        
+        // Calculate expected NAV increase
+        // effectiveSupply = totalSupply + vsAfter
+        uint256 effectiveSupply = uint256(int256(totalSupply) + vsAfter);
+        uint256 expectedNavIncrease = uint256(surplusInBase) * 1e18 / effectiveSupply;
+        
+        // STRICT EQUALITY: NAV increase should exactly match surplus / effectiveSupply
+        uint256 actualNavIncrease = navAfter - storedNav;
+        assertEq(actualNavIncrease, expectedNavIncrease, "NAV increase must exactly equal surplus per share");
+        
+        vm.chainId(31337);
+    }
+
     /// @notice Test that virtual supply delta is correctly calculated when VS is already non-zero
     /// @dev This tests the fix for the bug where negative VS clearing logic was incorrect
     function test_ECrosschain_TransferMode_WithExistingVirtualSupply() public {
