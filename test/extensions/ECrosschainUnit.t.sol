@@ -678,7 +678,10 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Get VS after donation
         int256 vsAfter = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
         
-        // CRITICAL ASSERTION: VS should EXACTLY equal `amount` (100e6), NOT `amountDelta` (110e6)
+        // Fresh pool has NAV=1e18 (no prior supply, no stored price)
+        uint256 storedNav = 1e18;
+        
+        // CRITICAL ASSERTION 1: VS should EXACTLY equal `amount` (100e6), NOT `amountDelta` (110e6)
         // This proves surplus goes to existing shareholders (NAV increase), not to phantom shares
         // With NAV=1e18 and pool decimals=18, shares = amount * 10^18 / 1e18 = amount
         assertEq(
@@ -693,6 +696,42 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             uint256(vsAfter) < actualReceived, 
             "VS must be less than amountDelta - surplus should NOT create virtual shares"
         );
+        
+        // CRITICAL ASSERTION 2: Verify NAV calculation is correct
+        // For fresh pool: NAV = totalBalance / effectiveSupply
+        // totalBalance = actualReceived = 110e6 (no pre-existing balance)
+        // effectiveSupply = vsAfter = 100e6 (shares from expectedAmount only)
+        // 
+        // If we incorrectly used actualReceived for VS:
+        //   NAV = 110e6 / 110e6 = 1.0 (NAV unchanged - NAV neutral)
+        // With correct impl (expectedAmount for VS):
+        //   NAV = 110e6 / 100e6 = 1.1 (NAV increased - surplus benefits shareholders)
+        
+        uint256 navAfter = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        
+        // effectiveSupply = vsAfter (no prior totalSupply)
+        uint256 effectiveSupply = uint256(vsAfter);
+        
+        // Convert total balance to base token terms
+        int256 totalBalanceInBase = IEOracle(poolProxy).convertTokenAmount(
+            ethUsdc,
+            int256(poolBalance), // 110e6 after donation
+            address(0) // base token is ETH
+        );
+        
+        // Expected NAV = totalBalanceInBase * 1e18 / effectiveSupply
+        uint256 expectedNav = uint256(totalBalanceInBase) * 1e18 / effectiveSupply;
+        assertEq(navAfter, expectedNav, "NAV must equal totalAssets / effectiveSupply");
+        
+        // Verify NAV increased from storedNav (surplus increased NAV)
+        assertGt(navAfter, storedNav, "NAV must increase due to surplus");
+        
+        // Verify that using actualReceived for VS would result in SAME NAV (NAV-neutral)
+        // This proves using expectedAmount is correct - surplus goes to NAV
+        uint256 wrongVs = actualReceived; // What VS would be if we used actualReceived
+        uint256 navIfWrong = uint256(totalBalanceInBase) * 1e18 / wrongVs;
+        assertGt(navAfter, navIfWrong, "Correct impl should have HIGHER NAV than if we used actualReceived for VS");
+        assertEq(navIfWrong, storedNav, "Wrong impl would keep NAV at 1e18 (NAV-neutral)");
         
         vm.clearMockedCalls();
         vm.chainId(31337);
@@ -757,6 +796,37 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         // Verify VS < actualReceived (surplus NOT creating phantom shares)
         assertTrue(uint256(vsAfter) < actualReceived, "VS must be less than amountDelta");
+        
+        // CRITICAL ASSERTION 2: Verify NAV calculation is correct
+        // For first-use with pre-existing balance: NAV = totalBalance / effectiveSupply
+        // totalBalance = preExisting + actualReceived = 2000e6 + 110e6 = 2110e6
+        // effectiveSupply = vsAfter = 100e6 (shares from expectedAmount only)
+        // 
+        // If we incorrectly used actualReceived for VS:
+        //   NAV = 2110e6 / 110e6 = 19.18... (lower NAV - surplus diluted by phantom shares)
+        // With correct impl (expectedAmount for VS):
+        //   NAV = 2110e6 / 100e6 = 21.1 (higher NAV - surplus benefits shareholders)
+        
+        uint256 navAfter = ISmartPoolState(poolProxy).getPoolTokens().unitaryValue;
+        
+        // effectiveSupply = vsAfter (no prior totalSupply)
+        uint256 effectiveSupply = uint256(vsAfter);
+        
+        // Convert total balance to base token terms
+        int256 totalBalanceInBase = IEOracle(poolProxy).convertTokenAmount(
+            ethUsdc,
+            int256(poolBalance), // 2110e6 after donation
+            address(0) // base token is ETH
+        );
+        
+        // Expected NAV = totalBalanceInBase * 1e18 / effectiveSupply
+        uint256 expectedNav = uint256(totalBalanceInBase) * 1e18 / effectiveSupply;
+        assertEq(navAfter, expectedNav, "NAV must equal totalAssets / effectiveSupply");
+        
+        // Verify that using actualReceived for VS would result in LOWER NAV (proves surplus goes to shareholders)
+        uint256 wrongVs = actualReceived; // What VS would be if we used actualReceived
+        uint256 navIfWrong = uint256(totalBalanceInBase) * 1e18 / wrongVs;
+        assertGt(navAfter, navIfWrong, "Correct impl should have HIGHER NAV than if we used actualReceived for VS");
         
         vm.clearMockedCalls();
         vm.chainId(31337);
