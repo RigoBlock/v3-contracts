@@ -71,8 +71,8 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         // For bridge transactions, amountDelta will be >= amount due to solver surplus
-        // We use amountDelta for virtual supply calculation (captures full value)
-        // and amount for validation that we got at least what was expected
+        // We use amount for virtual supply (shares minted), but amountDelta for assets
+        // This means surplus (amountDelta - amount) increases NAV for existing shareholders
         require(amountDelta >= amount, CallerTransferAmount());
 
         // Only allow tokens from our cross-chain whitelist (check before unwrapping)
@@ -93,10 +93,14 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
 
         if (params.opType == OpType.Transfer) {
-            _handleTransferMode(token, amount, amountDelta, storedBalance, previouslyActive);
+            // Update virtual supply with amount (expected value), surplus remains as NAV increase
+            _updateVirtualSupply(token, amount);
         } else if (params.opType != OpType.Sync) {
             revert InvalidOpType();
         }
+
+        // Validate NAV integrity (common to both Transfer and Sync modes)
+        _validateNavIntegrity(token, amountDelta, storedBalance, previouslyActive);
 
         emit TokensReceived(msg.sender, token, amountDelta, uint8(params.opType));
 
@@ -106,12 +110,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         uint256(0).storeAssets();
     }
 
-    function _handleTransferMode(
+    function _updateVirtualSupply(
         address token,
-        uint256 amount,
-        uint256 amountDelta,
-        uint256 storedBalance,
-        bool previouslyActive
+        uint256 amount
     ) private {
         // This increases effective supply, keeping NAV unchanged
         address baseToken = StorageLib.pool().baseToken;
@@ -129,11 +130,23 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
 
         // Update virtual supply directly (works for both positive and negative current VS)
         mintedAmount.toInt256().updateVirtualSupply();
+    }
 
-        // Validate NAV integrity
+    /// @dev Validates that NAV wasn't manipulated between the lock and finalize calls.
+    /// @dev Ensures no internal transfers or unauthorized operations occurred during donation flow.
+    /// @dev Updates state by calling `updateUnitaryValue` method in the pool proxy.
+    function _validateNavIntegrity(
+        address token,
+        uint256 amountDelta,
+        uint256 storedBalance,
+        bool previouslyActive
+    ) private {
+        address baseToken = StorageLib.pool().baseToken;
+
+        // Get current NAV state after the donation
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
 
-        // Calculate expected assets
+        // Calculate expected assets based on stored state + received amount
         uint256 expectedAssets = TransientStorage.getStoredAssets();
 
         if (!previouslyActive) {
