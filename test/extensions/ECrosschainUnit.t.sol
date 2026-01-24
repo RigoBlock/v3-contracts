@@ -629,6 +629,72 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.chainId(31337);
     }
     
+    /// @notice Test that solver surplus increases NAV in Transfer mode (surplus goes to shareholders)
+    /// @dev This is critical: we use `amount` for VS, not `amountDelta`, so surplus increases NAV
+    /// @dev If we incorrectly used `amountDelta` for VS, NAV would remain unchanged (NAV-neutral)
+    /// @dev This test verifies VS changes by `amount`, not `amountDelta`, proving surplus benefits shareholders
+    function test_ECrosschain_TransferMode_SurplusIncreasesNav() public {
+        vm.warp(block.timestamp + 100);
+        
+        // Setup oracle for USDC
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        
+        // Unlock with 0 balance
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(0));
+        IECrosschain(poolProxy).donate(ethUsdc, 1, params);
+        vm.chainId(1);
+        
+        // Get VS before donation
+        int256 vsBefore = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(vsBefore, 0, "VS should start at 0");
+        
+        // Simulate surplus: amountDelta = 110e6, but amount (expected) = 100e6
+        // Surplus = 10e6 USDC (10%)
+        uint256 expectedAmount = 100e6;  // What sender specified (used for VS)
+        uint256 actualReceived = 110e6;  // What solver delivered (surplus)
+        
+        vm.mockCall(ethUsdc, abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy), abi.encode(actualReceived));
+        
+        // Donate with expected amount (less than actual balance)
+        IECrosschain(poolProxy).donate(ethUsdc, expectedAmount, params);
+        
+        // Get VS after donation
+        int256 vsAfter = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        
+        // CRITICAL ASSERTION: VS should increase by `amount` (100e6), NOT by `amountDelta` (110e6)
+        // This proves surplus goes to existing shareholders (NAV increase), not to phantom shares
+        // With NAV=1e6 (1:1 for 6 decimals), shares minted = amount * 10^decimals / NAV = 100e6
+        assertApproxEqRel(
+            uint256(vsAfter), 
+            expectedAmount,  // VS delta should equal expectedAmount
+            0.01e18,         // 1% tolerance for rounding
+            "Virtual supply should increase by EXPECTED amount (100e6), not by actual received (110e6)"
+        );
+        
+        // If we incorrectly used amountDelta, VS would be ~110e6 instead of ~100e6
+        // The difference (10e6 shares worth) would mean surplus created phantom shares instead of NAV increase
+        assertTrue(
+            uint256(vsAfter) < actualReceived, 
+            "VS must be less than amountDelta - surplus should NOT create virtual shares"
+        );
+        
+        vm.clearMockedCalls();
+        vm.chainId(31337);
+    }
+    
     /// @notice Test that virtual supply delta is correctly calculated when VS is already non-zero
     /// @dev This tests the fix for the bug where negative VS clearing logic was incorrect
     function test_ECrosschain_TransferMode_WithExistingVirtualSupply() public {
@@ -1087,8 +1153,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.chainId(31337);
     }
 
-    /// @notice Test Sync mode with 100% multiplier attempts to clear VB
-    /// @dev This test verifies the code path is executed correctly with mocked oracle
     /// @notice Test Sync mode with pre-existing balance (same pattern as Transfer mode tests)
     /// @dev Validates that Sync mode correctly handles pre-existing untracked token balance
     function test_ECrosschain_SyncMode_WithPreExistingBalance() public {

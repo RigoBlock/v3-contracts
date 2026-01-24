@@ -71,8 +71,8 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         // For bridge transactions, amountDelta will be >= amount due to solver surplus
-        // We use amountDelta for virtual supply calculation (captures full value)
-        // and amount for validation that we got at least what was expected
+        // We use amount for virtual supply (shares minted), but amountDelta for assets
+        // This means surplus (amountDelta - amount) increases NAV for existing shareholders
         require(amountDelta >= amount, CallerTransferAmount());
 
         // Only allow tokens from our cross-chain whitelist (check before unwrapping)
@@ -93,6 +93,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
 
         if (params.opType == OpType.Transfer) {
+            // Update virtual supply with amount (expected value), surplus remains as NAV increase
             _updateVirtualSupply(token, amount);
         } else if (params.opType != OpType.Sync) {
             revert InvalidOpType();
