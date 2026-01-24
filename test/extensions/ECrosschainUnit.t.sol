@@ -1089,82 +1089,61 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
 
     /// @notice Test Sync mode with 100% multiplier attempts to clear VB
     /// @dev This test verifies the code path is executed correctly with mocked oracle
-    function test_ECrosschain_SyncWithMultiplier_AttemptsClearVB() public {
-        // Pool is already set up in setUp()
+    /// @notice Test Sync mode with pre-existing balance (same pattern as Transfer mode tests)
+    /// @dev Validates that Sync mode correctly handles pre-existing untracked token balance
+    function test_ECrosschain_SyncMode_WithPreExistingBalance() public {
+        vm.warp(block.timestamp + 100);
         
         // Setup mock oracle for USDC price feed
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDC),
+                currency1: Currency.wrap(ethUsdc),
                 fee: 0,
                 tickSpacing: TickMath.MAX_TICK_SPACING,
                 hooks: IHooks(address(deployment.mockOracle))
             })
         );
         
-        vm.chainId(1); // Set to Ethereum for USDC whitelist
-        
-        // Mock initial balance
-        vm.mockCall(
-            Constants.ETH_USDC,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
-            abi.encode(1000e6)
-        );
+        // Attacker pre-donates tokens before legitimate use (same pattern as Transfer tests)
+        uint256 preExisting = 1000e6;
+        MockERC20(ethUsdc).mint(poolProxy, preExisting);
         
         DestinationMessageParams memory syncParams = DestinationMessageParams({
             opType: OpType.Sync,
             shouldUnwrapNative: false
         });
         
-        // Initialize donation
-        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, syncParams);
+        // Unlock: storedBalance=1000e6, storedAssets=0 (token not yet active)
+        IECrosschain(poolProxy).donate(ethUsdc, 1, syncParams);
+        vm.chainId(1);
         
-        // Mock increased balance (simulating received tokens)
-        vm.mockCall(
-            Constants.ETH_USDC,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
-            abi.encode(1200e6)
-        );
+        // Legitimate donation arrives
+        uint256 donationAmount = 200e6;
+        MockERC20(ethUsdc).mint(poolProxy, donationAmount);
         
-        // Mock convertTokenAmount to return a fixed value (avoids oracle complexity in unit test)
-        // 200e6 USDC -> 200e6 in base value (1:1 for simplicity)
-        vm.mockCall(
-            poolProxy,
-            abi.encodeWithSelector(IEOracle.convertTokenAmount.selector),
-            abi.encode(int256(200e6))
-        );
+        // Should succeed: expectedAssets = storedAssets(0) + convert(amountDelta + storedBalance)
+        //                                = 0 + convert(200e6 + 1000e6) = convert(1200e6)
+        // actualAssets = convert(1200e6) from updateUnitaryValue
+        vm.expectEmit(true, true, true, true);
+        emit IECrosschain.TokensReceived(address(this), ethUsdc, donationAmount, uint8(OpType.Sync));
+        IECrosschain(poolProxy).donate(ethUsdc, donationAmount, syncParams);
         
-        // Receive tokens via Sync with 100% multiplier
-        // This should succeed and attempt to clear VB (no VB exists in this test, so just activates token)
-        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 200e6, syncParams);
-        
-        vm.clearMockedCalls();
         vm.chainId(31337);
     }
     
-    /// @notice Test Sync mode with 0% multiplier (legacy behavior - no VB clearing)
-    function test_ECrosschain_SyncWithZeroMultiplier_LegacyBehavior() public {
-        // Pool is already set up in setUp()
+    /// @notice Test Sync mode without pre-existing balance (clean donation)
+    function test_ECrosschain_SyncMode_CleanDonation() public {
+        vm.warp(block.timestamp + 100);
         
-        // Setup mock oracle for USDC price feed
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDC),
+                currency1: Currency.wrap(ethUsdc),
                 fee: 0,
                 tickSpacing: TickMath.MAX_TICK_SPACING,
                 hooks: IHooks(address(deployment.mockOracle))
             })
-        );
-        
-        vm.chainId(1);
-        
-        // Mock initial balance
-        vm.mockCall(
-            Constants.ETH_USDC,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
-            abi.encode(1000e6)
         );
         
         DestinationMessageParams memory syncParams = DestinationMessageParams({
@@ -1172,73 +1151,71 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
             shouldUnwrapNative: false
         });
         
-        // Initialize donation
-        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, syncParams);
+        // Unlock with zero balance
+        IECrosschain(poolProxy).donate(ethUsdc, 1, syncParams);
+        vm.chainId(1);
         
-        // Mock increased balance
-        vm.mockCall(
-            Constants.ETH_USDC,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
-            abi.encode(1200e6)
-        );
+        // Donate tokens
+        uint256 donationAmount = 200e6;
+        MockERC20(ethUsdc).mint(poolProxy, donationAmount);
         
-        // Receive tokens via Sync with 0% multiplier - should succeed with no VB clearing
-        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 200e6, syncParams);
-
-        vm.clearMockedCalls();
+        vm.expectEmit(true, true, true, true);
+        emit IECrosschain.TokensReceived(address(this), ethUsdc, donationAmount, uint8(OpType.Sync));
+        IECrosschain(poolProxy).donate(ethUsdc, donationAmount, syncParams);
+        
         vm.chainId(31337);
     }
     
-    /// @notice Test Sync mode with 50% multiplier (partial VB clearing)
-    function test_ECrosschain_SyncWithPartialMultiplier() public {
-        // Pool is already set up in setUp()
+    /// @notice Test Sync mode reverts with NavManipulationDetected when assets are manipulated
+    /// @dev Simulates scenario where total assets decrease between unlock and finalize
+    function test_ECrosschain_SyncMode_RevertsOnNavManipulation() public {
+        vm.warp(block.timestamp + 100);
         
-        // Setup mock oracle for USDC price feed
+        // Setup oracles for both USDC and USDT
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
-                currency1: Currency.wrap(Constants.ETH_USDC),
+                currency1: Currency.wrap(ethUsdc),
+                fee: 0,
+                tickSpacing: TickMath.MAX_TICK_SPACING,
+                hooks: IHooks(address(deployment.mockOracle))
+            })
+        );
+        deployment.mockOracle.initializeObservations(
+            PoolKey({
+                currency0: Currency.wrap(address(0)),
+                currency1: Currency.wrap(ethUsdt),
                 fee: 0,
                 tickSpacing: TickMath.MAX_TICK_SPACING,
                 hooks: IHooks(address(deployment.mockOracle))
             })
         );
         
-        vm.chainId(1);
-        
-        // Mock initial balance
-        vm.mockCall(
-            Constants.ETH_USDC,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
-            abi.encode(1000e6)
-        );
+        // Give pool pre-existing USDT balance and make it active
+        MockERC20(ethUsdt).mint(poolProxy, 1000e6);
+        _setupActiveToken(poolProxy, ethUsdt);
         
         DestinationMessageParams memory syncParams = DestinationMessageParams({
             opType: OpType.Sync,
             shouldUnwrapNative: false
         });
         
-        // Initialize donation
-        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 1, syncParams);
+        // Unlock: storedAssets includes the 1000 USDT
+        IECrosschain(poolProxy).donate(ethUsdc, 1, syncParams);
+        vm.chainId(1);
         
-        // Mock increased balance
-        vm.mockCall(
-            Constants.ETH_USDC,
-            abi.encodeWithSelector(IERC20.balanceOf.selector, poolProxy),
-            abi.encode(1200e6)
-        );
+        // Simulate manipulation: USDT is removed (drained/swapped out) while "donating" USDC
+        // This could happen if pool owner does something malicious between calls
+        MockERC20(ethUsdc).mint(poolProxy, 200e6); // "Donation" arrives
+        // Transfer USDT out of pool to simulate drain
+        vm.prank(poolProxy);
+        IERC20(ethUsdt).transfer(address(this), 1000e6);
         
-        // Mock convertTokenAmount to return a fixed value
-        vm.mockCall(
-            poolProxy,
-            abi.encodeWithSelector(IEOracle.convertTokenAmount.selector),
-            abi.encode(int256(200e6))
-        );
+        // Should revert: expectedAssets = storedAssets(1000 USDT value) + convert(200 USDC)
+        //                actualAssets = convert(200 USDC) only (USDT gone)
+        vm.expectRevert(abi.encodeWithSelector(IECrosschain.NavManipulationDetected.selector, uint256(1200e6), uint256(200e6)));
+        IECrosschain(poolProxy).donate(ethUsdc, 200e6, syncParams);
         
-        // Receive tokens via Sync with 50% multiplier - should succeed
-        IECrosschain(poolProxy).donate(Constants.ETH_USDC, 200e6, syncParams);
-        
-        vm.clearMockedCalls();
         vm.chainId(31337);
     }
 
