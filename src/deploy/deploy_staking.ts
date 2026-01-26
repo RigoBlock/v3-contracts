@@ -10,7 +10,8 @@ const deploy: DeployFunction = async function (
   const { deploy } = deployments;
 
   const chainId = await getChainId();
-  if (!chainId || !chainConfig[chainId]) {
+  const chainIdNum = parseInt(chainId);
+  if (!chainId || !chainConfig[chainIdNum]) {
     if (chainId === "31337") {
       console.log("Skipping for Hardhat Network");
       return;
@@ -19,7 +20,7 @@ const deploy: DeployFunction = async function (
     }
   }
 
-  const config = chainConfig[chainId];
+  const config = chainConfig[chainIdNum];
 
   const grgTransferProxy = await deploy("ERC20Proxy", {
     from: deployer,

@@ -20,9 +20,10 @@
 pragma solidity 0.8.28;
 
 import {IEApps} from "../extensions/adapters/interfaces/IEApps.sol";
+import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
+import {IENavView} from "../extensions/adapters/interfaces/IENavView.sol";
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 import {IEUpgrade} from "../extensions/adapters/interfaces/IEUpgrade.sol";
-import {IAuthority} from "../interfaces/IAuthority.sol";
 import {IExtensionsMap} from "../interfaces/IExtensionsMap.sol";
 import {IExtensionsMapDeployer} from "../interfaces/IExtensionsMapDeployer.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
@@ -35,21 +36,30 @@ contract ExtensionsMap is IExtensionsMap {
     // mapped selectors. When adding a new selector, make sure its mapping to extension address is added below.
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
     bytes4 private constant _EAPPS_UNIV4_POSITIONS_SELECTOR = IEApps.getUniV4TokenIds.selector;
+    bytes4 private constant _ENAVVIEW_NAV_DATA_SELECTOR = IENavView.getNavDataView.selector;
+    bytes4 private constant _ENAVVIEW_APP_BALANCES_SELECTOR = IENavView.getAppTokensAndBalancesView.selector;
     bytes4 private constant _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR = IEOracle.convertBatchTokenAmounts.selector;
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
     bytes4 private constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
     bytes4 private constant _EORACLE_TWAP_SELECTOR = IEOracle.getTwap.selector;
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
+    bytes4 private constant _ECROSSCHAIN_DONATE_SELECTOR = IECrosschain.donate.selector;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eApps;
+
+    /// @inheritdoc IExtensionsMap
+    address public immutable override eNavView;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eOracle;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eUpgrade;
+
+    /// @inheritdoc IExtensionsMap
+    address public immutable override eCrosschain;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override wrappedNative;
@@ -59,12 +69,15 @@ contract ExtensionsMap is IExtensionsMap {
     constructor() {
         DeploymentParams memory params = IExtensionsMapDeployer(msg.sender).parameters();
         eApps = params.extensions.eApps;
+        eNavView = params.extensions.eNavView;
         eOracle = params.extensions.eOracle;
         eUpgrade = params.extensions.eUpgrade;
+        eCrosschain = params.extensions.eCrosschain;
         wrappedNative = params.wrappedNative;
 
         // validate immutable constants. Assumes deps are correctly initialized
         assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId);
+        assert(_ENAVVIEW_NAV_DATA_SELECTOR ^ _ENAVVIEW_APP_BALANCES_SELECTOR == type(IENavView).interfaceId);
         assert(
             _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ^
                 _EORACLE_CONVERT_AMOUNT_SELECTOR ^
@@ -73,6 +86,7 @@ contract ExtensionsMap is IExtensionsMap {
                 type(IEOracle).interfaceId
         );
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
+        assert(_ECROSSCHAIN_DONATE_SELECTOR == type(IECrosschain).interfaceId);
     }
 
     /// @inheritdoc IExtensionsMap
@@ -82,6 +96,12 @@ contract ExtensionsMap is IExtensionsMap {
     ) external view override returns (address extension, bool shouldDelegatecall) {
         if (selector == _EAPPS_BALANCES_SELECTOR || selector == _EAPPS_UNIV4_POSITIONS_SELECTOR) {
             extension = eApps;
+            shouldDelegatecall = true;
+        } else if (selector == _ECROSSCHAIN_DONATE_SELECTOR) {
+            extension = eCrosschain;
+            shouldDelegatecall = true;
+        } else if (selector == _ENAVVIEW_NAV_DATA_SELECTOR || selector == _ENAVVIEW_APP_BALANCES_SELECTOR) {
+            extension = eNavView;
             shouldDelegatecall = true;
         } else if (
             selector == _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ||

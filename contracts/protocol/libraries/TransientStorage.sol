@@ -15,6 +15,13 @@ library TransientStorage {
 
     bytes32 internal constant _TRANSIENT_TWAP_TICK_SLOT = bytes32(uint256(keccak256("transient.tick.slot")) - 1);
 
+    // Transient storage slots for cross-chain donation tracking
+    // _STORED_NAV_SLOT is used to store NAV at donation init time for proper share calculation
+    bytes32 internal constant _STORED_NAV_SLOT = bytes32(uint256(keccak256("eacross.stored.nav")) - 1);
+    bytes32 internal constant _STORED_ASSETS_SLOT = bytes32(uint256(keccak256("eacross.stored.assets")) - 1);
+    bytes32 internal constant _TEMP_BALANCE_SLOT = bytes32(uint256(keccak256("eacross.temp.balance")) - 1);
+    bytes32 internal constant _DONATION_LOCK_SLOT = bytes32(uint256(keccak256("eacross.donation.lock")) - 1);
+
     // Helper functions for tstore operations
     /// @notice Stores a mapping of token addresses to int256 values
     function store(Int256 slot, address token, int256 value) internal {
@@ -39,5 +46,42 @@ library TransientStorage {
 
     function getTwap(address token) internal view returns (int24) {
         return int24(get(Int256.wrap(_TRANSIENT_TWAP_TICK_SLOT), token));
+    }
+
+    function setDonationLock(address token, uint256 balance) internal {
+        bool isUnlocked = getDonationLock();
+        _DONATION_LOCK_SLOT.asBoolean().tstore(!isUnlocked);
+        storeTemporaryBalance(token, balance, !isUnlocked);
+    }
+
+    function getDonationLock() internal view returns (bool) {
+        return _DONATION_LOCK_SLOT.asBoolean().tload();
+    }
+
+    function getTemporaryBalance(address token) internal view returns (uint256, bool) {
+        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
+        return (slot.asUint256().tload(), (bytes32(uint256(slot) + 1)).asBoolean().tload());
+    }
+
+    function storeNav(uint256 nav) internal {
+        _STORED_NAV_SLOT.asUint256().tstore(nav);
+    }
+
+    function storeAssets(uint256 assets) internal {
+        _STORED_ASSETS_SLOT.asUint256().tstore(assets);
+    }
+
+    function storeTemporaryBalance(address token, uint256 balance, bool locked) private {
+        bytes32 slot = _TEMP_BALANCE_SLOT.deriveMapping(token);
+        slot.asUint256().tstore(balance);
+        (bytes32(uint256(slot) + 1)).asBoolean().tstore(locked);
+    }
+
+    function getStoredNav() internal view returns (uint256) {
+        return _STORED_NAV_SLOT.asUint256().tload();
+    }
+
+    function getStoredAssets() internal view returns (uint256) {
+        return _STORED_ASSETS_SLOT.asUint256().tload();
     }
 }

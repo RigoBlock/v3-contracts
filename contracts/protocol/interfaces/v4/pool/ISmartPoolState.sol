@@ -1,9 +1,15 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
+
+import {OpType} from "../../../types/Crosschain.sol";
 
 /// @title Rigoblock V3 Pool State - Returns the pool view methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface ISmartPoolState {
+    /// @notice Returns the list of accepted mint tokens.
+    /// @return tokens Array of token addresses.
+    function getAcceptedMintTokens() external view returns (address[] memory tokens);
+
     /// @notice Returns the active application flags.
     /// @return packedApplications Packed value of bitmap encoded active flags.
     function getActiveApplications() external view returns (uint256 packedApplications);
@@ -111,4 +117,9 @@ interface ISmartPoolState {
     /// @param operator The address of the operator.
     /// @return approved The approval status.
     function isOperator(address holder, address operator) external view returns (bool approved);
+
+    /// @notice Gets the deterministic escrow address for cross-chain operations.
+    /// @param opType The operation type (Transfer or Sync).
+    /// @return escrowAddress The deterministic escrow contract address.
+    function getEscrowAddress(OpType opType) external view returns (address escrowAddress);
 }

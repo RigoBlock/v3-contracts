@@ -1,44 +1,27 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2022-2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
+// SPDX-License-Identifier: Apache 2.0-or-later
+pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinImmutables} from "./MixinImmutables.sol";
 import {AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
-
-pragma solidity >=0.8.0 <0.9.0;
 
 /// @notice Storage slots must be preserved to prevent storage clashing.
 /// @dev Pool storage is not sequential: each variable is wrapped into a struct which is assigned a storage slot.
 abstract contract MixinStorage is MixinImmutables {
     constructor() {
         // governance must always check that pool extensions are not using these storage slots (reserved for proxy storage)
-        assert(_POOL_INIT_SLOT == bytes32(uint256(keccak256("pool.proxy.initialization")) - 1));
-        assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
-        assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
-        assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
-        assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
+        assert(_ACCEPTED_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.accepted.tokens")) - 1));
         assert(_APPLICATIONS_SLOT == bytes32(uint256(keccak256("pool.proxy.applications")) - 1));
         assert(_OPERATOR_BOOLEAN_SLOT == bytes32(uint256(keccak256("pool.proxy.operator.boolean")) - 1));
+        assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
+        assert(_POOL_INIT_SLOT == bytes32(uint256(keccak256("pool.proxy.initialization")) - 1));
+        assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
+        assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
+        assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
+        assert(_UNIV4_TOKEN_IDS_SLOT == bytes32(uint256(keccak256("pool.proxy.uniV4.tokenIds")) - 1));
+        assert(_VIRTUAL_SUPPLY_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1));
     }
 
-    // mappings slot kept empty and i.e. userBalance stored at location keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT))
-    // activation stored at locantion keccak256(address(msg.sender) . uint256(_POOL_USER_ACCOUNTS_SLOT)) + 1
     struct Accounts {
         mapping(address => UserAccount) userAccounts;
     }
@@ -99,6 +82,12 @@ abstract contract MixinStorage is MixinImmutables {
     function operators() internal pure returns (Operator storage s) {
         assembly {
             s.slot := _OPERATOR_BOOLEAN_SLOT
+        }
+    }
+
+    function acceptedTokensSet() internal pure returns (AddressSet storage s) {
+        assembly {
+            s.slot := _ACCEPTED_TOKENS_SLOT
         }
     }
 }
