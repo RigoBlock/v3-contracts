@@ -16,6 +16,7 @@ import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {DeploymentParams, Extensions} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 import {MockOracle} from "../../contracts/test/MockOracle.sol";
 
 interface IERC20Proxy {
@@ -50,8 +51,8 @@ contract UnitTestFixture is Test {
         deployment.authority = deployCode("out/Authority.sol/Authority.json", abi.encode(address(this)));
         IAuthority(deployment.authority).setWhitelister(address(this), true);
 
-        // TODO: update if we implement tokenJar in this package
-        address tokenJar = makeAddr("tokenJar");
+        // use mainnet token jar address (protocol only sends tokens to it)
+        address tokenJar = Constants.TOKEN_JAR;
 
         // TODO: it turns out implementation needs upgrade extension which needs factory, which needs implementation - recursive.
         // It was implemented so because originally we only had adapters (mapped from authority). Review deployment flow in a future major release.

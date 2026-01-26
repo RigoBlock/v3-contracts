@@ -66,6 +66,8 @@ library Constants {
     address internal constant BASE_ORACLE = 0x59f39091Fd6f47e9D0bCB466F74e305f1709BAC4;
     address internal constant POLYGON_ORACLE = 0x1D8691A1A7d53B60DeDd99D8079E026cB0E5bac4;
 
+    address internal constant TOKEN_JAR = 0xA0F9C380ad1E1be09046319fd907335B2B452B37;
+
     /// @notice Test pool address with cross-chain assets
     address internal constant TEST_POOL = 0xEfa4bDf566aE50537A507863612638680420645C;
 
