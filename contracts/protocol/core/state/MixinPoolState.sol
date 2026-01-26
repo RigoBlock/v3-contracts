@@ -1,19 +1,25 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
+import {EscrowFactory} from "../../libraries/EscrowFactory.sol";
+import {OpType} from "../../types/Crosschain.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
     /*
      * EXTERNAL VIEW METHODS
      */
-    /// @dev Returns how many pool tokens a user holds.
-    /// @param who Address of the target account.
-    /// @return Number of pool.
+    /// @inheritdoc IERC20
     function balanceOf(address who) external view override returns (uint256) {
         return accounts().userAccounts[who].userBalance;
+    }
+
+    /// @inheritdoc ISmartPoolState
+    function getAcceptedMintTokens() external view override returns (address[] memory tokens) {
+        return _getAcceptedMintTokens();
     }
 
     /// @inheritdoc ISmartPoolState
@@ -37,8 +43,14 @@ abstract contract MixinPoolState is MixinPoolValue {
         return (getPool(), getPoolParams(), getPoolTokens());
     }
 
+    /// @inheritdoc ISmartPoolState
     function getUserAccount(address who) external view override returns (UserAccount memory) {
         return accounts().userAccounts[who];
+    }
+
+    /// @inheritdoc ISmartPoolState
+    function getEscrowAddress(OpType opType) external view override returns (address escrowAddress) {
+        return EscrowFactory.getEscrowAddress(address(this), opType);
     }
 
     /// @inheritdoc ISmartPoolState
@@ -59,8 +71,7 @@ abstract contract MixinPoolState is MixinPoolValue {
     /*
      * PUBLIC VIEW METHODS
      */
-    /// @notice Decimals are initialized at proxy creation.
-    /// @return Number of decimals.
+    /// @inheritdoc IERC20
     function decimals() public view override returns (uint8) {
         return pool().decimals;
     }
@@ -139,7 +150,15 @@ abstract contract MixinPoolState is MixinPoolValue {
 
     function _getSpread() internal view override returns (uint16) {
         uint16 spread = poolParams().spread;
-        return spread != 0 ? spread : _MAX_SPREAD;
+        return spread != 0 ? spread : _DEFAULT_SPREAD;
+    }
+
+    function _getTokenJar() internal view override returns (address) {
+        return tokenJar;
+    }
+
+    function _getAcceptedMintTokens() private view returns (address[] memory) {
+        return acceptedTokensSet().addresses;
     }
 
     function _getActiveTokens() private view returns (ActiveTokens memory tokens) {

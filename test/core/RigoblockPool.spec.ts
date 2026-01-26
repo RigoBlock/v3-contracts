@@ -138,7 +138,7 @@ describe("Proxy", async () => {
         it('should create new tokens', async () => {
             const { pool } = await setupTests()
             expect(await pool.totalSupply()).to.be.eq(0)
-            const etherAmount = parseEther("1")
+            const etherAmount = parseEther("0.95")
             const amount = await pool.callStatic.mint(
                   user1.address,
                   etherAmount,
@@ -148,18 +148,20 @@ describe("Proxy", async () => {
             await expect(
                 pool.mint(user1.address, parseEther("2"), 0, { value: etherAmount })
             ).to.be.revertedWith('PoolMintAmountIn()')
+            const spread =  BigNumber.from((await pool.getPoolParams()).spread)
+            expect(spread).to.be.eq(10) // default spread is 0.1%
+            const expectedMintedAmount = etherAmount.sub(etherAmount.mul(spread).div(10000))
             await expect(
                 pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             ).to.emit(pool, "Transfer").withArgs(
                 AddressZero,
                 user1.address,
-                amount
+                expectedMintedAmount
             )
             expect(await pool.totalSupply()).to.be.not.eq(0)
-            expect(await pool.balanceOf(user1.address)).to.be.eq(amount)
-            const poolData = await pool.getPoolParams()
-            const netAmount = amount
-            expect(netAmount.toString()).to.be.eq(etherAmount.toString())
+            const userBalance = await pool.balanceOf(user1.address)
+            expect(userBalance).to.be.eq(expectedMintedAmount)
+            expect(userBalance.toString()).to.be.eq(expectedMintedAmount.toString())
         })
 
         it('should revert with invalid recipient', async () => {
@@ -173,7 +175,7 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             const etherAmount = parseEther("0.00012")
             await expect(pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            ).to.be.revertedWith('PoolAmountSmallerThanMinumum(1000)')
+            ).to.be.revertedWith('PoolAmountSmallerThanMinimum(1000)')
         })
 
         it('should revert if user not whitelisted when whitelist enabled', async () => {
@@ -239,26 +241,29 @@ describe("Proxy", async () => {
             const { pool } = await setupTests()
             let etherAmount = parseEther("0.1")
             // we forward some ether to the pool, so we can test edge case where nav would be affected
-            await user1.sendTransaction({ to: pool.address, value: parseEther("0.4")})
+            await user1.sendTransaction({ to: pool.address, value: etherAmount.mul(4) })
             expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1"))
+            // the fist mint will use the initial nav, or the previously stored one (in case of mint after total burn)
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            expect(await pool.totalSupply()).to.be.eq(etherAmount)
+            const spread =  BigNumber.from((await pool.getPoolParams()).spread)
+            const expectedMintedAmount = etherAmount.sub(etherAmount.mul(spread).div(10000))
+            expect(await pool.totalSupply()).to.be.eq(expectedMintedAmount)
             expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1"))
             let ethBalance = await hre.ethers.provider.getBalance(pool.address)
-            expect(ethBalance).to.be.eq(parseEther("0.5"))
+            expect(ethBalance).to.be.eq(etherAmount.mul(5).sub(spread.mul(etherAmount).div(10000)))
             await timeTravel({ seconds: 2592000, mine: true })
-            // initially minted pool tokens are same as ether amount
-            await pool.burn(etherAmount, 1)
+            // initially minted pool tokens are same as ether amount minus spread
+            await pool.burn(expectedMintedAmount, 1)
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
-            expect(ethBalance).to.be.eq(0)
+            expect(ethBalance).to.be.eq(1) // leftover wei due to spread calculation rounding
             expect(await pool.totalSupply()).to.be.eq(0)
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5"))
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5.004004004004004004"))
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
-            expect(ethBalance).to.be.eq(parseEther("0.1"))
+            expect(ethBalance).to.be.eq(expectedMintedAmount.add(1)) // leftover wei due to spread calculation rounding
             // a higher unitary value results in a lower amount of pool tokens
-            expect(await pool.totalSupply()).to.be.eq(parseEther("0.02"))
-            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5"))
+            expect(await pool.totalSupply()).to.be.eq(parseEther("0.019964012802560512"))
+            expect((await pool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("5.004004004004004004"))
         })
 
         it('should not include univ3npm position tokens', async () => {
@@ -283,6 +288,8 @@ describe("Proxy", async () => {
             await uniswapV3Npm.mint(mintParams)
             expect(await uniswapV3Npm.balanceOf(pool.address)).to.be.eq(1)
             const etherAmount = parseEther("11")
+            const spread =  BigNumber.from((await pool.getPoolParams()).spread)
+            const expectedMintedAmount = etherAmount.sub(etherAmount.mul(spread).div(10000))
             // first mint will only update storage with inintial value and not include the univ3 position tokens
             // pools from versions before v4 will already have a stored value, so will include univ3 position tokens
             await expect(
@@ -290,10 +297,10 @@ describe("Proxy", async () => {
             ).to.emit(pool, "Transfer").withArgs(
                 AddressZero,
                 user1.address,
-                etherAmount
+                expectedMintedAmount
             )
             // first mint will update storage with initial value and will use that one to calculate minted tokens
-            expect(await pool.totalSupply()).to.be.eq(etherAmount)
+            expect(await pool.totalSupply()).to.be.eq(expectedMintedAmount)
             // TODO: could calculate the value from positions(id) and verify new nav
             // TODO: should also test with very small values returned (as previously was 1.00000000000000001)
 
@@ -308,7 +315,7 @@ describe("Proxy", async () => {
                 .to.emit(pool, "Transfer").withArgs(
                     AddressZero,
                     user1.address,
-                    etherAmount
+                    expectedMintedAmount
                 )
                 .and.to.not.emit(pool, "NewNav")
             expect((await pool.getPoolTokens()).unitaryValue).to.be.deep.eq(parseEther("1"))
@@ -325,11 +332,14 @@ describe("Proxy", async () => {
             // and 2-block attacks are possible with 1-2 block lockup
             // TODO: should be able to burn after 1 second, requires 2
             await timeTravel({ seconds: 2592000, mine: true })
-            expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(etherAmount)
+            const spread =  BigNumber.from((await pool.getPoolParams()).spread)
+            const netAmount = etherAmount.sub(etherAmount.mul(spread).div(10000))
+            const poolBalance = await hre.ethers.provider.getBalance(pool.address)
+            expect(poolBalance).to.be.deep.eq(netAmount)
             const preBalance = await hre.ethers.provider.getBalance(user1.address)
             const netRevenue = await pool.callStatic.burn(userPoolBalance, 1)
-            const { unitaryValue } = await pool.getPoolTokens()
-            expect(netRevenue).to.be.eq(BigNumber.from(userPoolBalance).mul(100).div(100).mul(unitaryValue).div(etherAmount))
+            //const { unitaryValue } = await pool.getPoolTokens()
+            expect(netRevenue).to.be.eq(poolBalance.sub(poolBalance.mul(spread).div(10000)))
             // the following is true with fee set as 0
             await expect(
                 pool.burn(userPoolBalance, 1)
@@ -338,8 +348,7 @@ describe("Proxy", async () => {
                 AddressZero,
                 userPoolBalance
             )
-            const spreadAmount = BigNumber.from(etherAmount).sub(etherAmount.div(100).mul(100).div(100).mul(100))
-            expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(spreadAmount)
+            expect(await hre.ethers.provider.getBalance(pool.address)).to.be.deep.eq(0)
             const postBalance = await hre.ethers.provider.getBalance(user1.address)
             expect(postBalance).to.be.gt(preBalance)
         })
@@ -461,32 +470,35 @@ describe("Proxy", async () => {
         it('should update storage when caller is any wallet', async () => {
             const { pool } = await setupTests()
             await pool.setOwner(user2.address)
+            // First call initializes NAV to 10^decimals and writes to storage
+            // msg.sender is still user1 (the one calling updateUnitaryValue)
             await expect(pool.updateUnitaryValue())
-                .to.be.revertedWith('PoolSupplyIsNullOrDust()')
+                .to.emit(pool, "NewNav").withArgs(
+                    user1.address,
+                    pool.address,
+                    parseEther("1")
+                )
             const etherAmount = parseEther("0.1")
-            expect(
-                await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            ).to.emit(pool, "NewNav").withArgs(
-                user1.address,
-                pool.address,
-                parseEther("1")
-            )
+            // Mint calls _updateNav() but NAV already initialized, so no NewNav emission
+            await expect(pool.mint(user1.address, etherAmount, 0, { value: etherAmount }))
+                .to.not.emit(pool, "NewNav")
             await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
 
         it('should update storage when caller is owner', async () => {
             const { pool } = await setupTests()
+            // First call initializes NAV to 10^decimals and writes to storage
             await expect(pool.updateUnitaryValue())
-                .to.be.revertedWith('PoolSupplyIsNullOrDust()')
+                .to.emit(pool, "NewNav").withArgs(
+                    user1.address,
+                    pool.address,
+                    parseEther("1")
+                )
             const etherAmount = parseEther("0.1")
-            await expect(
-                pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
-            ).to.emit(pool, "NewNav").withArgs(
-                user1.address,
-                pool.address,
-                parseEther("1")
-            )
+            // Mint calls _updateNav() but NAV already initialized, so no NewNav emission
+            await expect(pool.mint(user1.address, etherAmount, 0, { value: etherAmount }))
+                .to.not.emit(pool, "NewNav")
             await expect(pool.updateUnitaryValue())
                 .to.not.emit(pool, "NewNav")
         })
@@ -497,25 +509,28 @@ describe("Proxy", async () => {
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             etherAmount = parseEther("0.4")
             await user1.sendTransaction({ to: pool.address, value: etherAmount})
+            // spread is applied on mint amount and transferred token, so the native transfer amount has higher impact on nav
             await expect(pool.updateUnitaryValue())
                 .to.emit(pool, "NewNav").withArgs(
                     user1.address,
                     pool.address,
-                    parseEther("5")
+                    parseEther("5.004004004004004004")
                 )
         })
 
-        it('should revert with previously burnt supply', async () => {
+        it('should handle previously burnt supply gracefully', async () => {
             const { pool } = await setupTests()
             let etherAmount = parseEther("0.1")
             await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
             let ethBalance = await hre.ethers.provider.getBalance(pool.address)
-            expect(ethBalance).to.be.eq(etherAmount)
+            const { spread } = await pool.getPoolParams()
+            expect(ethBalance).to.be.eq(etherAmount.sub(etherAmount.mul(spread).div(10000)))
             await timeTravel({ seconds: 2592000, mine: true })
-            await pool.burn(etherAmount, 1)
+            await pool.burn(etherAmount.sub(etherAmount.mul(spread).div(10000)), 1)
             ethBalance = await hre.ethers.provider.getBalance(pool.address)
             expect(ethBalance).to.be.eq(0)
-            await expect(pool.updateUnitaryValue()).to.be.revertedWith('PoolSupplyIsNullOrDust()')
+            // With zero supply, returns stored NAV without revert
+            await expect(pool.updateUnitaryValue()).to.not.emit(pool, "NewNav")
         })
     })
 
@@ -624,7 +639,7 @@ describe("Proxy", async () => {
 
         it('should change spread', async () => {
             const { pool } = await setupTests()
-            expect((await pool.getPoolParams()).spread).to.be.eq(500)
+            expect((await pool.getPoolParams()).spread).to.be.eq(10)
             await expect(pool.changeSpread(100))
                 .to.emit(pool, "SpreadChanged").withArgs(pool.address, 100)
             expect((await pool.getPoolParams()).spread).to.be.eq(100)
@@ -632,14 +647,14 @@ describe("Proxy", async () => {
 
         it('should revert if same as current', async () => {
             const { pool } = await setupTests()
-            expect((await pool.getPoolParams()).spread).to.be.eq(500)
-            // the first time we update storage, the spread must be different from the default one (500)
-            await expect(pool.changeSpread(500))
+            expect((await pool.getPoolParams()).spread).to.be.eq(10)
+            // the first time we update storage, the spread must be different from the default one (10)
+            await expect(pool.changeSpread(10))
                 .to.be.revertedWith('OwnerActionInputIsSameAsCurrent()')
             await expect(pool.changeSpread(400))
                 .to.emit(pool, "SpreadChanged").withArgs(pool.address, 400)
-            await expect(pool.changeSpread(500))
-                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 500)
+            await expect(pool.changeSpread(10))
+                .to.emit(pool, "SpreadChanged").withArgs(pool.address, 10)
         })
     })
 
@@ -770,8 +785,10 @@ describe("Proxy", async () => {
             expect(activeTokens.length).to.be.eq(1)
             isWethInActiveTokens = activeTokens.includes(weth.address)
             expect(isWethInActiveTokens).to.be.true
-            // will execute and not remove any token
-            await expect(pool.purgeInactiveTokensAndApps()).to.not.be.reverted
+            // will execute and remove the token (balance is 0)
+            await expect(pool.purgeInactiveTokensAndApps())
+                .to.emit(pool, "TokenStatusChanged")
+                .withArgs(weth.address, false)
             activeTokens = (await pool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(0)
         })

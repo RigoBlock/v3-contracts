@@ -16,20 +16,19 @@ jobs:
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
       PROD: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: 'recursive'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22.12.0
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             "**/node_modules"
-            **/.foundry
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
       - name: Install Foundry
-        uses: onbjerg/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
       - run: yarn --frozen-lockfile
@@ -49,17 +48,16 @@ jobs:
       SOLIDITY_VERSION: ${{ matrix.solidity }}
       SOLIDITY_SETTINGS: ${{ matrix.settings }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22.12.0
           registry-url: https://registry.npmjs.org/
-          always-auth: true
       - name: Install Foundry
-        uses: onbjerg/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: "**/node_modules"
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}

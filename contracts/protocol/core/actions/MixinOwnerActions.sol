@@ -1,8 +1,26 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
+/*
+
+ Copyright 2025 Rigo Intl.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+*/
 
 import {MixinActions} from "./MixinActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
+import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolOwnerActions} from "../../interfaces/v4/pool/ISmartPoolOwnerActions.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
@@ -28,6 +46,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc ISmartPoolOwnerActions
     function changeFeeCollector(address feeCollector) external override onlyOwner {
+        // prevent the owner to set a fee collector without their prior consent
         require(msg.sender == feeCollector || isOperator(feeCollector, msg.sender), InvalidOperator());
         require(feeCollector != _getFeeCollector(), OwnerActionInputIsSameAsCurrent());
         poolParams().feeCollector = feeCollector;
@@ -48,7 +67,7 @@ abstract contract MixinOwnerActions is MixinActions {
 
     /// @inheritdoc ISmartPoolOwnerActions
     function changeSpread(uint16 newSpread) external override onlyOwner {
-        // 0 value is sentinel for uninitialized spread, returning _MAX_SPREAD
+        // 0 value is sentinel for uninitialized spread, returning _DEFAULT_SPREAD
         require(newSpread > 0 && newSpread <= _MAX_SPREAD, PoolSpreadInvalid(_MAX_SPREAD));
         require(newSpread != _getSpread(), OwnerActionInputIsSameAsCurrent());
         poolParams().spread = newSpread;
@@ -114,6 +133,23 @@ abstract contract MixinOwnerActions is MixinActions {
                     set.remove(activeTokens[i]);
                 }
             }
+        }
+    }
+
+    /// @inheritdoc ISmartPoolOwnerActions
+    function setAcceptableMintToken(address token, bool isAccepted) external override onlyOwner {
+        // acceptedTokensSet: controls mintWithToken permission (operator decision)
+        // activeTokensSet: added when token is actually minted (see MixinActions._mint)
+        AddressSet storage acceptedSet = acceptedTokensSet();
+
+        if (isAccepted) {
+            acceptedSet.addUnique(IEOracle(address(this)), token, pool().baseToken);
+            // DO NOT add to activeTokensSet here - it will be added in _mint when tokens arrive
+            // This prevents attack: accept token -> purge (removes from active) -> mint (NAV drops)
+        } else {
+            // Only remove from acceptedTokensSet, NOT from activeTokensSet
+            // Removing from activeTokensSet would break NAV if pool owns the token
+            acceptedSet.remove(token);
         }
     }
 

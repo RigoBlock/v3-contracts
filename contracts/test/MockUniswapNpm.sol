@@ -33,7 +33,7 @@ contract MockUniswapNpm {
     uint80 private _nextPoolId = 1;
 
     // default position in state. We can modify return params by override returned params
-    Position defaultPosition =
+    Position public defaultPosition =
         Position({
             nonce: 0,
             operator: address(0),

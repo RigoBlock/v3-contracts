@@ -4,6 +4,7 @@ import "@nomiclabs/hardhat-ethers";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { timeTravel } from "../utils/utils";
+import { BigNumber } from "ethers";
 
 describe("AStaking", async () => {
     const [ user1 ] = waffle.provider.getWallets()
@@ -146,17 +147,21 @@ describe("AStaking", async () => {
             await timeTravel({ days: 14, mine:true })
             await stakingProxy.endEpoch()
             expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
-            await fullPool.mint(user1.address, amount, 0, { value: amount })
-            // first mint only initialized value in storage, need to mint again to update active tokens
-            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
-            await fullPool.mint(user1.address, amount, 0, { value: amount })
-            const activeTokens = (await fullPool.getActiveTokens()).activeTokens
+            await expect(fullPool.mint(user1.address, amount, 0, { value: amount }))
+                .to.emit(fullPool, "TokenStatusChanged")
+                .withArgs(grgToken.address, true)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            let activeTokens = (await fullPool.getActiveTokens()).activeTokens
+            expect(activeTokens[0]).to.be.eq(grgToken.address)
+            await expect(fullPool.mint(user1.address, amount, 0, { value: amount }))
+                .to.not.emit(fullPool, "TokenStatusChanged")
+            activeTokens = (await fullPool.getActiveTokens()).activeTokens
             expect(activeTokens.length).to.be.eq(1)
             expect(activeTokens[0]).to.be.eq(grgToken.address)
         })
 
         it('should not remove grg from active tokens when null stake', async () => {
-            const { grgToken, newPoolAddress } = await setupTests()
+            const { grgToken, newPoolAddress, oraclePool } = await setupTests()
             const Pool = await hre.ethers.getContractFactory("AStaking")
             const pool = Pool.attach(newPoolAddress)
             const FullPool = await hre.ethers.getContractFactory("SmartPool")
@@ -180,16 +185,28 @@ describe("AStaking", async () => {
             // token is not removed because the token pool's balance is not null.
             expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
             await timeTravel({ days: 30, mine:true })
-            // remove base token balance, so below grg value in base token, so we can burn for token. Nav is approx 1.98019965344058
-            // log ether balance to check if it is 0
-            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(parseEther("300"))
-            await fullPool.burn(parseEther("150"), 1)
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576965"))
-            await fullPool.burnForToken(parseEther("49.500041661833943559"), 1, grgToken.address)
-            expect(await grgToken.balanceOf(pool.address)).to.be.eq(1)
+            // remove base token balance, so below grg value in base token, so we can burn for token
+            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(parseEther("299.7"))
+            const unitaryValue = BigNumber.from((await fullPool.getPoolTokens()).unitaryValue)
+            const poolNativeBalance = await hre.ethers.provider.getBalance(fullPool.address)
+            // mint transferred balance minus spread
+            expect(poolNativeBalance).to.be.eq(parseEther("299.7"))
+            const poolTokensFromBalance = poolNativeBalance.mul(parseEther("1")).div(unitaryValue)
+            expect(poolTokensFromBalance).to.be.eq(parseEther("151.273419778308952543"))
+            await fullPool.burn(poolTokensFromBalance, 1)
+            const userPoolBalance = BigNumber.from(await fullPool.balanceOf(user1.address))
+            const grgBalanceInBaseToken = await oraclePool.convertTokenAmount(grgToken.address, await grgToken.balanceOf(pool.address), AddressZero)
+            expect(BigNumber.from(grgBalanceInBaseToken)).to.be.eq(parseEther("98.019965344057696551"))
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.981180834274851817"))
+            expect(userPoolBalance).to.be.eq(parseEther("49.475526740563682485"))
+            await fullPool.burnForToken(userPoolBalance, 1, grgToken.address)
+            expect(await grgToken.balanceOf(pool.address)).to.be.eq(36)
             await fullPool.purgeInactiveTokensAndApps()
+            // TODO: the small roundings in favor of the pool result in a small residual balance, which prevents the token removal
+            // This is acceptable, as the vault can get rid of all small balances by converting them into the base token
             // this time, token is removed because the token pool's balance is null or 1.
-            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(0)
+            expect((await fullPool.getActiveTokens()).activeTokens.length).to.be.eq(1)
+            expect(await fullPool.totalSupply()).to.be.eq(parseEther("0"))
         })
 
         it('should clear balances with total burn', async () => {
@@ -206,28 +223,47 @@ describe("AStaking", async () => {
             await pool.undelegateStake(amount)
             await pool.unstake(amount)
             await fullPool.mint(user1.address, amount, 0, { value: amount })
-            // our mock oracle returns 200, so we expect the nav to be 1.980034655942303453
+            // our mock oracle returns 200, so we expect the nav to be 1.981180834274851817
             expect(await oraclePool.getTwap(grgToken.address)).to.be.eq(200)
             await fullPool.updateUnitaryValue()
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576965"))
+            let unitaryValue = (await fullPool.getPoolTokens()).unitaryValue
+            expect(BigNumber.from(unitaryValue)).to.be.eq(parseEther("1.981180834274851817"))
             await timeTravel({ days: 30, mine:true })
-            // remove base token balance, so below grg value in base token, so we can burn for token. Nav is approx 1.98019965344058
+            // remove base token balance, so below grg value in base token, so we can burn for token. Nav is approx 1.981180834274851817
             // TODO: the following call is reflexive, i.e. not burning the full amount will result in a different nav, and the number of pool tokens
             // to clear grg token balance will be different. We will then find ourselves with a null total supply, but a positive balance in the pool.
-            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(parseEther("300"))
-            await fullPool.burn(parseEther("151.499875014498169326"), 1)
-            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(0)
-            await fullPool.burnForToken(parseEther("49.500041661833943556"), 1, grgToken.address)
-            // TODO: there is a small residual amount in the pool, probably due to rounding errors
-            expect(await grgToken.balanceOf(pool.address)).to.be.eq(7)
+            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(parseEther("299.7"))
+            const grgBalanceInBaseToken = await oraclePool.convertTokenAmount(grgToken.address, await grgToken.balanceOf(pool.address), AddressZero)
+            expect(grgBalanceInBaseToken).to.be.eq(parseEther("98.019965344057696551"))
+            const poolNativeBalance = await hre.ethers.provider.getBalance(fullPool.address)
+            // mint transferred balance minus spread
+            expect(poolNativeBalance).to.be.eq(parseEther("299.7"))
+            const poolTokensFromBalance = poolNativeBalance.mul(parseEther("1")).div(unitaryValue)
+            expect(poolTokensFromBalance).to.be.eq(parseEther("151.273419778308952543"))
+            await fullPool.burn(poolTokensFromBalance, 1)
+            // there is a small approximation error due to spread application
+            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(2)
+            // the burn operation won't affect the unitary value
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(unitaryValue)
+            const grgBurnAmount = BigNumber.from(grgBalanceInBaseToken).mul(parseEther("1")).div(unitaryValue)
+            expect(grgBurnAmount).to.be.eq(parseEther("49.475526740563682501"))
+            const userPoolBalance = BigNumber.from(await fullPool.balanceOf(user1.address))
+            expect(userPoolBalance).to.be.eq(parseEther("49.475526740563682485"))
+            expect(grgBurnAmount.sub(userPoolBalance)).to.be.lte(21) // small rounding error in favor of the pool
+            await expect(
+                fullPool.burnForToken(userPoolBalance.add(1), 1, grgToken.address)
+            ).to.be.revertedWith('PoolBurnNotEnough()')
+            await fullPool.burnForToken(userPoolBalance, 1, grgToken.address)
+            // there is a small residual amount in the pool, due to rounding errors
+            expect(await grgToken.balanceOf(pool.address)).to.be.eq(36)
             const totalSupply = await fullPool.totalSupply()
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576966"))
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.981180834274851817"))
             expect(await fullPool.totalSupply()).to.be.eq(0)
             await expect(fullPool.burn(totalSupply, 1)).to.be.revertedWith('PoolBurnNullAmount()')
-            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(0)
+            expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(2) // residual native balance has not changed
             // assert pool value does not change (need to mint as supply is null)
             await fullPool.mint(user1.address, amount, 0, { value: amount })
-            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.980199653440576966"))
+            expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.981180834274851817"))
         })
     })
 })

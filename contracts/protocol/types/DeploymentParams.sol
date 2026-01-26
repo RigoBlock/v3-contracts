@@ -5,6 +5,8 @@ struct Extensions {
     address eApps;
     address eOracle;
     address eUpgrade;
+    address eCrosschain;
+    address eNavView;
 }
 
 struct DeploymentParams {

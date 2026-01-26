@@ -1,22 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-/*
-
- Copyright 2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
 pragma solidity >=0.8.0 <0.9.0;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
@@ -26,7 +8,10 @@ import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
+import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
+import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
+import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
@@ -35,8 +20,10 @@ import {NavComponents} from "../../types/NavComponents.sol";
 abstract contract MixinPoolValue is MixinOwnerActions {
     using ApplicationsLib for ApplicationsSlot;
     using EnumerableSet for AddressSet;
+    using SlotDerivation for bytes32;
     using TransientStorage for address;
     using SafeCast for uint256;
+    using SafeCast for int256;
 
     error BaseTokenPriceFeedError();
 
@@ -49,26 +36,51 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         components.decimals = pool().decimals;
 
         // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
+        // Notice: the following check adds a little gas overhead, but is necessary to guarantee backwards compatibility with v3. Because all existing
+        // v3 vaults have a price feed, we could move the following assertion to the following block, i.e. executing it only on the first mint.
         require(IEOracle(address(this)).hasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
+
+        // Always compute net total assets (used for cross-chain donation validation)
+        int256 netValue = _computeTotalPoolValue(components.baseToken);
+
+        if (netValue >= 0) {
+            components.netTotalValue = uint256(netValue);
+        } else {
+            components.netTotalLiabilities = uint256(-netValue);
+        }
 
         // first mint skips nav calculation
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
-        } else if (components.totalSupply == 0) {
-            return components;
         } else {
-            uint256 totalPoolValue = _computeTotalPoolValue(components.baseToken);
+            int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
 
-            if (totalPoolValue > 0) {
+            // revert if abs virtual supply below a minimum threshold of total supply. Also means effective supply must be non-negative.
+            NavImpactLib.validateSupply(components.totalSupply, virtualSupply);
+            int256 effectiveSupply = int256(components.totalSupply) + virtualSupply;
+
+            // effective supply cannot be negative from previous assertion. Also cannot burn internally more than has been minted.
+            if (effectiveSupply == 0) {
+                return components;
+            }
+
+            components.totalSupply = uint256(effectiveSupply);
+
+            if (components.netTotalValue > 0) {
                 // unitary value needs to be scaled by pool decimals (same as base token decimals)
-                components.unitaryValue = (totalPoolValue * 10 ** components.decimals) / components.totalSupply;
+                components.unitaryValue =
+                    (components.netTotalValue * 10 ** components.decimals) /
+                    components.totalSupply;
             } else {
+                // No net value, return stored NAV
                 return components;
             }
         }
 
-        // unitary value cannot be null
-        assert(components.unitaryValue > 0);
+        // never allow storing 0 - flag for default unitary price of uninitialized pool
+        if (components.unitaryValue == 0) {
+            components.unitaryValue = 1;
+        }
 
         // update storage only if different
         if (components.unitaryValue != poolTokens().unitaryValue) {
@@ -83,11 +95,12 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     /// @dev Assumes the stored list contain unique elements.
     /// @dev A write method to be used in mint and burn operations.
     /// @dev Uses transient storage to keep track of unique token balances.
-    function _computeTotalPoolValue(address baseToken) private returns (uint256 poolValue) {
-        AddressSet storage values = activeTokensSet();
+    function _computeTotalPoolValue(address baseToken) private returns (int256 poolValue) {
+        uint256 packedApps = activeApplications().packedApplications;
 
-        ApplicationsSlot storage appsBitmap = activeApplications();
-        uint256 packedApps = appsBitmap.packedApplications;
+        // Declare reusable variables outside loops to reduce stack depth
+        address token;
+        int256 amount;
 
         // try and get positions balances. Will revert if not successul and prevent incorrect nav calculation.
         try IEApps(address(this)).getAppTokenBalances(_getActiveApplications()) returns (ExternalApp[] memory apps) {
@@ -103,20 +116,25 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                         activeApplications().storeApplication(apps[i].appType);
                     }
 
+                    // Reuse variables to minimize stack depth
+                    amount = apps[i].balances[j].amount;
+
                     // Always add or update the balance from positions
-                    if (apps[i].balances[j].amount != 0) {
+                    if (amount != 0) {
+                        token = apps[i].balances[j].token;
+
                         // cache balances in temporary storage
-                        int256 storedBalance = apps[i].balances[j].token.getBalance();
+                        int256 storedBalance = token.getBalance();
 
                         // verify token in active tokens set, add it otherwise (relevant for pool deployed before v4)
                         if (storedBalance == 0) {
                             // will add to set only if not already stored
-                            values.addUnique(IEOracle(address(this)), apps[i].balances[j].token, baseToken);
+                            activeTokensSet().addUnique(IEOracle(address(this)), token, baseToken);
                         }
 
-                        storedBalance += apps[i].balances[j].amount;
+                        storedBalance += amount;
                         // store balance and make sure slot is not cleared to prevent trying to add token again
-                        apps[i].balances[j].token.storeBalance(storedBalance != 0 ? storedBalance : int256(1));
+                        token.storeBalance(storedBalance != 0 ? storedBalance : int256(1));
                     }
                 }
             }
@@ -126,7 +144,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
 
         // initialize pool value as base token balances (wallet balance plus apps balances)
-        int256 poolValueInBaseToken = _getAndClearBalance(baseToken);
+        uint256 nativeAmount = msg.value;
+        poolValue = _getAndClearBalance(baseToken, nativeAmount);
 
         // active tokens include any potentially not stored app token, like when a pool upgrades from v3 to v4
         address[] memory activeTokens = activeTokensSet().addresses;
@@ -137,36 +156,31 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
         // base token is not stored in activeTokens array
         for (uint256 i = 0; i < activeTokensLength; i++) {
-            tokenAmounts[i] = _getAndClearBalance(activeTokens[i]);
+            tokenAmounts[i] = _getAndClearBalance(activeTokens[i], nativeAmount);
         }
 
         if (activeTokensLength > 0) {
-            poolValueInBaseToken += IEOracle(address(this)).convertBatchTokenAmounts(
-                activeTokens,
-                tokenAmounts,
-                baseToken
-            );
+            poolValue += IEOracle(address(this)).convertBatchTokenAmounts(activeTokens, tokenAmounts, baseToken);
         }
-
-        // we never return 0, so updating stored value won't clear storage, i.e. an empty slot means a non-minted pool
-        return (uint256(poolValueInBaseToken) > 0 ? uint256(poolValueInBaseToken) : 1);
     }
 
     /// @dev Returns 0 balance if ERC20 call fails.
-    function _getAndClearBalance(address token) private returns (int256 balance) {
-        balance = token.getBalance();
+    /// @param token The token address to get balance for
+    /// @param nativeAmount The msg.value to subtract from ETH balance (passed to avoid multiple msg.value reads)
+    function _getAndClearBalance(address token, uint256 nativeAmount) private returns (int256 value) {
+        value = token.getBalance();
 
         // clear temporary storage if used
-        if (balance != 0) {
+        if (value != 0) {
             token.storeBalance(0);
         }
 
         // the active tokens list contains unique addresses
         if (token == _ZERO_ADDRESS) {
-            balance += (address(this).balance - msg.value).toInt256();
+            value += (address(this).balance - nativeAmount).toInt256();
         } else {
             try IERC20(token).balanceOf(address(this)) returns (uint256 _balance) {
-                balance += _balance.toInt256();
+                value += _balance.toInt256();
             } catch {
                 // returns 0 balance if the ERC20 balance cannot be found
                 return 0;

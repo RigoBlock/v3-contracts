@@ -93,13 +93,21 @@ const userConfig: HardhatUserConfig = {
         version: "0.8.17",
         settings: { ...soliditySettings, evmVersion: "london" }
       },
+      "contracts/mocks/MockAcrossSpokePool.sol": {
+        version: "0.8.28",
+        settings: { 
+          ...soliditySettings,
+          viaIR: true,
+          evmVersion: "cancun"
+        }
+      },
     }
   },
   networks: {
     hardhat: {
       allowUnlimitedContractSize: true,
       blockGasLimit: 100000000,
-      gas: 100000000
+      gas: 16000000,
     },
     mainnet: {
       ...sharedNetworkConfig,

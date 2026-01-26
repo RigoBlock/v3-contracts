@@ -7,8 +7,10 @@ import {DeploymentParams, Extensions} from "../types/DeploymentParams.sol";
 
 contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     address private transient _eApps;
+    address private transient _eNavView;
     address private transient _eOracle;
     address private transient _eUpgrade;
+    address private transient _eCrosschain;
     address private transient _wrappedNative;
 
     /// @inheritdoc IExtensionsMapDeployer
@@ -17,8 +19,10 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     /// @inheritdoc IExtensionsMapDeployer
     function deployExtensionsMap(DeploymentParams memory params, bytes32 salt) external override returns (address) {
         _eApps = params.extensions.eApps;
+        _eNavView = params.extensions.eNavView;
         _eOracle = params.extensions.eOracle;
         _eUpgrade = params.extensions.eUpgrade;
+        _eCrosschain = params.extensions.eCrosschain;
         _wrappedNative = params.wrappedNative;
 
         // Pre-compute the CREATE2 address
@@ -47,7 +51,13 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     function parameters() external view override returns (DeploymentParams memory) {
         return
             DeploymentParams({
-                extensions: Extensions({eApps: _eApps, eOracle: _eOracle, eUpgrade: _eUpgrade}),
+                extensions: Extensions({
+                    eApps: _eApps,
+                    eNavView: _eNavView,
+                    eOracle: _eOracle,
+                    eUpgrade: _eUpgrade,
+                    eCrosschain: _eCrosschain
+                }),
                 wrappedNative: _wrappedNative
             });
     }
