@@ -186,15 +186,12 @@ contract RealDeploymentFixture is Test {
         return deployment;
     }
     
-    function _deployNewImplementation(ExtensionsMap extensionsMapParam) public returns (SmartPool) {
-        // Deploy mock TokenJar (using a simple mock address for deterministic deployment)
-        address tokenJar = Constants.TOKEN_JAR;
-        
+    function _deployNewImplementation(ExtensionsMap extensionsMapParam) public returns (SmartPool) {        
         // Deploy new SmartPool implementation
         SmartPool impl = new SmartPool(
             AUTHORITY,
             address(extensionsMapParam),
-            tokenJar
+            Constants.TOKEN_JAR
         );
         console2.log("Deployed SmartPool implementation:", address(impl));
         return impl;
