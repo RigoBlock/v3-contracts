@@ -142,15 +142,12 @@ contract PolygonDeploymentFixture is Test {
         return deployment;
     }
     
-    function _deployNewImplementation(ExtensionsMap extensionsMapParam) public returns (SmartPool) {
-        // Deploy mock TokenJar
-        address mockTokenJar = address(0x4444444444444444444444444444444444444444);
-        
+    function _deployNewImplementation(ExtensionsMap extensionsMapParam) public returns (SmartPool) {        
         // Deploy new SmartPool implementation
         SmartPool impl = new SmartPool(
             AUTHORITY,
             address(extensionsMapParam),
-            mockTokenJar
+            Constants.TOKEN_JAR
         );
         console2.log("Deployed SmartPool implementation:", address(impl));
         return impl;

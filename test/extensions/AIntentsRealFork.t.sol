@@ -117,7 +117,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         deployFixture(baseTokens);
 
         tokenJar = ISmartPool(payable(ethereum.pool)).tokenJar();
-        assertTrue(tokenJar == 0x4444444444444444444444444444444444444444, "TokenJar address has been changed in fixture");
+        assertTrue(tokenJar == Constants.TOKEN_JAR, "TokenJar address has been changed in fixture");
         
         // Fixture already created forks and pools - just access them
         // No need to create forks again, fixture did everything, also crediting tokens to user
