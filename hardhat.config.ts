@@ -34,7 +34,7 @@ if (PK) {
   };
 }
 
-if (["mainnet", "rinkeby", "kovan", "sepolia", "ropsten", "mumbai", "polygon"].includes(argv.network) && INFURA_KEY === undefined) {
+if (["mainnet", "sepolia", "polygon", "base", "optimism", "arbitrum", "bsc", "unichain"].includes(argv.network) && INFURA_KEY === undefined) {
   throw new Error(
     `Could not find Infura key in env, unable to connect to network ${argv.network}`,
   );
@@ -112,7 +112,7 @@ const userConfig: HardhatUserConfig = {
     mainnet: {
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 1500000000,
+      gasPrice: 250000000,
     },
     xdai: {
       ...sharedNetworkConfig,
@@ -122,31 +122,15 @@ const userConfig: HardhatUserConfig = {
       ...sharedNetworkConfig,
       url: `https://rpc.energyweb.org`,
     },
-    rinkeby: {
-      ...sharedNetworkConfig,
-      url: `https://rinkeby.infura.io/v3/${INFURA_KEY}`,
-    },
     sepolia: {
       ...sharedNetworkConfig,
       url: `https://sepolia.infura.io/v3/${INFURA_KEY}`,
       gasPrice: 40000000000,
     },
-    ropsten: {
-      ...sharedNetworkConfig,
-      url: `https://ropsten.infura.io/v3/${INFURA_KEY}`,
-    },
-    kovan: {
-      ...sharedNetworkConfig,
-      url: `https://kovan.infura.io/v3/${INFURA_KEY}`,
-    },
-    mumbai: {
-      ...sharedNetworkConfig,
-      url: `https://polygon-mumbai.infura.io/v3/${INFURA_KEY}`,
-    },
     polygon: {
       ...sharedNetworkConfig,
       url: `https://polygon-rpc.com/`,
-      gasPrice: 120000000000,
+      gasPrice: 180000000000,
     },
     volta: {
       ...sharedNetworkConfig,
@@ -189,22 +173,61 @@ const userConfig: HardhatUserConfig = {
     timeout: 2000000,
   },
   etherscan: {
-    apiKey: {
-      mainnet: ETHERSCAN_API_KEY ?? '',
-      sepolia: ETHERSCAN_API_KEY ?? '',
-      optimisticEthereum: process.env.OPTIMISTIC_SCAN_API_KEY ?? '',
-      arbitrumOne: process.env.ARBISCAN_API_KEY ?? '',
-      bsc: process.env.BSCSCAN_API_KEY ?? '',
-      polygon: process.env.POLYGONSCAN_API_KEY ?? '',
-      base: process.env.BASE_API_KEY ?? '',
-      unichain: process.env.UNICHAIN_API_KEY ?? '',
-    },
+    apiKey: ETHERSCAN_API_KEY ?? '',
     customChains: [
+      {
+        network: "mainnet",
+        chainId: 1,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=1",
+          browserURL: "https://etherscan.io"
+        }
+      },
+      {
+        network: "sepolia",
+        chainId: 11155111,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=11155111",
+          browserURL: "https://sepolia.etherscan.io"
+        }
+      },
+      {
+        network: "optimisticEthereum",
+        chainId: 10,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=10",
+          browserURL: "https://optimistic.etherscan.io"
+        }
+      },
+      {
+        network: "arbitrumOne",
+        chainId: 42161,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=42161",
+          browserURL: "https://arbiscan.io"
+        }
+      },
+      {
+        network: "bsc",
+        chainId: 56,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=56",
+          browserURL: "https://bscscan.com"
+        }
+      },
+      {
+        network: "polygon",
+        chainId: 137,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=137",
+          browserURL: "https://polygonscan.com"
+        }
+      },
       {
         network: "base",
         chainId: 8453,
         urls: {
-          apiURL: "https://api.basescan.org/api",
+          apiURL: "https://api.etherscan.io/v2/api?chainid=8453",
           browserURL: "https://basescan.org"
         }
       },
@@ -212,7 +235,7 @@ const userConfig: HardhatUserConfig = {
         network: "unichain",
         chainId: 130,
         urls: {
-          apiURL: "https://api.uniscan.xyz/api",
+          apiURL: "https://api.etherscan.io/v2/api?chainid=130",
           browserURL: "https://uniscan.xyz"
         }
       }

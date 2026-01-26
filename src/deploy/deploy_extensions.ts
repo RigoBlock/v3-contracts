@@ -72,6 +72,13 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const eNavView = await deploy("ENavView", {
+    from: deployer,
+    args: [config.stakingProxy, config.univ4Posm],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   const eCrosschain = await deploy("ECrosschain", {
     from: deployer,
     args: [],
@@ -83,7 +90,8 @@ const deploy: DeployFunction = async function (
     eApps: eApps.address,
     eOracle: eOracle.address,
     eUpgrade: eUpgrade.address,
-    eCrosschain: eCrosschain.address
+    eCrosschain: eCrosschain.address,
+    eNavView: eNavView.address
   }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
@@ -148,6 +156,13 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
+
+  await deploy("AIntents", {
+    from: deployer,
+    args: [config.acrossSpokePool],
+    log: true,
+    deterministicDeployment: true,
+  })
 
   /*await deploy("AMulticall", {
     from: deployer,
