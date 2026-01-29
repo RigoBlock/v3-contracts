@@ -1,3 +1,12 @@
+## [2.1.3](https://github.com/rigoblock/v3-contracts/compare/v2.1.2...v2.1.3) (2026-01-29)
+
+
+### Bug Fixes
+
+* try fix npm publish again ([acf1a4b](https://github.com/rigoblock/v3-contracts/commit/acf1a4b52fe7cd994ee6fa0ab436db09b5c047f2))
+
+
+
 ## [2.1.2](https://github.com/rigoblock/v3-contracts/compare/v2.1.1...v2.1.2) (2026-01-29)
 
 
@@ -72,15 +81,6 @@
 
 * burn doc ([7073e23](https://github.com/rigoblock/v3-contracts/commit/7073e23a53850c12e03f8ddaeaf8b003f8e9331f))
 * prevent owner setting new values same as default ([ef81d89](https://github.com/rigoblock/v3-contracts/commit/ef81d891e94c39ea41f9b617ece9f830934ea6ca))
-
-
-
-## [2.0.6](https://github.com/rigoblock/v3-contracts/compare/v2.0.5...v2.0.6) (2025-05-29)
-
-
-### Bug Fixes
-
-* base token price feed assertion also on first mint ([bf5344b](https://github.com/rigoblock/v3-contracts/commit/bf5344b73da92865b31e076f856acc347c4623ce))
 
 
 
