@@ -32,19 +32,22 @@ library EscrowFactory {
     /// @param pool The pool address
     /// @param opType The operation type
     /// @return escrowContract The deployed escrow contract address
+    /// @dev MUST be called via delegatecall from pool context (address(this) == pool)
     function deployEscrow(address pool, OpType opType) internal returns (address escrowContract) {
-        bytes32 salt = _getSalt(opType);
+        escrowContract = getEscrowAddress(pool, opType);
 
-        // Try to deploy - if already exists, CREATE2 will succeed and return existing address
-        try new Escrow{salt: salt}(pool, opType) returns (Escrow escrow) {
-            escrowContract = address(escrow);
-            emit EscrowDeployed(pool, opType, escrowContract);
-        } catch {
-            // Escrow already exists at this address - compute and return it
-            escrowContract = getEscrowAddress(pool, opType);
+        // If escrow already deployed, return early (idempotent)
+        // This avoids the massive gas cost of CREATE2 address collision failure
+        if (escrowContract.code.length > 0) {
+            return escrowContract;
         }
 
-        require(escrowContract != address(0), DeploymentFailed());
+        // Deploy new escrow contract
+        bytes32 salt = _getSalt(opType);
+        Escrow escrow = new Escrow{salt: salt}(pool, opType);
+        require(address(escrow) == escrowContract, DeploymentFailed());
+
+        emit EscrowDeployed(pool, opType, escrowContract);
     }
 
     /// @dev Gets the salt for CREATE2 deployment
