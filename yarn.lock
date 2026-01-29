@@ -5617,9 +5617,9 @@ hardhat-deploy@1.0.4:
     zksync-ethers "^5.0.0"
 
 hardhat@^2.13.1:
-  version "2.28.3"
-  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-2.28.3.tgz#f6f337cf99266a22de9dff0d45588ad7d7503586"
-  integrity sha512-f1WxpCJCXzxDc12MgIIxxkvB2QK40g/atsW4Az5WQFhUXpZx4VFoSfvwYBIRsRbq6xIrgxef+tXuWda5wTLlgA==
+  version "2.28.4"
+  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-2.28.4.tgz#d61ede03ba9637756173f77cfbea32cedc26ca1b"
+  integrity sha512-iQC4WNWjWMz7cVVFqzEBNisUQ/EEEJrWysJ2hRAMTnfXJx6Y11UXdmtz4dHIzvGL0z27XCCaJrcApDPH0KaZEg==
   dependencies:
     "@ethereumjs/util" "^9.1.0"
     "@ethersproject/abi" "^5.1.2"
