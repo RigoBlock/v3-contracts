@@ -67,9 +67,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // This also implicitly validates that neither inputToken nor outputToken is address(0)
         CrosschainLib.validateBridgeableTokenPair(params.inputToken, params.outputToken);
 
-        // Validate exclusive relayer must be zero (we don't use exclusive relaying)
-        require(params.exclusiveRelayer.isAddressZero(), NullAddress());
-
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
 
@@ -181,10 +178,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.inputAmount,
             params.outputAmount,
             params.destinationChainId,
-            address(0),
+            address(0), // No exclusive relayer - open competition
             params.quoteTimestamp,
             uint32(block.timestamp + _acrossSpokePool.fillDeadlineBuffer()),
-            params.exclusivityDeadline,
+            0, // No exclusivity deadline since we don't use exclusive relaying
             abi.encode(instructions)
         );
 

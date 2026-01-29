@@ -222,57 +222,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         );
 
     }
-    
-    /// @notice Test getEscrowAddress is accessible to all callers via pool state
-    function test_AIntents_GetEscrowAddress_PublicAccess() public {
-        // getEscrowAddress should NOT revert when called via adapter (removed from adapter)
-        // It's now a pool state method accessible to everyone
-        
-        // mock calls to pool to verify it's working
-        ISmartPool poolInstance = ISmartPool(payable(pool()));
-        poolInstance.getPoolTokens();
-        poolInstance.updateUnitaryValue();
-        bool hasPriceFeed = IEOracle(pool()).hasPriceFeed(poolInstance.getPool().baseToken);
-        console2.log("Base token has price feed:", hasPriceFeed);
-        IEApps(pool()).getUniV4TokenIds();
-        
-        // Call as pool owner - should work
-        vm.prank(poolOwner);
-        address escrowFromOwner = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
-        assertTrue(escrowFromOwner != address(0), "Should return valid escrow address");
-        console2.log("Escrow address:", escrowFromOwner);
-        
-        // Call as random user - should also work (public view function)
-        address randomUser = makeAddr("randomUser");
-        vm.prank(randomUser);
-        address escrowFromRandom = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
-        assertEq(escrowFromRandom, escrowFromOwner, "Should return same address for any caller");
-    }
-    
-    /// @notice Test getEscrowAddress returns same result from any caller context
-    /// @dev Verifies CREATE2 calculation is deterministic and publicly accessible
-    function test_AIntents_GetEscrowAddress_ContextIndependent() public {
-        // Call from pool owner context
-        vm.prank(poolOwner);
-        address escrowFromPoolOwner = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
-        
-        // Call from random external address context
-        address externalCaller = makeAddr("externalCaller");
-        vm.prank(externalCaller);
-        address escrowFromExternal = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
-        
-        // Both should return the same address - CREATE2 depends on pool address, not caller
-        assertEq(
-            escrowFromExternal,
-            escrowFromPoolOwner,
-            "External call should return same escrow address as internal call"
-        );
-        
-        // Verify it matches the expected CREATE2 address
-        address expectedEscrow = EscrowFactory.getEscrowAddress(pool(), OpType.Transfer);
-        assertEq(escrowFromExternal, expectedEscrow, "Address should match CREATE2 calculation");
-        assertEq(escrowFromPoolOwner, expectedEscrow, "Address should match CREATE2 calculation");
-    }
 
     /*//////////////////////////////////////////////////////////////////////////
                              MESSAGE ENCODING TESTS
@@ -486,10 +435,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         assertTrue(tokens.unitaryValue > 0, "Should get real token data");
         
         // Test that adapter methods are available
-        // Notice: getEscrowAddress is now a pool state method, accessible to anyone
-        vm.prank(poolOwner);
-        address escrowAddr = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
-        assertTrue(escrowAddr != address(0), "Should get escrow address from pool state");
+        // Notice: Escrow address can be calculated via EscrowFactory library
+        address escrowAddr = EscrowFactory.getEscrowAddress(pool(), OpType.Transfer);
+        assertTrue(escrowAddr != address(0), "Should get escrow address");
     }
     
     /*//////////////////////////////////////////////////////////////////////////
@@ -533,9 +481,8 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         SourceMessageParams memory decoded = abi.decode(params.message, (SourceMessageParams));
         assertEq(uint8(decoded.opType), uint8(OpType.Transfer), "Message properly encoded");
         
-        // 5. Test escrow address calculation (now a pool state method)
-        vm.prank(poolOwner);
-        address escrowAddr = ISmartPoolState(pool()).getEscrowAddress(OpType.Transfer);
+        // 5. Test escrow address calculation (can be calculated via EscrowFactory library)
+        address escrowAddr = EscrowFactory.getEscrowAddress(pool(), OpType.Transfer);
         assertTrue(escrowAddr != address(0), "Escrow address calculated");
         
         console2.log("Complete workflow test passed without any mocks!");
