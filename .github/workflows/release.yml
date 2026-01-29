@@ -136,7 +136,7 @@ jobs:
           submodules: 'recursive'
       - uses: actions/setup-node@v6
         with:
-          node-version: 22.12.0
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -148,4 +148,4 @@ jobs:
             **/node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
       - run: yarn --frozen-lockfile
-      - run: npm publish
+      - run: npm publish --provenance
