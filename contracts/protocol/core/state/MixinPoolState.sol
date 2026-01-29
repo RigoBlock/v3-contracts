@@ -5,8 +5,6 @@ import {MixinPoolValue} from "../state/MixinPoolValue.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
-import {EscrowFactory} from "../../libraries/EscrowFactory.sol";
-import {OpType} from "../../types/Crosschain.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
     /*
@@ -46,11 +44,6 @@ abstract contract MixinPoolState is MixinPoolValue {
     /// @inheritdoc ISmartPoolState
     function getUserAccount(address who) external view override returns (UserAccount memory) {
         return accounts().userAccounts[who];
-    }
-
-    /// @inheritdoc ISmartPoolState
-    function getEscrowAddress(OpType opType) external view override returns (address escrowAddress) {
-        return EscrowFactory.getEscrowAddress(address(this), opType);
     }
 
     /// @inheritdoc ISmartPoolState

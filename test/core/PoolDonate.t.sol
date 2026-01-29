@@ -301,6 +301,8 @@ contract PoolDonateTest is Test {
     /// @notice Test escrow deployment and refundVault integration with pool
     function test_EscrowIntegration_DeployAndRefund() public {
         // Deploy a Transfer escrow for the pool
+        // Must prank as pool to match production delegatecall context where address(this) == pool
+        vm.prank(pool);
         address escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
         Escrow escrow = Escrow(payable(escrowAddress));
         
@@ -374,7 +376,8 @@ contract PoolDonateTest is Test {
     /// @notice Test escrow refund with WETH (matching Across behavior)
     /// @dev Across refunds expired deposits as WETH, not native ETH
     function test_EscrowIntegration_ETHRefund() public {
-        // Deploy escrow
+        // Deploy escrow - prank as pool to match production delegatecall context
+        vm.prank(pool);
         address escrowAddress = EscrowFactory.deployEscrow(pool, OpType.Transfer);
         Escrow escrow = Escrow(payable(escrowAddress));
         
@@ -416,10 +419,12 @@ contract PoolDonateTest is Test {
     
     /// @notice Test multiple escrow deployments have different addresses
     function test_EscrowIntegration_MultipleEscrows() public {
-        // Deploy Transfer escrow
+        // Deploy Transfer escrow - prank as pool to match production delegatecall context
+        vm.prank(pool);
         address transferEscrow = EscrowFactory.deployEscrow(pool, OpType.Transfer);
         
         // Deploy Sync escrow
+        vm.prank(pool);
         address syncEscrow = EscrowFactory.deployEscrow(pool, OpType.Sync);
         
         // They should be different addresses

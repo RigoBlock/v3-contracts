@@ -29,7 +29,7 @@ library CrosschainTokens {
     address internal constant BASE_WETH = 0x4200000000000000000000000000000000000006;
 
     // Polygon
-    address internal constant POLY_USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+    address internal constant POLY_USDC = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
     address internal constant POLY_USDT = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
     address internal constant POLY_WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
     address internal constant POLY_WBTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
@@ -40,6 +40,6 @@ library CrosschainTokens {
     address internal constant BSC_WETH = 0x2170Ed0880ac9A755fd29B2688956BD959F933F8;
 
     // Unichain
-    address internal constant UNI_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address internal constant UNI_USDC = 0x078D782b760474a361dDA0AF3839290b0EF57AD6;
     address internal constant UNI_WETH = 0x4200000000000000000000000000000000000006;
 }

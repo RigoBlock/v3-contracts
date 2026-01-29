@@ -21,10 +21,12 @@ contract TestEscrowUser {
 
 contract EscrowFactoryCoverageTest is Test {
     TestEscrowUser testContract;
-    address mockPool = address(0x1234);
+    address mockPool;
 
     function setUp() public {
         testContract = new TestEscrowUser();
+        // mockPool must be a contract (Escrow constructor requires code.length > 0)
+        mockPool = address(testContract); // Use testContract as a mock pool with code
     }
 
     function test_CatchStatementCoverage() public {
