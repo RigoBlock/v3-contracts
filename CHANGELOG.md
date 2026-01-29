@@ -1,3 +1,12 @@
+## [2.1.1](https://github.com/rigoblock/v3-contracts/compare/v2.1.0...v2.1.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* fix release workflow ([d54cf53](https://github.com/rigoblock/v3-contracts/commit/d54cf532a37568bd6192ae7bffed85bc806ce274))
+
+
+
 # [2.1.0](https://github.com/rigoblock/v3-contracts/compare/v2.0.7...v2.1.0) (2026-01-29)
 
 
@@ -72,15 +81,6 @@
 ### Bug Fixes
 
 * hardhat compile setup in npm publish task ([c79412c](https://github.com/rigoblock/v3-contracts/commit/c79412cbfcee69a5437184d2cec29f5eb5b5e82b))
-
-
-
-## [2.0.4](https://github.com/rigoblock/v3-contracts/compare/v2.0.3...v2.0.4) (2025-05-25)
-
-
-### Bug Fixes
-
-* release script ([d552594](https://github.com/rigoblock/v3-contracts/commit/d5525946c949cfa463417a312c121ca1624ecd0f))
 
 
 
