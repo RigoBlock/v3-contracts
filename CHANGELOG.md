@@ -1,3 +1,12 @@
+## [2.1.2](https://github.com/rigoblock/v3-contracts/compare/v2.1.1...v2.1.2) (2026-01-29)
+
+
+### Bug Fixes
+
+* npm publish ([ad18b0a](https://github.com/rigoblock/v3-contracts/commit/ad18b0a89e8f0e5a574b74bd1fe3d8ef38094dc2))
+
+
+
 ## [2.1.1](https://github.com/rigoblock/v3-contracts/compare/v2.1.0...v2.1.1) (2026-01-29)
 
 
@@ -72,15 +81,6 @@
 ### Bug Fixes
 
 * base token price feed assertion also on first mint ([bf5344b](https://github.com/rigoblock/v3-contracts/commit/bf5344b73da92865b31e076f856acc347c4623ce))
-
-
-
-## [2.0.5](https://github.com/rigoblock/v3-contracts/compare/v2.0.4...v2.0.5) (2025-05-25)
-
-
-### Bug Fixes
-
-* hardhat compile setup in npm publish task ([c79412c](https://github.com/rigoblock/v3-contracts/commit/c79412cbfcee69a5437184d2cec29f5eb5b5e82b))
 
 
 
