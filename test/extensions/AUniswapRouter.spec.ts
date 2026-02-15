@@ -675,7 +675,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should revert when calling unsupported methods', async () => {
-      const { pool, grgToken } = await setupTests()
+      const { pool, grgToken, wethAddress, oracle } = await setupTests()
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.INCREASE_LIQUIDITY_FROM_DELTAS, [0, 0, 0, '0x'])
       const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
@@ -684,8 +684,6 @@ describe("AUniswapRouter", async () => {
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
       ).to.be.revertedWith(`UnsupportedAction(${Actions.INCREASE_LIQUIDITY_FROM_DELTAS})`)
       v4Planner = new V4Planner()
-      // TODO: we revert in adapter because we cannot settle if we do not know the amount, but should check if
-      // we already forwarded enough eth or approved token, so currency can be settled or taken?
       v4Planner.addAction(Actions.MINT_POSITION_FROM_DELTAS, [
         [AddressZero, AddressZero, 0, 0, AddressZero],
         0, 0, 0, 0, AddressZero, '0x']
@@ -693,13 +691,31 @@ describe("AUniswapRouter", async () => {
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value:  0 })
       ).to.be.revertedWith(`UnsupportedAction(${Actions.MINT_POSITION_FROM_DELTAS})`)
+    })
+
+    it('should decode CLOSE_CURRENCY action', async () => {
+      const { pool, wethAddress, grgToken, oracle } = await setupTests()
+      // Initialize price feed so the token used in CLOSE_CURRENCY passes oracle validation
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      await oracle.initializeObservations(PAIR.poolKey)
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // CLOSE_CURRENCY is supported — decoded and forwarded to POSM. Test with a non-native token
+      // to verify oracle validation works for any currency (not just base token).
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [wethAddress])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      // also verify native ETH works (always has price feed as base token)
       v4Planner = new V4Planner()
-      // TODO: we revert because we cannot settle if we do not know the amount, but should check if
-      // we already forwarded enough eth or approved token, so currency can be settled or taken?
-      v4Planner.addAction(Actions.CLOSE_CURRENCY, [pool.address])
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [AddressZero])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      // token without price feed should revert
+      v4Planner = new V4Planner()
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [grgToken.address])
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
-      ).to.be.revertedWith(`UnsupportedAction(${Actions.CLOSE_CURRENCY})`)
+      ).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
     })
 
     it('returns gas cost for eth pool mint with 1 uni v4 liquidity position', async () => {
