@@ -566,7 +566,16 @@ describe("AUniswapRouter", async () => {
       v4Planner.addAction(Actions.BURN_POSITION, [expectedTokenId, MAX_UINT128, MAX_UINT128, '0x'])
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(0)
-      expect((await positionPool.getUniV4TokenIds()).length).to.be.eq(2)
+      const remainingIds = await positionPool.getUniV4TokenIds()
+      expect(remainingIds.length).to.be.eq(2)
+
+      // Verify remaining tokenIds are actual Uniswap position IDs (not corrupted array indices).
+      // The burned position (expectedTokenId) was first in the array, so swap-and-pop should
+      // move the last tokenId into its slot. Both remaining entries must be valid token IDs
+      // (i.e. expectedTokenId+1 and expectedTokenId+2), not small index numbers.
+      const expectedRemaining = [expectedTokenId.add(2), expectedTokenId.add(1)]
+      expect(remainingIds[0]).to.be.eq(expectedRemaining[0])
+      expect(remainingIds[1]).to.be.eq(expectedRemaining[1])
     })
 
     it('position should be included in nav calculations', async () => {

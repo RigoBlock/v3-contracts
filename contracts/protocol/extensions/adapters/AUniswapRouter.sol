@@ -293,8 +293,9 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                         uint256 lastIndex = idsSlot.tokenIds.length - 1;
 
                         if (idIndex != lastIndex) {
-                            idsSlot.tokenIds[idIndex] = lastIndex;
-                            idsSlot.positions[lastIndex] = position;
+                            uint256 lastTokenId = idsSlot.tokenIds[lastIndex];
+                            idsSlot.tokenIds[idIndex] = lastTokenId;
+                            idsSlot.positions[lastTokenId] = position;
                         }
 
                         idsSlot.positions[positions[i].tokenId] = 0;
