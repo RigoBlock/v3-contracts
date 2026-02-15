@@ -128,8 +128,9 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         } catch (bytes memory returnData) {
             if (params.value > address(this).balance) {
                 revert InsufficientNativeBalance();
-            } else {
-                revert(string(returnData));
+            }
+            assembly {
+                revert(add(returnData, 32), mload(returnData))
             }
         }
     }
