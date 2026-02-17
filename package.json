@@ -81,7 +81,7 @@
     "eslint-plugin-no-only-tests": "^3.0.0",
     "eslint-plugin-prettier": "^4.2.1",
     "ethereum-waffle": "^3.3.0",
-    "ethers": "^5.1.4",
+    "ethers": "^6.16.0",
     "hardhat": "^2.13.1",
     "hardhat-deploy": "1.0.4",
     "husky": "^9.0.10",
@@ -96,7 +96,7 @@
     "yargs": "^18.0.0"
   },
   "peerDependencies": {
-    "ethers": "^5.1.4"
+    "ethers": "^6.16.0"
   },
   "dependencies": {}
 }
