@@ -70,7 +70,7 @@
     "@types/node": "^25.0.0",
     "@types/yargs": "^17.0.24",
     "@typescript-eslint/eslint-plugin": "^4.7.0",
-    "@typescript-eslint/parser": "^4.7.0",
+    "@typescript-eslint/parser": "^8.56.0",
     "argv": "^0.0.3",
     "chai": "^4.2.0",
     "debug": "^4.2.0",
