@@ -87,7 +87,7 @@
     "husky": "^9.0.10",
     "prettier": "^3.8.1",
     "prettier-plugin-solidity": "^1.4.2",
-    "solc": "0.8.33",
+    "solc": "0.8.34",
     "solhint": "^5.0.5",
     "solhint-plugin-prettier": "^0.1.0",
     "solidity-coverage": "^0.8.2",
