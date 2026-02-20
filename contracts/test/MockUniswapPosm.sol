@@ -27,12 +27,26 @@ contract MockUniswapPosm {
     mapping(uint256 tokenId => PositionInfo info) public positionInfo;
     mapping(bytes25 poolId => PoolKey poolKey) public poolKeys;
 
+    error MockCustomError(string reason);
+
+    // 0 = no revert, 1 = revert with string, 2 = revert with custom error
+    uint256 public revertMode;
+
     constructor(address _permit2) {
         permit2 = IAllowanceTransfer(_permit2);
     }
 
+    function setRevertMode(uint256 mode) external {
+        revertMode = mode;
+    }
+
     /// universal router needs to retrieve ownerOf
     function modifyLiquidities(bytes calldata unlockData, uint256 /*deadline*/) external payable {
+        if (revertMode == 1) {
+            revert("MockPosmStringError");
+        } else if (revertMode == 2) {
+            revert MockCustomError("MockPosmCustomError");
+        }
         (bytes calldata actions, bytes[] calldata params) = unlockData.decodeActionsRouterParams();
         uint256 numActions = actions.length;
         assert(numActions == params.length);

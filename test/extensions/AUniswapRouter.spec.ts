@@ -72,6 +72,7 @@ describe("AUniswapRouter", async () => {
       univ4Posm: Univ4Posm.attach(Univ4PosmInstance.address),
       wethAddress,
       aUniswapRouter,
+      uniRouter,
       uniRouterAddress: uniRouter.address,
       hookAddress: HookInstance.address,
       oracle: Hook.attach(HookInstance.address),
@@ -566,7 +567,16 @@ describe("AUniswapRouter", async () => {
       v4Planner.addAction(Actions.BURN_POSITION, [expectedTokenId, MAX_UINT128, MAX_UINT128, '0x'])
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
       expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(0)
-      expect((await positionPool.getUniV4TokenIds()).length).to.be.eq(2)
+      const remainingIds = await positionPool.getUniV4TokenIds()
+      expect(remainingIds.length).to.be.eq(2)
+
+      // Verify remaining tokenIds are actual Uniswap position IDs (not corrupted array indices).
+      // The burned position (expectedTokenId) was first in the array, so swap-and-pop should
+      // move the last tokenId into its slot. Both remaining entries must be valid token IDs
+      // (i.e. expectedTokenId+1 and expectedTokenId+2), not small index numbers.
+      const expectedRemaining = [expectedTokenId.add(2), expectedTokenId.add(1)]
+      expect(remainingIds[0]).to.be.eq(expectedRemaining[0])
+      expect(remainingIds[1]).to.be.eq(expectedRemaining[1])
     })
 
     it('position should be included in nav calculations', async () => {
@@ -666,7 +676,7 @@ describe("AUniswapRouter", async () => {
     })
 
     it('should revert when calling unsupported methods', async () => {
-      const { pool, grgToken } = await setupTests()
+      const { pool, grgToken, wethAddress, oracle } = await setupTests()
       let v4Planner: V4Planner = new V4Planner()
       v4Planner.addAction(Actions.INCREASE_LIQUIDITY_FROM_DELTAS, [0, 0, 0, '0x'])
       const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
@@ -675,8 +685,6 @@ describe("AUniswapRouter", async () => {
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
       ).to.be.revertedWith(`UnsupportedAction(${Actions.INCREASE_LIQUIDITY_FROM_DELTAS})`)
       v4Planner = new V4Planner()
-      // TODO: we revert in adapter because we cannot settle if we do not know the amount, but should check if
-      // we already forwarded enough eth or approved token, so currency can be settled or taken?
       v4Planner.addAction(Actions.MINT_POSITION_FROM_DELTAS, [
         [AddressZero, AddressZero, 0, 0, AddressZero],
         0, 0, 0, 0, AddressZero, '0x']
@@ -684,13 +692,69 @@ describe("AUniswapRouter", async () => {
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value:  0 })
       ).to.be.revertedWith(`UnsupportedAction(${Actions.MINT_POSITION_FROM_DELTAS})`)
+    })
+
+    it('should decode CLOSE_CURRENCY action', async () => {
+      const { pool, wethAddress, grgToken, oracle } = await setupTests()
+      // Initialize price feed so the token used in CLOSE_CURRENCY passes oracle validation
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      await oracle.initializeObservations(PAIR.poolKey)
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // CLOSE_CURRENCY is supported — decoded and forwarded to POSM. Test with a non-native token
+      // to verify oracle validation works for any currency (not just base token).
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [wethAddress])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      // also verify native ETH works (always has price feed as base token)
       v4Planner = new V4Planner()
-      // TODO: we revert because we cannot settle if we do not know the amount, but should check if
-      // we already forwarded enough eth or approved token, so currency can be settled or taken?
-      v4Planner.addAction(Actions.CLOSE_CURRENCY, [pool.address])
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [AddressZero])
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      // token without price feed should revert
+      v4Planner = new V4Planner()
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [grgToken.address])
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
-      ).to.be.revertedWith(`UnsupportedAction(${Actions.CLOSE_CURRENCY})`)
+      ).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+    })
+
+    it('should propagate string error from posm', async () => {
+      const { pool, wethAddress, oracle, univ4Posm } = await setupTests()
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      await oracle.initializeObservations(PAIR.poolKey)
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // use CLOSE_CURRENCY with no native value to avoid InsufficientNativeBalance check
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [wethAddress])
+      // set mock to revert with string error
+      await univ4Posm.setRevertMode(1)
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      ).to.be.revertedWith('MockPosmStringError')
+      // reset revert mode
+      await univ4Posm.setRevertMode(0)
+    })
+
+    it('should propagate custom error from posm', async () => {
+      const { pool, wethAddress, oracle, univ4Posm } = await setupTests()
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey = { currency0: AddressZero, currency1: wethAddress, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      await oracle.initializeObservations(PAIR.poolKey)
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // use CLOSE_CURRENCY with no native value to avoid InsufficientNativeBalance check
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.CLOSE_CURRENCY, [wethAddress])
+      // set mock to revert with custom error
+      await univ4Posm.setRevertMode(2)
+      await expect(
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      ).to.be.revertedWith('MockCustomError("MockPosmCustomError")')
+      // reset revert mode
+      await univ4Posm.setRevertMode(0)
     })
 
     it('returns gas cost for eth pool mint with 1 uni v4 liquidity position', async () => {
@@ -1481,6 +1545,44 @@ describe("AUniswapRouter", async () => {
       await expect(
         user1.sendTransaction({ to: aUniswapRouter.address, value: 0, data: encodedSwapData})
       ).to.be.revertedWith('DirectCallNotAllowed()')
+    })
+
+    it('should propagate string error from universal router', async () => {
+      const { pool, wethAddress, uniRouter } = await setupTests()
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey.currency1 = wethAddress
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // set mock to revert with string error
+      await uniRouter.setRevertMode(1)
+      await expect(
+        extPool['execute(bytes,bytes[])'](commands, inputs)
+      ).to.be.revertedWith('MockRouterStringError')
+      await uniRouter.setRevertMode(0)
+    })
+
+    it('should propagate custom error from universal router', async () => {
+      const { pool, wethAddress, uniRouter } = await setupTests()
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey.currency1 = wethAddress
+      const v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.TAKE, [PAIR.poolKey.currency0, pool.address, parseEther("12")])
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V4_SWAP, [v4Planner.actions, v4Planner.params])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // set mock to revert with custom error
+      await uniRouter.setRevertMode(2)
+      await expect(
+        extPool['execute(bytes,bytes[])'](commands, inputs)
+      ).to.be.revertedWith('MockCustomError("MockRouterCustomError")')
+      await uniRouter.setRevertMode(0)
     })
 
     it('should execute a subplan', async () => {
