@@ -83,18 +83,29 @@ struct Position {
 
 ### When tokensIn Are Determined
 
-Token approvals (`tokensIn`) are set only when the token flow direction is unambiguous:
+Token approvals (`tokensIn`) are set only when the token flow direction is unambiguous.
+
+**Universal Router commands** (via `execute`):
+
+| Command / Action | tokensIn set? | Why |
+|---|---|---|
+| `V3_SWAP_EXACT_IN` | Yes (first token in path) | First address is input token |
+| `V3_SWAP_EXACT_OUT` | Yes (last token in path) | V3 exact-out path is reversed |
+| `V2_SWAP_EXACT_IN` | Yes (path[0]) | First address is input token |
+| `V2_SWAP_EXACT_OUT` | Yes (path[0]) | V2 path is always `[tokenIn, ..., tokenOut]` |
+| V4 `SETTLE` | Yes | Explicit settlement inside V4_SWAP |
+| V4 `SETTLE_ALL` | Yes | Explicit settlement inside V4_SWAP |
+
+**PositionManager actions** (via `modifyLiquidities`):
 
 | Action | tokensIn set? | Why |
 |---|---|---|
 | `MINT_POSITION` | Yes (currency0 + currency1) | Tokens always flow in on mint |
 | `INCREASE_LIQUIDITY` | Yes (currency0 + currency1) | Tokens always flow in on increase |
-| `SETTLE_PAIR` | Yes (currency0 + currency1) | Explicit settlement of tokens |
-| `SETTLE` / `SETTLE_ALL` | Yes | Explicit settlement of tokens |
+| `SETTLE_PAIR` | Yes (currency0 + currency1) | Explicit pair settlement |
+| `SETTLE` | No (not decoded) | Relies on MINT/INCREASE to set approvals ahead of time |
 | `CLOSE_CURRENCY` | No (tokensOut only) | Direction ambiguous — may settle or take |
 | `CLEAR_OR_TAKE` | No (tokensOut only) | Takes remaining balance |
-| `V3_SWAP_EXACT_IN` | Yes (first token in path) | First address is input token |
-| `V2_SWAP_EXACT_IN` | Yes (path[0]) | First address is input token |
 
 ---
 
