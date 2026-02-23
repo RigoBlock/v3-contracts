@@ -147,6 +147,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         assert(actionsLength == params.length);
         Parameters memory newParams;
         Position[] memory positions;
+        bool containsMint;
 
         for (uint256 actionIndex = 0; actionIndex < actionsLength; actionIndex++) {
             (newParams, positions) = _decodePosmAction(
@@ -155,6 +156,9 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                 newParams,
                 positions
             );
+            if (!containsMint && uint8(actions[actionIndex]) == Actions.MINT_POSITION) {
+                containsMint = true;
+            }
         }
 
         _processRecipients(newParams.recipients);
@@ -163,7 +167,6 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
 
         // read nextTokenId from Posm only if one of the decoded actions is mint position
         uint256 nextTokenIdBefore;
-        bool containsMint = _containsMintAction(positions);
 
         if (containsMint) {
             nextTokenIdBefore = _uniV4Posm.nextTokenId();
@@ -315,12 +318,4 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         }
     }
 
-    function _containsMintAction(Position[] memory positions) private pure returns (bool isMint) {
-        for (uint256 i = 0; i < positions.length; i++) {
-            if (positions[i].action == Actions.MINT_POSITION) {
-                isMint = true;
-                break;
-            }
-        }
-    }
 }

@@ -71,7 +71,6 @@ abstract contract AUniswapDecoder {
                             lastTokenBytes.offset := lastTokenOffset
                         }
                         params.tokensOut = _addUnique(params.tokensOut, lastTokenBytes.toAddress());
-                        params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
@@ -87,7 +86,6 @@ abstract contract AUniswapDecoder {
                             lastTokenBytes.offset := lastTokenOffset
                         }
                         params.tokensIn = _addUnique(params.tokensIn, lastTokenBytes.toAddress());
-                        params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
                         revert InvalidCommandType(command);
@@ -128,7 +126,6 @@ abstract contract AUniswapDecoder {
                         address[] calldata path = inputs.toAddressArray(3);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
-                        params.recipients = _addUnique(params.recipients, recipient);
                         params.value += path[0] == ZERO_ADDRESS ? amountIn : 0;
                         return params;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
@@ -138,7 +135,6 @@ abstract contract AUniswapDecoder {
                         address[] calldata path = inputs.toAddressArray(3);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
-                        params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PERMIT2_PERMIT) {
                         revert InvalidCommandType(command);
@@ -395,7 +391,6 @@ abstract contract AUniswapDecoder {
                 revert UnsupportedAction(action);
             }
         }
-        revert UnsupportedAction(action);
     }
 
     function _addUnique(address[] memory array, address target) private pure returns (address[] memory) {
