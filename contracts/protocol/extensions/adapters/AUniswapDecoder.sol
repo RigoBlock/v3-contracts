@@ -1,22 +1,4 @@
 // SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
@@ -89,7 +71,6 @@ abstract contract AUniswapDecoder {
                             lastTokenBytes.offset := lastTokenOffset
                         }
                         params.tokensOut = _addUnique(params.tokensOut, lastTokenBytes.toAddress());
-                        params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
@@ -105,7 +86,6 @@ abstract contract AUniswapDecoder {
                             lastTokenBytes.offset := lastTokenOffset
                         }
                         params.tokensIn = _addUnique(params.tokensIn, lastTokenBytes.toAddress());
-                        params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
                         revert InvalidCommandType(command);
@@ -146,7 +126,6 @@ abstract contract AUniswapDecoder {
                         address[] calldata path = inputs.toAddressArray(3);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
-                        params.recipients = _addUnique(params.recipients, recipient);
                         params.value += path[0] == ZERO_ADDRESS ? amountIn : 0;
                         return params;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
@@ -154,9 +133,8 @@ abstract contract AUniswapDecoder {
                         (address recipient, , , , ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
-                        params.tokensOut = _addUnique(params.tokensOut, path[0]);
-                        params.tokensIn = _addUnique(params.tokensIn, path[path.length - 1]);
-                        params.recipients = _addUnique(params.recipients, recipient);
+                        params.tokensIn = _addUnique(params.tokensIn, path[0]);
+                        params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
                         return params;
                     } else if (command == Commands.PERMIT2_PERMIT) {
                         revert InvalidCommandType(command);
@@ -327,6 +305,10 @@ abstract contract AUniswapDecoder {
                     }
                 }
 
+                // tokens flow in on increase, approve here so settlement actions (CLOSE_CURRENCY) don't need to
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency1));
+
                 positions = _addUniquePosition(positions, Position(hook, tokenId, Actions.INCREASE_LIQUIDITY));
                 return (params, positions);
             } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
@@ -345,6 +327,9 @@ abstract contract AUniswapDecoder {
                 // as an amount could be null, we want to assert here that both tokens have a price feed
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency0));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(poolKey.currency1));
+                // tokens flow in on mint, approve here so settlement actions (CLOSE_CURRENCY) don't need to
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency0));
+                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(poolKey.currency1));
                 params.recipients = _addUnique(params.recipients, owner);
                 params.value += Currency.unwrap(poolKey.currency0) == ZERO_ADDRESS ? amount0Max : 0;
                 positions = _addUniquePosition(positions, Position(address(poolKey.hooks), 0, Actions.MINT_POSITION));
@@ -374,10 +359,7 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, recipient);
                 return (params, positions);
             } else if (action == Actions.SETTLE) {
-                // in posm, SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0). Therefore, we do not append `value` here
-                // (Currency currency, uint256 amount, bool payerIsUser)
-                (Currency currency, , ) = actionParams.decodeCurrencyUint256AndBool();
-                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
+                // SETTLE is usually used with ActionConstants.OPEN_DELTA (i.e. 0), so we do not append `value` here.
                 return (params, positions);
             } else if (action == Actions.TAKE) {
                 (Currency currency, address recipient, ) = actionParams.decodeCurrencyAddressAndUint256();
@@ -386,11 +368,10 @@ abstract contract AUniswapDecoder {
                 return (params, positions);
             } else if (action == Actions.CLOSE_CURRENCY) {
                 Currency currency = actionParams.decodeCurrency();
-                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
+                return (params, positions);
             } else if (action == Actions.CLEAR_OR_TAKE) {
                 (Currency currency, ) = actionParams.decodeCurrencyAndUint256();
-                params.tokensIn = _addUnique(params.tokensIn, Currency.unwrap(currency));
                 params.tokensOut = _addUnique(params.tokensOut, Currency.unwrap(currency));
                 return (params, positions);
             } else if (action == Actions.SWEEP) {
@@ -410,7 +391,6 @@ abstract contract AUniswapDecoder {
                 revert UnsupportedAction(action);
             }
         }
-        revert UnsupportedAction(action);
     }
 
     function _addUnique(address[] memory array, address target) private pure returns (address[] memory) {
