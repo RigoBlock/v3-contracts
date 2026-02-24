@@ -70,6 +70,16 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
 
+        // Sanity check: outputAmount must not exceed inputAmount (after decimal scaling).
+        // Across relayers won't fill output > input (guaranteed loss), but a rogue operator
+        // could inflate virtual supply adjustment to artificially inflate NAV on source chain.
+        uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
+            params.outputToken,
+            params.inputToken,
+            params.outputAmount
+        );
+        require(scaledOutputAmount <= params.inputAmount, OutputAmountTooHigh());
+
         // Validate source message parameters to prevent rogue input
         SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
 
@@ -88,13 +98,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         }
         require(StorageLib.isOwnedToken(tokenToValidate), TokenNotActive());
 
-        // Approve max before deposit, reset to 1 after (skip for native ETH).
+        // Approve max before deposit, reset to 1 after (ERC20 only, skipped when sending native ETH).
         if (sourceParams.sourceNativeAmount == 0) {
             params.inputToken.safeApprove(address(_acrossSpokePool), type(uint256).max);
         }
 
         Instructions memory instructions = _buildMulticallInstructions(params, sourceParams);
-        _executeAcrossDeposit(params, sourceParams, instructions);
+        _executeAcrossDeposit(params, sourceParams, instructions, scaledOutputAmount);
 
         // Reset approval — no hanging approvals, slot stays warm.
         if (sourceParams.sourceNativeAmount == 0) {
@@ -157,11 +167,12 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     function _executeAcrossDeposit(
         AcrossParams memory params,
         SourceMessageParams memory sourceParams,
-        Instructions memory instructions
+        Instructions memory instructions,
+        uint256 scaledOutputAmount
     ) private {
         // Handle source-side adjustments based on operation type
         if (sourceParams.opType == OpType.Transfer) {
-            _handleSourceTransfer(params);
+            _handleSourceTransfer(params, scaledOutputAmount);
         } else if (sourceParams.opType == OpType.Sync) {
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
         } else {
@@ -200,31 +211,22 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
     }
 
-    /// @dev Calculates the base token equivalent value of the output amount.
-    /// @dev Handles BSC decimal conversion and oracle price lookup.
-    /// @param params The across params containing token and amount info.
+    /// @dev Converts the scaled output amount to the pool's base token value via oracle.
+    /// @param params The across params containing token info.
+    /// @param scaledOutputAmount The output amount already scaled to inputToken decimals.
     /// @return outputValueInBase The output amount converted to base token value.
-    /// @return baseToken The pool's base token address.
     function _getOutputValueInBase(
-        AcrossParams memory params
-    ) private view returns (uint256 outputValueInBase, address baseToken) {
-        // Scale outputAmount to inputToken decimals for proper comparison
-        // (same token on different chains may have different decimals, e.g., BSC USDC)
-        uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
-            params.outputToken, // Amount is in this token's decimals
-            params.inputToken, // Convert to this token's decimals
-            params.outputAmount
-        );
-
-        // Convert output amount to base token value
-        baseToken = StorageLib.pool().baseToken;
+        AcrossParams memory params,
+        uint256 scaledOutputAmount
+    ) private view returns (uint256 outputValueInBase) {
+        address baseToken = StorageLib.pool().baseToken;
         outputValueInBase = IEOracle(address(this))
             .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
             .toUint256();
     }
 
-    function _handleSourceTransfer(AcrossParams memory params) private {
-        (uint256 outputValueInBase, ) = _getOutputValueInBase(params);
+    function _handleSourceTransfer(AcrossParams memory params, uint256 scaledOutputAmount) private {
+        uint256 outputValueInBase = _getOutputValueInBase(params, scaledOutputAmount);
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint8 poolDecimals = StorageLib.pool().decimals;
 
