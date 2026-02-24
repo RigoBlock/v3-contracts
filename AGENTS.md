@@ -162,6 +162,61 @@ int256 baseAmount = IEOracle(address(this)).convertTokenAmount(
 
 ## Adding New Components
 
+### Token Approval Patterns for External Protocol Integrations
+
+**CRITICAL**: The approval pattern MUST match the target protocol's scoping mechanism.
+Verify the target's token flow before writing approval code.
+
+**Pattern 1 — Target uses Permit2** (e.g., Uniswap via AUniswapRouter):
+```solidity
+// Layer 1: One-time persistent ERC20 → Permit2 (checked with threshold)
+if (IERC20(token).allowance(address(this), address(_permit2)) < type(uint96).max) {
+    token.safeApprove(address(_permit2), type(uint256).max);
+}
+// Layer 2: Per-call Permit2.approve with block-scoped expiration
+_permit2.approve(token, target, type(uint160).max, 0); // expiration=0 → current block only
+```
+
+**Pattern 2 — Target does NOT use Permit2** (e.g., 0x AllowanceHolder via A0xRouter):
+```solidity
+// Per-call: approve exact amount before call, reset to 1 after success
+token.safeApprove(address(target), amount);
+
+try target.exec{value: value}(...) returns (bytes memory result) {
+    token.safeApprove(address(target), 1); // reset to 1 (keeps slot warm for gas savings)
+    return result;
+} catch { ... } // revert unwinds the approval automatically
+```
+
+**How to determine which pattern to use:**
+1. Read the target protocol's docs for their token transfer mechanism
+2. If target supports Permit2 → Pattern 1 (persistent ERC20 + per-call Permit2.approve)
+3. If target uses standard ERC20 transferFrom → Pattern 2 (per-call approve + reset)
+4. ALWAYS use `safeApprove` for USDT compatibility (force-reset then approve)
+5. For native ETH: forward via `{value: value}` — no ERC20 approval needed
+
+**Gas optimization — approval reset to 1, not 0:**
+- Resetting to 0 clears storage → next swap pays 20000 gas (zero → non-zero SSTORE)
+- Resetting to 1 keeps slot warm → next swap pays 5000 gas (non-zero → non-zero SSTORE)
+- Always reset to 1 unless there's a specific reason to fully clear
+
+**Native ETH handling in adapters (CRITICAL):**
+- NEVER use `msg.value` to forward ETH in adapter calls
+- The adapter runs via delegatecall — `msg.value` comes from the CALLER, not the pool
+- The pool is the vault; derive the ETH value from calldata parameters
+- Example: `uint256 value = token.isAddressZero() ? amount : 0;`
+- Then: `target.exec{value: value}(...)` — sends from pool's own balance
+- Same pattern used in AUniswapRouter: `_uniswapRouter.execute{value: params.value}(...)`
+- For `InsufficientNativeBalance` check: compare derived `value` to `address(this).balance`
+
+**Testing requirements for new integrations:**
+- Test all swap directions: ETH→Token, Token→ETH, Token→Token
+- Test with USDT (special approval behavior)
+- Test on fork with real deployed contracts (not just mocks)
+- Verify allowance is 1 (not 0) after each successful call (for Pattern 2)
+- Verify revert unwinds approval state correctly
+- Verify ETH swaps use pool balance, NOT caller's msg.value
+
 ### New Adapter
 1. Create `contracts/protocol/extensions/adapters/YourAdapter.sol`
 2. Create interface in `adapters/interfaces/IYourAdapter.sol`
@@ -442,3 +497,18 @@ When making changes:
     - Storage slots: Define in the library (e.g., VirtualStorageLib.VIRTUAL_SUPPLY_SLOT) and reference from there
     - Chain-specific addresses: Define in libraries (e.g., CrosschainLib) or shared types, not in multiple contracts
     - If a value must be duplicated for technical reasons (e.g., immutable in constructor), document clearly which is the source of truth
+14. **WRONG APPROVAL PATTERN FOR EXTERNAL PROTOCOLS** - Before writing approval code, verify whether the target protocol uses Permit2 or standard ERC20 transferFrom:
+    - If target uses Permit2 → persistent ERC20 approval + per-call Permit2.approve (Pattern 1)
+    - If target uses standard ERC20 → per-call approve exact amount + reset to 1 (Pattern 2)
+    - NEVER assume both patterns are interchangeable. Read the protocol's docs first.
+    - See "Token Approval Patterns" section in "Adding New Components" for full details and code samples.
+15. **USING msg.value IN ADAPTERS** - Adapters run via delegatecall in the pool's context. `msg.value` is what the CALLER sent, NOT the pool's balance. The pool is the vault — derive the ETH value from calldata params (e.g., `value = token == address(0) ? amount : 0`) and forward from pool's own balance (`target.exec{value: value}(...)`). See AUniswapRouter and A0xRouter for reference.
+16. **RESETTING APPROVAL TO 0** - When resetting ERC20 approval after a call, set to 1 (not 0). Setting to 0 clears the storage slot; the next swap pays 20000 gas to write zero→non-zero. Setting to 1 keeps the slot warm, so the next swap costs only 5000 gas (non-zero→non-zero). Always prefer `safeApprove(target, 1)` over `safeApprove(target, 0)`.
+17. **AVOID ASSEMBLY — USE TYPES AND abi.decode** - Do NOT use inline assembly unless explicitly told to optimize a specific code path. Assembly is error-prone (off-by-one bugs are common and hard to audit). Prefer:
+    - `abi.decode(data[offset:offset+size], (Type))` for calldata extraction
+    - `bytes4(abi.decode(data[:32], (bytes32)))` to extract a packed selector from calldata
+    - `IInterface.FUNCTION.selector` instead of `bytes4(keccak256("FUNCTION(param_types)"))`
+    - Solidity calldata slicing (`data[a:b]`) over manual `calldataload` math
+    - Assembly is acceptable ONLY for: raw error propagation (`revert(add(d,32),mload(d))`), extracting `bytes4` from `bytes memory` (no Solidity cast exists), and ERC-7201 storage slot access.
+18. **USE .selector INSTEAD OF keccak256 HASHING** - ALWAYS use `IInterface.functionName.selector` to obtain function selectors. NEVER use `bytes4(keccak256("functionName(paramTypes)"))` — it is fragile (typos in the string silently produce wrong selectors) and not type-checked by the compiler. If the interface doesn't exist locally, vendor a minimal interface with just the function signatures needed. Example: `ISettlerActions.RFQ.selector` not `bytes4(keccak256("RFQ(address,((address,uint256),uint256,uint256),...)"))`
+19. **LOW-LEVEL CALLS IN TESTS** - NEVER use `(bool success, bytes memory data) = target.call(abi.encodeCall(...))` in tests. Always use typed interface calls: `IInterface(target).method(...)`. For expected reverts, use `vm.expectRevert(expectedError)` or `try IInterface(target).method(...) { revert("should fail"); } catch (bytes memory err) { /* check err */ }`. Low-level calls bypass Solidity's type checking and make tests harder to read and audit.

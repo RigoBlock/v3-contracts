@@ -3161,4 +3161,109 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         
         console2.log("\n=== Valid Native ETH Deposit Test Complete ===");
     }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                        OUTPUT AMOUNT SANITY CHECK
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Proves that outputAmount > inputAmount is rejected by the sanity check.
+    /// @dev Without this check, a rogue operator could inflate virtual supply to manipulate NAV.
+    ///      The attack: set outputAmount = 10x inputAmount for same-token bridge. VS adjustment
+    ///      is based on outputAmount, so effective supply drops 10x more than tokens actually
+    ///      leave the pool → NAV artificially inflated. The deposit would never be filled by
+    ///      Across (relayer loses money), eventually expiring and being refunded, but the rogue
+    ///      VS adjustment persists (refund via donate is NAV-neutral, doesn't reverse VS).
+    function test_AIntents_OutputAmountExceedsInput_Reverts() public {
+        uint256 inputAmount = 100e6; // 100 USDC
+        uint256 inflatedOutput = 1000e6; // 10x — rogue operator inflates output
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: inputAmount,
+            outputAmount: inflatedOutput,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        vm.expectRevert(IAIntents.OutputAmountTooHigh.selector);
+        IAIntents(pool()).depositV3(params);
+    }
+
+    /// @notice Verifies that outputAmount == inputAmount (normal case) still works.
+    function test_AIntents_OutputAmountEqualsInput_Succeeds() public {
+        uint256 transferAmount = 100e6; // 100 USDC
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount, // 1:1 — normal case
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
+        // Should succeed — verify VS was written
+        int256 vs = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        assertLt(vs, 0, "VS should be negative after valid outbound transfer");
+    }
+
+    /// @notice Verifies that outputAmount < inputAmount (slippage) still works.
+    function test_AIntents_OutputAmountLessThanInput_Succeeds() public {
+        uint256 inputAmount = 100e6; // 100 USDC
+        uint256 outputWithSlippage = 99e6; // 1% slippage — normal Across behavior
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: inputAmount,
+            outputAmount: outputWithSlippage,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
+        // Should succeed — verify VS was written
+        int256 vs = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        assertLt(vs, 0, "VS should be negative after valid outbound transfer");
+    }
 }
