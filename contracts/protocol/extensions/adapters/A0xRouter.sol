@@ -148,7 +148,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         //   [4:36]  slippage.recipient
         //   [36:68] slippage.buyToken
         //   [68:100] slippage.minAmountOut
-        bytes4 selector = bytes4(abi.decode(data[:32], (bytes32)));
+        bytes4 selector = bytes4(data[:4]);
 
         // Only allow Settler.execute — not executeWithPermit or executeMetaTxn.
         require(selector == ISettlerTakerSubmitted.execute.selector, UnsupportedSettlerFunction());
@@ -191,7 +191,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
             uint256 elOffset = abi.decode(data[elPos:elPos + 32], (uint256));
             // Element data: arrStart + 32 (content start) + elOffset + 32 (skip length word)
             uint256 selectorPos = arrStart + elOffset + 64;
-            bytes4 actionSelector = bytes4(abi.decode(data[selectorPos:selectorPos + 32], (bytes32)));
+            bytes4 actionSelector = bytes4(data[selectorPos:selectorPos + 4]);
 
             if (actionSelector == ISettlerActions.RFQ.selector || actionSelector == ISettlerActions.RFQ_VIP.selector) {
                 revert ForbiddenAction(actionSelector);
