@@ -97,9 +97,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         }
 
         // 5. Forward the call to AllowanceHolder using pool's own balance.
-        try _allowanceHolder.exec{value: value}(operator, token, amount, target, data) returns (
-            bytes memory result
-        ) {
+        try _allowanceHolder.exec{value: value}(operator, token, amount, target, data) returns (bytes memory result) {
             // 6. Reset approval to 1 after successful exec (gas optimization).
             //    AllowanceHolder.transferFrom consumes the ERC20 allowance, so it should already
             //    be 0 or near-0 after a full fill. Reset to 1 (not 0) keeps the storage slot warm:
@@ -156,7 +154,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         require(selector == ISettlerTakerSubmitted.execute.selector, UnsupportedSettlerFunction());
 
         // Decode AllowedSlippage tuple fields using type-safe abi.decode.
-        (address recipient, address buyToken,) = abi.decode(data[4:100], (address, address, uint256));
+        (address recipient, address buyToken, ) = abi.decode(data[4:100], (address, address, uint256));
 
         // Recipient must be this contract (the pool, in delegatecall context).
         require(recipient == address(this), RecipientNotSmartPool());
