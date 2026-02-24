@@ -1,6 +1,6 @@
 {
   "name": "@rgbk/v3-contracts",
-  "version": "2.0.7",
+  "version": "2.1.4",
   "description": "Ethereum asset management",
   "homepage": "https://github.com/rigoblock/v3-contracts/",
   "license": "Apache-2.0",
@@ -26,8 +26,8 @@
     "coverage": "yarn coverage:all",
     "coverage:setup": "mkdir -p coverage",
     "coverage:hardhat": "hardhat coverage && mv -f coverage.json coverage/coverage.json 2>/dev/null || true",
-    "coverage:foundry": "rm -f lcov.info && forge build && forge coverage --no-match-coverage \"mocks/|examples/|test/|tokens/|utils/\" --no-match-path 'test/extensions/PolygonFork.t.sol' --report lcov && mv lcov.info coverage/foundry_lcov.info",
-    "coverage:foundry:no-forks": "rm -f lcov.info && forge build && forge coverage --no-match-coverage \"mocks/|examples/|test/|tokens/|utils/\" --no-match-path 'test/extensions/PolygonFork.t.sol' --no-match-path 'test/extensions/*Fork.t.sol' --no-match-path 'test/extensions/TransferEscrow.t.sol' --no-match-path 'test/core/PoolDonate.t.sol' --report lcov && mv lcov.info coverage/foundry_lcov.info",
+    "coverage:foundry": "forge build && chmod +x ./scripts/foundry-coverage.sh && ./scripts/foundry-coverage.sh",
+    "coverage:foundry:no-forks": "rm -f lcov.info && forge build && forge coverage --no-match-coverage \"mocks/|examples/|test/|tokens/|utils/\" --no-match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PolygonForkTest|PoolDonateTest' --report lcov && mv lcov.info coverage/foundry_lcov.info",
     "coverage:all": "yarn coverage:setup && yarn coverage:hardhat && yarn coverage:foundry && chmod +x ./scripts/analyze-coverage.sh && ./scripts/analyze-coverage.sh",
     "coverage:clean": "rm -rf ~/.foundry/cache/rpc && yarn coverage:all && echo '✅ Coverage from clear RPC cache completed.'",
     "security": "chmod +x ./scripts/security-analysis.sh && ./scripts/security-analysis.sh",
@@ -47,7 +47,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rigoblock/v3-contracts.git"
+    "url": "https://github.com/RigoBlock/v3-contracts"
   },
   "keywords": [
     "Ethereum",
@@ -85,11 +85,11 @@
     "hardhat": "^2.13.1",
     "hardhat-deploy": "1.0.4",
     "husky": "^9.0.10",
-    "prettier": "^2.1.2",
+    "prettier": "^3.8.1",
     "prettier-plugin-solidity": "^1.4.2",
-    "solc": "0.8.33",
+    "solc": "0.8.34",
     "solhint": "^5.0.5",
-    "solhint-plugin-prettier": "^0.0.5",
+    "solhint-plugin-prettier": "^0.1.0",
     "solidity-coverage": "^0.8.2",
     "ts-node": "^10.8.1",
     "typescript": "^5.0.4",

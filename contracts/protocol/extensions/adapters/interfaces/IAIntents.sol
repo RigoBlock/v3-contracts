@@ -22,6 +22,7 @@ interface IAIntents {
 
     error DirectCallNotAllowed();
     error NullAddress();
+    error OutputAmountTooHigh();
     error TokenNotActive();
     error SameChainTransfer();
     error InvalidInputToken();

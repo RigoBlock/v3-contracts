@@ -1,22 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-/*
-
- Copyright 2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
@@ -146,8 +128,9 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         } catch (bytes memory returnData) {
             if (params.value > address(this).balance) {
                 revert InsufficientNativeBalance();
-            } else {
-                revert(string(returnData));
+            }
+            assembly {
+                revert(add(returnData, 32), mload(returnData))
             }
         }
     }
@@ -164,6 +147,7 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         assert(actionsLength == params.length);
         Parameters memory newParams;
         Position[] memory positions;
+        bool containsMint;
 
         for (uint256 actionIndex = 0; actionIndex < actionsLength; actionIndex++) {
             (newParams, positions) = _decodePosmAction(
@@ -172,6 +156,9 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                 newParams,
                 positions
             );
+            if (!containsMint && uint8(actions[actionIndex]) == Actions.MINT_POSITION) {
+                containsMint = true;
+            }
         }
 
         _processRecipients(newParams.recipients);
@@ -180,7 +167,6 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
 
         // read nextTokenId from Posm only if one of the decoded actions is mint position
         uint256 nextTokenIdBefore;
-        bool containsMint = _containsMintAction(positions);
 
         if (containsMint) {
             nextTokenIdBefore = _uniV4Posm.nextTokenId();
@@ -191,9 +177,12 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
             return;
         } catch Error(string memory reason) {
             revert(reason);
-        } catch {
+        } catch (bytes memory returnData) {
             if (newParams.value > address(this).balance) {
                 revert InsufficientNativeBalance();
+            }
+            assembly {
+                revert(add(returnData, 32), mload(returnData))
             }
         }
     }
@@ -268,9 +257,11 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                     // Notice: if moving the following block to protect all actions, make sure hook address is appended.
                     if (positions[i].hook != ZERO_ADDRESS) {
                         bool hasAfterAddLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
-                            Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
+                            Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG !=
+                            0;
                         bool hasAfterRemoveLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
-                            Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
+                            Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG !=
+                            0;
 
                         // Prevent hooks that can access pool liquidity deltas
                         require(
@@ -293,8 +284,9 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                         uint256 lastIndex = idsSlot.tokenIds.length - 1;
 
                         if (idIndex != lastIndex) {
-                            idsSlot.tokenIds[idIndex] = lastIndex;
-                            idsSlot.positions[lastIndex] = position;
+                            uint256 lastTokenId = idsSlot.tokenIds[lastIndex];
+                            idsSlot.tokenIds[idIndex] = lastTokenId;
+                            idsSlot.positions[lastTokenId] = position;
                         }
 
                         idsSlot.positions[positions[i].tokenId] = 0;
@@ -325,15 +317,6 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                     recipients[i] == ActionConstants.ADDRESS_THIS,
                 RecipientNotSmartPoolOrRouter()
             );
-        }
-    }
-
-    function _containsMintAction(Position[] memory positions) private pure returns (bool isMint) {
-        for (uint256 i = 0; i < positions.length; i++) {
-            if (positions[i].action == Actions.MINT_POSITION) {
-                isMint = true;
-                break;
-            }
         }
     }
 }

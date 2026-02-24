@@ -11,3 +11,6 @@
 [submodule "lib/universal-router"]
 	path = lib/universal-router
 	url = https://github.com/Uniswap/universal-router.git
+[submodule "lib/0x-settler"]
+	path = lib/0x-settler
+	url = https://github.com/0xProject/0x-settler
