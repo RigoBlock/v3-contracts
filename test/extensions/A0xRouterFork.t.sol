@@ -224,13 +224,10 @@ contract A0xRouterForkTest is Test {
         }
     }
 
-    /// @notice Bridge action selectors embedded in the actions array are rejected by the
-    ///  Feature 2 (Taker) settler with ActionInvalid. The settler's _dispatch only recognizes
-    ///  ISettlerActions selectors. Bridge actions from IBridgeSettlerActions are unknown.
-    /// @dev UPGRADE RISK: If a future 0x settler version adds bridge actions to the Taker
-    ///  dispatch chain, these assertions would fail. The adapter would then need to add bridge
-    ///  selectors to its forbidden actions list (like RFQ).
-    function test_BridgeExclusion_BridgeActionSelectorsRejectedByTakerSettler() public {
+    /// @notice Bridge action selectors are blocked by the adapter's action allowlist.
+    ///  Bridge actions from IBridgeSettlerActions are not in the allowlist, so they are
+    ///  rejected with ActionNotAllowed before reaching the settler.
+    function test_BridgeExclusion_BridgeActionSelectorsBlockedByAllowlist() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
         // Known bridge action selectors from IBridgeSettlerActions interface (imported from 0x-settler).
@@ -262,14 +259,10 @@ contract A0xRouterForkTest is Test {
             );
 
             vm.prank(poolOwner);
-            try IA0xRouter(pool).exec(
+            vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, bridgeSelectors[i]));
+            IA0xRouter(pool).exec(
                 currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-            ) {
-                revert("Bridge action selector must be rejected by Taker settler");
-            } catch (bytes memory returnData) {
-                // Assert the settler rejects the unknown action with ActionInvalid.
-                _assertIsActionInvalid(returnData);
-            }
+            );
         }
 
         // Pool balance unchanged — revert unwound everything
@@ -300,14 +293,18 @@ contract A0xRouterForkTest is Test {
         }
     }
 
-    /// @notice BASIC action is bounded by the settler's slippage check even though it
-    ///  can call arbitrary non-restricted contracts.
-    function test_BridgeExclusion_BasicActionBoundedBySlippageCheck() public {
+    /// @notice BASIC action is blocked by the adapter's action allowlist.
+    ///  BASIC can call arbitrary contracts with arbitrary calldata (including token.approve or
+    ///  token.transfer), so it must never reach the settler. The allowlist blocks it before
+    ///  the call is forwarded to AllowanceHolder.
+    function test_BridgeExclusion_BasicActionBlockedByAllowlist() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes4 basicSelector = ISettlerActions.BASIC.selector;
 
         // Encode BASIC action targeting a random address (simulating a bridge protocol)
         bytes memory basicAction = abi.encodePacked(
-            ISettlerActions.BASIC.selector,
+            basicSelector,
             abi.encode(
                 Constants.ETH_USDC,    // sellToken
                 uint256(10000),        // bps = 100%
@@ -324,35 +321,29 @@ contract A0xRouterForkTest is Test {
             SETTLER_EXECUTE_SELECTOR,
             pool,               // recipient
             Constants.ETH_WETH,  // buyToken
-            uint256(1e15),       // minAmountOut > 0 (slippage protection)
+            uint256(1e15),       // minAmountOut
             actions,
             bytes32(0)
         );
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, basicSelector));
+        IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        ) {
-            revert("BASIC to arbitrary target must fail");
-        } catch (bytes memory returnData) {
-            _assertNotOurValidationError(returnData);
-        }
+        );
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
     }
 
     /*//////////////////////////////////////////////////////////////////////////
-                        RFQ EXCLUSION
+                        ACTION ALLOWLIST
 
-    RFQ allows arbitrary counterparty at arbitrary price. The adapter scans the
-    actions array for RFQ selectors and reverts with ForbiddenAction before the
-    call reaches AllowanceHolder/Settler.
-
-    Blocked actions (selectors from ISettlerActions):
-    - RFQ — active in SettlerBase._dispatch, immediate risk
-    - RFQ_VIP — currently disabled in settler, blocked defensively
+    The adapter uses a whitelist pattern: only explicitly allowed action selectors
+    pass validation. This blocks BASIC (arbitrary calldata to arbitrary target),
+    RFQ (arbitrary off-chain pricing), RENEGADE (arbitrary target), and METATXN_*
+    (wrong execution flow). Unrecognized selectors are also blocked by default.
     //////////////////////////////////////////////////////////////////////////*/
 
-    /// @notice RFQ action is blocked by the adapter — reverts with ForbiddenAction.
+    /// @notice RFQ action is blocked — reverts with ActionNotAllowed.
     function test_RFQ_BlockedByAdapter() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
@@ -380,13 +371,13 @@ contract A0xRouterForkTest is Test {
             SETTLER_EXECUTE_SELECTOR,
             pool,               // recipient (passes adapter validation)
             Constants.ETH_WETH,  // buyToken (has price feed)
-            uint256(0),          // minAmountOut = 0 (worst case: attacker controls this)
+            uint256(1e15),       // minAmountOut > 0 (required by adapter)
             actions,
             bytes32(0)
         );
 
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ForbiddenAction.selector, rfqSelector));
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, rfqSelector));
         IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
         );
@@ -417,12 +408,12 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(0),
+            pool, Constants.ETH_WETH, uint256(1e15),
             actions, bytes32(0)
         );
 
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ForbiddenAction.selector, rfqVipSelector));
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, rfqVipSelector));
         IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
         );
@@ -455,12 +446,135 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(0),
+            pool, Constants.ETH_WETH, uint256(1e15),
             actions, bytes32(0)
         );
 
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ForbiddenAction.selector, rfqSelector));
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, rfqSelector));
+        IA0xRouter(pool).exec(
+            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
+        );
+    }
+
+    /// @notice BASIC action is blocked — it can call arbitrary contracts with arbitrary calldata,
+    ///  which could drain pool tokens via approve() or transfer() on the sell token.
+    function test_BASIC_BlockedByAdapter() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes4 basicSelector = ISettlerActions.BASIC.selector;
+
+        // BASIC(address sellToken, uint256 bps, address pool, uint256 offset, bytes data)
+        bytes memory basicAction = abi.encodePacked(
+            basicSelector,
+            abi.encode(
+                Constants.ETH_USDC,     // sellToken
+                uint256(10000),         // bps (100%)
+                address(0xdeadbeef),    // pool (arbitrary target)
+                uint256(0),             // offset
+                bytes("arbitrary_data")
+            )
+        );
+
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = basicAction;
+
+        bytes memory settlerData = abi.encodeWithSelector(
+            SETTLER_EXECUTE_SELECTOR,
+            pool, Constants.ETH_WETH, uint256(1e15),
+            actions, bytes32(0)
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, basicSelector));
+        IA0xRouter(pool).exec(
+            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
+        );
+
+        assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
+    }
+
+    /// @notice RENEGADE action is blocked — it calls an arbitrary target with arbitrary data.
+    function test_RENEGADE_BlockedByAdapter() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes4 renegadeSelector = ISettlerActions.RENEGADE.selector;
+
+        bytes memory renegadeAction = abi.encodePacked(
+            renegadeSelector,
+            abi.encode(address(0xdeadbeef), Constants.ETH_USDC, bytes("arbitrary"))
+        );
+
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = renegadeAction;
+
+        bytes memory settlerData = abi.encodeWithSelector(
+            SETTLER_EXECUTE_SELECTOR,
+            pool, Constants.ETH_WETH, uint256(1e15),
+            actions, bytes32(0)
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, renegadeSelector));
+        IA0xRouter(pool).exec(
+            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
+        );
+
+        assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
+    }
+
+    /// @notice METATXN_* variants are blocked — they are for the executeMetaTxn flow,
+    ///  not TakerSubmitted. Blocking reduces unnecessary attack surface.
+    function test_METATXN_BlockedByAdapter() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes4 metatxnSelector = ISettlerActions.METATXN_UNISWAPV3_VIP.selector;
+
+        bytes memory metatxnAction = abi.encodePacked(
+            metatxnSelector,
+            abi.encode(pool, address(0), uint256(0), uint256(0), uint256(0), bytes(""), uint256(0))
+        );
+
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = metatxnAction;
+
+        bytes memory settlerData = abi.encodeWithSelector(
+            SETTLER_EXECUTE_SELECTOR,
+            pool, Constants.ETH_WETH, uint256(1e15),
+            actions, bytes32(0)
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, metatxnSelector));
+        IA0xRouter(pool).exec(
+            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
+        );
+
+        assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
+    }
+
+    /// @notice Unknown/future action selectors are blocked by default (whitelist = forward-secure).
+    function test_UnknownAction_BlockedByDefault() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes4 unknownSelector = bytes4(0xdeadbeef);
+
+        bytes memory unknownAction = abi.encodePacked(
+            unknownSelector,
+            abi.encode(pool, uint256(0))
+        );
+
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = unknownAction;
+
+        bytes memory settlerData = abi.encodeWithSelector(
+            SETTLER_EXECUTE_SELECTOR,
+            pool, Constants.ETH_WETH, uint256(1e15),
+            actions, bytes32(0)
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, unknownSelector));
         IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
         );
@@ -542,6 +656,35 @@ contract A0xRouterForkTest is Test {
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, noPriceFeedToken));
         IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
+    /// @notice minAmountOut=0 is valid (slippage is the submitter's responsibility).
+    ///  The real protection is the action allowlist, not minAmountOut validation.
+    function test_CalldataValidation_ZeroMinAmountOutPassesValidation() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes memory uniAction = abi.encodePacked(
+            ISettlerActions.UNISWAPV3.selector,
+            abi.encode(pool, uint256(10000), bytes("fake_path"), uint256(0))
+        );
+
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = uniAction;
+
+        bytes memory settlerData = abi.encodeWithSelector(
+            SETTLER_EXECUTE_SELECTOR,
+            pool, Constants.ETH_WETH, uint256(0),
+            actions, bytes32(0)
+        );
+
+        vm.prank(poolOwner);
+        try IA0xRouter(pool).exec(
+            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
+        ) {
+            revert("Should fail inside settler (bad params)");
+        } catch (bytes memory returnData) {
+            _assertNotOurValidationError(returnData);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -664,7 +807,7 @@ contract A0xRouterForkTest is Test {
         );
     }
 
-    /// @notice Per-call approval pattern: exact amount approved, unwound on revert
+    /// @notice Approve max before, reset to 1 after; unwound on revert
     function test_ApprovalPattern_ExactAmountApprovedAndUnwound() public {
         uint256 sellAmount = 1000e6;
         deal(Constants.ETH_USDC, pool, sellAmount * 2);
@@ -815,7 +958,7 @@ contract A0xRouterForkTest is Test {
         vm.prank(poolOwner);
         IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
 
-        // After successful exec, allowance should be 1 (gas optimization: keep storage slot warm)
+        // After successful exec, allowance should be 1 (reset after call, slot stays warm)
         uint256 allowanceAfter = IERC20(Constants.ETH_USDC).allowance(pool, ALLOWANCE_HOLDER);
         assertEq(allowanceAfter, 1, "Allowance should be 1 after successful exec");
     }
@@ -884,7 +1027,7 @@ contract A0xRouterForkTest is Test {
             assertTrue(errorSelector != IA0xRouter.UnsupportedSettlerFunction.selector, "Should not be UnsupportedSettlerFunction");
             assertTrue(errorSelector != IA0xRouter.InvalidSettlerCalldata.selector, "Should not be InvalidSettlerCalldata");
             assertTrue(errorSelector != IA0xRouter.DirectCallNotAllowed.selector, "Should not be DirectCallNotAllowed");
-            assertTrue(errorSelector != IA0xRouter.ForbiddenAction.selector, "Should not be ForbiddenAction");
+            assertTrue(errorSelector != IA0xRouter.ActionNotAllowed.selector, "Should not be ActionNotAllowed");
         }
     }
 

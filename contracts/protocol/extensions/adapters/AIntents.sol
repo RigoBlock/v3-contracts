@@ -88,13 +88,18 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         }
         require(StorageLib.isOwnedToken(tokenToValidate), TokenNotActive());
 
-        _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
+        // Approve max before deposit, reset to 1 after (skip for native ETH).
+        if (sourceParams.sourceNativeAmount == 0) {
+            params.inputToken.safeApprove(address(_acrossSpokePool), type(uint256).max);
+        }
 
-        // Always use multicall handler approach for robust pool existence checking
         Instructions memory instructions = _buildMulticallInstructions(params, sourceParams);
         _executeAcrossDeposit(params, sourceParams, instructions);
 
-        _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
+        // Reset approval — no hanging approvals, slot stays warm.
+        if (sourceParams.sourceNativeAmount == 0) {
+            params.inputToken.safeApprove(address(_acrossSpokePool), 1);
+        }
     }
 
     /*
@@ -229,24 +234,5 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         // Write negative VS (shares leaving this chain → reduces effective supply)
         (-burntAmount).updateVirtualSupply();
-    }
-
-    /// @dev Approves or revokes token approval for SpokePool interaction.
-    /// @dev Native ETH: When sourceNativeAmount > 0, ETH is sent via value parameter and WETH address is used as identifier.
-    ///      In this case, skip approval since no ERC20 transfer occurs (only native value transfer).
-    /// @dev ERC20: When sourceNativeAmount == 0, normal ERC20 approval flow (including WETH when used as ERC20).
-    /// @param token The token address to approve (guaranteed non-zero by validateBridgeableTokenPair)
-    /// @param sourceNativeAmount Native ETH amount being sent (0 for ERC20 transfers)
-    function _safeApproveToken(address token, uint256 sourceNativeAmount) private {
-        // Skip approval if sending native ETH with WETH wrapper (no ERC20 transfer)
-        if (sourceNativeAmount > 0) return;
-
-        if (IERC20(token).allowance(address(this), address(_acrossSpokePool)) > 0) {
-            // Reset to 0 first for tokens that require it (like USDT)
-            token.safeApprove(address(_acrossSpokePool), 0);
-        } else {
-            // Approve max amount
-            token.safeApprove(address(_acrossSpokePool), type(uint256).max);
-        }
     }
 }
