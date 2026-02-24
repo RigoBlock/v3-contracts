@@ -7,7 +7,6 @@ import {Constants} from "../../contracts/test/Constants.sol";
 
 import {A0xRouter} from "../../contracts/protocol/extensions/adapters/A0xRouter.sol";
 import {IA0xRouter} from "../../contracts/protocol/extensions/adapters/interfaces/IA0xRouter.sol";
-import {ISettlerActions, IBridgeSettlerActions} from "../../contracts/protocol/extensions/adapters/interfaces/ISettlerActions.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 
 import {ExtensionsMap} from "../../contracts/protocol/deps/ExtensionsMap.sol";
@@ -17,6 +16,7 @@ import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
+import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
@@ -26,34 +26,47 @@ import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IR
 import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
 import {Extensions, DeploymentParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
-/// @notice Minimal interface for the 0x Deployer/Registry
-interface I0xDeployer {
-    function ownerOf(uint256 tokenId) external view returns (address);
-    function prev(uint128 featureId) external view returns (address);
-}
+// Imported from 0x-settler submodule — provides type-safe selectors for action validation.
+import {ISettlerActions} from "0x-settler/src/ISettlerActions.sol";
+import {IBridgeSettlerActions} from "0x-settler/src/bridge/IBridgeSettlerActions.sol";
+import {IAllowanceHolder} from "0x-settler/src/allowanceholder/IAllowanceHolder.sol";
+import {ISettlerTakerSubmitted} from "0x-settler/src/interfaces/ISettlerTakerSubmitted.sol";
+import {ActionInvalid} from "0x-settler/src/core/SettlerErrors.sol";
+import {IDeployer, IERC721View} from "0x-settler/src/deployer/IDeployer.sol";
+import {Feature} from "0x-settler/src/deployer/Feature.sol";
 
 /// @title A0xRouterFork - Fork integration tests for 0x swap aggregator adapter
-/// @notice Validates A0xRouter against real 0x infrastructure on Ethereum mainnet
-/// @dev Tests settler verification, bridge exclusion, approval pattern, and calldata validation
-///  using real AllowanceHolder and Deployer contracts (not mocks).
+/// @notice Validates A0xRouter against real 0x infrastructure on Ethereum mainnet.
+///  All selectors are derived from 0x-settler submodule interfaces — no hardcoded hex values.
+/// @dev Tests settler verification, bridge exclusion, approval pattern, calldata validation,
+///  access control, error propagation, and token management using real AllowanceHolder and
+///  Deployer contracts (not mocks).
+///
+/// UPGRADE RISK: These tests pin to a specific block and 0x-settler commit. If 0x upgrades
+/// their settler contracts (new action selectors, changed dispatch logic), tests may need
+/// updates. In particular, if future settlers add bridge actions to the Taker dispatch chain,
+/// the ActionInvalid assertions in bridge exclusion tests would fail — requiring adapter updates.
 contract A0xRouterForkTest is Test {
     // 0x infrastructure (from Constants.sol)
     address constant ALLOWANCE_HOLDER = Constants.ZERO_EX_ALLOWANCE_HOLDER;
     address constant DEPLOYER = Constants.ZERO_EX_DEPLOYER;
 
     /// @dev Feature ID 2 = Taker Submitted (same-chain swaps).
-    uint128 constant SETTLER_TAKER_FEATURE = 2;
+    ///  Not importable from 0x-settler — magic number in each settler variant's _tokenId() override.
+    ///  See: require(Feature.unwrap(takerSubmittedFeature) == 2) in 0x-settler/script/DeploySafes.s.sol
+    Feature constant TAKER_SUBMITTED_FEATURE = Feature.wrap(2);
 
     /// @dev Feature ID 5 = Bridge (cross-chain, excluded by our adapter).
-    uint128 constant SETTLER_BRIDGE_FEATURE = 5;
+    ///  See: require(Feature.unwrap(bridgeFeature) == 5) in 0x-settler/script/DeploySafes.s.sol
+    Feature constant BRIDGE_FEATURE = Feature.wrap(5);
 
     // Rigoblock infrastructure
     address constant AUTHORITY = Constants.AUTHORITY;
     address constant FACTORY = Constants.FACTORY;
 
-    // Selectors
-    bytes4 constant EXEC_SELECTOR = 0x2213bc0b;
-    bytes4 constant SETTLER_EXECUTE_SELECTOR = 0x1fff991f;
+    // Selectors derived from 0x-settler interfaces — NOT hardcoded hex values.
+    bytes4 constant EXEC_SELECTOR = IAllowanceHolder.exec.selector;
+    bytes4 constant SETTLER_EXECUTE_SELECTOR = ISettlerTakerSubmitted.execute.selector;
 
     uint256 mainnetFork;
     A0xRouter a0xRouter;
@@ -71,7 +84,7 @@ contract A0xRouterForkTest is Test {
         assertTrue(DEPLOYER.code.length > 0, "Deployer not deployed at expected address");
 
         // Get current settler from real Deployer
-        currentSettler = I0xDeployer(DEPLOYER).ownerOf(SETTLER_TAKER_FEATURE);
+        currentSettler = IDeployer(DEPLOYER).ownerOf(Feature.unwrap(TAKER_SUBMITTED_FEATURE));
         assertTrue(currentSettler != address(0), "No settler registered for Feature 2");
         assertTrue(currentSettler.code.length > 0, "Current settler has no bytecode");
         console2.log("Current Feature 2 (Taker) settler:", currentSettler);
@@ -89,7 +102,7 @@ contract A0xRouterForkTest is Test {
 
     /// @notice Verify real Deployer returns a valid settler for Feature 2
     function test_RealDeployer_ReturnsValidTakerSettler() public view {
-        address settler = I0xDeployer(DEPLOYER).ownerOf(SETTLER_TAKER_FEATURE);
+        address settler = IDeployer(DEPLOYER).ownerOf(Feature.unwrap(TAKER_SUBMITTED_FEATURE));
         assertTrue(settler != address(0), "Feature 2 settler should not be zero address");
         assertTrue(settler.code.length > 0, "Feature 2 settler should be a contract");
         console2.log("Feature 2 settler bytecode size:", settler.code.length);
@@ -97,7 +110,7 @@ contract A0xRouterForkTest is Test {
 
     /// @notice Verify previous settler (dwell time support) is accessible
     function test_RealDeployer_PrevSettlerAccessible() public view {
-        address prev = I0xDeployer(DEPLOYER).prev(SETTLER_TAKER_FEATURE);
+        address prev = IDeployer(DEPLOYER).prev(TAKER_SUBMITTED_FEATURE);
         console2.log("Previous Feature 2 settler:", prev);
         // prev may be zero if no previous deployment, or non-zero during dwell time
     }
@@ -129,7 +142,7 @@ contract A0xRouterForkTest is Test {
 
     /// @notice Adapter accepts the previous settler during dwell time
     function test_Adapter_AcceptsPrevSettlerIfAvailable() public {
-        address prevSettler = I0xDeployer(DEPLOYER).prev(SETTLER_TAKER_FEATURE);
+        address prevSettler = IDeployer(DEPLOYER).prev(TAKER_SUBMITTED_FEATURE);
         if (prevSettler == address(0) || prevSettler.code.length == 0) {
             console2.log("No previous settler available at this block, skipping");
             return;
@@ -170,39 +183,26 @@ contract A0xRouterForkTest is Test {
     Layer 2 — Adapter action scanning (_checkNoForbiddenActions):
       The adapter scans the settler's actions array for RFQ selectors and reverts
       with ForbiddenAction if found. RFQ allows arbitrary counterparty at arbitrary
-      price — a phished pool owner or rogue agent could submit an RFQ order that
-      drains the vault. Unlike DEX swaps (which execute at on-chain market price),
-      RFQ settlements have no on-chain price reference. minAmountOut is controlled
-      by the same compromised submitter and provides no protection.
-      Blocked selectors: RFQ (0xd92aadfb), RFQ_VIP (0x604ba49a).
+      price — a phished pool owner or malicious agent could submit it.
+      Blocked selectors: ISettlerActions.RFQ, ISettlerActions.RFQ_VIP.
 
     Layer 3 — Settler action dispatch:
       Feature 2 settlers only recognize ISettlerActions selectors (UNISWAPV3,
-      UNISWAPV2, BASIC, VELODROME, POSITIVE_SLIPPAGE, NATIVE_CHECK, plus chain-
-      specific like UNISWAPV4, BALANCERV3, MAVERICKV2, etc.). Bridge actions from
-      IBridgeSettlerActions (BRIDGE_ERC20_TO_ACROSS, BRIDGE_NATIVE_TO_ACROSS,
-      BRIDGE_ERC20_TO_MAYAN, etc.) are NOT in the Taker settler's _dispatch chain.
-      Unknown selectors cause revert with ActionInvalid.
+      UNISWAPV2, BASIC, VELODROME, etc.). Bridge actions from IBridgeSettlerActions
+      (BRIDGE_ERC20_TO_ACROSS, BRIDGE_NATIVE_TO_ACROSS, etc.) are NOT in the Taker
+      settler's _dispatch chain. Unknown selectors cause revert with ActionInvalid.
+      NOTE: If a future settler version adds bridge actions to the Taker dispatch,
+      these tests would need updating and the adapter would need a new exclusion list.
 
     Layer 4 — Settler slippage check (_checkSlippageAndTransfer):
-      Runs at the end of execute(). Requires the settler to hold >= minAmountOut
-      of buyToken and transfers it all to recipient. If tokens were bridged away,
-      the settler wouldn't hold them, and the check fails (with minAmountOut > 0).
-
-    BASIC action analysis:
-      BASIC can call arbitrary non-restricted addresses. In theory, it could call a
-      bridge protocol (e.g., Across SpokePool). However, Layer 4 prevents this: after
-      BASIC sends tokens to a bridge, the settler has no buyToken balance, and
-      _checkSlippageAndTransfer reverts. Bypassing requires minAmountOut=0, which
-      means a malicious pool owner — same trust model as setting amountOutMin=0 on
-      Uniswap. Additionally, BASIC uses ERC20 approval (not Permit2), so it cannot
-      compose with other settlers' fee/transfer mechanisms.
+      Runs at the end of execute(). Requires settler to hold >= minAmountOut of
+      buyToken. If tokens were bridged away, the settler wouldn't hold them.
     //////////////////////////////////////////////////////////////////////////*/
 
     /// @notice Feature 5 (Bridge) settler is rejected — different address than Feature 2
     function test_BridgeSettler_RejectedByAdapter() public {
         // Try to get the Bridge settler (Feature 5). It may be paused or not exist.
-        try I0xDeployer(DEPLOYER).ownerOf(SETTLER_BRIDGE_FEATURE) returns (address bridgeSettler) {
+        try IDeployer(DEPLOYER).ownerOf(Feature.unwrap(BRIDGE_FEATURE)) returns (address bridgeSettler) {
             console2.log("Feature 5 (Bridge) settler:", bridgeSettler);
 
             // Bridge settler must be a different address from the Taker settler
@@ -225,14 +225,15 @@ contract A0xRouterForkTest is Test {
     }
 
     /// @notice Bridge action selectors embedded in the actions array are rejected by the
-    ///  Feature 2 (Taker) settler. The settler's _dispatch only recognizes ISettlerActions
-    ///  selectors. Bridge actions from IBridgeSettlerActions (which only exist in Feature 5
-    ///  BridgeSettler contracts) are unknown and cause revert with ActionInvalid.
+    ///  Feature 2 (Taker) settler with ActionInvalid. The settler's _dispatch only recognizes
+    ///  ISettlerActions selectors. Bridge actions from IBridgeSettlerActions are unknown.
+    /// @dev UPGRADE RISK: If a future 0x settler version adds bridge actions to the Taker
+    ///  dispatch chain, these assertions would fail. The adapter would then need to add bridge
+    ///  selectors to its forbidden actions list (like RFQ).
     function test_BridgeExclusion_BridgeActionSelectorsRejectedByTakerSettler() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
-        // Known bridge action selectors from IBridgeSettlerActions interface.
-        // These are: bytes4(keccak256("FUNCTION_NAME(param_types)"))
+        // Known bridge action selectors from IBridgeSettlerActions interface (imported from 0x-settler).
         bytes4[4] memory bridgeSelectors = [
             IBridgeSettlerActions.BRIDGE_ERC20_TO_ACROSS.selector,
             IBridgeSettlerActions.BRIDGE_NATIVE_TO_ACROSS.selector,
@@ -242,7 +243,6 @@ contract A0xRouterForkTest is Test {
 
         for (uint256 i = 0; i < bridgeSelectors.length; i++) {
             // Encode a bridge action in the settler's actions array.
-            // Each action entry is: [4-byte selector | ABI-encoded params]
             bytes memory bridgeAction = abi.encodePacked(
                 bridgeSelectors[i],
                 abi.encode(address(0xdead), bytes("fake_deposit_data"))
@@ -267,7 +267,8 @@ contract A0xRouterForkTest is Test {
             ) {
                 revert("Bridge action selector must be rejected by Taker settler");
             } catch (bytes memory returnData) {
-                _assertNotOurValidationError(returnData);
+                // Assert the settler rejects the unknown action with ActionInvalid.
+                _assertIsActionInvalid(returnData);
             }
         }
 
@@ -276,20 +277,14 @@ contract A0xRouterForkTest is Test {
     }
 
     /// @notice Non-Feature-2 settlers are all rejected by the adapter.
-    ///  Feature 2 = Taker Submitted (only accepted type).
-    ///  Feature 4 = Intent, Feature 5 = Bridge — both rejected.
-    ///  Any future feature types also rejected unless they happen to share
-    ///  the same address as the Feature 2 settler (which won't happen per
-    ///  the 0x Deployer's design — each feature has its own settler bytecode).
     function test_BridgeExclusion_NonFeature2SettlersRejected() public {
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
 
         // Test features 1 through 10 (excluding 2 = our accepted feature)
         for (uint128 featureId = 1; featureId <= 10; featureId++) {
-            if (featureId == SETTLER_TAKER_FEATURE) continue; // skip Feature 2
+            if (featureId == Feature.unwrap(TAKER_SUBMITTED_FEATURE)) continue; // skip Feature 2
 
-            try I0xDeployer(DEPLOYER).ownerOf(featureId) returns (address featureSettler) {
-                // Skip if same address as Feature 2 (shouldn't happen) or zero
+            try IDeployer(DEPLOYER).ownerOf(featureId) returns (address featureSettler) {
                 if (featureSettler == address(0) || featureSettler == currentSettler) continue;
 
                 console2.log("Feature", featureId, "settler:", featureSettler);
@@ -300,29 +295,22 @@ contract A0xRouterForkTest is Test {
                     featureSettler, Constants.ETH_USDC, 1000e6, payable(featureSettler), settlerData
                 );
             } catch {
-                // Feature doesn't exist or is paused — inherently excluded
                 console2.log("Feature", featureId, "not available (paused or unregistered)");
             }
         }
     }
 
     /// @notice BASIC action is bounded by the settler's slippage check even though it
-    ///  can call arbitrary non-restricted contracts. If BASIC sent tokens to a bridge
-    ///  protocol, the settler would have no buyToken left, and _checkSlippageAndTransfer
-    ///  would revert (with minAmountOut > 0). This test encodes a BASIC action calling
-    ///  an arbitrary address — the settler's own integrity checks catch it.
+    ///  can call arbitrary non-restricted contracts.
     function test_BridgeExclusion_BasicActionBoundedBySlippageCheck() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
-        bytes4 basicSelector = ISettlerActions.BASIC.selector;
-
         // Encode BASIC action targeting a random address (simulating a bridge protocol)
-        // BASIC(sellToken, bps, pool, offset, data)
         bytes memory basicAction = abi.encodePacked(
-            basicSelector,
+            ISettlerActions.BASIC.selector,
             abi.encode(
                 Constants.ETH_USDC,    // sellToken
-                uint256(10000),        // bps = 100% (10000 = BASIS)
+                uint256(10000),        // bps = 100%
                 address(0xdeadbeef),   // pool target (arbitrary, simulates bridge)
                 uint256(0),            // offset
                 bytes("")              // call data
@@ -355,31 +343,21 @@ contract A0xRouterForkTest is Test {
     /*//////////////////////////////////////////////////////////////////////////
                         RFQ EXCLUSION
 
-    RFQ allows arbitrary counterparty at arbitrary price — unlike DEX swaps
-    (which execute at on-chain market price), RFQ has no on-chain price reference.
-    A rogue maker can sign a Permit2 quote at any price, and a phished pool owner
-    or malicious agent would submit it. Our recipient/buyToken/priceFeed checks
-    do NOT protect against this because minAmountOut is controlled by the same
-    (potentially compromised) submitter.
+    RFQ allows arbitrary counterparty at arbitrary price. The adapter scans the
+    actions array for RFQ selectors and reverts with ForbiddenAction before the
+    call reaches AllowanceHolder/Settler.
 
-    The adapter scans the actions array for RFQ selectors and reverts with
-    ForbiddenAction before the call reaches AllowanceHolder/Settler.
-
-    Blocked actions:
-    - RFQ (0xd92aadfb) — active in SettlerBase._dispatch, immediate risk
-    - RFQ_VIP (0x604ba49a) — currently disabled in settler, blocked defensively
+    Blocked actions (selectors from ISettlerActions):
+    - RFQ — active in SettlerBase._dispatch, immediate risk
+    - RFQ_VIP — currently disabled in settler, blocked defensively
     //////////////////////////////////////////////////////////////////////////*/
 
     /// @notice RFQ action is blocked by the adapter — reverts with ForbiddenAction.
-    ///  This test encodes a valid-looking RFQ action in the actions array and verifies
-    ///  the adapter catches it BEFORE the call reaches AllowanceHolder.
     function test_RFQ_BlockedByAdapter() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
         bytes4 rfqSelector = ISettlerActions.RFQ.selector;
 
-        // Encode an RFQ action. The params don't need to be valid — the adapter
-        // blocks the action selector BEFORE AllowanceHolder processes it.
         bytes memory rfqAction = abi.encodePacked(
             rfqSelector,
             abi.encode(
@@ -407,19 +385,16 @@ contract A0xRouterForkTest is Test {
             bytes32(0)
         );
 
-        // The adapter MUST catch this and revert with ForbiddenAction, not let it through
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ForbiddenAction.selector, rfqSelector));
         IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
         );
 
-        // Pool funds untouched
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
     }
 
-    /// @notice RFQ_VIP action is also blocked (forward security — currently disabled in settler
-    ///  but could be re-enabled in future settler versions).
+    /// @notice RFQ_VIP action is also blocked (forward security).
     function test_RFQ_VIP_BlockedByAdapter() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
@@ -456,7 +431,6 @@ contract A0xRouterForkTest is Test {
     }
 
     /// @notice RFQ embedded as the Nth action (not just first) is also caught.
-    ///  The adapter scans ALL actions, not just the first one.
     function test_RFQ_BlockedEvenAsSecondAction() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
@@ -493,17 +467,11 @@ contract A0xRouterForkTest is Test {
     }
 
     /// @notice Valid DEX actions (not RFQ) pass the adapter's action check.
-    ///  Verifies the action scanner doesn't false-positive on legitimate DEX selectors.
-    ///  The call still fails inside the settler (empty/invalid action params), but the
-    ///  error is NOT ForbiddenAction — it's from the settler's own execution.
     function test_RFQ_DexActionsNotBlocked() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
-        // UNISWAPV3 selector — a legitimate DEX action that must NOT be blocked
-        bytes4 uniV3Selector = ISettlerActions.UNISWAPV3.selector;
-
         bytes memory uniAction = abi.encodePacked(
-            uniV3Selector,
+            ISettlerActions.UNISWAPV3.selector,
             abi.encode(pool, uint256(10000), bytes("fake_path"), uint256(1e15))
         );
 
@@ -543,7 +511,6 @@ contract A0xRouterForkTest is Test {
 
     /// @notice Unsupported function selector is rejected
     function test_CalldataValidation_UnsupportedSelector() public {
-        // Construct calldata with a wrong selector
         bytes memory wrongData = abi.encodeWithSelector(
             bytes4(0xdeadbeef), pool, Constants.ETH_WETH, uint256(1e18),
             new bytes[](0), bytes32(0)
@@ -563,24 +530,120 @@ contract A0xRouterForkTest is Test {
         IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), shortData);
     }
 
+    /// @notice buyToken without a registered price feed is rejected (migrated from HH tests)
+    function test_CalldataValidation_BuyTokenNoPriceFeed() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        // Use an address that definitely has no price feed registered
+        address noPriceFeedToken = makeAddr("noPriceFeedToken");
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, noPriceFeedToken, 1e18);
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, noPriceFeedToken));
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                            ACCESS CONTROL (migrated from HH tests)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Non-owner cannot call exec
+    function test_AccessControl_NonOwnerReverts() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
+
+        address notOwner = makeAddr("notOwner");
+        vm.prank(notOwner);
+        vm.expectRevert();
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
+    /// @notice Direct call to adapter reverts (must use delegatecall via pool)
+    function test_DirectCall_Reverts() public {
+        bytes memory settlerData = _encodeSettlerExecute(address(a0xRouter), Constants.ETH_WETH, 1e18);
+
+        vm.expectRevert(IA0xRouter.DirectCallNotAllowed.selector);
+        a0xRouter.exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                        FEATURE PAUSED (migrated from HH tests)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Adapter reverts when the Deployer feature is paused.
+    ///  Uses vm.mockCallRevert to simulate ownerOf reverting (paused feature behavior).
+    function test_FeaturePaused_RevertsOnOwnerOf() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
+
+        // Mock ownerOf to revert (simulates paused feature)
+        vm.mockCallRevert(
+            DEPLOYER,
+            abi.encodeWithSelector(IERC721View.ownerOf.selector, Feature.unwrap(TAKER_SUBMITTED_FEATURE)),
+            "paused"
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert();
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                        ERROR PROPAGATION (migrated from HH tests)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice AllowanceHolder revert with reason string is propagated.
+    function test_ErrorPropagation_RevertWithReasonString() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
+
+        // Mock AllowanceHolder.exec to revert with a reason string
+        vm.mockCallRevert(
+            ALLOWANCE_HOLDER,
+            abi.encodeWithSelector(EXEC_SELECTOR),
+            abi.encodeWithSignature("Error(string)", "MockRevertReason")
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert("MockRevertReason");
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
+    /// @notice AllowanceHolder revert without reason is propagated as raw bytes.
+    function test_ErrorPropagation_RevertWithoutReason() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
+
+        // Mock AllowanceHolder.exec to revert without reason (empty revert)
+        vm.mockCallRevert(
+            ALLOWANCE_HOLDER,
+            abi.encodeWithSelector(EXEC_SELECTOR),
+            ""
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert();
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
                             APPROVAL PATTERN
     //////////////////////////////////////////////////////////////////////////*/
 
     /// @notice ERC20 approval to AllowanceHolder is 0 before exec and unwound on revert
-    /// @dev AllowanceHolder does NOT use Permit2. It consumes standard ERC20 allowance.
-    ///  Adapter approves exact amount before exec and resets to 1 after success.
-    ///  On revert, the EVM unwinds the approval automatically (back to pre-call state).
     function test_ApprovalPattern_ZeroBeforeAndUnwoundOnRevert() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
-        // Before: no approval
         uint256 allowanceBefore = IERC20(Constants.ETH_USDC).allowance(pool, ALLOWANCE_HOLDER);
         assertEq(allowanceBefore, 0, "Should start with 0 allowance");
 
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
 
-        // Exec will fail inside AllowanceHolder/Settler (revert unwinds the approval too)
         vm.prank(poolOwner);
         try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData) {
             revert("Call should revert inside settler (empty actions)");
@@ -588,7 +651,6 @@ contract A0xRouterForkTest is Test {
             _assertNotOurValidationError(returnData);
         }
 
-        // After reverted exec: approval should still be 0 (revert unwinds state)
         uint256 allowanceAfter = IERC20(Constants.ETH_USDC).allowance(pool, ALLOWANCE_HOLDER);
         assertEq(allowanceAfter, 0, "Allowance should be 0 after reverted exec");
     }
@@ -602,13 +664,11 @@ contract A0xRouterForkTest is Test {
         );
     }
 
-    /// @notice Per-call approval pattern: exact amount approved, reset to 1 on success, unwound on revert
-    /// @dev Verifies approval is unwound on revert (back to 0 since it was 0 before)
+    /// @notice Per-call approval pattern: exact amount approved, unwound on revert
     function test_ApprovalPattern_ExactAmountApprovedAndUnwound() public {
         uint256 sellAmount = 1000e6;
         deal(Constants.ETH_USDC, pool, sellAmount * 2);
 
-        // Fresh pool has 0 allowance
         assertEq(IERC20(Constants.ETH_USDC).allowance(pool, ALLOWANCE_HOLDER), 0);
 
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
@@ -624,13 +684,10 @@ contract A0xRouterForkTest is Test {
 
     /// @notice USDT approval pattern works with safeApprove (force reset then approve)
     function test_ApprovalPattern_WorksWithUSDT() public {
-        // USDT has special approval behavior: reverts if allowance > 0 and setting non-zero
-        // safeApprove handles this by force-resetting to 0 first
         deal(Constants.ETH_USDT, pool, 10000e6);
 
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
 
-        // Should not revert with USDT approval issues
         vm.prank(poolOwner);
         try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDT, 1000e6, payable(currentSettler), settlerData) {
             revert("Call should revert inside settler (empty actions)");
@@ -638,7 +695,6 @@ contract A0xRouterForkTest is Test {
             _assertNotOurValidationError(returnData);
         }
 
-        // Allowance should be 0 (revert unwound state)
         assertEq(IERC20(Constants.ETH_USDT).allowance(pool, ALLOWANCE_HOLDER), 0);
     }
 
@@ -646,18 +702,15 @@ contract A0xRouterForkTest is Test {
                     SWAP SIMULATION TESTS (TOKEN FLOWS)
     //////////////////////////////////////////////////////////////////////////*/
 
-    /// @notice Token→Token swap simulation: verify adapter validates, approves, and calls AllowanceHolder
-    /// @dev Tests USDC→WETH swap path. The actual swap fails inside Settler due to
-    ///  empty actions, but we verify: (1) settler validation passes, (2) approval is set,
-    ///  (3) the error is from AllowanceHolder/Settler internals not from our validation.
+    /// @notice Token->Token swap simulation: verify adapter validates and calls AllowanceHolder
     function test_SwapSimulation_TokenToToken_PassesValidation() public {
-        uint256 sellAmount = 5000e6; // 5000 USDC
+        uint256 sellAmount = 5000e6;
         deal(Constants.ETH_USDC, pool, sellAmount);
 
         bytes memory settlerData = _encodeSettlerExecute(
             pool,
-            Constants.ETH_WETH, // buyToken = WETH (has price feed as wrappedNative)
-            1e15 // minAmountOut: 0.001 WETH
+            Constants.ETH_WETH,
+            1e15
         );
 
         vm.prank(poolOwner);
@@ -669,26 +722,20 @@ contract A0xRouterForkTest is Test {
             _assertNotOurValidationError(returnData);
         }
 
-        // Pool USDC balance unchanged (revert unwound everything)
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), sellAmount, "Pool USDC unchanged after revert");
     }
 
-    /// @notice ETH→Token swap simulation: pool sends its own ETH, NOT msg.value
-    /// @dev Tests selling ETH for USDC. Token param is address(0) for native ETH.
-    ///  The adapter derives value = amount from the token/amount params and forwards
-    ///  from the pool's balance. The caller does NOT send ETH (no msg.value).
+    /// @notice ETH->Token swap simulation: pool sends its own ETH, NOT msg.value
     function test_SwapSimulation_ETHToToken_UsesPoolBalance() public {
-        // Fund pool with ETH
         deal(pool, 10 ether);
         uint256 poolBalanceBefore = pool.balance;
 
         bytes memory settlerData = _encodeSettlerExecute(
             pool,
-            Constants.ETH_USDC, // buyToken = USDC
-            1e6 // minAmountOut: 1 USDC
+            Constants.ETH_USDC,
+            1e6
         );
 
-        // Caller does NOT send any ETH — the pool uses its own balance
         vm.prank(poolOwner);
         try IA0xRouter(pool).exec(
             currentSettler, address(0), 1 ether, payable(currentSettler), settlerData
@@ -698,21 +745,18 @@ contract A0xRouterForkTest is Test {
             _assertNotOurValidationError(returnData);
         }
 
-        // Pool balance unchanged (revert unwound the ETH transfer too)
         assertEq(pool.balance, poolBalanceBefore, "Pool ETH unchanged after revert");
     }
 
-    /// @notice Token→ETH swap simulation: sell USDC for native ETH
-    /// @dev buyToken in slippage struct is WETH (wrappedNative), which has price feed.
-    ///  Settler would unwrap WETH to ETH and send to pool.
+    /// @notice Token->ETH swap simulation: sell USDC for native ETH
     function test_SwapSimulation_TokenToETH_PassesValidation() public {
         uint256 sellAmount = 5000e6;
         deal(Constants.ETH_USDC, pool, sellAmount);
 
         bytes memory settlerData = _encodeSettlerExecute(
             pool,
-            Constants.ETH_WETH, // buyToken = WETH (serves as ETH proxy in 0x)
-            1e15 // minAmountOut
+            Constants.ETH_WETH,
+            1e15
         );
 
         vm.prank(poolOwner);
@@ -725,7 +769,7 @@ contract A0xRouterForkTest is Test {
         }
     }
 
-    /// @notice USDT→WETH swap simulation: tests USDT special approval handling
+    /// @notice USDT->WETH swap simulation: tests USDT special approval handling
     function test_SwapSimulation_USDTToWETH_PassesValidation() public {
         uint256 sellAmount = 5000e6;
         deal(Constants.ETH_USDT, pool, sellAmount);
@@ -745,25 +789,54 @@ contract A0xRouterForkTest is Test {
             _assertNotOurValidationError(returnData);
         }
 
-        // Allowance is 0 after revert
         assertEq(IERC20(Constants.ETH_USDT).allowance(pool, ALLOWANCE_HOLDER), 0);
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                        TOKEN MANAGEMENT (migrated from HH tests)
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice buyToken is added to pool's active tokens set.
+    ///  This test verifies a successful exec path adds buyToken. We use vm.mockCall to make
+    ///  AllowanceHolder.exec return success (simulating a complete swap), then verify the
+    ///  allowance is reset to 1 and the token management code path was reached.
+    function test_TokenManagement_BuyTokenAddedAndApprovalResetOnSuccess() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
+
+        // Mock AllowanceHolder.exec to return success (simulates completed swap)
+        vm.mockCall(
+            ALLOWANCE_HOLDER,
+            abi.encodeWithSelector(EXEC_SELECTOR),
+            abi.encode(bytes(""))
+        );
+
+        vm.prank(poolOwner);
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+
+        // After successful exec, allowance should be 1 (gas optimization: keep storage slot warm)
+        uint256 allowanceAfter = IERC20(Constants.ETH_USDC).allowance(pool, ALLOWANCE_HOLDER);
+        assertEq(allowanceAfter, 1, "Allowance should be 1 after successful exec");
     }
 
     /*//////////////////////////////////////////////////////////////////////////
                             ADAPTER PROPERTIES
     //////////////////////////////////////////////////////////////////////////*/
 
-    /// @notice Direct call to adapter reverts (must use delegatecall via pool)
-    function test_DirectCall_Reverts() public {
-        bytes memory settlerData = _encodeSettlerExecute(address(a0xRouter), Constants.ETH_WETH, 1e18);
-
-        vm.expectRevert(IA0xRouter.DirectCallNotAllowed.selector);
-        a0xRouter.exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
-    }
-
     /// @notice Required version returns expected value
     function test_RequiredVersion() public view {
         assertEq(a0xRouter.requiredVersion(), "4.0.0");
+    }
+
+    /// @notice Verify selectors match expected values (sanity check for imports)
+    function test_SelectorsSanityCheck() public pure {
+        // AllowanceHolder.exec(address,address,uint256,address,bytes)
+        assertEq(EXEC_SELECTOR, bytes4(0x2213bc0b), "EXEC_SELECTOR mismatch");
+        // Settler.execute((address,address,uint256),bytes[],bytes32)
+        assertEq(ISettlerTakerSubmitted.execute.selector, bytes4(0x1fff991f), "ISettlerTakerSubmitted.execute.selector mismatch");
+        // ActionInvalid(uint256,bytes4,bytes)
+        assertEq(ActionInvalid.selector, bytes4(0x3c74eed6), "ActionInvalid selector mismatch");
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -787,8 +860,19 @@ contract A0xRouterForkTest is Test {
         );
     }
 
+    /// @dev Asserts the revert error IS ActionInvalid from the settler.
+    ///  UPGRADE RISK: If a future 0x settler version changes this error or adds bridge
+    ///  actions to the Taker dispatch chain, this assertion will fail.
+    function _assertIsActionInvalid(bytes memory returnData) internal pure {
+        assertTrue(returnData.length >= 4, "Return data too short for error selector");
+        bytes4 errorSelector;
+        assembly {
+            errorSelector := mload(add(returnData, 32))
+        }
+        assertEq(errorSelector, ActionInvalid.selector, "Expected ActionInvalid from settler");
+    }
+
     /// @dev Asserts the revert error is NOT from our validation layer (A0xRouter custom errors).
-    ///  If the error came from our validation, the test should have caught it earlier.
     function _assertNotOurValidationError(bytes memory returnData) internal pure {
         if (returnData.length >= 4) {
             bytes4 errorSelector;

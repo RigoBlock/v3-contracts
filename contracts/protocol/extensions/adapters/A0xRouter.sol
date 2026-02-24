@@ -19,23 +19,8 @@ import {IA0xRouter} from "./interfaces/IA0xRouter.sol";
 import {ISettlerActions} from "0x-settler/src/ISettlerActions.sol";
 import {IAllowanceHolder} from "0x-settler/src/allowanceholder/IAllowanceHolder.sol";
 import {ISettlerTakerSubmitted} from "0x-settler/src/interfaces/ISettlerTakerSubmitted.sol";
-
-/// @notice Minimal interface for the 0x Deployer/Registry (ERC721-compatible).
-/// @dev We use a minimal local interface instead of importing the full IDeployer from 0x-settler
-///  because the full interface pulls in many transitive dependencies (Feature, Nonce, IOwnable,
-///  IERC1967Proxy, etc.). We only need ownerOf and prev for settler verification.
-///  UPGRADE RISK: If 0x changes the Deployer API (unlikely — it's an ERC721), this interface
-///  must be updated to match. The deployer address (0x00000000000004533Fe15556B1E086BB1A72cEae)
-///  is the same on all chains.
-interface I0xDeployer {
-    /// @notice Returns the current Settler address for a given feature.
-    /// @dev Reverts if feature is paused.
-    function ownerOf(uint256 tokenId) external view returns (address);
-
-    /// @notice Returns the previous Settler address for a given feature.
-    /// @dev Used during API dwell time when the current instance differs from what the API returns.
-    function prev(uint128 featureId) external view returns (address);
-}
+import {IDeployer} from "0x-settler/src/deployer/IDeployer.sol";
+import {Feature} from "0x-settler/src/deployer/Feature.sol";
 
 /// @title A0xRouter - Allows smart pool swaps via the 0x swap aggregator.
 /// @notice This adapter validates and forwards swap calls from the 0x API through AllowanceHolder to Settler.
@@ -54,24 +39,21 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
 
     address private immutable _adapter;
     IAllowanceHolder private immutable _allowanceHolder;
-    I0xDeployer private immutable _deployer;
+    IDeployer private immutable _deployer;
 
     /// @dev Feature ID 2 = Taker Submitted Settler (standard user-submitted swap flow).
     ///  The deployer uses ERC721 tokenIds to identify features. Feature 2 = same-chain swap settler.
     ///  This is NOT importable from 0x-settler — it's a magic number assigned in each settler variant's
     ///  _tokenId() override (e.g., Settler.sol returns 2, BridgeSettler.sol returns 5).
-    uint128 private constant _SETTLER_TAKER_FEATURE = 2;
-
-    /// @dev Derived from ISettlerTakerSubmitted.execute — the only allowed settler entry point.
-    ///  execute((address,address,uint256),bytes[],bytes32) = 0x1fff991f
-    bytes4 private constant _SETTLER_EXECUTE_SELECTOR = ISettlerTakerSubmitted.execute.selector;
+    ///  See: require(Feature.unwrap(takerSubmittedFeature) == 2) in 0x-settler/script/DeploySafes.s.sol
+    Feature private constant _TAKER_SUBMITTED_FEATURE = Feature.wrap(2);
 
     /// @param allowanceHolder The 0x AllowanceHolder contract address (chain-specific, immutable).
     /// @param deployer The 0x Deployer/Registry contract address (same on all chains).
     constructor(address allowanceHolder, address deployer) {
         _adapter = address(this);
         _allowanceHolder = IAllowanceHolder(allowanceHolder);
-        _deployer = I0xDeployer(deployer);
+        _deployer = IDeployer(deployer);
     }
 
     modifier onlyDelegateCall() {
@@ -145,12 +127,12 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     ///  Reverts if the feature is paused (ownerOf reverts) or if target doesn't match current or previous.
     function _requireGenuineSettler(address target) private view {
         // ownerOf reverts if the feature is paused, which is the desired behavior.
-        if (_deployer.ownerOf(_SETTLER_TAKER_FEATURE) == target) {
+        if (_deployer.ownerOf(Feature.unwrap(_TAKER_SUBMITTED_FEATURE)) == target) {
             return;
         }
 
         // Fallback: check previous instance (handles 0x API dwell time between deployments).
-        if (_deployer.prev(_SETTLER_TAKER_FEATURE) == target) {
+        if (_deployer.prev(_TAKER_SUBMITTED_FEATURE) == target) {
             return;
         }
 
@@ -171,7 +153,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         bytes4 selector = bytes4(abi.decode(data[:32], (bytes32)));
 
         // Only allow Settler.execute — not executeWithPermit or executeMetaTxn.
-        require(selector == _SETTLER_EXECUTE_SELECTOR, UnsupportedSettlerFunction());
+        require(selector == ISettlerTakerSubmitted.execute.selector, UnsupportedSettlerFunction());
 
         // Decode AllowedSlippage tuple fields using type-safe abi.decode.
         (address recipient, address buyToken,) = abi.decode(data[4:100], (address, address, uint256));
