@@ -478,7 +478,7 @@ describe("A0xRouter", async () => {
       ).to.be.reverted;
     });
 
-    it("should set persistent max approval to AllowanceHolder (one-time)", async () => {
+    it("should approve exact amount before exec and reset to 0 after (per-call)", async () => {
       const { pool, mockAllowanceHolder, mockSettler, sellToken, buyToken, oracle } = await setupTests();
 
       const sellAmount = ethers.utils.parseEther("100");
@@ -509,9 +509,9 @@ describe("A0xRouter", async () => {
 
       await user1.sendTransaction({ to: pool.address, value: 0, data: execData });
 
-      // After exec, allowance should be max uint256 (persistent, like Permit2 approval)
+      // After exec, allowance should be 0 (per-call approve/reset, no persistent allowance)
       const allowanceAfter = await sellToken.allowance(pool.address, mockAllowanceHolder.address);
-      expect(allowanceAfter).to.equal(ethers.constants.MaxUint256);
+      expect(allowanceAfter).to.equal(0);
     });
 
     it("should add buyToken to active tokens", async () => {

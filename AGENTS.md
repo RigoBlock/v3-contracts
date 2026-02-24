@@ -162,6 +162,46 @@ int256 baseAmount = IEOracle(address(this)).convertTokenAmount(
 
 ## Adding New Components
 
+### Token Approval Patterns for External Protocol Integrations
+
+**CRITICAL**: The approval pattern MUST match the target protocol's scoping mechanism.
+Verify the target's token flow before writing approval code.
+
+**Pattern 1 — Target uses Permit2** (e.g., Uniswap via AUniswapRouter):
+```solidity
+// Layer 1: One-time persistent ERC20 → Permit2 (checked with threshold)
+if (IERC20(token).allowance(address(this), address(_permit2)) < type(uint96).max) {
+    token.safeApprove(address(_permit2), type(uint256).max);
+}
+// Layer 2: Per-call Permit2.approve with block-scoped expiration
+_permit2.approve(token, target, type(uint160).max, 0); // expiration=0 → current block only
+```
+
+**Pattern 2 — Target does NOT use Permit2** (e.g., 0x AllowanceHolder via A0xRouter):
+```solidity
+// Per-call: approve exact amount before call, reset to 0 after success
+token.safeApprove(address(target), amount);
+
+try target.exec{value: msg.value}(...) returns (bytes memory result) {
+    token.safeApprove(address(target), 0); // reset (defense-in-depth)
+    return result;
+} catch { ... } // revert unwinds the approval automatically
+```
+
+**How to determine which pattern to use:**
+1. Read the target protocol's docs for their token transfer mechanism
+2. If target supports Permit2 → Pattern 1 (persistent ERC20 + per-call Permit2.approve)
+3. If target uses standard ERC20 transferFrom → Pattern 2 (per-call approve + reset)
+4. ALWAYS use `safeApprove` for USDT compatibility (force-reset then approve)
+5. For native ETH: forward via `{value: msg.value}` — no ERC20 approval needed
+
+**Testing requirements for new integrations:**
+- Test all swap directions: ETH→Token, Token→ETH, Token→Token
+- Test with USDT (special approval behavior)
+- Test on fork with real deployed contracts (not just mocks)
+- Verify allowance is 0 before AND after each call (for Pattern 2)
+- Verify revert unwinds approval state correctly
+
 ### New Adapter
 1. Create `contracts/protocol/extensions/adapters/YourAdapter.sol`
 2. Create interface in `adapters/interfaces/IYourAdapter.sol`
@@ -442,3 +482,8 @@ When making changes:
     - Storage slots: Define in the library (e.g., VirtualStorageLib.VIRTUAL_SUPPLY_SLOT) and reference from there
     - Chain-specific addresses: Define in libraries (e.g., CrosschainLib) or shared types, not in multiple contracts
     - If a value must be duplicated for technical reasons (e.g., immutable in constructor), document clearly which is the source of truth
+14. **WRONG APPROVAL PATTERN FOR EXTERNAL PROTOCOLS** - Before writing approval code, verify whether the target protocol uses Permit2 or standard ERC20 transferFrom:
+    - If target uses Permit2 → persistent ERC20 approval + per-call Permit2.approve (Pattern 1)
+    - If target uses standard ERC20 → per-call approve exact amount + reset to 0 (Pattern 2)
+    - NEVER assume both patterns are interchangeable. Read the protocol's docs first.
+    - See "Token Approval Patterns" section in "Adding New Components" for full details and code samples.

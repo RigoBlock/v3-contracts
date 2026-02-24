@@ -211,15 +211,19 @@ function requireGenuineSettler(uint128 featureId, address allegedSettler) {
 - **How it works**: Before each exec call, the adapter approves the exact sellToken `amount`
   to AllowanceHolder. After successful execution, any remaining approval is reset to 0.
   On failure, the entire transaction reverts, unwinding the approval automatically.
-- **Why not persistent max approval?** Settler instances upgrade frequently (new versions
-  deployed regularly). Although AllowanceHolder already provides ephemeral sub-allowances
-  (cleared after each exec call), we limit the ERC20 approval window as defense-in-depth
-  against potential vulnerabilities in future Settler versions.
-- **Comparison with AUniswapRouter**: AUniswapRouter uses a similar two-layer pattern:
-  persistent ERC20 approval to Permit2, then per-block Permit2 approval (expiration=0)
-  to the router. A0xRouter uses: per-call ERC20 approval to AllowanceHolder, plus
-  AllowanceHolder's built-in ephemeral allowance (per-call, auto-cleared). Both patterns
-  limit the window of exposure beyond the base ERC20 approval.
+- **AllowanceHolder does NOT use Permit2**: They are completely separate pathways in the
+  0x architecture (see [0x-settler README](https://github.com/0xProject/0x-settler)).
+  AllowanceHolder consumes standard ERC20 allowance via `token.transferFrom(pool, settler, amount)`.
+  Since there is no second scoping layer (unlike Permit2), we approve per-call and reset.
+- **Why not persistent max approval?** Without a second scoping mechanism like Permit2's
+  block-scoped approval (expiration=0), a persistent max ERC20 approval to AllowanceHolder
+  would leave the pool exposed if AllowanceHolder ever had a vulnerability.
+- **Comparison with AUniswapRouter**: AUniswapRouter uses Permit2 (two-layer pattern):
+  persistent ERC20 approval to Permit2, then per-block Permit2.approve (expiration=0)
+  to the router. A0xRouter cannot use this pattern because AllowanceHolder is not Permit2.
+  Instead: per-call ERC20 `safeApprove(amount)` → exec → `safeApprove(0)` reset.
+- **USDT safety**: `safeApprove` handles USDT-style tokens that revert if setting non-zero
+  allowance from non-zero (force reset to 0 first, then approve).
 
 ## Supported 0x Actions (Non-exhaustive)
 

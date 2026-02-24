@@ -2,7 +2,6 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
-import {IERC20} from "../../interfaces/IERC20.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
@@ -91,17 +90,25 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         // 2. Decode the Settler calldata to extract and validate AllowedSlippage parameters.
         _validateSettlerCalldata(data);
 
-        // 3. Approve sellToken to AllowanceHolder (one-time persistent, same pattern as Permit2).
-        //    AllowanceHolder provides per-call security via ephemeral sub-allowances that are
-        //    auto-cleared after exec() for contract callers, analogous to Permit2's block-scoped approval.
+        // 3. Approve exact sellToken amount to AllowanceHolder for this call only.
+        //    AllowanceHolder does NOT use Permit2 — it consumes standard ERC20 allowance via
+        //    token.transferFrom(pool, settler, amount) inside exec(). Since there is no second
+        //    scoping layer (unlike Permit2), we approve per-call and reset to 0 after success.
+        //    safeApprove handles USDT-style tokens (force reset then approve).
         if (!token.isAddressZero()) {
-            _safeApproveToken(token);
+            token.safeApprove(address(_allowanceHolder), amount);
         }
 
         // 4. Forward the call to AllowanceHolder with unmodified parameters.
         try _allowanceHolder.exec{value: msg.value}(operator, token, amount, target, data) returns (
             bytes memory result
         ) {
+            // 5. Reset approval to 0 after successful exec (defense-in-depth).
+            //    AllowanceHolder.transferFrom consumes the ERC20 allowance, so it should already
+            //    be 0 or near-0 after a full fill. Reset handles any partial consumption.
+            if (!token.isAddressZero()) {
+                token.safeApprove(address(_allowanceHolder), 0);
+            }
             return result;
         } catch Error(string memory reason) {
             revert(reason);
@@ -168,16 +175,5 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     function _assertTokenOutHasPriceFeed(address buyToken) private {
         AddressSet storage values = StorageLib.activeTokensSet();
         values.addUnique(IEOracle(address(this)), buyToken, StorageLib.pool().baseToken);
-    }
-
-    /// @dev Sets max ERC20 approval to AllowanceHolder if not already set (one-time persistent).
-    ///  Same pattern as AUniswapRouter's ERC20→Permit2 persistent approval.
-    ///  AllowanceHolder provides the per-call scoping layer via ephemeral sub-allowances
-    ///  (auto-cleared for contract callers after exec), analogous to Permit2.approve with expiration=0.
-    ///  Uses safeApprove which handles USDT-style tokens (force reset then approve).
-    function _safeApproveToken(address token) private {
-        if (IERC20(token).allowance(address(this), address(_allowanceHolder)) < type(uint96).max) {
-            token.safeApprove(address(_allowanceHolder), type(uint256).max);
-        }
     }
 }
