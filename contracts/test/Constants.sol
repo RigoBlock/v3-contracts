@@ -74,6 +74,16 @@ library Constants {
     address internal constant TEST_POOL = 0xEfa4bDf566aE50537A507863612638680420645C;
 
     /*//////////////////////////////////////////////////////////////
+                        0x SWAP AGGREGATOR
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice 0x AllowanceHolder (Cancun version, same on all supported chains)
+    address internal constant ZERO_EX_ALLOWANCE_HOLDER = 0x0000000000001fF3684f28c67538d4D072C22734;
+
+    /// @notice 0x Deployer/Registry (same on all chains)
+    address internal constant ZERO_EX_DEPLOYER = 0x00000000000004533Fe15556B1E086BB1A72cEae;
+
+    /*//////////////////////////////////////////////////////////////
                             ACROSS SPOKE POOLS
     //////////////////////////////////////////////////////////////*/
 
