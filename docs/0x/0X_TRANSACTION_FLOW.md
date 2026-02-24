@@ -211,7 +211,8 @@ function requireGenuineSettler(uint128 featureId, address allegedSettler) {
 
 ### Approval Pattern (Per-Call Approve/Reset)
 - **How it works**: Before each exec call, the adapter approves the exact sellToken `amount`
-  to AllowanceHolder. After successful execution, any remaining approval is reset to 0.
+  to AllowanceHolder. After successful execution, any remaining approval is reset to 1
+  (keeps storage slot warm — saves 15000 gas on next swap vs resetting to 0).
   On failure, the entire transaction reverts, unwinding the approval automatically.
 - **AllowanceHolder does NOT use Permit2**: They are completely separate pathways in the
   0x architecture (see [0x-settler README](https://github.com/0xProject/0x-settler)).
@@ -223,7 +224,7 @@ function requireGenuineSettler(uint128 featureId, address allegedSettler) {
 - **Comparison with AUniswapRouter**: AUniswapRouter uses Permit2 (two-layer pattern):
   persistent ERC20 approval to Permit2, then per-block Permit2.approve (expiration=0)
   to the router. A0xRouter cannot use this pattern because AllowanceHolder is not Permit2.
-  Instead: per-call ERC20 `safeApprove(amount)` → exec → `safeApprove(0)` reset.
+  Instead: per-call ERC20 `safeApprove(amount)` → exec → `safeApprove(1)` reset.
 - **USDT safety**: `safeApprove` handles USDT-style tokens that revert if setting non-zero
   allowance from non-zero (force reset to 0 first, then approve).
 
@@ -252,7 +253,8 @@ function requireGenuineSettler(uint128 featureId, address allegedSettler) {
 
 3. **AllowanceHolder approval** — The pool approves the exact sell amount to AllowanceHolder
    for each call (not a persistent max approval). After successful execution, any remaining
-   approval is reset to 0. On failure, the revert unwinds the approval automatically.
+   approval is reset to 1 (keeps storage warm for gas savings). On failure, the revert
+   unwinds the approval automatically.
 
 4. **Operator == Target** — In normal operation, the operator parameter equals the target (both are the Settler). If they differ, the swap will fail at AllowanceHolder.transferFrom.
 

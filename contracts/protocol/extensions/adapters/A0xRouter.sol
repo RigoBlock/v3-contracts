@@ -10,18 +10,23 @@ import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {IA0xRouter} from "./interfaces/IA0xRouter.sol";
 
-/// @notice Minimal interface for the 0x AllowanceHolder contract.
-interface IAllowanceHolder {
-    function exec(
-        address operator,
-        address token,
-        uint256 amount,
-        address payable target,
-        bytes calldata data
-    ) external payable returns (bytes memory result);
-}
+// Imported from 0x-settler submodule — action selectors used for RFQ exclusion.
+// UPGRADE RISK: If 0x upgrades their settler contracts or changes action selectors,
+// the adapter must be redeployed with updated imports. The adapter follows the deployer-
+// returned settler instances, so a new settler deployment with changed action signatures
+// would cause the forbidden action check to scan for stale selectors. Monitor 0x-settler
+// releases for breaking changes.
+import {ISettlerActions} from "0x-settler/src/ISettlerActions.sol";
+import {IAllowanceHolder} from "0x-settler/src/allowanceholder/IAllowanceHolder.sol";
+import {ISettlerTakerSubmitted} from "0x-settler/src/interfaces/ISettlerTakerSubmitted.sol";
 
 /// @notice Minimal interface for the 0x Deployer/Registry (ERC721-compatible).
+/// @dev We use a minimal local interface instead of importing the full IDeployer from 0x-settler
+///  because the full interface pulls in many transitive dependencies (Feature, Nonce, IOwnable,
+///  IERC1967Proxy, etc.). We only need ownerOf and prev for settler verification.
+///  UPGRADE RISK: If 0x changes the Deployer API (unlikely — it's an ERC721), this interface
+///  must be updated to match. The deployer address (0x00000000000004533Fe15556B1E086BB1A72cEae)
+///  is the same on all chains.
 interface I0xDeployer {
     /// @notice Returns the current Settler address for a given feature.
     /// @dev Reverts if feature is paused.
@@ -52,10 +57,14 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     I0xDeployer private immutable _deployer;
 
     /// @dev Feature ID 2 = Taker Submitted Settler (standard user-submitted swap flow).
+    ///  The deployer uses ERC721 tokenIds to identify features. Feature 2 = same-chain swap settler.
+    ///  This is NOT importable from 0x-settler — it's a magic number assigned in each settler variant's
+    ///  _tokenId() override (e.g., Settler.sol returns 2, BridgeSettler.sol returns 5).
     uint128 private constant _SETTLER_TAKER_FEATURE = 2;
 
-    /// @dev Selector for Settler.execute((address,address,uint256),bytes[],bytes32).
-    bytes4 private constant _SETTLER_EXECUTE_SELECTOR = 0x1fff991f;
+    /// @dev Derived from ISettlerTakerSubmitted.execute — the only allowed settler entry point.
+    ///  execute((address,address,uint256),bytes[],bytes32) = 0x1fff991f
+    bytes4 private constant _SETTLER_EXECUTE_SELECTOR = ISettlerTakerSubmitted.execute.selector;
 
     /// @param allowanceHolder The 0x AllowanceHolder contract address (chain-specific, immutable).
     /// @param deployer The 0x Deployer/Registry contract address (same on all chains).
@@ -151,37 +160,62 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     /// @dev Decodes and validates the Settler.execute calldata embedded in the AllowanceHolder `data` parameter.
     ///  Ensures: (1) correct function selector, (2) recipient is the pool, (3) buyToken has a price feed.
     function _validateSettlerCalldata(bytes calldata data) private {
-        // Minimum length: 4 (selector) + 32 (recipient) + 32 (buyToken) + 32 (minAmountOut) = 100 bytes
-        require(data.length >= 100, InvalidSettlerCalldata());
-
-        bytes4 selector;
-        address recipient;
-        address buyToken;
+        // Minimum length: 4 (selector) + 32×3 (static tuple) + 32 (bytes[] offset) + 32 (bytes32) = 164 bytes
+        require(data.length >= 164, InvalidSettlerCalldata());
 
         // data layout for execute((address,address,uint256),bytes[],bytes32):
-        //   [0:4]   selector
-        //   [4:36]  slippage.recipient (static tuple member 1)
-        //   [36:68] slippage.buyToken  (static tuple member 2)
-        //   [68:100] slippage.minAmountOut (static tuple member 3)
-        assembly ("memory-safe") {
-            selector := calldataload(data.offset)
-            recipient := calldataload(add(data.offset, 4))
-            buyToken := calldataload(add(data.offset, 36))
-        }
+        //   [0:4]   selector (packed, not ABI-padded)
+        //   [4:36]  slippage.recipient
+        //   [36:68] slippage.buyToken
+        //   [68:100] slippage.minAmountOut
+        bytes4 selector = bytes4(abi.decode(data[:32], (bytes32)));
 
         // Only allow Settler.execute — not executeWithPermit or executeMetaTxn.
         require(selector == _SETTLER_EXECUTE_SELECTOR, UnsupportedSettlerFunction());
+
+        // Decode AllowedSlippage tuple fields using type-safe abi.decode.
+        (address recipient, address buyToken,) = abi.decode(data[4:100], (address, address, uint256));
 
         // Recipient must be this contract (the pool, in delegatecall context).
         require(recipient == address(this), RecipientNotSmartPool());
 
         // Assert buyToken has a registered price feed in the oracle.
         _assertTokenOutHasPriceFeed(buyToken);
+
+        // Scan the actions array for forbidden action selectors (RFQ).
+        _checkNoForbiddenActions(data);
     }
 
     /// @dev Verifies the buyToken has a price feed and adds it to the active tokens set if new.
     function _assertTokenOutHasPriceFeed(address buyToken) private {
         AddressSet storage values = StorageLib.activeTokensSet();
         values.addUnique(IEOracle(address(this)), buyToken, StorageLib.pool().baseToken);
+    }
+
+    /// @dev Scans the settler's actions array and reverts if any action uses RFQ.
+    ///  RFQ allows arbitrary counterparty at arbitrary price — unlike DEX swaps (which execute
+    ///  at on-chain market price), RFQ has no on-chain price reference. A rogue maker can sign
+    ///  a quote at any price, and a phished pool owner or malicious agent would submit it.
+    ///  Our recipient/buyToken/priceFeed checks do NOT protect against this because minAmountOut
+    ///  is controlled by the same (potentially compromised) submitter.
+    ///  The actions array is ABI-encoded as bytes[] inside the Settler.execute calldata.
+    function _checkNoForbiddenActions(bytes calldata data) private pure {
+        // data[100:132] = offset to bytes[] actions, relative to params start at data[4:]
+        uint256 actionsOffset = abi.decode(data[100:132], (uint256));
+        uint256 arrStart = 4 + actionsOffset;
+        uint256 numActions = abi.decode(data[arrStart:arrStart + 32], (uint256));
+
+        for (uint256 i; i < numActions; ++i) {
+            // Element offset is at arrStart + 32 + i*32 (relative to arrStart + 32 per ABI spec)
+            uint256 elPos = arrStart + 32 + i * 32;
+            uint256 elOffset = abi.decode(data[elPos:elPos + 32], (uint256));
+            // Element data: arrStart + 32 (content start) + elOffset + 32 (skip length word)
+            uint256 selectorPos = arrStart + elOffset + 64;
+            bytes4 actionSelector = bytes4(abi.decode(data[selectorPos:selectorPos + 32], (bytes32)));
+
+            if (actionSelector == ISettlerActions.RFQ.selector || actionSelector == ISettlerActions.RFQ_VIP.selector) {
+                revert ForbiddenAction(actionSelector);
+            }
+        }
     }
 }

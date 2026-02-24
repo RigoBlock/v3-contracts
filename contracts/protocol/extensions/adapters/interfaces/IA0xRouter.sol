@@ -41,6 +41,10 @@ interface IA0xRouter {
     /// @notice Thrown when the pool does not hold enough native balance.
     error InsufficientNativeBalance();
 
+    /// @notice Thrown when a settler action is explicitly forbidden (e.g., RFQ).
+    /// @param actionSelector The 4-byte selector of the forbidden action.
+    error ForbiddenAction(bytes4 actionSelector);
+
     /// @notice Execute a swap via the 0x AllowanceHolder contract.
     /// @dev The calldata is forwarded unmodified to AllowanceHolder after validation.
     /// @param operator The address authorized to consume the ephemeral allowance (typically the Settler).

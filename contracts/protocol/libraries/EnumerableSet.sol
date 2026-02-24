@@ -65,7 +65,7 @@ library EnumerableSet {
             if (set.positions[token] == 0 || set.positions[token] == REMOVED_ADDRESS_FLAG) {
                 require(set.addresses.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
 
-                // perform a staticcall to the oracle extension and assert token has a price feed
+                // call the oracle extension (routed via pool fallback) and assert token has a price feed
                 require(eOracle.hasPriceFeed(token), TokenPriceFeedDoesNotExist(token));
 
                 // update storage
