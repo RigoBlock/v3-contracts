@@ -179,11 +179,11 @@ _permit2.approve(token, target, type(uint160).max, 0); // expiration=0 → curre
 
 **Pattern 2 — Target does NOT use Permit2** (e.g., 0x AllowanceHolder via A0xRouter):
 ```solidity
-// Per-call: approve exact amount before call, reset to 0 after success
+// Per-call: approve exact amount before call, reset to 1 after success
 token.safeApprove(address(target), amount);
 
-try target.exec{value: msg.value}(...) returns (bytes memory result) {
-    token.safeApprove(address(target), 0); // reset (defense-in-depth)
+try target.exec{value: value}(...) returns (bytes memory result) {
+    token.safeApprove(address(target), 1); // reset to 1 (keeps slot warm for gas savings)
     return result;
 } catch { ... } // revert unwinds the approval automatically
 ```
@@ -193,14 +193,29 @@ try target.exec{value: msg.value}(...) returns (bytes memory result) {
 2. If target supports Permit2 → Pattern 1 (persistent ERC20 + per-call Permit2.approve)
 3. If target uses standard ERC20 transferFrom → Pattern 2 (per-call approve + reset)
 4. ALWAYS use `safeApprove` for USDT compatibility (force-reset then approve)
-5. For native ETH: forward via `{value: msg.value}` — no ERC20 approval needed
+5. For native ETH: forward via `{value: value}` — no ERC20 approval needed
+
+**Gas optimization — approval reset to 1, not 0:**
+- Resetting to 0 clears storage → next swap pays 20000 gas (zero → non-zero SSTORE)
+- Resetting to 1 keeps slot warm → next swap pays 5000 gas (non-zero → non-zero SSTORE)
+- Always reset to 1 unless there's a specific reason to fully clear
+
+**Native ETH handling in adapters (CRITICAL):**
+- NEVER use `msg.value` to forward ETH in adapter calls
+- The adapter runs via delegatecall — `msg.value` comes from the CALLER, not the pool
+- The pool is the vault; derive the ETH value from calldata parameters
+- Example: `uint256 value = token.isAddressZero() ? amount : 0;`
+- Then: `target.exec{value: value}(...)` — sends from pool's own balance
+- Same pattern used in AUniswapRouter: `_uniswapRouter.execute{value: params.value}(...)`
+- For `InsufficientNativeBalance` check: compare derived `value` to `address(this).balance`
 
 **Testing requirements for new integrations:**
 - Test all swap directions: ETH→Token, Token→ETH, Token→Token
 - Test with USDT (special approval behavior)
 - Test on fork with real deployed contracts (not just mocks)
-- Verify allowance is 0 before AND after each call (for Pattern 2)
+- Verify allowance is 1 (not 0) after each successful call (for Pattern 2)
 - Verify revert unwinds approval state correctly
+- Verify ETH swaps use pool balance, NOT caller's msg.value
 
 ### New Adapter
 1. Create `contracts/protocol/extensions/adapters/YourAdapter.sol`
@@ -484,6 +499,9 @@ When making changes:
     - If a value must be duplicated for technical reasons (e.g., immutable in constructor), document clearly which is the source of truth
 14. **WRONG APPROVAL PATTERN FOR EXTERNAL PROTOCOLS** - Before writing approval code, verify whether the target protocol uses Permit2 or standard ERC20 transferFrom:
     - If target uses Permit2 → persistent ERC20 approval + per-call Permit2.approve (Pattern 1)
-    - If target uses standard ERC20 → per-call approve exact amount + reset to 0 (Pattern 2)
+    - If target uses standard ERC20 → per-call approve exact amount + reset to 1 (Pattern 2)
     - NEVER assume both patterns are interchangeable. Read the protocol's docs first.
     - See "Token Approval Patterns" section in "Adding New Components" for full details and code samples.
+15. **USING msg.value IN ADAPTERS** - Adapters run via delegatecall in the pool's context. `msg.value` is what the CALLER sent, NOT the pool's balance. The pool is the vault — derive the ETH value from calldata params (e.g., `value = token == address(0) ? amount : 0`) and forward from pool's own balance (`target.exec{value: value}(...)`). See AUniswapRouter and A0xRouter for reference.
+16. **RESETTING APPROVAL TO 0** - When resetting ERC20 approval after a call, set to 1 (not 0). Setting to 0 clears the storage slot; the next swap pays 20000 gas to write zero→non-zero. Setting to 1 keeps the slot warm, so the next swap costs only 5000 gas (non-zero→non-zero). Always prefer `safeApprove(target, 1)` over `safeApprove(target, 0)`.
+17. **USING abi.decode WHEN ASSEMBLY IS BETTER** - For extracting simple values from calldata (selector + a few words), assembly `calldataload` is more gas-efficient than `abi.decode` because it avoids memory allocation and copy overhead. Use assembly for hot paths and simple extractions; use `abi.decode` for complex struct decoding where clarity matters more than gas.

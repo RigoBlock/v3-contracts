@@ -478,7 +478,7 @@ describe("A0xRouter", async () => {
       ).to.be.reverted;
     });
 
-    it("should approve exact amount before exec and reset to 0 after (per-call)", async () => {
+    it("should approve exact amount before exec and reset to 1 after (per-call)", async () => {
       const { pool, mockAllowanceHolder, mockSettler, sellToken, buyToken, oracle } = await setupTests();
 
       const sellAmount = ethers.utils.parseEther("100");
@@ -509,9 +509,10 @@ describe("A0xRouter", async () => {
 
       await user1.sendTransaction({ to: pool.address, value: 0, data: execData });
 
-      // After exec, allowance should be 0 (per-call approve/reset, no persistent allowance)
+      // After exec, allowance should be 1 (gas optimization: keep storage slot warm,
+      // so next swap pays 5000 gas for non-zero→non-zero instead of 20000 for zero→non-zero)
       const allowanceAfter = await sellToken.allowance(pool.address, mockAllowanceHolder.address);
-      expect(allowanceAfter).to.equal(0);
+      expect(allowanceAfter).to.equal(1);
     });
 
     it("should add buyToken to active tokens", async () => {

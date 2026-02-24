@@ -90,30 +90,38 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         // 2. Decode the Settler calldata to extract and validate AllowedSlippage parameters.
         _validateSettlerCalldata(data);
 
-        // 3. Approve exact sellToken amount to AllowanceHolder for this call only.
+        // 3. Derive the ETH value to forward from the pool's own balance.
+        //    When selling native ETH (token == address(0)), the pool sends `amount` of its own ETH.
+        //    When selling ERC20, no ETH is needed. Never use msg.value — the pool is the vault,
+        //    the caller only triggers the operation, same pattern as AUniswapRouter.
+        uint256 value = token.isAddressZero() ? amount : 0;
+
+        // 4. Approve exact sellToken amount to AllowanceHolder for this call only.
         //    AllowanceHolder does NOT use Permit2 — it consumes standard ERC20 allowance via
         //    token.transferFrom(pool, settler, amount) inside exec(). Since there is no second
-        //    scoping layer (unlike Permit2), we approve per-call and reset to 0 after success.
+        //    scoping layer (unlike Permit2), we approve per-call and reset after success.
         //    safeApprove handles USDT-style tokens (force reset then approve).
         if (!token.isAddressZero()) {
             token.safeApprove(address(_allowanceHolder), amount);
         }
 
-        // 4. Forward the call to AllowanceHolder with unmodified parameters.
-        try _allowanceHolder.exec{value: msg.value}(operator, token, amount, target, data) returns (
+        // 5. Forward the call to AllowanceHolder using pool's own balance.
+        try _allowanceHolder.exec{value: value}(operator, token, amount, target, data) returns (
             bytes memory result
         ) {
-            // 5. Reset approval to 0 after successful exec (defense-in-depth).
+            // 6. Reset approval to 1 after successful exec (gas optimization).
             //    AllowanceHolder.transferFrom consumes the ERC20 allowance, so it should already
-            //    be 0 or near-0 after a full fill. Reset handles any partial consumption.
+            //    be 0 or near-0 after a full fill. Reset to 1 (not 0) keeps the storage slot warm:
+            //    next swap pays 5000 gas (non-zero → non-zero) instead of 20000 (zero → non-zero).
             if (!token.isAddressZero()) {
-                token.safeApprove(address(_allowanceHolder), 0);
+                token.safeApprove(address(_allowanceHolder), 1);
             }
             return result;
         } catch Error(string memory reason) {
             revert(reason);
         } catch (bytes memory returnData) {
-            if (msg.value > address(this).balance) {
+            // Check if the revert was caused by insufficient ETH in the pool.
+            if (value > address(this).balance) {
                 revert InsufficientNativeBalance();
             }
             assembly {

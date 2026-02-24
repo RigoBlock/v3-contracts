@@ -248,11 +248,11 @@ contract A0xRouterForkTest is Test {
                             APPROVAL PATTERN
     //////////////////////////////////////////////////////////////////////////*/
 
-    /// @notice ERC20 approval to AllowanceHolder is 0 before and after exec
+    /// @notice ERC20 approval to AllowanceHolder is 0 before exec and unwound on revert
     /// @dev AllowanceHolder does NOT use Permit2. It consumes standard ERC20 allowance.
-    ///  Adapter approves exact amount before exec and resets to 0 after success.
-    ///  On revert, the EVM unwinds the approval automatically.
-    function test_ApprovalPattern_ZeroBeforeAndAfterExec() public {
+    ///  Adapter approves exact amount before exec and resets to 1 after success.
+    ///  On revert, the EVM unwinds the approval automatically (back to pre-call state).
+    function test_ApprovalPattern_ZeroBeforeAndUnwoundOnRevert() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
         // Before: no approval
@@ -282,21 +282,13 @@ contract A0xRouterForkTest is Test {
         );
     }
 
-    /// @notice Per-call approval pattern: exact amount approved, reset after success
-    /// @dev Uses a mock Settler to complete the swap flow and verify approval is reset
-    function test_ApprovalPattern_ExactAmountApprovedAndReset() public {
+    /// @notice Per-call approval pattern: exact amount approved, reset to 1 on success, unwound on revert
+    /// @dev Verifies approval is unwound on revert (back to 0 since it was 0 before)
+    function test_ApprovalPattern_ExactAmountApprovedAndUnwound() public {
         uint256 sellAmount = 1000e6;
         deal(Constants.ETH_USDC, pool, sellAmount * 2);
 
-        // Deploy a mock settler that we can use as target
-        // This tests the real AllowanceHolder with real USDC
-        MockSwapTarget mockTarget = new MockSwapTarget();
-
-        // The real AllowanceHolder won't accept our mock as a settler.
-        // Instead, we verify the approval is exactly `amount` by directly reading slot during exec.
-        // Since AllowanceHolder.exec will revert (mock isn't a real settler), we test:
-        // 1. Fresh pool has 0 allowance
-        // 2. After reverted exec, allowance is still 0 (EVM unwinds)
+        // Fresh pool has 0 allowance
         assertEq(IERC20(Constants.ETH_USDC).allowance(pool, ALLOWANCE_HOLDER), 0);
 
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
@@ -364,12 +356,14 @@ contract A0xRouterForkTest is Test {
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), sellAmount, "Pool USDC unchanged after revert");
     }
 
-    /// @notice ETH→Token swap simulation: native ETH forwarded via msg.value
+    /// @notice ETH→Token swap simulation: pool sends its own ETH, NOT msg.value
     /// @dev Tests selling ETH for USDC. Token param is address(0) for native ETH.
-    ///  No ERC20 approval needed for native ETH.
-    function test_SwapSimulation_ETHToToken_PassesValidation() public {
+    ///  The adapter derives value = amount from the token/amount params and forwards
+    ///  from the pool's balance. The caller does NOT send ETH (no msg.value).
+    function test_SwapSimulation_ETHToToken_UsesPoolBalance() public {
         // Fund pool with ETH
         deal(pool, 10 ether);
+        uint256 poolBalanceBefore = pool.balance;
 
         bytes memory settlerData = _encodeSettlerExecute(
             pool,
@@ -377,20 +371,21 @@ contract A0xRouterForkTest is Test {
             1e6 // minAmountOut: 1 USDC
         );
 
-        // Initialize USDC price feed (it may already exist from pool setup, but ensure)
-        // USDC is the base token, so it should have a price feed
-
+        // Caller does NOT send any ETH — the pool uses its own balance
         vm.prank(poolOwner);
-        (bool success, bytes memory returnData) = pool.call{value: 1 ether}(
+        (bool success, bytes memory returnData) = pool.call(
             abi.encodeCall(
                 IA0xRouter.exec,
                 (currentSettler, address(0), 1 ether, payable(currentSettler), settlerData)
             )
         );
 
-        // Expected: fails inside AllowanceHolder/Settler, not at our validation
+        // Expected: fails inside AllowanceHolder/Settler (empty actions), not at our validation
         assertFalse(success, "Should fail inside Settler (empty actions)");
         _assertNotOurValidationError(returnData);
+
+        // Pool balance unchanged (revert unwound the ETH transfer too)
+        assertEq(pool.balance, poolBalanceBefore, "Pool ETH unchanged after revert");
     }
 
     /// @notice Token→ETH swap simulation: sell USDC for native ETH
@@ -556,10 +551,4 @@ contract A0xRouterForkTest is Test {
         ISmartPool(payable(pool)).mint(user, 100_000e6, 0);
         vm.stopPrank();
     }
-}
-
-/// @dev Minimal mock target for testing AllowanceHolder flow
-contract MockSwapTarget {
-    fallback() external payable {}
-    receive() external payable {}
 }

@@ -57,9 +57,11 @@ exec(operator, token, amount, target, data):
   2. Decode `data` (Settler.execute calldata) to extract AllowedSlippage
      - recipient: MUST equal address(this) (the pool)
      - buyToken: MUST have a price feed in the oracle
-  3. Approve exact sellToken amount to AllowanceHolder (per-call, not persistent)
-  4. Forward call: AllowanceHolder.exec{value}(operator, token, amount, target, data)
-  5. On success: reset ERC20 approval to 0 (revoke any unconsumed allowance)
+  3. Derive ETH value from params: value = (token == address(0)) ? amount : 0
+     - NEVER use msg.value — pool is the vault, sends its own ETH
+  4. Approve exact sellToken amount to AllowanceHolder (per-call, not persistent)
+  5. Forward call: AllowanceHolder.exec{value: value}(operator, token, amount, target, data)
+  6. On success: reset ERC20 approval to 1 (keeps storage slot warm for gas savings)
      On failure: revert propagates, approval reverted automatically by EVM
 ```
 
