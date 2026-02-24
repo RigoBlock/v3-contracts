@@ -1,6 +1,9 @@
 forget-std/=lib/forget-std
 solmate/=lib/solmate
 permit2/=lib/permit2
+0x-settler/=lib/0x-settler/
+@permit2/=lib/0x-settler/lib/permit2/src/
+@forge-std/=lib/0x-settler/lib/forge-std/src/
 @uniswap/universal-router/=lib/universal-router/
 @uniswap/v3-periphery/=lib/universal-router/lib/v3-periphery/
 @uniswap/v4-periphery/=lib/universal-router/lib/v4-periphery/

@@ -257,9 +257,11 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                     // Notice: if moving the following block to protect all actions, make sure hook address is appended.
                     if (positions[i].hook != ZERO_ADDRESS) {
                         bool hasAfterAddLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
-                            Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
+                            Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG !=
+                            0;
                         bool hasAfterRemoveLiquidityDeltaPermission = uint160(address(positions[i].hook)) &
-                            Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG != 0;
+                            Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG !=
+                            0;
 
                         // Prevent hooks that can access pool liquidity deltas
                         require(
@@ -317,5 +319,4 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
             );
         }
     }
-
 }

@@ -70,6 +70,16 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // Prevent same-chain transfers (destination must be different chain)
         require(params.destinationChainId != block.chainid, SameChainTransfer());
 
+        // Sanity check: outputAmount must not exceed inputAmount (after decimal scaling).
+        // Across relayers won't fill output > input (guaranteed loss), but a rogue operator
+        // could inflate virtual supply adjustment to artificially inflate NAV on source chain.
+        uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
+            params.outputToken,
+            params.inputToken,
+            params.outputAmount
+        );
+        require(scaledOutputAmount <= params.inputAmount, OutputAmountTooHigh());
+
         // Validate source message parameters to prevent rogue input
         SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
 
@@ -88,13 +98,18 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         }
         require(StorageLib.isOwnedToken(tokenToValidate), TokenNotActive());
 
-        _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
+        // Approve max before deposit, reset to 1 after (ERC20 only, skipped when sending native ETH).
+        if (sourceParams.sourceNativeAmount == 0) {
+            params.inputToken.safeApprove(address(_acrossSpokePool), type(uint256).max);
+        }
 
-        // Always use multicall handler approach for robust pool existence checking
         Instructions memory instructions = _buildMulticallInstructions(params, sourceParams);
-        _executeAcrossDeposit(params, sourceParams, instructions);
+        _executeAcrossDeposit(params, sourceParams, instructions, scaledOutputAmount);
 
-        _safeApproveToken(params.inputToken, sourceParams.sourceNativeAmount);
+        // Reset approval — no hanging approvals, slot stays warm.
+        if (sourceParams.sourceNativeAmount == 0) {
+            params.inputToken.safeApprove(address(_acrossSpokePool), 1);
+        }
     }
 
     /*
@@ -152,11 +167,12 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     function _executeAcrossDeposit(
         AcrossParams memory params,
         SourceMessageParams memory sourceParams,
-        Instructions memory instructions
+        Instructions memory instructions,
+        uint256 scaledOutputAmount
     ) private {
         // Handle source-side adjustments based on operation type
         if (sourceParams.opType == OpType.Transfer) {
-            _handleSourceTransfer(params);
+            _handleSourceTransfer(params, scaledOutputAmount);
         } else if (sourceParams.opType == OpType.Sync) {
             NavImpactLib.validateNavImpact(params.inputToken, params.inputAmount, sourceParams.navTolerance);
         } else {
@@ -195,31 +211,22 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         );
     }
 
-    /// @dev Calculates the base token equivalent value of the output amount.
-    /// @dev Handles BSC decimal conversion and oracle price lookup.
-    /// @param params The across params containing token and amount info.
+    /// @dev Converts the scaled output amount to the pool's base token value via oracle.
+    /// @param params The across params containing token info.
+    /// @param scaledOutputAmount The output amount already scaled to inputToken decimals.
     /// @return outputValueInBase The output amount converted to base token value.
-    /// @return baseToken The pool's base token address.
     function _getOutputValueInBase(
-        AcrossParams memory params
-    ) private view returns (uint256 outputValueInBase, address baseToken) {
-        // Scale outputAmount to inputToken decimals for proper comparison
-        // (same token on different chains may have different decimals, e.g., BSC USDC)
-        uint256 scaledOutputAmount = CrosschainLib.applyBscDecimalConversion(
-            params.outputToken, // Amount is in this token's decimals
-            params.inputToken, // Convert to this token's decimals
-            params.outputAmount
-        );
-
-        // Convert output amount to base token value
-        baseToken = StorageLib.pool().baseToken;
+        AcrossParams memory params,
+        uint256 scaledOutputAmount
+    ) private view returns (uint256 outputValueInBase) {
+        address baseToken = StorageLib.pool().baseToken;
         outputValueInBase = IEOracle(address(this))
             .convertTokenAmount(params.inputToken, scaledOutputAmount.toInt256(), baseToken)
             .toUint256();
     }
 
-    function _handleSourceTransfer(AcrossParams memory params) private {
-        (uint256 outputValueInBase, ) = _getOutputValueInBase(params);
+    function _handleSourceTransfer(AcrossParams memory params, uint256 scaledOutputAmount) private {
+        uint256 outputValueInBase = _getOutputValueInBase(params, scaledOutputAmount);
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint8 poolDecimals = StorageLib.pool().decimals;
 
@@ -229,24 +236,5 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         // Write negative VS (shares leaving this chain → reduces effective supply)
         (-burntAmount).updateVirtualSupply();
-    }
-
-    /// @dev Approves or revokes token approval for SpokePool interaction.
-    /// @dev Native ETH: When sourceNativeAmount > 0, ETH is sent via value parameter and WETH address is used as identifier.
-    ///      In this case, skip approval since no ERC20 transfer occurs (only native value transfer).
-    /// @dev ERC20: When sourceNativeAmount == 0, normal ERC20 approval flow (including WETH when used as ERC20).
-    /// @param token The token address to approve (guaranteed non-zero by validateBridgeableTokenPair)
-    /// @param sourceNativeAmount Native ETH amount being sent (0 for ERC20 transfers)
-    function _safeApproveToken(address token, uint256 sourceNativeAmount) private {
-        // Skip approval if sending native ETH with WETH wrapper (no ERC20 transfer)
-        if (sourceNativeAmount > 0) return;
-
-        if (IERC20(token).allowance(address(this), address(_acrossSpokePool)) > 0) {
-            // Reset to 0 first for tokens that require it (like USDT)
-            token.safeApprove(address(_acrossSpokePool), 0);
-        } else {
-            // Approve max amount
-            token.safeApprove(address(_acrossSpokePool), type(uint256).max);
-        }
     }
 }
