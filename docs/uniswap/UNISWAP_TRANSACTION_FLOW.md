@@ -418,3 +418,21 @@ V3 paths are packed bytes: `[tokenA (20 bytes) | fee (3 bytes) | tokenB (20 byte
 
 ### 10. V2 Path Direction
 V2 paths are `address[]`. For both exact-in AND exact-out, `path[0]` is always the input token and `path[last]` is always the output token (unlike V3 where exact-out reverses the path).
+
+### 11. Native ETH V2 Exact-Out Not Supported
+`V2_SWAP_EXACT_OUT` with `path[0] == address(0)` (native ETH input) reverts with `InvalidCommandType`. Computing the exact `amountIn` would require `UniswapV2Library.getAmountInMultihop()` (on-chain `getReserves()` calls + chain-specific `v2Factory` immutable). Use `WRAP_ETH` + `V2_SWAP_EXACT_IN` instead.
+
+---
+
+## Design Decisions
+
+### DECREASE_LIQUIDITY / BURN_POSITION Do Not Populate `tokensOut`
+
+The decoder intentionally skips adding pool currencies to `params.tokensOut` for `DECREASE_LIQUIDITY` and `BURN_POSITION` actions. This is a **deliberate gas optimization**, not a missing check.
+
+**Why it's safe:**
+- Positions can only exist in storage if created via `MINT_POSITION` through this adapter
+- `MINT_POSITION` adds both currencies to `tokensOut` → both get validated for price feeds and registered as active tokens
+- The `idsSlot.positions[tokenId] != 0` ownership check ensures only pool-minted positions can be decreased/burned
+- Tokens remain in the active set while any LP position holds balance
+- Adding a `getPoolAndPositionInfo()` view call on every decrease/burn would waste gas for no security benefit

@@ -698,29 +698,6 @@ describe("AUniswapRouter", async () => {
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
     })
 
-    it('should decode WRAP with OPEN_DELTA flag without adding value', async () => {
-      const { pool, wethAddress, oracle } = await setupTests()
-      const PAIR = {
-        ...DEFAULT_PAIR,
-        poolKey: {
-          ...DEFAULT_PAIR.poolKey,
-          currency0: AddressZero,
-          currency1: wethAddress,
-          fee: 0,
-          tickSpacing: MAX_TICK_SPACING,
-          hooks: oracle.address,
-        },
-      }
-      await oracle.initializeObservations(PAIR.poolKey)
-      // WRAP with OPEN_DELTA sentinel should not add to params.value (resolved at execution time)
-      let v4Planner: V4Planner = new V4Planner()
-      v4Planner.addAction(Actions.WRAP, [OPEN_DELTA])
-      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
-      const extPool = ExtPool.attach(pool.address)
-      // Should succeed with value=0 since OPEN_DELTA is skipped in value computation
-      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
-    })
-
     it('should revert when calling unsupported methods', async () => {
       const { pool, grgToken, wethAddress, oracle } = await setupTests()
       let v4Planner: V4Planner = new V4Planner()

@@ -65,9 +65,9 @@ jobs:
         run: yarn test
 
       # Dependabot only bumps npm deps (yarn.lock), never git submodules.
-      # Foundry tests depend on submodules + RPC secrets, neither available in dependabot PRs.
+      # Foundry fork tests need RPC secrets, unavailable in dependabot and external fork PRs.
       - name: Run Foundry tests
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: yarn test:foundry
 
       - name: Clean previous coverage artifacts
