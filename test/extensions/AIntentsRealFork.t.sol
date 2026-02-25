@@ -3088,7 +3088,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             inputToken: usdt,  // SPOOFING ATTACK: Using USDT but sending native ETH
             outputToken: Constants.ARB_USDT,
             inputAmount: 1 ether,
-            outputAmount: 3000e6,  // ~3000 USDT
+            outputAmount: 1 ether - 0.01 ether,  // within 2% fee band so OutputAmountTooLow doesn't fire first
             destinationChainId: 42161,
             exclusiveRelayer: address(0),
             quoteTimestamp: uint32(block.timestamp),
@@ -3263,6 +3263,71 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         IAIntents(pool()).depositV3(params);
 
         // Should succeed — verify VS was written
+        int256 vs = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        assertLt(vs, 0, "VS should be negative after valid outbound transfer");
+    }
+
+    /// @notice Verifies that outputAmount below 98% of inputAmount (>2% fee) reverts.
+    /// @dev A rogue or erroneous deposit with excessive fee would damage NAV. The 2% cap limits this.
+    function test_AIntents_OutputAmountTooLow_Reverts() public {
+        uint256 inputAmount = 100e6; // 100 USDC
+        // 97e6 = 3% fee, exceeds the 2% max
+        uint256 lowOutput = 97e6;
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: inputAmount,
+            outputAmount: lowOutput,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        vm.expectRevert(IAIntents.OutputAmountTooLow.selector);
+        IAIntents(pool()).depositV3(params);
+    }
+
+    /// @notice Verifies that outputAmount at exactly 98% of inputAmount (2% fee) succeeds.
+    function test_AIntents_OutputAmountAtMinimum_Succeeds() public {
+        uint256 inputAmount = 100e6; // 100 USDC
+        // 98e6 = exactly 2% fee, should pass
+        uint256 minOutput = 98e6;
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: inputAmount,
+            outputAmount: minOutput,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
         int256 vs = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         assertLt(vs, 0, "VS should be negative after valid outbound transfer");
     }

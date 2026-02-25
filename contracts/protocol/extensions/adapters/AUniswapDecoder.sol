@@ -8,6 +8,7 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
+import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
@@ -59,7 +60,7 @@ abstract contract AUniswapDecoder {
                 if (command < Commands.V2_SWAP_EXACT_IN) {
                     if (command == Commands.V3_SWAP_EXACT_IN) {
                         // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser
-                        (address recipient, , , , ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        address recipient = abi.decode(inputs, (address));
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
@@ -74,7 +75,7 @@ abstract contract AUniswapDecoder {
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
-                        (address recipient, , , , ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        address recipient = abi.decode(inputs, (address));
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, path.toAddress());
@@ -94,19 +95,19 @@ abstract contract AUniswapDecoder {
                     } else if (command == Commands.SWEEP) {
                         // sweep is used when the router is used for transfers to clear leftover
                         // address token, address recipient, uint160 amountMin
-                        (address token, address recipient, ) = abi.decode(inputs, (address, address, uint256));
+                        (address token, address recipient) = abi.decode(inputs, (address, address));
                         params.tokensOut = _addUnique(params.tokensOut, token);
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.TRANSFER) {
                         // address token, address recipient, uint256 value
-                        (address token, address recipient, ) = abi.decode(inputs, (address, address, uint256));
+                        (address token, address recipient) = abi.decode(inputs, (address, address));
                         params.tokensOut = _addUnique(params.tokensOut, token);
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PAY_PORTION) {
                         // address token, address recipient, uint256 bips
-                        (address token, address recipient, ) = abi.decode(inputs, (address, address, uint256));
+                        (address token, address recipient) = abi.decode(inputs, (address, address));
                         params.tokensOut = _addUnique(params.tokensOut, token);
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
@@ -118,10 +119,7 @@ abstract contract AUniswapDecoder {
                     // 0x08 <= command < 0x10
                     if (command == Commands.V2_SWAP_EXACT_IN) {
                         // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser
-                        (address recipient, uint256 amountIn, , , ) = abi.decode(
-                            inputs,
-                            (address, uint256, uint256, bytes, bool)
-                        );
+                        (address recipient, uint256 amountIn) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
@@ -130,9 +128,11 @@ abstract contract AUniswapDecoder {
                         return params;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
                         // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
-                        (address recipient, , , , ) = abi.decode(inputs, (address, uint256, uint256, bytes, bool));
+                        address recipient = abi.decode(inputs, (address));
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
+                        // Native ETH exact-out needs UniswapV2Library.getAmountInMultihop(); use WRAP_ETH + V2 exact-in instead
+                        if (path[0] == ZERO_ADDRESS) revert InvalidCommandType(command);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
                         return params;
@@ -142,11 +142,14 @@ abstract contract AUniswapDecoder {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
-                        params.value += amount;
+                        // CONTRACT_BALANCE is resolved at execution time to router's ETH balance
+                        if (amount != ActionConstants.CONTRACT_BALANCE) {
+                            params.value += amount;
+                        }
                         return params;
                     } else if (command == Commands.UNWRAP_WETH) {
                         // address recipient, uint256 amountMin
-                        (address recipient, ) = abi.decode(inputs, (address, uint256));
+                        address recipient = abi.decode(inputs, (address));
                         params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
@@ -380,9 +383,12 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, to);
                 return (params, positions);
             } else if (action == Actions.WRAP) {
+                // Flag amounts (CONTRACT_BALANCE, OPEN_DELTA) are resolved at execution time by POSM
                 uint256 amount = actionParams.decodeUint256();
                 params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
-                params.value += amount;
+                if (amount != ActionConstants.CONTRACT_BALANCE && amount != ActionConstants.OPEN_DELTA) {
+                    params.value += amount;
+                }
                 return (params, positions);
             } else if (action == Actions.UNWRAP) {
                 params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
