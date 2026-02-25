@@ -2,7 +2,7 @@ import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import { AddressZero } from "@ethersproject/constants";
 import { Contract, BigNumber } from "ethers";
-import { DEADLINE, MAX_UINT128, MAX_UINT160 } from "../shared/constants";
+import { CONTRACT_BALANCE, DEADLINE, MAX_UINT128, MAX_UINT160, OPEN_DELTA } from "../shared/constants";
 import { Actions, V4Planner } from '../shared/v4Planner'
 import { CommandType, RoutePlanner } from '../shared/planner'
 import { parse } from "path";
@@ -673,6 +673,52 @@ describe("AUniswapRouter", async () => {
       const etherAmount = ethers.utils.parseEther("13.1") // settle 12 + 0.1 + 1 (wrap)
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+    })
+
+    it('should decode WRAP with CONTRACT_BALANCE flag without overflow', async () => {
+      const { pool, wethAddress, oracle } = await setupTests()
+      const PAIR = {
+        ...DEFAULT_PAIR,
+        poolKey: {
+          ...DEFAULT_PAIR.poolKey,
+          currency0: AddressZero,
+          currency1: wethAddress,
+          fee: 0,
+          tickSpacing: MAX_TICK_SPACING,
+          hooks: oracle.address,
+        },
+      }
+      await oracle.initializeObservations(PAIR.poolKey)
+      // WRAP with CONTRACT_BALANCE sentinel should not add to params.value (resolved at execution time)
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.WRAP, [CONTRACT_BALANCE])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // Should succeed with value=0 since CONTRACT_BALANCE is skipped in value computation
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+    })
+
+    it('should decode WRAP with OPEN_DELTA flag without adding value', async () => {
+      const { pool, wethAddress, oracle } = await setupTests()
+      const PAIR = {
+        ...DEFAULT_PAIR,
+        poolKey: {
+          ...DEFAULT_PAIR.poolKey,
+          currency0: AddressZero,
+          currency1: wethAddress,
+          fee: 0,
+          tickSpacing: MAX_TICK_SPACING,
+          hooks: oracle.address,
+        },
+      }
+      await oracle.initializeObservations(PAIR.poolKey)
+      // WRAP with OPEN_DELTA sentinel should not add to params.value (resolved at execution time)
+      let v4Planner: V4Planner = new V4Planner()
+      v4Planner.addAction(Actions.WRAP, [OPEN_DELTA])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      // Should succeed with value=0 since OPEN_DELTA is skipped in value computation
+      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
     })
 
     it('should revert when calling unsupported methods', async () => {
@@ -1520,6 +1566,44 @@ describe("AUniswapRouter", async () => {
           to: extPool.address, 
           value: 0, 
           data: encodedSwapData 
+        });
+      } catch (error: any) {
+        const customError = error.error?.reason || error.reason || error.message;
+        throw new Error(`${customError}`);
+      }
+    })
+
+    it('should decode WRAP_ETH with CONTRACT_BALANCE flag without overflow', async () => {
+      const { pool, grgToken, wethAddress, oracle } = await setupTests()
+      const PAIR = {
+        ...DEFAULT_PAIR,
+        poolKey: {
+          ...DEFAULT_PAIR.poolKey,
+          currency0: AddressZero,
+          currency1: wethAddress,
+          fee: 0,
+          tickSpacing: MAX_TICK_SPACING,
+          hooks: oracle.address,
+        },
+      }
+      await oracle.initializeObservations(PAIR.poolKey)
+      const planner: RoutePlanner = new RoutePlanner()
+      // WRAP_ETH with CONTRACT_BALANCE sentinel should not add to params.value
+      planner.addCommand(CommandType.WRAP_ETH, [pool.address, CONTRACT_BALANCE])
+      planner.addCommand(CommandType.BALANCE_CHECK_ERC20, [pool.address, grgToken.address, 1])
+      const { commands, inputs } = planner
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [commands, inputs, DEADLINE]
+      )
+      // Should succeed with value=0 since CONTRACT_BALANCE is skipped in value computation
+      try {
+        await user1.sendTransaction({
+          to: extPool.address,
+          value: 0,
+          data: encodedSwapData
         });
       } catch (error: any) {
         const customError = error.error?.reason || error.reason || error.message;
