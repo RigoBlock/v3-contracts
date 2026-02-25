@@ -61,7 +61,14 @@ jobs:
 
       - run: yarn build
 
-      - run: yarn test
+      - name: Run Hardhat tests
+        run: yarn test
+
+      # Dependabot only bumps npm deps (yarn.lock), never git submodules.
+      # Foundry tests depend on submodules + RPC secrets, neither available in dependabot PRs.
+      - name: Run Foundry tests
+        if: github.actor != 'dependabot[bot]'
+        run: yarn test:foundry
 
       - name: Clean previous coverage artifacts
         run: |

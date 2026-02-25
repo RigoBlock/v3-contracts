@@ -1873,7 +1873,6 @@ describe("AUniswapRouter", async () => {
       }
       path = [AddressZero, grgToken.address]
       planner.addCommand(CommandType.V2_SWAP_EXACT_IN, [pool.address, 100, 1, path, true])
-      planner.addCommand(CommandType.V2_SWAP_EXACT_OUT, [pool.address, 100, 1, path, true])
       encodedSwapData = extPool.interface.encodeFunctionData(
         'execute(bytes,bytes[],uint256)',
         [planner.commands, planner.inputs, DEADLINE]
@@ -1900,6 +1899,25 @@ describe("AUniswapRouter", async () => {
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
       ).to.be.revertedWith('RecipientNotSmartPoolOrRouter()')
+    });
+
+    it("should revert V2_SWAP_EXACT_OUT with native ETH path", async function () {
+      const { pool, grgToken, wethAddress, oracle } = await setupTests()
+      const PAIR = { ...DEFAULT_PAIR }
+      PAIR.poolKey = { currency0: AddressZero, currency1: grgToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
+      await oracle.initializeObservations(PAIR.poolKey)
+      const path = [AddressZero, grgToken.address]
+      const planner: RoutePlanner = new RoutePlanner()
+      planner.addCommand(CommandType.V2_SWAP_EXACT_OUT, [pool.address, 100, 1, path, true])
+      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter")
+      const extPool = ExtPool.attach(pool.address)
+      const encodedSwapData = extPool.interface.encodeFunctionData(
+        'execute(bytes,bytes[],uint256)',
+        [planner.commands, planner.inputs, DEADLINE]
+      )
+      await expect(
+        user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
+      ).to.be.revertedWith('InvalidCommandType(9)')
     });
 
     it("should process sweep, transfer and pay v3 payment methods", async function () {
