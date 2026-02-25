@@ -1,6 +1,6 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { chainConfig, extensionsMapSalt } from "../utils/constants";
+import { chainConfig, extensionsMapSalt, zeroExAllowanceHolder, zeroExDeployer } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
@@ -170,6 +170,20 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });*/
+
+  await deploy("AIntents", {
+    from: deployer,
+    args: [config.acrossSpokePool],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await deploy("A0xRouter", {
+    from: deployer,
+    args: [zeroExAllowanceHolder, zeroExDeployer],
+    log: true,
+    deterministicDeployment: true,
+  });
 };
 
 deploy.tags = ['extensions', 'adapters', 'l2-suite', 'main-suite']
