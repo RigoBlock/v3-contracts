@@ -89,7 +89,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         // Enforce minimum output: outputAmount must be at least 98% of inputAmount (max 2% bridge fee).
         // Limits NAV damage from rogue deposits or input errors. Normal Across fees are well within this.
-        require(scaledOutputAmount * BPS_BASE >= params.inputAmount * (BPS_BASE - MAX_BRIDGE_FEE_BPS), OutputAmountTooLow());
+        require(
+            scaledOutputAmount * BPS_BASE >= params.inputAmount * (BPS_BASE - MAX_BRIDGE_FEE_BPS),
+            OutputAmountTooLow()
+        );
 
         // Validate source message parameters to prevent rogue input
         SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
