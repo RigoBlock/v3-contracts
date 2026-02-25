@@ -42,6 +42,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     /// @notice Maximum allowed nav tolerance in basis points (100% = 10000 bps)
     uint256 private constant MAX_NAV_TOLERANCE_BPS = 10000;
 
+    /// @notice Basis points denominator
+    uint256 private constant BPS_BASE = 10000;
+
+    /// @notice Maximum allowed bridge fee in basis points (2% = 200 bps)
+    /// @dev Limits NAV damage from rogue or erroneous deposits. Normal Across fills are 0.05-0.5%.
+    uint256 private constant MAX_BRIDGE_FEE_BPS = 200;
+
     address private immutable _aIntents;
 
     error NavToleranceTooHigh();
@@ -79,6 +86,13 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.outputAmount
         );
         require(scaledOutputAmount <= params.inputAmount, OutputAmountTooHigh());
+
+        // Enforce minimum output: outputAmount must be at least 98% of inputAmount (max 2% bridge fee).
+        // Limits NAV damage from rogue deposits or input errors. Normal Across fees are well within this.
+        require(
+            scaledOutputAmount * BPS_BASE >= params.inputAmount * (BPS_BASE - MAX_BRIDGE_FEE_BPS),
+            OutputAmountTooLow()
+        );
 
         // Validate source message parameters to prevent rogue input
         SourceMessageParams memory sourceParams = abi.decode(params.message, (SourceMessageParams));
