@@ -8,6 +8,7 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IV4Router} from "@uniswap/v4-periphery/src/interfaces/IV4Router.sol";
+import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
@@ -142,7 +143,10 @@ abstract contract AUniswapDecoder {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
-                        params.value += amount;
+                        // CONTRACT_BALANCE is resolved at execution time to router's ETH balance
+                        if (amount != ActionConstants.CONTRACT_BALANCE) {
+                            params.value += amount;
+                        }
                         return params;
                     } else if (command == Commands.UNWRAP_WETH) {
                         // address recipient, uint256 amountMin
@@ -380,9 +384,12 @@ abstract contract AUniswapDecoder {
                 params.recipients = _addUnique(params.recipients, to);
                 return (params, positions);
             } else if (action == Actions.WRAP) {
+                // Flag amounts (CONTRACT_BALANCE, OPEN_DELTA) are resolved at execution time by POSM
                 uint256 amount = actionParams.decodeUint256();
                 params.tokensOut = _addUnique(params.tokensOut, _wrappedNative);
-                params.value += amount;
+                if (amount != ActionConstants.CONTRACT_BALANCE && amount != ActionConstants.OPEN_DELTA) {
+                    params.value += amount;
+                }
                 return (params, positions);
             } else if (action == Actions.UNWRAP) {
                 params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
