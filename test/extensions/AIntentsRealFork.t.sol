@@ -3088,7 +3088,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             inputToken: usdt,  // SPOOFING ATTACK: Using USDT but sending native ETH
             outputToken: Constants.ARB_USDT,
             inputAmount: 1 ether,
-            outputAmount: 3000e6,  // ~3000 USDT
+            outputAmount: 1 ether - 0.01 ether,  // within 2% fee band so OutputAmountTooLow doesn't fire first
             destinationChainId: 42161,
             exclusiveRelayer: address(0),
             quoteTimestamp: uint32(block.timestamp),
