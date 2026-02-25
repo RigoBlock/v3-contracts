@@ -3,6 +3,10 @@ export const AddressOne = "0x0000000000000000000000000000000000000001";
 // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
 export const extensionsMapSalt = "extensionsMapSalt4";
 
+// 0x Protocol addresses (same on all supported chains)
+export const zeroExAllowanceHolder = "0x0000000000001fF3684f28c67538d4D072C22734";
+export const zeroExDeployer = "0x00000000000004533Fe15556B1E086BB1A72cEae";
+
 interface ChainConfig {
   rigoToken: string;
   oracle: string;
