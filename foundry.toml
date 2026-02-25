@@ -7,6 +7,7 @@ cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
 gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNavImpactPool", "TestSafeTransferLib", "ExtensionsMap", "RigoblockPoolProxy.0.8.17"]
+fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
 
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
@@ -36,3 +37,4 @@ optimism = "${OPTIMISM_MAINNET_RPC_URL}"
 arbitrum = "${ARBITRUM_MAINNET_RPC_URL}"
 base = "${BASE_MAINNET_RPC_URL}"
 polygon = "${POLYGON_MAINNET_RPC_URL}"
+unichain = "${UNICHAIN_RPC_URL}"

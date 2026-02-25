@@ -14,4 +14,7 @@ library ForkBlocks {
 
     /// @notice Polygon chain block number for fork tests
     uint256 internal constant POLYGON_BLOCK = 81_000_000;
+
+    /// @notice Unichain block number for fork tests (just before tx 0xcd79b65d)
+    uint256 internal constant UNICHAIN_BLOCK = 41_298_700;
 }
