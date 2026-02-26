@@ -24,6 +24,10 @@ library Constants {
     /// @dev Re-exported from ForkBlocks for backward compatibility
     uint256 internal constant POLYGON_BLOCK = ForkBlocks.POLYGON_BLOCK;
 
+    /// @notice Unichain block number for fork tests
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant UNICHAIN_BLOCK = ForkBlocks.UNICHAIN_BLOCK;
+
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
     //////////////////////////////////////////////////////////////*/
@@ -65,6 +69,7 @@ library Constants {
     address internal constant ORACLE = 0xB13250f0Dc8ec6dE297E81CDA8142DB51860BaC4;
     address internal constant BASE_ORACLE = 0x59f39091Fd6f47e9D0bCB466F74e305f1709BAC4;
     address internal constant POLYGON_ORACLE = 0x1D8691A1A7d53B60DeDd99D8079E026cB0E5bac4;
+    address internal constant UNI_ORACLE = 0x54bd666eA7FD8d5404c0593Eab3Dcf9b6E2A3aC4;
 
     /// @notice Rigoblock token jar (same across all chains)
     /// @dev Receives spread fees accrued from pool operations
