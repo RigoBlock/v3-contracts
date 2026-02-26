@@ -776,6 +776,29 @@ contract A0xRouterForkTest is Test {
         IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
     }
 
+    /// @notice InsufficientNativeBalance is thrown when trying to swap more ETH than pool has.
+    ///  This error is checked in the catch block after AllowanceHolder.exec fails, ensuring
+    ///  we provide a clear error message instead of generic revert data when the issue is
+    ///  insufficient native balance.
+    function test_ErrorPropagation_InsufficientNativeBalance() public {
+        // Give pool only 0.1 ETH
+        deal(pool, 0.1 ether);
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_USDC, 1e6);
+
+        // Mock AllowanceHolder.exec to fail (simulating any failure during swap)
+        vm.mockCallRevert(
+            ALLOWANCE_HOLDER,
+            abi.encodeWithSelector(EXEC_SELECTOR),
+            abi.encodeWithSignature("SomeOtherError()")
+        );
+
+        // Try to swap 1 ETH when pool only has 0.1 ETH
+        vm.prank(poolOwner);
+        vm.expectRevert(IA0xRouter.InsufficientNativeBalance.selector);
+        IA0xRouter(pool).exec(currentSettler, address(0), 1 ether, payable(currentSettler), settlerData);
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
                             APPROVAL PATTERN
     //////////////////////////////////////////////////////////////////////////*/

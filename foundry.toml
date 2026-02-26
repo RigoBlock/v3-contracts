@@ -8,6 +8,7 @@ optimizer_runs = 1_000_000
 auto_detect_solc = true
 gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNavImpactPool", "TestSafeTransferLib", "ExtensionsMap", "RigoblockPoolProxy.0.8.17"]
 fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
+ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
@@ -20,13 +21,13 @@ compilation_restrictions = [
     { paths = "contracts/**", via_ir = false },
 ]
 
-[profile.fmt]
+[fmt]
 line_length = 120
 tab_width = 4
 bracket_spacing = true
 int_types = "long"
 
-[profile.lint]
+[lint]
 ignore = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 lint_on_build = false
 
