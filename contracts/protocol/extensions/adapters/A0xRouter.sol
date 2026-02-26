@@ -25,8 +25,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
 
     string private constant _REQUIRED_VERSION = "4.0.0";
 
-    /// @dev Sentinel address used by the 0x API/Settler for native ETH in AllowedSlippage.buyToken.
-    ///  See: SettlerAbstract.ETH_ADDRESS in 0x-settler.
+    /// @dev Sentinel address defined in 0x SettlerAbstract.ETH_ADDRESS for native currency.
     address private constant _ETH_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     address private immutable _adapter;

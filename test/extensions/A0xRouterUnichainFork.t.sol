@@ -76,7 +76,7 @@ contract A0xRouterUnichainForkTest is Test {
 
     function setUp() public {
         // Fork BEFORE the earliest failing tx (TX1 at block 41291308)
-        unichainFork = vm.createSelectFork("unichain", 41291300);
+        unichainFork = vm.createSelectFork("unichain", Constants.UNICHAIN_BLOCK);
 
         // Verify 0x infrastructure
         assertTrue(ALLOWANCE_HOLDER.code.length > 0, "AllowanceHolder not deployed");
