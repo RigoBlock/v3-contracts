@@ -1,3 +1,12 @@
+## [2.2.1](https://github.com/RigoBlock/v3-contracts/compare/v2.2.0...v2.2.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* 0x adapter ([f0c59f2](https://github.com/RigoBlock/v3-contracts/commit/f0c59f27e9e2eb68cf90b067c02bcb5936ca352d))
+
+
+
 # [2.2.0](https://github.com/RigoBlock/v3-contracts/compare/v2.1.4...v2.2.0) (2026-02-25)
 
 
@@ -41,15 +50,6 @@
 ### Bug Fixes
 
 * npm publish ([ad18b0a](https://github.com/RigoBlock/v3-contracts/commit/ad18b0a89e8f0e5a574b74bd1fe3d8ef38094dc2))
-
-
-
-## [2.1.1](https://github.com/RigoBlock/v3-contracts/compare/v2.1.0...v2.1.1) (2026-01-29)
-
-
-### Bug Fixes
-
-* fix release workflow ([d54cf53](https://github.com/RigoBlock/v3-contracts/commit/d54cf532a37568bd6192ae7bffed85bc806ce274))
 
 
 
