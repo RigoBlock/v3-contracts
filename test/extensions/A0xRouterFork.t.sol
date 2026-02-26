@@ -293,22 +293,18 @@ contract A0xRouterForkTest is Test {
         }
     }
 
-    /// @notice BASIC action is blocked by the adapter's action allowlist.
-    ///  BASIC can call arbitrary contracts with arbitrary calldata (including token.approve or
-    ///  token.transfer), so it must never reach the settler. The allowlist blocks it before
-    ///  the call is forwarded to AllowanceHolder.
-    function test_BridgeExclusion_BasicActionBlockedByAllowlist() public {
+    /// @notice BASIC action now passes the adapter's allowlist (needed for ETH wrapping).
+    ///  Settler's _isRestrictedTarget() and slippage check provide protection instead.
+    function test_BridgeExclusion_BasicActionAllowedByAllowlist() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
 
-        bytes4 basicSelector = ISettlerActions.BASIC.selector;
-
-        // Encode BASIC action targeting a random address (simulating a bridge protocol)
+        // Encode BASIC action
         bytes memory basicAction = abi.encodePacked(
-            basicSelector,
+            ISettlerActions.BASIC.selector,
             abi.encode(
                 Constants.ETH_USDC,    // sellToken
                 uint256(10000),        // bps = 100%
-                address(0xdeadbeef),   // pool target (arbitrary, simulates bridge)
+                address(0xdeadbeef),   // pool target
                 uint256(0),            // offset
                 bytes("")              // call data
             )
@@ -326,21 +322,25 @@ contract A0xRouterForkTest is Test {
             bytes32(0)
         );
 
+        // BASIC passes our validation — reverts inside AllowanceHolder/settler, not from adapter
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, basicSelector));
-        IA0xRouter(pool).exec(
+        try IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
-        assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
+        ) {
+            revert("Should revert inside settler (bad params)");
+        } catch (bytes memory returnData) {
+            _assertNotOurValidationError(returnData);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////////////////
                         ACTION ALLOWLIST
 
     The adapter uses a whitelist pattern: only explicitly allowed action selectors
-    pass validation. This blocks BASIC (arbitrary calldata to arbitrary target),
-    RFQ (arbitrary off-chain pricing), RENEGADE (arbitrary target), and METATXN_*
-    (wrong execution flow). Unrecognized selectors are also blocked by default.
+    pass validation. BASIC is allowed (needed by the 0x API for ETH wrapping and
+    intermediate operations). Blocked: RFQ (arbitrary off-chain pricing),
+    RENEGADE (arbitrary target), METATXN_* (wrong execution flow), and bridge
+    actions. Unrecognized selectors are also blocked by default.
     //////////////////////////////////////////////////////////////////////////*/
 
     /// @notice RFQ action is blocked — reverts with ActionNotAllowed.
@@ -457,16 +457,15 @@ contract A0xRouterForkTest is Test {
         );
     }
 
-    /// @notice BASIC action is blocked — it can call arbitrary contracts with arbitrary calldata,
-    ///  which could drain pool tokens via approve() or transfer() on the sell token.
-    function test_BASIC_BlockedByAdapter() public {
+    /// @notice BASIC action is allowed — needed by 0x API for ETH wrapping/unwrapping and
+    ///  intermediate protocol interactions. Protected by settler's _isRestrictedTarget() and
+    ///  slippage check.
+    function test_BASIC_AllowedByAdapter() public {
         deal(Constants.ETH_USDC, pool, 10000e6);
-
-        bytes4 basicSelector = ISettlerActions.BASIC.selector;
 
         // BASIC(address sellToken, uint256 bps, address pool, uint256 offset, bytes data)
         bytes memory basicAction = abi.encodePacked(
-            basicSelector,
+            ISettlerActions.BASIC.selector,
             abi.encode(
                 Constants.ETH_USDC,     // sellToken
                 uint256(10000),         // bps (100%)
@@ -485,13 +484,16 @@ contract A0xRouterForkTest is Test {
             actions, bytes32(0)
         );
 
+        // BASIC passes our validation. The call reverts inside AllowanceHolder/settler,
+        // not from our adapter validation.
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, basicSelector));
-        IA0xRouter(pool).exec(
+        try IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
-
-        assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
+        ) {
+            revert("Should revert inside settler (bad params)");
+        } catch (bytes memory returnData) {
+            _assertNotOurValidationError(returnData);
+        }
     }
 
     /// @notice RENEGADE action is blocked — it calls an arbitrary target with arbitrary data.
@@ -774,6 +776,29 @@ contract A0xRouterForkTest is Test {
         IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
     }
 
+    /// @notice InsufficientNativeBalance is thrown when trying to swap more ETH than pool has.
+    ///  This error is checked in the catch block after AllowanceHolder.exec fails, ensuring
+    ///  we provide a clear error message instead of generic revert data when the issue is
+    ///  insufficient native balance.
+    function test_ErrorPropagation_InsufficientNativeBalance() public {
+        // Give pool only 0.1 ETH
+        deal(pool, 0.1 ether);
+
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_USDC, 1e6);
+
+        // Mock AllowanceHolder.exec to fail (simulating any failure during swap)
+        vm.mockCallRevert(
+            ALLOWANCE_HOLDER,
+            abi.encodeWithSelector(EXEC_SELECTOR),
+            abi.encodeWithSignature("SomeOtherError()")
+        );
+
+        // Try to swap 1 ETH when pool only has 0.1 ETH
+        vm.prank(poolOwner);
+        vm.expectRevert(IA0xRouter.InsufficientNativeBalance.selector);
+        IA0xRouter(pool).exec(currentSettler, address(0), 1 ether, payable(currentSettler), settlerData);
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
                             APPROVAL PATTERN
     //////////////////////////////////////////////////////////////////////////*/
@@ -891,14 +916,17 @@ contract A0xRouterForkTest is Test {
         assertEq(pool.balance, poolBalanceBefore, "Pool ETH unchanged after revert");
     }
 
-    /// @notice Token->ETH swap simulation: sell USDC for native ETH
+    /// @notice Token->ETH swap simulation: 0x API uses 0xEeee...ee sentinel as buyToken for native ETH.
+    ///  Adapter maps it to address(0) for price feed check.
     function test_SwapSimulation_TokenToETH_PassesValidation() public {
         uint256 sellAmount = 5000e6;
         deal(Constants.ETH_USDC, pool, sellAmount);
 
+        // 0x API uses 0xEeee...ee sentinel for native ETH buyToken, not address(0)
+        address ETH_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
         bytes memory settlerData = _encodeSettlerExecute(
             pool,
-            Constants.ETH_WETH,
+            ETH_SENTINEL,
             1e15
         );
 
@@ -1090,3 +1118,4 @@ contract A0xRouterForkTest is Test {
         vm.stopPrank();
     }
 }
+
