@@ -157,13 +157,6 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await deploy("AIntents", {
-    from: deployer,
-    args: [config.acrossSpokePool],
-    log: true,
-    deterministicDeployment: true,
-  })
-
   /*await deploy("AMulticall", {
     from: deployer,
     args: [],
