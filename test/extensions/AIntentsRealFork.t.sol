@@ -421,7 +421,7 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     }
     
     /// @notice Test that we can call extension methods via delegatecall
-    function test_ExtensionDelegatecall_NoMocksNeeded() public {
+    function test_ExtensionDelegatecall_NoMocksNeeded() public view {
         ISmartPool poolInstance = ISmartPool(payable(pool()));
         
         // Test calling extension methods on the pool address

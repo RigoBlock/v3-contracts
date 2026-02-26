@@ -25,6 +25,9 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
 
     string private constant _REQUIRED_VERSION = "4.0.0";
 
+    /// @dev Sentinel address defined in 0x SettlerAbstract.ETH_ADDRESS for native currency.
+    address private constant _ETH_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
     address private immutable _adapter;
     IAllowanceHolder private immutable _allowanceHolder;
     IDeployer private immutable _deployer;
@@ -61,16 +64,17 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         _requireGenuineSettler(target);
         _validateSettlerCalldata(data);
 
-        uint256 value = token.isAddressZero() ? amount : 0;
+        bool isNativeETH = token.isAddressZero() || token == _ETH_SENTINEL;
+        uint256 value = isNativeETH ? amount : 0;
 
         // Approve max before call — ERC20 skips allowance deduction at type(uint256).max.
-        if (!token.isAddressZero()) {
+        if (!isNativeETH) {
             token.safeApprove(address(_allowanceHolder), type(uint256).max);
         }
 
         try _allowanceHolder.exec{value: value}(operator, token, amount, target, data) returns (bytes memory result) {
             // Reset to 1 after success — no hanging approvals, slot stays warm.
-            if (!token.isAddressZero()) {
+            if (!isNativeETH) {
                 token.safeApprove(address(_allowanceHolder), 1);
             }
             return result;
@@ -87,11 +91,16 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @dev Reverts if the action selector is not in the allowlist.
+    ///  BASIC is allowed because the 0x API uses it for ETH wrapping/unwrapping and intermediate
+    ///  protocol interactions. The settler's _isRestrictedTarget() prevents BASIC from calling
+    ///  Permit2, AllowanceHolder, or the settler itself. The settler's slippage check
+    ///  (_checkSlippageAndTransfer) ensures minimum output, preventing fund loss.
     function _assertIsAllowedAction(bytes4 s) private pure {
         require(
             s == ISettlerActions.TRANSFER_FROM.selector ||
                 s == ISettlerActions.NATIVE_CHECK.selector ||
                 s == ISettlerActions.POSITIVE_SLIPPAGE.selector ||
+                s == ISettlerActions.BASIC.selector ||
                 s == ISettlerActions.UNISWAPV2.selector ||
                 s == ISettlerActions.UNISWAPV3.selector ||
                 s == ISettlerActions.UNISWAPV3_VIP.selector ||
@@ -121,7 +130,12 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @dev Adds buyToken to active tokens if it has a valid price feed.
+    ///  Maps the 0x ETH sentinel (0xEeee...) to address(0) because the EOracle recognizes
+    ///  address(0) and wrappedNative as having price feeds, but not the sentinel.
     function _assertTokenOutHasPriceFeed(address buyToken) private {
+        if (buyToken == _ETH_SENTINEL) {
+            buyToken = address(0);
+        }
         AddressSet storage values = StorageLib.activeTokensSet();
         values.addUnique(IEOracle(address(this)), buyToken, StorageLib.pool().baseToken);
     }
