@@ -26,7 +26,8 @@ echo "⚡ Step 1/3: Running non-fork test coverage..."
 rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --no-match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PolygonForkTest|PoolDonateTest' \
+  --no-match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PolygonForkTest|PoolDonateTest|AGmxV2ForkTest|A0xRouterUnichainForkTest|AUniswapForkTest' \
+  --fork-retries 5 --fork-retry-backoff 400 --compute-units-per-second 100 \
   --report lcov
 
 mv lcov.info /tmp/foundry_nofork_lcov.info
@@ -38,7 +39,8 @@ echo "⚡ Step 2/3: Running fork test coverage..."
 rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PoolDonateTest' \
+  --match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PoolDonateTest|AGmxV2ForkTest|A0xRouterUnichainForkTest|AUniswapForkTest' \
+  --fork-retries 5 --fork-retry-backoff 400 --compute-units-per-second 100 \
   --report lcov
 
 mv lcov.info /tmp/foundry_fork_lcov.info

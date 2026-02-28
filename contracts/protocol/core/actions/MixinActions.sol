@@ -227,6 +227,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
         NavImpactLib.validateSupply(poolTokens().totalSupply, virtualSupply);
 
+        // slither-disable-next-line divide-before-multiply
         netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;

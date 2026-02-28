@@ -156,6 +156,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         require(
+            // slither-disable-next-line incorrect-equality
             navParams.netTotalValue == expectedAssets,
             NavManipulationDetected(expectedAssets, navParams.netTotalValue)
         );

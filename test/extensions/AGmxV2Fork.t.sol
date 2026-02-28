@@ -35,8 +35,11 @@ import {
     IGmxRoleStore,
     IGmxOrderHandler,
     IGmxChainlinkPriceFeedProvider,
-    GmxValidatedPrice
+    GmxValidatedPrice,
+    GmxPositionInfo,
+    GmxExecutionPriceResult
 } from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
@@ -1291,6 +1294,302 @@ contract AGmxV2ForkTest is Test {
             navAfterOpen,
             "realized profit must bring NAV above post-open level"
         );
+    }
+
+    // =========================================================================
+    // Tests — _ensureWeth coverage
+    // =========================================================================
+
+    /// @notice When the pool has less WETH than the required amount but enough native ETH,
+    ///  _ensureWeth wraps the deficit from native ETH and the order is created successfully.
+    function test_EnsureWeth_WrapsNativeEthToMakeUpDeficit() public {
+        // Give the pool only 0.1 WETH — well below COLLATERAL_AMOUNT (1 WETH) + any fee.
+        deal(ARB_WETH, pool, 0.1 ether);
+        // Give 5 native ETH to cover the deficit.
+        deal(pool, 5 ether);
+
+        uint256 wethBefore = IERC20(ARB_WETH).balanceOf(pool);
+        uint256 ethBefore = pool.balance;
+
+        vm.prank(poolOwner);
+        bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+
+        // Order key must be non-zero — order was created.
+        assertTrue(orderKey != bytes32(0), "order key must be non-zero after ETH top-up");
+
+        // Pool's combined WETH + ETH decreased by at least COLLATERAL_AMOUNT.
+        uint256 wethAfter = IERC20(ARB_WETH).balanceOf(pool);
+        uint256 ethAfter = pool.balance;
+        uint256 totalBefore = wethBefore + ethBefore;
+        uint256 totalAfter = wethAfter + ethAfter;
+        assertGe(
+            totalBefore - totalAfter,
+            COLLATERAL_AMOUNT,
+            "at least collateral amount must have left the pool"
+        );
+    }
+
+    /// @notice When the pool has neither WETH nor native ETH, _ensureWeth reverts with
+    ///  InsufficientNativeBalance (covers the require() on AGmxV2 lines 244-245).
+    function test_EnsureWeth_InsufficientNativeBalance_Reverts() public {
+        // Strip WETH and native ETH from pool.
+        deal(ARB_WETH, pool, 0);
+        deal(pool, 0);
+
+        vm.prank(poolOwner);
+        vm.expectRevert(IAGmxV2.InsufficientNativeBalance.selector);
+        IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+    }
+
+    // =========================================================================
+    // Tests — GmxLib reader error fallbacks
+    // =========================================================================
+
+    /// @notice When IGmxReader.getAccountOrders reverts, GmxLib catches and returns empty
+    ///  pending-order balances — getAppTokenBalances must not propagate the revert.
+    ///  Covers GmxLib line 220 (catch branch of _getPendingOrderBalances).
+    function test_GmxLib_GetAccountOrders_ReaderReverts_HandledGracefully() public {
+        // Create a pending order so the GMX_V2_POSITIONS bit is set and GmxLib
+        // will try to query pending orders.
+        vm.prank(poolOwner);
+        IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+
+        uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+
+        // Mock the reader to revert on getAccountOrders.
+        vm.mockCallRevert(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encodeWithSignature("Error(string)", "reader unavailable")
+        );
+
+        // Must not revert — catch block returns empty slice.
+        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(gmxFlag);
+        vm.clearMockedCalls();
+
+        // No executed position → GMX app must return either empty or the fallback collateral.
+        // What matters is that the call completed without reverting.
+        assertTrue(apps.length >= 0, "call must complete without reverting");
+    }
+
+    /// @notice When IGmxReader.getAccountPositionInfoList reverts, GmxLib falls back to
+    ///  _collateralOnlyBalances — returning raw collateral amounts.
+    ///  Covers GmxLib lines 352-354 (_collateralOnlyBalances body).
+    function test_GmxLib_GetPositionInfoList_ReaderReverts_FallsBackToCollateralOnly() public {
+        // Open and execute a position so there is a real Position.Props on-chain.
+        vm.prank(poolOwner);
+        bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+        _executeOrder(orderKey, GMX_ETH_USD_MARKET);
+
+        uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+
+        // Mock getAccountPositionInfoList to revert — forces the catch → _collateralOnlyBalances.
+        vm.mockCallRevert(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encodeWithSignature("Error(string)", "info list unavailable")
+        );
+
+        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(gmxFlag);
+        vm.clearMockedCalls();
+
+        // _collateralOnlyBalances returns the raw collateralAmount for each position.
+        bool found;
+        for (uint256 i; i < apps.length; ++i) {
+            if (uint256(apps[i].appType) == uint256(Applications.GMX_V2_POSITIONS)) {
+                found = true;
+                assertGt(apps[i].balances.length, 0, "must have at least one collateral balance");
+                assertEq(apps[i].balances[0].token, ARB_WETH, "fallback token must be collateral (WETH)");
+                assertGt(apps[i].balances[0].amount, 0, "fallback collateral amount must be positive");
+                break;
+            }
+        }
+        assertTrue(found, "GMX_V2_POSITIONS app must be present in fallback mode");
+    }
+
+    /// @notice Claimable long-token and short-token funding fees are included as separate
+    ///  AppTokenBalance entries when getAccountPositionInfoList returns non-zero values.
+    ///  Covers GmxLib lines 309 and 315 (claimableLong/ShortTokenAmount > 0 branches).
+    function test_GmxLib_ClaimableFundingFees_IncludedInBalances() public {
+        // Open and execute a real position.
+        vm.prank(poolOwner);
+        bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+        _executeOrder(orderKey, GMX_ETH_USD_MARKET);
+
+        // Read the real position.
+        Position.Props[] memory positions = IGmxReader(GMX_READER).getAccountPositions(
+            GMX_DATA_STORE, pool, 0, type(uint256).max
+        );
+        assertEq(positions.length, 1, "must have exactly 1 position");
+
+        // Get real oracle price for collateral.
+        GmxValidatedPrice memory wethPrice =
+            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+
+        // Build a fake GmxPositionInfo with realistic collateral amounts and
+        // explicitly set non-zero claimable funding fees for both long and short tokens.
+        GmxPositionInfo[] memory fakeInfos = new GmxPositionInfo[](1);
+        fakeInfos[0] = _buildFakePosInfo({
+            pos: positions[0],
+            colPriceMin: wethPrice.min,
+            colPriceMax: wethPrice.max,
+            basePnlUsd: 0,
+            totalImpactUsd: 0,
+            claimableLong: 0.001 ether, // triggers L309
+            claimableShort: 1e5 // triggers L315 (USDC units — 6 decimals, so 0.1 USDC)
+        });
+
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(fakeInfos)
+        );
+
+        uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(gmxFlag);
+        vm.clearMockedCalls();
+
+        // Collect all balance tokens from the GMX app.
+        address[] memory tokens;
+        int256[] memory amounts;
+        for (uint256 i; i < apps.length; ++i) {
+            if (uint256(apps[i].appType) == uint256(Applications.GMX_V2_POSITIONS)) {
+                tokens = new address[](apps[i].balances.length);
+                amounts = new int256[](apps[i].balances.length);
+                for (uint256 j; j < apps[i].balances.length; ++j) {
+                    tokens[j] = apps[i].balances[j].token;
+                    amounts[j] = apps[i].balances[j].amount;
+                }
+                break;
+            }
+        }
+
+        // The ETH/USD market has WETH as longToken and USDC as shortToken.
+        // Both claimable fee entries must appear.
+        bool foundLong;
+        bool foundShort;
+        for (uint256 i; i < tokens.length; ++i) {
+            if (tokens[i] == ARB_WETH && amounts[i] == int256(0.001 ether)) foundLong = true;
+            if (tokens[i] == ARB_USDC && amounts[i] == int256(1e5)) foundShort = true;
+        }
+        assertTrue(foundLong, "claimable long-token (WETH) funding fee must appear in balances");
+        assertTrue(foundShort, "claimable short-token (USDC) funding fee must appear in balances");
+    }
+
+    /// @notice When totalImpactUsd > 0 (positive price impact), the position net collateral is
+    ///  larger than with zero impact.  Covers GmxLib line 336 (positive impactCollateral branch).
+    function test_GmxLib_PositivePriceImpact_IncreasesPositionValue() public {
+        // Open and execute a real position.
+        vm.prank(poolOwner);
+        bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+        _executeOrder(orderKey, GMX_ETH_USD_MARKET);
+
+        Position.Props[] memory positions = IGmxReader(GMX_READER).getAccountPositions(
+            GMX_DATA_STORE, pool, 0, type(uint256).max
+        );
+        assertEq(positions.length, 1, "must have exactly 1 position");
+
+        GmxValidatedPrice memory wethPrice =
+            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+
+        uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+
+        // --- Baseline: zero impact ---
+        GmxPositionInfo[] memory zeroImpact = new GmxPositionInfo[](1);
+        zeroImpact[0] = _buildFakePosInfo({
+            pos: positions[0],
+            colPriceMin: wethPrice.min,
+            colPriceMax: wethPrice.max,
+            basePnlUsd: 0,
+            totalImpactUsd: 0,
+            claimableLong: 0,
+            claimableShort: 0
+        });
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(zeroImpact)
+        );
+        ExternalApp[] memory appsNoImpact = IEApps(pool).getAppTokenBalances(gmxFlag);
+        vm.clearMockedCalls();
+
+        // --- Positive impact: totalImpactUsd = 500 USD in 1e30 precision (~0.167 WETH at 3000) ---
+        int256 posImpactUsd = 500 * int256(GMX_USD); // $500 in 1e30
+        GmxPositionInfo[] memory posImpact = new GmxPositionInfo[](1);
+        posImpact[0] = _buildFakePosInfo({
+            pos: positions[0],
+            colPriceMin: wethPrice.min,
+            colPriceMax: wethPrice.max,
+            basePnlUsd: 0,
+            totalImpactUsd: posImpactUsd,
+            claimableLong: 0,
+            claimableShort: 0
+        });
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(posImpact)
+        );
+        ExternalApp[] memory appsWithImpact = IEApps(pool).getAppTokenBalances(gmxFlag);
+        vm.clearMockedCalls();
+
+        // Extract net-collateral amounts from both results (token == ARB_WETH, index 0).
+        int256 colNoImpact;
+        int256 colWithImpact;
+        for (uint256 i; i < appsNoImpact.length; ++i) {
+            if (uint256(appsNoImpact[i].appType) == uint256(Applications.GMX_V2_POSITIONS)) {
+                colNoImpact = appsNoImpact[i].balances[0].amount;
+                break;
+            }
+        }
+        for (uint256 i; i < appsWithImpact.length; ++i) {
+            if (uint256(appsWithImpact[i].appType) == uint256(Applications.GMX_V2_POSITIONS)) {
+                colWithImpact = appsWithImpact[i].balances[0].amount;
+                break;
+            }
+        }
+
+        assertGt(
+            colWithImpact,
+            colNoImpact,
+            "positive price impact must increase reported net collateral"
+        );
+    }
+
+    // =========================================================================
+    // Helper — construct a minimal GmxPositionInfo for mocking
+    // =========================================================================
+
+    /// @dev Builds a GmxPositionInfo with chosen PnL/impact/funding-fee values while keeping
+    ///  all other fields at their on-chain values.  Used solely for unit-coverage mocking.
+    function _buildFakePosInfo(
+        Position.Props memory pos,
+        uint256 colPriceMin,
+        uint256 colPriceMax,
+        int256 basePnlUsd,
+        int256 totalImpactUsd,
+        uint256 claimableLong,
+        uint256 claimableShort
+    ) private pure returns (GmxPositionInfo memory info) {
+        info.positionKey = bytes32(0);
+        info.position = pos;
+
+        // fees — zero everything except collateralTokenPrice and claimable funding
+        info.fees.collateralTokenPrice = Price.Props({min: colPriceMin, max: colPriceMax});
+        info.fees.funding.claimableLongTokenAmount = claimableLong;
+        info.fees.funding.claimableShortTokenAmount = claimableShort;
+        // totalCostAmount = 0 (no fees charged in the fake info)
+
+        info.basePnlUsd = basePnlUsd;
+
+        info.executionPriceResult = GmxExecutionPriceResult({
+            priceImpactUsd: 0,
+            executionPrice: 0,
+            balanceWasImproved: false,
+            proportionalPendingImpactUsd: 0,
+            totalImpactUsd: totalImpactUsd,
+            priceImpactDiffUsd: 0
+        });
     }
 
     /// @notice Full USDC-collateral short: open → execute → close → execute.

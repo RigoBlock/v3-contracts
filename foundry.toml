@@ -10,6 +10,12 @@ gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNav
 fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
 ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 
+# Retry transient RPC failures and throttle request rate to avoid exceeding provider
+# compute unit limits (Alchemy default cap: 330 CUPS).  These are CLI-only flags
+# (not valid as foundry.toml keys in this foundry version); they are passed
+# directly to `forge coverage` in scripts/foundry-coverage.sh.
+# Flags used:  --fork-retries 5  --fork-retry-backoff 400  --compute-units-per-second 100
+
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
 
