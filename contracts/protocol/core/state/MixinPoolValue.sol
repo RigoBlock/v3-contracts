@@ -67,12 +67,10 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             components.totalSupply = uint256(effectiveSupply);
 
             if (components.netTotalValue > 0) {
-                // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue =
                     (components.netTotalValue * 10 ** components.decimals) /
                     components.totalSupply;
             } else {
-                // No net value, return stored NAV
                 return components;
             }
         }

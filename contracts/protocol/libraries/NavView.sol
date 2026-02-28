@@ -58,9 +58,9 @@ library NavView {
         uint256 activeAppIndex;
         uint256 tokenIndex;
 
-        // Populate appBalances array with balances from each ACTIVE application only
+        // Populate appBalances array with balances from each application.
         for (uint256 i = 0; i < appsCount; i++) {
-            if (!ApplicationsLib.isActiveApplication(packedApps, i)) continue;
+            if (!ApplicationsLib.shouldQueryApp(packedApps, i)) continue;
 
             if (Applications(i) == Applications.GRG_STAKING) {
                 appBalances[activeAppIndex] = _getGrgStakingProxyBalances(pool, grgStakingProxy);

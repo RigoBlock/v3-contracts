@@ -71,8 +71,7 @@ const deploy: DeployFunction = async function (
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [
-      grgStakingProxy,
-      univ4Posm,
+      [grgStakingProxy, univ4Posm],
     ],
     log: true,
     deterministicDeployment: true,

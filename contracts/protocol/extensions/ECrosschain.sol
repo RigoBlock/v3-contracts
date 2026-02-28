@@ -86,11 +86,10 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
             token = address(0);
         }
 
-        // define a boolean to be used in nav manipulation assertion
-        bool previouslyActive = StorageLib.isOwnedToken(token);
-
-        // Only activate after token transfer. Token could be already active, but addUnique is idempotent.
-        StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
+        // Single positions[token] read: returns whether token was already active AND adds it if not.
+        bool previouslyActive = StorageLib.activeTokensSet().addAndCheckWasActive(
+            IEOracle(address(this)), token, StorageLib.pool().baseToken
+        );
 
         if (params.opType == OpType.Transfer) {
             // Update virtual supply with amount (expected value), surplus remains as NAV increase

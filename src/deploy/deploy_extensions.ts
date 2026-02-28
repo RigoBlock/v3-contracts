@@ -68,8 +68,7 @@ const deploy: DeployFunction = async function (
   const eApps = await deploy("EApps", {
     from: deployer,
     args: [
-      config.stakingProxy,
-      config.univ4Posm,
+      [config.stakingProxy, config.univ4Posm],
     ],
     log: true,
     deterministicDeployment: true,

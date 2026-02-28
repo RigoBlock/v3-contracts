@@ -27,50 +27,22 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     string private constant _REQUIRED_VERSION = "4.1.2";
     uint256 private constant _MAX_EXECUTION_FEE = 0.05 ether;
 
-    // =========================================================================
-    // Immutables
-    // =========================================================================
-
-    /// @dev Address of this deployed adapter instance. Used to detect direct (non-delegatecall) calls.
     address private immutable _adapter;
 
-    // =========================================================================
-    // Constructor
-    // =========================================================================
-
-    /// @dev No constructor parameters: all canonical GMX and WETH addresses are
-    ///  hardcoded constants in GmxLib and referenced here via GmxLib.GMX_EXCHANGE_ROUTER
-    ///  and GmxLib.WRAPPED_NATIVE.  If GMX upgrades a contract, a new adapter must be
-    ///  deployed regardless (encoding changes), so immutables add no value.
-    ///  Execution fees are computed on-chain from the GMX DataStore at order-creation time via
-    ///  GmxLib.computeExecutionFee (adjustedGasLimit × tx.gasprice).  In eth_call simulations
-    ///  tx.gasprice is 0, so the simulated WETH consumption is understated; actual execution is correct.
     constructor() {
         require(block.chainid == GmxLib.ARBITRUM_CHAIN_ID, NotArbitrum());
         _adapter = address(this);
     }
-
-    // =========================================================================
-    // Modifiers
-    // =========================================================================
 
     modifier onlyDelegateCall() {
         require(address(this) != _adapter, DirectCallNotAllowed());
         _;
     }
 
-    // =========================================================================
-    // IMinimumVersion
-    // =========================================================================
-
     /// @inheritdoc IMinimumVersion
     function requiredVersion() external pure override returns (string memory) {
         return _REQUIRED_VERSION;
     }
-
-    // =========================================================================
-    // IAGmxV2 — order management
-    // =========================================================================
 
     /// @inheritdoc IAGmxV2
     function createIncreaseOrder(
@@ -136,9 +108,6 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
                 dataList: new bytes32[](0)
             })
         );
-
-        // Mark GMX positions as an active application in pool storage so that
-        // getAppTokenBalances() is called during NAV computation.
         StorageLib.activeApplications().storeApplication(uint256(Applications.GMX_V2_POSITIONS));
     }
 
@@ -201,7 +170,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     function updateOrder(UpdateOrderParams calldata params) external override nonReentrant onlyDelegateCall {
         // Top up the execution fee to current gas price.  Use the increase-order gas limit
         // (the larger of the two order types) as a conservative upper bound; excess is refunded
-        // by GMX to cancellationReceiver (the pool).  Guarded by the same _MAX_EXECUTION_FEE cap.
+        // by GMX to cancellationReceiver (the pool). Guarded by the same _MAX_EXECUTION_FEE cap.
         uint256 feeTopUp = GmxLib.computeExecutionFee(true);
         require(feeTopUp <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
         if (feeTopUp > 0) {
@@ -227,10 +196,6 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         // (set to address(this) on creation), so tokens return to the pool automatically.
         GmxLib.GMX_ROUTER.cancelOrder(key);
     }
-
-    // =========================================================================
-    // IAGmxV2 — fee & collateral claims
-    // =========================================================================
 
     /// @inheritdoc IAGmxV2
     function claimFundingFees(
@@ -259,20 +224,17 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         GmxLib.GMX_ROUTER.claimCollateral(markets, tokens, timeKeys, address(this));
     }
 
-    // =========================================================================
-    // Private helpers
-    // =========================================================================
-
-    /// @dev Registers `token` in the pool's active-tokens set if it has a valid price feed
-    ///  and is not the base token.  Must be called at order-create time (not close time) because
-    ///  keeper execution returns collateral to the pool wallet without calling back into this adapter.
+    /// @dev Adds `token` to the pool's active-tokens set so it is visible to NAV computation when
+    ///  the GMX keeper settles the position and tokens land in the pool wallet.
+    ///  Called at order-create time because there is no callback at settle time.
+    ///  addUnique already skips the base token (token == baseToken check inside), so we only
+    ///  need to guard address(0) here (native ETH — GMX always uses WETH, never address(0)).
     function _trackToken(address token) private {
-        if (token == address(0) || token == GmxLib.WRAPPED_NATIVE) {
+        if (token == address(0)) {
             return;
         }
 
-        AddressSet storage activeTokens = StorageLib.activeTokensSet();
-        activeTokens.addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
+        StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
     }
 
     /// @dev Ensures the pool holds at least `amount` WETH, wrapping from native ETH if needed.

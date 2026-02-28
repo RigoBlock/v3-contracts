@@ -240,7 +240,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
                 : IERC20(baseToken).balanceOf(address(this));
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
 
-            // an active token must have a price feed, hence the oracle query will always return a converted value
             netRevenue = uint256(
                 IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue.toInt256(), tokenOut)
             );

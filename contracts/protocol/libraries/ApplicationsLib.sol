@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
+import {Applications} from "../types/Applications.sol";
+
 struct ApplicationsSlot {
     uint256 packedApplications;
 }
@@ -36,5 +38,16 @@ library ApplicationsLib {
         require(appIndex < MAX_ALLOWED_APPLICATIONS, ApplicationIndexBitmaskRange());
         uint256 flag = 1 << appIndex;
         return (packedApplications & flag) != 0;
+    }
+
+    /// @notice Returns whether an application should be queried for token balances.
+    /// @dev GRG_STAKING is always queried: it is a pre-existing application that self-activates
+    ///  on the first NAV write, so the active-bit may not be set yet on a fresh pool.
+    /// @param packedApplications The bitmap packed active applications flags.
+    /// @param appIndex The application to check.
+    /// @return bool Whether the application should be queried.
+    function shouldQueryApp(uint256 packedApplications, uint256 appIndex) internal pure returns (bool) {
+        if (Applications(appIndex) == Applications.GRG_STAKING) return true;
+        return isActiveApplication(packedApplications, appIndex);
     }
 }

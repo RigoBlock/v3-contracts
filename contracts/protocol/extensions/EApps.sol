@@ -57,15 +57,9 @@ contract EApps is IEApps {
 
         // Count how many applications are active
         for (uint256 i = 0; i < totalAppsCount; i++) {
-            if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
+            if (packedApplications.shouldQueryApp(uint256(Applications(i)))) {
                 activeAppCount++;
                 activeApps[i] = true;
-                // grg staking is a pre-existing application. Therefore, we always check staked balance.
-            } else if (Applications(i) == Applications.GRG_STAKING) {
-                activeAppCount++;
-                activeApps[i] = true;
-            } else {
-                continue;
             }
         }
 
