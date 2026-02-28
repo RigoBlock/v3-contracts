@@ -121,11 +121,7 @@ library NavView {
         address uniV4Posm
     ) internal view returns (NavData memory) {
         // Get token balances
-        AppTokenBalance[] memory balances = _getTokensAndBalances(
-            pool,
-            grgStakingProxy,
-            uniV4Posm
-        );
+        AppTokenBalance[] memory balances = _getTokensAndBalances(pool, grgStakingProxy, uniV4Posm);
 
         // Get pool data
         address baseToken = StorageLib.pool().baseToken;
@@ -199,11 +195,7 @@ library NavView {
     ) private view returns (AppTokenBalance[] memory) {
         // Get active tokens and application balances
         ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(pool).getActiveTokens();
-        AppTokenBalance[] memory appBalances = getAppTokenBalances(
-            pool,
-            grgStakingProxy,
-            uniV4Posm
-        );
+        AppTokenBalance[] memory appBalances = getAppTokenBalances(pool, grgStakingProxy, uniV4Posm);
 
         // define new array of max length (active tokens + base token + app tokens)
         uint256 portfolioTokensLength = tokens.activeTokens.length + 1;

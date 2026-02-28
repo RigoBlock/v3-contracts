@@ -98,7 +98,10 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         } else {
             // ERC-20 collateral: send collateral token and WETH fee as separate transfers.
             _ensureWeth(executionFee);
-            params.addresses.initialCollateralToken.safeTransfer(orderVault, params.numbers.initialCollateralDeltaAmount);
+            params.addresses.initialCollateralToken.safeTransfer(
+                orderVault,
+                params.numbers.initialCollateralDeltaAmount
+            );
             GmxLib.WRAPPED_NATIVE.safeTransfer(orderVault, executionFee);
         }
 
@@ -281,5 +284,4 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
             IWETH9(GmxLib.WRAPPED_NATIVE).deposit{value: deficit}();
         }
     }
-
 }

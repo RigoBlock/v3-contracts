@@ -53,9 +53,7 @@ interface IAGmxV2 {
     ///  numbers.sizeDeltaUsd, numbers.acceptablePrice, and isLong are used from the caller.
     /// @param params GMX CreateOrderParams (security-critical fields are overridden by the adapter).
     /// @return orderKey The unique key of the created GMX order.
-    function createIncreaseOrder(
-        IBaseOrderUtils.CreateOrderParams calldata params
-    ) external returns (bytes32 orderKey);
+    function createIncreaseOrder(IBaseOrderUtils.CreateOrderParams calldata params) external returns (bytes32 orderKey);
 
     /// @notice Decreases or closes a leveraged position via a GMX v2 decrease order.
     /// @dev Uses GMX's own CreateOrderParams. The adapter enforces safe values for receiver,
@@ -69,9 +67,7 @@ interface IAGmxV2 {
     ///  the call reverts.
     /// @param params GMX CreateOrderParams (security-critical fields are overridden by the adapter).
     /// @return orderKey The unique key of the created GMX order.
-    function createDecreaseOrder(
-        IBaseOrderUtils.CreateOrderParams calldata params
-    ) external returns (bytes32 orderKey);
+    function createDecreaseOrder(IBaseOrderUtils.CreateOrderParams calldata params) external returns (bytes32 orderKey);
 
     /// @notice Updates size, price or fee of an existing pending GMX order.
     /// @dev Tops up the execution fee automatically (same on-chain formula as createOrder).

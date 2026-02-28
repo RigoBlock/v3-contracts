@@ -188,4 +188,3 @@ contract EApps is IEApps {
         return TickMath.getSqrtPriceAtTick(twap1 - twap0);
     }
 }
-

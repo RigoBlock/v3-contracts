@@ -110,10 +110,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         uint256(0).storeAssets();
     }
 
-    function _updateVirtualSupply(
-        address token,
-        uint256 amount
-    ) private {
+    function _updateVirtualSupply(address token, uint256 amount) private {
         // This increases effective supply, keeping NAV unchanged
         address baseToken = StorageLib.pool().baseToken;
 
