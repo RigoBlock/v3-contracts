@@ -169,14 +169,20 @@ const deploy: DeployFunction = async function (
 
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [stakingProxy.address, univ4Posm.address],
+    args: [
+      stakingProxy.address,
+      univ4Posm.address,
+    ],
     log: true,
     deterministicDeployment: true,
   });
 
   const eNavView = await deploy("ENavView", {
     from: deployer,
-    args: [stakingProxy.address, univ4Posm.address],
+    args: [
+      stakingProxy.address,
+      univ4Posm.address,
+    ],
     log: true,
     deterministicDeployment: true,
   });

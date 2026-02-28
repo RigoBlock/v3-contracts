@@ -1,4 +1,5 @@
 forget-std/=lib/forget-std
+gmx-synthetics/=lib/gmx-synthetics/contracts/
 solmate/=lib/solmate
 permit2/=lib/permit2
 0x-settler/=lib/0x-settler/

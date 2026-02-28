@@ -385,14 +385,14 @@ Price feeds are chain-local - no cross-chain oracle calls required.
 
 ### 5.4 Feature Comparison
 
-| Feature | Enzyme | dHEDGE | Rigoblock |
-|---------|--------|--------|-----------|
-| Multi-chain support | Limited | Limited | Native |
-| Automated NAV | Via keepers | Via keepers | Built-in |
-| Cross-chain transfers | Not supported | Manual | Atomic |
-| NAV sync latency | Minutes | Minutes | Zero |
-| Keeper requirement | Yes | Yes | No |
-| Same address all chains | No | No | Yes |
+| Feature | Rigoblock | Peers |
+|---------|-----------|-------|
+| Multi-chain support | Native (same address all chains) | Per-chain deployments, no address parity |
+| Automated NAV | Built-in (computed locally per chain) | Via keeper bots or off-chain aggregators |
+| Cross-chain transfers | Atomic (VS model, no messaging per NAV) | Not supported or manual reconciliation |
+| NAV sync latency | Zero (local computation only) | Minutes to hours (keeper or oracle lag) |
+| Keeper requirement | No | Yes (NAV updates, rebalancing) |
+| Same address all chains | Yes | No |
 
 ---
 

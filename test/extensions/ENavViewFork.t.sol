@@ -19,7 +19,7 @@ import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISm
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {AppTokenBalance, ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
-import {DeploymentParams, Extensions} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
 /// @title ENavViewFork - Fork-based tests for the ENavView extension
 /// @notice Tests the ENavView extension against a live pool with implementation upgrade simulation
@@ -110,7 +110,7 @@ contract ENavViewForkTest is Test {
         }
 
         // Deploy new ENavView extension
-        eNavView = new ENavView(GRG_STAKING, UNISWAP_V4_POSM);
+        eNavView = new ENavView(EAppsParams({grgStakingProxy: GRG_STAKING, univ4Posm: UNISWAP_V4_POSM}));
         console2.log("  New ENavView:", address(eNavView));
 
         // We'll deploy ECrosschain since it's not on mainnet yet

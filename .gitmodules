@@ -14,3 +14,6 @@
 [submodule "lib/0x-settler"]
 	path = lib/0x-settler
 	url = https://github.com/0xProject/0x-settler
+[submodule "lib/gmx-synthetics"]
+	path = lib/gmx-synthetics
+	url = https://github.com/gmx-io/gmx-synthetics

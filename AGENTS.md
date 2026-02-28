@@ -512,3 +512,14 @@ When making changes:
     - Assembly is acceptable ONLY for: raw error propagation (`revert(add(d,32),mload(d))`), extracting `bytes4` from `bytes memory` (no Solidity cast exists), and ERC-7201 storage slot access.
 18. **USE .selector INSTEAD OF keccak256 HASHING** - ALWAYS use `IInterface.functionName.selector` to obtain function selectors. NEVER use `bytes4(keccak256("functionName(paramTypes)"))` — it is fragile (typos in the string silently produce wrong selectors) and not type-checked by the compiler. If the interface doesn't exist locally, vendor a minimal interface with just the function signatures needed. Example: `ISettlerActions.RFQ.selector` not `bytes4(keccak256("RFQ(address,((address,uint256),uint256,uint256),...)"))`
 19. **LOW-LEVEL CALLS IN TESTS** - NEVER use `(bool success, bytes memory data) = target.call(abi.encodeCall(...))` in tests. Always use typed interface calls: `IInterface(target).method(...)`. For expected reverts, use `vm.expectRevert(expectedError)` or `try IInterface(target).method(...) { revert("should fail"); } catch (bytes memory err) { /* check err */ }`. Low-level calls bypass Solidity's type checking and make tests harder to read and audit.
+20. **APP ACTIVATION: only when creating non-token external positions** - Call `StorageLib.activeApplications().storeApplication(uint256(Applications.X))` ONLY when the adapter creates an EXTERNAL POSITION that lives outside the pool's ERC-20 wallet and must be valued by EApps. Examples that NEED activation: AGmxV2 (opens DataStore perpetual positions), AUniswapRouter (creates UniV4 LP NFT positions). Examples that DO NOT need activation: A0xRouter (pure swap — output tokens land in pool wallet and are tracked on arrival), AIntents/AcrossBridge (funds leave the pool via bridge; no position held on-chain). The rule: if there is no on-chain struct/position to value at NAV time, storeApplication is not needed.
+
+## GMX v2 Integration
+
+See `docs/gmx/` for the full GMX integration guide. Key rules for AI agents:
+
+- `GmxLib` returns **native collateral tokens** (not WETH). See `docs/gmx/nav-accounting.md`.
+- Always call `_trackToken(collateralToken)` in `createIncreaseOrder`. See `docs/gmx/architecture.md#token-tracking`.
+- `ARBITRUM_CHAIN_ID` is defined in `GmxLib` — never duplicate it.
+- The chain guard is the `GMX_V2_POSITIONS` activation bit, not a `block.chainid` check in `GmxLib`.
+- For P&L fork tests, mock the Chainlink oracle BEFORE `_executeOrder`. See `docs/gmx/architecture.md#common-pitfalls`.

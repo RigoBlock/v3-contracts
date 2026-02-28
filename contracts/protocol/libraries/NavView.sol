@@ -22,6 +22,7 @@ import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
+import {GmxLib} from "./GmxLib.sol";
 /// @title NavView - Internal library for navigation and application view functionality
 /// @notice Provides internal functions to calculate NAV and retrieve application balances
 /// @dev This library contains the core logic for the ENavView extension
@@ -51,17 +52,22 @@ library NavView {
         address grgStakingProxy,
         address uniV4Posm
     ) internal view returns (AppTokenBalance[] memory balances) {
+        uint256 packedApps = ISmartPoolState(pool).getActiveApplications();
         uint256 appsCount = uint256(Applications.COUNT);
         AppTokenBalance[][] memory appBalances = new AppTokenBalance[][](appsCount);
         uint256 activeAppIndex;
         uint256 tokenIndex;
 
-        // Populate appBalances array with balances from each active application
+        // Populate appBalances array with balances from each ACTIVE application only
         for (uint256 i = 0; i < appsCount; i++) {
+            if (!ApplicationsLib.isActiveApplication(packedApps, i)) continue;
+
             if (Applications(i) == Applications.GRG_STAKING) {
                 appBalances[activeAppIndex] = _getGrgStakingProxyBalances(pool, grgStakingProxy);
             } else if (Applications(i) == Applications.UNIV4_LIQUIDITY) {
                 appBalances[activeAppIndex] = _getUniV4PmBalances(pool, uniV4Posm);
+            } else if (Applications(i) == Applications.GMX_V2_POSITIONS) {
+                appBalances[activeAppIndex] = GmxLib.getGmxPositionBalances(pool);
             } else {
                 continue;
             }
@@ -115,7 +121,11 @@ library NavView {
         address uniV4Posm
     ) internal view returns (NavData memory) {
         // Get token balances
-        AppTokenBalance[] memory balances = _getTokensAndBalances(pool, grgStakingProxy, uniV4Posm);
+        AppTokenBalance[] memory balances = _getTokensAndBalances(
+            pool,
+            grgStakingProxy,
+            uniV4Posm
+        );
 
         // Get pool data
         address baseToken = StorageLib.pool().baseToken;
@@ -189,7 +199,11 @@ library NavView {
     ) private view returns (AppTokenBalance[] memory) {
         // Get active tokens and application balances
         ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(pool).getActiveTokens();
-        AppTokenBalance[] memory appBalances = getAppTokenBalances(pool, grgStakingProxy, uniV4Posm);
+        AppTokenBalance[] memory appBalances = getAppTokenBalances(
+            pool,
+            grgStakingProxy,
+            uniV4Posm
+        );
 
         // define new array of max length (active tokens + base token + app tokens)
         uint256 portfolioTokensLength = tokens.activeTokens.length + 1;
@@ -272,6 +286,9 @@ library NavView {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // GMX v2 position valuation (view-only mirror of EApps._getGmxV2PositionBalances)
+    // -------------------------------------------------------------------------
     function _findCrossPrice(address pool, address token0, address token1) private view returns (uint160 sqrtPriceX96) {
         int24 twap0;
         int24 twap1;

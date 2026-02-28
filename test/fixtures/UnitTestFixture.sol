@@ -15,7 +15,7 @@ import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfa
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
-import {DeploymentParams, Extensions} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {MockOracle} from "../../contracts/test/MockOracle.sol";
 
@@ -86,11 +86,11 @@ contract UnitTestFixture is Test {
         deployment.mockOracle = MockOracle(deployCode("out/MockOracle.sol/MockOracle.0.8.28.json"));
 
         // Deploy extensions - will require mockCall or, as for EOracle.getTwap, mockCall on the oracle contract (due to foundry limitation on mockCall for internal calls)
-        extensions.eApps = address(new EApps(stakingProxy, mockUniv4Posm));
+        extensions.eApps = address(new EApps(EAppsParams({grgStakingProxy: stakingProxy, univ4Posm: mockUniv4Posm})));
         extensions.eOracle = address(new EOracle(address(deployment.mockOracle), deployment.wrappedNative));
         extensions.eUpgrade = address(new EUpgrade(deployment.factory));
         extensions.eCrosschain = address(new ECrosschain());
-        extensions.eNavView = address(new ENavView(stakingProxy, mockUniv4Posm));
+        extensions.eNavView = address(new ENavView(EAppsParams({grgStakingProxy: stakingProxy, univ4Posm: mockUniv4Posm})));
 
         console2.log("Deployed EApps:", extensions.eApps);
         console2.log("Deployed EOracle:", extensions.eOracle);

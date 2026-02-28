@@ -28,6 +28,10 @@ library Constants {
     /// @dev Re-exported from ForkBlocks for backward compatibility
     uint256 internal constant UNICHAIN_BLOCK = ForkBlocks.UNICHAIN_BLOCK;
 
+    /// @notice Arbitrum One block number for fork tests (GMX adapter)
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant ARB_BLOCK = ForkBlocks.ARB_BLOCK;
+
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
     //////////////////////////////////////////////////////////////*/
@@ -134,6 +138,40 @@ library Constants {
     address internal constant ARB_USDT = CrosschainTokens.ARB_USDT;
     address internal constant ARB_WETH = CrosschainTokens.ARB_WETH;
     address internal constant ARB_WBTC = CrosschainTokens.ARB_WBTC;
+
+    /*//////////////////////////////////////////////////////////////
+                            GMX v2 — ARBITRUM
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Rigoblock oracle hook on Arbitrum (EOracle constructor arg).
+    address internal constant ARB_ORACLE = 0x3043e182047F8696dFE483535785ed1C3681baC4;
+
+    /// @dev GRG staking proxy on Arbitrum.
+    address internal constant ARB_GRG_STAKING = 0xD495296510257DAdf0d74846a8307bf533a0fB48;
+
+    /// @dev Uniswap v4 PositionManager on Arbitrum.
+    address internal constant ARB_UNISWAP_V4_POSM = 0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869;
+
+    /// @notice GMX v2 ExchangeRouter on Arbitrum.
+    address internal constant ARB_GMX_EXCHANGE_ROUTER = 0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41;
+
+    /// @notice GMX v2 DataStore on Arbitrum.
+    address internal constant ARB_GMX_DATA_STORE = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
+
+    /// @notice GMX v2 Reader on Arbitrum.
+    address internal constant ARB_GMX_READER = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
+
+    /// @notice GMX v2 Chainlink price feed provider on Arbitrum.
+    address internal constant ARB_GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
+
+    /// @notice GMX v2 referral storage on Arbitrum (gmx-contracts ReferralStorage).
+    address internal constant ARB_GMX_REFERRAL_STORAGE = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d;
+
+    /// @notice GMX v2 RoleStore on Arbitrum — used in fork tests to look up keeper addresses.
+    address internal constant ARB_GMX_ROLE_STORE = 0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72;
+
+    /// @notice GMX v2 ETH/USD market token (GM:ETH-USDC) on Arbitrum.
+    address internal constant ARB_GMX_ETH_USD_MARKET = 0x70d95587d40A2caf56bd97485aB3Eec10Bee6336;
 
     // Optimism - use shared constants
     address internal constant OPT_USDC = CrosschainTokens.OPT_USDC;
