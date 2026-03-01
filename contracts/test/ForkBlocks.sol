@@ -17,4 +17,8 @@ library ForkBlocks {
 
     /// @notice Unichain block number for fork tests (just before TX1 at block 41291308, and also TX2/TX3)
     uint256 internal constant UNICHAIN_BLOCK = 41_291_300;
+
+    /// @notice Arbitrum One block number for fork tests (GMX v2 adapter tests).
+    /// @dev Block ~430M corresponds to approximately late January 2026.
+    uint256 internal constant ARB_BLOCK = 430_000_000;
 }

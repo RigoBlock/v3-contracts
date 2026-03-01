@@ -17,8 +17,10 @@ import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
+import {GmxLib} from "../libraries/GmxLib.sol";
 import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
+import {EAppsParams} from "../types/DeploymentParams.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
 
 /// @notice A universal aggregator for external contracts positions.
@@ -39,9 +41,10 @@ contract EApps is IEApps {
     IPositionManager private immutable _uniV4Posm;
 
     /// @notice The different immutable addresses will result in different deployed addresses on different networks.
-    constructor(address grgStakingProxy, address univ4Posm) {
-        _grgStakingProxy = IStaking(grgStakingProxy);
-        _uniV4Posm = IPositionManager(univ4Posm);
+    /// @param params Chain-specific addresses bundled into a single struct.
+    constructor(EAppsParams memory params) {
+        _grgStakingProxy = IStaking(params.grgStakingProxy);
+        _uniV4Posm = IPositionManager(params.univ4Posm);
     }
 
     /// @inheritdoc IEApps
@@ -54,15 +57,9 @@ contract EApps is IEApps {
 
         // Count how many applications are active
         for (uint256 i = 0; i < totalAppsCount; i++) {
-            if (packedApplications.isActiveApplication(uint256(Applications(i)))) {
+            if (packedApplications.shouldQueryApp(uint256(Applications(i)))) {
                 activeAppCount++;
                 activeApps[i] = true;
-                // grg staking is a pre-existing application. Therefore, we always check staked balance.
-            } else if (Applications(i) == Applications.GRG_STAKING) {
-                activeAppCount++;
-                activeApps[i] = true;
-            } else {
-                continue;
             }
         }
 
@@ -92,6 +89,8 @@ contract EApps is IEApps {
             balances = _getGrgStakingProxyBalances();
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
             balances = _getUniV4PmBalances();
+        } else if (appType == Applications.GMX_V2_POSITIONS) {
+            balances = _getGmxV2PositionBalances();
         } else {
             revert UnknownApplication(uint256(appType));
         }
@@ -99,7 +98,11 @@ contract EApps is IEApps {
 
     /// @dev Will return an empty array in case no stake found but unclaimed rewards (which are earned in the undelegate epoch).
     /// @dev This is fine as the amount is very small and saves several storage reads.
+    /// @dev Returns empty if grgStakingProxy is not set (non-Ethereum chains like Arbitrum).
     function _getGrgStakingProxyBalances() private view returns (AppTokenBalance[] memory balances) {
+        // Skip staking check on chains where GRG staking is not deployed.
+        if (address(_grgStakingProxy) == address(0)) return balances;
+
         uint256 stakingBalance = _grgStakingProxy.getTotalStake(address(this));
 
         // continue querying unclaimed rewards only with positive balance
@@ -137,6 +140,13 @@ contract EApps is IEApps {
             balances[i * 2 + 1].token = Currency.unwrap(poolKey.currency1);
             balances[i * 2 + 1].amount = amount1.toInt256();
         }
+    }
+
+    /// @dev Returns collateral token amounts net of PnL, fees, and price impact for all open GMX v2
+    ///  positions plus the initial collateral of pending increase orders.
+    ///  Delegates entirely to GmxLib so the logic is shared with NavView.
+    function _getGmxV2PositionBalances() private view returns (AppTokenBalance[] memory) {
+        return GmxLib.getGmxPositionBalances(address(this));
     }
 
     function _findCrossPrice(address token0, address token1) private returns (uint160) {

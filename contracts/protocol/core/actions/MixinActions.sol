@@ -227,6 +227,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
         NavImpactLib.validateSupply(poolTokens().totalSupply, virtualSupply);
 
+        // slither-disable-next-line divide-before-multiply
         netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
@@ -240,7 +241,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
                 : IERC20(baseToken).balanceOf(address(this));
             require(netRevenue > baseTokenBalance, BaseTokenBalance());
 
-            // an active token must have a price feed, hence the oracle query will always return a converted value
             netRevenue = uint256(
                 IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue.toInt256(), tokenOut)
             );

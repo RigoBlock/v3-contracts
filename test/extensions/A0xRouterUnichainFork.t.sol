@@ -22,7 +22,7 @@ import {IOwnedUninitialized} from "../../contracts/utils/owned/IOwnedUninitializ
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
 import {IEUpgrade} from "../../contracts/protocol/extensions/adapters/interfaces/IEUpgrade.sol";
-import {Extensions, DeploymentParams} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {Extensions, DeploymentParams, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
 import {ISettlerActions} from "0x-settler/src/ISettlerActions.sol";
 import {IAllowanceHolder} from "0x-settler/src/allowanceholder/IAllowanceHolder.sol";
@@ -301,10 +301,10 @@ contract A0xRouterUnichainForkTest is Test {
         pool = PROD_POOL;
 
         // Deploy new extensions with Unichain-specific addresses
-        EApps eApps = new EApps(address(0), address(0));
+        EApps eApps = new EApps(EAppsParams({grgStakingProxy: address(0), univ4Posm: address(0)}));
         EOracle eOracle = new EOracle(Constants.UNI_ORACLE, Constants.UNI_WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView = new ENavView(address(0), address(0));
+        ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: address(0), univ4Posm: address(0)}));
         ECrosschain eCrosschain = new ECrosschain();
 
         Extensions memory extensions = Extensions({
