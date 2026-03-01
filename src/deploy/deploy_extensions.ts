@@ -74,9 +74,11 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const navViewParams = {grgStakingProxy: config.stakingProxy, univ4Posm: config.univ4Posm};
+
   const eNavView = await deploy("ENavView", {
     from: deployer,
-    args: [config.stakingProxy, config.univ4Posm],
+    args: [navViewParams],
     log: true,
     deterministicDeployment: true,
   });
