@@ -1,3 +1,17 @@
+# [2.3.0](https://github.com/RigoBlock/v3-contracts/compare/v2.2.1...v2.3.0) (2026-03-01)
+
+
+### Bug Fixes
+
+* minor refactoring ([cb15fdf](https://github.com/RigoBlock/v3-contracts/commit/cb15fdf969bd73f6ea47484629682a4a97c2cf29))
+
+
+### Features
+
+* perps ([d396377](https://github.com/RigoBlock/v3-contracts/commit/d396377ee69fcd5521897f19e8f4a134680a667d))
+
+
+
 ## [2.2.1](https://github.com/RigoBlock/v3-contracts/compare/v2.2.0...v2.2.1) (2026-02-26)
 
 
@@ -41,15 +55,6 @@
 ### Bug Fixes
 
 * try fix npm publish again ([acf1a4b](https://github.com/RigoBlock/v3-contracts/commit/acf1a4b52fe7cd994ee6fa0ab436db09b5c047f2))
-
-
-
-## [2.1.2](https://github.com/RigoBlock/v3-contracts/compare/v2.1.1...v2.1.2) (2026-01-29)
-
-
-### Bug Fixes
-
-* npm publish ([ad18b0a](https://github.com/RigoBlock/v3-contracts/commit/ad18b0a89e8f0e5a574b74bd1fe3d8ef38094dc2))
 
 
 
