@@ -74,6 +74,15 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  const navViewParams = {grgStakingProxy: config.stakingProxy, univ4Posm: config.univ4Posm};
+
+  const eNavView = await deploy("ENavView", {
+    from: deployer,
+    args: [navViewParams],
+    log: true,
+    deterministicDeployment: true,
+  });
+
   const eCrosschain = await deploy("ECrosschain", {
     from: deployer,
     args: [],
@@ -85,7 +94,8 @@ const deploy: DeployFunction = async function (
     eApps: eApps.address,
     eOracle: eOracle.address,
     eUpgrade: eUpgrade.address,
-    eCrosschain: eCrosschain.address
+    eCrosschain: eCrosschain.address,
+    eNavView: eNavView.address
   }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
