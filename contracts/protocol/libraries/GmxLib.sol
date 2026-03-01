@@ -30,9 +30,11 @@ library GmxLib {
     address private constant _GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
     uint256 private constant _MAX_GMX_POSITIONS = 32;
 
-    // Key hashes from GMX Keys.sol
+    // Key hashes from GMX Keys.sol / PositionStoreUtils.sol
     bytes32 private constant _KEY_FEE_BASE = keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));
     bytes32 private constant _KEY_FEE_PER_ORACLE = keccak256(abi.encode("ESTIMATED_GAS_FEE_PER_ORACLE_PRICE"));
+    // Matches PositionStoreUtils.SIZE_IN_USD — used to probe position existence via DataStore.
+    bytes32 private constant _POSITION_SIZE_IN_USD_KEY = keccak256(abi.encode("SIZE_IN_USD"));
     bytes32 private constant _KEY_FEE_MULTIPLIER = keccak256(abi.encode("ESTIMATED_GAS_FEE_MULTIPLIER_FACTOR"));
     bytes32 private constant _KEY_INCREASE_ORDER_GAS = keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
     bytes32 private constant _KEY_DECREASE_ORDER_GAS = keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
@@ -71,13 +73,33 @@ library GmxLib {
         return adjustedGasLimit * tx.gasprice;
     }
 
-    /// @notice Reverts when `account` already holds the maximum number of open GMX positions.
-    ///  Called by AGmxV2 before creating a new position so the NAV-loop gas cost stays bounded.
+    /// @notice Reverts when `account` is at the maximum open GMX positions AND the proposed
+    ///  order would open a *new* position (i.e. no existing position matches the given
+    ///  market + collateralToken + isLong tuple).  Increasing an existing position never
+    ///  consumes a new slot, so the cap is not enforced in that case.
     ///  Lives in GmxLib so the private DataStore and Reader addresses are not duplicated in the
     ///  adapter (which has no constructor params for either).
-    function assertPositionLimitNotReached(address account) internal view {
+    function assertPositionLimitNotReached(
+        address account,
+        address market,
+        address collateralToken,
+        bool isLong
+    ) internal view {
+        // Fast path: check whether this exact position already has size in the DataStore.
+        // positionKey = keccak256(account, market, collateralToken, isLong) — Position.sol#L202.
+        // sizeInUsd field is stored at keccak256(positionKey, SIZE_IN_USD) — PositionStoreUtils.sol#L53.
+        // One DataStore.getUint call is far cheaper than fetching the full positions array.
+        bytes32 positionKey = keccak256(abi.encode(account, market, collateralToken, isLong));
+        if (IGmxDataStore(_GMX_DATA_STORE).getUint(keccak256(abi.encode(positionKey, _POSITION_SIZE_IN_USD_KEY))) > 0) {
+            // Position exists — this is an increase order, no new slot is consumed.
+            return;
+        }
+
+        // Slow path: new position.  We only need to know whether there are already
+        // _MAX_GMX_POSITIONS open positions.  Fetching more than that is unnecessary, so cap
+        // the Reader call at _MAX_GMX_POSITIONS to bound the returned array size.
         require(
-            IGmxReader(_GMX_READER).getAccountPositions(_GMX_DATA_STORE, account, 0, type(uint256).max).length <
+            IGmxReader(_GMX_READER).getAccountPositions(_GMX_DATA_STORE, account, 0, _MAX_GMX_POSITIONS).length <
                 _MAX_GMX_POSITIONS,
             MaxGmxPositionsReached()
         );

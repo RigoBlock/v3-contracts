@@ -22,24 +22,6 @@ interface IAGmxV2 {
     /// @notice Emitted when the pool's combined WETH + native ETH balance is insufficient to cover the execution fee.
     error InsufficientNativeBalance();
 
-    /// @notice Parameters for updating an existing pending order.
-    /// @param key The unique order key returned by `createIncreaseOrder` or `createDecreaseOrder`.
-    /// @param sizeDeltaUsd New size delta in USD (GMX 10^30 precision).
-    /// @param acceptablePrice New acceptable execution price.
-    /// @param triggerPrice New trigger price for limit/stop-loss orders.
-    /// @param minOutputAmount New minimum output amount.
-    /// @param validFromTime New valid-from timestamp.
-    /// @param autoCancel New auto-cancel flag.
-    struct UpdateOrderParams {
-        bytes32 key;
-        uint256 sizeDeltaUsd;
-        uint256 acceptablePrice;
-        uint256 triggerPrice;
-        uint256 minOutputAmount;
-        uint256 validFromTime;
-        bool autoCancel;
-    }
-
     // =========================================================================
     // Functions
     // =========================================================================
@@ -70,31 +52,53 @@ interface IAGmxV2 {
     function createDecreaseOrder(IBaseOrderUtils.CreateOrderParams calldata params) external returns (bytes32 orderKey);
 
     /// @notice Updates size, price or fee of an existing pending GMX order.
-    /// @dev Tops up the execution fee automatically (same on-chain formula as createOrder).
-    ///  Only limit-type orders are updatable; calling on MarketIncrease/Decrease reverts at GMX level.
-    /// @param params Parameters with the order key and new values.
-    function updateOrder(UpdateOrderParams calldata params) external;
+    /// @dev Matches the GMX ExchangeRouter selector exactly. Tops up the execution fee
+    ///  automatically (same on-chain formula as createOrder). Only limit-type orders are
+    ///  updatable; calling on MarketIncrease/Decrease reverts at GMX level.
+    /// @param key The unique order key to update.
+    /// @param sizeDeltaUsd New size delta in USD (GMX 10^30 precision).
+    /// @param acceptablePrice New acceptable execution price.
+    /// @param triggerPrice New trigger price for limit/stop-loss orders.
+    /// @param minOutputAmount New minimum output amount.
+    /// @param validFromTime New valid-from timestamp.
+    /// @param autoCancel New auto-cancel flag.
+    function updateOrder(
+        bytes32 key,
+        uint256 sizeDeltaUsd,
+        uint256 acceptablePrice,
+        uint256 triggerPrice,
+        uint256 minOutputAmount,
+        uint256 validFromTime,
+        bool autoCancel
+    ) external;
 
     /// @notice Cancels a pending GMX order and recovers collateral / execution fees back to the pool.
     /// @param key The order key to cancel.
     function cancelOrder(bytes32 key) external;
 
     /// @notice Claims accumulated funding fees for one or more market/token pairs.
-    /// @dev Claimed tokens are sent to the pool and registered in the active tokens set when they
-    ///  have a valid price feed in the pool's EOracle extension.
+    /// @dev Matches the GMX ExchangeRouter selector exactly. Claimed tokens are always sent to
+    ///  the pool (address(this) in delegatecall context) regardless of the `receiver` argument.
+    ///  Claimed tokens are registered in the active tokens set when they have a valid price feed.
     /// @param markets Array of GMX market addresses to claim from.
     /// @param tokens Array of token addresses corresponding to each market.
-    function claimFundingFees(address[] calldata markets, address[] calldata tokens) external;
+    /// @param receiver Ignored — overridden to address(this) to ensure funds stay in the pool.
+    function claimFundingFees(address[] calldata markets, address[] calldata tokens, address receiver) external;
 
     /// @notice Claims collateral freed from positions where the negative price impact threshold was exceeded.
-    /// @dev Claimed tokens are sent to the pool and registered in the active tokens set when they
-    ///  have a valid price feed in the pool's EOracle extension.
+    /// @dev Matches the GMX ExchangeRouter selector exactly. Claimed tokens are always sent to
+    ///  the pool (address(this) in delegatecall context) regardless of the `receiver` argument.
+    ///  Claimed tokens are registered in the active tokens set when they have a valid price feed.
+    ///  Note: the deployed GMX ExchangeRouter reverts with an arithmetic underflow when
+    ///  claimable amount is zero — callers must only invoke this when collateral is claimable.
     /// @param markets Array of GMX market addresses to claim from.
     /// @param tokens Array of token addresses corresponding to each market.
     /// @param timeKeys Array of time bucket keys identifying each claimable collateral batch.
+    /// @param receiver Ignored — overridden to address(this) to ensure funds stay in the pool.
     function claimCollateral(
         address[] calldata markets,
         address[] calldata tokens,
-        uint256[] calldata timeKeys
+        uint256[] calldata timeKeys,
+        address receiver
     ) external;
 }

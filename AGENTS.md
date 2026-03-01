@@ -14,7 +14,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 1. **Storage Layout**: Never reorder/remove storage variables in existing contracts
 2. **Extensions/Adapters**: Never add storage (they run via delegatecall in pool context)
 3. **Storage Slots**: Always assert new slots in `MixinStorage.sol` constructor (use dot notation)
-4. **Security**: Extensions MUST verify `msg.sender` in delegatecall context
+4. **Security**: Adapter write-access is enforced by `MixinFallback`, NOT by an `onlyPoolOwner` modifier in adapter code. The fallback sets `shouldDelegatecall = msg.sender == pool().owner`: non-owners are `staticcall`ed (any state mutation reverts); only the pool owner is `delegatecall`ed (write mode). Extensions that genuinely need caller restrictions must add explicit `msg.sender` checks.
 5. **NAV Integrity**: Cross-chain transfers MUST manage virtual supply
 6. **Testing**: Always write/update tests when modifying .sol files - tests must pass
 7. **Error Handling**: Use custom errors (`error ErrorName(params)`) instead of revert strings
@@ -344,7 +344,8 @@ assembly { sstore(slot, newVs) }
 
 When modifying code:
 
-- [ ] Extensions verify `msg.sender` (preserved in delegatecall)
+- [ ] Adapter write-access gated by `MixinFallback.fallback()` (`shouldDelegatecall = msg.sender == pool().owner` — non-owners get `staticcall`)
+- [ ] Extensions with caller restrictions verify `msg.sender` explicitly (extensions are always delegatecalled for all callers)
 - [ ] No storage in extensions/adapters (use pool storage)
 - [ ] New storage slots asserted in MixinStorage
 - [ ] Safe token operations (SafeTransferLib)
@@ -481,7 +482,7 @@ When making changes:
 
 1. **Adding storage to extensions/adapters** - They run in pool context, use pool storage
 2. **Direct calls to extensions/adapters** - Always called via delegatecall
-3. **Forgetting security checks** - Verify msg.sender in delegatecall context
+3. **Adapter access control misunderstanding** — There is NO `onlyPoolOwner` modifier in adapter code. Write-mode gate lives in `MixinFallback`: `shouldDelegatecall = msg.sender == pool().owner`, so non-owners are routed via `staticcall` (state writes revert). Extensions always run via `delegatecall` for all callers, so they DO need explicit `msg.sender` checks when caller restriction is required.
 4. **Breaking storage layout** - Never reorder/modify existing storage
 5. **Reading stale NAV** - Call updateUnitaryValue() first if need current value
 6. **Assuming same addresses across chains** - Extensions are chain-specific
@@ -513,6 +514,11 @@ When making changes:
 18. **USE .selector INSTEAD OF keccak256 HASHING** - ALWAYS use `IInterface.functionName.selector` to obtain function selectors. NEVER use `bytes4(keccak256("functionName(paramTypes)"))` — it is fragile (typos in the string silently produce wrong selectors) and not type-checked by the compiler. If the interface doesn't exist locally, vendor a minimal interface with just the function signatures needed. Example: `ISettlerActions.RFQ.selector` not `bytes4(keccak256("RFQ(address,((address,uint256),uint256,uint256),...)"))`
 19. **LOW-LEVEL CALLS IN TESTS** - NEVER use `(bool success, bytes memory data) = target.call(abi.encodeCall(...))` in tests. Always use typed interface calls: `IInterface(target).method(...)`. For expected reverts, use `vm.expectRevert(expectedError)` or `try IInterface(target).method(...) { revert("should fail"); } catch (bytes memory err) { /* check err */ }`. Low-level calls bypass Solidity's type checking and make tests harder to read and audit.
 20. **APP ACTIVATION: only when creating non-token external positions** - Call `StorageLib.activeApplications().storeApplication(uint256(Applications.X))` ONLY when the adapter creates an EXTERNAL POSITION that lives outside the pool's ERC-20 wallet and must be valued by EApps. Examples that NEED activation: AGmxV2 (opens DataStore perpetual positions), AUniswapRouter (creates UniV4 LP NFT positions). Examples that DO NOT need activation: A0xRouter (pure swap — output tokens land in pool wallet and are tracked on arrival), AIntents/AcrossBridge (funds leave the pool via bridge; no position held on-chain). The rule: if there is no on-chain struct/position to value at NAV time, storeApplication is not needed.
+21. **ADAPTER INTERFACE SELECTORS MUST MATCH THE TARGET PROTOCOL EXACTLY** — When an adapter wraps an external protocol (e.g., GMX, Uniswap, 0x), the `IAdapter` interface MUST expose the SAME function signatures (and therefore selectors) as the underlying protocol interface. This allows the GMX/Uniswap/etc. API to be used directly with minimal changes. Rules:
+    - Copy the EXACT parameter list from the protocol's interface — never wrap flat params into a struct, and never omit params.
+    - If a parameter must be overridden for security (e.g., `address receiver` that must always be `address(this)`), KEEP it in the interface but leave the variable name blank (`address`), and ignore the caller-supplied value in the implementation. Document the override in the NatSpec.
+    - Do NOT introduce wrapper structs to bundle existing protocol params — this changes the selector and breaks ABI compatibility.
+    - Exception: if the adapter intentionally splits a protocol function into multiple calls for type-safety (e.g., `createIncreaseOrder` / `createDecreaseOrder` instead of a single `createOrder`), the split is acceptable when the parameter TYPE is preserved (same `CreateOrderParams` struct from the protocol).
 
 ## GMX v2 Integration
 
@@ -522,4 +528,5 @@ See `docs/gmx/` for the full GMX integration guide. Key rules for AI agents:
 - Always call `_trackToken(collateralToken)` in `createIncreaseOrder`. See `docs/gmx/architecture.md#token-tracking`.
 - `ARBITRUM_CHAIN_ID` is defined in `GmxLib` — never duplicate it.
 - The chain guard is the `GMX_V2_POSITIONS` activation bit, not a `block.chainid` check in `GmxLib`.
-- For P&L fork tests, mock the Chainlink oracle BEFORE `_executeOrder`. See `docs/gmx/architecture.md#common-pitfalls`.
+- For P&L fork tests, mock the Chainlink oracle BEFORE `_executeOrder`. See `docs/gmx/architecture.md#common-pitfalls`.- **32-position cap**: `assertPositionLimitNotReached` blocks NEW positions (non-matching market+collateral+direction) when 32 are open. Increasing an EXISTING position is allowed at any count. The NAV loop uses `type(uint256).max` — it reads ALL positions, never just 32.
+- **No NAV blind spots**: both pending-order collateral (in GMX OrderVault) and executed-position collateral are always fully counted in NAV. The 32 cap is a gas-protection heuristic only.

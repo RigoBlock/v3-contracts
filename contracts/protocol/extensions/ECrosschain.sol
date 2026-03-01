@@ -88,7 +88,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
 
         // Single positions[token] read: returns whether token was already active AND adds it if not.
         bool previouslyActive = StorageLib.activeTokensSet().addAndCheckWasActive(
-            IEOracle(address(this)), token, StorageLib.pool().baseToken
+            IEOracle(address(this)),
+            token,
+            StorageLib.pool().baseToken
         );
 
         if (params.opType == OpType.Transfer) {

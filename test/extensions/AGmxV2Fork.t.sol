@@ -32,6 +32,7 @@ import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 import {
     IGmxReader,
+    IGmxDataStore,
     IGmxRoleStore,
     IGmxOrderHandler,
     IGmxChainlinkPriceFeedProvider,
@@ -287,7 +288,7 @@ contract AGmxV2ForkTest is Test {
         tokens[0] = ARB_WETH;
 
         vm.prank(poolOwner);
-        IAGmxV2(pool).claimFundingFees(markets, tokens);
+        IAGmxV2(pool).claimFundingFees(markets, tokens, address(this));
     }
 
     /// @notice claimCollateral is routed correctly through the adapter to the GMX ExchangeRouter.
@@ -311,7 +312,7 @@ contract AGmxV2ForkTest is Test {
         // The adapter correctly propagates the revert without swallowing it.
         vm.prank(poolOwner);
         vm.expectRevert();
-        IAGmxV2(pool).claimCollateral(markets, tokens, timeKeys);
+        IAGmxV2(pool).claimCollateral(markets, tokens, timeKeys, address(this));
     }
 
     // =========================================================================
@@ -484,21 +485,11 @@ contract AGmxV2ForkTest is Test {
         vm.prank(poolOwner);
         bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
 
-        IAGmxV2.UpdateOrderParams memory upd = IAGmxV2.UpdateOrderParams({
-            key: orderKey,
-            sizeDeltaUsd: SIZE_DELTA_USD * 2,
-            acceptablePrice: type(uint256).max,
-            triggerPrice: 0,
-            minOutputAmount: 0,
-            validFromTime: 0,
-            autoCancel: false
-        });
-
         // GMX disallows updating MarketIncrease orders — only limit orders are updatable.
         // `OrderNotUpdatable(uint256 orderType)` is the expected revert.
         vm.prank(poolOwner);
         vm.expectRevert();
-        IAGmxV2(pool).updateOrder(upd);
+        IAGmxV2(pool).updateOrder(orderKey, SIZE_DELTA_USD * 2, type(uint256).max, 0, 0, 0, false);
     }
 
     // =========================================================================
@@ -506,10 +497,21 @@ contract AGmxV2ForkTest is Test {
     // =========================================================================
 
     /// @notice createIncreaseOrder reverts with MaxGmxPositionsReached when the reader
-    ///   reports 32 open positions (temporary limit to bound NAV loop gas).
+    ///   reports 32 open positions and the order would open a DIFFERENT position
+    ///   (different market/collateral/direction — a brand-new slot).
     function test_CreateIncreaseOrder_MaxPositions_Reverts() public {
-        // Mock the Reader to report 32 open positions for this pool.
-        // The adapter calls getAccountPositions(dataStore, pool, 0, 32) and checks length < 32.
+        // Fast path: mock DataStore.getUint to return 0 — no existing position for this
+        // market+collateral+direction tuple, so this is a new-position attempt.
+        bytes32 positionKey = keccak256(abi.encode(pool, GMX_ETH_USD_MARKET, ARB_WETH, true));
+        bytes32 sizeKey = keccak256(abi.encode(positionKey, keccak256(abi.encode("SIZE_IN_USD"))));
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, sizeKey),
+            abi.encode(uint256(0))
+        );
+
+        // Slow path: mock Reader to report 32 open positions (cap hit).
+        // Bound is now _MAX_GMX_POSITIONS (32), not type(uint256).max.
         Position.Props[] memory fakePositions = new Position.Props[](32);
         vm.mockCall(
             GMX_READER,
@@ -518,12 +520,35 @@ contract AGmxV2ForkTest is Test {
                 GMX_DATA_STORE,
                 pool,
                 uint256(0),
-                type(uint256).max
+                uint256(32)
             ),
             abi.encode(fakePositions)
         );
         vm.prank(poolOwner);
         vm.expectRevert(GmxLib.MaxGmxPositionsReached.selector);
+        IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+    }
+
+    /// @notice createIncreaseOrder succeeds even when the pool is at 32 positions if the
+    ///   order targets an already-open position (same market + collateralToken + isLong).
+    ///   Increasing an existing position does not consume a new slot — the cap is skipped.
+    function test_CreateIncreaseOrder_ExistingPositionAtMaxPositions_Succeeds() public {
+        // Fast path: mock DataStore.getUint to return a non-zero sizeInUsd —
+        // the position already exists, so assertPositionLimitNotReached returns early.
+        // getAccountPositions is NOT called at all.
+        bytes32 positionKey = keccak256(abi.encode(pool, GMX_ETH_USD_MARKET, ARB_WETH, true));
+        bytes32 sizeKey = keccak256(abi.encode(positionKey, keccak256(abi.encode("SIZE_IN_USD"))));
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, sizeKey),
+            abi.encode(uint256(1e30)) // non-zero sizeInUsd → existing position
+        );
+
+        // Fund pool with enough WETH to cover collateral + execution fee.
+        deal(ARB_WETH, pool, 10 ether);
+
+        // Should NOT revert with MaxGmxPositionsReached (fast path exits before the count check).
+        vm.prank(poolOwner);
         IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
     }
 

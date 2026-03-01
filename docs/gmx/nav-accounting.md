@@ -203,3 +203,57 @@ In both cases, reporting **zero** is the correct NAV contribution — not a nega
 
 GMX closes positions via keeper execution, which sends collateral back to the pool wallet WITHOUT calling back into the adapter. Open time is the only reliable hook to ensure the collateral token is tracked. If the token arrived via a swap adapter it is already tracked (`_trackToken` is a no-op); if it arrived via direct external transfer, `_trackToken` adds it at open time so the returned collateral is visible after close.
 
+## Known NAV Coverage Gaps
+
+Two GMX accounting scenarios produce a **temporary NAV undercount** until the pool owner takes a manual action. In both cases the missing value is conservative (never an overstatement) and the assets are not lost — they remain claimable from the GMX DataStore.
+
+---
+
+### Gap 1 — Price-Impact Rebate Collateral
+
+When a decrease order executes with a sufficiently large negative price impact, GMX withholds a portion of the collateral as a rebate that becomes claimable over time (see [GMX docs — Price Impact Rebates](https://docs.gmx.io/docs/trading/v2#price-impact-rebates)). The claimable amount is keyed by `(market, token, timeKey)` where `timeKey = block.timestamp / DATA_STORE.getUint("CLAIMABLE_COLLATERAL_TIME_DIVISOR")`.
+
+**Why `GmxLib` cannot see it automatically:**
+
+`getAccountPositionInfoList` returns data for *open* positions only. The withheld rebate is stored directly in the GMX DataStore under a per-account, per-time-bucket key; it is not reachable via any Reader view that generic position queries exercise.
+
+Receiving notice of a new claimable rebate at order-execution time would require implementing the `afterOrderExecution` GMX keeper callback. The adapter cannot implement this callback because the keeper is not the pool owner — any callback made by the keeper would be routed by `MixinFallback` as a `staticcall` (not a `delegatecall`), so all state writes inside the callback would revert.
+
+**Workaround (current):**
+
+The pool owner computes the `timeKey` off-chain:
+```
+timeKey = executionTimestamp / DATA_STORE.getUint(keccak256("CLAIMABLE_COLLATERAL_TIME_DIVISOR"))
+```
+and calls `AGmxV2.claimCollateral(markets, tokens, timeKeys)`. Once claimed, the collateral lands in the pool wallet and is immediately visible to NAV.
+
+**Future option:** A dedicated GMX callback extension (`EGmxCallback`) could receive `afterOrderExecution` from the keeper. The extension would be delegatecalled for all callers (extensions are always delegatecalled regardless of `msg.sender`), so the keeper could trigger a state write. The extension must restrict `msg.sender` to the GMX role-store controller to prevent arbitrary callers from manipulating stored claimable-collateral keys. This extension is **not currently implemented** — the workaround is acceptable given the rarity of high-price-impact decreases.
+
+---
+
+### Gap 2 — Accrued Funding Fees After Full Position Close
+
+`GmxLib._appendGmxPosBalances` reads `positionInfo.fees.funding.claimableLongTokenAmount` and `claimableShortTokenAmount` from `getAccountPositionInfoList`, which only returns **open** positions. Once the last position on a given market is closed, any unclaimed funding fees that were accruing on that market become invisible to the NAV loop: the `PositionInfo` no longer exists in the Reader response, and the claimable-funding-amount DataStore keys are not queried anywhere.
+
+The amounts remain claimable at:
+```
+keccak256(abi.encode("CLAIMABLE_FUNDING_AMOUNT", market, token, account))
+```
+
+**Impact:** Unclaimed funding fees from a fully-closed market are not reflected in NAV until `AGmxV2.claimFundingFees(markets, tokens)` is called. Funding fee accrual is gradual — the undercount grows slowly and is bounded by the fee rate × position size × time.
+
+**Workaround (current):** The pool owner should call `claimFundingFees` for the relevant markets when closing the last position on that market, or periodically if long-lived positions are held.
+
+**Future option:** The same `EGmxCallback` extension described above could track which markets have ever been active (analogous to maintaining a set of historical markets), enabling the NAV loop to also query closed-market funding fees. This is not currently implemented.
+
+---
+
+### Summary
+
+| Gap | Trigger | Missing value type | How to recover |
+|---|---|---|---|
+| Price-impact rebate | High-impact decrease execution | Withheld collateral | Call `claimCollateral(markets, tokens, timeKeys)` |
+| Post-close funding fees | Full position close on a market | Accrued funding fees | Call `claimFundingFees(markets, tokens)` |
+
+Both actions are already exposed by `AGmxV2`. Neither gap creates an NAV overstatement or an exploitable manipulation vector — the pool can only be undervalued relative to true holdings, never overvalued.
+

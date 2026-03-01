@@ -15,16 +15,19 @@ The GMX adapter runs via `delegatecall` in the pool's context. The pool is a mul
 
 ### Pool Owner Only
 
-All order operations (`createIncreaseOrder`, `createDecreaseOrder`, `cancelOrder`, `updateOrder`, `claimFundingFees`, `claimCollateral`) are gated by:
+All order operations (`createIncreaseOrder`, `createDecreaseOrder`, `cancelOrder`, `updateOrder`, `claimFundingFees`, `claimCollateral`) are restricted to the pool owner by `MixinFallback`.
+
+There is **no** `onlyPoolOwner` modifier inside the adapter. The protection is in the pool's `MixinFallback.fallback()`, which routes adapter calls based on caller identity:
 
 ```solidity
-modifier onlyPoolOwner() {
-    if (msg.sender != StorageLib.pool().owner) revert CallerIsNotOwner();
-    _;
-}
+// MixinFallback.sol — for adapter (Authority) calls
+shouldDelegatecall = msg.sender == pool().owner;
+
+// If owner   → delegatecall  (state mutations allowed)
+// If not owner → staticcall  (any state mutation reverts)
 ```
 
-In the delegatecall context, `msg.sender` is the original external caller (preserved through proxy → implementation → adapter dispatch). This means only the pool owner can invoke GMX operations.
+In the delegatecall context `msg.sender` is the original external caller (preserved through proxy → implementation → adapter dispatch). Non-owners can call adapter read-only views (routed as `staticcall`) but any write attempt reverts.
 
 LP depositors **cannot** submit or cancel orders.
 
@@ -57,19 +60,29 @@ if (params.executionFee > maxExecutionFee) revert ExecutionFeeExceedsMax();
 
 ### Position Count Limit
 
-Unbounded positions would make GMX Reader calls prohibitively expensive (gas, latency) for NAV calculations. The adapter limits to 32 concurrent positions:
+Unbounded positions would make GMX Reader calls prohibitively expensive in the NAV loop. The adapter enforces a **32 unique-position cap** at `createIncreaseOrder` time:
 
 ```solidity
-function _assertPositionLimitNotReached() private view {
-    require(
-        _reader.getAccountPositions(_dataStore, address(this), 0, _MAX_GMX_POSITIONS).length
-            < _MAX_GMX_POSITIONS,
-        MaxGmxPositionsReached()
-    );
-}
+// GmxLib.assertPositionLimitNotReached (called from createIncreaseOrder only)
+//
+// If a matching position already exists (same market + collateralToken + isLong),
+// this is an increase — no new slot is consumed, the check is skipped.
+// If it is a new position, the pool must have < 32 open positions.
 ```
 
-This is checked at `createIncreaseOrder` time only. Existing positions are not retroactively constrained.
+**Important implementation detail — NAV reads are unbounded:**  
+The NAV loop (`_getExecutedPositionBalances`, `_getPendingOrderBalances`) always fetches ALL positions and all orders using `getAccountPositions(..., 0, type(uint256).max)`. The 32-position limit only gates *creation*, not *reading*. This means:
+
+- A position count >32 cannot arise in steady-state (the cap prevents it).
+- If it somehow arose (e.g., a race condition with many simultaneously pending orders), all positions would still be correctly counted in NAV — no positions become "invisible".
+- Collateral is always accounted: `OrderVault` funds are counted via `_getPendingOrderBalances`; executed-position collateral is counted via `_getExecutedPositionBalances`. There is no window where collateral disappears from NAV.
+
+**Pending-order race condition (acknowledged, not fixed):**  
+`createIncreaseOrder` checks the count of *executed* positions at call time. Multiple `createIncreaseOrder` calls before any keeper execution can in theory queue more than 32 orders. However:
+1. Each call transfers real collateral from the pool (the pool owner is spending pool funds).
+2. Once executed, all resulting positions are unconditionally included in NAV via the unbounded read.
+3. The gas cost per NAV calculation is bounded in practice because the pool owner has finite collateral and each position needs a separate market/direction/collateral combination with a real execution fee.
+4. There is **no NAV manipulation** possible: pending-order collateral is already counted, so NAV does not decrease when orders are created and does not rebound artificially when they execute.
 
 ---
 
@@ -186,7 +199,7 @@ Hardcoding `bytes32(0)` removes this conflict entirely with no impact on trading
 
 ## Audit Notes
 
-- All entry points: chain guard → delegatecall guard → owner guard
+- All entry points: chain guard (`ARBITRUM_CHAIN_ID`) → delegatecall guard (`onlyDelegateCall`) → owner routing in `MixinFallback` (`shouldDelegatecall = msg.sender == pool().owner`)
 - No storage declared in adapter (pure delegatecall model)
 - Immutables eliminate any storage-collision risk for GMX addresses
 - `SafeTransferLib` used for all token operations

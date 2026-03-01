@@ -28,7 +28,7 @@ address private immutable _adapter;  // = address(this) at deploy time
 ```
 1. Pool owner calls createIncreaseOrder(params)
 2. Adapter validates:
-   - msg.sender is pool owner (onlyPoolOwner)
+   - `MixinFallback` routes call via `delegatecall` only if `msg.sender == pool().owner`; non-owners are `staticcall`ed
    - position count < 32 (GmxLib.MaxGmxPositionsReached)
    - computedFee <= 0.05 ETH (ExecutionFeeExceedsMax)
 3. Transfer collateral to GMX OrderVault:

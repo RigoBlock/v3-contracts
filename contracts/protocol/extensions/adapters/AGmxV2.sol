@@ -48,8 +48,15 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     function createIncreaseOrder(
         IBaseOrderUtils.CreateOrderParams calldata params
     ) external override nonReentrant onlyDelegateCall returns (bytes32 orderKey) {
-        // Enforce the per-pool position cap before creating a new position.
-        GmxLib.assertPositionLimitNotReached(address(this));
+        // Enforce the per-pool position cap, but only if this would open a new position.
+        // Increasing an existing position (same market + collateral + direction) does not
+        // consume a new slot, so the cap is skipped in that case.
+        GmxLib.assertPositionLimitNotReached(
+            address(this),
+            params.addresses.market,
+            params.addresses.initialCollateralToken,
+            params.isLong
+        );
 
         // Compute execution fee on-chain: fee = adjustedGasLimit × tx.gasprice (same formula
         // GMX uses in validateExecutionFee).  Guard against extreme gas prices with the cap.
@@ -167,7 +174,15 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc IAGmxV2
-    function updateOrder(UpdateOrderParams calldata params) external override nonReentrant onlyDelegateCall {
+    function updateOrder(
+        bytes32 key,
+        uint256 sizeDeltaUsd,
+        uint256 acceptablePrice,
+        uint256 triggerPrice,
+        uint256 minOutputAmount,
+        uint256 validFromTime,
+        bool autoCancel
+    ) external override nonReentrant onlyDelegateCall {
         // Top up the execution fee to current gas price.  Use the increase-order gas limit
         // (the larger of the two order types) as a conservative upper bound; excess is refunded
         // by GMX to cancellationReceiver (the pool). Guarded by the same _MAX_EXECUTION_FEE cap.
@@ -180,13 +195,13 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         }
 
         GmxLib.GMX_ROUTER.updateOrder(
-            params.key,
-            params.sizeDeltaUsd,
-            params.acceptablePrice,
-            params.triggerPrice,
-            params.minOutputAmount,
-            params.validFromTime,
-            params.autoCancel
+            key,
+            sizeDeltaUsd,
+            acceptablePrice,
+            triggerPrice,
+            minOutputAmount,
+            validFromTime,
+            autoCancel
         );
     }
 
@@ -200,7 +215,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     /// @inheritdoc IAGmxV2
     function claimFundingFees(
         address[] calldata markets,
-        address[] calldata tokens
+        address[] calldata tokens,
+        address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
         // Register claimed tokens so the pool NAV includes them.
         for (uint256 i; i < tokens.length; ++i) {
@@ -214,7 +230,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     function claimCollateral(
         address[] calldata markets,
         address[] calldata tokens,
-        uint256[] calldata timeKeys
+        uint256[] calldata timeKeys,
+        address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
         // Register claimed tokens so the pool NAV includes them.
         for (uint256 i; i < tokens.length; ++i) {
