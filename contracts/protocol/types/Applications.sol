@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 enum Applications {
     GRG_STAKING,
     UNIV4_LIQUIDITY,
+    GMX_V2_POSITIONS,
     // append new applications here, up to a total of 255 as a theoretical maximum
     COUNT
 }

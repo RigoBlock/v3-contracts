@@ -58,6 +58,29 @@ library EnumerableSet {
     // flag for removed address
     uint256 private constant REMOVED_ADDRESS_FLAG = type(uint256).max;
 
+    /// @notice Like addUnique but also returns whether the token was active before this call.
+    /// @dev Reads set.positions[token] exactly once, saving one SLOAD vs separate isActive + addUnique.
+    ///  Returns true for base token (always considered active, never stored in the set).
+    function addAndCheckWasActive(
+        AddressSet storage set,
+        IEOracle eOracle,
+        address token,
+        address baseToken
+    ) internal returns (bool wasActive) {
+        if (token == baseToken) return true;
+
+        uint256 position = set.positions[token]; // single SLOAD
+        wasActive = (position != 0 && position != REMOVED_ADDRESS_FLAG);
+
+        if (!wasActive) {
+            require(set.addresses.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
+            require(eOracle.hasPriceFeed(token), TokenPriceFeedDoesNotExist(token));
+            set.addresses.push(token);
+            set.positions[token] = set.addresses.length;
+            emit ISmartPoolEvents.TokenStatusChanged(token, true);
+        }
+    }
+
     /// @notice Base token is never pushed to active tokens, as already stored.
     /// @dev Skips and returns false for base token, which is already in storage.
     function addUnique(AddressSet storage set, IEOracle eOracle, address token, address baseToken) internal {

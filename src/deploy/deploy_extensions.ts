@@ -67,7 +67,9 @@ const deploy: DeployFunction = async function (
   
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [config.stakingProxy, config.univ4Posm],
+    args: [
+      [config.stakingProxy, config.univ4Posm],
+    ],
     log: true,
     deterministicDeployment: true,
   });
@@ -169,6 +171,16 @@ const deploy: DeployFunction = async function (
     log: true,
     deterministicDeployment: true,
   });
+
+  // AGmxV2 is Arbitrum-only; skip silently on all other networks.
+  if (chainId === 42161) {
+    await deploy("AGmxV2", {
+      from: deployer,
+      args: [],
+      log: true,
+      deterministicDeployment: true,
+    });
+  }
 };
 
 deploy.tags = ['extensions', 'adapters', 'l2-suite', 'main-suite']

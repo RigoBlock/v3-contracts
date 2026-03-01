@@ -14,7 +14,7 @@ import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces
 import {ExtensionsMap} from "../../contracts/protocol/deps/ExtensionsMap.sol";
 import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
-import {Extensions, DeploymentParams} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {Extensions, DeploymentParams, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
@@ -149,10 +149,10 @@ contract RealDeploymentFixture is Test {
     
     function _deployExtensions(ChainConfig memory config) public returns (ChainDeployment memory deployment) {
         // 1. Deploy extensions - will have different address from deployed (deployer address)
-        deployment.eApps = new EApps(config.grgStakingProxy, config.uniV4Posm);
+        deployment.eApps = new EApps(EAppsParams({grgStakingProxy: config.grgStakingProxy, univ4Posm: config.uniV4Posm}));
         deployment.eOracle = new EOracle(config.oracle, config.wrappedNative);
         deployment.eUpgrade = new EUpgrade(Constants.FACTORY);
-        deployment.eNavView = new ENavView(config.grgStakingProxy, config.uniV4Posm);
+        deployment.eNavView = new ENavView(EAppsParams({grgStakingProxy: config.grgStakingProxy, univ4Posm: config.uniV4Posm}));
         deployment.eCrosschain = new ECrosschain();
         console2.log("Deployed extensions successfully");
 

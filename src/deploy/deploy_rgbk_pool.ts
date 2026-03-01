@@ -70,7 +70,9 @@ const deploy: DeployFunction = async function (
   const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [grgStakingProxy, univ4Posm],
+    args: [
+      [grgStakingProxy, univ4Posm],
+    ],
     log: true,
     deterministicDeployment: true,
   });
