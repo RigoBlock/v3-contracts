@@ -8,16 +8,6 @@ import {Order} from "gmx-synthetics/order/Order.sol";
 import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxDataStore, IGmxExchangeRouter, GmxValidatedPrice, GmxPositionInfo, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 
-/// @title GmxLib
-/// @notice Shared GMX v2 position and order valuation logic used by EApps and NavView.
-/// @dev All functions are internal and are inlined into the calling contract.
-///
-///  NAV accounting:
-///  - Executed positions: net collateral ± unrealised PnL ± price impact − fees
-///  - Pending increase orders: initial collateral sitting in the GMX OrderVault
-///    is counted so that NAV does not drop when an order is created and restored
-///    only when the order is executed.  Decrease orders are skipped — the
-///    position still holds the collateral until execution.
 library GmxLib {
     uint256 internal constant ARBITRUM_CHAIN_ID = 42161;
     address internal constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
@@ -48,10 +38,6 @@ library GmxLib {
     ///  Defined here so GmxLib.assertPositionLimitNotReached can use a custom error
     ///  without importing the adapter interface (which would create a circular dependency).
     error MaxGmxPositionsReached();
-
-    // =========================================================================
-    // Public entry point
-    // =========================================================================
 
     /// @notice Estimates the execution fee for a GMX market order at a given gas price.
     /// @dev Reproduces GasUtils.adjustGasLimitForEstimate(dataStore, orderGasLimit, 3).
@@ -109,12 +95,6 @@ library GmxLib {
     ///  increase orders held by `account` in GMX v2.
     /// @dev Returns empty array on non-Arbitrum chains (GMX v2 is Arbitrum-only).
     function getGmxPositionBalances(address account) internal view returns (AppTokenBalance[] memory balances) {
-        // Chain-ID guard is intentionally absent here: GmxLib is only ever
-        // invoked when the GMX_V2_POSITIONS application bit is set in pool
-        // storage, which only happens via AGmxV2.createIncreaseOrder — an
-        // Arbitrum-only adapter (constructor-guarded with ARBITRUM_CHAIN_ID).
-        // Adding a redundant chainid check here would give a false impression
-        // of safety and obscure where the real guard lives.
         AppTokenBalance[] memory posBal = _getExecutedPositionBalances(account);
         AppTokenBalance[] memory ordBal = _getPendingOrderBalances(account);
 
@@ -125,10 +105,6 @@ library GmxLib {
         for (uint256 i; i < posBal.length; ++i) balances[i] = posBal[i];
         for (uint256 i; i < ordBal.length; ++i) balances[posBal.length + i] = ordBal[i];
     }
-
-    // =========================================================================
-    // Executed positions
-    // =========================================================================
 
     /// @dev Returns net collateral ± PnL ± impact − fees for all open positions.
     ///  Delegates heavy lifting to helpers to stay within the 16-slot stack limit.
@@ -176,14 +152,6 @@ library GmxLib {
     ///  Extracted from `_getExecutedPositionBalances` to keep each function's stack usage
     ///  within the 16-slot EVM limit.  Returns empty posInfos on reader revert (caller falls
     ///  back to collateral-only mode).
-    ///
-    ///  Sequencer downtime: when the Arbitrum sequencer is down, Chainlink prices are stale
-    ///  but still readable — getOraclePrice() does NOT revert. Returning stale prices is
-    ///  deliberately accepted here: the last known price is a far better NAV approximation
-    ///  than returning zero PnL (_collateralOnlyBalances), which would cause dramatic NAV
-    ///  distortion for any position with significant unrealized PnL or accumulated funding fees.
-    ///  Sequencer outages on Arbitrum are rare and brief; using the last validated price is
-    ///  consistent with how audited external integrations (e.g. Enzyme) handle this.
     function _fetchPositionInfos(
         Position.Props[] memory positions,
         address account
@@ -221,17 +189,9 @@ library GmxLib {
             // Return empty — caller falls back to collateral-only balances.
         }
     }
-    // =========================================================================
-    // Pending increase orders (NAV-preserving: collateral is in OrderVault)
-    // =========================================================================
 
     /// @dev Returns the initial collateral amount for every pending MarketIncrease
     ///  or LimitIncrease order.  Converted to wrappedNative when possible.
-    ///
-    ///  Why: when `createIncreaseOrder` is called, collateral leaves the pool
-    ///  wallet immediately (sent to GMX OrderVault).  Without accounting for
-    ///  pending orders, NAV would drop by the full collateral amount until the
-    ///  keeper executes the order.
     function _getPendingOrderBalances(address account) private view returns (AppTokenBalance[] memory balances) {
         GmxOrderInfo[] memory orders;
         try IGmxReader(_GMX_READER).getAccountOrders(_GMX_DATA_STORE, account, 0, type(uint256).max) returns (
@@ -274,23 +234,9 @@ library GmxLib {
         for (uint256 i; i < count; ++i) balances[i] = tmp[i];
     }
 
-    // =========================================================================
-    // Per-position balance computation helpers
-    // =========================================================================
-
     /// @dev Appends up to 3 entries per position (net collateral, claimable long-token funding,
     ///  claimable short-token funding) to `tmp`.  Returns the updated count.
-    ///
     ///  All amounts are expressed in the NATIVE TOKEN of each component.
-    ///  No WETH conversion is performed here; EOracle/NavView handle the USD valuation.
-    ///
-    ///  Why native tokens (not WETH):
-    ///  - GMX with NoSwap always returns the exact collateral token on position close.
-    ///  - Returning collateralToken with a positive amount means purgeInactiveTokensAndApps
-    ///    sees it in the `inApp` set and will NOT remove it from activeTokensSet — no
-    ///    sentinel trick required.
-    ///  - EOracle can price any token that was added via _trackToken (which requires a price
-    ///    feed), so NAV conversion is correct for all supported collateral tokens.
     function _appendGmxPosBalances(
         AppTokenBalance[] memory tmp,
         uint256 count,
@@ -300,27 +246,8 @@ library GmxLib {
         // --- net collateral (collateral ± PnL ± impact − fees) in collateralToken units ---
         address colToken = posInfo.position.addresses.collateralToken;
         int256 net = _computeGmxNetCollateral(posInfo);
+
         // Floor at zero — NAV cannot be inflated by this choice.
-        //
-        // GMX v2 guarantees that the pool can NEVER owe more than its deposited
-        // collateral. The protocol enforces minimum collateral thresholds (checked
-        // on every state-changing operation) and triggers liquidation before a
-        // position can produce a real negative balance. The maximum actual loss is
-        // the deposited collateral; GMX does not generate on-chain debt obligations
-        // against the pool.
-        //
-        // When _computeGmxNetCollateral() returns a negative value it means the
-        // estimated fees + unrealised loss exceed the deposited collateral amount.
-        // In that state the position is already past the liquidation threshold and
-        // the real recoverable amount is approximately zero (a small residual may
-        // remain after the liquidation fee is taken by the keeper, but that is
-        // bounded to a few basis points of original collateral).
-        //
-        // Reporting zero is therefore a slight UNDERSTATEMENT of recovery value
-        // (never an overstatement), so it cannot inflate NAV or allow early
-        // redeemers to exit at an inflated price. The current LPs absorb the loss
-        // correctly because the collateral is already absent from the pool wallet
-        // and the position contributes 0 to EApps-valued NAV.
         if (net > 0) {
             tmp[count++] = AppTokenBalance({token: colToken, amount: net});
         }
@@ -341,8 +268,6 @@ library GmxLib {
     }
 
     /// @dev Computes net collateral in collateral-token units for one GMX position.
-    ///    net = collateralAmount + basePnl/colPrice ± impact/colPrice − totalCostAmount
-    ///  Uses max price for positive PnL (conservative), min price for negative PnL (favourable).
     function _computeGmxNetCollateral(GmxPositionInfo memory posInfo) private pure returns (int256 netCollateral) {
         Price.Props memory colPrice = posInfo.fees.collateralTokenPrice;
 
@@ -380,10 +305,6 @@ library GmxLib {
         }
     }
 
-    /// @dev Fetches the GMX-format price for `token` from the Chainlink provider.
-    ///  Returns a zero Price.Props on failure — callers treat zero price as "no data".
-    ///  During Arbitrum sequencer downtime, Chainlink prices are stale but readable;
-    ///  returning them is intentional — see _fetchPositionInfos for rationale.
     function _safeGetGmxPrice(address token) private view returns (Price.Props memory price) {
         if (token == address(0)) return price;
         try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
@@ -393,7 +314,6 @@ library GmxLib {
         } catch {}
     }
 
-    /// @dev Ceiling integer division: ⌈a/b⌉.
     function _ceilDiv(uint256 a, uint256 b) private pure returns (uint256) {
         if (a == 0 || b == 0) return 0;
         return (a - 1) / b + 1;
