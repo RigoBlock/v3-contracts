@@ -39,15 +39,8 @@ library GmxLib {
     ///  without importing the adapter interface (which would create a circular dependency).
     error MaxGmxPositionsReached();
 
-    /// @notice Estimates the execution fee for a GMX market order at a given gas price.
     /// @dev Reproduces GasUtils.adjustGasLimitForEstimate(dataStore, orderGasLimit, 3).
-    ///  INTENDED FOR OFF-CHAIN USE via eth_call with an explicit gasPrice in the call params.
-    ///  Do NOT call this on-chain to derive params.executionFee: in a real transaction tx.gasprice
-    ///  equals the EIP-1559 effective gas price (correct), but in eth_call simulations tx.gasprice
-    ///  is 0 unless the caller sets it — producing a silent zero that makes balance-sufficiency
-    ///  checks unreliable.  Instead, callers should read this value off-chain, multiply by their
-    ///  target gasPrice and apply a buffer (e.g. 1.5×), then pass the result as params.executionFee.
-    ///  Any excess vs GMX's minimum is refunded by payExecutionFee to cancellationReceiver (the pool).
+    ///  Excess fee above GMX's minimum is refunded to cancellationReceiver (the pool).
     /// @param isIncrease True for increase orders, false for decrease orders.
     function computeExecutionFee(bool isIncrease) internal view returns (uint256) {
         IGmxDataStore ds = IGmxDataStore(_GMX_DATA_STORE);

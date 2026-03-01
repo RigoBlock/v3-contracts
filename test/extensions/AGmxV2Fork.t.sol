@@ -114,6 +114,13 @@ contract AGmxV2ForkTest is Test {
         // Create Arbitrum fork
         vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
 
+        // Guard: if the RPC does not serve state at ARB_BLOCK, contracts have no code.
+        // Fail loud here so the root cause (wrong/missing ARBITRUM_MAINNET_RPC_URL) is obvious.
+        require(
+            address(GMX_READER).code.length > 0,
+            "Fork guard: GMX Reader has no code at ARB_BLOCK - check ARBITRUM_MAINNET_RPC_URL"
+        );
+
         // Set a realistic gas price so computeExecutionFee returns a non-zero value.
         // 1 gwei is consistent with typical Arbitrum basefee; tests can assert the fee is
         // deducted and refunded correctly rather than silently working at fee = 0.
@@ -495,6 +502,17 @@ contract AGmxV2ForkTest is Test {
     // =========================================================================
     // Tests — 32-position DoS limit
     // =========================================================================
+
+    /// @notice createIncreaseOrder reverts with InvalidIncreaseOrderType when the caller
+    ///   passes any order type other than MarketIncrease.
+    function test_CreateIncreaseOrder_WrongOrderType_Reverts() public {
+        IBaseOrderUtils.CreateOrderParams memory p = _defaultIncreaseParams();
+        p.orderType = Order.OrderType.LimitIncrease;
+
+        vm.prank(poolOwner);
+        vm.expectRevert(IAGmxV2.InvalidIncreaseOrderType.selector);
+        IAGmxV2(pool).createIncreaseOrder(p);
+    }
 
     /// @notice createIncreaseOrder reverts with MaxGmxPositionsReached when the reader
     ///   reports 32 open positions and the order would open a DIFFERENT position

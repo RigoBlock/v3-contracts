@@ -63,6 +63,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256 executionFee = GmxLib.computeExecutionFee(true);
         require(executionFee <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
 
+        require(params.orderType == Order.OrderType.MarketIncrease, InvalidIncreaseOrderType());
         _trackToken(params.addresses.initialCollateralToken);
 
         address orderVault = GmxLib.GMX_ROUTER.orderHandler().orderVault();

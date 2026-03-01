@@ -12,6 +12,9 @@ interface IAGmxV2 {
     /// @notice Thrown when deploying on a chain other than Arbitrum.
     error NotArbitrum();
 
+    /// @notice Thrown when the caller passes an order type that is not MarketIncrease.
+    error InvalidIncreaseOrderType();
+
     /// @notice Thrown when the caller passes an order type that is not a valid decrease type.
     error InvalidDecreaseOrderType();
 
