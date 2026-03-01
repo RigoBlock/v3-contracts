@@ -50,6 +50,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
 
         // first mint skips nav calculation
+        // slither-disable-next-line incorrect-equality
         if (components.unitaryValue == 0) {
             components.unitaryValue = 10 ** components.decimals;
         } else {
@@ -60,6 +61,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             int256 effectiveSupply = int256(components.totalSupply) + virtualSupply;
 
             // effective supply cannot be negative from previous assertion. Also cannot burn internally more than has been minted.
+            // slither-disable-next-line incorrect-equality
             if (effectiveSupply == 0) {
                 return components;
             }
@@ -67,17 +69,16 @@ abstract contract MixinPoolValue is MixinOwnerActions {
             components.totalSupply = uint256(effectiveSupply);
 
             if (components.netTotalValue > 0) {
-                // unitary value needs to be scaled by pool decimals (same as base token decimals)
                 components.unitaryValue =
                     (components.netTotalValue * 10 ** components.decimals) /
                     components.totalSupply;
             } else {
-                // No net value, return stored NAV
                 return components;
             }
         }
 
         // never allow storing 0 - flag for default unitary price of uninitialized pool
+        // slither-disable-next-line incorrect-equality
         if (components.unitaryValue == 0) {
             components.unitaryValue = 1;
         }

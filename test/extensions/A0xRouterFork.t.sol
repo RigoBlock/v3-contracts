@@ -24,7 +24,7 @@ import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IOwnedUninitialized} from "../../contracts/utils/owned/IOwnedUninitialized.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
-import {Extensions, DeploymentParams} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {Extensions, DeploymentParams, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
 // Imported from 0x-settler submodule — provides type-safe selectors for action validation.
 import {ISettlerActions} from "0x-settler/src/ISettlerActions.sol";
@@ -1062,10 +1062,10 @@ contract A0xRouterForkTest is Test {
     /// @dev Deploy extensions, implementation, factory update, pool creation, adapter registration
     function _setupPool() private {
         // Deploy all required extensions
-        EApps eApps = new EApps(Constants.GRG_STAKING, Constants.UNISWAP_V4_POSM);
+        EApps eApps = new EApps(EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM}));
         EOracle eOracle = new EOracle(Constants.ORACLE, Constants.ETH_WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView = new ENavView(Constants.GRG_STAKING, Constants.UNISWAP_V4_POSM);
+        ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM}));
         ECrosschain eCrosschain = new ECrosschain();
 
         Extensions memory extensions = Extensions({

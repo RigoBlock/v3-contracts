@@ -10,6 +10,17 @@ gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNav
 fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
 ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 
+# Note: --fork-retries, --fork-retry-backoff, --compute-units-per-second are CLI-only
+# flags that also require --fork-url to be present (Foundry rejects the combination
+# without it). Our fork tests create their own forks via vm.createSelectFork() using
+# the named [rpc_endpoints] below — no global --fork-url is needed or used.
+# These CLI flags are therefore incompatible with our workflow and are intentionally omitted.
+#
+# All chains (mainnet, base, arbitrum, unichain, polygon) have RPC URL secrets in CI.
+# The coverage script (scripts/foundry-coverage.sh) excludes PolygonForkTest from CI
+# (local-only) and A0xRouterUnichainForkTest (optional, can be re-enabled). All other
+# fork tests run in CI Step 2 using their vm.createSelectFork() calls.
+
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
 

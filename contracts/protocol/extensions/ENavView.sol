@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {IENavView} from "./adapters/interfaces/IENavView.sol";
 import {NavView} from "../libraries/NavView.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
+import {EAppsParams} from "../types/DeploymentParams.sol";
 
 /// @title ENavView - Navigation and application view extension for Rigoblock smart pools
 /// @notice Provides view methods to retrieve token balances and NAV without modifying state
@@ -19,11 +20,10 @@ contract ENavView is IENavView {
     address private immutable uniV4Posm;
 
     /// @notice Constructor stores immutable addresses for chain-specific contracts
-    /// @param _grgStakingProxy Address of the GRG staking proxy on this chain
-    /// @param _uniV4Posm Address of the Uniswap V4 position manager on this chain
-    constructor(address _grgStakingProxy, address _uniV4Posm) {
-        grgStakingProxy = _grgStakingProxy;
-        uniV4Posm = _uniV4Posm;
+    /// @param params Chain-specific addresses bundled into a single struct.
+    constructor(EAppsParams memory params) {
+        grgStakingProxy = params.grgStakingProxy;
+        uniV4Posm = params.univ4Posm;
     }
 
     /// @inheritdoc IENavView

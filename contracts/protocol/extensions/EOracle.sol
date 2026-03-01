@@ -27,7 +27,6 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
-import {Observation} from "../types/Observation.sol";
 
 contract EOracle is IEOracle {
     using TickMath for int24;
@@ -115,18 +114,15 @@ contract EOracle is IEOracle {
     }
 
     /// @inheritdoc IEOracle
-    /// @dev This method will return true if the last stored observation has a non-nil timestamp.
-    /// @dev Adding wrapped native token requires a price feed against navite, as otherwise must warm up EApps in order
-    /// to have same contract address on all chains.
+    /// @dev Returns true if the oracle pool has been initialised (cardinality > 0).
     function hasPriceFeed(address token) external view returns (bool) {
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
-            (PoolKey memory key, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
-
-            // try and get the last stored observation
-            Observation memory observation = _oracle.getObservation(key, state.index);
-            return observation.blockTimestamp != 0;
+            // cardinality > 0 means the oracle pool has been initialised and has at least one
+            // observation — equivalent to checking blockTimestamp != 0 but saves one SLOAD.
+            (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
+            return state.cardinality > 0;
         }
     }
 
