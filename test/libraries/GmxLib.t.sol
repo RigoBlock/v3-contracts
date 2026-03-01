@@ -483,6 +483,33 @@ contract GmxLibTest is Test {
         assertEq(balances[0].amount, int256(970e6));
     }
 
+    /// @notice If the Reader returns a zero collateralTokenPrice, _computeGmxNetCollateral
+    ///   falls back to raw collateralAmount (no PnL/impact applied) to avoid division by zero.
+    function test_GetGmxPositionBalances_ZeroCollateralPrice_FallsBackToRawCollateral() public {
+        _mockOnePosition(
+            COL_TOKEN,
+            500e6,
+            int256(200e30), // would be +200e6 at 1e24, but price is zero
+            int256(50e30),  // would be +50e6 at 1e24, but price is zero
+            Price.Props({min: 0, max: 0}), // zeroed price — guard must fire
+            0,
+            0,
+            0
+        );
+
+        GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encode(emptyOrders)
+        );
+
+        // With the zero-price guard: result = raw collateralAmount, no PnL/impact added.
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
+        assertEq(balances.length, 1);
+        assertEq(balances[0].amount, int256(500e6));
+    }
+
     /// @notice _fetchPositionInfos try/catch fallback: Reader reverts → collateral-only.
     function test_GetGmxPositionBalances_PositionInfoListReverts_FallsBackToCollateralOnly()
         public

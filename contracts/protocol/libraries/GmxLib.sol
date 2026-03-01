@@ -263,8 +263,15 @@ library GmxLib {
     }
 
     /// @dev Computes net collateral in collateral-token units for one GMX position.
+    ///  If either collateral price is zero (malformed Reader response), returns raw collateral
+    ///  amount with no PnL/impact adjustment — consistent with _collateralOnlyBalances fallback.
     function _computeGmxNetCollateral(GmxPositionInfo memory posInfo) private pure returns (int256 netCollateral) {
         Price.Props memory colPrice = posInfo.fees.collateralTokenPrice;
+
+        // Guard against division by zero if Reader returns a zeroed price struct.
+        if (colPrice.min == 0 || colPrice.max == 0) {
+            return int256(posInfo.position.numbers.collateralAmount);
+        }
 
         int256 basePnlCollateral;
         if (posInfo.basePnlUsd > 0) {
