@@ -302,6 +302,34 @@ contract GmxLibTest is Test {
         assertEq(balances[0].amount, int256(200e6));
     }
 
+    /// @notice An increase order with zero collateral but non-zero execution fee still
+    ///   contributes the fee to NAV (size-only leverage increase on existing collateral).
+    function test_GetGmxPositionBalances_ZeroCollateral_FeeStillCounted() public {
+        Position.Props[] memory emptyPos = new Position.Props[](0);
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(emptyPos)
+        );
+
+        GmxOrderInfo[] memory orders = new GmxOrderInfo[](1);
+        orders[0].order.numbers.orderType = Order.OrderType.MarketIncrease;
+        orders[0].order.addresses.initialCollateralToken = COL_TOKEN;
+        orders[0].order.numbers.initialCollateralDeltaAmount = 0; // size-only increase
+        orders[0].order.numbers.executionFee = 0.001 ether;
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encode(orders)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
+        // Must return 1 entry for the execution fee only (no collateral entry).
+        assertEq(balances.length, 1);
+        assertEq(balances[0].token, WRAPPED_NATIVE);
+        assertEq(balances[0].amount, int256(0.001 ether));
+    }
+
     /// @notice getAccountOrders reverts → _getPendingOrderBalances returns empty.
     function test_GetGmxPositionBalances_OrdersRevert_ReturnsEmpty() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);

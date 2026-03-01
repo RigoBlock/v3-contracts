@@ -7,8 +7,10 @@ import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxDataStore, IGmxExchangeRouter, GmxValidatedPrice, GmxPositionInfo, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 
 library GmxLib {
+    using SafeCast for uint256;
     uint256 internal constant ARBITRUM_CHAIN_ID = 42161;
     address internal constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
 
@@ -206,22 +208,27 @@ library GmxLib {
 
         for (uint256 i; i < n; ++i) {
             Order.OrderType ot = orders[i].order.numbers.orderType;
-            // Only increase orders move collateral to the OrderVault.
+            // Only increase orders move collateral and execution fee to the OrderVault.
             if (ot != Order.OrderType.MarketIncrease && ot != Order.OrderType.LimitIncrease) continue;
 
             address colToken = orders[i].order.addresses.initialCollateralToken;
             uint256 amount = orders[i].order.numbers.initialCollateralDeltaAmount;
-            if (amount == 0) continue;
+            uint256 fee = orders[i].order.numbers.executionFee;
+
+            // Skip orders with nothing to track (both collateral and fee are zero).
+            if (amount == 0 && fee == 0) continue;
 
             // Collateral token (EOracle can price it; no WETH conversion needed).
-            tmp[count++] = AppTokenBalance({token: colToken, amount: int256(amount)});
+            if (amount > 0) {
+                tmp[count++] = AppTokenBalance({token: colToken, amount: amount.toInt256()});
+            }
 
             // Execution fee: always WETH, stored separately in the order vault.
             // Counted here so NAV is not understated during the pending period.
             // GMX refunds it on cancellation; keepers consume it on execution.
-            uint256 fee = orders[i].order.numbers.executionFee;
+            // Fee is tracked even when initialCollateralDeltaAmount is zero (size-only increase).
             if (fee > 0) {
-                tmp[count++] = AppTokenBalance({token: WRAPPED_NATIVE, amount: int256(fee)});
+                tmp[count++] = AppTokenBalance({token: WRAPPED_NATIVE, amount: fee.toInt256()});
             }
         }
 
@@ -250,13 +257,13 @@ library GmxLib {
         // --- claimable long-token funding fees ---
         uint256 cl = posInfo.fees.funding.claimableLongTokenAmount;
         if (cl > 0) {
-            tmp[count++] = AppTokenBalance({token: mkt.longToken, amount: int256(cl)});
+            tmp[count++] = AppTokenBalance({token: mkt.longToken, amount: cl.toInt256()});
         }
 
         // --- claimable short-token funding fees ---
         uint256 cs = posInfo.fees.funding.claimableShortTokenAmount;
         if (cs > 0) {
-            tmp[count++] = AppTokenBalance({token: mkt.shortToken, amount: int256(cs)});
+            tmp[count++] = AppTokenBalance({token: mkt.shortToken, amount: cs.toInt256()});
         }
 
         return count;
@@ -270,7 +277,7 @@ library GmxLib {
 
         // Guard against division by zero if Reader returns a zeroed price struct.
         if (colPrice.min == 0 || colPrice.max == 0) {
-            return int256(posInfo.position.numbers.collateralAmount);
+            return posInfo.position.numbers.collateralAmount.toInt256();
         }
 
         int256 basePnlCollateral;
@@ -288,10 +295,10 @@ library GmxLib {
         }
 
         netCollateral =
-            int256(posInfo.position.numbers.collateralAmount) +
+            posInfo.position.numbers.collateralAmount.toInt256() +
             basePnlCollateral +
             impactCollateral -
-            int256(posInfo.fees.totalCostAmount);
+            posInfo.fees.totalCostAmount.toInt256();
     }
 
     /// @dev Fallback: return raw collateral amounts when Reader.getAccountPositionInfoList fails.
@@ -302,7 +309,7 @@ library GmxLib {
         for (uint256 i; i < positions.length; ++i) {
             balances[i] = AppTokenBalance({
                 token: positions[i].addresses.collateralToken,
-                amount: int256(positions[i].numbers.collateralAmount)
+                amount: positions[i].numbers.collateralAmount.toInt256()
             });
         }
     }
