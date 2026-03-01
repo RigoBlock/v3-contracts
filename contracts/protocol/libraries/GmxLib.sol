@@ -86,7 +86,9 @@ library GmxLib {
 
     /// @notice Returns combined AppTokenBalance[] for executed positions and pending
     ///  increase orders held by `account` in GMX v2.
-    /// @dev Returns empty array on non-Arbitrum chains (GMX v2 is Arbitrum-only).
+    /// @dev Assumes the caller has already verified the GMX_V2_POSITIONS application bit is set.
+    ///  That bit is only set by AGmxV2.createIncreaseOrder, which is constructor-guarded to Arbitrum.
+    ///  There is intentionally no redundant chain-id check here.
     function getGmxPositionBalances(address account) internal view returns (AppTokenBalance[] memory balances) {
         AppTokenBalance[] memory posBal = _getExecutedPositionBalances(account);
         AppTokenBalance[] memory ordBal = _getPendingOrderBalances(account);
