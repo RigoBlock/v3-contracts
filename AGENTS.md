@@ -371,7 +371,7 @@ When modifying code:
 - Document known limitations clearly (see docs/across/KNOWN_ISSUES_AND_EDGE_CASES.md)
 - **Keep inline code comments strictly minimal**: only what is needed to understand core functionality. Readers should infer "what" from code; comments should only explain non-obvious "why".
 - **Design rationale, audit responses, and known limitations belong in `/docs/`**, not in source code. A one-line comment may reference the relevant doc section if needed.
-- **Do NOT add verbose NatSpec justifying design decisions or mentioning future features** in contract source. Example: the reason `fallback()` is `payable` is documented in `docs/staking/CANTINA_FINDINGS_STATUS.md`, not in the contract.
+- **Do NOT add verbose NatSpec justifying design decisions or mentioning future features** in contract source. Example: the reason `receive()` is `payable` (while `fallback()` is non-payable) is documented in `docs/staking/CANTINA_FINDINGS_STATUS.md`, not in the contract.
 
 ### Documentation File Management
 

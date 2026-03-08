@@ -100,15 +100,14 @@ Every command sequence that may leave residue in the PositionManager must append
 This is the correct granularity: individual command sequences are responsible for
 reclaiming their residues, not the dispatch layer.
 
-**Why the auditor's suggested fix was wrong**: Removing `payable` from `fallback()`
-would only affect ETH; ERC20 token residues would still be sweepable (POSM's
-`Actions.SWEEP` is a general-purpose mechanism for both). The `fallback()`
-payability is architecturally unrelated to POSM residue; see RIGO-7 for the
-separate analysis of ETH-carrying calls through the fallback.
-
-**What prevented a bad fix from landing**: When `payable` removal was first applied,
-test `test_FallbackIsPayable_EthPassesThroughToExtension` exposed that the change
-destroyed correct behavior. See `AGENTS.md` pitfall 22 for the general rule.
+**Why removing `payable` from `fallback()` is unrelated**: The auditor suggested
+removing `payable` from `fallback()` as a fix. This was removed anyway — not
+because it fixed anything, but because it gave a false impression: `receive()`
+handles plain ETH independently, and any ETH-carrying call-with-data reverts inside
+the delegatecall to `getExtensionBySelector` (non-payable) regardless of whether
+`fallback()` is payable or not. So `fallback() payable` was a no-op in both
+directions. See RIGO-7 for the full analysis. The residue problem (ERC20 + ETH)
+remains mitigated only by SWEEP actions in adapter command sequences.
 
 ---
 
@@ -219,22 +218,22 @@ The stored mapping is always correctly deleted. Low operational risk.
 
 ---
 
-### RIGO-7 — ETH-carrying fallback calls revert at non-payable ExtensionsMap resolver ❌
+### RIGO-7 — ETH-carrying fallback calls revert at non-payable ExtensionsMap resolver ✅
 
 `MixinFallback.fallback()` delegatecalls into `ExtensionsMap.getExtensionBySelector`
 which is `external view` (non-payable). Solidity's CALLVALUE check fires on
 delegatecall whenever `msg.value > 0`, reverting before the adapter is reached.
-Making adapter functions `payable` does not help — the revert is at the lookup step.
+Making adapter functions `payable` does not help — the revert is at the lookup step,
+not the adapter. ETH is never lost: the revert unwinds the call and returns ETH.
 
-`fallback()` was previously declared `payable`, which was removed because it gave a
-false impression that ETH-carrying calls were supported when they always reverted
-anyway. Plain ETH receives are handled by `receive() external payable` and are
-unaffected. ETH is never lost: the transaction reverts and ETH is returned to sender.
+`fallback()` was also removed as a cosmetic correctness fix: `receive()` independently
+handles plain ETH sends (delegatecalls with empty calldata route to `receive()` in the
+implementation context), and the `payable` keyword on `fallback()` gave a false
+impression without providing any capability.
 
-**Fix**: Make `getExtensionBySelector` `payable` in both `IExtensionsMap` and
-`ExtensionsMap`. Requires a new `ExtensionsMap` deployment (immutable per chain).
+**Fix applied**: removed `payable` modifier.
 
-**Status**: Confirmed finding. `fallback()` `payable` removed. Root cause deferred.
+**Status**: Fixed.
 
 ---
 
@@ -264,10 +263,10 @@ unaffected. ETH is never lost: the transaction reverts and ETH is returned to se
 | RIGO-1 | Low | moveStake DELEGATED→DELEGATED revert | ❌ NOT FIXED (multicall workaround) |
 | RIGO-12 | Info | ENavView ETH balance omission | ✅ FIXED |
 | RIGO-11 | Info | Authority.removeMethod misleading event | 🔍 FALSE POSITIVE |
-| RIGO-7 | Info | ETH-carrying fallback calls revert at resolver | ❌ NOT FIXED (fallback `payable` removed; root cause deferred) |
+| RIGO-7 | Info | ETH-carrying fallback calls revert at resolver | ✅ FIXED |
 | RIGO-5 | Info | Hardhat default mnemonic | ✅ FIXED |
 
-**Fixed**: RIGO-2, 3, 5, 6, 8, 9, 12 (7 findings)
-**Not fixed with rationale**: RIGO-1, RIGO-4, RIGO-7, RIGO-13, RIGO-14 (5 findings)
+**Fixed**: RIGO-2, 3, 5, 6, 7, 8, 9, 12 (8 findings)
+**Not fixed with rationale**: RIGO-1, RIGO-4, RIGO-13, RIGO-14 (4 findings)
 **False positive / by-design**: RIGO-10, RIGO-11, RIGO-15 flash-loan (3 findings)
 **RIGO-15 cross-epoch**: Real but low-risk; documented with fix pseudocode
