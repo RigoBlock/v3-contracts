@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
+import {Delegation} from "../../../types/Delegation.sol";
+
 /// @title Rigoblock V3 Pool Owner Actions Interface - Interface of the owner methods.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 interface ISmartPoolOwnerActions {
@@ -39,4 +41,21 @@ interface ISmartPoolOwnerActions {
     /// @notice Allows pool owner to set the transaction fee.
     /// @param transactionFee Value of the transaction fee in basis points.
     function setTransactionFee(uint16 transactionFee) external;
+
+    /// @notice Allows pool owner to batch grant or revoke delegated adapter write access.
+    /// @dev Each entry independently adds or removes one (selector, address) pair.
+    ///      Emits DelegationUpdated for every entry processed.
+    /// @param delegations Array of delegation operations to apply.
+    function updateDelegation(Delegation[] calldata delegations) external;
+
+
+    /// @notice Revokes all selector delegations for a given address in a single call.
+    /// @dev Useful when a delegated wallet is compromised.
+    /// @param delegated Address whose full delegation is to be revoked.
+    function revokeAllDelegations(address delegated) external;
+
+    /// @notice Revokes all address delegations for a given selector in a single call.
+    /// @dev Useful when an adapter is being replaced by governance and stale delegates should be cleaned.
+    /// @param selector Selector whose full delegation list is to be cleared.
+    function revokeAllDelegationsForSelector(bytes4 selector) external;
 }

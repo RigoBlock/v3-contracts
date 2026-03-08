@@ -43,8 +43,11 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
                 require(VERSION.isVersionHigherOrEqual(required), PoolVersionNotSupported());
             } catch {}
 
-            // adapter calls are for owner in write mode, and read mode for everyone else (including this)
-            shouldDelegatecall = msg.sender == pool().owner;
+            // adapter calls: approved delegates for their specific selectors in write mode,
+            // owner in write mode, read mode for everyone else (including this contract).
+            shouldDelegatecall =
+                delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0 ||
+                msg.sender == pool().owner;
         }
 
         assembly {

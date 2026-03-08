@@ -1,22 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
-/*
-
- Copyright 2025 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
 
 import {MixinActions} from "./MixinActions.sol";
 import {IEApps} from "../../extensions/adapters/interfaces/IEApps.sol";
@@ -24,11 +7,14 @@ import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolOwnerActions} from "../../interfaces/v4/pool/ISmartPoolOwnerActions.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
+import {DelegationData, DelegationLib} from "../../libraries/DelegationLib.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
+import {Delegation} from "../../types/Delegation.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 
 abstract contract MixinOwnerActions is MixinActions {
     using ApplicationsLib for ApplicationsSlot;
+    using DelegationLib for DelegationData;
     using EnumerableSet for AddressSet;
 
     error PoolCallerIsNotOwner();
@@ -183,5 +169,40 @@ abstract contract MixinOwnerActions is MixinActions {
 
     function _isContract(address target) private view returns (bool) {
         return target.code.length > 0;
+    }
+
+    /// @inheritdoc ISmartPoolOwnerActions
+    function updateDelegation(Delegation[] calldata delegations) external override onlyOwner {
+        DelegationData storage d = delegation();
+        uint256 length = delegations.length;
+        for (uint256 i = 0; i < length; ++i) {
+            Delegation calldata entry = delegations[i];
+            bool changed = entry.isDelegated
+                ? d.add(entry.selector, entry.delegated)
+                : d.remove(entry.selector, entry.delegated);
+            if (changed) emit DelegationUpdated(address(this), entry.delegated, entry.selector, entry.isDelegated);
+        }
+    }
+
+    /// @inheritdoc ISmartPoolOwnerActions
+    function revokeAllDelegations(address delegated) external override onlyOwner {
+        DelegationData storage d = delegation();
+        bytes4[] memory selectors = d.getSelectors(delegated);
+        d.removeAllByAddress(delegated);
+        uint256 len = selectors.length;
+        for (uint256 i = 0; i < len; ++i) {
+            emit DelegationUpdated(address(this), delegated, selectors[i], false);
+        }
+    }
+
+    /// @inheritdoc ISmartPoolOwnerActions
+    function revokeAllDelegationsForSelector(bytes4 selector) external override onlyOwner {
+        DelegationData storage d = delegation();
+        address[] memory addrs = d.getAddresses(selector);
+        d.removeAllBySelector(selector);
+        uint256 len = addrs.length;
+        for (uint256 i = 0; i < len; ++i) {
+            emit DelegationUpdated(address(this), addrs[i], selector, false);
+        }
     }
 }

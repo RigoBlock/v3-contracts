@@ -9,7 +9,7 @@ import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 /// @dev Inheriting from interface is required as we override public variables.
 abstract contract MixinConstants is ISmartPool {
     /// @inheritdoc ISmartPoolImmutable
-    string public constant override VERSION = "4.1.3";
+    string public constant override VERSION = "4.2.0";
 
     bytes32 internal constant _ACCEPTED_TOKENS_SLOT =
         0xa33198d1011bad6f8d9b4a537f82cf21cfac49b1430cf1a99c11aaf4d7325fc6;
@@ -33,6 +33,8 @@ abstract contract MixinConstants is ISmartPool {
         0xd87266b00c1e82928c0b0200ad56e2ee648a35d4e9b273d2ac9533471e3b5d3c;
 
     bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = VirtualStorageLib.VIRTUAL_SUPPLY_SLOT;
+
+    bytes32 internal constant _DELEGATION_SLOT = 0x1de728329845ca9693f4e251833e4fd20a461e4f39179bee6e55171aedb6dc19;
 
     address internal constant _ZERO_ADDRESS = address(0);
 

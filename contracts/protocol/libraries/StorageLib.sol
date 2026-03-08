@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {TokenIdsSlot} from "../types/Applications.sol";
 import {ApplicationsSlot} from "./ApplicationsLib.sol";
+import {DelegationData} from "./DelegationLib.sol";
 import {AddressSet, EnumerableSet, Pool} from "./EnumerableSet.sol";
 
 /// @notice A library for extensions to access proxy pre-assigned storage slots.
@@ -11,6 +12,7 @@ library StorageLib {
 
     /// @notice persistent storage slots, used to read from proxy storage without having to update implementation
     bytes32 public constant APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
+    bytes32 public constant DELEGATION_SLOT = 0x1de728329845ca9693f4e251833e4fd20a461e4f39179bee6e55171aedb6dc19;
     bytes32 public constant POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
     bytes32 public constant POOL_TOKENS_SLOT = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;
     bytes32 public constant TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
@@ -19,6 +21,12 @@ library StorageLib {
     function pool() internal pure returns (Pool storage s) {
         assembly {
             s.slot := POOL_INIT_SLOT
+        }
+    }
+
+    function delegation() internal pure returns (DelegationData storage s) {
+        assembly {
+            s.slot := DELEGATION_SLOT
         }
     }
 
