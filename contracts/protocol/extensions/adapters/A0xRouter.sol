@@ -62,7 +62,8 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         bytes calldata data
     ) external payable override nonReentrant onlyDelegateCall returns (bytes memory) {
         _requireGenuineSettler(target);
-        _validateSettlerCalldata(data);
+        require(operator == target, OperatorMustEqualTarget());
+        _validateSettlerCalldata(target, data);
 
         bool isNativeETH = token.isAddressZero() || token == _ETH_SENTINEL;
         uint256 value = isNativeETH ? amount : 0;
@@ -141,7 +142,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @dev Iterates settler actions and validates each selector against the allowlist.
-    function _checkActionsAllowed(bytes calldata data) private pure {
+    function _checkActionsAllowed(address target, bytes calldata data) private pure {
         // ABI layout: data[100:132] = offset to actions[] (4th word after selector).
         uint256 actionsOffset = abi.decode(data[100:132], (uint256));
         uint256 arrStart = 4 + actionsOffset;
@@ -153,6 +154,12 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
             uint256 selectorPos = arrStart + elOffset + 64;
             bytes4 actionSelector = bytes4(data[selectorPos:selectorPos + 4]);
             _assertIsAllowedAction(actionSelector);
+
+            // TRANSFER_FROM routes sell tokens from the pool into the Settler for internal routing.
+            if (actionSelector == ISettlerActions.TRANSFER_FROM.selector) {
+                address transferFromRecipient = abi.decode(data[selectorPos + 4:selectorPos + 36], (address));
+                require(transferFromRecipient == target, TransferFromRecipientNotSettler(transferFromRecipient));
+            }
         }
     }
 
@@ -166,7 +173,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @dev Validates settler calldata: correct selector, recipient, price feed, and action allowlist.
-    function _validateSettlerCalldata(bytes calldata data) private {
+    function _validateSettlerCalldata(address target, bytes calldata data) private {
         require(data.length >= 164, InvalidSettlerCalldata());
 
         require(bytes4(data[:4]) == ISettlerTakerSubmitted.execute.selector, UnsupportedSettlerFunction());
@@ -175,6 +182,6 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         require(recipient == address(this), RecipientNotSmartPool());
 
         _assertTokenOutHasPriceFeed(buyToken);
-        _checkActionsAllowed(data);
+        _checkActionsAllowed(target, data);
     }
 }

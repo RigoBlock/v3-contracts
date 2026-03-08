@@ -27,35 +27,42 @@ library CrosschainLib {
             return
                 token == CrosschainTokens.ETH_USDC ||
                 token == CrosschainTokens.ETH_USDT ||
-                token == CrosschainTokens.ETH_WETH;
+                token == CrosschainTokens.ETH_WETH ||
+                token == CrosschainTokens.ETH_WBTC;
         } else if (block.chainid == 42161) {
             // Arbitrum
             return
                 token == CrosschainTokens.ARB_USDC ||
                 token == CrosschainTokens.ARB_USDT ||
-                token == CrosschainTokens.ARB_WETH;
+                token == CrosschainTokens.ARB_WETH ||
+                token == CrosschainTokens.ARB_WBTC;
         } else if (block.chainid == 10) {
             // Optimism
             return
                 token == CrosschainTokens.OPT_USDC ||
                 token == CrosschainTokens.OPT_USDT ||
-                token == CrosschainTokens.OPT_WETH;
+                token == CrosschainTokens.OPT_WETH ||
+                token == CrosschainTokens.OPT_WBTC;
         } else if (block.chainid == 8453) {
             // Base
-            return token == CrosschainTokens.BASE_USDC || token == CrosschainTokens.BASE_WETH; // No USDT on Base
+            return
+                token == CrosschainTokens.BASE_USDC ||
+                token == CrosschainTokens.BASE_USDT ||
+                token == CrosschainTokens.BASE_WETH;
         } else if (block.chainid == 137) {
             // Polygon
             return
                 token == CrosschainTokens.POLY_USDC ||
                 token == CrosschainTokens.POLY_USDT ||
-                token == CrosschainTokens.POLY_WETH;
+                token == CrosschainTokens.POLY_WETH ||
+                token == CrosschainTokens.POLY_WBTC;
         } else if (block.chainid == 56) {
             // BSC
             return
                 token == CrosschainTokens.BSC_USDC ||
                 token == CrosschainTokens.BSC_USDT ||
                 token == CrosschainTokens.BSC_WETH;
-        } else if (block.chainid == 1301) {
+        } else if (block.chainid == 130) {
             // Unichain
             return token == CrosschainTokens.UNI_USDC || token == CrosschainTokens.UNI_WETH;
         }
@@ -170,6 +177,7 @@ library CrosschainLib {
             inputToken == CrosschainTokens.OPT_WBTC ||
             inputToken == CrosschainTokens.POLY_WBTC
         ) {
+            // WBTC is available on Ethereum, Arbitrum, Optimism, Polygon — not on Base, BSC, Unichain
             require(
                 outputToken == CrosschainTokens.ETH_WBTC ||
                     outputToken == CrosschainTokens.ARB_WBTC ||
