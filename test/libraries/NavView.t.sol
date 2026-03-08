@@ -272,6 +272,43 @@ contract NavViewTest is Test {
     }
 
     // =========================================================================
+    // getNavData — native ETH balance included when base token is non-native
+    // =========================================================================
+
+    function test_GetNavData_NativeEthIncludedInBatch_WhenBaseTokenNonNative() public {
+        _mockActiveApplications(0);
+        _mockGrgZeroStake();
+
+        // Pool holds 1 ETH (address(0)) and BASE_TOKEN (ERC20)
+        address[] memory activeTokens = new address[](1);
+        activeTokens[0] = address(0); // native ETH as active token
+        ISmartPoolState.ActiveTokens memory at =
+            ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(at));
+
+        // Give POOL 1 ETH
+        vm.deal(POOL, 1e18);
+
+        // POOL also holds 500 BASE_TOKEN
+        _mockBaseTokenBalance(500e18);
+
+        // Oracle converts 1 ETH → 3000 BASE_TOKEN (i.e., ETH price = 3000)
+        vm.mockCall(
+            POOL,
+            abi.encodeWithSelector(IEOracle.convertBatchTokenAmounts.selector),
+            abi.encode(int256(3000e18))
+        );
+
+        _mockPoolTokens(1e18, 3500e18);
+
+        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+
+        // totalValue = 500e18 (base) + 3000e18 (ETH converted) = 3500e18
+        assertEq(data.totalValue, 3500e18);
+        assertEq(data.unitaryValue, 1e18); // 3500e18 * 1e18 / 3500e18
+    }
+
+    // =========================================================================
     // getNavData — batch conversion fails → zero NavData
     // =========================================================================
 

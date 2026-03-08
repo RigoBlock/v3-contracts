@@ -369,7 +369,9 @@ When modifying code:
 - NatSpec all public/external functions
 - Use `@inheritdoc` for interface implementations
 - Document known limitations clearly (see docs/across/KNOWN_ISSUES_AND_EDGE_CASES.md)
-- Keep inline comments minimal and focused on "why" not "what"
+- **Keep inline code comments strictly minimal**: only what is needed to understand core functionality. Readers should infer "what" from code; comments should only explain non-obvious "why".
+- **Design rationale, audit responses, and known limitations belong in `/docs/`**, not in source code. A one-line comment may reference the relevant doc section if needed.
+- **Do NOT add verbose NatSpec justifying design decisions or mentioning future features** in contract source. Example: the reason `receive()` is `payable` (while `fallback()` is non-payable) is documented in `docs/staking/CANTINA_FINDINGS_STATUS.md`, not in the contract.
 
 ### Documentation File Management
 
@@ -519,6 +521,11 @@ When making changes:
     - If a parameter must be overridden for security (e.g., `address receiver` that must always be `address(this)`), KEEP it in the interface but leave the variable name blank (`address`), and ignore the caller-supplied value in the implementation. Document the override in the NatSpec.
     - Do NOT introduce wrapper structs to bundle existing protocol params — this changes the selector and breaks ABI compatibility.
     - Exception: if the adapter intentionally splits a protocol function into multiple calls for type-safety (e.g., `createIncreaseOrder` / `createDecreaseOrder` instead of a single `createOrder`), the split is acceptable when the parameter TYPE is preserved (same `CreateOrderParams` struct from the protocol).
+
+22. **TEST FAILURES AFTER AUDIT FIXES ARE SIGNALS, NOT NOISE** — When an audit fix causes a previously-passing test to fail, **NEVER remove or rewrite the test** to make the suite green again without first understanding why it failed. Required process: (1) identify what the test was asserting, (2) establish why the fix changes that behavior, (3) determine whether the test is now invalid OR whether the fix is wrong. **RIGO-14/RIGO-7 canonical example**: removing `payable` from `fallback()` (RIGO-14 audit suggestion) made `test_Donate_WithMsgValue_Reverts` fail. Investigation revealed the test was itself wrong — it used `vm.mockCall` which bypasses the real CALLVALUE check in `ExtensionsMap`, so it was testing mock behavior rather than production behavior. Further system-level analysis (RIGO-7) then confirmed that `fallback() payable` is architecturally useless: `receive()` handles plain ETH independently; any ETH-carrying call-with-data reverts inside the delegatecall to `ExtensionsMap` regardless. The `payable` was removed and the fake test was deleted. The signal from the failure was real — but the right conclusion was that the test was wrong, not the fix.
+
+23. **AUDIT FINDINGS REQUIRE INDEPENDENT VERIFICATION BEFORE APPLYING** — Never apply an audit finding without: (1) running the full test suite to detect regressions, (2) verifying through protocol documentation that the fix cannot block any legitimate protocol path, (3) documenting the decision in `/docs/` if preserving production code over the auditor's recommendation. A finding that looks safe in isolation may close off a critical path when the full system is considered. Defend each "not fixed" or "by-design" disposition clearly in the audit status document.
+
 
 ## GMX v2 Integration
 
