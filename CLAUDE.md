@@ -368,6 +368,70 @@ function test_SetDonationLock() public {
 
 ---
 
+## Code Comment Philosophy
+
+### What belongs in code comments
+
+Source files (`.sol`) should contain **only what is strictly necessary to understand core functionality**:
+
+- NatSpec for all `public`/`external` functions (required for ABI tooling)
+- `@inheritdoc` for interface implementations (avoids duplication)
+- Brief inline `// why` comments for non-obvious decisions
+
+**Not in code:**
+- Design rationale or architectural tradeoffs
+- Audit finding responses or dispositions
+- Known limitations that require extended explanation
+- Future-feature justifications
+- References to external protocol details beyond what is needed to read the function
+
+### What belongs in `/docs/`
+
+Everything that helps when understanding *why* a decision was made, not *what* the code does:
+
+- Design decision rationale and rejected alternatives
+- Audit finding responses (see `docs/staking/CANTINA_FINDINGS_STATUS.md`)
+- Known limitations with mitigation patterns
+- Cross-protocol interaction designs
+- NAV accounting analysis
+
+A single-line comment pointing to the doc is acceptable: `// see docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-14`
+
+---
+
+## Audit Fix Verification Protocol
+
+### The "test failure as signal" rule
+
+When an audit fix causes a previously-passing test to fail, the failure is **always a signal to investigate, never noise to suppress**.
+
+**Required steps before accepting any audit fix:**
+1. Run the full test suite with the fix applied
+2. For each failing test: understand what it was asserting and why the fix breaks it
+3. Determine which is wrong — the test or the fix
+4. Only after that analysis: either correct the fix, or (if the test is genuinely stale) remove it with documented justification
+
+**NEVER**: silently remove a failing test, or rewrite it to match the new (potentially broken) behavior, without completing the above analysis.
+
+### Canonical example: RIGO-14
+
+**Audit finding**: POSM ETH residue publicly sweepable — proposed fix: remove `payable` from `MixinFallback.fallback()`.
+
+**What happened when applied:**
+- `test_Donate_WithMsgValue_Reverts` started failing
+- Initial reaction: rewrite the test to match
+- Correct reaction: investigate — which revealed the fix was architecturally wrong
+
+**Why the fix was wrong (two independent reasons):**
+1. `Actions.SWEEP` sweeps both ETH and ERC20 residues. Removing `payable` only addresses ETH and does nothing for ERC20 token residues — the real mitigation is at the call-encoding layer (appending SWEEP for each residue token in the adapter command sequence)
+2. Removing `payable` from the dispatch fallback blocks any adapter/extension that legitimately forwards ETH (GMX execution fees, bridge fees). If Across ever refunded fees in native ETH instead of WETH, a non-payable fallback would cause a permanent protocol failure until an upgrade
+
+**Lesson**: The test failure was a signal. The fix was wrong. The test was later removed only because it used `vm.mockCall` (which bypasses the real extension's CALLVALUE check and cannot reliably test real behavior in a mocked setup) — not because the underlying concern was resolved. The protection remains: `ECrosschain.donate` is non-payable, so any `donate{value: X}` call reverts inside the extension regardless of the fallback.
+
+Full disposition: `docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-14`
+
+---
+
 ## Resources
 
 - [Rigoblock Documentation](https://docs.rigoblock.com)

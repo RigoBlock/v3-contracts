@@ -25,12 +25,24 @@ const { NODE_URL, INFURA_KEY, MNEMONIC, ETHERSCAN_API_KEY, PK, SOLIDITY_VERSION,
 const DEFAULT_MNEMONIC =
   "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
 
+const LOCAL_NETWORKS = ["hardhat", "localhost"];
+const isLiveNetwork = !LOCAL_NETWORKS.includes((argv as any).network as string);
+
 const sharedNetworkConfig: HttpNetworkUserConfig = {};
 if (PK) {
   sharedNetworkConfig.accounts = [PK];
-} else {
+} else if (MNEMONIC && MNEMONIC.trim() !== "") {
   sharedNetworkConfig.accounts = {
-    mnemonic: MNEMONIC || DEFAULT_MNEMONIC,
+    mnemonic: MNEMONIC,
+  };
+} else if (isLiveNetwork) {
+  throw new Error(
+    `No private key or mnemonic configured. Set PK or MNEMONIC in your .env file before deploying to ${(argv as any).network}.`,
+  );
+} else {
+  // hardhat/localhost only – safe to use well-known test mnemonic
+  sharedNetworkConfig.accounts = {
+    mnemonic: DEFAULT_MNEMONIC,
   };
 }
 

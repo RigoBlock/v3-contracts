@@ -146,7 +146,7 @@ library NavView {
             uint256 idx = 0;
 
             for (uint256 i = 0; i < balances.length; i++) {
-                if (balances[i].token != baseToken && balances[i].token != ZERO_ADDRESS && balances[i].amount != 0) {
+                if (balances[i].token != baseToken && balances[i].amount != 0) {
                     tokens[idx] = balances[i].token;
                     amounts[idx] = balances[i].amount;
                     idx++;
