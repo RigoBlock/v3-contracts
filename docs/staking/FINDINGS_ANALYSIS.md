@@ -141,13 +141,17 @@ still return a non-zero claimable reward from prior epochs. During this window N
 is understated and an opportunistic minter can capture a share of unclaimed rewards
 at below-fair price.
 
-**Why we did NOT fix `EApps`**:
+**Why we did NOT fix**:
 
-Extending `EApps` to query `computeRewardBalanceOfDelegator` unconditionally would
-require a staking proxy upgrade (re-deploy of `StakingProxy` implementation) and
-would add an extra warm-storage read per NAV calculation even when pools never
-use staking. Given the bounded and operator-controlled nature of the window we
-consider documentation + operational guidance sufficient.
+The protocol-level fix would be to auto-redeem unclaimed delegator rewards
+atomically within the `unstake()` call itself, so the gap never opens. This was
+not pursued because the claimable reward amount during the gap is generally
+negligible relative to pool AUM, and the window is entirely operator-controlled.
+
+An alternative `EApps` fix (query `computeRewardBalanceOfDelegator` unconditionally)
+would require only an `EApps` extension redeployment via a new `ExtensionsMap` —
+**not** a staking proxy upgrade. It was not pursued for the same reason: the amount
+is negligible and the operational mitigation is straightforward.
 
 **How the window is bounded**:
 
@@ -164,7 +168,7 @@ single multicall transaction:
 ```solidity
 // Example: atomic unstake + withdraw via pool multicall
 bytes[] memory calls = new bytes[](2);
-calls[0] = abi.encodeCall(IStaking.moveStake, (delegated, undelegated, amount));
+calls[0] = abi.encodeCall(IStaking.unstake, (amount));
 calls[1] = abi.encodeCall(IStaking.withdrawDelegatorRewards, (poolId));
 IMulticall(pool).multicall(calls);
 ```
@@ -183,9 +187,8 @@ on-chain state and survive any lockup period. The maximum extractable value is
 bounded to the claimable reward amount (not pool AUM). This is materially smaller
 than the gas + lockup cost in all realistic scenarios.
 
-**Future fix path**: When the staking proxy implementation is next upgraded for
-other reasons, `EApps` should be updated to always query
-`computeRewardBalanceOfDelegator` regardless of vault balance:
+**Future fix path**: `EApps` can be updated (via new `ExtensionsMap` deployment)
+to always query `computeRewardBalanceOfDelegator` regardless of vault balance:
 
 ```solidity
 // Proposed EApps fix (for next staking proxy upgrade cycle)

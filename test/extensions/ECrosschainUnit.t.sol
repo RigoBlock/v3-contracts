@@ -145,6 +145,15 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.store(pool, positionSlot, bytes32(newLength));
     }
     
+    /// @notice Plain ETH send (empty calldata) to pool succeeds via receive().
+    /// @dev EVM routes empty-calldata calls to receive() before fallback(). Unaffected by RIGO-7.
+    function test_Pool_DirectEthTransfer_Succeeds() public {
+        uint256 before = poolProxy.balance;
+        (bool ok,) = payable(poolProxy).call{value: 1 ether}("");
+        assertTrue(ok, "Pool must accept plain ETH sends via receive()");
+        assertEq(poolProxy.balance, before + 1 ether);
+    }
+
     /// @notice Test extension deployment (stateless)
     function test_Setup_Deployment() public view {
         assertTrue(address(deployment.implementation).code.length > 0, "Implementation should be deployed");
@@ -1134,9 +1143,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     /// @notice Test extension Sync mode with proper delegatecall context
     function test_ECrosschain_SyncMode_WithDelegatecall() public {
         vm.warp(block.timestamp + 100);
-        // Sync donations require non-zero effective supply to prevent first-minter drain.
-        // Set totalSupply directly without adding real assets so asset accounting is unaffected.
-        vm.store(poolProxy, bytes32(uint256(StorageLib.POOL_TOKENS_SLOT) + 1), bytes32(uint256(1e18)));
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
@@ -1360,8 +1366,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     /// @notice Test that Sync operations work with client-side validation
     function test_ECrosschain_SyncMode_ClientSideValidation() public {
         vm.warp(block.timestamp + 100);
-        // Sync donations require non-zero effective supply to prevent first-minter drain.
-        vm.store(poolProxy, bytes32(uint256(StorageLib.POOL_TOKENS_SLOT) + 1), bytes32(uint256(1e18)));
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
@@ -1403,8 +1407,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     /// @dev Validates that Sync mode correctly handles pre-existing untracked token balance
     function test_ECrosschain_SyncMode_WithPreExistingBalance() public {
         vm.warp(block.timestamp + 100);
-        // Sync donations require non-zero effective supply to prevent first-minter drain.
-        vm.store(poolProxy, bytes32(uint256(StorageLib.POOL_TOKENS_SLOT) + 1), bytes32(uint256(1e18)));
         
         // Setup mock oracle for USDC price feed
         deployment.mockOracle.initializeObservations(
@@ -1447,8 +1449,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     /// @notice Test Sync mode without pre-existing balance (clean donation)
     function test_ECrosschain_SyncMode_CleanDonation() public {
         vm.warp(block.timestamp + 100);
-        // Sync donations require non-zero effective supply to prevent first-minter drain.
-        vm.store(poolProxy, bytes32(uint256(StorageLib.POOL_TOKENS_SLOT) + 1), bytes32(uint256(1e18)));
         
         deployment.mockOracle.initializeObservations(
             PoolKey({
@@ -1484,10 +1484,6 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     /// @dev Simulates scenario where total assets decrease between unlock and finalize
     function test_ECrosschain_SyncMode_RevertsOnNavManipulation() public {
         vm.warp(block.timestamp + 100);
-        // Sync donations require non-zero effective supply to prevent first-minter drain.
-        // Setting totalSupply without adding real assets keeps netTotalValue unchanged,
-        // so the expected NavManipulationDetected values (1200e6 vs 200e6) remain correct.
-        vm.store(poolProxy, bytes32(uint256(StorageLib.POOL_TOKENS_SLOT) + 1), bytes32(uint256(1e18)));
         
         // Setup oracles for both USDC and USDT
         deployment.mockOracle.initializeObservations(

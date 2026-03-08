@@ -413,22 +413,28 @@ When an audit fix causes a previously-passing test to fail, the failure is **alw
 
 **NEVER**: silently remove a failing test, or rewrite it to match the new (potentially broken) behavior, without completing the above analysis.
 
-### Canonical example: RIGO-14
+### Canonical example: RIGO-14 / RIGO-7
 
-**Audit finding**: POSM ETH residue publicly sweepable — proposed fix: remove `payable` from `MixinFallback.fallback()`.
+**Audit finding (RIGO-14)**: POSM ETH residue publicly sweepable — proposed fix: remove `payable` from `MixinFallback.fallback()`.
 
 **What happened when applied:**
 - `test_Donate_WithMsgValue_Reverts` started failing
 - Initial reaction: rewrite the test to match
-- Correct reaction: investigate — which revealed the fix was architecturally wrong
+- First investigation concluded "fix was wrong" (claimed it would block ETH forwarding)
+- Deeper investigation (RIGO-7 analysis) reversed that conclusion
 
-**Why the fix was wrong (two independent reasons):**
-1. `Actions.SWEEP` sweeps both ETH and ERC20 residues. Removing `payable` only addresses ETH and does nothing for ERC20 token residues — the real mitigation is at the call-encoding layer (appending SWEEP for each residue token in the adapter command sequence)
-2. Removing `payable` from the dispatch fallback blocks any adapter/extension that legitimately forwards ETH (GMX execution fees, bridge fees). If Across ever refunded fees in native ETH instead of WETH, a non-payable fallback would cause a permanent protocol failure until an upgrade
+**Why the initial "fix was wrong" conclusion was itself wrong:**
+1. `fallback() payable` provides no capability: `receive()` handles plain ETH independently; any ETH-carrying call-with-data reverts inside the `delegatecall` to `ExtensionsMap.getExtensionBySelector` (non-payable) before the adapter is reached, regardless of whether `fallback()` is payable.
+2. The claim "adapters need ETH via msg.value" contradicts the protocol rule that adapters forward ETH from the vault balance, never from `msg.value` (AGENTS.md pitfall 15).
 
-**Lesson**: The test failure was a signal. The fix was wrong. The test was later removed only because it used `vm.mockCall` (which bypasses the real extension's CALLVALUE check and cannot reliably test real behavior in a mocked setup) — not because the underlying concern was resolved. The protection remains: `ECrosschain.donate` is non-payable, so any `donate{value: X}` call reverts inside the extension regardless of the fallback.
+**The test was also wrong:**
+`test_Donate_WithMsgValue_Reverts` used `vm.mockCall` which bypasses the real CALLVALUE check in `ExtensionsMap`. It tested mock behavior, not production behavior.
 
-Full disposition: `docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-14`
+**Correct final outcome:** `payable` removed from `fallback()`. Fake test deleted. RIGO-14 (POSM residue) remains unfixed — the real fix is appending `Actions.SWEEP` to adapter command sequences, which addresses both ETH and ERC20 residues.
+
+**Lesson**: The test failure was a genuine signal. The correct response was full system-level analysis, not just code inspection in isolation. The investigation took multiple rounds because intermediate conclusions were wrong.
+
+Full disposition: `docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-7`
 
 ---
 

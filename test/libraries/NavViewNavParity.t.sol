@@ -209,6 +209,7 @@ contract NavViewNavParityTest is UnitTestFixture {
 
         // Deploy and register AStaking adapter
         address aStaking = _deployAndRegisterAStaking();
+        require(aStaking.code.length > 0, "ASTAKING_DEPLOY_FAIL");
 
         // Create pool and mint shares
         _createGrgPool();

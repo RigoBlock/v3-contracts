@@ -91,40 +91,24 @@ on all chains. Tests updated in `test/libraries/CrosschainLib.t.sol`.
 ### RIGO-14 — POSM ETH residue publicly sweepable ❌ NOT FIXED / BY-DESIGN
 
 `AUniswapDecoder` forwarded `amount0Max` as ETH to `PositionManager`. Any leftover
-ETH after settlement was publicly sweepable via `modifyLiquiditiesWithoutUnlock` +
-`Actions.SWEEP`.
+ETH (or ERC20 tokens) after settlement was publicly sweepable via
+`modifyLiquiditiesWithoutUnlock` + `Actions.SWEEP`.
 
-**Why `fallback() payable` is intentionally preserved**
+**Mitigation**: The residue risk is addressed at the adapter call-encoding layer.
+Every command sequence that may leave residue in the PositionManager must append
+`Actions.SWEEP` for each residue token (ETH or ERC20) at the end of the sequence.
+This is the correct granularity: individual command sequences are responsible for
+reclaiming their residues, not the dispatch layer.
 
-The auditor proposed removing `payable` from `MixinFallback.fallback()`. This was
-reverted for two independent reasons:
+**Why the auditor's suggested fix was wrong**: Removing `payable` from `fallback()`
+would only affect ETH; ERC20 token residues would still be sweepable (POSM's
+`Actions.SWEEP` is a general-purpose mechanism for both). The `fallback()`
+payability is architecturally unrelated to POSM residue; see RIGO-7 for the
+separate analysis of ETH-carrying calls through the fallback.
 
-1. **It only addresses ETH, not ERC20 residues.** POSM's `Actions.SWEEP` is a
-   general-purpose mechanism for sweeping both ETH and ERC20 token residues left
-   in the PositionManager after settlement. Removing `payable` from the fallback
-   would not fix the ERC20 case at all — tokens can still be left as residue and
-   swept by anyone. The correct mitigation is appending `Actions.SWEEP` for each
-   relevant token at the end of every adapter command sequence.
-
-2. **It would block legitimate ETH forwarding.** Extensions and adapters may need
-   to forward ETH as part of protocol interactions (e.g. execution fees for GMX,
-   bridge fees). Removing `payable` from the dispatch fallback is too broad — the
-   gate must live in individual non-payable function signatures, not the router.
-   Proof: if the Across bridge ever refunded fees in ETH instead of WETH, a
-   non-payable fallback would permanently block that path until an implementation
-   upgrade.
-
-**What prevented a bad fix from landing**
-
-When the `payable` removal was first applied, an existing test (`test_Donate_WithMsgValue_Reverts`)
-began failing for a new reason: the mocked extension returned success because the
-payable-fallback restriction was gone. Instead of removing the failing test, the
-failure was investigated — revealing that the fix was wrong. See the "Audit Fix
-Verification" section in `AGENTS.md` for the general rule.
-
-**Resolution**: Production code preserved. `fallback() external payable` retained.
-The POSM residue risk is mitigated at the adapter call-encoding layer by ensuring
-SWEEP actions cover all residue tokens (ETH and ERC20) at the end of each command.
+**What prevented a bad fix from landing**: When `payable` removal was first applied,
+test `test_FallbackIsPayable_EthPassesThroughToExtension` exposed that the change
+destroyed correct behavior. See `AGENTS.md` pitfall 22 for the general rule.
 
 ---
 
@@ -134,9 +118,12 @@ After fully unstaking, `EApps` returns zero staking value even while claimable
 delegator rewards exist, causing NAV understatement until `withdrawDelegatorRewards`
 is called.
 
-**Why not fixed**: The gap window is purely operator-controlled. Using `multicall`
-to call `unstake` + `withdrawDelegatorRewards` atomically eliminates the gap
-entirely. An `EApps` fix requires a staking proxy upgrade which is deferred.
+**Why not fixed**: The protocol-level fix would be to auto-redeem unclaimed delegator
+rewards atomically within the `unstake()` call itself, eliminating the gap at the
+source. This was not pursued because the claimable reward amount during the gap is
+generally negligible relative to pool AUM, and the window is entirely
+operator-controlled (it only exists when `unstake` is called in isolation without
+an immediate `withdrawDelegatorRewards`).
 
 **Recommended client pattern**: See `docs/staking/FINDINGS_ANALYSIS.md §RIGO-13`.
 **Tests**: `test/staking/StakingNavLifecycle.t.sol` documents the three NAV stages.
@@ -232,19 +219,22 @@ The stored mapping is always correctly deleted. Low operational risk.
 
 ---
 
-### RIGO-7 — Payable fallback reverts on `msg.value > 0` 🔍
+### RIGO-7 — ETH-carrying fallback calls revert at non-payable ExtensionsMap resolver ❌
 
-The pool `fallback()` is `payable`, but it immediately `delegatecall`s into
-`ExtensionsMap.getExtensionBySelector` which is non-payable, causing revert for
-any ETH-carrying fallback call.
+`MixinFallback.fallback()` delegatecalls into `ExtensionsMap.getExtensionBySelector`
+which is `external view` (non-payable). Solidity's CALLVALUE check fires on
+delegatecall whenever `msg.value > 0`, reverting before the adapter is reached.
+Making adapter functions `payable` does not help — the revert is at the lookup step.
 
-**Analysis**: ETH-carrying adapter calls through fallback are not a supported use
-case. Pools accept ETH via `receive()` / `mint()`. The `payable` modifier on
-`fallback()` is intentional to prevent reverting on plain ETH receives that are
-routed to `receive()` first by the EVM; it does not imply that adapter calls
-with ETH are supported. No fix required.
+`fallback()` was previously declared `payable`, which was removed because it gave a
+false impression that ETH-carrying calls were supported when they always reverted
+anyway. Plain ETH receives are handled by `receive() external payable` and are
+unaffected. ETH is never lost: the transaction reverts and ETH is returned to sender.
 
-**Status**: False positive / by-design. No code change.
+**Fix**: Make `getExtensionBySelector` `payable` in both `IExtensionsMap` and
+`ExtensionsMap`. Requires a new `ExtensionsMap` deployment (immutable per chain).
+
+**Status**: Confirmed finding. `fallback()` `payable` removed. Root cause deferred.
 
 ---
 
@@ -265,8 +255,8 @@ with ETH are supported. No fix required.
 | RIGO-10 | High | Stale NAV on zero effectiveSupply after Sync | 🔍 FALSE POSITIVE |
 | RIGO-6 | High | A0xRouter operator != target AllowanceHolder drain | ✅ FIXED |
 | RIGO-2 | High | CrosschainLib validation mismatch (WBTC/BASE_USDT) | ✅ FIXED |
-| RIGO-14 | Medium | POSM ETH residue sweepable | ❌ NOT FIXED (by-design, `payable` preserved) |
-| RIGO-13 | Medium | GRG staking NAV gap (zero stake + claimable rewards) | ❌ NOT FIXED (document + multicall pattern) |
+| RIGO-14 | Medium | POSM ETH residue sweepable | ❌ NOT FIXED (mitigated by SWEEP actions) |
+| RIGO-13 | Medium | GRG staking NAV gap (zero stake + claimable rewards) | ❌ NOT FIXED (negligible amount, operator-controlled) |
 | RIGO-9 | Medium | mintWithToken NAV snapshot before token activation | ✅ FIXED |
 | RIGO-4 | Medium | finalizePool zero-transfer DoS | ❌ NOT FIXED (not exploitable in production) |
 | RIGO-3 | Medium | A0xRouter TRANSFER_FROM arbitrary recipient | ✅ FIXED |
@@ -274,10 +264,10 @@ with ETH are supported. No fix required.
 | RIGO-1 | Low | moveStake DELEGATED→DELEGATED revert | ❌ NOT FIXED (multicall workaround) |
 | RIGO-12 | Info | ENavView ETH balance omission | ✅ FIXED |
 | RIGO-11 | Info | Authority.removeMethod misleading event | 🔍 FALSE POSITIVE |
-| RIGO-7 | Info | Payable fallback with non-payable resolver | 🔍 FALSE POSITIVE |
+| RIGO-7 | Info | ETH-carrying fallback calls revert at resolver | ❌ NOT FIXED (fallback `payable` removed; root cause deferred) |
 | RIGO-5 | Info | Hardhat default mnemonic | ✅ FIXED |
 
-**Fixed**: RIGO-2, 3, 5, 6, 8, 9, 12, 14 (8 findings)
-**Not fixed with rationale**: RIGO-1, RIGO-4, RIGO-13 (3 findings)
-**False positive / by-design**: RIGO-7, RIGO-10, RIGO-11, RIGO-15 flash-loan (4 findings)
+**Fixed**: RIGO-2, 3, 5, 6, 8, 9, 12 (7 findings)
+**Not fixed with rationale**: RIGO-1, RIGO-4, RIGO-7, RIGO-13, RIGO-14 (5 findings)
+**False positive / by-design**: RIGO-10, RIGO-11, RIGO-15 flash-loan (3 findings)
 **RIGO-15 cross-epoch**: Real but low-risk; documented with fix pseudocode
