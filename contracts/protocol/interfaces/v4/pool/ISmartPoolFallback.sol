@@ -7,7 +7,7 @@ interface ISmartPoolFallback {
     /// @notice Delegate calls to pool extension.
     /// @dev Delegatecall restricted to owner, staticcall accessible by everyone.
     /// @dev Restricting delegatecall to owner effectively locks direct calls.
-    fallback() external payable;
+    fallback() external;
 
     /// @notice Allows transfers to pool.
     /// @dev Prevents accidental transfer to implementation contract.
