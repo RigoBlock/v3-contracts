@@ -46,6 +46,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
+
             token.setDonationLock(balance);
 
             // If token has pre-existing balance but isn't active, it won't be in storedAssets
