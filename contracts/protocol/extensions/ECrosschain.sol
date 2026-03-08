@@ -5,7 +5,6 @@ import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 import {ISmartPoolActions} from "../interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolImmutable} from "../interfaces/v4/pool/ISmartPoolImmutable.sol";
-import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
 import {IWETH9} from "../interfaces/IWETH9.sol";
 import {CrosschainLib} from "../libraries/CrosschainLib.sol";
 import {AddressSet, EnumerableSet} from "../libraries/EnumerableSet.sol";
@@ -47,6 +46,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
+
             token.setDonationLock(balance);
 
             // If token has pre-existing balance but isn't active, it won't be in storedAssets

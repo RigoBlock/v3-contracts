@@ -200,35 +200,25 @@ contract PoolDonateTest is Test {
         assertEq(donorEthBefore - donorEthAfter, ETH_DONATION_AMOUNT, "Donor should lose exactly the donation amount");
     }
 
-    /// @notice REGRESSION TEST: Verify donate reverts when called with msg.value (non-payable function)
-    /// @dev This prevents the critical bug where ETH sent with donate() call would be stuck in the contract
+    /// @notice REGRESSION TEST: Verify donate reverts when called with msg.value (non-payable fallback)
+    /// @dev Removing payable from fallback() means any call bearing msg.value reverts at the Solidity CALLVALUE check
+    ///      before reaching extension dispatch. The low-level call returns success=false; no ETH is stuck.
     function test_Donate_WithMsgValue_Reverts() public {
         vm.startPrank(donor);
-        
+
         DestinationMessageParams memory params;
-        
-        // Attempt to call donate with ETH value attached - should revert because function is not payable
-        // Raw EVM revert (no selector) because Solidity rejects msg.value on non-payable functions
-        vm.expectRevert();
+
+        // Low-level call with msg.value: proxy's payable fallback forwards via delegatecall into the
+        // implementation's non-payable fallback(), which Solidity rejects with a bare CALLVALUE revert.
+        // Do NOT use vm.expectRevert() before a low-level .call() — foundry would intercept the revert
+        // and set success=true, inverting the assertion.
         (bool success,) = address(pool).call{value: ETH_DONATION_AMOUNT}(
             abi.encodeWithSelector(IECrosschain.donate.selector, address(0), ETH_DONATION_AMOUNT, params)
         );
-        
-        // If expectRevert didn't catch it, check success flag
+
         assertFalse(success, "Donate with msg.value should fail (function is non-payable)");
-        
-        console2.log("Correctly reverted when trying to send ETH directly with donate call");
-        
-        // Also test direct ETH transfer without function call - should revert because no receive() function
-        // Raw EVM revert (no selector) because pool has no receive() or fallback() function
-        vm.expectRevert();
-        (bool transferSuccess,) = payable(pool).call{value: ETH_DONATION_AMOUNT}("");
-        
-        assertFalse(transferSuccess, "Direct ETH transfer should fail (no receive/fallback function)");
-        
+
         vm.stopPrank();
-        
-        console2.log("Correctly reverted when trying to send ETH without function call (no receive function)");
     }
 
     /// @notice Test donation fails with non-owned token

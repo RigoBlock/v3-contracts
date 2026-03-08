@@ -54,8 +54,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     ) external payable override nonReentrant returns (uint256 recipientAmount) {
         // Check owner has explicitly accepted this token for minting
         require(acceptedTokensSet().isActive(tokenIn), PoolMintTokenNotActive());
-        // Token will be added to activeTokensSet in _mint after transfer completes
-
+        // Token will be activated in _mint before the NAV snapshot.
         recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
     }
 
@@ -129,6 +128,14 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     ) private returns (uint256) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
         require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
+        // Activate tokenIn before the NAV snapshot so any pre-existing untracked balance
+        // (e.g. from an airdrop or direct ERC20 transfer) is included in NAV pricing.
+        // Without this, the first mintWithToken call for a token with a pre-existing pool
+        // balance would underprice shares against the true pool value, enabling dilution.
+        // Guarded by _BASE_TOKEN_FLAG: base token balance is always included in NAV directly.
+        if (tokenIn != _BASE_TOKEN_FLAG) {
+            activeTokensSet().addUnique(IEOracle(address(this)), tokenIn, pool().baseToken);
+        }
         NavComponents memory components = _updateNav();
         address kycProvider = poolParams().kycProvider;
 
@@ -151,10 +158,6 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
             tokenIn.safeTransfer(_getTokenJar(), spread);
         }
-
-        // Add token to activeTokensSet now that pool actually owns it
-        // This prevents vulnerability where token is accepted but removed by purge before first mint
-        activeTokensSet().addUnique(IEOracle(address(this)), tokenIn, components.baseToken);
 
         amountIn -= spread;
 
