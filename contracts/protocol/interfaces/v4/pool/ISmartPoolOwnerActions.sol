@@ -44,7 +44,7 @@ interface ISmartPoolOwnerActions {
 
     /// @notice Allows pool owner to batch grant or revoke delegated adapter write access.
     /// @dev Each entry independently adds or removes one (selector, address) pair.
-    ///      Emits DelegationUpdated for every entry processed.
+    ///      Emits DelegationUpdated only for entries that change storage (idempotent operations emit no event).
     /// @param delegations Array of delegation operations to apply.
     function updateDelegation(Delegation[] calldata delegations) external;
 

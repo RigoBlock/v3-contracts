@@ -40,10 +40,11 @@ delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0
 ### Fallback Gate
 
 ```solidity
-// adapter calls: owner in write mode, approved delegates for their specific
-// selectors in write mode, read mode for everyone else (including this)
-shouldDelegatecall = msg.sender == pool().owner ||
-    delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0;
+// Delegation check is first: approved delegates short-circuit here;
+// owner falls through to the second check.
+// Read mode for everyone else (any state mutation in the adapter reverts).
+shouldDelegatecall = delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0 ||
+    msg.sender == pool().owner;
 ```
 
 Non-owners without delegation (and `address(this)`) are routed via `staticcall`; any state mutation reverts automatically — no explicit `onlyOwner` guard needed in adapter code.
@@ -135,18 +136,21 @@ These are the minimum useful set: off-chain agents can enumerate their own scope
 ### Fallback check overhead (non-owner path)
 
 ```solidity
-shouldDelegatecall = msg.sender == pool().owner ||
-    delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0;
+// Delegation check first — agents short-circuit here; owner pays both SLOADs.
+shouldDelegatecall = delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0 ||
+    msg.sender == pool().owner;
 ```
 
-| Step | Cost (warm) | Cost (cold) |
-|---|---|---|
-| `pool().owner` SLOAD | ~100 gas | ~2100 gas |
-| Owner match → short-circuit | 0 extra | 0 extra |
-| Double-mapping slot derivation (non-owner) | 84 gas | 84 gas |
-| Delegation SLOAD (non-owner) | 100 gas | 2100 gas |
-| **Total for owner** | ~100 gas | ~2100 gas |
-| **Total for delegated non-owner** | ~284 gas | ~4284 gas |
+| Step | Delegated agent | Pool owner | Unauthenticated |
+|---|---|---|---|
+| Double-mapping slot derivation | 84 gas | 84 gas | 84 gas |
+| Delegation SLOAD | ~100 warm / ~2100 cold | ~100 warm / ~2100 cold | ~100 warm / ~2100 cold |
+| Agent match → short-circuit | yes | no | no |
+| `pool().owner` SLOAD | — | ~100 warm / ~2100 cold | ~100 warm / ~2100 cold |
+| **Total (warm)** | **~184 gas** | **~284 gas** | **~284 gas** |
+| **Total (cold)** | **~2184 gas** | **~4284 gas** | **~4284 gas** |
+
+Ordering rationale: since agents are expected to transact far more frequently than the owner, placing the delegation check first makes every agent call ~2100 gas cheaper (cold, one fewer SLOAD) at the cost of ~2100 gas per owner call. The net saving across the system is proportional to `(agentCalls − ownerCalls) × 2100 gas`.
 
 Hash derivation breakdown: two `keccak256` over 64 bytes each = 2 × (30 + 12) = **84 gas** (fixed, independent of warm/cold).
 
@@ -171,7 +175,7 @@ The EIP-2929 warm/cold distinction resets per transaction. A delegated agent sen
 | Property | Details |
 |---|---|
 | Access control | All write operations: `onlyOwner` |
-| Fallback overhead | 1 SLOAD for non-owner callers (selectorToAddressPosition lookup) |
+| Fallback overhead | 1 delegation SLOAD for all callers; owner additionally pays the `pool().owner` SLOAD |
 | Enumerable sets | Both directions; swap-and-pop for O(1) removal |
 | Idempotent add | Adding an already-delegated pair is a no-op |
 | Idempotent remove | Removing a non-existent pair is a no-op |
@@ -192,6 +196,34 @@ The EIP-2929 warm/cold distinction resets per transaction. A delegated agent sen
 4. **Compromised agent wallet**: call `revokeAllDelegations(agentAddress)` to instantly revoke all its permissions. Governance does not need to be involved.
 
 5. **Replaced adapter**: call `revokeAllDelegationsForSelector(selector)` to clean up stale delegations before/after governance upgrades the adapter mapping.
+
+6. **Delegations survive ownership transfer**. The delegation mapping is keyed by selector + address, not by owner identity. A malicious previous owner could install a delegation back-door before calling `setOwner`. The incoming owner MUST audit and clean up delegations on taking control — call `revokeAllDelegations` for every known agent address, or `revokeAllDelegationsForSelector` for each adapter selector, as part of the handover checklist. There is no automatic revocation on `setOwner`.
+
+7. **No privilege escalation via delegation**. Owner actions such as `updateDelegation`, `setOwner`, etc. are dispatched directly by the implementation's ABI, never through `MixinFallback`. A delegation to an owner-action selector has no effect; the call still hits `onlyOwner` and reverts.
+
+---
+
+## Future Extension: Per-Delegation Expiry
+
+Expiry timestamps are not part of the current release (delegations are revocable by the owner at any time). If needed in a future release they can be added **without breaking the existing storage layout**:
+
+```solidity
+// Add a 5th field to DelegationData — safe because all fields are mappings
+mapping(bytes4 => mapping(address => uint40)) expiryAt; // 0 = never expires
+```
+
+The fallback check would become:
+```solidity
+uint40 expiry = delegation().expiryAt[msg.sig][msg.sender];
+bool notExpired = expiry == 0 || expiry > uint40(block.timestamp);
+shouldDelegatecall =
+    (delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0 && notExpired) ||
+    msg.sender == pool().owner;
+```
+
+Cost: one additional SLOAD (~2100 gas cold) per agent call. Worth considering against the value of on-chain expiry vs off-chain key rotation.
+
+**NAV guard (rejected)**: a per-call check that halts delegation if pool NAV dropped >X% was considered but rejected. NAV reads are inherently expensive, require storing a baseline at delegation time, and are susceptible to flash-loan manipulation. Slippage protection belongs inside individual adapters, not in the access-control gate.
 
 ---
 
