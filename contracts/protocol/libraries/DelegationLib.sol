@@ -138,11 +138,6 @@ library DelegationLib {
     // View helpers
     // -------------------------------------------------------------------------
 
-    /// @notice Returns whether `addr` has been granted delegated write access to `selector`.
-    function isDelegated(DelegationData storage self, bytes4 selector, address addr) internal view returns (bool) {
-        return self.selectorToAddressPosition[selector][addr] != 0;
-    }
-
     /// @notice Returns all addresses currently delegated for `selector`.
     function getAddresses(DelegationData storage self, bytes4 selector) internal view returns (address[] memory) {
         return self.selectorAddresses[selector];

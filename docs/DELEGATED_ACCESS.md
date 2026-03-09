@@ -227,13 +227,16 @@ Derived as `keccak256("pool.proxy.delegation") - 1` per ERC-7201 convention. Ass
 | File | Role |
 |---|---|
 | `contracts/protocol/libraries/DelegationLib.sol` | Core enumerable bi-directional delegation registry; `add`/`remove` return `bool` |
+| `contracts/protocol/types/Delegation.sol` | `Delegation` struct type definition |
 | `contracts/protocol/core/immutable/MixinConstants.sol` | `_DELEGATION_SLOT` constant |
 | `contracts/protocol/core/immutable/MixinStorage.sol` | `delegation()` accessor + slot assertion |
-| `contracts/protocol/core/sys/MixinFallback.sol` | Updated `shouldDelegatecall` check |
+| `contracts/protocol/core/sys/MixinFallback.sol` | Updated `shouldDelegatecall` check; delegation tested first |
 | `contracts/protocol/core/actions/MixinOwnerActions.sol` | `updateDelegation`, `revokeAllDelegations`, `revokeAllDelegationsForSelector` |
 | `contracts/protocol/core/state/MixinPoolState.sol` | `getDelegatedAddresses`, `getDelegatedSelectors` |
-| `contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol` | `Delegation` struct + write interface |
+| `contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol` | Write interface (imports `Delegation` from types) |
 | `contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol` | Read interface |
 | `contracts/protocol/interfaces/v4/pool/ISmartPoolEvents.sol` | `DelegationUpdated` event |
 | `contracts/protocol/libraries/StorageLib.sol` | `DELEGATION_SLOT` + `delegation()` for extensions |
-| `test/core/RigoblockPool.Delegation.spec.ts` | 32 Hardhat tests |
+| `contracts/test/MockDelegationAdapter.sol` | Test-only adapter for write-gate tests |
+| `test/core/RigoblockPool.Delegation.spec.ts` | 32 Hardhat integration tests |
+| `test/libraries/DelegationLib.t.sol` | 41 Foundry tests: 27 unit + 7 fuzz + 7 invariant |
