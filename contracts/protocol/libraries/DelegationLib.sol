@@ -8,13 +8,13 @@ pragma solidity ^0.8.28;
 ///      Both directions are kept in O(1) via position tracking (1-indexed, 0 = absent).
 struct DelegationData {
     /// @dev selector → (address → 1-indexed position in selectorAddresses[selector]). 0 = not delegated.
-    mapping(bytes4 => mapping(address => uint256)) selectorToAddressPosition;
+    mapping(bytes4 selector => mapping(address delegated => uint256 position)) selectorToAddressPosition;
     /// @dev selector → ordered list of delegated addresses.
-    mapping(bytes4 => address[]) selectorAddresses;
+    mapping(bytes4 selector => address[] addresses) selectorAddresses;
     /// @dev address → ordered list of selectors delegated to it.
-    mapping(address => bytes4[]) addressSelectors;
+    mapping(address delegated => bytes4[] selectors) addressSelectors;
     /// @dev address → (selector → 1-indexed position in addressSelectors[address]). 0 = not present.
-    mapping(address => mapping(bytes4 => uint256)) addressToSelectorPosition;
+    mapping(address delegated => mapping(bytes4 selector => uint256 position)) addressToSelectorPosition;
 }
 
 /// @title DelegationLib - Enumerable bi-directional delegation registry.

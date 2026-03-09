@@ -25,7 +25,7 @@ abstract contract MixinStorage is MixinImmutables {
     }
 
     struct Accounts {
-        mapping(address => UserAccount) userAccounts;
+        mapping(address owner => UserAccount) userAccounts;
     }
 
     function accounts() internal pure returns (Accounts storage s) {

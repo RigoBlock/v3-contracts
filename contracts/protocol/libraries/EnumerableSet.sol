@@ -9,7 +9,7 @@ struct AddressSet {
     address[] addresses;
     // Mapping of address to position.
     // Position 0 means an address has never been added before.
-    mapping(address => uint256) positions;
+    mapping(address token => uint256 position) positions;
 }
 
 /// @notice Pool initialization parameters.
