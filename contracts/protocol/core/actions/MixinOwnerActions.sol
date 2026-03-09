@@ -123,6 +123,28 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc ISmartPoolOwnerActions
+    function revokeAllDelegations(address delegated) external override onlyOwner {
+        DelegationData storage d = delegation();
+        bytes4[] memory selectors = d.getSelectors(delegated);
+        d.removeAllByAddress(delegated);
+        uint256 len = selectors.length;
+        for (uint256 i = 0; i < len; ++i) {
+            emit DelegationUpdated(address(this), delegated, selectors[i], false);
+        }
+    }
+
+    /// @inheritdoc ISmartPoolOwnerActions
+    function revokeAllDelegationsForSelector(bytes4 selector) external override onlyOwner {
+        DelegationData storage d = delegation();
+        address[] memory addrs = d.getAddresses(selector);
+        d.removeAllBySelector(selector);
+        uint256 len = addrs.length;
+        for (uint256 i = 0; i < len; ++i) {
+            emit DelegationUpdated(address(this), addrs[i], selector, false);
+        }
+    }
+
+    /// @inheritdoc ISmartPoolOwnerActions
     function setAcceptableMintToken(address token, bool isAccepted) external override onlyOwner {
         // acceptedTokensSet: controls mintWithToken permission (operator decision)
         // activeTokensSet: added when token is actually minted (see MixinActions._mint)
@@ -151,15 +173,7 @@ abstract contract MixinOwnerActions is MixinActions {
     }
 
     /// @inheritdoc ISmartPoolOwnerActions
-    function setTransactionFee(uint16 transactionFee) external override onlyOwner {
-        require(transactionFee <= _MAX_TRANSACTION_FEE, PoolFeeBiggerThanMax(_MAX_TRANSACTION_FEE)); //fee cannot be higher than 1%
-        require(transactionFee != poolParams().transactionFee, OwnerActionInputIsSameAsCurrent());
-        poolParams().transactionFee = transactionFee;
-        emit NewFee(msg.sender, address(this), transactionFee);
-    }
-
-    /// @inheritdoc ISmartPoolOwnerActions
-    function setOwner(address newOwner) public override onlyOwner {
+    function setOwner(address newOwner) external override onlyOwner {
         require(newOwner != _ZERO_ADDRESS, PoolNullOwnerInput());
         require(newOwner != pool().owner, OwnerActionInputIsSameAsCurrent());
         address oldOwner = pool().owner;
@@ -167,8 +181,12 @@ abstract contract MixinOwnerActions is MixinActions {
         emit NewOwner(oldOwner, newOwner);
     }
 
-    function _isContract(address target) private view returns (bool) {
-        return target.code.length > 0;
+    /// @inheritdoc ISmartPoolOwnerActions
+    function setTransactionFee(uint16 transactionFee) external override onlyOwner {
+        require(transactionFee <= _MAX_TRANSACTION_FEE, PoolFeeBiggerThanMax(_MAX_TRANSACTION_FEE)); //fee cannot be higher than 1%
+        require(transactionFee != poolParams().transactionFee, OwnerActionInputIsSameAsCurrent());
+        poolParams().transactionFee = transactionFee;
+        emit NewFee(msg.sender, address(this), transactionFee);
     }
 
     /// @inheritdoc ISmartPoolOwnerActions
@@ -184,25 +202,7 @@ abstract contract MixinOwnerActions is MixinActions {
         }
     }
 
-    /// @inheritdoc ISmartPoolOwnerActions
-    function revokeAllDelegations(address delegated) external override onlyOwner {
-        DelegationData storage d = delegation();
-        bytes4[] memory selectors = d.getSelectors(delegated);
-        d.removeAllByAddress(delegated);
-        uint256 len = selectors.length;
-        for (uint256 i = 0; i < len; ++i) {
-            emit DelegationUpdated(address(this), delegated, selectors[i], false);
-        }
-    }
-
-    /// @inheritdoc ISmartPoolOwnerActions
-    function revokeAllDelegationsForSelector(bytes4 selector) external override onlyOwner {
-        DelegationData storage d = delegation();
-        address[] memory addrs = d.getAddresses(selector);
-        d.removeAllBySelector(selector);
-        uint256 len = addrs.length;
-        for (uint256 i = 0; i < len; ++i) {
-            emit DelegationUpdated(address(this), addrs[i], selector, false);
-        }
+    function _isContract(address target) private view returns (bool) {
+        return target.code.length > 0;
     }
 }
