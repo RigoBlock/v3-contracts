@@ -171,6 +171,19 @@ contract A0xRouterForkTest is Test {
         IA0xRouter(pool).exec(fakeSettler, Constants.ETH_USDC, 1000e6, payable(fakeSettler), settlerData);
     }
 
+    /// @notice Adapter rejects calls where operator differs from target (RIGO-6 defence)
+    /// @dev AllowanceHolder has no built-in operator==target enforcement. A malicious
+    ///  operator could call AllowanceHolder.transferFrom during the exec window if
+    ///  operator != target. This test verifies the adapter's own guard catches it.
+    function test_Adapter_RejectsOperatorNotEqualTarget() public {
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
+        address maliciousOperator = makeAddr("maliciousOperator");
+
+        vm.prank(poolOwner);
+        vm.expectRevert(IA0xRouter.OperatorMustEqualTarget.selector);
+        IA0xRouter(pool).exec(maliciousOperator, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
                         BRIDGE/CROSS-CHAIN EXCLUSION
 
@@ -427,10 +440,10 @@ contract A0xRouterForkTest is Test {
 
         bytes4 rfqSelector = ISettlerActions.RFQ.selector;
 
-        // First action: a valid-looking TRANSFER_FROM (harmless)
+        // First action: a valid TRANSFER_FROM (recipient = settler, so it passes the new recipient check)
         bytes memory transferAction = abi.encodePacked(
             ISettlerActions.TRANSFER_FROM.selector,
-            abi.encode(pool, address(0), uint256(0), uint256(0), uint256(0), bytes(""))
+            abi.encode(currentSettler, address(0), uint256(0), uint256(0), uint256(0), bytes(""))
         );
 
         // Second action: RFQ (must be caught)
@@ -452,6 +465,35 @@ contract A0xRouterForkTest is Test {
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, rfqSelector));
+        IA0xRouter(pool).exec(
+            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
+        );
+    }
+
+    /// @notice TRANSFER_FROM with recipient != settler is blocked to prevent pool-owner drains.
+    /// @dev In legitimate 0x API swaps, TRANSFER_FROM always routes sell tokens to the Settler
+    ///  itself. Any other recipient bypasses share accounting and constitutes a direct token drain.
+    function test_TRANSFER_FROM_NonSettlerRecipientBlocked() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        address attacker = makeAddr("attacker");
+
+        bytes memory transferAction = abi.encodePacked(
+            ISettlerActions.TRANSFER_FROM.selector,
+            abi.encode(attacker, address(0), uint256(0), uint256(0), uint256(0), bytes(""))
+        );
+
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = transferAction;
+
+        bytes memory settlerData = abi.encodeWithSelector(
+            SETTLER_EXECUTE_SELECTOR,
+            pool, Constants.ETH_WETH, uint256(0),
+            actions, bytes32(0)
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IA0xRouter.TransferFromRecipientNotSettler.selector, attacker));
         IA0xRouter(pool).exec(
             currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
         );

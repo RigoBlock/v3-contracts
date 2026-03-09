@@ -368,6 +368,100 @@ function test_SetDonationLock() public {
 
 ---
 
+## Solidity Code Style
+
+### Named mapping variables
+
+All new mappings must use named key and value parameters (introduced in Solidity 0.8.18):
+
+```solidity
+// ✓ Correct
+mapping(address owner => UserAccount) userAccounts;
+mapping(bytes4 selector => mapping(address delegated => uint256 position)) selectorToAddressPosition;
+
+// ✗ Wrong — legacy style, not permitted in new code
+mapping(address => UserAccount) userAccounts;
+mapping(bytes4 => mapping(address => uint256)) selectorToAddressPosition;
+```
+
+Rules:
+- Name both key **and** value; for arrays the value name describes the element type (`address[] addresses`, `bytes4[] selectors`).
+- For nested mappings, name all levels.
+- Applies to: struct fields, state variables, and library-internal structs in any file touched by the current PR.
+- Do **not** retrofit legacy contracts that are not being modified — accuracy of git blame matters more than style uniformity.
+
+---
+
+## Code Comment Philosophy
+
+### What belongs in code comments
+
+Source files (`.sol`) should contain **only what is strictly necessary to understand core functionality**:
+
+- NatSpec for all `public`/`external` functions (required for ABI tooling)
+- `@inheritdoc` for interface implementations (avoids duplication)
+- Brief inline `// why` comments for non-obvious decisions
+
+**Not in code:**
+- Design rationale or architectural tradeoffs
+- Audit finding responses or dispositions
+- Known limitations that require extended explanation
+- Future-feature justifications
+- References to external protocol details beyond what is needed to read the function
+
+### What belongs in `/docs/`
+
+Everything that helps when understanding *why* a decision was made, not *what* the code does:
+
+- Design decision rationale and rejected alternatives
+- Audit finding responses (see `docs/staking/CANTINA_FINDINGS_STATUS.md`)
+- Known limitations with mitigation patterns
+- Cross-protocol interaction designs
+- NAV accounting analysis
+
+A single-line comment pointing to the doc is acceptable: `// see docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-14`
+
+---
+
+## Audit Fix Verification Protocol
+
+### The "test failure as signal" rule
+
+When an audit fix causes a previously-passing test to fail, the failure is **always a signal to investigate, never noise to suppress**.
+
+**Required steps before accepting any audit fix:**
+1. Run the full test suite with the fix applied
+2. For each failing test: understand what it was asserting and why the fix breaks it
+3. Determine which is wrong — the test or the fix
+4. Only after that analysis: either correct the fix, or (if the test is genuinely stale) remove it with documented justification
+
+**NEVER**: silently remove a failing test, or rewrite it to match the new (potentially broken) behavior, without completing the above analysis.
+
+### Canonical example: RIGO-14 / RIGO-7
+
+**Audit finding (RIGO-14)**: POSM ETH residue publicly sweepable — proposed fix: remove `payable` from `MixinFallback.fallback()`.
+
+**What happened when applied:**
+- `test_Donate_WithMsgValue_Reverts` started failing
+- Initial reaction: rewrite the test to match
+- First investigation concluded "fix was wrong" (claimed it would block ETH forwarding)
+- Deeper investigation (RIGO-7 analysis) reversed that conclusion
+
+**Why the initial "fix was wrong" conclusion was itself wrong:**
+1. `fallback() payable` provides no capability: `receive()` handles plain ETH independently; any ETH-carrying call-with-data reverts inside the `delegatecall` to `ExtensionsMap.getExtensionBySelector` (non-payable) before the adapter is reached, regardless of whether `fallback()` is payable.
+2. The claim "adapters need ETH via msg.value" contradicts the protocol rule that adapters forward ETH from the vault balance, never from `msg.value` (AGENTS.md pitfall 15).
+
+**The test was also wrong:**
+`test_Donate_WithMsgValue_Reverts` used `vm.mockCall` which bypasses the real CALLVALUE check in `ExtensionsMap`. It tested mock behavior, not production behavior.
+
+**Correct final outcome:** `payable` removed from `fallback()`. Fake test deleted. RIGO-14 (POSM residue) remains unfixed — the real fix is appending `Actions.SWEEP` to adapter command sequences, which addresses both ETH and ERC20 residues.
+
+**Lesson**: The test failure was a genuine signal. The correct response was full system-level analysis, not just code inspection in isolation. The investigation took multiple rounds because intermediate conclusions were wrong.
+
+Full disposition: `docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-7`
+
+---
+
 ## Resources
 
 - [Rigoblock Documentation](https://docs.rigoblock.com)

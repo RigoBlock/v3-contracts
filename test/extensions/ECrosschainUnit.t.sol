@@ -145,6 +145,15 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         vm.store(pool, positionSlot, bytes32(newLength));
     }
     
+    /// @notice Plain ETH send (empty calldata) to pool succeeds via receive().
+    /// @dev EVM routes empty-calldata calls to receive() before fallback(). Unaffected by RIGO-7.
+    function test_Pool_DirectEthTransfer_Succeeds() public {
+        uint256 before = poolProxy.balance;
+        (bool ok,) = payable(poolProxy).call{value: 1 ether}("");
+        assertTrue(ok, "Pool must accept plain ETH sends via receive()");
+        assertEq(poolProxy.balance, before + 1 ether);
+    }
+
     /// @notice Test extension deployment (stateless)
     function test_Setup_Deployment() public view {
         assertTrue(address(deployment.implementation).code.length > 0, "Implementation should be deployed");

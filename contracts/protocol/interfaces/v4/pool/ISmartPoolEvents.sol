@@ -63,6 +63,13 @@ interface ISmartPoolEvents {
     /// @param approved Boolean the operator is approved by the user.
     event OperatorSet(address indexed holder, address indexed operator, bool approved);
 
+    /// @notice Emitted when a selector delegation is added or removed by the pool owner.
+    /// @param pool Address of the pool.
+    /// @param delegated Address whose delegation status changed.
+    /// @param selector Function selector whose access was updated.
+    /// @param isDelegated True if access was granted, false if revoked.
+    event DelegationUpdated(address indexed pool, address indexed delegated, bytes4 indexed selector, bool isDelegated);
+
     /// @notice Emitted when a token's active status changes in the pool.
     /// @param token Address of the token whose status changed.
     /// @param isActive True if token was activated, false if deactivated.

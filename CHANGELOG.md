@@ -1,3 +1,17 @@
+# [2.4.0](https://github.com/RigoBlock/v3-contracts/compare/v2.3.0...v2.4.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* final fixes ([6f3e37b](https://github.com/RigoBlock/v3-contracts/commit/6f3e37bdbd7611ebb6f74dc8f26312ae54bf6d6c))
+
+
+### Features
+
+* agentic delegation ([0fa0194](https://github.com/RigoBlock/v3-contracts/commit/0fa0194552d207e4149b5eaac80a0d54b5f5a8db))
+
+
+
 # [2.3.0](https://github.com/RigoBlock/v3-contracts/compare/v2.2.1...v2.3.0) (2026-03-01)
 
 
@@ -46,15 +60,6 @@
 ### Bug Fixes
 
 * repository url in package.json ([32bf7f0](https://github.com/RigoBlock/v3-contracts/commit/32bf7f0f1b649f5b81fba6bf865ff81814b16265))
-
-
-
-## [2.1.3](https://github.com/RigoBlock/v3-contracts/compare/v2.1.2...v2.1.3) (2026-01-29)
-
-
-### Bug Fixes
-
-* try fix npm publish again ([acf1a4b](https://github.com/RigoBlock/v3-contracts/commit/acf1a4b52fe7cd994ee6fa0ab436db09b5c047f2))
 
 
 

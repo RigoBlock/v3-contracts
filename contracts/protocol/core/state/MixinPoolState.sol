@@ -4,9 +4,11 @@ pragma solidity >=0.8.0 <0.9.0;
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
+import {DelegationData, DelegationLib} from "../../libraries/DelegationLib.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
 
 abstract contract MixinPoolState is MixinPoolValue {
+    using DelegationLib for DelegationData;
     /*
      * EXTERNAL VIEW METHODS
      */
@@ -122,6 +124,16 @@ abstract contract MixinPoolState is MixinPoolValue {
     /// @inheritdoc ISmartPoolState
     function isOperator(address holder, address operator) public view override returns (bool) {
         return operators().isApproved[holder][operator];
+    }
+
+    /// @inheritdoc ISmartPoolState
+    function getDelegatedAddresses(bytes4 selector) external view override returns (address[] memory) {
+        return delegation().getAddresses(selector);
+    }
+
+    /// @inheritdoc ISmartPoolState
+    function getDelegatedSelectors(address delegated) external view override returns (bytes4[] memory) {
+        return delegation().getSelectors(delegated);
     }
 
     /*

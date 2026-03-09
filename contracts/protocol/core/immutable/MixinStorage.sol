@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {MixinImmutables} from "./MixinImmutables.sol";
 import {AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
+import {DelegationData} from "../../libraries/DelegationLib.sol";
 
 /// @notice Storage slots must be preserved to prevent storage clashing.
 /// @dev Pool storage is not sequential: each variable is wrapped into a struct which is assigned a storage slot.
@@ -20,10 +21,11 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_TOKEN_REGISTRY_SLOT == bytes32(uint256(keccak256("pool.proxy.token.registry")) - 1));
         assert(_UNIV4_TOKEN_IDS_SLOT == bytes32(uint256(keccak256("pool.proxy.uniV4.tokenIds")) - 1));
         assert(_VIRTUAL_SUPPLY_SLOT == bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1));
+        assert(_DELEGATION_SLOT == bytes32(uint256(keccak256("pool.proxy.delegation")) - 1));
     }
 
     struct Accounts {
-        mapping(address => UserAccount) userAccounts;
+        mapping(address owner => UserAccount) userAccounts;
     }
 
     function accounts() internal pure returns (Accounts storage s) {
@@ -82,6 +84,12 @@ abstract contract MixinStorage is MixinImmutables {
     function operators() internal pure returns (Operator storage s) {
         assembly {
             s.slot := _OPERATOR_BOOLEAN_SLOT
+        }
+    }
+
+    function delegation() internal pure returns (DelegationData storage s) {
+        assembly {
+            s.slot := _DELEGATION_SLOT
         }
     }
 

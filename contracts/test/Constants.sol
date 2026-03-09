@@ -42,7 +42,7 @@ library Constants {
     uint256 internal constant BASE_CHAIN_ID = 8453;
     uint256 internal constant POLYGON_CHAIN_ID = 137;
     uint256 internal constant BSC_CHAIN_ID = 56;
-    uint256 internal constant UNICHAIN_CHAIN_ID = 1301;
+    uint256 internal constant UNICHAIN_CHAIN_ID = 130;
 
     /*//////////////////////////////////////////////////////////////
                         RIGOBLOCK INFRASTRUCTURE
