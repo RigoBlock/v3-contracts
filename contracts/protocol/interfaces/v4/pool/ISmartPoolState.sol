@@ -115,4 +115,14 @@ interface ISmartPoolState {
     /// @param operator The address of the operator.
     /// @return approved The approval status.
     function isOperator(address holder, address operator) external view returns (bool approved);
+
+    /// @notice Returns all addresses currently granted delegated write access to a selector.
+    /// @param selector The adapter function selector to query.
+    /// @return addresses Array of addresses with delegated access for that selector.
+    function getDelegatedAddresses(bytes4 selector) external view returns (address[] memory addresses);
+
+    /// @notice Returns all selectors currently delegated to an address.
+    /// @param delegated The address to query.
+    /// @return selectors Array of selectors the address has been granted access to.
+    function getDelegatedSelectors(address delegated) external view returns (bytes4[] memory selectors);
 }

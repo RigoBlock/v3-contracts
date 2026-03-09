@@ -25,7 +25,7 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
     /// @inheritdoc ISmartPoolFallback
     /// @dev Extensions are persistent, while adapters are upgradable by the governance.
     /// @dev uses shouldDelegatecall to flag selectors that should prompt a delegatecall.
-    fallback() external payable onlyDelegateCall {
+    fallback() external onlyDelegateCall {
         // returns nil target if selector not mapped. Uses delegatecall to preserve context of msg.sender for shouldDelegatecall flag
         (, bytes memory returnData) = address(_extensionsMap).delegatecall(
             abi.encodeCall(_extensionsMap.getExtensionBySelector, (msg.sig))
@@ -43,8 +43,11 @@ abstract contract MixinFallback is MixinImmutables, MixinStorage {
                 require(VERSION.isVersionHigherOrEqual(required), PoolVersionNotSupported());
             } catch {}
 
-            // adapter calls are for owner in write mode, and read mode for everyone else (including this)
-            shouldDelegatecall = msg.sender == pool().owner;
+            // adapter calls: approved delegates for their specific selectors in write mode,
+            // owner in write mode, read mode for everyone else (including this contract).
+            shouldDelegatecall =
+                delegation().selectorToAddressPosition[msg.sig][msg.sender] != 0 ||
+                msg.sender == pool().owner;
         }
 
         assembly {

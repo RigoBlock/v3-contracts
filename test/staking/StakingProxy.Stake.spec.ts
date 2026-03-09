@@ -161,8 +161,42 @@ describe("StakingProxy-Stake", async () => {
               StakeStatus.Delegated,
               poolId
             )
+            // RIGO-1 (known production behaviour): DELEGATED→DELEGATED with same pointer reverts.
+            // Per-pool accounting is handled by _undelegateStake/_delegateStake upstream, but
+            // _moveStake itself uses require(!_arePointersEqual) for the global status bucket.
             await expect(
                 stakingProxy.moveStake(toInfo, toInfo, amount)
+            ).to.be.revertedWith("STAKING_POINTERS_EQUAL_ERROR")
+        })
+
+        // RIGO-1: cross-pool DELEGATED→DELEGATED in a single moveStake call also reverts
+        // because fromPtr and toPtr both resolve to _ownerStakeByStatus[DELEGATED][owner] —
+        // the same storage slot regardless of pool.  The documented workaround is a two-step
+        // multicall (DELEGATED→UNDELEGATED, then UNDELEGATED→DELEGATED).
+        it('should revert when redelegating between pools in single moveStake call (RIGO-1 known limitation)', async () => {
+            const { grgToken, stakingProxy, grgTransferProxyAddress, newPoolAddress, poolId } = await setupTests()
+            const amount = parseEther("100")
+            await grgToken.approve(grgTransferProxyAddress, amount)
+            await stakingProxy.stake(amount)
+
+            const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
+            const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
+            const factory = Factory.attach(RigoblockPoolProxyFactory.address)
+            const { newPoolAddress: newPoolAddress2, poolId: poolId2 } = await factory.callStatic.createPool('testpool2', 'TEST2', AddressZero)
+            await factory.createPool('testpool2', 'TEST2', AddressZero)
+
+            await stakingProxy.createStakingPool(newPoolAddress)
+            await stakingProxy.createStakingPool(newPoolAddress2)
+
+            const undelegated = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toPool1 = new StakeInfo(StakeStatus.Delegated, poolId)
+            const toPool2 = new StakeInfo(StakeStatus.Delegated, poolId2)
+
+            await stakingProxy.moveStake(undelegated, toPool1, amount)
+
+            // Single-call cross-pool redelegate reverts (production behaviour)
+            await expect(
+                stakingProxy.moveStake(toPool1, toPool2, amount)
             ).to.be.revertedWith("STAKING_POINTERS_EQUAL_ERROR")
         })
 
