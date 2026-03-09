@@ -368,6 +368,30 @@ function test_SetDonationLock() public {
 
 ---
 
+## Solidity Code Style
+
+### Named mapping variables
+
+All new mappings must use named key and value parameters (introduced in Solidity 0.8.18):
+
+```solidity
+// ✓ Correct
+mapping(address owner => UserAccount) userAccounts;
+mapping(bytes4 selector => mapping(address delegated => uint256 position)) selectorToAddressPosition;
+
+// ✗ Wrong — legacy style, not permitted in new code
+mapping(address => UserAccount) userAccounts;
+mapping(bytes4 => mapping(address => uint256)) selectorToAddressPosition;
+```
+
+Rules:
+- Name both key **and** value; for arrays the value name describes the element type (`address[] addresses`, `bytes4[] selectors`).
+- For nested mappings, name all levels.
+- Applies to: struct fields, state variables, and library-internal structs in any file touched by the current PR.
+- Do **not** retrofit legacy contracts that are not being modified — accuracy of git blame matters more than style uniformity.
+
+---
+
 ## Code Comment Philosophy
 
 ### What belongs in code comments
