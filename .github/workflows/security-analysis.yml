@@ -114,7 +114,7 @@ jobs:
         echo "SARIF file location: $(pwd)/results.sarif"
 
     - name: Create/update checklist as PR comment
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       if: always() && inputs.pr_number && hashFiles('slither-report.md') != ''
       with:
         script: |
