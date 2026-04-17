@@ -1,3 +1,12 @@
+## [2.4.1](https://github.com/RigoBlock/v3-contracts/compare/v2.4.0...v2.4.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* prevent pool DOS by enforcing effective supply ratio in AIntents ([3c0633b](https://github.com/RigoBlock/v3-contracts/commit/3c0633b737d3086a9072cca76872518394c99e6b)), closes [#898](https://github.com/RigoBlock/v3-contracts/issues/898) [#897](https://github.com/RigoBlock/v3-contracts/issues/897) [#895](https://github.com/RigoBlock/v3-contracts/issues/895)
+
+
+
 # [2.4.0](https://github.com/RigoBlock/v3-contracts/compare/v2.3.0...v2.4.0) (2026-03-09)
 
 
@@ -51,15 +60,6 @@
 ### Features
 
 * 0x aggregator adapter ([1629068](https://github.com/RigoBlock/v3-contracts/commit/1629068b489f6a7fe57e3ab0a1332806f4b5420f))
-
-
-
-## [2.1.4](https://github.com/RigoBlock/v3-contracts/compare/v2.1.3...v2.1.4) (2026-01-29)
-
-
-### Bug Fixes
-
-* repository url in package.json ([32bf7f0](https://github.com/RigoBlock/v3-contracts/commit/32bf7f0f1b649f5b81fba6bf865ff81814b16265))
 
 
 
