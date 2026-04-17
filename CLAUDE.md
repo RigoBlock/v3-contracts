@@ -24,9 +24,19 @@ AGENTS.md provides concise, actionable guidelines for AI assistants. This docume
 
 **Solution**: Proxy pattern with fallback mechanism
 - **Pool Proxy**: Fixed address, user-facing entry point
-- **Implementation**: Upgradeable logic (via factory)
-- **Extensions**: Chain-specific, immutable per deployment (e.g., price oracles with specific feeds)
+- **Implementation**: Upgradeable logic (via factory). Includes all Mixin contracts and libraries (NavImpactLib, VirtualStorageLib, etc.) compiled into its bytecode. The ExtensionsMap address is stored as `immutable` in the implementation.
+- **Extensions**: Chain-specific, immutable per deployment (e.g., price oracles with specific feeds). Routed via ExtensionsMap (selector → extension address).
 - **Adapters**: Protocol integrations, upgradeable via governance
+
+**Upgrade implications — what to redeploy:**
+- **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse the existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar)`. No extensions need redeployment.
+- **Library change (used by an extension)**: The extension must be redeployed (library is compiled into extension bytecode) → new ExtensionsMap → new implementation.
+- **Extension change**: New extension + new ExtensionsMap + new implementation.
+- **Adapter change**: New adapter + Authority governance update. No implementation changes.
+
+**ExtensionsMap salt:** Only bump the salt when the ExtensionsMap contract code itself changes or when an extension address changes. If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap.
+
+**Version bump:** Every implementation change MUST bump `VERSION` in `MixinConstants.sol`.
 
 **Why separate Extensions and Adapters?**
 1. **Extensions** need chain-specific constructor params (oracle feeds, SpokePool addresses)
@@ -215,22 +225,20 @@ Solution: Two modes
 
 **Why must handler verify msg.sender?**
 
-Extension called via delegatecall from pool:
+The destination flow uses the Across MulticallHandler (external contract, not ours):
 ```
-Malicious actor → Pool.fallback() → delegatecall ECrosschain.handleV3AcrossMessage()
+SpokePool → MulticallHandler.handleV3AcrossMessage() → (executes encoded multicall) → pool.donate() (ECrosschain via delegatecall)
 ```
 
-In delegatecall context:
+`handleV3AcrossMessage` is NOT a method on the pool or ECrosschain. The pool's actual entry point is `ECrosschain.donate()`, called via the MulticallHandler's encoded multicall instructions.
+
+`ECrosschain.donate()` runs via delegatecall in the pool's context:
 - Code runs as if it's part of pool
-- `msg.sender` is preserved (the attacker)
-- Handler can modify pool storage
+- `msg.sender` is the MulticallHandler (which received the call from SpokePool)
+- Donation lock + NAV integrity checks prevent manipulation
 
 **Security requirement:**
-```solidity
-if (msg.sender != _ACROSS_SPOKE_POOL) revert UnauthorizedCaller();
-```
-
-Only Across SpokePool can legitimately call this after fill.
+The MulticallHandler is a trusted Across contract. The encoded multicall instructions are created by `AIntents._buildMulticallInstructions()` at deposit time and cannot be tampered with.
 
 ### Testing Challenge - Storage Isolation
 
@@ -256,15 +264,17 @@ When test calls library, `$` points to test contract storage at that slot, not p
 **Solution:**
 Create virtual supply through actual pool operations:
 ```solidity
-// Use actual protocol operation (donation) to create virtual supply
+// Use actual protocol operation (Across fill via MulticallHandler) to create virtual supply
+// SpokePool calls MulticallHandler.handleV3AcrossMessage(), which executes encoded
+// multicall instructions including pool.donate() (ECrosschain extension via delegatecall)
 vm.prank(address(spokePool));
-ECrosschain(pool).handleV3AcrossMessage(
-    token,
+IMulticallHandler(multicallHandler).handleV3AcrossMessage(
+    outputToken,
     amount,
     relayer,
-    encodeMessage(OpType.Transfer, ...)
+    abi.encode(instructions)
 );
-// Now pool has virtual supply via legitimate operation
+// Now pool has virtual supply via legitimate operation (donate → _updateVirtualSupply)
 ```
 
 ---
@@ -288,10 +298,10 @@ vm.selectFork(ethFork);
 // ... initiate transfer on Arbitrum
 bytes memory message = captureMessage();
 
-vm.selectFork(optFbaseForkork);
-// ... simulate Across fill on Optimism
+vm.selectFork(baseFork);
+// ... simulate Across fill on destination via MulticallHandler
 vm.prank(address(spokePool));
-pool.handleV3AcrossMessage(token, amount, relayer, message);
+IMulticallHandler(multicallHandler).handleV3AcrossMessage(outputToken, amount, relayer, abi.encode(instructions));
 ```
 
 **Critical: Use deployed addresses from Constants.sol**

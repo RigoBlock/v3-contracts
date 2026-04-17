@@ -16,7 +16,8 @@ This guide covers the technical implementation of the Across Protocol integratio
 
 2. **ECrosschain.sol** (Destination Chain Extension)
    - Path: `contracts/protocol/extensions/ECrosschain.sol`
-   - Receives tokens via `handleV3AcrossMessage()`
+   - Entry point: `donate()` (called via Across MulticallHandler's encoded multicall)
+   - `handleV3AcrossMessage()` lives on the Across MulticallHandler (external), not on the pool
    - Writes positive Virtual Supply for Transfer mode
    - Validates NAV integrity
 
@@ -28,7 +29,7 @@ This guide covers the technical implementation of the Across Protocol integratio
 4. **NavImpactLib.sol** (NAV Validation)
    - Path: `contracts/protocol/libraries/NavImpactLib.sol`
    - Validates Sync mode NAV impact
-   - Enforces 1/MINIMUM_SUPPLY_RATIO effective supply constraint (currently 12.5% with MINIMUM_SUPPLY_RATIO = 8)
+   - Enforces 1/MINIMUM_SUPPLY_RATIO effective supply constraint (currently 5% with MINIMUM_SUPPLY_RATIO = 20)
 
 ## Transfer Flow
 
@@ -61,30 +62,25 @@ function depositV3(AcrossParams calldata params) external {
 
 ### Destination Chain (ECrosschain)
 
+The destination flow uses the Across MulticallHandler (external contract):
+```
+SpokePool → MulticallHandler.handleV3AcrossMessage(outputToken, amount, relayer, encodedInstructions)
+  → MulticallHandler executes encoded multicall:
+    1. pool.donate(token, 1, params)     // Phase 1: snapshot balance + NAV
+    2. IERC20.transfer(pool, amount)     // Transfer tokens to pool
+    3. handler.drainLeftoverTokens(...)  // Drain any surplus
+    4. pool.donate(token, amount, params) // Phase 2: process donation + VS update
+```
+
+`ECrosschain.donate()` is the actual pool entry point (called via delegatecall):
 ```solidity
-function handleV3AcrossMessage(
-    address tokenSent,
-    uint256 amount,
-    address relayer,
-    bytes memory message
-) external {
-    // 1. Validate caller is SpokePool
-    require(msg.sender == address(_spokePool), OnlySpokePoolAllowed());
-    
-    // 2. Store initial state for validation
-    token.setDonationLock(amount);
-    TransientStorage.storeNav(currentNav);
-    TransientStorage.storeAssets(currentAssets);
-    
-    // 3. Execute multicall instructions
-    // ... (transfer tokens to pool, call donate())
-    
-    // 4. In donate(): Apply virtual adjustments
-    if (params.opType == OpType.Transfer) {
-        _handleTransferMode(...);  // Writes positive VS
-    } else if (params.opType == OpType.Sync) {
-        _handleSyncMode();  // No VS adjustment
-    }
+function donate(address token, uint256 amount, DestinationMessageParams calldata params) external {
+    // Phase 1 (amount == 1): Store initial state for validation
+    // Phase 2: Process donation
+    //   - Validate balance delta >= amount
+    //   - If Transfer mode: write positive VS (_updateVirtualSupply)
+    //   - If Sync mode: no VS adjustment
+    //   - Validate NAV integrity
 }
 ```
 
@@ -187,7 +183,7 @@ int256 sharesLeaving = (outputValue * 10**decimals / nav).toInt256();
 int256 newVS = currentVS - sharesLeaving;  // More negative
 int256 effectiveSupply = int256(totalSupply) + newVS;
 
-// Must maintain at least 1/MINIMUM_SUPPLY_RATIO of total supply (currently 12.5%)
+// Must maintain at least 1/MINIMUM_SUPPLY_RATIO of total supply (currently 5%)
 require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 

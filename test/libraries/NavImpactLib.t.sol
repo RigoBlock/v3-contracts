@@ -177,16 +177,16 @@ contract NavImpactLibTest is Test {
         harness.validateSupply(100e18, int256(50e18));
     }
 
-    /// @notice 87.5e18 * 8 = 700e18 == 100e18 * 7 → NOT strictly greater → pass.
+    /// @notice 95e18 * 20 = 1900e18 == 100e18 * 19 → NOT strictly greater → pass.
     function test_ValidateSupply_NegativeVS_AtExactThreshold_Passes() public view {
-        // -87.5e18 = -875e17; 875e17 * 8 = 700e18 = 100e18 * 7 → equal → NOT > → pass
-        harness.validateSupply(100e18, -int256(875e17));
+        // -95e18; 95e18 * 20 = 1900e18 = 100e18 * 19 → equal → NOT > → pass
+        harness.validateSupply(100e18, -int256(95e18));
     }
 
-    /// @notice 88e18 * 8 = 704e18 > 100e18 * 7 = 700e18 → revert.
+    /// @notice 96e18 * 20 = 1920e18 > 100e18 * 19 = 1900e18 → revert.
     function test_ValidateSupply_NegativeVS_BeyondThreshold_Reverts() public {
         vm.expectRevert(NavImpactLib.EffectiveSupplyTooLow.selector);
-        harness.validateSupply(100e18, -int256(88e18));
+        harness.validateSupply(100e18, -int256(96e18));
     }
 
     function test_ValidateSupply_NegativeVS_FullDrain_Reverts() public {
