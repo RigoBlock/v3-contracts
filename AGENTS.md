@@ -54,9 +54,24 @@ User → Pool Proxy (delegatecall)→ Implementation
 ```
 
 - **Proxy**: User-facing contract at fixed address
-- **Implementation**: Core logic, can be upgraded
-- **Extensions**: Immutable per deployment, chain-specific addresses
-- **Adapters**: Upgradeable via governance
+- **Implementation**: Core logic (Mixin contracts + libraries like NavImpactLib, VirtualStorageLib). Can be upgraded via factory. Libraries are compiled into the implementation bytecode.
+- **Extensions**: Immutable per deployment, chain-specific addresses. Routed via ExtensionsMap (selector → extension address). ExtensionsMap address is immutable in the implementation.
+- **Adapters**: Upgradeable via governance (Authority). Protocol integrations (Uniswap, Across source, etc.)
+
+### Upgrade Implications
+- **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar)`.
+- **Library change (used by an extension)**: The extension must be redeployed (library is compiled into extension bytecode) → new ExtensionsMap → new implementation.
+- **Extension change**: New extension + new ExtensionsMap + new implementation (ExtensionsMap is immutable in impl bytecode).
+- **Adapter change**: New adapter + Authority governance update. No implementation or extension changes needed.
+
+### ExtensionsMap Salt
+- The salt only needs to be bumped when the ExtensionsMap contract code itself changes (new selectors, new routing logic).
+- If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+- If any extension is redeployed (new address), a new ExtensionsMap must be deployed. The salt should be bumped to produce a new CREATE2 address.
+
+### Version Bump
+- Every implementation change MUST bump `VERSION` in `MixinConstants.sol` (e.g., `"4.2.0"` → `"4.3.0"`).
+- This applies to ANY change compiled into the implementation: Mixin contracts, libraries, or constructor parameters.
 
 ## Key Files
 
@@ -275,9 +290,10 @@ factory.setImplementation(newImplementation);
 vm.prank(poolOwner);
 pool.someOperation();
 
-// Simulate Across SpokePool calling handler
+// Simulate Across fill: SpokePool calls MulticallHandler.handleV3AcrossMessage()
+// which executes encoded multicall instructions that call pool.donate() (ECrosschain extension)
 vm.prank(address(spokePool));
-pool.handleV3AcrossMessage(...);
+IMulticallHandler(multicallHandler).handleV3AcrossMessage(outputToken, amount, relayer, abi.encode(instructions));
 ```
 
 ## Key Deployed Addresses (Most Chains)

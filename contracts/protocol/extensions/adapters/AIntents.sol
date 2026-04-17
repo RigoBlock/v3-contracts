@@ -8,6 +8,7 @@ import {IMulticallHandler} from "../../interfaces/IMulticallHandler.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
+import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {CrosschainLib} from "../../libraries/CrosschainLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
@@ -46,8 +47,10 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     uint256 private constant BPS_BASE = 10000;
 
     /// @notice Maximum allowed bridge fee in basis points (2% = 200 bps)
-    /// @dev Limits NAV damage from rogue or erroneous deposits. Normal Across fills are 0.05-0.5%.
     uint256 private constant MAX_BRIDGE_FEE_BPS = 200;
+
+    /// @notice Fill deadline for Across deposits (10 minutes)
+    uint32 private constant FILL_DEADLINE_SECONDS = 600;
 
     address private immutable _aIntents;
 
@@ -149,7 +152,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         // 2. Transfer expected amount to pool (no approval needed)
         calls[1] = Call({
             target: params.outputToken,
-            callData: abi.encodeCall(IERC20.transfer, (params.recipient, params.outputAmount)),
+            callData: abi.encodeCall(IERC20.transfer, (address(this), params.outputAmount)),
             value: 0
         });
 
@@ -158,7 +161,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             target: CrosschainLib.getAcrossHandler(params.destinationChainId),
             callData: abi.encodeCall(
                 IMulticallHandler.drainLeftoverTokens,
-                (params.outputToken, payable(params.recipient))
+                (params.outputToken, payable(address(this)))
             ),
             value: 0
         });
@@ -210,7 +213,7 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
             params.destinationChainId,
             address(0), // No exclusive relayer - open competition
             params.quoteTimestamp,
-            uint32(block.timestamp + _acrossSpokePool.fillDeadlineBuffer()),
+            uint32(block.timestamp + FILL_DEADLINE_SECONDS),
             0, // No exclusivity deadline since we don't use exclusive relaying
             abi.encode(instructions)
         );
@@ -250,5 +253,11 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
 
         // Write negative VS (shares leaving this chain → reduces effective supply)
         (-burntAmount).updateVirtualSupply();
+
+        // Validate effective supply is still above minimum threshold after VS update.
+        NavImpactLib.validateSupply(
+            ISmartPoolState(address(this)).getPoolTokens().totalSupply,
+            VirtualStorageLib.getVirtualSupply()
+        );
     }
 }

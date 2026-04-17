@@ -21,9 +21,9 @@ library NavImpactLib {
     /// @dev Impact is calculated as (transferValue * 10000) / totalAssetsValue in basis points
     error NavImpactTooHigh();
 
-    /// @notice Minimum ratio of effective supply to total supply (1/8 = 12.5%)
+    /// @notice Minimum ratio of effective supply to total supply (1/20 = 5%)
     /// @dev When virtual supply is negative, effective supply must be at least totalSupply / MINIMUM_SUPPLY_RATIO
-    uint256 internal constant MINIMUM_SUPPLY_RATIO = 8;
+    uint256 internal constant MINIMUM_SUPPLY_RATIO = 20;
 
     /// @notice Validates that transfer amount doesn't exceed NAV impact tolerance
     /// @dev Calculates percentage impact: (transferValue * 10000) / totalAssetsValue vs toleranceBps
