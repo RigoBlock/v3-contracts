@@ -23,7 +23,7 @@ abstract contract MixinPoolState is MixinPoolValue {
     }
 
     /// @inheritdoc ISmartPoolState
-    /// @dev Grg staking and UniV3 positions will not be returned by default.
+    /// @dev Grg staking is always queried regardless of the active bit.
     function getActiveApplications() external view override returns (uint256 packedApplications) {
         return _getActiveApplications();
     }
