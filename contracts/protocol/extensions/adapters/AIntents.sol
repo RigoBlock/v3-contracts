@@ -47,11 +47,9 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     uint256 private constant BPS_BASE = 10000;
 
     /// @notice Maximum allowed bridge fee in basis points (2% = 200 bps)
-    /// @dev Limits NAV damage from rogue or erroneous deposits. Normal Across fills are 0.05-0.5%.
     uint256 private constant MAX_BRIDGE_FEE_BPS = 200;
 
     /// @notice Fill deadline for Across deposits (10 minutes)
-    /// @dev Valid fills happen in seconds; short deadline prevents long lockups for unfillable intents.
     uint32 private constant FILL_DEADLINE_SECONDS = 600;
 
     address private immutable _aIntents;
@@ -257,8 +255,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         (-burntAmount).updateVirtualSupply();
 
         // Validate effective supply is still above minimum threshold after VS update.
-        // Without this check, cumulative deposits could push VS past the ratio limit,
-        // permanently blocking all NAV-dependent operations (mint, burn, updateUnitaryValue).
         NavImpactLib.validateSupply(
             ISmartPoolState(address(this)).getPoolTokens().totalSupply,
             VirtualStorageLib.getVirtualSupply()

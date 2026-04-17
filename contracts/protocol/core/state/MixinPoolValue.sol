@@ -112,7 +112,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
 
                 // active positions tokens are a subset of active tokens
                 for (uint256 j = 0; j < appTokenBalancesLength; j++) {
-                    // push application if not active but tokens are returned from it (as with GRG staking and univ3 liquidity)
+                    // push application if not active but tokens are returned from it (e.g. GRG staking is always queried)
                     if (!ApplicationsLib.isActiveApplication(packedApps, uint256(apps[i].appType))) {
                         activeApplications().storeApplication(apps[i].appType);
                     }
