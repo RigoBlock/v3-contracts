@@ -16,10 +16,11 @@ Cross-chain token transfer integration using [Across Protocol V3](https://across
 
 **ECrosschain.sol** (Destination Chain Extension)
 - Path: `contracts/protocol/extensions/ECrosschain.sol`
-- Receives via `handleV3AcrossMessage()` (called by SpokePool)
+- Entry point: `donate()` (called via Across MulticallHandler's encoded multicall)
 - Writes **positive VS** on destination (shares arriving)
 - Validates NAV changes and applies virtual supply adjustments
 - Handles Transfer (NAV-neutral) and Sync (NAV change) modes
+- Note: `handleV3AcrossMessage()` lives on the Across MulticallHandler (external), not on the pool
 
 **Virtual Supply (VS-Only Model)**
 - **Virtual Supply**: Pool token shares representing cross-chain holdings
@@ -80,18 +81,19 @@ function depositV3(
     bytes calldata message
 ) external;
 
-// Destination chain (ECrosschain)
-function handleV3AcrossMessage(
-    address tokenSent,
+// Destination chain flow:
+// SpokePool → MulticallHandler.handleV3AcrossMessage() → (multicall) → pool.donate()
+// ECrosschain.donate() is the actual pool entry point (called via delegatecall)
+function donate(
+    address token,
     uint256 amount,
-    address relayer,
-    bytes memory message
+    DestinationMessageParams calldata params
 ) external;
 ```
 
 ### Security Model
 
-1. **Handler verification**: Only Across SpokePool can call handler
+1. **Handler verification**: Across SpokePool calls MulticallHandler, which executes encoded instructions calling pool.donate()
 2. **Price feed validation**: Token must have price feed before acceptance
 3. **NAV validation**: Final NAV checked against expected value
 4. **Virtual supply consistency**: Read and update within same transaction
@@ -118,7 +120,7 @@ Across SpokePool addresses vary by chain - see Constants.sol
 ## Known Limitations
 
 1. **No recovery mechanism**: Across V3 lacks direct token recovery
-2. **Effective supply constraint**: Negative VS limited to 87.5% of total supply (MINIMUM_SUPPLY_RATIO = 8)
+2. **Effective supply constraint**: Negative VS limited to 95% of total supply (MINIMUM_SUPPLY_RATIO = 20)
 3. **Bridge fees**: Always reduce NAV (real economic cost)
 4. **Solver surplus**: Small NAV increase in Sync mode (benefits holders)
 
@@ -136,10 +138,10 @@ The implementation uses **Virtual Supply (VS) only** rather than the previous VB
 - ✅ Lower gas costs (one storage write per side)
 - ✅ No VB/VS synchronization complexity
 - ✅ Performance shared proportionally between chains
-- ✅ 12.5% safety buffer prevents supply exhaustion (MINIMUM_SUPPLY_RATIO = 8)
+- ✅ 5% safety buffer prevents supply exhaustion (MINIMUM_SUPPLY_RATIO = 20)
 
 **Trade-off:**
-- ⚠️ Source cannot send more than 87.5% of effective supply in a single transfer
+- ⚠️ Source cannot send more than 95% of effective supply in a single transfer
 - ⚠️ Post-burn check required to prevent bypassing effective supply limit
 
 ## Resources

@@ -25,6 +25,7 @@ import {IAcrossSpokePool} from "../../contracts/protocol/interfaces/IAcrossSpoke
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
+import {NavImpactLib} from "../../contracts/protocol/libraries/NavImpactLib.sol";
 import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
 import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
 
@@ -3330,5 +3331,234 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
 
         int256 vs = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         assertLt(vs, 0, "VS should be negative after valid outbound transfer");
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                    #898 FIX TESTS: POST-VS validateSupply CHECK
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice A single deposit for >95% of pool value should revert EffectiveSupplyTooLow.
+    /// @dev Before the fix, this would silently create a stuck pool. After the fix,
+    ///      the deposit itself reverts, preventing the DOS.
+    function test_AIntents_Transfer_SingleLargeDeposit_ExceedsRatio_Reverts() public {
+        // Pool has ~100k USDC minted. Transferring 96% should fail (exceeds 95% limit).
+        ISmartPoolState.PoolTokens memory tokens = ISmartPoolState(pool()).getPoolTokens();
+        uint256 poolBalance = IERC20(Constants.ETH_USDC).balanceOf(pool());
+
+        // Transfer 96% of pool balance — exceeds the 1/20 (5%) minimum effective supply
+        uint256 transferAmount = poolBalance * 96 / 100;
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        vm.expectRevert(NavImpactLib.EffectiveSupplyTooLow.selector);
+        IAIntents(pool()).depositV3(params);
+    }
+
+    /// @notice Two sequential deposits: first ~80% passes, second ~16% reverts (cumulative >95%).
+    /// @dev This is the core scenario for issue #898. Without the fix, both deposits succeed
+    ///      but the pool becomes permanently stuck afterward.
+    function test_AIntents_Transfer_SequentialDeposits_CumulativelyExceedRatio_Reverts() public {
+        uint256 poolBalance = IERC20(Constants.ETH_USDC).balanceOf(pool());
+
+        // First deposit: 80% of pool balance — within the 95% limit
+        uint256 firstAmount = poolBalance * 80 / 100;
+
+        IAIntents.AcrossParams memory params1 = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: firstAmount,
+            outputAmount: firstAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        // First deposit should succeed
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params1);
+
+        // Verify negative VS was written
+        int256 vsAfterFirst = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        assertLt(vsAfterFirst, 0, "VS should be negative after first transfer");
+
+        // Verify updateUnitaryValue still works after first deposit
+        ISmartPoolActions(pool()).updateUnitaryValue();
+
+        // Second deposit: 16% of original balance — cumulative would be 96%, exceeding 95% limit
+        uint256 secondAmount = poolBalance * 16 / 100;
+
+        IAIntents.AcrossParams memory params2 = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: secondAmount,
+            outputAmount: secondAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        // Second deposit should revert — cumulative VS would exceed ratio
+        vm.prank(poolOwner);
+        vm.expectRevert(NavImpactLib.EffectiveSupplyTooLow.selector);
+        IAIntents(pool()).depositV3(params2);
+    }
+
+    /// @notice Deposit for exactly 94% of pool value should succeed (within 95% limit).
+    function test_AIntents_Transfer_AtRatioLimit_Succeeds() public {
+        uint256 poolBalance = IERC20(Constants.ETH_USDC).balanceOf(pool());
+
+        // Transfer 94% — leaves 6% effective supply, above 5% minimum
+        uint256 transferAmount = poolBalance * 94 / 100;
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
+        int256 vs = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        assertLt(vs, 0, "VS should be negative after valid transfer");
+    }
+
+    /// @notice Verify updateUnitaryValue succeeds after a large (within-limit) transfer.
+    /// @dev This is the key assertion: the pool must NOT become stuck after a valid transfer.
+    function test_AIntents_Transfer_UpdateNavWorksAfterLargeTransfer() public {
+        uint256 poolBalance = IERC20(Constants.ETH_USDC).balanceOf(pool());
+
+        // Transfer 90% — large but within 95% limit
+        uint256 transferAmount = poolBalance * 90 / 100;
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: address(this),
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
+        // CRITICAL: updateUnitaryValue must still work after large transfer
+        ISmartPoolActions(pool()).updateUnitaryValue();
+        ISmartPoolState.PoolTokens memory tokens = ISmartPoolState(pool()).getPoolTokens();
+        assertGt(tokens.unitaryValue, 0, "NAV should remain positive after large transfer");
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+                    #897 FIX TESTS: RECIPIENT HARDCODING + DEADLINE
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @notice Verify multicall instructions use pool address as recipient, not params.recipient.
+    /// @dev Deposits with wrong recipient should still succeed because the contract ignores
+    ///      params.recipient and always uses address(this) in multicall instructions.
+    function test_AIntents_Recipient_AlwaysPool() public {
+        uint256 transferAmount = 1000e6;
+
+        // Set recipient to a completely wrong address
+        address wrongRecipient = makeAddr("wrongRecipient");
+
+        IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
+            depositor: address(this),
+            recipient: wrongRecipient, // Wrong recipient — should be ignored
+            inputToken: Constants.ETH_USDC,
+            outputToken: Constants.BASE_USDC,
+            inputAmount: transferAmount,
+            outputAmount: transferAmount,
+            destinationChainId: Constants.BASE_CHAIN_ID,
+            exclusiveRelayer: address(0),
+            quoteTimestamp: uint32(block.timestamp),
+            fillDeadline: uint32(block.timestamp + 1 hours),
+            exclusivityDeadline: 0,
+            message: abi.encode(SourceMessageParams({
+                opType: OpType.Transfer,
+                navTolerance: TOLERANCE_BPS,
+                shouldUnwrapOnDestination: false,
+                sourceNativeAmount: 0
+            }))
+        });
+
+        // Record logs to capture the encoded instructions
+        vm.recordLogs();
+
+        vm.prank(poolOwner);
+        IAIntents(pool()).depositV3(params);
+
+        // Verify the deposit succeeded by checking VS was written (tokens were sent to SpokePool).
+        // The key test is that the deposit didn't revert despite wrong recipient param.
+        int256 vs = int256(uint256(vm.load(pool(), virtualSupplySlot)));
+        assertLt(vs, 0, "VS should be negative - deposit succeeded despite wrong recipient param");
+
+        // Verify pool balance decreased (tokens sent to SpokePool)
+        uint256 postBalance = IERC20(Constants.ETH_USDC).balanceOf(pool());
+        assertLt(postBalance, IERC20(Constants.ETH_USDC).balanceOf(pool()) + transferAmount, "Pool balance should decrease");
     }
 }

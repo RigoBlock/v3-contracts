@@ -1118,11 +1118,11 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         uint256 totalSupply = ISmartPoolState(poolProxy).getPoolTokens().totalSupply;
         assertGt(totalSupply, 0, "totalSupply should be non-zero after mint");
         
-        // Simulate negative VS that puts effective supply in the danger zone (0 < ES < TS/8)
-        // totalSupply = 1000e18, threshold = 1000e18 / 8 = 125e18
+        // Simulate negative VS that puts effective supply in the danger zone (0 < ES < TS/20)
+        // totalSupply = 1000e18, threshold = 1000e18 / 20 = 50e18
         // Set VS = -(totalSupply - threshold/2) to get ES = threshold/2 (below threshold but positive)
-        int256 threshold = int256(totalSupply / 8);
-        int256 targetEffectiveSupply = threshold / 2;  // 50% of threshold = 6.25% of TS
+        int256 threshold = int256(totalSupply / 20);
+        int256 targetEffectiveSupply = threshold / 2;  // 50% of threshold = 2.5% of TS
         int256 largeNegativeVS = -(int256(totalSupply) - targetEffectiveSupply);
         
         vm.store(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT, bytes32(uint256(largeNegativeVS)));
