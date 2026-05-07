@@ -22,8 +22,10 @@ interface IAIntents {
 
     error DirectCallNotAllowed();
     error NullAddress();
+    error OracleReturnedZero();
     error OutputAmountTooHigh();
     error OutputAmountTooLow();
+    error PoolUnderwater();
     error TokenNotActive();
     error SameChainTransfer();
     error InvalidInputToken();

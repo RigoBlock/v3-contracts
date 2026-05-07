@@ -311,11 +311,7 @@ contract NavViewNavParityTest is UnitTestFixture {
 
         // Seed the oracle for tokenIn at the SAME block.timestamp as GRG (both at setUp's timestamp).
         // Both will have identical tick observations, giving a 1:1 cross price (cross tick = 0).
-        // Seeding BEFORE vm.warp ensures observe arithmetic won't underflow.
         _seedOracleForToken(address(tokenIn));
-
-        // Advance time so MockOracle.observe(secondsAgos=[2,0]) doesn't underflow
-        vm.warp(100);
 
         // Pool owner accepts tokenIn for minting (adds to accepted set, NOT active set)
         vm.prank(poolOwner);

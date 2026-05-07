@@ -20,6 +20,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeCast for uint256;
 
     error BaseTokenBalance();
+    error ETHNotAccepted();
     error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
     error PoolBurnNotEnough();
     error PoolBurnNullAmount();
@@ -153,6 +154,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             require(msg.value == amountIn, PoolMintAmountIn());
             _getTokenJar().safeTransferNative(spread);
         } else {
+            require(msg.value == 0, ETHNotAccepted());
             tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
             tokenIn.safeTransfer(_getTokenJar(), spread);
         }
@@ -240,7 +242,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             uint256 baseTokenBalance = baseToken.isAddressZero()
                 ? address(this).balance
                 : IERC20(baseToken).balanceOf(address(this));
-            require(netRevenue > baseTokenBalance, BaseTokenBalance());
+            require(netRevenue >= baseTokenBalance, BaseTokenBalance());
 
             netRevenue = uint256(
                 IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue.toInt256(), tokenOut)
@@ -282,7 +284,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
                 // allocate fee tokens to fee collector
                 accounts().userAccounts[feeCollector].userBalance += uint208(feePool);
-                accounts().userAccounts[feeCollector].activation = uint48(block.timestamp + 1);
+                accounts().userAccounts[feeCollector].activation = uint48(block.timestamp) + _getMinPeriod();
                 emit Transfer(msg.sender, feeCollector, feePool);
             }
         }

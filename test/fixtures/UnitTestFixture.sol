@@ -45,6 +45,10 @@ contract UnitTestFixture is Test {
 
     /// @notice Deploy minimal infrastructure for unit tests
     function deployFixture() public virtual {
+        // Ensure block.timestamp is large enough for TWAP windows (min 300s on mainnet
+        // requires timestamp >= 300 to avoid uint32 underflow in MockOracle.observe).
+        vm.warp(1000);
+
         console2.log("=== Deploying Unit Test Fixture ===");
 
         // Deploy minimal mock authority (needs code at address)

@@ -73,6 +73,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                     (components.netTotalValue * 10 ** components.decimals) /
                     components.totalSupply;
             } else {
+                // Pool is underwater: return sentinel 1 in-memory so callers detect the state
+                // without overwriting the stored NAV (which is needed for empty-pool re-init).
+                components.unitaryValue = 1;
                 return components;
             }
         }
