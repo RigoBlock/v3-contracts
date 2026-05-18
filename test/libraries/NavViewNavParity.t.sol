@@ -371,7 +371,7 @@ contract NavViewNavParityTest is UnitTestFixture {
             tickSpacing: TickMath.MAX_TICK_SPACING,
             hooks: IHooks(address(deployment.mockOracle))
         });
-        deployment.mockOracle.initializeObservations(key, int24(0));
+        deployment.mockOracle.initializeObservations(key);
     }
 
     // =========================================================================

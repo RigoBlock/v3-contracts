@@ -3342,7 +3342,6 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     ///      the deposit itself reverts, preventing the DOS.
     function test_AIntents_Transfer_SingleLargeDeposit_ExceedsRatio_Reverts() public {
         // Pool has ~100k USDC minted. Transferring 96% should fail (exceeds 95% limit).
-        ISmartPoolState.PoolTokens memory tokens = ISmartPoolState(pool()).getPoolTokens();
         uint256 poolBalance = IERC20(Constants.ETH_USDC).balanceOf(pool());
 
         // Transfer 96% of pool balance — exceeds the 1/20 (5%) minimum effective supply
