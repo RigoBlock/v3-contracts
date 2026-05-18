@@ -25,7 +25,6 @@ interface IAIntents {
     error OracleReturnedZero();
     error OutputAmountTooHigh();
     error OutputAmountTooLow();
-    error PoolUnderwater();
     error TokenNotActive();
     error SameChainTransfer();
     error InvalidInputToken();

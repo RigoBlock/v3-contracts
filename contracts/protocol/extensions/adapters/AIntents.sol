@@ -247,7 +247,6 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
         uint256 outputValueInBase = _getOutputValueInBase(params, scaledOutputAmount);
         require(outputValueInBase > 0, OracleReturnedZero());
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
-        require(navParams.netTotalValue > 0, PoolUnderwater());
         uint8 poolDecimals = StorageLib.pool().decimals;
 
         // Calculate shares equivalent: outputValue / NAV = shares

@@ -19,7 +19,6 @@ contract EOracle is IEOracle {
     uint256 private constant Q96 = 2 ** 96;
 
     address private immutable _wrappedNative;
-
     IOracle private immutable _oracle;
 
     constructor(address oracleHookAddress, address wrappedNative) {
@@ -97,19 +96,12 @@ contract EOracle is IEOracle {
     }
 
     /// @inheritdoc IEOracle
-    /// @dev Returns true if the oracle pool has enough observations for a reliable TWAP.
-    /// @dev Requires minimum cardinality to ensure TWAP window is at least 300 seconds.
     function hasPriceFeed(address token) external view returns (bool) {
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
-            // Require minimum cardinalityNext to guarantee a 300-second TWAP window has been funded.
-            // cardinalityNext represents the operator's intent; cardinality grows as observations fill.
-            // Ethereum blocktime ~8s: 38 blocks * 8s = 304s (capped at 300s).
-            // Other chains blocktime ~1s: 300 blocks * 1s = 300s.
-            uint16 minCardinality = block.chainid == 1 ? 38 : 300;
             (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
-            return state.cardinalityNext >= minCardinality;
+            return state.cardinality > 0;
         }
     }
 
@@ -127,8 +119,7 @@ contract EOracle is IEOracle {
             // get twap from oracle
             uint32[] memory secondsAgos = _getSecondsAgos(state.cardinality);
             (int48[] memory tickCumulatives, ) = _oracle.observe(key, secondsAgos);
-            int256 avgTick = (tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos[0]));
-            return avgTick.toInt24();
+            return int256((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos[0]))).toInt24();
         }
     }
 

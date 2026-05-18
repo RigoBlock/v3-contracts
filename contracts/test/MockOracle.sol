@@ -16,9 +16,7 @@ contract MockOracle {
     // we preserve same state as default pool id, so we get same results
     function initializeObservations(PoolKey calldata poolKey) external {
         PoolId id = poolKey.toId();
-        // cardinality=2 keeps observe() correct for small-timestamp Foundry tests.
-        // cardinalityNext=300 satisfies EOracle.hasPriceFeed() minimum-cardinality check.
-        states[id] = IOracle.ObservationState({index: 1, cardinality: 2, cardinalityNext: 300});
+        states[id] = IOracle.ObservationState({index: 1, cardinality: 2, cardinalityNext: 2});
         uint32 initialTimestamp = uint32(block.timestamp);
         uint32 secondTimestamp = initialTimestamp + 1;
         observations[id][0] = Observation({
@@ -84,7 +82,7 @@ contract MockOracle {
             // Adjust for time passed since the closest observation (simplified for mock)
             if (targetTimestamp > closestObservation.blockTimestamp) {
                 uint32 timeDiff = targetTimestamp - closestObservation.blockTimestamp;
-                tickCumulatives[i] += int48(int24(closestObservation.prevTick) * int56(uint56(timeDiff)));
+                tickCumulatives[i] += int48(int24(closestObservation.prevTick) * int32(timeDiff));
                 secondsPerLiquidityCumulativeX128s[i] += uint144(ONE_X96 * timeDiff);
             }
         }

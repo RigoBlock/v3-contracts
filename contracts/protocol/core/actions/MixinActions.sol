@@ -284,7 +284,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
                 // allocate fee tokens to fee collector
                 accounts().userAccounts[feeCollector].userBalance += uint208(feePool);
-                accounts().userAccounts[feeCollector].activation = uint48(block.timestamp) + _getMinPeriod();
+                accounts().userAccounts[feeCollector].activation = uint48(block.timestamp) + 1;
                 emit Transfer(msg.sender, feeCollector, feePool);
             }
         }
