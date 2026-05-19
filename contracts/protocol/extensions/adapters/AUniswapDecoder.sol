@@ -199,9 +199,11 @@ abstract contract AUniswapDecoder {
                                 IV4Router.ExactOutputParams calldata swapParams = paramsAtIndex
                                     .decodeSwapExactOutParams();
 
+                                // In ExactOutputParams, path is encoded in reverse (output→input order),
+                                // so path[0].intermediateCurrency is the actual input currency.
                                 if (swapParams.path.length > 0) {
-                                    PathKey calldata lastPathKey = swapParams.path[swapParams.path.length - 1];
-                                    params.value += Currency.unwrap(lastPathKey.intermediateCurrency) == ZERO_ADDRESS
+                                    PathKey calldata firstPathKey = swapParams.path[0];
+                                    params.value += Currency.unwrap(firstPathKey.intermediateCurrency) == ZERO_ADDRESS
                                         ? swapParams.amountInMaximum
                                         : 0;
                                 }

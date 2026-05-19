@@ -100,6 +100,9 @@ User → Pool Proxy (delegatecall)→ Implementation
 - `AGovernance.sol` - Governance voting
 - `AMulticall.sol` - Batch transactions
 
+### Oracle System
+Rigoblock uses **BackGeoOracle**, a Uniswap V4 hook that provides manipulation-resistant on-chain price feeds via truncated geometric-mean TWAP and automatic backrunning. The `EOracle` extension wraps the hook and exposes `getTwap()`, `convertTokenAmount()`, and `hasPriceFeed()` to the pool. For a full technical overview of how the hook works, how feeds are registered, and the security model, see [`docs/oracle/BACKGEOORACLE.md`](docs/oracle/BACKGEOORACLE.md).
+
 ## Storage Pattern
 
 **All storage uses ERC-7201 namespaced pattern with dot notation:**
