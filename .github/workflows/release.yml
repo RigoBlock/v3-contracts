@@ -32,7 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          submodules: 'recursive'
+          token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
+          submodules: recursive
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 22.12.0
@@ -89,6 +91,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
           ref: ${{ github.ref }}
           fetch-depth: 0
       - name: Create Github Release
@@ -131,9 +134,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
           ref: ${{ github.ref }}
           fetch-depth: 0
-          submodules: 'recursive'
+          submodules: recursive
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
