@@ -242,7 +242,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             uint256 baseTokenBalance = baseToken.isAddressZero()
                 ? address(this).balance
                 : IERC20(baseToken).balanceOf(address(this));
-            require(netRevenue >= baseTokenBalance, BaseTokenBalance());
+            require(netRevenue > baseTokenBalance, BaseTokenBalance());
 
             netRevenue = uint256(
                 IEOracle(address(this)).convertTokenAmount(baseToken, netRevenue.toInt256(), tokenOut)

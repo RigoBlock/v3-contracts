@@ -99,6 +99,7 @@ contract EOracle is IEOracle {
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
+            // cardinality > 0 means the oracle pool has been initialised and has at least one observation
             (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
             return state.cardinality > 0;
         }
