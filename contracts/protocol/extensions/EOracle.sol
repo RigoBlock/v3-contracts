@@ -13,7 +13,6 @@ import {IOracle} from "../interfaces/IOracle.sol";
 contract EOracle is IEOracle {
     using TickMath for int24;
     using SafeCast for uint256;
-    using SafeCast for int256;
 
     address private constant _ZERO_ADDRESS = address(0);
     uint256 private constant Q96 = 2 ** 96;
@@ -119,7 +118,7 @@ contract EOracle is IEOracle {
             // get twap from oracle
             uint32[] memory secondsAgos = _getSecondsAgos(state.cardinality);
             (int48[] memory tickCumulatives, ) = _oracle.observe(key, secondsAgos);
-            return int256((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos[0]))).toInt24();
+            return int24((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos[0])));
         }
     }
 

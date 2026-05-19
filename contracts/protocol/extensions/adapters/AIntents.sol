@@ -243,9 +243,8 @@ contract AIntents is IAIntents, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     function _handleSourceTransfer(AcrossParams memory params, uint256 scaledOutputAmount) private {
-        if (scaledOutputAmount == 0) return;
         uint256 outputValueInBase = _getOutputValueInBase(params, scaledOutputAmount);
-        require(outputValueInBase > 0, OracleReturnedZero());
+        require(outputValueInBase > 0, ZeroConvertedValue());
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
         uint8 poolDecimals = StorageLib.pool().decimals;
 

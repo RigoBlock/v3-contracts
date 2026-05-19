@@ -20,7 +20,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     using SafeCast for uint256;
 
     error BaseTokenBalance();
-    error ETHNotAccepted();
+    error NativeCurrencyNotAccepted();
     error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
     error PoolBurnNotEnough();
     error PoolBurnNullAmount();
@@ -154,7 +154,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             require(msg.value == amountIn, PoolMintAmountIn());
             _getTokenJar().safeTransferNative(spread);
         } else {
-            require(msg.value == 0, ETHNotAccepted());
+            require(msg.value == 0, NativeCurrencyNotAccepted());
             tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
             tokenIn.safeTransfer(_getTokenJar(), spread);
         }

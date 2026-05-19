@@ -73,9 +73,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                     (components.netTotalValue * 10 ** components.decimals) /
                     components.totalSupply;
             } else {
-                // Pool has non-positive value - return sentinel 1 without storing
+                // Pool has non-positive value - use sentinel 1 to prevent draining at stale NAV
                 components.unitaryValue = 1;
-                return components;
             }
         }
 

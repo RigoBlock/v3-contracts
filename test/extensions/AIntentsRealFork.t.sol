@@ -2911,23 +2911,24 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
     /// @notice Test transfer with null/zero output amount
     /// @dev Verifies that null transfers are handled safely without burning virtual supply incorrectly
     /// @dev With outputAmount=0: burntAmount = (0 * 10^decimals) / unitaryValue = 0, so no VS change
-    function test_IntegrationFork_Transfer_NullOutputAmount() public {
+    /// @notice Test transfer with null/zero output amount reverts safely
+    /// @dev Zero-amount inputs are rogue client-side inputs. They must revert
+    ///      with ZeroConvertedValue instead of silently passing.
+    function test_IntegrationFork_Transfer_NullOutputAmount_Reverts() public {
         uint256 transferAmount = 0; // Zero amount transfer
 
         // Fund pool owner with tokens (needed for gas, not for transfer)
         deal(Constants.ETH_USDC, poolOwner, 1000e6);
-        
-        console2.log("\n=== Null Output Amount Transfer Test ===");
-        console2.log("Transfer amount:", transferAmount);
 
         // Capture initial state BEFORE any operations
-        // Note: First updateUnitaryValue() will write price to storage if not already set
         ISmartPoolActions(pool()).updateUnitaryValue();
-        
+
         ISmartPoolState.PoolTokens memory initialTokens = ISmartPoolState(pool()).getPoolTokens();
         int256 initialVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         uint256 initialStoredPrice = initialTokens.unitaryValue;
-        
+
+        console2.log("\n=== Null Output Amount Transfer Test ===");
+        console2.log("Transfer amount:", transferAmount);
         console2.log("Initial total supply:", initialTokens.totalSupply);
         console2.log("Initial virtual supply:", initialVirtualSupply);
         console2.log("Initial stored price:", initialStoredPrice);
@@ -2953,31 +2954,23 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             }))
         });
 
-        // Execute zero-amount transfer
+        // Zero-amount transfers are rogue inputs and must revert atomically
+        vm.expectRevert(IAIntents.ZeroConvertedValue.selector);
         vm.prank(poolOwner);
         IAIntents(pool()).depositV3(params);
-        
-        // Capture final state
+
+        // Because the call reverted, state must be unchanged
         ISmartPoolState.PoolTokens memory finalTokens = ISmartPoolState(pool()).getPoolTokens();
         int256 finalVirtualSupply = int256(uint256(vm.load(pool(), virtualSupplySlot)));
         uint256 finalStoredPrice = finalTokens.unitaryValue;
-        
-        console2.log("\nFinal total supply:", finalTokens.totalSupply);
-        console2.log("Final virtual supply:", finalVirtualSupply);
-        console2.log("Final stored price:", finalStoredPrice);
 
-        // Assert: Total supply unchanged (no minting/burning of real tokens)
-        assertEq(finalTokens.totalSupply, initialTokens.totalSupply, "Total supply should be unchanged");
-        
-        // Assert: Virtual supply unchanged (burntAmount = 0 when outputAmount = 0)
-        assertEq(finalVirtualSupply, initialVirtualSupply, "Virtual supply should be unchanged for zero amount");
-        
-        // Assert: Stored price unchanged (no value transferred, no price impact)
-        assertEq(finalStoredPrice, initialStoredPrice, "Stored price should be unchanged");
-        
-        console2.log("\n[SUCCESS] Zero outputAmount correctly handled:");
+        assertEq(finalTokens.totalSupply, initialTokens.totalSupply, "Total supply unchanged after revert");
+        assertEq(finalVirtualSupply, initialVirtualSupply, "Virtual supply unchanged after revert");
+        assertEq(finalStoredPrice, initialStoredPrice, "Stored price unchanged after revert");
+
+        console2.log("\n[SUCCESS] Zero outputAmount correctly reverted:");
         console2.log("- Total supply: unchanged");
-        console2.log("- Virtual supply: unchanged (burntAmount = 0)");
+        console2.log("- Virtual supply: unchanged");
         console2.log("- Stored price: unchanged");
     }
 

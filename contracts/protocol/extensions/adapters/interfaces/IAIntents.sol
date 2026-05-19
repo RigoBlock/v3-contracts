@@ -22,7 +22,7 @@ interface IAIntents {
 
     error DirectCallNotAllowed();
     error NullAddress();
-    error OracleReturnedZero();
+    error ZeroConvertedValue();
     error OutputAmountTooHigh();
     error OutputAmountTooLow();
     error TokenNotActive();
