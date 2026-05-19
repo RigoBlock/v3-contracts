@@ -64,7 +64,7 @@ jobs:
         id: conventional_changelog_action
         uses: TriPSs/conventional-changelog-action@v6
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.PUBLISH_GITHUB_TOKEN }}
 
   create_release:
     name: Create Release
