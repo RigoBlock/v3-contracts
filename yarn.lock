@@ -4090,9 +4090,9 @@ eslint-plugin-import@^2.22.1:
     tsconfig-paths "^3.15.0"
 
 eslint-plugin-no-only-tests@^3.0.0:
-  version "3.3.0"
-  resolved "https://registry.yarnpkg.com/eslint-plugin-no-only-tests/-/eslint-plugin-no-only-tests-3.3.0.tgz#d9d42ccd4b5d099b4872fb5046cf95441188cfb5"
-  integrity sha512-brcKcxGnISN2CcVhXJ/kEQlNa0MEfGRtwKtWA16SkqXHKitaKIMrfemJKLKX1YqDU5C/5JY3PvZXd5jEW04e0Q==
+  version "3.4.0"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-no-only-tests/-/eslint-plugin-no-only-tests-3.4.0.tgz#a457d2c559bda3301ce5a75147b8ba447186e88a"
+  integrity sha512-4S3/9Nb7A2tiMcpzEQE9bQSlpeOz6WJkgryBuou/SA8W2x2c8Zf4j0NvTKBjv6qNhF9T79tmkecm/0CHqV0UGg==
 
 eslint-plugin-prettier@^4.2.1:
   version "4.2.5"
@@ -9461,10 +9461,10 @@ solc@0.8.26:
     semver "^5.5.0"
     tmp "0.0.33"
 
-solc@0.8.34:
-  version "0.8.34"
-  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.34.tgz#be5fc555a9863f3f1b2d49d3f5f9897c48e433e7"
-  integrity sha512-qf8HajA1sHhXRV0hMSDXLjVbc4v3Q+SQbL9zok+1WmgVj7Z4oMjMHxaysCzfGtFVqjZdfDDJWyZI+tcx5bO7Dw==
+solc@0.8.35:
+  version "0.8.35"
+  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.35.tgz#48f48d82d2ed49929953243066229fbf308938cb"
+  integrity sha512-OaP/4zyoKRo2CjqZDxbtkeRlEo6MxP4FLCxntw1Agf9OSoecmwYKoFBSB34UcSKBFBucrTh3Mb0nRoJou62ibw==
   dependencies:
     command-exists "^1.2.8"
     commander "^8.1.0"
