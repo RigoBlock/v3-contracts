@@ -23,7 +23,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using SlotDerivation for bytes32;
     using TransientStorage for address;
     using SafeCast for uint256;
-    using SafeCast for int256;
 
     error BaseTokenPriceFeedError();
 
