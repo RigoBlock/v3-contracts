@@ -160,7 +160,7 @@ describe("MixinStorageAccessible", async () => {
                 [0, 0]
             )
             expect(poolParams).to.be.eq(encodedPack)
-            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('InvalidOperator()')
+            await expect(pool.mint(user2.address, parseEther("10"), 0)).to.be.revertedWith('InvalidOperator')
             await pool.connect(user2).setOperator(user1.address, true)
             let etherValue = parseEther("10")
             await pool.mint(user2.address, etherValue, 1, { value: etherValue })

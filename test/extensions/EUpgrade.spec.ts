@@ -42,13 +42,13 @@ describe("EUpgrade", async () => {
         it('should revert if called directly', async () => {
             const { eUpgrade } = await setupTests()
             await expect(eUpgrade.upgradeImplementation())
-                .to.be.revertedWith('EUpgradeDirectCall()')
+                .to.be.revertedWith('EUpgradeDirectCall')
         })
 
         it('should revert if new implementation is same as current', async () => {
             const { pool } = await setupTests()
             await expect(pool.upgradeImplementation())
-                .to.be.revertedWith('EUpgradeImplementationIsSameAsCurrent()')
+                .to.be.revertedWith('EUpgradeImplementationIsSameAsCurrent')
         })
 
         it('should upgrade implementation', async () => {
@@ -63,7 +63,7 @@ describe("EUpgrade", async () => {
             const { factory, pool } = await setupTests()
             await factory.setImplementation(factory.address)
             await expect(pool.connect(user2).upgradeImplementation())
-                .to.be.revertedWith('EUpgradeDirectCall()')
+                .to.be.revertedWith('EUpgradeDirectCall')
         })
 
         it('should not allow multicall to upgrade for non-owner', async () => {
@@ -80,10 +80,10 @@ describe("EUpgrade", async () => {
                 'multicall(bytes[])',
                 [ [encodedUpgradeData] ]
             )
-            // multicall reverts without a reason
+            // multicall swallows the revert for custom errors shorter than 68 bytes, which includes EUpgradeImplementationIsSameAsCurrent
             await expect(
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith('Transaction reverted without a reason')
+            ).to.be.revertedWith("")
         })
     })
 })

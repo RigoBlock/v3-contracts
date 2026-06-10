@@ -76,7 +76,9 @@ contract RogueStaking {
         bytes memory encodedCall = abi.encodeWithSelector(selector);
         (bool success, bytes memory data) = inflation.call(encodedCall);
         if (!success) {
-            revert(string(data));
+            assembly {
+                revert(add(data, 32), mload(data))
+            }
         }
         return uint256(bytes32(data));
     }

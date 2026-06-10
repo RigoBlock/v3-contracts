@@ -65,7 +65,7 @@ describe("RogueStakingProxy", async () => {
             await expect(rogueProxy.endEpoch()).to.be.revertedWith("INFLATION_TIME_ANOMALY_ERROR")
             await rogueProxy.setDuration(432000)
             await expect(rogueProxy.endEpoch()).to.emit(rigoToken, "TokenMinted")
-            await expect(rogueProxy.endEpoch()).to.be.reverted
+            await expect(rogueProxy.endEpoch()).to.be.revertedWith("INFLATION_EPOCH_END_ERROR")
             await timeTravel({ days: 5, mine:true })
             const mintAmount = await rogueProxy.getInflation()
             expect(await rogueProxy.callStatic.endEpoch()).to.be.eq(mintAmount)

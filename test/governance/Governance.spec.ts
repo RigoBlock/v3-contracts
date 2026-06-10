@@ -24,7 +24,7 @@ describe("Governance Implementation", async () => {
             const action = new ProposedAction(user2.address, mockBytes, BigNumber.from('0'))
             // will revert as strategy is set to address 0, therefore is not able to return voting power
             await expect(implementation.propose([action],'this proposal should always fail'))
-                .to.be.revertedWith("Transaction reverted: function returned an unexpected amount of data")
+                .to.be.revertedWith("function returned an unexpected amount of data")
         })
     })
 

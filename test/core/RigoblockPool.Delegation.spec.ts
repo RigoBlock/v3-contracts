@@ -43,7 +43,7 @@ describe("Delegation", async () => {
                 pool.connect(user2).updateDelegation([
                     { delegated: user2.address, selector: WRITE_SELECTOR, isDelegated: true }
                 ])
-            ).to.be.revertedWith("PoolCallerIsNotOwner()")
+            ).to.be.revertedWith("PoolCallerIsNotOwner")
         })
 
         it("should grant delegation for a single (selector, address) pair", async () => {
@@ -163,7 +163,7 @@ describe("Delegation", async () => {
             const { pool } = await setupTests()
             await expect(
                 pool.connect(user2).revokeAllDelegations(user2.address)
-            ).to.be.revertedWith("PoolCallerIsNotOwner()")
+            ).to.be.revertedWith("PoolCallerIsNotOwner")
         })
 
         it("should revoke all selectors for a delegated address at once", async () => {
@@ -219,7 +219,7 @@ describe("Delegation", async () => {
             const { pool } = await setupTests()
             await expect(
                 pool.connect(user2).revokeAllDelegationsForSelector(WRITE_SELECTOR)
-            ).to.be.revertedWith("PoolCallerIsNotOwner()")
+            ).to.be.revertedWith("PoolCallerIsNotOwner")
         })
 
         it("should revoke all addresses delegated for a selector at once", async () => {

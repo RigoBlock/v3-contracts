@@ -370,7 +370,7 @@ describe("StakingProxy-Stake", async () => {
             await grgVault.enterCatastrophicFailure()
             // GRG requires a positive transfer amount
             await expect(grgVault.withdrawAllFrom(user2.address))
-                .to.be.revertedWith("Transaction reverted without a reason")
+                .to.be.revertedWith("")
             const amount = parseEther("100")
             await grgToken.approve(grgTransferProxyAddress, amount)
             await expect(stakingProxy.stake(amount))
