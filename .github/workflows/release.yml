@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          submodules: 'recursive'
+          submodules: recursive
       - uses: actions/setup-node@v6
         with:
           node-version: 22.12.0
@@ -133,7 +133,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
-          submodules: 'recursive'
+          submodules: recursive
       - uses: actions/setup-node@v6
         with:
           node-version: '24'

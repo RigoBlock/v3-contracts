@@ -309,8 +309,6 @@ contract NavViewNavParityTest is UnitTestFixture {
         // Deploy a mock ERC20 that will be used as tokenIn
         MockERC20 tokenIn = new MockERC20("MockToken", "MCK", 18);
 
-        // Seed the oracle for tokenIn at the SAME block.timestamp as GRG (both at setUp's timestamp).
-        // Both will have identical tick observations, giving a 1:1 cross price (cross tick = 0).
         // Seeding BEFORE vm.warp ensures observe arithmetic won't underflow.
         _seedOracleForToken(address(tokenIn));
 

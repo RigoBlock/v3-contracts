@@ -23,7 +23,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using SlotDerivation for bytes32;
     using TransientStorage for address;
     using SafeCast for uint256;
-    using SafeCast for int256;
 
     error BaseTokenPriceFeedError();
 
@@ -73,7 +72,8 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                     (components.netTotalValue * 10 ** components.decimals) /
                     components.totalSupply;
             } else {
-                return components;
+                // Pool has non-positive value - use sentinel 1 to prevent draining at stale NAV
+                components.unitaryValue = 1;
             }
         }
 

@@ -48,7 +48,6 @@ interface ISmartPoolOwnerActions {
     /// @param delegations Array of delegation operations to apply.
     function updateDelegation(Delegation[] calldata delegations) external;
 
-
     /// @notice Revokes all selector delegations for a given address in a single call.
     /// @dev Useful when a delegated wallet is compromised.
     /// @param delegated Address whose full delegation is to be revoked.

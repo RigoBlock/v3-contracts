@@ -1,6 +1,6 @@
 {
   "name": "@rgbk/v3-contracts",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Ethereum asset management",
   "homepage": "https://github.com/rigoblock/v3-contracts/",
   "license": "Apache-2.0",
@@ -95,7 +95,7 @@
     "solhint-plugin-prettier": "^0.1.0",
     "solidity-coverage": "^0.8.2",
     "ts-node": "^10.8.1",
-    "typescript": "^5.0.4",
+    "typescript": "^6.0.3",
     "yargs": "^18.0.0"
   },
   "peerDependencies": {

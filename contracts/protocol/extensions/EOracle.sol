@@ -18,7 +18,6 @@ contract EOracle is IEOracle {
     uint256 private constant Q96 = 2 ** 96;
 
     address private immutable _wrappedNative;
-
     IOracle private immutable _oracle;
 
     constructor(address oracleHookAddress, address wrappedNative) {
@@ -96,13 +95,11 @@ contract EOracle is IEOracle {
     }
 
     /// @inheritdoc IEOracle
-    /// @dev Returns true if the oracle pool has been initialised (cardinality > 0).
     function hasPriceFeed(address token) external view returns (bool) {
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
-            // cardinality > 0 means the oracle pool has been initialised and has at least one
-            // observation — equivalent to checking blockTimestamp != 0 but saves one SLOAD.
+            // cardinality > 0 means the oracle pool has been initialised and has at least one observation
             (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
             return state.cardinality > 0;
         }

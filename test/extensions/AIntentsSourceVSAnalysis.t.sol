@@ -13,6 +13,9 @@ import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces
 import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {OpType, DestinationMessageParams, SourceMessageParams, Call, Instructions} from "../../contracts/protocol/types/Crosschain.sol";
 import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
+import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {ExternalApp, AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
+import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
 
 interface IMulticallHandler {
     function handleV3AcrossMessage(address token, uint256, address, bytes memory message) external;
@@ -176,6 +179,34 @@ contract AIntentsSourceVSAnalysisTest is Test, RealDeploymentFixture {
         assertEq(navDropBps, 99, "NAV drop = 99 bps (~1% of remaining, ~0.5% of total amplified 2x)");
     }
 
+    /// @notice Negative net value path: netTotalLiabilities populated, unitaryValue = sentinel 1.
+    /// @dev Mocks IEApps to inject a negative base-token balance larger than the pool's
+    ///      actual ERC20 balance, forcing _computeTotalPoolValue to return < 0.
+    function test_NegativeNetValue_NavReturnsSentinelOneAndLiabilities() public {
+        vm.selectFork(baseForkId);
+
+        // Build a mock app balance: base token owes 1000 USDC (negative position)
+        AppTokenBalance[] memory balances = new AppTokenBalance[](1);
+        balances[0] = AppTokenBalance({token: Constants.BASE_USDC, amount: -int256(1000e6)});
+
+        ExternalApp[] memory apps = new ExternalApp[](1);
+        apps[0] = ExternalApp({appType: uint256(0), balances: balances});
+
+        // Mock getAppTokenBalances on the pool (delegatecall target)
+        vm.mockCall(
+            base.pool,
+            abi.encodeWithSelector(IEApps.getAppTokenBalances.selector),
+            abi.encode(apps)
+        );
+
+        NetAssetsValue memory nav = ISmartPoolActions(base.pool).updateUnitaryValue();
+
+        // Negative net value => netTotalLiabilities records the absolute value
+        assertEq(nav.netTotalValue, 0, "netTotalValue must be 0 when netValue < 0");
+        assertEq(nav.netTotalLiabilities, 900e6, "netTotalLiabilities = abs(-1000e6 + 100e6 actual balance)");
+        assertEq(nav.unitaryValue, 1, "unitaryValue must be sentinel 1");
+    }
+
     /// @notice 100% effective-supply burn with 1% solver fee.
     ///
     /// Starting state: totalSupply=0, VS=+100, balance=100 USDC, NAV=$1.00
@@ -183,8 +214,8 @@ contract AIntentsSourceVSAnalysisTest is Test, RealDeploymentFixture {
     ///
     /// Expected: VS burn = 99/1.0 = 99. VS after = 100-99 = +1 (phantom).
     ///   Balance = 0. effectiveSupply = 1.
-    ///   _updateNav: netTotalValue=0, effectiveSupply>0 => else branch => returns stored NAV.
-    ///   NAV stays at $1.00 — stale, backed by $0 assets.
+    ///   _updateNav: netTotalValue=0, effectiveSupply>0 => unitaryValue set to sentinel 1 and stored.
+    ///   NAV becomes 1 (minimum sentinel), reflecting $0 assets.
     function test_FullSupplyBurn_1pctFee() public {
         vm.selectFork(baseForkId);
 
@@ -212,7 +243,7 @@ contract AIntentsSourceVSAnalysisTest is Test, RealDeploymentFixture {
         // 3. Phantom VS = 1e6 (fee in shares, backed by $0)
         assertEq(vsAfter, 1e6, "Phantom VS = 1e6 (fee/NAV, backed by nothing)");
 
-        // 4. NAV: netTotalValue=0, effectiveSupply=1 => stored NAV returned unchanged
-        assertEq(navAfter, navBefore, "NAV unchanged (empty pool returns stored value)");
+        // 4. NAV: netTotalValue=0, effectiveSupply=1 => sentinel 1 stored
+        assertEq(navAfter, 1, "NAV becomes sentinel 1 (empty pool, insolvent)");
     }
 }
