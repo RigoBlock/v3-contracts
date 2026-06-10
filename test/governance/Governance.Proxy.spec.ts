@@ -125,17 +125,38 @@ describe("Governance Proxy", async () => {
             expect(votingPeriod).to.be.eq(604800)
             const endTime = startTime.add(votingPeriod)
             actions = [action, action]
+            // Before proposing, no actions are stored for this proposal id
             let outputActions = await governanceInstance.getActions(1)
-            expect(String(outputActions)).to.be.eq(String([]))
-            // notice: in the event the test suite does not return an error when comparing actions to an empty array
-            // further tests down below assert actions are correctly logged at event emission.
-            await expect(governanceInstance.propose(actions, description))
+            expect(outputActions.length).to.be.eq(0)
+            // Waffle 4 .withArgs() uses reference equality (.equal()) for array elements.
+            // ProposedAction structs inside arrays are emitted as ethers Result objects,
+            // which cannot be matched against plain tuples/objects via .withArgs().
+            // We verify the event emission and check args via receipt instead.
+            const tx = await governanceInstance.propose(actions, description)
+            await expect(tx)
                 .to.emit(governanceInstance, "ProposalCreated")
-                .withArgs(user1.address, proposalId, outputActions, startTime, endTime, description)
+            const receipt = await tx.wait()
+            const event = receipt.events?.find((e: any) => e.event === 'ProposalCreated')
+            expect(event.args.proposer).to.eq(user1.address)
+            expect(event.args.proposalId).to.eq(proposalId)
+            expect(event.args.actions.length).to.eq(actions.length)
+            // Explicitly assert each emitted action matches the expected action
+            for (let i = 0; i < actions.length; i++) {
+                expect(event.args.actions[i].target).to.eq(action.target)
+                expect(event.args.actions[i].data).to.eq(action.data)
+                expect(event.args.actions[i].value).to.eq(action.value)
+            }
+            expect(event.args.startBlockOrTime).to.eq(startTime)
+            expect(event.args.endBlockOrTime).to.eq(endTime)
+            expect(event.args.description).to.eq(description)
             expect(await governanceInstance.proposalCount()).to.be.eq(1)
+            // Verify on-chain storage matches the input actions exactly
             outputActions = await governanceInstance.getActions(1)
-            const actionTuple = new ProposedAction(outputActions[0].target, outputActions[0].data, BigNumber.from(outputActions[0].value))
-            expect(String(actionTuple)).to.be.eq(String(action))
+            const actionsTuple = [
+                new ProposedAction(outputActions[0].target, outputActions[0].data, BigNumber.from(outputActions[0].value)),
+                new ProposedAction(outputActions[1].target, outputActions[1].data, BigNumber.from(outputActions[1].value))
+            ]
+            expect(String(actionsTuple)).to.be.eq(String(actions))
         })
 
         it('can create valid proposal', async () => {
@@ -157,17 +178,37 @@ describe("Governance Proxy", async () => {
             const votingPeriod = await governanceInstance.callStatic.votingPeriod()
             const endTime = startTime.add(votingPeriod)
             const actions = [action, action]
+            // Before proposing, no actions are stored for this proposal id
             let outputActions = await governanceInstance.getActions(proposalId)
-            expect(String(outputActions)).to.be.eq(String([]))
-            // we cannot correctly compare struct arrays in events
-            await expect(governanceInstance.propose(actions, description))
+            expect(outputActions.length).to.be.eq(0)
+            // Waffle 4 .withArgs() uses reference equality (.equal()) for array elements.
+            // ProposedAction structs inside arrays are emitted as ethers Result objects,
+            // which cannot be matched against plain tuples/objects via .withArgs().
+            // We verify the event emission and check args via receipt instead.
+            const tx = await governanceInstance.propose(actions, description)
+            await expect(tx)
                 .to.emit(governanceInstance, "ProposalCreated")
-                .withArgs(user1.address, proposalId, [], startTime, endTime, description)
-            // therefore, we first check that the actions storage has been updated
+            const receipt = await tx.wait()
+            const event = receipt.events?.find((e: any) => e.event === 'ProposalCreated')
+            expect(event.args.proposer).to.eq(user1.address)
+            expect(event.args.proposalId).to.eq(proposalId)
+            expect(event.args.actions.length).to.eq(actions.length)
+            // Explicitly assert each emitted action matches the expected action
+            for (let i = 0; i < actions.length; i++) {
+                expect(event.args.actions[i].target).to.eq(action.target)
+                expect(event.args.actions[i].data).to.eq(action.data)
+                expect(event.args.actions[i].value).to.eq(action.value)
+            }
+            expect(event.args.startBlockOrTime).to.eq(startTime)
+            expect(event.args.endBlockOrTime).to.eq(endTime)
+            expect(event.args.description).to.eq(description)
+            // Verify on-chain storage matches the input actions exactly
             outputActions = await governanceInstance.getActions(proposalId)
-            expect(String(outputActions)).to.be.not.eq(String([]))
-            const actionTuple = new ProposedAction(outputActions[0].target, outputActions[0].data, BigNumber.from(outputActions[0].value))
-            expect(String(actionTuple)).to.be.eq(String(action))
+            const storedActionsTuple = [
+                new ProposedAction(outputActions[0].target, outputActions[0].data, BigNumber.from(outputActions[0].value)),
+                new ProposedAction(outputActions[1].target, outputActions[1].data, BigNumber.from(outputActions[1].value))
+            ]
+            expect(String(storedActionsTuple)).to.be.eq(String(actions))
             // after that, we further investigate by creating a new identical proposal
             const txReceipt = await governanceInstance.propose(actions, description)
             const result = await txReceipt.wait()
@@ -651,7 +692,7 @@ describe("Governance Proxy", async () => {
             await timeTravel({ days: 14, mine:true })
             await expect(
                 governanceInstance.execute(1)
-            ).to.be.revertedWith("Transaction reverted without a reason")
+            ).to.be.revertedWith("")
         })
 
         // executable immediately after support > 2/3 all staked delegated GRG
