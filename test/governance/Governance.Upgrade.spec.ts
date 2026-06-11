@@ -223,7 +223,7 @@ describe("Governance Upgrades", async () => {
             await governanceInstance.castVote(2, VoteType.For)
             await timeTravel({ days: 7, mine:true })
             // governance strategy reverts without error in case of rogue params as proposer should be aware of params
-            await expect(governanceInstance.execute(1)).to.be.revertedWith("VM Exception while processing transaction: revert")
+            await expect(governanceInstance.execute(1)).to.be.revertedWith("panic code 0x1")
             await expect(governanceInstance.execute(2)).to.emit(governanceInstance, "ThresholdsUpdated")
         })
 

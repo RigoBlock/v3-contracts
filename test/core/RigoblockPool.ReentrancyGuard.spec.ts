@@ -72,7 +72,7 @@ describe("ReentrancyGuard", async () => {
             await rogueToken.transfer(testReentrancyAttack.address, tokenAmount)
             const poolKey = { currency0: AddressZero, currency1: rogueToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
             await oracle.initializeObservations(poolKey)
-            await expect(testReentrancyAttack.mintPool()).to.be.revertedWith('TokenTransferFromFailed()')
+            await expect(testReentrancyAttack.mintPool()).to.be.revertedWith('TokenTransferFromFailed')
             expect(await testReentrancyAttack.count()).to.be.eq(0)
             await testReentrancyAttack.setMaxCount(1)
             await testReentrancyAttack.mintPool()

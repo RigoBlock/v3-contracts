@@ -81,13 +81,13 @@ describe("ProxyFactory", async () => {
             await registry.setAuthority(factory.address)
             // will be reverted without error as registry modifier calls non-implemented Authority.isWhitelistedFactory method
             await expect(factory.createPool('testpool','TEST', AddressZero))
-                .to.be.revertedWith("VM Exception while processing transaction: revert")
+                .to.be.revertedWith("")
             const authority = await deployments.get("Authority")
             await registry.setAuthority(authority.address)
             await factory.setRegistry(factory.address)
             // will be reverted without error as factory does not implement Registry.register method
             await expect(factory.createPool('testpool','TEST', AddressZero))
-                .to.be.revertedWith("VM Exception while processing transaction: revert")
+                .to.be.revertedWith("")
         })
 
         it('should create pool with space not first or last character', async () => {

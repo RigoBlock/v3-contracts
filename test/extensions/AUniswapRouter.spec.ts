@@ -117,7 +117,7 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       const etherAmount = ethers.utils.parseEther("12")
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       await expect(extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value }))
@@ -211,7 +211,7 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter()')
+      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter')
     })
 
     it('should revert mint if a token does not have a price feed', async () => {
@@ -245,7 +245,7 @@ describe("AUniswapRouter", async () => {
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+      ).to.be.revertedWith('TokenPriceFeedDoesNotExist').withArgs(grgToken.address)
       PAIR.poolKey.hooks = oracle.address
       PAIR.poolKey.currency0 = AddressZero
       PAIR.poolKey.currency1 = grgToken.address
@@ -292,7 +292,7 @@ describe("AUniswapRouter", async () => {
       await pool.mint(user1.address, etherAmount.add(markup), 1, { value: etherAmount.add(markup) })
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith(`LiquidityMintHookError("${hookAddress}")`)
+      ).to.be.revertedWith('LiquidityMintHookError').withArgs(hookAddress)
     })
 
     it('should not be able to increase liquidity of non-owned position', async () => {
@@ -339,7 +339,7 @@ describe("AUniswapRouter", async () => {
       // adding liquidity to a non-owned position reverts without error, just a simple assertion is implemented
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('PositionOwner()')
+      ).to.be.revertedWith('PositionOwner')
     })
 
     it('should not allow mint and increase liquidity in same call', async () => {
@@ -380,7 +380,7 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('PositionDoesNotExist()')
+      ).to.be.revertedWith('PositionDoesNotExist')
     })
 
     it('should increase liquidity', async () => {
@@ -669,7 +669,7 @@ describe("AUniswapRouter", async () => {
       // ETH transfer fails with custom error when pool does not have enough balance
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       const etherAmount = ethers.utils.parseEther("13.1") // settle 12 + 0.1 + 1 (wrap)
       await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
@@ -706,15 +706,15 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
-      ).to.be.revertedWith(`UnsupportedAction(${Actions.INCREASE_LIQUIDITY_FROM_DELTAS})`)
+      ).to.be.revertedWith('UnsupportedAction').withArgs(Actions.INCREASE_LIQUIDITY_FROM_DELTAS)
       v4Planner = new V4Planner()
       v4Planner.addAction(Actions.MINT_POSITION_FROM_DELTAS, [
         [AddressZero, AddressZero, 0, 0, AddressZero],
         0, 0, 0, 0, AddressZero, '0x']
       )
       await expect(
-        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value:  0 })
-      ).to.be.revertedWith(`UnsupportedAction(${Actions.MINT_POSITION_FROM_DELTAS})`)
+        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
+      ).to.be.revertedWith('UnsupportedAction').withArgs(Actions.MINT_POSITION_FROM_DELTAS)
     })
 
     it('should decode CLOSE_CURRENCY action', async () => {
@@ -739,7 +739,7 @@ describe("AUniswapRouter", async () => {
       v4Planner.addAction(Actions.CLOSE_CURRENCY, [grgToken.address])
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
-      ).to.be.revertedWith(`TokenPriceFeedDoesNotExist("${grgToken.address}")`)
+      ).to.be.revertedWith('TokenPriceFeedDoesNotExist').withArgs(grgToken.address)
     })
 
     it('should propagate string error from posm', async () => {
@@ -775,7 +775,7 @@ describe("AUniswapRouter", async () => {
       await univ4Posm.setRevertMode(2)
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value: 0 })
-      ).to.be.revertedWith('MockCustomError("MockPosmCustomError")')
+      ).to.be.revertedWith('MockCustomError').withArgs('MockPosmCustomError')
       // reset revert mode
       await univ4Posm.setRevertMode(0)
     })
@@ -815,7 +815,7 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       await expect(
         extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       let txReceipt = await pool.mint(user1.address, etherAmount, 1, { value: etherAmount })
       let result = await txReceipt.wait()
       let gasCost = result.cumulativeGasUsed.toNumber()
@@ -921,7 +921,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       // mint more that the swap amount because the spread tokens are sent to the burn contract
       const tokenAmount = ethers.utils.parseEther("12")
       const { spread } = await pool.getPoolParams()
@@ -970,7 +970,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('TransactionDeadlinePassed()')
+      ).to.be.revertedWith('TransactionDeadlinePassed')
     })
 
     it('should set approval with settle action', async () => {
@@ -1051,7 +1051,7 @@ describe("AUniswapRouter", async () => {
       expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       const tokenAmount = ethers.utils.parseEther("12")
       const { spread } = await pool.getPoolParams()
       const markup = tokenAmount.mul(spread).div(BigNumber.from(10000).sub(spread))
@@ -1103,7 +1103,7 @@ describe("AUniswapRouter", async () => {
       expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       const { spread } = await pool.getPoolParams()
       const markup = amountInNative.mul(spread).div(BigNumber.from(10000).sub(spread))
       await pool.mint(user1.address, amountInNative.add(markup), 1, { value: amountInNative.add(markup) })
@@ -1200,7 +1200,7 @@ describe("AUniswapRouter", async () => {
       expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       // markup must be applied to the amount transferred
       const etherAmount = ethers.utils.parseEther("22")
       const { spread } = await pool.getPoolParams()
@@ -1295,7 +1295,7 @@ describe("AUniswapRouter", async () => {
       expect(await hre.ethers.provider.getBalance(uniRouterAddress)).to.be.eq(ethers.utils.parseEther("0"))
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       // markup must be applied to the amount transferred
       const { spread } = await pool.getPoolParams()
       const markup = maxAmountInNative.mul(spread).div(BigNumber.from(10000).sub(spread))
@@ -1381,7 +1381,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter()')
+      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter')
     })
 
     it('should revert settle if tokenOut does not have a price feed', async () => {
@@ -1410,9 +1410,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      // we cannot get the correct error address format, but the address is the grgToken address
-      //).to.be.revertedWith(`TokenPriceFeedDoesNotExist(${PAIR.poolKey.currency1})`)
-      ).to.be.revertedWith(`TokenPriceFeedDoesNotExist`)
+      ).to.be.revertedWith('TokenPriceFeedDoesNotExist').withArgs(grgToken.address)
       await oracle.initializeObservations(PAIR.poolKey)
       try {
         await user1.sendTransaction({ 
@@ -1605,7 +1603,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: aUniswapRouter.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('DirectCallNotAllowed()')
+      ).to.be.revertedWith('DirectCallNotAllowed')
     })
 
     it('should propagate string error from universal router', async () => {
@@ -1642,7 +1640,7 @@ describe("AUniswapRouter", async () => {
       await uniRouter.setRevertMode(2)
       await expect(
         extPool['execute(bytes,bytes[])'](commands, inputs)
-      ).to.be.revertedWith('MockCustomError("MockRouterCustomError")')
+      ).to.be.revertedWith('MockCustomError').withArgs('MockRouterCustomError')
       await uniRouter.setRevertMode(0)
     })
 
@@ -1856,7 +1854,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InsufficientNativeBalance()')
+      ).to.be.revertedWith('InsufficientNativeBalance')
       await pool.mint(user1.address, ethers.utils.parseEther("0.1"), 1, { value: ethers.utils.parseEther("0.1") })
       try {
         await user1.sendTransaction({ 
@@ -1875,7 +1873,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter()')
+      ).to.be.revertedWith('RecipientNotSmartPoolOrRouter')
     });
 
     it("should revert V2_SWAP_EXACT_OUT with native ETH path", async function () {
@@ -1894,7 +1892,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InvalidCommandType(9)')
+      ).to.be.revertedWith('InvalidCommandType').withArgs(9)
     });
 
     it("should process sweep, transfer and pay v3 payment methods", async function () {
@@ -1939,7 +1937,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith(`InvalidCommandType(${CommandType.PERMIT2_TRANSFER_FROM})`)
+      ).to.be.revertedWith('InvalidCommandType').withArgs(CommandType.PERMIT2_TRANSFER_FROM)
       planner = new RoutePlanner()
       planner.addCommand(CommandType.PERMIT2_PERMIT_BATCH, [{
         details: [{token: grgToken.address, amount: 0, expiration: 0, nonce: 0}],
@@ -1952,7 +1950,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith(`InvalidCommandType(${CommandType.PERMIT2_PERMIT_BATCH})`)
+      ).to.be.revertedWith('InvalidCommandType').withArgs(CommandType.PERMIT2_PERMIT_BATCH)
       planner = new RoutePlanner()
       planner.addCommand(CommandType.PERMIT2_PERMIT, [{
         details: {token: grgToken.address, amount: 0, expiration: 0, nonce: 0},
@@ -1965,7 +1963,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith(`InvalidCommandType(${CommandType.PERMIT2_PERMIT})`)
+      ).to.be.revertedWith('InvalidCommandType').withArgs(CommandType.PERMIT2_PERMIT)
       planner = new RoutePlanner()
       planner.addCommand(CommandType.PERMIT2_TRANSFER_FROM_BATCH, [[{from: pool.address, to: pool.address, amount: 1, token: pool.address}]])
       encodedSwapData = extPool.interface.encodeFunctionData(
@@ -1974,7 +1972,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith(`InvalidCommandType(${CommandType.PERMIT2_TRANSFER_FROM_BATCH})`)
+      ).to.be.revertedWith('InvalidCommandType').withArgs(CommandType.PERMIT2_TRANSFER_FROM_BATCH)
       planner = new RoutePlanner()
       planner.addCommand(CommandType.V3_POSITION_MANAGER_PERMIT, [encodedSwapData])
       encodedSwapData = extPool.interface.encodeFunctionData(
@@ -1983,7 +1981,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith(`InvalidCommandType(${CommandType.V3_POSITION_MANAGER_PERMIT})`)
+      ).to.be.revertedWith('InvalidCommandType').withArgs(CommandType.V3_POSITION_MANAGER_PERMIT)
       planner = new RoutePlanner()
       planner.addCommand(CommandType.V3_POSITION_MANAGER_CALL, [encodedSwapData])
       encodedSwapData = extPool.interface.encodeFunctionData(
@@ -1992,7 +1990,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith(`InvalidCommandType(${CommandType.V3_POSITION_MANAGER_CALL})`)
+      ).to.be.revertedWith('InvalidCommandType').withArgs(CommandType.V3_POSITION_MANAGER_CALL)
       planner = new RoutePlanner()
       planner.addCommand(CommandType.V4_POSITION_MANAGER_CALL, [encodedSwapData])
       encodedSwapData = extPool.interface.encodeFunctionData(
@@ -2001,7 +1999,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith(`InvalidCommandType(${CommandType.V4_POSITION_MANAGER_CALL})`)
+      ).to.be.revertedWith('InvalidCommandType').withArgs(CommandType.V4_POSITION_MANAGER_CALL)
 
       let rogueCommand = CommandType.EXECUTE_SUB_PLAN + 1
       encodedSwapData = extPool.interface.encodeFunctionData(
@@ -2010,7 +2008,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InvalidCommandType(34)')
+      ).to.be.revertedWith('InvalidCommandType').withArgs(34)
       rogueCommand = CommandType.V2_SWAP_EXACT_IN - 1
       encodedSwapData = extPool.interface.encodeFunctionData(
         'execute(bytes,bytes[],uint256)',
@@ -2018,7 +2016,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InvalidCommandType(7)')
+      ).to.be.revertedWith('InvalidCommandType').withArgs(7)
       rogueCommand = CommandType.V4_SWAP - 1
       encodedSwapData = extPool.interface.encodeFunctionData(
         'execute(bytes,bytes[],uint256)',
@@ -2026,7 +2024,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InvalidCommandType(15)')
+      ).to.be.revertedWith('InvalidCommandType').withArgs(15)
       rogueCommand = CommandType.EXECUTE_SUB_PLAN - 1
       encodedSwapData = extPool.interface.encodeFunctionData(
         'execute(bytes,bytes[],uint256)',
@@ -2034,7 +2032,7 @@ describe("AUniswapRouter", async () => {
       )
       await expect(
         user1.sendTransaction({ to: extPool.address, value: 0, data: encodedSwapData})
-      ).to.be.revertedWith('InvalidCommandType(32)')
+      ).to.be.revertedWith('InvalidCommandType').withArgs(32)
       PAIR.poolKey.currency1 = grgToken.address
     })
 
