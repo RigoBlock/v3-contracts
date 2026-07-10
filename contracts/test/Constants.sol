@@ -152,6 +152,9 @@ library Constants {
     /// @dev Uniswap v4 PositionManager on Arbitrum.
     address internal constant ARB_UNISWAP_V4_POSM = 0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869;
 
+    /// @dev Uniswap Universal Router v4 on Arbitrum.
+    address internal constant ARB_UNIVERSAL_ROUTER = 0xA51afAFe0263b40EdaEf0Df8781eA9aa03E381a3;
+
     /// @notice GMX v2 ExchangeRouter on Arbitrum.
     address internal constant ARB_GMX_EXCHANGE_ROUTER = 0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41;
 

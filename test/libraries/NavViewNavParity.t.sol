@@ -268,8 +268,31 @@ contract NavViewNavParityTest is UnitTestFixture {
     }
 
     // =========================================================================
-    // Test 9: Large virtual supply adjustment (effectiveSupply >> totalSupply)
-    //         Ensures integer arithmetic does not overflow or diverge.
+    // Test 9: Positive supply with zero total value — must match sentinel 1
+    //
+    // WHY THIS TEST IS CRITICAL:
+    // NavView previously returned unitaryValue = 0 when effectiveSupply > 0 and
+    // totalValue <= 0, while _updateNav stored sentinel 1. This regression test
+    // covers the exact edge case described in the backlog note.
+    // =========================================================================
+
+    function test_NavParity_PositiveSupplyZeroValue_ReturnsSentinelOne() public {
+        _createGrgPool();
+        _mintShares(poolOwner, 1_000e18);
+
+        // Drain pool assets so totalValue = 0 while supply remains positive.
+        deal(address(grg), pool, 0);
+
+        _assertNavParity();
+
+        // Both paths must return the sentinel value, not 0.
+        NavView.NavData memory viewNav = IENavView(pool).getNavDataView();
+        assertEq(viewNav.unitaryValue, 1, "view-NAV must use sentinel 1 when value <= 0");
+    }
+
+    // =========================================================================
+    // Test 10: Large virtual supply adjustment (effectiveSupply >> totalSupply)
+    //          Ensures integer arithmetic does not overflow or diverge.
     // =========================================================================
 
     function test_NavParity_LargePositiveVirtualSupply_EqualUnitaryValue() public {
