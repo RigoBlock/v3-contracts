@@ -741,4 +741,30 @@ contract GmxLibTest is Test {
         price.min = 1e24;
         price.max = 1e24;
     }
+
+    // =========================================================================
+    // getPnlToken
+    // =========================================================================
+
+    /// @notice Long positions settle PnL in the market's longToken.
+    function test_GetPnlToken_Long_ReturnsLongToken() public {
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET),
+            abi.encode(_buildMarket())
+        );
+
+        assertEq(GmxLib.getPnlToken(MARKET, true), LONG_TOKEN, "long PnL token must be longToken");
+    }
+
+    /// @notice Short positions settle PnL in the market's shortToken.
+    function test_GetPnlToken_Short_ReturnsShortToken() public {
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET),
+            abi.encode(_buildMarket())
+        );
+
+        assertEq(GmxLib.getPnlToken(MARKET, false), SHORT_TOKEN, "short PnL token must be shortToken");
+    }
 }

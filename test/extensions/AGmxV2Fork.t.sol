@@ -445,6 +445,28 @@ contract AGmxV2ForkTest is Test {
         assertTrue(IEOracle(pool).hasPriceFeed(ARB_WETH), "EOracle must have WETH price feed");
     }
 
+    /// @notice For a short position whose collateral token differs from the directional PnL
+    ///   token, createIncreaseOrder proactively registers the PnL token in activeTokensSet.
+    ///   This ensures proceeds from profitable closes (including keeper-driven liquidations)
+    ///   are visible to NAV computation.
+    function test_CreateIncreaseOrder_TracksPnlToken_WhenCollateralDiffersFromPnlToken() public {
+        vm.prank(poolOwner);
+        IAGmxV2(pool).createIncreaseOrder(_shortIncreaseParams());
+
+        ISmartPoolState.ActiveTokens memory active = ISmartPoolState(pool).getActiveTokens();
+
+        // WETH is the base token, so it is omitted from activeTokens array.
+        // The short position's PnL token (USDC) must have been tracked.
+        bool foundUsdc;
+        for (uint256 i; i < active.activeTokens.length; ++i) {
+            if (active.activeTokens[i] == ARB_USDC) {
+                foundUsdc = true;
+                break;
+            }
+        }
+        assertTrue(foundUsdc, "USDC (short PnL token) must be tracked when collateral is WETH");
+    }
+
     // =========================================================================
     // Tests — EApps with keeper-executed position (simulated)
     // =========================================================================
@@ -729,6 +751,16 @@ contract AGmxV2ForkTest is Test {
             referralCode: bytes32(0),
             dataList: new bytes32[](0)
         });
+    }
+
+    /// @dev Returns a CreateOrderParams for a WETH-collateralized ETH/USD short increase.
+    ///  For this market shortToken is USDC, which differs from the WETH collateral token.
+    function _shortIncreaseParams() private pure returns (IBaseOrderUtils.CreateOrderParams memory) {
+        IBaseOrderUtils.CreateOrderParams memory p = _defaultIncreaseParams();
+        p.isLong = false;
+        // Short: acceptable price is a floor; 0 means accept any price.
+        p.numbers.acceptablePrice = 0;
+        return p;
     }
 
     /// @dev Returns a default CreateOrderParams for a WETH long full-close market decrease.

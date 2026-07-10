@@ -66,6 +66,15 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         require(params.orderType == Order.OrderType.MarketIncrease, InvalidIncreaseOrderType());
         _trackToken(params.addresses.initialCollateralToken);
 
+        // Proactively track the market's directional PnL token. GMX settles profitable closes
+        // in longToken (longs) or shortToken (shorts), which may differ from the collateral
+        // token. Registering it at increase time ensures NAV counts the proceeds even for
+        // keeper-driven closes/liquidations where the adapter is not invoked.
+        address pnlToken = GmxLib.getPnlToken(params.addresses.market, params.isLong);
+        if (pnlToken != params.addresses.initialCollateralToken) {
+            _trackToken(pnlToken);
+        }
+
         address orderVault = GmxLib.GMX_ROUTER.orderHandler().orderVault();
 
         bool collateralIsWrappedNative = params.addresses.initialCollateralToken == GmxLib.WRAPPED_NATIVE;
