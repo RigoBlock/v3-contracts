@@ -364,10 +364,10 @@ contract NavViewTest is Test {
     }
 
     // =========================================================================
-    // getNavData — supply exists but value is 0 → unitaryValue = 0
+    // getNavData — supply exists but value is 0 → matches _updateNav sentinel 1
     // =========================================================================
 
-    function test_GetNavData_PositiveSupply_ZeroTotalValue_ReturnsZeroUnitaryValue() public {
+    function test_GetNavData_PositiveSupply_ZeroTotalValue_ReturnsSentinelOne() public {
         _mockActiveApplications(0);
         _mockGrgZeroStake();
         _mockActiveTokens();
@@ -376,9 +376,46 @@ contract NavViewTest is Test {
 
         NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
-        // totalValue = 0, effectiveSupply > 0 → unitaryValue = 0
+        // totalValue = 0, effectiveSupply > 0 → matches _updateNav sentinel 1
         assertEq(data.totalValue, 0);
-        assertEq(data.unitaryValue, 0);
+        assertEq(data.unitaryValue, 1);
+    }
+
+    // =========================================================================
+    // getNavData — supply exists but value is negative → matches _updateNav sentinel 1
+    // =========================================================================
+
+    function test_GetNavData_PositiveSupply_NegativeTotalValue_ReturnsSentinelOne() public {
+        _mockActiveApplications(0);
+        _mockGrgZeroStake();
+
+        address[] memory activeTokens = new address[](1);
+        activeTokens[0] = OTHER_TOKEN;
+        ISmartPoolState.ActiveTokens memory at =
+            ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(at));
+
+        _mockBaseTokenBalance(0);
+        vm.mockCall(
+            OTHER_TOKEN,
+            abi.encodeWithSelector(bytes4(keccak256("balanceOf(address)")), POOL),
+            abi.encode(uint256(0))
+        );
+
+        // Oracle reports a negative conversion value (e.g. external position liability)
+        vm.mockCall(
+            POOL,
+            abi.encodeWithSelector(IEOracle.convertBatchTokenAmounts.selector),
+            abi.encode(int256(-100e18))
+        );
+
+        _mockPoolTokens(1e18, 100e18);
+
+        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+
+        // totalValue < 0, effectiveSupply > 0 → matches _updateNav sentinel 1
+        assertEq(data.totalValue, 0);
+        assertEq(data.unitaryValue, 1);
     }
 
     // =========================================================================
