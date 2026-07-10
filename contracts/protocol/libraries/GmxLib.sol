@@ -156,12 +156,6 @@ library GmxLib {
         for (uint256 i; i < count; ++i) balances[i] = tmp[i];
     }
 
-    /// @dev In-memory token price cache used by `_fetchPositionInfos`.
-    struct TokenPrice {
-        address token;
-        Price.Props price;
-    }
-
     /// @dev Builds per-position market data and fetches PnL-enriched PositionInfo structs.
     ///  Extracted from `_getExecutedPositionBalances` to keep each function's stack usage
     ///  within the 16-slot EVM limit.  Returns empty posInfos on reader revert (caller falls
@@ -177,16 +171,14 @@ library GmxLib {
         uint256 n = positions.length;
         address[] memory markets = new address[](n);
         marketStructs = new Market.Props[](n);
-        GmxMarketPrices[] memory marketPrices = new GmxMarketPrices[](n);
 
-        TokenPrice[] memory tokenCache = new TokenPrice[](n * 3);
-        uint256 tokenCacheCount;
-
+        // First pass: deduplicate Market.Props and collect all unique tokens across every market.
+        address[] memory uniqueTokens = new address[](n * 3);
+        uint256 uniqueTokenCount;
         for (uint256 i; i < n; ++i) {
             address mktAddr = positions[i].addresses.market;
             markets[i] = mktAddr;
 
-            // Reuse an already-fetched Market.Props by scanning the populated slice of `markets`.
             uint256 seenAt = _findAddress(markets, i, mktAddr);
             if (seenAt == i) {
                 marketStructs[i] = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, mktAddr);
@@ -194,21 +186,27 @@ library GmxLib {
                 marketStructs[i] = marketStructs[seenAt];
             }
 
-            (marketPrices[i].indexTokenPrice, tokenCacheCount) = _cachedTokenPrice(
-                tokenCache,
-                marketStructs[i].indexToken,
-                tokenCacheCount
-            );
-            (marketPrices[i].longTokenPrice, tokenCacheCount) = _cachedTokenPrice(
-                tokenCache,
-                marketStructs[i].longToken,
-                tokenCacheCount
-            );
-            (marketPrices[i].shortTokenPrice, tokenCacheCount) = _cachedTokenPrice(
-                tokenCache,
-                marketStructs[i].shortToken,
-                tokenCacheCount
-            );
+            Market.Props memory mkt = marketStructs[i];
+            uniqueTokenCount = _addUniqueAddress(uniqueTokens, uniqueTokenCount, mkt.indexToken);
+            uniqueTokenCount = _addUniqueAddress(uniqueTokens, uniqueTokenCount, mkt.longToken);
+            uniqueTokenCount = _addUniqueAddress(uniqueTokens, uniqueTokenCount, mkt.shortToken);
+        }
+
+        // Fetch each unique token price exactly once.
+        Price.Props[] memory uniquePrices = new Price.Props[](uniqueTokenCount);
+        for (uint256 i; i < uniqueTokenCount; ++i) {
+            uniquePrices[i] = _safeGetGmxPrice(uniqueTokens[i]);
+        }
+
+        // Build per-position marketPrices from the cached token prices.
+        GmxMarketPrices[] memory marketPrices = new GmxMarketPrices[](n);
+        for (uint256 i; i < n; ++i) {
+            Market.Props memory mkt = marketStructs[i];
+            marketPrices[i] = GmxMarketPrices({
+                indexTokenPrice: uniquePrices[_findAddress(uniqueTokens, uniqueTokenCount, mkt.indexToken)],
+                longTokenPrice: uniquePrices[_findAddress(uniqueTokens, uniqueTokenCount, mkt.longToken)],
+                shortTokenPrice: uniquePrices[_findAddress(uniqueTokens, uniqueTokenCount, mkt.shortToken)]
+            });
         }
 
         try
@@ -237,20 +235,19 @@ library GmxLib {
         return count;
     }
 
-    /// @dev Returns the cached oracle price for `token`, fetching it on first sight.
-    ///  The cache is updated in-place; the updated token count is returned.
-    function _cachedTokenPrice(
-        TokenPrice[] memory cache,
-        address token,
-        uint256 count
-    ) private view returns (Price.Props memory price, uint256 newCount) {
+    /// @dev Appends `addr` to `arr` if it is not already present in `arr[0..count)`.
+    ///  Returns the updated unique count.
+    function _addUniqueAddress(
+        address[] memory arr,
+        uint256 count,
+        address addr
+    ) private pure returns (uint256 newCount) {
         for (uint256 i; i < count; ++i) {
-            if (cache[i].token == token) {
-                return (cache[i].price, count);
+            if (arr[i] == addr) {
+                return count;
             }
         }
-        price = _safeGetGmxPrice(token);
-        cache[count] = TokenPrice({token: token, price: price});
+        arr[count] = addr;
         newCount = count + 1;
     }
 
