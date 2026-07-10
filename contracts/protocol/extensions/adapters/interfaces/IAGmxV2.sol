@@ -45,9 +45,10 @@ interface IAGmxV2 {
     ///  cancellationReceiver, callbackContract, uiFeeReceiver, swapPath, executionFee,
     ///  callbackGasLimit, shouldUnwrapNativeToken, referralCode, dataList, and
     ///  decreasePositionSwapType (always NoSwap) — caller-supplied values for these fields are
-    ///  ignored. Forcing NoSwap ensures the settlement output is always the collateral token
-    ///  (already tracked for NAV); allowing SwapCollateralTokenToPnlToken would return the
-    ///  market's index token, which is not in the pool's active-tokens set.
+    ///  ignored. Forcing NoSwap keeps the returned collateral in the already-tracked collateral
+    ///  token. The market's directional PnL token (longToken for longs, shortToken for shorts)
+    ///  is proactively tracked at increase time, so profits returned in that token are visible
+    ///  to NAV computation even for keeper-driven closes and liquidations.
     ///  orderType must be one of MarketDecrease, LimitDecrease, or StopLossDecrease, otherwise
     ///  the call reverts.
     /// @param params GMX CreateOrderParams (security-critical fields are overridden by the adapter).
