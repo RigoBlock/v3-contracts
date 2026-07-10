@@ -419,6 +419,28 @@ contract NavViewTest is Test {
     }
 
     // =========================================================================
+    // getNavData — tiny value relative to supply triggers the unitaryValue == 0
+    //            safety net that mirrors _updateNav.
+    // =========================================================================
+
+    function test_GetNavData_TotalValueRoundsToZero_SafetyNetSetsSentinelOne() public {
+        _mockActiveApplications(0);
+        _mockGrgZeroStake();
+        _mockActiveTokens();
+
+        // totalValue = 1 wei of base token, supply = 2e18 shares
+        _mockBaseTokenBalance(1);
+        _mockPoolTokens(1e18, 2e18);
+
+        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+
+        // Without the safety net: unitaryValue = (1 * 1e18) / 2e18 = 0.
+        // Safety net must set it to 1, matching _updateNav.
+        assertEq(data.totalValue, 1);
+        assertEq(data.unitaryValue, 1);
+    }
+
+    // =========================================================================
     // getNavData — with GMX active and no positions
     // =========================================================================
 
