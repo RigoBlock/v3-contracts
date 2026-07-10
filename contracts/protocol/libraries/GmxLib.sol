@@ -156,10 +156,20 @@ library GmxLib {
         for (uint256 i; i < count; ++i) balances[i] = tmp[i];
     }
 
+    /// @dev In-memory token price cache used by `_fetchPositionInfos`.
+    struct TokenPrice {
+        address token;
+        Price.Props price;
+    }
+
     /// @dev Builds per-position market data and fetches PnL-enriched PositionInfo structs.
     ///  Extracted from `_getExecutedPositionBalances` to keep each function's stack usage
     ///  within the 16-slot EVM limit.  Returns empty posInfos on reader revert (caller falls
     ///  back to collateral-only mode).
+    /// @dev Deduplicates `getMarket` and oracle-price reads across positions so each unique
+    ///  market and token is queried only once per NAV update.  Positions are capped at
+    ///  `_MAX_GMX_POSITIONS` (32), so the O(n²) in-memory scans are cheap compared with
+    ///  repeated external calls.
     function _fetchPositionInfos(
         Position.Props[] memory positions,
         address account
@@ -169,15 +179,29 @@ library GmxLib {
         marketStructs = new Market.Props[](n);
         GmxMarketPrices[] memory marketPrices = new GmxMarketPrices[](n);
 
+        TokenPrice[] memory tokenCache = new TokenPrice[](n * 3);
+        uint256 tokenCacheCount;
+
         for (uint256 i; i < n; ++i) {
             address mktAddr = positions[i].addresses.market;
             markets[i] = mktAddr;
-            marketStructs[i] = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, mktAddr);
-            marketPrices[i] = GmxMarketPrices({
-                indexTokenPrice: _safeGetGmxPrice(marketStructs[i].indexToken),
-                longTokenPrice: _safeGetGmxPrice(marketStructs[i].longToken),
-                shortTokenPrice: _safeGetGmxPrice(marketStructs[i].shortToken)
-            });
+
+            // Reuse an already-fetched Market.Props by scanning the populated slice of `markets`.
+            uint256 seenAt = _findAddress(markets, i, mktAddr);
+            if (seenAt == i) {
+                marketStructs[i] = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, mktAddr);
+            } else {
+                marketStructs[i] = marketStructs[seenAt];
+            }
+
+            Market.Props memory mkt = marketStructs[i];
+            Price.Props memory price;
+            (price, tokenCacheCount) = _cachedTokenPrice(tokenCache, mkt.indexToken, tokenCacheCount);
+            marketPrices[i].indexTokenPrice = price;
+            (price, tokenCacheCount) = _cachedTokenPrice(tokenCache, mkt.longToken, tokenCacheCount);
+            marketPrices[i].longTokenPrice = price;
+            (price, tokenCacheCount) = _cachedTokenPrice(tokenCache, mkt.shortToken, tokenCacheCount);
+            marketPrices[i].shortTokenPrice = price;
         }
 
         try
@@ -196,6 +220,31 @@ library GmxLib {
         } catch {
             // Return empty — caller falls back to collateral-only balances.
         }
+    }
+
+    /// @dev Returns the index of `target` in `arr[0..count)`, or `count` if not found.
+    function _findAddress(address[] memory arr, uint256 count, address target) private pure returns (uint256) {
+        for (uint256 i; i < count; ++i) {
+            if (arr[i] == target) return i;
+        }
+        return count;
+    }
+
+    /// @dev Returns the cached oracle price for `token`, fetching it on first sight.
+    ///  The cache is updated in-place; the updated token count is returned.
+    function _cachedTokenPrice(
+        TokenPrice[] memory cache,
+        address token,
+        uint256 count
+    ) private view returns (Price.Props memory price, uint256 newCount) {
+        for (uint256 i; i < count; ++i) {
+            if (cache[i].token == token) {
+                return (cache[i].price, count);
+            }
+        }
+        price = _safeGetGmxPrice(token);
+        cache[count] = TokenPrice({token: token, price: price});
+        newCount = count + 1;
     }
 
     /// @dev Returns the initial collateral amount for every pending MarketIncrease

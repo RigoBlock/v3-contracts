@@ -743,6 +743,97 @@ contract GmxLibTest is Test {
     }
 
     // =========================================================================
+    // Deduplication of market/price reads
+    // =========================================================================
+
+    /// @notice When multiple positions share the same market, GmxLib must query
+    ///  `getMarket` only once and fetch each unique token price only once.
+    function test_GetGmxPositionBalances_DeduplicatesMarketAndPriceReads() public {
+        // 3 positions in the same market.
+        Position.Props[] memory positions = new Position.Props[](3);
+        for (uint256 i; i < 3; ++i) {
+            positions[i].addresses.collateralToken = COL_TOKEN;
+            positions[i].addresses.market = MARKET;
+        }
+        positions[0].numbers.collateralAmount = 100e6;
+        positions[1].numbers.collateralAmount = 200e6;
+        positions[2].numbers.collateralAmount = 300e6;
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(positions)
+        );
+
+        Market.Props memory mktData = _buildMarket();
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET),
+            abi.encode(mktData)
+        );
+
+        // Mock prices per unique token.
+        GmxValidatedPrice memory price = _defaultPrice();
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, INDEX_TOKEN, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LONG_TOKEN, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, SHORT_TOKEN, ""),
+            abi.encode(price)
+        );
+
+        // Assert exactly one getMarket call and one price call per unique token.
+        vm.expectCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET), 1);
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, INDEX_TOKEN, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LONG_TOKEN, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, SHORT_TOKEN, ""),
+            1
+        );
+
+        // Return 3 fake position infos.
+        GmxPositionInfo[] memory posInfos = new GmxPositionInfo[](3);
+        for (uint256 i; i < 3; ++i) {
+            posInfos[i].position = positions[i];
+            posInfos[i].fees.collateralTokenPrice = Price.Props({min: 1e24, max: 1e24});
+        }
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(posInfos)
+        );
+
+        GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encode(emptyOrders)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
+        assertEq(balances.length, 3);
+        assertEq(balances[0].amount, int256(100e6));
+        assertEq(balances[1].amount, int256(200e6));
+        assertEq(balances[2].amount, int256(300e6));
+    }
+
+    // =========================================================================
     // getPnlToken
     // =========================================================================
 
