@@ -54,6 +54,17 @@ library GmxLib {
         return adjustedGasLimit * tx.gasprice;
     }
 
+    /// @notice Returns the token in which GMX settles PnL for a given market and direction.
+    /// @dev Long positions settle PnL in the market's longToken; short positions settle in
+    ///  the market's shortToken. The collateral token may differ from the PnL token.
+    /// @param market Address of the GMX market token.
+    /// @param isLong True for long positions, false for short positions.
+    /// @return The address of the directional PnL token.
+    function getPnlToken(address market, bool isLong) internal view returns (address) {
+        Market.Props memory mkt = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
+        return isLong ? mkt.longToken : mkt.shortToken;
+    }
+
     /// @notice Reverts when `account` is at the maximum open GMX positions AND the proposed
     ///  order would open a *new* position (i.e. no existing position matches the given
     ///  market + collateralToken + isLong tuple).  Increasing an existing position never
