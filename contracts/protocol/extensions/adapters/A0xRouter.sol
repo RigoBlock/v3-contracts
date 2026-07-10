@@ -96,6 +96,9 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     ///  protocol interactions. The settler's _isRestrictedTarget() prevents BASIC from calling
     ///  Permit2, AllowanceHolder, or the settler itself. The settler's slippage check
     ///  (_checkSlippageAndTransfer) ensures minimum output, preventing fund loss.
+    ///  CHECK_SLIPPAGE is allowed because exact-output 0x swaps use it to pay the bought tokens
+    ///  to the vault after verifying the minimum output. _validateSettlerCalldata already enforces
+    ///  that the recipient is the vault and that the buy token has a price feed.
     function _assertIsAllowedAction(bytes4 s) private pure {
         require(
             s == ISettlerActions.TRANSFER_FROM.selector ||
@@ -113,7 +116,6 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
                 s == ISettlerActions.PANCAKE_INFINITY_VIP.selector ||
                 s == ISettlerActions.CURVE_TRICRYPTO_VIP.selector ||
                 s == ISettlerActions.MAVERICKV2.selector ||
-                s == ISettlerActions.MAVERICKV2_VIP.selector ||
                 s == ISettlerActions.DODOV1.selector ||
                 s == ISettlerActions.DODOV2.selector ||
                 s == ISettlerActions.VELODROME.selector ||
@@ -121,11 +123,10 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
                 s == ISettlerActions.BEBOP.selector ||
                 s == ISettlerActions.EKUBO.selector ||
                 s == ISettlerActions.EKUBOV3.selector ||
-                s == ISettlerActions.EKUBO_VIP.selector ||
                 s == ISettlerActions.EKUBOV3_VIP.selector ||
                 s == ISettlerActions.EULERSWAP.selector ||
-                s == ISettlerActions.LFJTM.selector ||
-                s == ISettlerActions.HANJI.selector,
+                s == ISettlerActions.HANJI.selector ||
+                s == ISettlerActions.CHECK_SLIPPAGE.selector,
             ActionNotAllowed(s)
         );
     }
