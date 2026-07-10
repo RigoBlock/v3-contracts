@@ -6233,10 +6233,10 @@ solc@0.8.26:
     semver "^5.5.0"
     tmp "0.0.33"
 
-solc@0.8.35:
-  version "0.8.35"
-  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.35.tgz#48f48d82d2ed49929953243066229fbf308938cb"
-  integrity sha512-OaP/4zyoKRo2CjqZDxbtkeRlEo6MxP4FLCxntw1Agf9OSoecmwYKoFBSB34UcSKBFBucrTh3Mb0nRoJou62ibw==
+solc@0.8.36:
+  version "0.8.36"
+  resolved "https://registry.yarnpkg.com/solc/-/solc-0.8.36.tgz#f036b3e2b159d21dd8360dc5d7be921d87a00176"
+  integrity sha512-cnDhjWo8dC5FxnEwCrWxUsJS7RPsHf+pVUe9Tr/+b15sQ40WCVn4vX4R+tOvN5gRfEgiquvFzfF4VV0kSnknhw==
   dependencies:
     command-exists "^1.2.8"
     commander "^8.1.0"
