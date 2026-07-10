@@ -194,7 +194,21 @@ library GmxLib {
                 marketStructs[i] = marketStructs[seenAt];
             }
 
-            (marketPrices[i], tokenCacheCount) = _cachedMarketPrices(tokenCache, marketStructs[i], tokenCacheCount);
+            (marketPrices[i].indexTokenPrice, tokenCacheCount) = _cachedTokenPrice(
+                tokenCache,
+                marketStructs[i].indexToken,
+                tokenCacheCount
+            );
+            (marketPrices[i].longTokenPrice, tokenCacheCount) = _cachedTokenPrice(
+                tokenCache,
+                marketStructs[i].longToken,
+                tokenCacheCount
+            );
+            (marketPrices[i].shortTokenPrice, tokenCacheCount) = _cachedTokenPrice(
+                tokenCache,
+                marketStructs[i].shortToken,
+                tokenCacheCount
+            );
         }
 
         try
@@ -238,18 +252,6 @@ library GmxLib {
         price = _safeGetGmxPrice(token);
         cache[count] = TokenPrice({token: token, price: price});
         newCount = count + 1;
-    }
-
-    /// @dev Returns the cached GmxMarketPrices for `mkt`, fetching any unseen token prices.
-    function _cachedMarketPrices(
-        TokenPrice[] memory tokenCache,
-        Market.Props memory mkt,
-        uint256 count
-    ) private view returns (GmxMarketPrices memory prices, uint256 newCount) {
-        (prices.indexTokenPrice, count) = _cachedTokenPrice(tokenCache, mkt.indexToken, count);
-        (prices.longTokenPrice, count) = _cachedTokenPrice(tokenCache, mkt.longToken, count);
-        (prices.shortTokenPrice, count) = _cachedTokenPrice(tokenCache, mkt.shortToken, count);
-        newCount = count;
     }
 
     /// @dev Returns the initial collateral amount for every pending MarketIncrease
