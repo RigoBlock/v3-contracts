@@ -156,10 +156,20 @@ library GmxLib {
         for (uint256 i; i < count; ++i) balances[i] = tmp[i];
     }
 
+    /// @dev In-memory token price cache used by `_fetchPositionInfos`.
+    struct TokenPrice {
+        address token;
+        Price.Props price;
+    }
+
     /// @dev Builds per-position market data and fetches PnL-enriched PositionInfo structs.
     ///  Extracted from `_getExecutedPositionBalances` to keep each function's stack usage
     ///  within the 16-slot EVM limit.  Returns empty posInfos on reader revert (caller falls
     ///  back to collateral-only mode).
+    /// @dev Deduplicates `getMarket` and oracle-price reads across positions so each unique
+    ///  market and token is queried only once per NAV update.  Positions are capped at
+    ///  `_MAX_GMX_POSITIONS` (32), so the O(n²) in-memory scans are cheap compared with
+    ///  repeated external calls.
     function _fetchPositionInfos(
         Position.Props[] memory positions,
         address account
@@ -169,15 +179,27 @@ library GmxLib {
         marketStructs = new Market.Props[](n);
         GmxMarketPrices[] memory marketPrices = new GmxMarketPrices[](n);
 
+        TokenPrice[] memory tokenCache = new TokenPrice[](n * 3);
+        uint256 tokenCacheCount;
+
         for (uint256 i; i < n; ++i) {
             address mktAddr = positions[i].addresses.market;
             markets[i] = mktAddr;
-            marketStructs[i] = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, mktAddr);
-            marketPrices[i] = GmxMarketPrices({
-                indexTokenPrice: _safeGetGmxPrice(marketStructs[i].indexToken),
-                longTokenPrice: _safeGetGmxPrice(marketStructs[i].longToken),
-                shortTokenPrice: _safeGetGmxPrice(marketStructs[i].shortToken)
-            });
+
+            uint256 seenAt = _findAddress(markets, i, mktAddr);
+            if (seenAt == i) {
+                marketStructs[i] = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, mktAddr);
+            } else {
+                marketStructs[i] = marketStructs[seenAt];
+            }
+
+            Price.Props memory price;
+            (price, tokenCacheCount) = _cachedTokenPrice(tokenCache, marketStructs[i].indexToken, tokenCacheCount);
+            marketPrices[i].indexTokenPrice = price;
+            (price, tokenCacheCount) = _cachedTokenPrice(tokenCache, marketStructs[i].longToken, tokenCacheCount);
+            marketPrices[i].longTokenPrice = price;
+            (price, tokenCacheCount) = _cachedTokenPrice(tokenCache, marketStructs[i].shortToken, tokenCacheCount);
+            marketPrices[i].shortTokenPrice = price;
         }
 
         try
@@ -198,8 +220,36 @@ library GmxLib {
         }
     }
 
-    /// @dev Returns the initial collateral amount for every pending MarketIncrease
-    ///  or LimitIncrease order.  Converted to wrappedNative when possible.
+    /// @dev Returns the index of `target` in `arr[0..count)`, or `count` if not found.
+    function _findAddress(address[] memory arr, uint256 count, address target) private pure returns (uint256) {
+        for (uint256 i; i < count; ++i) {
+            if (arr[i] == target) return i;
+        }
+        return count;
+    }
+
+    /// @dev Returns the cached oracle price for `token`, fetching it on first sight.
+    ///  The cache is updated in-place; the updated token count is returned.
+    function _cachedTokenPrice(
+        TokenPrice[] memory cache,
+        address token,
+        uint256 count
+    ) private view returns (Price.Props memory price, uint256 newCount) {
+        for (uint256 i; i < count; ++i) {
+            if (cache[i].token == token) {
+                return (cache[i].price, count);
+            }
+        }
+        price = _safeGetGmxPrice(token);
+        cache[count] = TokenPrice({token: token, price: price});
+        newCount = count + 1;
+    }
+
+    /// @dev Returns assets held in the GMX OrderVault for all pending orders.
+    ///  - Increase orders escrow `initialCollateralDeltaAmount` plus an `executionFee`.
+    ///  - Decrease and update orders only move the `executionFee` to the vault (the
+    ///    position collateral remains in the DataStore and is valued by the executed-
+    ///    position branch).  We therefore count the fee for every order type.
     function _getPendingOrderBalances(address account) private view returns (AppTokenBalance[] memory balances) {
         GmxOrderInfo[] memory orders;
         try IGmxReader(_GMX_READER).getAccountOrders(_GMX_DATA_STORE, account, 0, type(uint256).max) returns (
@@ -213,31 +263,27 @@ library GmxLib {
         uint256 n = orders.length;
         if (n == 0) return balances;
 
-        // 2 entries per order: initialCollateralDeltaAmount + executionFee (always WETH).
+        // 2 entries per order: initialCollateralDeltaAmount (increase only) + executionFee (all types).
         AppTokenBalance[] memory tmp = new AppTokenBalance[](n * 2);
         uint256 count;
 
         for (uint256 i; i < n; ++i) {
             Order.OrderType ot = orders[i].order.numbers.orderType;
-            // Only increase orders move collateral and execution fee to the OrderVault.
-            if (ot != Order.OrderType.MarketIncrease && ot != Order.OrderType.LimitIncrease) continue;
+            bool isIncrease = ot == Order.OrderType.MarketIncrease || ot == Order.OrderType.LimitIncrease;
 
             address colToken = orders[i].order.addresses.initialCollateralToken;
             uint256 amount = orders[i].order.numbers.initialCollateralDeltaAmount;
             uint256 fee = orders[i].order.numbers.executionFee;
 
-            // Skip orders with nothing to track (both collateral and fee are zero).
-            if (amount == 0 && fee == 0) continue;
-
-            // Collateral token (EOracle can price it; no WETH conversion needed).
-            if (amount > 0) {
+            // Only increase orders escrow new collateral in the OrderVault.
+            // Decrease orders keep collateral in the open position, which is valued
+            // separately by _getExecutedPositionBalances; counting it here would double-count.
+            if (isIncrease && amount > 0) {
                 tmp[count++] = AppTokenBalance({token: colToken, amount: amount.toInt256()});
             }
 
-            // Execution fee: always WETH, stored separately in the order vault.
-            // Counted here so NAV is not understated during the pending period.
-            // GMX refunds it on cancellation; keepers consume it on execution.
-            // Fee is tracked even when initialCollateralDeltaAmount is zero (size-only increase).
+            // Execution fee is paid for every order type and held in the order vault
+            // until the keeper executes the order or the order is cancelled.
             if (fee > 0) {
                 tmp[count++] = AppTokenBalance({token: WRAPPED_NATIVE, amount: fee.toInt256()});
             }

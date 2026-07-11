@@ -77,12 +77,24 @@ The NAV loop (`_getExecutedPositionBalances`, `_getPendingOrderBalances`) always
 - If it somehow arose (e.g., a race condition with many simultaneously pending orders), all positions would still be correctly counted in NAV — no positions become "invisible".
 - Collateral is always accounted: `OrderVault` funds are counted via `_getPendingOrderBalances`; executed-position collateral is counted via `_getExecutedPositionBalances`. There is no window where collateral disappears from NAV.
 
+### Pending-Order NAV Accounting
+
+`_getPendingOrderBalances` values assets currently held in GMX's `OrderVault`:
+
+| Order type | Counted in NAV | Notes |
+|---|---|---|
+| `MarketIncrease` / `LimitIncrease` | `initialCollateralDeltaAmount` + `executionFee` | Both collateral and fee move to the vault on creation. |
+| `MarketDecrease` / `LimitDecrease` / `StopLossDecrease` | `executionFee` only | Position collateral stays in the DataStore and is valued by `_getExecutedPositionBalances`; counting it here would double-count. |
+| Swap orders | `executionFee` only | `AGmxV2` does not create swap orders. If they were created, the input amount would also need to be counted. |
+
+Because decrease-order execution fees are now counted, a pending decrease no longer creates a temporary NAV gap for the fee portion.
+
 **Pending-order race condition (acknowledged, not fixed):**  
 `createIncreaseOrder` checks the count of *executed* positions at call time. Multiple `createIncreaseOrder` calls before any keeper execution can in theory queue more than 32 orders. However:
 1. Each call transfers real collateral from the pool (the pool owner is spending pool funds).
 2. Once executed, all resulting positions are unconditionally included in NAV via the unbounded read.
-3. The gas cost per NAV calculation is bounded in practice because the pool owner has finite collateral and each position needs a separate market/direction/collateral combination with a real execution fee.
-4. There is **no NAV manipulation** possible: pending-order collateral is already counted, so NAV does not decrease when orders are created and does not rebound artificially when they execute.
+3. Pending-order collateral and all execution fees are already counted, so NAV does not drop when orders are created and does not rebound artificially when they execute.
+4. The gas cost per NAV calculation is bounded in practice because the pool owner has finite collateral and each position needs a separate market/direction/collateral combination with a real execution fee.
 
 ---
 
@@ -182,6 +194,16 @@ Returning stale Chainlink prices is intentionally accepted rather than triggerin
 - The only alternative — reverting `EApps.getAppTokenBalances` — would DoS all pool operations (deposit, withdraw, NAV update) for the entire outage duration, which is a worse outcome.
 
 **Consequence:** During a sequencer outage, GMX PnL in NAV is computed from the last known Chainlink prices. These will be slightly stale but not fabricated. This is acceptable and consistent with how GMX itself handles price continuity across its oracle layers.
+
+---
+
+## Known NAV Gaps and Dependency Fallbacks
+
+Two classes of pool-owned GMX balances are intentionally not queried automatically:
+
+- **Price-impact rebate collateral** and **accrued funding fees on fully-closed markets** only become visible after the pool owner calls `claimCollateral` / `claimFundingFees`. These are conservative undercounts (reported NAV ≤ true NAV) and are documented in [nav-accounting.md](./nav-accounting.md). They do not allow NAV inflation or direct value extraction from the pool.
+
+- **Reader/oracle failures** are handled with graceful fallbacks (`try/catch` on Reader calls; zero-price guard in `_computeGmxNetCollateral`; collateral-only fallback if `getAccountPositionInfoList` reverts). Reverting every NAV-sensitive operation during a dependency outage would be a worse outcome, so the design accepts temporarily less accurate pricing rather than a full protocol halt.
 
 ---
 

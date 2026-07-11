@@ -268,10 +268,9 @@ contract GmxLibTest is Test {
         assertEq(balances[1].amount, int256(0.001 ether));
     }
 
-    /// @notice LimitIncrease counted; MarketDecrease NOT counted.
-    function test_GetGmxPositionBalances_LimitIncrease_And_Decrease_OnlyIncreaseCounted()
-        public
-    {
+    /// @notice LimitIncrease collateral is counted; MarketDecrease collateral is NOT
+    ///  counted (it stays in the open position), but its execution fee IS counted.
+    function test_GetGmxPositionBalances_LimitIncrease_And_Decrease_FeeCounted() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);
         vm.mockCall(
             GMX_READER,
@@ -288,6 +287,7 @@ contract GmxLibTest is Test {
         orders[1].order.numbers.orderType = Order.OrderType.MarketDecrease;
         orders[1].order.addresses.initialCollateralToken = COL_TOKEN;
         orders[1].order.numbers.initialCollateralDeltaAmount = 999e6; // must be skipped
+        orders[1].order.numbers.executionFee = 0.002 ether;
 
         vm.mockCall(
             GMX_READER,
@@ -296,10 +296,39 @@ contract GmxLibTest is Test {
         );
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
-        // Only LimitIncrease with nonzero collateral and no fee → 1 entry
-        assertEq(balances.length, 1);
+        // LimitIncrease collateral + MarketDecrease execution fee → 2 entries
+        assertEq(balances.length, 2);
         assertEq(balances[0].token, COL_TOKEN);
         assertEq(balances[0].amount, int256(200e6));
+        assertEq(balances[1].token, WRAPPED_NATIVE);
+        assertEq(balances[1].amount, int256(0.002 ether));
+    }
+
+    /// @notice A pending decrease order contributes only its execution fee.
+    function test_GetGmxPositionBalances_DecreaseOrder_FeeCounted() public {
+        Position.Props[] memory emptyPos = new Position.Props[](0);
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(emptyPos)
+        );
+
+        GmxOrderInfo[] memory orders = new GmxOrderInfo[](1);
+        orders[0].order.numbers.orderType = Order.OrderType.MarketDecrease;
+        orders[0].order.addresses.initialCollateralToken = COL_TOKEN;
+        orders[0].order.numbers.initialCollateralDeltaAmount = 500e6; // must be ignored
+        orders[0].order.numbers.executionFee = 0.003 ether;
+
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encode(orders)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
+        assertEq(balances.length, 1);
+        assertEq(balances[0].token, WRAPPED_NATIVE);
+        assertEq(balances[0].amount, int256(0.003 ether));
     }
 
     /// @notice An increase order with zero collateral but non-zero execution fee still
@@ -740,6 +769,218 @@ contract GmxLibTest is Test {
     function _defaultPrice() internal pure returns (GmxValidatedPrice memory price) {
         price.min = 1e24;
         price.max = 1e24;
+    }
+
+    // =========================================================================
+    // Deduplication of market/price reads
+    // =========================================================================
+
+    /// @notice When multiple positions share the same market, GmxLib must query
+    ///  `getMarket` only once and fetch each unique token price only once.
+    function test_GetGmxPositionBalances_DeduplicatesMarketAndPriceReads() public {
+        // 3 positions in the same market.
+        Position.Props[] memory positions = new Position.Props[](3);
+        for (uint256 i; i < 3; ++i) {
+            positions[i].addresses.collateralToken = COL_TOKEN;
+            positions[i].addresses.market = MARKET;
+        }
+        positions[0].numbers.collateralAmount = 100e6;
+        positions[1].numbers.collateralAmount = 200e6;
+        positions[2].numbers.collateralAmount = 300e6;
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(positions)
+        );
+
+        Market.Props memory mktData = _buildMarket();
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET),
+            abi.encode(mktData)
+        );
+
+        // Mock prices per unique token.
+        GmxValidatedPrice memory price = _defaultPrice();
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, INDEX_TOKEN, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LONG_TOKEN, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, SHORT_TOKEN, ""),
+            abi.encode(price)
+        );
+
+        // Assert exactly one getMarket call and one price call per unique token.
+        vm.expectCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET), 1);
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, INDEX_TOKEN, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LONG_TOKEN, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, SHORT_TOKEN, ""),
+            1
+        );
+
+        // Return 3 fake position infos.
+        GmxPositionInfo[] memory posInfos = new GmxPositionInfo[](3);
+        for (uint256 i; i < 3; ++i) {
+            posInfos[i].position = positions[i];
+            posInfos[i].fees.collateralTokenPrice = Price.Props({min: 1e24, max: 1e24});
+        }
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(posInfos)
+        );
+
+        GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encode(emptyOrders)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
+        assertEq(balances.length, 3);
+        assertEq(balances[0].amount, int256(100e6));
+        assertEq(balances[1].amount, int256(200e6));
+        assertEq(balances[2].amount, int256(300e6));
+    }
+
+    /// @notice When two positions are in different markets that share a token,
+    ///  the shared token price is fetched only once.
+    function test_GetGmxPositionBalances_DeduplicatesTokenPriceAcrossMarkets() public {
+        address marketA = MARKET;
+        address marketB = address(0x2100);
+        address indexTokenB = address(0x7000);
+        address longTokenB = address(0x8000);
+
+        Position.Props[] memory positions = new Position.Props[](2);
+        positions[0].addresses.collateralToken = COL_TOKEN;
+        positions[0].addresses.market = marketA;
+        positions[0].numbers.collateralAmount = 100e6;
+        positions[1].addresses.collateralToken = COL_TOKEN;
+        positions[1].addresses.market = marketB;
+        positions[1].numbers.collateralAmount = 200e6;
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(positions)
+        );
+
+        Market.Props memory mktDataA = _buildMarket();
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, marketA),
+            abi.encode(mktDataA)
+        );
+
+        Market.Props memory mktDataB = Market.Props({
+            marketToken: marketB,
+            indexToken: indexTokenB,
+            longToken: longTokenB,
+            shortToken: SHORT_TOKEN
+        });
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, marketB),
+            abi.encode(mktDataB)
+        );
+
+        // Mock prices for all unique tokens (SHORT_TOKEN is shared).
+        GmxValidatedPrice memory price = _defaultPrice();
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, INDEX_TOKEN, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LONG_TOKEN, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, SHORT_TOKEN, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexTokenB, ""),
+            abi.encode(price)
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, longTokenB, ""),
+            abi.encode(price)
+        );
+
+        // Assert exactly one getMarket call per market and one price call per unique token.
+        vm.expectCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, marketA), 1);
+        vm.expectCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, marketB), 1);
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, INDEX_TOKEN, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LONG_TOKEN, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, SHORT_TOKEN, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexTokenB, ""),
+            1
+        );
+        vm.expectCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, longTokenB, ""),
+            1
+        );
+
+        GmxPositionInfo[] memory posInfos = new GmxPositionInfo[](2);
+        posInfos[0].position = positions[0];
+        posInfos[0].fees.collateralTokenPrice = Price.Props({min: 1e24, max: 1e24});
+        posInfos[1].position = positions[1];
+        posInfos[1].fees.collateralTokenPrice = Price.Props({min: 1e24, max: 1e24});
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(posInfos)
+        );
+
+        GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encode(emptyOrders)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
+        assertEq(balances.length, 2);
+        assertEq(balances[0].amount, int256(100e6));
+        assertEq(balances[1].amount, int256(200e6));
     }
 
     // =========================================================================
