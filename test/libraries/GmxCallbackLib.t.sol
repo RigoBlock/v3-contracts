@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
-import { Test } from "forge-std/Test.sol";
-import { GmxCallbackLib } from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
-import { Bytes32Set, EnumerableSet } from "../../contracts/protocol/libraries/EnumerableSet.sol";
+import {Test} from "forge-std/Test.sol";
+import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
+import {Bytes32Set, EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 
 /// @dev Harness to exercise GmxCallbackLib internal helpers.
 contract GmxCallbackLibHarness {
@@ -86,8 +86,11 @@ contract GmxCallbackLibTest is Test {
         // directly so the storage context matches.
         GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
         cb.claimableCollateralKeys.add(key);
-        cb.claimableCollateralInfo[key] =
-            GmxCallbackLib.ClaimableCollateralInfo({ token: address(0x1111), market: address(0x2222), timeKey: 1 });
+        cb.claimableCollateralInfo[key] = GmxCallbackLib.ClaimableCollateralInfo({
+            token: address(0x1111),
+            market: address(0x2222),
+            timeKey: 1
+        });
 
         GmxCallbackLib.removeClaimableCollateralKey(key);
 

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
-import { Test } from "forge-std/Test.sol";
-import { EnumerableSet, AddressSet, Bytes32Set } from "../../contracts/protocol/libraries/EnumerableSet.sol";
-import { IEOracle } from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
+import {Test} from "forge-std/Test.sol";
+import {EnumerableSet, AddressSet, Bytes32Set} from "../../contracts/protocol/libraries/EnumerableSet.sol";
+import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 
 /// @dev Harness for exercising EnumerableSet internal helpers in a non-fork unit test.
 contract EnumerableSetHarness {
@@ -13,12 +13,8 @@ contract EnumerableSetHarness {
     AddressSet internal addressSet;
     Bytes32Set internal bytes32Set;
 
-    function addAndCheckWasActive(address eOracle, address token, address baseToken) external returns (bool) {
-        return addressSet.addAndCheckWasActive(IEOracle(eOracle), token, baseToken);
-    }
-
-    function addUnique(address eOracle, address token, address baseToken) external {
-        addressSet.addUnique(IEOracle(eOracle), token, baseToken);
+    function addUnique(address eOracle, address token, address baseToken) external returns (bool) {
+        return addressSet.addUnique(IEOracle(eOracle), token, baseToken);
     }
 
     function containsAddress(address token) external view returns (bool) {
@@ -68,19 +64,19 @@ contract EnumerableSetTest is Test {
     // AddressSet
     // -------------------------------------------------------------------------
 
-    function test_AddAndCheckWasActive_BaseToken_ReturnsTrue() public {
-        assertTrue(harness.addAndCheckWasActive(eOracle, BASE_TOKEN, BASE_TOKEN));
+    function test_AddUnique_BaseToken_ReturnsTrue() public {
+        assertTrue(harness.addUnique(eOracle, BASE_TOKEN, BASE_TOKEN));
     }
 
-    function test_AddAndCheckWasActive_NewToken_ReturnsFalse() public {
-        bool wasActive = harness.addAndCheckWasActive(eOracle, TOKEN, BASE_TOKEN);
+    function test_AddUnique_NewToken_ReturnsFalse() public {
+        bool wasActive = harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
         assertFalse(wasActive);
         assertTrue(harness.containsAddress(TOKEN));
     }
 
-    function test_AddAndCheckWasActive_ExistingToken_ReturnsTrue() public {
-        harness.addAndCheckWasActive(eOracle, TOKEN, BASE_TOKEN);
-        bool wasActive = harness.addAndCheckWasActive(eOracle, TOKEN, BASE_TOKEN);
+    function test_AddUnique_ExistingToken_ReturnsTrue() public {
+        harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
+        bool wasActive = harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
         assertTrue(wasActive);
     }
 

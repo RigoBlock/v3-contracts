@@ -50,10 +50,10 @@ library EnumerableSet {
     // flag for removed bytes32 value
     uint256 private constant REMOVED_BYTES32_FLAG = type(uint256).max;
 
-    /// @notice Like addUnique but also returns whether the token was active before this call.
-    /// @dev Reads set.positions[token] exactly once, saving one SLOAD vs separate isActive + addUnique.
-    ///  Returns true for base token (always considered active, never stored in the set).
-    function addAndCheckWasActive(
+    /// @notice Adds `token` to the set if it is not the base token and not already active.
+    /// @dev Reads set.positions[token] exactly once. Returns whether the token was active
+    ///  before this call (base token is always considered active and is never stored).
+    function addUnique(
         AddressSet storage set,
         IEOracle eOracle,
         address token,
@@ -70,26 +70,6 @@ library EnumerableSet {
             set.addresses.push(token);
             set.positions[token] = set.addresses.length;
             emit ISmartPoolEvents.TokenStatusChanged(token, true);
-        }
-    }
-
-    /// @notice Base token is never pushed to active tokens, as already stored.
-    /// @dev Skips and returns false for base token, which is already in storage.
-    function addUnique(AddressSet storage set, IEOracle eOracle, address token, address baseToken) internal {
-        if (token != baseToken) {
-            if (set.positions[token] == 0 || set.positions[token] == REMOVED_ADDRESS_FLAG) {
-                require(set.addresses.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
-
-                // perform a staticcall to the oracle extension and assert token has a price feed
-                require(eOracle.hasPriceFeed(token), TokenPriceFeedDoesNotExist(token));
-
-                // update storage
-                set.addresses.push(token);
-                set.positions[token] = set.addresses.length;
-
-                // emit event for token activation
-                emit ISmartPoolEvents.TokenStatusChanged(token, true);
-            }
         }
     }
 
