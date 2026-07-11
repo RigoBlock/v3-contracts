@@ -197,13 +197,11 @@ Returning stale Chainlink prices is intentionally accepted rather than triggerin
 
 ---
 
-## Known NAV Gaps and Dependency Fallbacks
+## NAV Coverage and Dependency Fallbacks
 
-Two classes of pool-owned GMX balances are intentionally not queried automatically:
+The `EGmxCallback` extension automatically tracks price-impact rebate collateral and accrued funding fees on fully-closed markets, so both value classes are reflected in NAV as soon as the relevant GMX execution events occur. The pool owner still calls `claimCollateral` / `claimFundingFees` to recover the assets, but NAV accounting no longer depends on those manual claims.
 
-- **Price-impact rebate collateral** and **accrued funding fees on fully-closed markets** only become visible after the pool owner calls `claimCollateral` / `claimFundingFees`. These are conservative undercounts (reported NAV ≤ true NAV) and are documented in [nav-accounting.md](./nav-accounting.md). They do not allow NAV inflation or direct value extraction from the pool.
-
-- **Reader/oracle failures** are handled with graceful fallbacks (`try/catch` on Reader calls; zero-price guard in `_computeGmxNetCollateral`; collateral-only fallback if `getAccountPositionInfoList` reverts). Reverting every NAV-sensitive operation during a dependency outage would be a worse outcome, so the design accepts temporarily less accurate pricing rather than a full protocol halt.
+**Reader/oracle failures** are handled with graceful fallbacks (`try/catch` on Reader calls; zero-price guard in `_computeGmxNetCollateral`; collateral-only fallback if `getAccountPositionInfoList` reverts). Reverting every NAV-sensitive operation during a dependency outage would be a worse outcome, so the design accepts temporarily less accurate pricing rather than a full protocol halt.
 
 ---
 

@@ -211,7 +211,8 @@ const deploy: DeployFunction = async function (
     eNavView: eNavView.address,
     eOracle: eOracle.address,
     eUpgrade: eUpgrade.address,
-    eCrosschain: eCrosschain.address
+    eCrosschain: eCrosschain.address,
+    eGmxCallback: hre.ethers.constants.AddressZero
   }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {

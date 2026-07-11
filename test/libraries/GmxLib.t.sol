@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
-import {Price} from "gmx-synthetics/price/Price.sol";
-import {Market} from "gmx-synthetics/market/Market.sol";
-import {Position} from "gmx-synthetics/position/Position.sol";
-import {Order} from "gmx-synthetics/order/Order.sol";
+import { Test } from "forge-std/Test.sol";
+import { Price } from "gmx-synthetics/price/Price.sol";
+import { Market } from "gmx-synthetics/market/Market.sol";
+import { Position } from "gmx-synthetics/position/Position.sol";
+import { Order } from "gmx-synthetics/order/Order.sol";
 import {
     IGmxReader,
     IGmxDataStore,
@@ -18,18 +18,18 @@ import {
     GmxMarketPrices,
     GmxOrderInfo
 } from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
-import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
-import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
+import { GmxCallbackKeys } from "../../contracts/protocol/libraries/GmxCallbackKeys.sol";
+import { GmxCallbackLib } from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
+import { GmxLib } from "../../contracts/protocol/libraries/GmxLib.sol";
+import { AppTokenBalance } from "../../contracts/protocol/types/ExternalApp.sol";
 
 /// @dev Thin harness so GmxLib internal functions can be called via external
 ///      calls, enabling vm.expectRevert for functions that may revert.
 contract GmxLibHarness {
-    function assertPositionLimitNotReached(
-        address account,
-        address market,
-        address collateralToken,
-        bool isLong
-    ) external view {
+    function assertPositionLimitNotReached(address account, address market, address collateralToken, bool isLong)
+        external
+        view
+    {
         GmxLib.assertPositionLimitNotReached(account, market, collateralToken, isLong);
     }
 }
@@ -55,19 +55,13 @@ contract GmxLibTest is Test {
     address internal constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
 
     // Key hashes from GmxLib (reproduced for mock calldata construction)
-    bytes32 internal constant KEY_FEE_BASE =
-        keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));
-    bytes32 internal constant KEY_FEE_PER_ORACLE =
-        keccak256(abi.encode("ESTIMATED_GAS_FEE_PER_ORACLE_PRICE"));
-    bytes32 internal constant KEY_FEE_MULTIPLIER =
-        keccak256(abi.encode("ESTIMATED_GAS_FEE_MULTIPLIER_FACTOR"));
-    bytes32 internal constant KEY_INCREASE_ORDER_GAS =
-        keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
-    bytes32 internal constant KEY_DECREASE_ORDER_GAS =
-        keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
+    bytes32 internal constant KEY_FEE_BASE = keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));
+    bytes32 internal constant KEY_FEE_PER_ORACLE = keccak256(abi.encode("ESTIMATED_GAS_FEE_PER_ORACLE_PRICE"));
+    bytes32 internal constant KEY_FEE_MULTIPLIER = keccak256(abi.encode("ESTIMATED_GAS_FEE_MULTIPLIER_FACTOR"));
+    bytes32 internal constant KEY_INCREASE_ORDER_GAS = keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
+    bytes32 internal constant KEY_DECREASE_ORDER_GAS = keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
     // Matches GmxLib._POSITION_SIZE_IN_USD_KEY
-    bytes32 internal constant POSITION_SIZE_IN_USD_KEY =
-        keccak256(abi.encode("SIZE_IN_USD"));
+    bytes32 internal constant POSITION_SIZE_IN_USD_KEY = keccak256(abi.encode("SIZE_IN_USD"));
 
     // 1e30 — GmxLib._FLOAT_PRECISION
     uint256 internal constant FLOAT_PRECISION = 1e30;
@@ -97,9 +91,7 @@ contract GmxLibTest is Test {
             abi.encode(orderGas)
         );
         vm.mockCall(
-            GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector, KEY_FEE_BASE),
-            abi.encode(feeBase)
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, KEY_FEE_BASE), abi.encode(feeBase)
         );
         vm.mockCall(
             GMX_DATA_STORE,
@@ -113,7 +105,7 @@ contract GmxLibTest is Test {
         );
 
         vm.txGasPrice(1 gwei);
-        uint256 fee = GmxLib.computeExecutionFee(true);
+        uint256 fee = GmxLib.computeExecutionFee(true, 0);
 
         // baseGasLimit = 100_000 + 3×50_000 = 250_000
         // adjustedGasLimit = 250_000 + (2_000_000 × 1.1) = 250_000 + 2_200_000 = 2_450_000
@@ -135,9 +127,7 @@ contract GmxLibTest is Test {
             abi.encode(orderGas)
         );
         vm.mockCall(
-            GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector, KEY_FEE_BASE),
-            abi.encode(feeBase)
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, KEY_FEE_BASE), abi.encode(feeBase)
         );
         vm.mockCall(
             GMX_DATA_STORE,
@@ -151,7 +141,7 @@ contract GmxLibTest is Test {
         );
 
         vm.txGasPrice(2 gwei);
-        uint256 fee = GmxLib.computeExecutionFee(false);
+        uint256 fee = GmxLib.computeExecutionFee(false, 0);
 
         uint256 baseGasLimit = feeBase + 3 * feePerOracle;
         uint256 adjustedGasLimit = baseGasLimit + (orderGas * multiplierFactor) / FLOAT_PRECISION;
@@ -186,18 +176,12 @@ contract GmxLibTest is Test {
 
         // New position — no existing size.
         vm.mockCall(
-            GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector, storageKey),
-            abi.encode(uint256(0))
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, storageKey), abi.encode(uint256(0))
         );
 
         // Reader returns 5 positions (< 32 → no revert).
         Position.Props[] memory positions = new Position.Props[](5);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(positions)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
         GmxLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
     }
@@ -210,17 +194,11 @@ contract GmxLibTest is Test {
         bytes32 storageKey = keccak256(abi.encode(positionKey, POSITION_SIZE_IN_USD_KEY));
 
         vm.mockCall(
-            GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector, storageKey),
-            abi.encode(uint256(0))
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, storageKey), abi.encode(uint256(0))
         );
 
         Position.Props[] memory positions = new Position.Props[](32);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(positions)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
         vm.expectRevert(GmxLib.MaxGmxPositionsReached.selector);
         gmxHarness.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
@@ -243,22 +221,14 @@ contract GmxLibTest is Test {
     /// @notice MarketIncrease order with execution fee → 2 entries.
     function test_GetGmxPositionBalances_OnePendingMarketIncreaseOrder() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(emptyPos)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(emptyPos));
 
         GmxOrderInfo[] memory orders = new GmxOrderInfo[](1);
         orders[0].order.numbers.orderType = Order.OrderType.MarketIncrease;
         orders[0].order.addresses.initialCollateralToken = COL_TOKEN;
         orders[0].order.numbers.initialCollateralDeltaAmount = 500e6;
         orders[0].order.numbers.executionFee = 0.001 ether;
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(orders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(orders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 2);
@@ -272,11 +242,7 @@ contract GmxLibTest is Test {
     ///  counted (it stays in the open position), but its execution fee IS counted.
     function test_GetGmxPositionBalances_LimitIncrease_And_Decrease_FeeCounted() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(emptyPos)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(emptyPos));
 
         GmxOrderInfo[] memory orders = new GmxOrderInfo[](2);
         orders[0].order.numbers.orderType = Order.OrderType.LimitIncrease;
@@ -289,11 +255,7 @@ contract GmxLibTest is Test {
         orders[1].order.numbers.initialCollateralDeltaAmount = 999e6; // must be skipped
         orders[1].order.numbers.executionFee = 0.002 ether;
 
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(orders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(orders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         // LimitIncrease collateral + MarketDecrease execution fee → 2 entries
@@ -307,11 +269,7 @@ contract GmxLibTest is Test {
     /// @notice A pending decrease order contributes only its execution fee.
     function test_GetGmxPositionBalances_DecreaseOrder_FeeCounted() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(emptyPos)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(emptyPos));
 
         GmxOrderInfo[] memory orders = new GmxOrderInfo[](1);
         orders[0].order.numbers.orderType = Order.OrderType.MarketDecrease;
@@ -319,11 +277,7 @@ contract GmxLibTest is Test {
         orders[0].order.numbers.initialCollateralDeltaAmount = 500e6; // must be ignored
         orders[0].order.numbers.executionFee = 0.003 ether;
 
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(orders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(orders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 1);
@@ -335,22 +289,14 @@ contract GmxLibTest is Test {
     ///   contributes the fee to NAV (size-only leverage increase on existing collateral).
     function test_GetGmxPositionBalances_ZeroCollateral_FeeStillCounted() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(emptyPos)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(emptyPos));
 
         GmxOrderInfo[] memory orders = new GmxOrderInfo[](1);
         orders[0].order.numbers.orderType = Order.OrderType.MarketIncrease;
         orders[0].order.addresses.initialCollateralToken = COL_TOKEN;
         orders[0].order.numbers.initialCollateralDeltaAmount = 0; // size-only increase
         orders[0].order.numbers.executionFee = 0.001 ether;
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(orders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(orders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         // Must return 1 entry for the execution fee only (no collateral entry).
@@ -362,15 +308,9 @@ contract GmxLibTest is Test {
     /// @notice getAccountOrders reverts → _getPendingOrderBalances returns empty.
     function test_GetGmxPositionBalances_OrdersRevert_ReturnsEmpty() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(emptyPos)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(emptyPos));
         vm.mockCallRevert(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode("order error")
+            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode("order error")
         );
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
@@ -388,18 +328,14 @@ contract GmxLibTest is Test {
             1000e6, // collateralAmount
             100e30, // basePnlUsd +$100 in 1e30
             int256(0), // totalImpactUsd
-            Price.Props({min: 1e24, max: 1e24}), // col price $1 per unit
+            Price.Props({ min: 1e24, max: 1e24 }), // col price $1 per unit
             10e6, // totalCostAmount
             0, // claimableLong
             0 // claimableShort
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         // net = 1000e6 + 100e30/1e24 + 0 - 10e6 = 1000e6 + 100e6 - 10e6 = 1090e6
@@ -415,18 +351,14 @@ contract GmxLibTest is Test {
             1000e6,
             -50e30, // -$50 PnL (50e6 USDC loss « collateral)
             int256(0),
-            Price.Props({min: 1e24, max: 1e24}),
+            Price.Props({ min: 1e24, max: 1e24 }),
             10e6,
             0,
             0
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         // net = 1000e6 - ceil(50e30/1e24) - 10e6 = 1000e6 - 50e6 - 10e6 = 940e6
@@ -441,18 +373,14 @@ contract GmxLibTest is Test {
             100e6,
             -200e30, // -$200 loss > collateral → net negative → floored
             int256(0),
-            Price.Props({min: 1e24, max: 1e24}),
+            Price.Props({ min: 1e24, max: 1e24 }),
             50e6,
             0,
             0
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         // net = 100e6 - 200e6 - 50e6 = -150e6 → floored → no entry
@@ -466,18 +394,14 @@ contract GmxLibTest is Test {
             1000e6,
             int256(0), // no PnL
             int256(0),
-            Price.Props({min: 1e24, max: 1e24}),
+            Price.Props({ min: 1e24, max: 1e24 }),
             5e6,
             50e18, // 50 LONG_TOKEN claimable
             100e6 // 100 SHORT_TOKEN claimable
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         // 3 entries: net collateral + long funding fee + short funding fee
@@ -497,18 +421,14 @@ contract GmxLibTest is Test {
             1000e6,
             int256(0),
             int256(50e30), // +$50 impact → +50e6 net
-            Price.Props({min: 1e24, max: 1e24}),
+            Price.Props({ min: 1e24, max: 1e24 }),
             0,
             0,
             0
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 1);
@@ -522,18 +442,14 @@ contract GmxLibTest is Test {
             1000e6,
             int256(0),
             -int256(30e30), // -$30 impact → -30e6 net (1e24 price → 1:1)
-            Price.Props({min: 1e24, max: 1e24}),
+            Price.Props({ min: 1e24, max: 1e24 }),
             0,
             0,
             0
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 1);
@@ -547,19 +463,15 @@ contract GmxLibTest is Test {
             COL_TOKEN,
             500e6,
             int256(200e30), // would be +200e6 at 1e24, but price is zero
-            int256(50e30),  // would be +50e6 at 1e24, but price is zero
-            Price.Props({min: 0, max: 0}), // zeroed price — guard must fire
+            int256(50e30), // would be +50e6 at 1e24, but price is zero
+            Price.Props({ min: 0, max: 0 }), // zeroed price — guard must fire
             0,
             0,
             0
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         // With the zero-price guard: result = raw collateralAmount, no PnL/impact added.
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
@@ -568,26 +480,16 @@ contract GmxLibTest is Test {
     }
 
     /// @notice _fetchPositionInfos try/catch fallback: Reader reverts → collateral-only.
-    function test_GetGmxPositionBalances_PositionInfoListReverts_FallsBackToCollateralOnly()
-        public
-    {
+    function test_GetGmxPositionBalances_PositionInfoListReverts_FallsBackToCollateralOnly() public {
         // One position in the raw list
         Position.Props[] memory positions = new Position.Props[](1);
         positions[0].addresses.collateralToken = COL_TOKEN;
         positions[0].addresses.market = MARKET;
         positions[0].numbers.collateralAmount = 777e6;
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(positions)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
         Market.Props memory mktData = _buildMarket();
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector),
-            abi.encode(mktData)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getMarket.selector), abi.encode(mktData));
 
         GmxValidatedPrice memory price = _defaultPrice();
         vm.mockCall(
@@ -604,11 +506,7 @@ contract GmxLibTest is Test {
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 1);
@@ -619,25 +517,15 @@ contract GmxLibTest is Test {
     /// @notice _safeGetGmxPrice catch branch: Chainlink reverts → zero price →
     ///         prices passed to getAccountPositionInfoList are zero →
     ///         that call also reverts → collateral-only fallback.
-    function test_GetGmxPositionBalances_ChainlinkReverts_ZeroPrice_FallsBackToCollateralOnly()
-        public
-    {
+    function test_GetGmxPositionBalances_ChainlinkReverts_ZeroPrice_FallsBackToCollateralOnly() public {
         Position.Props[] memory positions = new Position.Props[](1);
         positions[0].addresses.collateralToken = COL_TOKEN;
         positions[0].addresses.market = MARKET;
         positions[0].numbers.collateralAmount = 500e6;
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(positions)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
         Market.Props memory mktData = _buildMarket();
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector),
-            abi.encode(mktData)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getMarket.selector), abi.encode(mktData));
 
         // Chainlink reverts → _safeGetGmxPrice returns zero Price.Props
         vm.mockCallRevert(
@@ -654,11 +542,7 @@ contract GmxLibTest is Test {
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 1);
@@ -669,14 +553,10 @@ contract GmxLibTest is Test {
     /// @notice _ceilDiv edge case: a == 0 → returns 0.
     ///         Covered indirectly via zero-PnL position (floor(0/price) = 0).
     function test_GetGmxPositionBalances_ZeroPnl_CeilDivZeroNumerator() public {
-        _mockOnePosition(COL_TOKEN, 1000e6, int256(0), int256(0), Price.Props({min: 1e24, max: 1e24}), 0, 0, 0);
+        _mockOnePosition(COL_TOKEN, 1000e6, int256(0), int256(0), Price.Props({ min: 1e24, max: 1e24 }), 0, 0, 0);
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         // net = 1000e6 + 0 + 0 - 0 = 1000e6
@@ -691,17 +571,9 @@ contract GmxLibTest is Test {
     /// @dev Mocks both getAccountPositions and getAccountOrders to return empty arrays.
     function _mockEmptyPositionsAndOrders() internal {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(emptyPos)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(emptyPos));
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
     }
 
     /// @dev Mocks the full executed-position call chain for a single position.
@@ -720,19 +592,11 @@ contract GmxLibTest is Test {
         positions[0].addresses.collateralToken = colToken;
         positions[0].addresses.market = MARKET;
         positions[0].numbers.collateralAmount = collateralAmount;
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(positions)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
         // 2 – getMarket
         Market.Props memory mktData = _buildMarket();
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector),
-            abi.encode(mktData)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getMarket.selector), abi.encode(mktData));
 
         // 3 – Chainlink prices (same for all tokens in this helper)
         GmxValidatedPrice memory price = _defaultPrice();
@@ -753,9 +617,7 @@ contract GmxLibTest is Test {
         posInfos[0].fees.funding.claimableLongTokenAmount = claimableLong;
         posInfos[0].fees.funding.claimableShortTokenAmount = claimableShort;
         vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
-            abi.encode(posInfos)
+            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector), abi.encode(posInfos)
         );
     }
 
@@ -787,11 +649,7 @@ contract GmxLibTest is Test {
         positions[0].numbers.collateralAmount = 100e6;
         positions[1].numbers.collateralAmount = 200e6;
         positions[2].numbers.collateralAmount = 300e6;
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(positions)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
         Market.Props memory mktData = _buildMarket();
         vm.mockCall(
@@ -840,20 +698,14 @@ contract GmxLibTest is Test {
         GmxPositionInfo[] memory posInfos = new GmxPositionInfo[](3);
         for (uint256 i; i < 3; ++i) {
             posInfos[i].position = positions[i];
-            posInfos[i].fees.collateralTokenPrice = Price.Props({min: 1e24, max: 1e24});
+            posInfos[i].fees.collateralTokenPrice = Price.Props({ min: 1e24, max: 1e24 });
         }
         vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
-            abi.encode(posInfos)
+            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector), abi.encode(posInfos)
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 3);
@@ -877,11 +729,7 @@ contract GmxLibTest is Test {
         positions[1].addresses.collateralToken = COL_TOKEN;
         positions[1].addresses.market = marketB;
         positions[1].numbers.collateralAmount = 200e6;
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(positions)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
         Market.Props memory mktDataA = _buildMarket();
         vm.mockCall(
@@ -891,10 +739,7 @@ contract GmxLibTest is Test {
         );
 
         Market.Props memory mktDataB = Market.Props({
-            marketToken: marketB,
-            indexToken: indexTokenB,
-            longToken: longTokenB,
-            shortToken: SHORT_TOKEN
+            marketToken: marketB, indexToken: indexTokenB, longToken: longTokenB, shortToken: SHORT_TOKEN
         });
         vm.mockCall(
             GMX_READER,
@@ -961,21 +806,15 @@ contract GmxLibTest is Test {
 
         GmxPositionInfo[] memory posInfos = new GmxPositionInfo[](2);
         posInfos[0].position = positions[0];
-        posInfos[0].fees.collateralTokenPrice = Price.Props({min: 1e24, max: 1e24});
+        posInfos[0].fees.collateralTokenPrice = Price.Props({ min: 1e24, max: 1e24 });
         posInfos[1].position = positions[1];
-        posInfos[1].fees.collateralTokenPrice = Price.Props({min: 1e24, max: 1e24});
+        posInfos[1].fees.collateralTokenPrice = Price.Props({ min: 1e24, max: 1e24 });
         vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
-            abi.encode(posInfos)
+            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector), abi.encode(posInfos)
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
         assertEq(balances.length, 2);
@@ -1007,5 +846,102 @@ contract GmxLibTest is Test {
         );
 
         assertEq(GmxLib.getPnlToken(MARKET, false), SHORT_TOKEN, "short PnL token must be shortToken");
+    }
+
+    /// @notice Verifies that claimable funding fees and collateral rebates recorded by
+    ///  the GMX callback extension are included in the returned balances.
+    function test_GetGmxPositionBalances_CallbackBalances() public {
+        address market = MARKET;
+        address token = COL_TOKEN;
+        uint256 timeKey = 123;
+        uint256 fundingAmount = 0.1 ether;
+        uint256 collateralAmount = 0.2 ether;
+
+        bytes32 collateralAmountKey = keccak256(
+            abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
+        );
+        bytes32 fundingKey =
+            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, address(this)));
+
+        // Populate the callback storage in this test contract.
+        GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
+        cb.trackedMarkets.addresses.push(market);
+        cb.trackedMarkets.positions[market] = 1;
+        cb.claimableCollateralKeys.values.push(collateralAmountKey);
+        cb.claimableCollateralKeys.positions[collateralAmountKey] = 1;
+        cb.claimableCollateralInfo[collateralAmountKey] =
+            GmxCallbackLib.ClaimableCollateralInfo({ token: token, market: market, timeKey: timeKey });
+
+        // Mock the GMX Reader/DataStore calls used by the callback-balance branch.
+        // Default all DataStore reads to 0; specific keys are overridden below.
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, market),
+            abi.encode(Market.Props({ marketToken: market, indexToken: token, longToken: token, shortToken: token }))
+        );
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(new Position.Props[](0))
+        );
+        vm.mockCall(
+            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(new GmxOrderInfo[](0))
+        );
+
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, fundingKey),
+            abi.encode(fundingAmount)
+        );
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, collateralAmountKey),
+            abi.encode(collateralAmount)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(address(this));
+        assertEq(balances.length, 2);
+        assertEq(balances[0].token, token);
+        assertEq(balances[0].amount, int256(fundingAmount));
+        assertEq(balances[1].token, token);
+        assertEq(balances[1].amount, int256(collateralAmount));
+    }
+
+    /// @notice Open-position funding fees (from PositionInfo) and post-update claimable funding
+    ///  (from DataStore) are independent values and must both be returned without double-counting.
+    function test_GetGmxPositionBalances_OpenPositionAndCallbackFunding_NotDoubleCounted() public {
+        uint256 positionFunding = 0.05 ether;
+        uint256 dataStoreFunding = 0.07 ether;
+
+        // Open position still accruing funding since its last update.
+        _mockOnePosition(COL_TOKEN, 0, 0, 0, Price.Props({ min: 1e24, max: 1e24 }), 0, positionFunding, 0);
+
+        // Same market was previously touched by a decrease/liquidation callback, so it is
+        // tracked and has a separate claimable funding balance already credited in DataStore.
+        GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
+        cb.trackedMarkets.addresses.push(MARKET);
+        cb.trackedMarkets.positions[MARKET] = 1;
+
+        bytes32 fundingKey =
+            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_FUNDING_AMOUNT_KEY, MARKET, LONG_TOKEN, address(this)));
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, fundingKey),
+            abi.encode(dataStoreFunding)
+        );
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+
+        GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(address(this));
+
+        assertEq(balances.length, 2);
+        assertEq(balances[0].token, LONG_TOKEN);
+        assertEq(balances[0].amount, int256(positionFunding));
+        assertEq(balances[1].token, LONG_TOKEN);
+        assertEq(balances[1].amount, int256(dataStoreFunding));
     }
 }

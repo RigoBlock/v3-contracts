@@ -12,6 +12,14 @@ struct AddressSet {
     mapping(address token => uint256 position) positions;
 }
 
+struct Bytes32Set {
+    // List of stored values
+    bytes32[] values;
+    // Mapping of value to position.
+    // Position 0 means a value has never been added before.
+    mapping(bytes32 value => uint256 position) positions;
+}
+
 /// @notice Pool initialization parameters.
 /// @dev This struct is not visible externally and used to store/read pool init params.
 /// @param name String of the pool name (max 32 characters).
@@ -39,6 +47,8 @@ library EnumerableSet {
 
     // flag for removed address
     uint256 private constant REMOVED_ADDRESS_FLAG = type(uint256).max;
+    // flag for removed bytes32 value
+    uint256 private constant REMOVED_BYTES32_FLAG = type(uint256).max;
 
     /// @notice Like addUnique but also returns whether the token was active before this call.
     /// @dev Reads set.positions[token] exactly once, saving one SLOAD vs separate isActive + addUnique.
@@ -115,5 +125,54 @@ library EnumerableSet {
     function isActive(AddressSet storage set, address token) internal view returns (bool) {
         uint256 position = set.positions[token];
         return (position != 0 && position != REMOVED_ADDRESS_FLAG);
+    }
+
+    function contains(AddressSet storage set, address value) internal view returns (bool) {
+        uint256 position = set.positions[value];
+        return (position != 0 && position != REMOVED_ADDRESS_FLAG);
+    }
+
+    function add(AddressSet storage set, address value) internal {
+        if (set.positions[value] == 0 || set.positions[value] == REMOVED_ADDRESS_FLAG) {
+            require(set.addresses.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
+            set.addresses.push(value);
+            set.positions[value] = set.addresses.length;
+        }
+    }
+
+    function add(Bytes32Set storage set, bytes32 value) internal {
+        if (set.positions[value] == 0 || set.positions[value] == REMOVED_BYTES32_FLAG) {
+            require(set.values.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
+            set.values.push(value);
+            set.positions[value] = set.values.length;
+        }
+    }
+
+    function remove(Bytes32Set storage set, bytes32 value) internal {
+        uint256 position = set.positions[value];
+        if (position != 0 && position != REMOVED_BYTES32_FLAG) {
+            uint256 valueIndex = position - 1;
+            uint256 lastIndex = set.values.length - 1;
+            if (valueIndex != lastIndex) {
+                bytes32 lastValue = set.values[lastIndex];
+                set.values[valueIndex] = lastValue;
+                set.positions[lastValue] = position;
+            }
+            set.values.pop();
+            set.positions[value] = REMOVED_BYTES32_FLAG;
+        }
+    }
+
+    function contains(Bytes32Set storage set, bytes32 value) internal view returns (bool) {
+        uint256 position = set.positions[value];
+        return position != 0 && position != REMOVED_BYTES32_FLAG;
+    }
+
+    function length(Bytes32Set storage set) internal view returns (uint256) {
+        return set.values.length;
+    }
+
+    function at(Bytes32Set storage set, uint256 index) internal view returns (bytes32) {
+        return set.values[index];
     }
 }

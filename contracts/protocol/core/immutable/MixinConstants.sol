@@ -36,6 +36,8 @@ abstract contract MixinConstants is ISmartPool {
 
     bytes32 internal constant _DELEGATION_SLOT = 0x1de728329845ca9693f4e251833e4fd20a461e4f39179bee6e55171aedb6dc19;
 
+    bytes32 internal constant _GMX_CALLBACK_SLOT = bytes32(uint256(keccak256("pool.proxy.gmx.callback")) - 1);
+
     address internal constant _ZERO_ADDRESS = address(0);
 
     address internal constant _BASE_TOKEN_FLAG = address(1);

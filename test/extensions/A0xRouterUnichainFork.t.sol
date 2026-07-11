@@ -312,7 +312,8 @@ contract A0xRouterUnichainForkTest is Test {
             eOracle: address(eOracle),
             eUpgrade: address(eUpgrade),
             eNavView: address(eNavView),
-            eCrosschain: address(eCrosschain)
+            eCrosschain: address(eCrosschain),
+            eGmxCallback: address(0)
         });
 
         ExtensionsMapDeployer mapDeployer = new ExtensionsMapDeployer();
