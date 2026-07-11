@@ -127,19 +127,6 @@ library EnumerableSet {
         return (position != 0 && position != REMOVED_ADDRESS_FLAG);
     }
 
-    function contains(AddressSet storage set, address value) internal view returns (bool) {
-        uint256 position = set.positions[value];
-        return (position != 0 && position != REMOVED_ADDRESS_FLAG);
-    }
-
-    function add(AddressSet storage set, address value) internal {
-        if (set.positions[value] == 0 || set.positions[value] == REMOVED_ADDRESS_FLAG) {
-            require(set.addresses.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
-            set.addresses.push(value);
-            set.positions[value] = set.addresses.length;
-        }
-    }
-
     function add(Bytes32Set storage set, bytes32 value) internal {
         if (set.positions[value] == 0 || set.positions[value] == REMOVED_BYTES32_FLAG) {
             require(set.values.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());

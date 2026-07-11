@@ -4,8 +4,7 @@ pragma solidity 0.8.28;
 import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {IGmxDataStore, IGmxReader, IGmxRoleStore} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
-import {AddressSet, Bytes32Set, EnumerableSet} from "../libraries/EnumerableSet.sol";
-import {GmxCallbackKeys} from "../libraries/GmxCallbackKeys.sol";
+import {Bytes32Set, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {GmxCallbackLib} from "../libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../libraries/GmxLib.sol";
 import {IEGmxCallback} from "./adapters/interfaces/IEGmxCallback.sol";
@@ -17,7 +16,6 @@ import {IEGmxCallback} from "./adapters/interfaces/IEGmxCallback.sol";
 /// @dev Runs as an extension (always delegatecalled). Only GMX controller contracts
 ///  may invoke the callback handler.
 contract EGmxCallback is IEGmxCallback {
-    using EnumerableSet for AddressSet;
     using EnumerableSet for Bytes32Set;
 
     bytes32 private constant _CONTROLLER_ROLE_STORE_KEY = keccak256(abi.encode("CONTROLLER"));
@@ -55,15 +53,15 @@ contract EGmxCallback is IEGmxCallback {
 
         // Track the market so NAV can query claimable funding fees even after the
         // position is closed/liquidated and no open positions remain.
-        if (!callbackData.trackedMarkets.contains(market)) {
-            callbackData.trackedMarkets.add(market);
+        if (!GmxCallbackLib.containsTrackedMarket(market)) {
+            GmxCallbackLib.addTrackedMarket(market);
             emit IEGmxCallback.TrackedMarketAdded(market);
         }
 
         // Record claimable collateral keys for both market tokens. Price-impact rebates
         // are time-locked, so we only store the key for later NAV/claiming.
         uint256 timeKey = block.timestamp /
-            IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(GmxCallbackKeys.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+            IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
         Market.Props memory marketInfo = IGmxReader(GmxLib._GMX_READER).getMarket(GmxLib._GMX_DATA_STORE, market);
 
         _recordClaimableCollateral(callbackData, market, marketInfo.longToken, timeKey);
@@ -80,7 +78,7 @@ contract EGmxCallback is IEGmxCallback {
         uint256 timeKey
     ) private {
         bytes32 amountKey = keccak256(
-            abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
         );
 
         // Only store keys that actually have claimable collateral.

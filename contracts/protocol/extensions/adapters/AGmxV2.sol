@@ -16,7 +16,6 @@ import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 import {IGmxOrderHandler} from "../../../utils/exchanges/gmx/IGmxSynthetics.sol";
-import {GmxCallbackKeys} from "../../libraries/GmxCallbackKeys.sol";
 import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../libraries/GmxLib.sol";
 
@@ -239,10 +238,9 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
 
         // Prune tracked markets that no longer have open positions or outstanding
         // claimable funding fees. Keeps the NAV iteration set minimal.
-        GmxCallbackLib.GmxCallbackSlot storage callbackData = GmxCallbackLib.gmxCallbackData();
         for (uint256 i; i < markets.length; ++i) {
             if (
-                callbackData.trackedMarkets.contains(markets[i]) &&
+                GmxCallbackLib.containsTrackedMarket(markets[i]) &&
                 !GmxLib.isMarketActive(address(this), markets[i]) &&
                 !GmxLib.hasClaimableFundingFees(address(this), markets[i])
             ) {
@@ -269,7 +267,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         for (uint256 i; i < markets.length; ++i) {
             bytes32 amountKey = keccak256(
                 abi.encode(
-                    GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY,
+                    GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY,
                     markets[i],
                     tokens[i],
                     timeKeys[i],
@@ -299,9 +297,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
 
     /// @dev Records `market` in callback storage so NAV can query post-close funding fees.
     function _trackMarket(address market) private {
-        GmxCallbackLib.GmxCallbackSlot storage callbackData = GmxCallbackLib.gmxCallbackData();
-        if (!callbackData.trackedMarkets.contains(market)) {
-            callbackData.trackedMarkets.add(market);
+        if (!GmxCallbackLib.containsTrackedMarket(market)) {
+            GmxCallbackLib.addTrackedMarket(market);
             emit IEGmxCallback.TrackedMarketAdded(market);
         }
     }

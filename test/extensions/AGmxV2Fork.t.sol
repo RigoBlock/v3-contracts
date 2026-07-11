@@ -51,7 +51,7 @@ import { Market } from "gmx-synthetics/market/Market.sol";
 import { Position } from "gmx-synthetics/position/Position.sol";
 import { IENavView } from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import { NavView } from "../../contracts/protocol/libraries/NavView.sol";
-import { GmxCallbackKeys } from "../../contracts/protocol/libraries/GmxCallbackKeys.sol";
+import { GmxCallbackLib } from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import { GmxLib } from "../../contracts/protocol/libraries/GmxLib.sol";
 import { Order } from "gmx-synthetics/order/Order.sol";
 import { IBaseOrderUtils } from "gmx-synthetics/order/IBaseOrderUtils.sol";
@@ -444,9 +444,9 @@ contract AGmxV2ForkTest is Test {
         address market = GMX_ETH_USD_MARKET;
         address token = ARB_WETH;
         uint256 timeKey = block.timestamp
-            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackKeys.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
         bytes32 amountKey =
-            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, pool));
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, pool));
 
         // Simulate a callback that recorded the key. The callback checks the DataStore amount
         // is non-zero, so we mock it to 1 wei during the callback and to 0 afterwards.
@@ -1928,12 +1928,12 @@ contract AGmxV2ForkTest is Test {
         uint256 fundingAmount = 0.001 ether;
         uint256 collateralAmount = 0.002 ether;
         uint256 timeKey = block.timestamp
-            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackKeys.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
 
         bytes32 fundingKey =
-            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_FUNDING_AMOUNT_KEY, market, mkt.longToken, pool));
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, mkt.longToken, pool));
         bytes32 collateralKey = keccak256(
-            abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, mkt.longToken, timeKey, pool)
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, mkt.longToken, timeKey, pool)
         );
 
         vm.startPrank(controller);
@@ -2006,12 +2006,12 @@ contract AGmxV2ForkTest is Test {
         address shortToken = ARB_USDC;
 
         uint256 timeKey = block.timestamp
-            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackKeys.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
 
         bytes32 longAmountKey =
-            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, longToken, timeKey, pool));
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, longToken, timeKey, pool));
         bytes32 shortAmountKey =
-            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, shortToken, timeKey, pool));
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, shortToken, timeKey, pool));
 
         vm.startPrank(controller);
         IGmxDataStore(GMX_DATA_STORE).setUint(longAmountKey, 0.001 ether);

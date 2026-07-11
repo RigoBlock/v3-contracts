@@ -18,7 +18,6 @@ import {
     GmxMarketPrices,
     GmxOrderInfo
 } from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
-import { GmxCallbackKeys } from "../../contracts/protocol/libraries/GmxCallbackKeys.sol";
 import { GmxCallbackLib } from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import { GmxLib } from "../../contracts/protocol/libraries/GmxLib.sol";
 import { AppTokenBalance } from "../../contracts/protocol/types/ExternalApp.sol";
@@ -858,15 +857,16 @@ contract GmxLibTest is Test {
         uint256 collateralAmount = 0.2 ether;
 
         bytes32 collateralAmountKey = keccak256(
-            abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
         );
         bytes32 fundingKey =
-            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, address(this)));
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, address(this)));
 
         // Populate the callback storage in this test contract.
         GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
-        cb.trackedMarkets.addresses.push(market);
-        cb.trackedMarkets.positions[market] = 1;
+        bytes32 marketKey = bytes32(uint256(uint160(market)));
+        cb.trackedMarkets.values.push(marketKey);
+        cb.trackedMarkets.positions[marketKey] = 1;
         cb.claimableCollateralKeys.values.push(collateralAmountKey);
         cb.claimableCollateralKeys.positions[collateralAmountKey] = 1;
         cb.claimableCollateralInfo[collateralAmountKey] =
@@ -921,11 +921,12 @@ contract GmxLibTest is Test {
         // Same market was previously touched by a decrease/liquidation callback, so it is
         // tracked and has a separate claimable funding balance already credited in DataStore.
         GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
-        cb.trackedMarkets.addresses.push(MARKET);
-        cb.trackedMarkets.positions[MARKET] = 1;
+        bytes32 marketKey = bytes32(uint256(uint160(MARKET)));
+        cb.trackedMarkets.values.push(marketKey);
+        cb.trackedMarkets.positions[marketKey] = 1;
 
         bytes32 fundingKey =
-            keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_FUNDING_AMOUNT_KEY, MARKET, LONG_TOKEN, address(this)));
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, MARKET, LONG_TOKEN, address(this)));
         vm.mockCall(
             GMX_DATA_STORE,
             abi.encodeWithSelector(IGmxDataStore.getUint.selector, fundingKey),

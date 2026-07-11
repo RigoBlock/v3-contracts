@@ -7,7 +7,6 @@ import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxDataStore, IGmxExchangeRouter, IGmxRoleStore, GmxValidatedPrice, GmxPositionInfo, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
-import {GmxCallbackKeys} from "./GmxCallbackKeys.sol";
 import {GmxCallbackLib} from "./GmxCallbackLib.sol";
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 
@@ -214,7 +213,7 @@ library GmxLib {
     /// @dev Returns funding fees and collateral rebates recorded by EGmxCallback.
     function _getCallbackBalances(address account) private view returns (AppTokenBalance[] memory balances) {
         GmxCallbackLib.GmxCallbackSlot storage callbackData = GmxCallbackLib.gmxCallbackData();
-        uint256 marketCount = callbackData.trackedMarkets.addresses.length;
+        uint256 marketCount = GmxCallbackLib.trackedMarketsCount();
         uint256 keyCount = callbackData.claimableCollateralKeys.values.length;
         if (marketCount == 0 && keyCount == 0) return balances;
 
@@ -222,7 +221,7 @@ library GmxLib {
         uint256 count;
 
         for (uint256 i; i < marketCount; ++i) {
-            address market = callbackData.trackedMarkets.addresses[i];
+            address market = GmxCallbackLib.trackedMarketAt(i);
             Market.Props memory mkt;
             try IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market) returns (Market.Props memory result) {
                 mkt = result;
@@ -261,7 +260,7 @@ library GmxLib {
     function _claimableFundingAmount(address market, address token, address account) private view returns (uint256) {
         return
             IGmxDataStore(_GMX_DATA_STORE).getUint(
-                keccak256(abi.encode(GmxCallbackKeys.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, account))
+                keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, account))
             );
     }
 
@@ -275,14 +274,14 @@ library GmxLib {
         if (amount == 0) return 0;
 
         bytes32 factorTimeKey = keccak256(
-            abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_FACTOR_KEY, info.market, info.token, info.timeKey)
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_FACTOR_KEY, info.market, info.token, info.timeKey)
         );
         bytes32 factorKey = keccak256(
-            abi.encode(GmxCallbackKeys.CLAIMABLE_COLLATERAL_FACTOR_KEY, info.market, info.token, info.timeKey, account)
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_FACTOR_KEY, info.market, info.token, info.timeKey, account)
         );
         bytes32 reductionKey = keccak256(
             abi.encode(
-                GmxCallbackKeys.CLAIMABLE_COLLATERAL_REDUCTION_FACTOR_KEY,
+                GmxCallbackLib.CLAIMABLE_COLLATERAL_REDUCTION_FACTOR_KEY,
                 info.market,
                 info.token,
                 info.timeKey,
@@ -290,7 +289,7 @@ library GmxLib {
             )
         );
         bytes32 claimedKey = keccak256(
-            abi.encode(GmxCallbackKeys.CLAIMED_COLLATERAL_AMOUNT_KEY, info.market, info.token, info.timeKey, account)
+            abi.encode(GmxCallbackLib.CLAIMED_COLLATERAL_AMOUNT_KEY, info.market, info.token, info.timeKey, account)
         );
 
         uint256 factor = IGmxDataStore(_GMX_DATA_STORE).getUint(factorTimeKey);
@@ -301,8 +300,8 @@ library GmxLib {
         if (factor == 0 && reduction == 0) {
             uint256 timeDiff = block.timestamp -
                 info.timeKey *
-                IGmxDataStore(_GMX_DATA_STORE).getUint(GmxCallbackKeys.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
-            if (timeDiff > IGmxDataStore(_GMX_DATA_STORE).getUint(GmxCallbackKeys.CLAIMABLE_COLLATERAL_DELAY_KEY)) {
+                IGmxDataStore(_GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+            if (timeDiff > IGmxDataStore(_GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_DELAY_KEY)) {
                 factor = _FLOAT_PRECISION;
             }
         }

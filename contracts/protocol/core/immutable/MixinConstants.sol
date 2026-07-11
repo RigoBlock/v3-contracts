@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {ISmartPool} from "../../ISmartPool.sol";
 import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
+import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.
@@ -36,7 +37,7 @@ abstract contract MixinConstants is ISmartPool {
 
     bytes32 internal constant _DELEGATION_SLOT = 0x1de728329845ca9693f4e251833e4fd20a461e4f39179bee6e55171aedb6dc19;
 
-    bytes32 internal constant _GMX_CALLBACK_SLOT = bytes32(uint256(keccak256("pool.proxy.gmx.callback")) - 1);
+    bytes32 internal constant _GMX_CALLBACK_SLOT = GmxCallbackLib.GMX_CALLBACK_DATA_SLOT;
 
     address internal constant _ZERO_ADDRESS = address(0);
 
