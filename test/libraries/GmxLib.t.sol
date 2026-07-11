@@ -31,6 +31,14 @@ contract GmxLibHarness {
     {
         GmxLib.assertPositionLimitNotReached(account, market, collateralToken, isLong);
     }
+
+    function isMarketActive(address account, address market) external view returns (bool) {
+        return GmxLib.isMarketActive(account, market);
+    }
+
+    function hasClaimableFundingFees(address account, address market) external view returns (bool) {
+        return GmxLib.hasClaimableFundingFees(account, market);
+    }
 }
 
 /// @title GmxLibTest
@@ -944,5 +952,209 @@ contract GmxLibTest is Test {
         assertEq(balances[0].amount, int256(positionFunding));
         assertEq(balances[1].token, LONG_TOKEN);
         assertEq(balances[1].amount, int256(dataStoreFunding));
+    }
+
+    // =========================================================================
+    // New view helpers: isMarketActive / hasClaimableFundingFees /
+    // claimableCollateralAmount
+    // =========================================================================
+
+    function test_IsMarketActive_True() public {
+        Position.Props[] memory positions = new Position.Props[](1);
+        positions[0].addresses.market = MARKET;
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
+
+        assertTrue(gmxHarness.isMarketActive(POOL, MARKET));
+    }
+
+    function test_IsMarketActive_False() public {
+        Position.Props[] memory positions = new Position.Props[](0);
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
+
+        assertFalse(gmxHarness.isMarketActive(POOL, MARKET));
+    }
+
+    function test_HasClaimableFundingFees_LongToken() public {
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET),
+            abi.encode(_buildMarket())
+        );
+
+        bytes32 fundingKey =
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, MARKET, LONG_TOKEN, POOL));
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, fundingKey), abi.encode(uint256(1))
+        );
+
+        assertTrue(gmxHarness.hasClaimableFundingFees(POOL, MARKET));
+    }
+
+    function test_HasClaimableFundingFees_ShortToken() public {
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET),
+            abi.encode(_buildMarket())
+        );
+
+        bytes32 fundingKey =
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, MARKET, SHORT_TOKEN, POOL));
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, fundingKey), abi.encode(uint256(1))
+        );
+
+        assertTrue(gmxHarness.hasClaimableFundingFees(POOL, MARKET));
+    }
+
+    function test_HasClaimableFundingFees_None() public {
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, MARKET),
+            abi.encode(_buildMarket())
+        );
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+
+        assertFalse(gmxHarness.hasClaimableFundingFees(POOL, MARKET));
+    }
+
+    function test_ClaimableCollateralAmount_NoInfo_ReturnsZero() public {
+        bytes32 amountKey = keccak256(abi.encode("amountKey", MARKET, COL_TOKEN, uint256(1), POOL));
+        assertEq(GmxLib.claimableCollateralAmount(amountKey, POOL), 0);
+    }
+
+    function test_ClaimableCollateralAmount_WithInfo_NoDelay() public {
+        address market = MARKET;
+        address token = COL_TOKEN;
+        uint256 timeKey = 1;
+        uint256 amount = 0.5 ether;
+
+        bytes32 amountKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
+        );
+
+        // Store metadata in this test contract.
+        GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
+        cb.claimableCollateralInfo[amountKey] =
+            GmxCallbackLib.ClaimableCollateralInfo({ token: token, market: market, timeKey: timeKey });
+
+        // Default everything to 0, then override the specific reads needed.
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, amountKey), abi.encode(amount)
+        );
+
+        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), amount);
+    }
+
+    /// @notice When factor <= reduction, the final factor is clamped to 0.
+    function test_ClaimableCollateralAmount_FactorNotGreaterThanReduction() public {
+        address market = MARKET;
+        address token = COL_TOKEN;
+        uint256 timeKey = 1;
+        uint256 amount = 0.5 ether;
+
+        bytes32 amountKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
+        );
+        bytes32 factorKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_FACTOR_KEY, market, token, timeKey, address(this))
+        );
+        bytes32 reductionKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_REDUCTION_FACTOR_KEY, market, token, timeKey, address(this))
+        );
+
+        GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
+        cb.claimableCollateralInfo[amountKey] =
+            GmxCallbackLib.ClaimableCollateralInfo({ token: token, market: market, timeKey: timeKey });
+
+        // factor (10) <= reduction (20) -> clamped to 0 -> claimable = 0.
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, amountKey), abi.encode(amount)
+        );
+        vm.mockCall(
+            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, factorKey), abi.encode(uint256(10))
+        );
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, reductionKey),
+            abi.encode(uint256(20))
+        );
+
+        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), 0);
+    }
+
+    /// @notice Callback-recorded funding fees on the short token are also returned.
+    function test_GetGmxPositionBalances_CallbackBalances_ShortTokenFunding() public {
+        address market = MARKET;
+        address token = SHORT_TOKEN;
+        uint256 timeKey = 123;
+        uint256 fundingAmount = 0.1 ether;
+
+        bytes32 fundingKey =
+            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, address(this)));
+
+        GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
+        bytes32 marketKey = bytes32(uint256(uint160(market)));
+        cb.trackedMarkets.values.push(marketKey);
+        cb.trackedMarkets.positions[marketKey] = 1;
+
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, market),
+            abi.encode(
+                Market.Props({ marketToken: market, indexToken: INDEX_TOKEN, longToken: LONG_TOKEN, shortToken: token })
+            )
+        );
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(new Position.Props[](0))
+        );
+        vm.mockCall(
+            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(new GmxOrderInfo[](0))
+        );
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, fundingKey),
+            abi.encode(fundingAmount)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(address(this));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].token, token);
+        assertEq(balances[0].amount, int256(fundingAmount));
+    }
+
+    /// @notice If getMarket reverts while iterating callback-recorded markets,
+    ///  the loop must continue instead of reverting.
+    function test_GetGmxPositionBalances_CallbackMarketRevert_SkipsMarket() public {
+        address market = MARKET;
+        address token = COL_TOKEN;
+
+        bytes32 marketKey = bytes32(uint256(uint160(market)));
+        GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
+        cb.trackedMarkets.values.push(marketKey);
+        cb.trackedMarkets.positions[marketKey] = 1;
+
+        vm.mockCallRevert(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, market),
+            abi.encode("market revert")
+        );
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(new Position.Props[](0))
+        );
+        vm.mockCall(
+            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(new GmxOrderInfo[](0))
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(address(this));
+        assertEq(balances.length, 0);
     }
 }
