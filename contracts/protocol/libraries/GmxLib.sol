@@ -245,8 +245,11 @@ library GmxLib {
         newCount = count + 1;
     }
 
-    /// @dev Returns the initial collateral amount for every pending MarketIncrease
-    ///  or LimitIncrease order.  Converted to wrappedNative when possible.
+    /// @dev Returns assets held in the GMX OrderVault for all pending orders.
+    ///  - Increase orders escrow `initialCollateralDeltaAmount` plus an `executionFee`.
+    ///  - Decrease and update orders only move the `executionFee` to the vault (the
+    ///    position collateral remains in the DataStore and is valued by the executed-
+    ///    position branch).  We therefore count the fee for every order type.
     function _getPendingOrderBalances(address account) private view returns (AppTokenBalance[] memory balances) {
         GmxOrderInfo[] memory orders;
         try IGmxReader(_GMX_READER).getAccountOrders(_GMX_DATA_STORE, account, 0, type(uint256).max) returns (
@@ -260,31 +263,27 @@ library GmxLib {
         uint256 n = orders.length;
         if (n == 0) return balances;
 
-        // 2 entries per order: initialCollateralDeltaAmount + executionFee (always WETH).
+        // 2 entries per order: initialCollateralDeltaAmount (increase only) + executionFee (all types).
         AppTokenBalance[] memory tmp = new AppTokenBalance[](n * 2);
         uint256 count;
 
         for (uint256 i; i < n; ++i) {
             Order.OrderType ot = orders[i].order.numbers.orderType;
-            // Only increase orders move collateral and execution fee to the OrderVault.
-            if (ot != Order.OrderType.MarketIncrease && ot != Order.OrderType.LimitIncrease) continue;
+            bool isIncrease = ot == Order.OrderType.MarketIncrease || ot == Order.OrderType.LimitIncrease;
 
             address colToken = orders[i].order.addresses.initialCollateralToken;
             uint256 amount = orders[i].order.numbers.initialCollateralDeltaAmount;
             uint256 fee = orders[i].order.numbers.executionFee;
 
-            // Skip orders with nothing to track (both collateral and fee are zero).
-            if (amount == 0 && fee == 0) continue;
-
-            // Collateral token (EOracle can price it; no WETH conversion needed).
-            if (amount > 0) {
+            // Only increase orders escrow new collateral in the OrderVault.
+            // Decrease orders keep collateral in the open position, which is valued
+            // separately by _getExecutedPositionBalances; counting it here would double-count.
+            if (isIncrease && amount > 0) {
                 tmp[count++] = AppTokenBalance({token: colToken, amount: amount.toInt256()});
             }
 
-            // Execution fee: always WETH, stored separately in the order vault.
-            // Counted here so NAV is not understated during the pending period.
-            // GMX refunds it on cancellation; keepers consume it on execution.
-            // Fee is tracked even when initialCollateralDeltaAmount is zero (size-only increase).
+            // Execution fee is paid for every order type and held in the order vault
+            // until the keeper executes the order or the order is cancelled.
             if (fee > 0) {
                 tmp[count++] = AppTokenBalance({token: WRAPPED_NATIVE, amount: fee.toInt256()});
             }

@@ -242,9 +242,9 @@ keccak256(abi.encode("CLAIMABLE_FUNDING_AMOUNT", market, token, account))
 
 **Impact:** Unclaimed funding fees from a fully-closed market are not reflected in NAV until `AGmxV2.claimFundingFees(markets, tokens)` is called. Funding fee accrual is gradual — the undercount grows slowly and is bounded by the fee rate × position size × time.
 
-**Workaround (current):** The pool owner should call `claimFundingFees` for the relevant markets when closing the last position on that market, or periodically if long-lived positions are held.
+**Workaround (current):** The pool owner should call `claimFundingFees` for the relevant markets when closing the last position on that market, or periodically if long-lived positions are held. Frontends should bundle this call immediately after a full close so the NAV gap is closed before any deposit/withdraw operations can execute against the stale valuation.
 
-**Future option:** The same `EGmxCallback` extension described above could track which markets have ever been active (analogous to maintaining a set of historical markets), enabling the NAV loop to also query closed-market funding fees. This is not currently implemented.
+**Future option:** The same `EGmxCallback` extension described above could track which markets have ever been active (analogous to maintaining a set of historical markets), enabling the NAV loop to also query closed-market funding fees. This is not currently implemented. Alternatively, `AGmxV2` could maintain a `trackedMarkets` set in pool storage at increase time and `GmxLib` could query `CLAIMABLE_FUNDING_AMOUNT` for those markets; this would close the funding-fee gap without a callback, but would not help with price-impact rebates, which still require execution-time timeKeys.
 
 ---
 

@@ -268,10 +268,9 @@ contract GmxLibTest is Test {
         assertEq(balances[1].amount, int256(0.001 ether));
     }
 
-    /// @notice LimitIncrease counted; MarketDecrease NOT counted.
-    function test_GetGmxPositionBalances_LimitIncrease_And_Decrease_OnlyIncreaseCounted()
-        public
-    {
+    /// @notice LimitIncrease collateral is counted; MarketDecrease collateral is NOT
+    ///  counted (it stays in the open position), but its execution fee IS counted.
+    function test_GetGmxPositionBalances_LimitIncrease_And_Decrease_FeeCounted() public {
         Position.Props[] memory emptyPos = new Position.Props[](0);
         vm.mockCall(
             GMX_READER,
@@ -288,6 +287,7 @@ contract GmxLibTest is Test {
         orders[1].order.numbers.orderType = Order.OrderType.MarketDecrease;
         orders[1].order.addresses.initialCollateralToken = COL_TOKEN;
         orders[1].order.numbers.initialCollateralDeltaAmount = 999e6; // must be skipped
+        orders[1].order.numbers.executionFee = 0.002 ether;
 
         vm.mockCall(
             GMX_READER,
@@ -296,10 +296,39 @@ contract GmxLibTest is Test {
         );
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
-        // Only LimitIncrease with nonzero collateral and no fee → 1 entry
-        assertEq(balances.length, 1);
+        // LimitIncrease collateral + MarketDecrease execution fee → 2 entries
+        assertEq(balances.length, 2);
         assertEq(balances[0].token, COL_TOKEN);
         assertEq(balances[0].amount, int256(200e6));
+        assertEq(balances[1].token, WRAPPED_NATIVE);
+        assertEq(balances[1].amount, int256(0.002 ether));
+    }
+
+    /// @notice A pending decrease order contributes only its execution fee.
+    function test_GetGmxPositionBalances_DecreaseOrder_FeeCounted() public {
+        Position.Props[] memory emptyPos = new Position.Props[](0);
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(emptyPos)
+        );
+
+        GmxOrderInfo[] memory orders = new GmxOrderInfo[](1);
+        orders[0].order.numbers.orderType = Order.OrderType.MarketDecrease;
+        orders[0].order.addresses.initialCollateralToken = COL_TOKEN;
+        orders[0].order.numbers.initialCollateralDeltaAmount = 500e6; // must be ignored
+        orders[0].order.numbers.executionFee = 0.003 ether;
+
+        vm.mockCall(
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
+            abi.encode(orders)
+        );
+
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(POOL);
+        assertEq(balances.length, 1);
+        assertEq(balances[0].token, WRAPPED_NATIVE);
+        assertEq(balances[0].amount, int256(0.003 ether));
     }
 
     /// @notice An increase order with zero collateral but non-zero execution fee still
