@@ -1042,7 +1042,7 @@ contract GmxLibTest is Test {
         assertFalse(gmxHarness.hasClaimableFundingFees(POOL, MARKET));
     }
 
-    function test_ClaimableCollateralAmount_NoInfo_ReturnsZero() public {
+    function test_ClaimableCollateralAmount_NoInfo_ReturnsZero() public view {
         bytes32 amountKey = keccak256(abi.encode("amountKey", MARKET, COL_TOKEN, uint256(1), POOL));
         assertEq(GmxLib.claimableCollateralAmount(amountKey, POOL), 0);
     }
@@ -1125,7 +1125,6 @@ contract GmxLibTest is Test {
     function test_GetGmxPositionBalances_CallbackBalances_ShortTokenFunding() public {
         address market = MARKET;
         address token = SHORT_TOKEN;
-        uint256 timeKey = 123;
         uint256 fundingAmount = 0.1 ether;
 
         bytes32 fundingKey = keccak256(
@@ -1171,8 +1170,6 @@ contract GmxLibTest is Test {
     ///  the loop must continue instead of reverting.
     function test_GetGmxPositionBalances_CallbackMarketRevert_SkipsMarket() public {
         address market = MARKET;
-        address token = COL_TOKEN;
-
         bytes32 marketKey = bytes32(uint256(uint160(market)));
         GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
         cb.trackedMarkets.values.push(marketKey);
