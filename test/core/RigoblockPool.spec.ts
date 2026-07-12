@@ -88,6 +88,38 @@ describe("Proxy", async () => {
         })
     })
 
+    describe("erc20", async () => {
+        it('should revert on transfer', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            await expect(
+                pool.transfer(user2.address, await pool.balanceOf(user1.address))
+            ).to.be.revertedWith('PoolTokenOperationNotAllowed')
+        })
+
+        it('should revert on transferFrom', async () => {
+            const { pool } = await setupTests()
+            const etherAmount = parseEther("1")
+            await pool.mint(user1.address, etherAmount, 0, { value: etherAmount })
+            await expect(
+                pool.transferFrom(user1.address, user2.address, await pool.balanceOf(user1.address))
+            ).to.be.revertedWith('PoolTokenOperationNotAllowed')
+        })
+
+        it('should revert on approve', async () => {
+            const { pool } = await setupTests()
+            await expect(
+                pool.approve(user2.address, parseEther("1"))
+            ).to.be.revertedWith('PoolTokenOperationNotAllowed')
+        })
+
+        it('should return zero allowance', async () => {
+            const { pool } = await setupTests()
+            expect(await pool.allowance(user1.address, user2.address)).to.be.eq(0)
+        })
+    })
+
     describe("setTransactionFee", async () => {
         it('should set the transaction fee', async () => {
             const { pool } = await setupTests()
