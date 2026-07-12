@@ -158,7 +158,8 @@ contract ENavViewForkTest is Test {
         newImplementation = new SmartPool(
             authorityAddress,
             address(extensionsMap),
-            mockTokenJar
+            mockTokenJar,
+            REGISTRY
         );
 
         console2.log("  New implementation:", address(newImplementation));

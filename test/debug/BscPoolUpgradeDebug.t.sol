@@ -42,7 +42,7 @@ contract BscPoolUpgradeDebugTest is Test {
     /// @notice Verifies updateUnitaryValue() succeeds after upgrading to new implementation
     function test_UpgradedImpl_UpdateUnitaryValue_Succeeds() public {
         // Deploy new implementation reusing existing ExtensionsMap (no extension changes)
-        SmartPool newImpl = new SmartPool(Constants.AUTHORITY, BSC_EXTENSIONS_MAP, Constants.TOKEN_JAR);
+        SmartPool newImpl = new SmartPool(Constants.AUTHORITY, BSC_EXTENSIONS_MAP, Constants.TOKEN_JAR, Constants.REGISTRY);
 
         // Upgrade via storage slot override
         vm.store(STUCK_POOL, IMPLEMENTATION_SLOT, bytes32(uint256(uint160(address(newImpl)))));

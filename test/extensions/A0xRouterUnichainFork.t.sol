@@ -321,11 +321,11 @@ contract A0xRouterUnichainForkTest is Test {
         bytes32 salt = keccak256(abi.encodePacked("A0X_UNI_FORK_TEST", block.chainid));
         address extensionsMapAddr = mapDeployer.deployExtensionsMap(params, salt);
 
-        // Deploy new implementation
-        SmartPool impl = new SmartPool(AUTHORITY, extensionsMapAddr, Constants.TOKEN_JAR);
-
         // Upgrade factory implementation
         address registry = IRigoblockPoolProxyFactory(FACTORY).getRegistry();
+
+        // Deploy new implementation
+        SmartPool impl = new SmartPool(AUTHORITY, extensionsMapAddr, Constants.TOKEN_JAR, registry);
         address rigoblockDao = IPoolRegistry(registry).rigoblockDao();
         vm.prank(rigoblockDao);
         IRigoblockPoolProxyFactory(FACTORY).setImplementation(address(impl));

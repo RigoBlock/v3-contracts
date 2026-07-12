@@ -149,9 +149,8 @@ contract NavViewStressedParityForkTest is Test {
         // ------------------------------------------------------------------
         // 3. Deploy and register new SmartPool implementation
         // ------------------------------------------------------------------
-        SmartPool impl = new SmartPool(AUTHORITY, extensionsMap, TOKEN_JAR);
-
         address registry = IRigoblockPoolProxyFactory(FACTORY).getRegistry();
+        SmartPool impl = new SmartPool(AUTHORITY, extensionsMap, TOKEN_JAR, registry);
         address rigoblockDao = IPoolRegistry(registry).rigoblockDao();
         vm.prank(rigoblockDao);
         IRigoblockPoolProxyFactory(FACTORY).setImplementation(address(impl));
