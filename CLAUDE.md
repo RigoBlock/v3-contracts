@@ -29,7 +29,7 @@ AGENTS.md provides concise, actionable guidelines for AI assistants. This docume
 - **Adapters**: Protocol integrations, upgradeable via governance
 
 **Upgrade implications — what to redeploy:**
-- **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse the existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar)`. No extensions need redeployment.
+- **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse the existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar, registry)`. No extensions need redeployment.
 - **Library change (used by an extension)**: The extension must be redeployed (library is compiled into extension bytecode) → new ExtensionsMap → new implementation.
 - **Extension change**: New extension + new ExtensionsMap + new implementation.
 - **Adapter change**: New adapter + Authority governance update. No implementation changes.

@@ -128,7 +128,7 @@ const deploy: DeployFunction = async function (
 
   await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMapAddress, config.tokenJar],
+    args: [authority.address, extensionsMapAddress, config.tokenJar, registry.address],
     log: true,
     deterministicDeployment: true,
   });
