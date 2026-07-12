@@ -26,8 +26,9 @@ contract SmartPool is
     constructor(
         address authority,
         address extensionsMap,
-        address tokenJar
-    ) MixinImmutables(authority, extensionsMap, tokenJar) {
+        address tokenJar,
+        address poolRegistry
+    ) MixinImmutables(authority, extensionsMap, tokenJar, poolRegistry) {
         // we lock implementation at deploy
         pool().owner = _ZERO_ADDRESS;
         poolParams().kycProvider = _BASE_TOKEN_FLAG;

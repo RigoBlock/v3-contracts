@@ -9,6 +9,7 @@ import {IExtensionsMap} from "../../interfaces/IExtensionsMap.sol";
 abstract contract MixinImmutables is MixinConstants {
     error InvalidAuthorityInput();
     error InvalidExtensionsMapInput();
+    error InvalidPoolRegistryInput();
 
     /// @inheritdoc ISmartPoolImmutable
     address public immutable override authority;
@@ -19,16 +20,21 @@ abstract contract MixinImmutables is MixinConstants {
     ///@inheritdoc ISmartPoolImmutable
     address public immutable override tokenJar;
 
+    ///@inheritdoc ISmartPoolImmutable
+    address public immutable override poolRegistry;
+
     // EIP1967 standard, must be immutable to be compile-time constant.
     address internal immutable _implementation;
 
     IExtensionsMap internal immutable _extensionsMap;
 
     /// @notice The ExtensionsMap interface is required to implement the expected methods as sanity check.
-    constructor(address _authority, address extensionsMap, address _tokenJar) {
+    constructor(address _authority, address extensionsMap, address _tokenJar, address _poolRegistry) {
         require(_authority.code.length > 0, InvalidAuthorityInput());
         require(extensionsMap.code.length > 0, InvalidExtensionsMapInput());
+        require(_poolRegistry.code.length > 0, InvalidPoolRegistryInput());
         authority = _authority;
+        poolRegistry = _poolRegistry;
 
         _implementation = address(this);
 
