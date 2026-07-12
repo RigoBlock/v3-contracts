@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
-import { AddressZero } from "@ethersproject/constants";
+import { AddressZero, MaxUint256 } from "@ethersproject/constants";
 
 describe("AMulticall", async () => {
     const [ user1, user2 ] = waffle.provider.getWallets()
@@ -30,6 +30,10 @@ describe("AMulticall", async () => {
         await authority.setAdapter(eUpgrade.address, true)
         // "ac9650d8": "multicall(bytes[])"
         await authority.addMethod("0xac9650d8", AMulticallInstance.address)
+        // "5ae401dc": "multicall(uint256,bytes[])"
+        await authority.addMethod("0x5ae401dc", AMulticallInstance.address)
+        // "1f0464d1": "multicall(bytes32,bytes[])"
+        await authority.addMethod("0x1f0464d1", AMulticallInstance.address)
         // "466f3dc3": "upgradeImplementation()"
         await authority.addMethod("0x466f3dc3", eUpgrade.address)
         return {
@@ -195,6 +199,31 @@ describe("AMulticall", async () => {
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
             ).to.be.revertedWith("EUpgradeImplementationIsSameAsCurrent")
+        })
+
+        it('should support multicall with deadline', async () => {
+            const { pool } = await setupTests()
+            const encodedSetOwnerData = pool.interface.encodeFunctionData('setOwner', [user2.address])
+            const encodedMulticallData = pool.interface.encodeFunctionData(
+                'multicall(uint256,bytes[])',
+                [MaxUint256, [encodedSetOwnerData]]
+            )
+            await expect(
+                user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
+            ).to.emit(pool, "NewOwner").withArgs(user1.address, user2.address)
+        })
+
+        it('should support multicall with previousBlockhash', async () => {
+            const { pool } = await setupTests()
+            const previousBlock = await waffle.provider.getBlock('latest')
+            const encodedSetOwnerData = pool.interface.encodeFunctionData('setOwner', [user2.address])
+            const encodedMulticallData = pool.interface.encodeFunctionData(
+                'multicall(bytes32,bytes[])',
+                [previousBlock.hash, [encodedSetOwnerData]]
+            )
+            await expect(
+                user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
+            ).to.emit(pool, "NewOwner").withArgs(user1.address, user2.address)
         })
     })
 })
