@@ -1,60 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import { Test } from "forge-std/Test.sol";
-import { Vm } from "forge-std/Vm.sol";
-import { console2 } from "forge-std/console2.sol";
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {console2} from "forge-std/console2.sol";
 
-import { Constants } from "../../contracts/test/Constants.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 
-import { AGmxV2 } from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
-import { EApps } from "../../contracts/protocol/extensions/EApps.sol";
-import { ECrosschain } from "../../contracts/protocol/extensions/ECrosschain.sol";
-import { EGmxCallback } from "../../contracts/protocol/extensions/EGmxCallback.sol";
-import { ENavView } from "../../contracts/protocol/extensions/ENavView.sol";
-import { EOracle } from "../../contracts/protocol/extensions/EOracle.sol";
-import { EUpgrade } from "../../contracts/protocol/extensions/EUpgrade.sol";
-import { SmartPool } from "../../contracts/protocol/SmartPool.sol";
-import { ExtensionsMapDeployer } from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
-import { IRigoblockPoolProxyFactory } from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
-import { IAuthority } from "../../contracts/protocol/interfaces/IAuthority.sol";
-import { IOwnedUninitialized } from "../../contracts/utils/owned/IOwnedUninitialized.sol";
-import { IPoolRegistry } from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
-import { ISmartPool } from "../../contracts/protocol/ISmartPool.sol";
-import { ISmartPoolOwnerActions } from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol";
-import { ISmartPoolState } from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
-import { ISmartPoolActions } from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
-import { IERC20 } from "../../contracts/protocol/interfaces/IERC20.sol";
-import { IAGmxV2 } from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
-import { IEApps } from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
-import { IEGmxCallback } from "../../contracts/protocol/extensions/adapters/interfaces/IEGmxCallback.sol";
-import { EventUtils } from "gmx-synthetics/event/EventUtils.sol";
-import { IEOracle } from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
-import { IMinimumVersion } from "../../contracts/protocol/extensions/adapters/interfaces/IMinimumVersion.sol";
-import { ExternalApp, AppTokenBalance } from "../../contracts/protocol/types/ExternalApp.sol";
-import { Applications } from "../../contracts/protocol/types/Applications.sol";
-import { DeploymentParams, Extensions, EAppsParams } from "../../contracts/protocol/types/DeploymentParams.sol";
-import {
-    IGmxReader,
-    IGmxDataStore,
-    IGmxRoleStore,
-    IGmxOrderHandler,
-    IGmxExchangeRouter,
-    IGmxChainlinkPriceFeedProvider,
-    GmxValidatedPrice,
-    GmxPositionInfo,
-    GmxExecutionPriceResult,
-    GmxOrderInfo
-} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
-import { Price } from "gmx-synthetics/price/Price.sol";
-import { Market } from "gmx-synthetics/market/Market.sol";
-import { Position } from "gmx-synthetics/position/Position.sol";
-import { IENavView } from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
-import { NavView } from "../../contracts/protocol/libraries/NavView.sol";
-import { GmxCallbackLib } from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
-import { GmxLib } from "../../contracts/protocol/libraries/GmxLib.sol";
-import { Order } from "gmx-synthetics/order/Order.sol";
-import { IBaseOrderUtils } from "gmx-synthetics/order/IBaseOrderUtils.sol";
+import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
+import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
+import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EGmxCallback} from "../../contracts/protocol/extensions/EGmxCallback.sol";
+import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
+import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
+import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
+import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
+import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
+import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
+import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
+import {IOwnedUninitialized} from "../../contracts/utils/owned/IOwnedUninitialized.sol";
+import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
+import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
+import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol";
+import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
+import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
+import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
+import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
+import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {IEGmxCallback} from "../../contracts/protocol/extensions/adapters/interfaces/IEGmxCallback.sol";
+import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
+import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
+import {IMinimumVersion} from "../../contracts/protocol/extensions/adapters/interfaces/IMinimumVersion.sol";
+import {ExternalApp, AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
+import {Applications} from "../../contracts/protocol/types/Applications.sol";
+import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {IGmxReader, IGmxDataStore, IGmxRoleStore, IGmxOrderHandler, IGmxExchangeRouter, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice, GmxPositionInfo, GmxExecutionPriceResult, GmxOrderInfo} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Price} from "gmx-synthetics/price/Price.sol";
+import {Market} from "gmx-synthetics/market/Market.sol";
+import {Position} from "gmx-synthetics/position/Position.sol";
+import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
+import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
+import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
+import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
+import {Order} from "gmx-synthetics/order/Order.sol";
+import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AGmxV2ForkTest
@@ -112,7 +101,10 @@ contract AGmxV2ForkTest is Test {
     // Events from EGmxCallback, duplicated here for expectEmit assertions.
     event TrackedMarketAdded(address indexed market);
     event ClaimableCollateralAdded(
-        bytes32 indexed claimableCollateralKey, address indexed token, address indexed market, uint256 timeKey
+        bytes32 indexed claimableCollateralKey,
+        address indexed token,
+        address indexed market,
+        uint256 timeKey
     );
     event TrackedMarketRemoved(address indexed market);
     event ClaimableCollateralRemoved(bytes32 indexed claimableCollateralKey);
@@ -156,11 +148,12 @@ contract AGmxV2ForkTest is Test {
         // ------------------------------------------------------------------
         // 2. Deploy extensions with Arbitrum-specific + GMX params
         // ------------------------------------------------------------------
-        EApps eApps = new EApps(EAppsParams({ grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM }));
+        EApps eApps = new EApps(EAppsParams({grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM}));
         EOracle eOracle = new EOracle(ARB_ORACLE, ARB_WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView =
-            new ENavView(EAppsParams({ grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM }));
+        ENavView eNavView = new ENavView(
+            EAppsParams({grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM})
+        );
         ECrosschain eCrosschain = new ECrosschain();
 
         // ------------------------------------------------------------------
@@ -193,7 +186,7 @@ contract AGmxV2ForkTest is Test {
         // 4. Create pool with WETH as base token
         // ------------------------------------------------------------------
         vm.prank(poolOwner);
-        (pool,) = IRigoblockPoolProxyFactory(FACTORY).createPool("GmxForkPool", "GMXFP", ARB_WETH);
+        (pool, ) = IRigoblockPoolProxyFactory(FACTORY).createPool("GmxForkPool", "GMXFP", ARB_WETH);
         console2.log("Pool created:", pool);
 
         // ------------------------------------------------------------------
@@ -246,8 +239,12 @@ contract AGmxV2ForkTest is Test {
         vm.prank(poolOwner);
         bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(p);
 
-        GmxOrderInfo[] memory orders =
-            IGmxReader(GMX_READER).getAccountOrders(GMX_DATA_STORE, pool, 0, type(uint256).max);
+        GmxOrderInfo[] memory orders = IGmxReader(GMX_READER).getAccountOrders(
+            GMX_DATA_STORE,
+            pool,
+            0,
+            type(uint256).max
+        );
 
         require(orders.length > 0, "no orders");
         Order.Props memory order = orders[orders.length - 1].order;
@@ -257,8 +254,9 @@ contract AGmxV2ForkTest is Test {
         assertEq(orderKey, orders[orders.length - 1].orderKey, "returned order key must match stored order");
 
         // The pool must be registered as the saved callback contract for liquidations/ADLs.
-        bytes32 savedCallbackKey =
-            keccak256(abi.encode(keccak256(abi.encode("SAVED_CALLBACK_CONTRACT")), pool, p.addresses.market));
+        bytes32 savedCallbackKey = keccak256(
+            abi.encode(keccak256(abi.encode("SAVED_CALLBACK_CONTRACT")), pool, p.addresses.market)
+        );
         assertEq(IDataStore(GMX_DATA_STORE).getAddress(savedCallbackKey), pool, "saved callback must be pool");
     }
 
@@ -272,8 +270,12 @@ contract AGmxV2ForkTest is Test {
         vm.prank(poolOwner);
         bytes32 orderKey = IAGmxV2(pool).createDecreaseOrder(p);
 
-        GmxOrderInfo[] memory orders =
-            IGmxReader(GMX_READER).getAccountOrders(GMX_DATA_STORE, pool, 0, type(uint256).max);
+        GmxOrderInfo[] memory orders = IGmxReader(GMX_READER).getAccountOrders(
+            GMX_DATA_STORE,
+            pool,
+            0,
+            type(uint256).max
+        );
 
         require(orders.length > 0, "no orders");
         Order.Props memory order = orders[orders.length - 1].order;
@@ -284,8 +286,9 @@ contract AGmxV2ForkTest is Test {
 
         // The saved callback contract is re-registered on every order to cover markets
         // that may not have been increased through this adapter.
-        bytes32 savedCallbackKey =
-            keccak256(abi.encode(keccak256(abi.encode("SAVED_CALLBACK_CONTRACT")), pool, p.addresses.market));
+        bytes32 savedCallbackKey = keccak256(
+            abi.encode(keccak256(abi.encode("SAVED_CALLBACK_CONTRACT")), pool, p.addresses.market)
+        );
         assertEq(IDataStore(GMX_DATA_STORE).getAddress(savedCallbackKey), pool, "saved callback must be pool");
     }
 
@@ -443,15 +446,18 @@ contract AGmxV2ForkTest is Test {
     function test_ClaimCollateral_RemovesFullyClaimedKey() public {
         address market = GMX_ETH_USD_MARKET;
         address token = ARB_WETH;
-        uint256 timeKey = block.timestamp
-            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
-        bytes32 amountKey =
-            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, pool));
+        uint256 timeKey = block.timestamp /
+            IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+        bytes32 amountKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, pool)
+        );
 
         // Simulate a callback that recorded the key. The callback checks the DataStore amount
         // is non-zero, so we mock it to 1 wei during the callback and to 0 afterwards.
         vm.mockCall(
-            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, amountKey), abi.encode(uint256(1))
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, amountKey),
+            abi.encode(uint256(1))
         );
         _simulateGmxCallback(market);
         vm.clearMockedCalls();
@@ -475,6 +481,131 @@ contract AGmxV2ForkTest is Test {
 
         vm.prank(poolOwner);
         IAGmxV2(pool).claimCollateral(markets, tokens, timeKeys, address(this));
+    }
+
+    /// @notice Fork parity: the reimplemented `GmxLib.claimableCollateralAmount` formula
+    ///  returns exactly the same WETH amount that GMX's real `claimCollateral` transfers.
+    ///  We manufacture a liquidation/ADL-like claimable-collateral state in the DataStore
+    ///  (as CONTROLLER), simulate the callback that records the key, and assert parity.
+    function test_ClaimCollateral_FormulaParity_RealTransfer() public {
+        address token = ARB_WETH;
+        uint256 amount = 0.01 ether;
+
+        (address market, uint256 timeKey) = _setupClaimableCollateral(token, amount);
+
+        // Query EApps in the pool context: this exercises GmxLib._getCallbackBalances and
+        // our reimplemented claimable-collateral formula.
+        uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(gmxFlag);
+        bool found;
+        for (uint256 i; i < apps.length; ++i) {
+            if (uint256(apps[i].appType) == uint256(Applications.GMX_V2_POSITIONS)) {
+                for (uint256 j; j < apps[i].balances.length; ++j) {
+                    if (apps[i].balances[j].token == token && uint256(apps[i].balances[j].amount) == amount) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assertTrue(found, "EApps must report the claimable collateral balance");
+
+        uint256 balanceBefore = IERC20(token).balanceOf(pool);
+
+        address[] memory markets = new address[](1);
+        markets[0] = market;
+        address[] memory tokens = new address[](1);
+        tokens[0] = token;
+        uint256[] memory timeKeys = new uint256[](1);
+        timeKeys[0] = timeKey;
+
+        vm.prank(poolOwner);
+        IAGmxV2(pool).claimCollateral(markets, tokens, timeKeys, address(this));
+
+        uint256 balanceAfter = IERC20(token).balanceOf(pool);
+        assertEq(balanceAfter - balanceBefore, amount, "actual WETH transfer must equal computed claimable amount");
+    }
+
+    /// @dev Helper for `test_ClaimCollateral_FormulaParity_RealTransfer`.
+    ///  Creates a synthetic GMX market token, writes claimable-collateral DataStore keys
+    ///  for `pool`, and records the key in callback storage by simulating a GMX
+    ///  afterOrderExecution callback.
+    function _setupClaimableCollateral(
+        address token,
+        uint256 amount
+    ) private returns (address market, uint256 timeKey) {
+        // Use a synthetic market token registered in GMX's DataStore. This lets the
+        // claimCollateral validation pass with a small WETH balance while still exercising
+        // the real GMX Router and MarketUtils code paths.
+        MockGmxMarketToken marketToken = new MockGmxMarketToken();
+        market = address(marketToken);
+        timeKey = 1;
+
+        uint256 timeDivisor = IGmxDataStore(GMX_DATA_STORE).getUint(
+            GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY
+        );
+        uint256 claimDelay = IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_DELAY_KEY);
+
+        // Use a fixed past timeKey. The callback is invoked at the start of its window so
+        // it records that exact timeKey; we then warp past the claim delay to make the
+        // collateral claimable. This works even when the delay is larger than the divisor.
+        vm.warp(timeKey * timeDivisor + 1);
+
+        _registerMarketInDataStore(market, token, token, ARB_USDC);
+        _writeClaimableCollateralDataStore(market, token, timeKey, amount);
+
+        // Ensure the synthetic market token has enough WETH to pay out the claim.
+        deal(token, market, amount * 2);
+
+        // Simulate the callback that records the key in pool storage (as would happen on liquidation/ADL).
+        _simulateGmxCallback(market);
+
+        // Warp past the claim delay so the time-vesting fallback applies.
+        vm.warp(timeKey * timeDivisor + claimDelay + 1);
+    }
+
+    /// @dev Writes the account-specific and market-wide claimable-collateral DataStore keys.
+    function _writeClaimableCollateralDataStore(
+        address market,
+        address token,
+        uint256 timeKey,
+        uint256 amount
+    ) private {
+        bytes32 accountAmountKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, pool)
+        );
+        bytes32 marketAmountKey = keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token));
+
+        address controller = _getController();
+        vm.startPrank(controller);
+        IGmxDataStore(GMX_DATA_STORE).setUint(accountAmountKey, amount);
+        IGmxDataStore(GMX_DATA_STORE).setUint(marketAmountKey, amount);
+        vm.stopPrank();
+    }
+
+    /// @dev Registers a synthetic market in GMX's DataStore so `Reader.getMarket` and
+    ///  `validateMarketTokenBalance` treat it as an enabled market.
+    function _registerMarketInDataStore(
+        address market,
+        address indexToken,
+        address longToken,
+        address shortToken
+    ) private {
+        bytes32 marketListKey = keccak256(abi.encode("MARKET_LIST"));
+        bytes32 marketTokenField = keccak256(abi.encode("MARKET_TOKEN"));
+        bytes32 indexTokenField = keccak256(abi.encode("INDEX_TOKEN"));
+        bytes32 longTokenField = keccak256(abi.encode("LONG_TOKEN"));
+        bytes32 shortTokenField = keccak256(abi.encode("SHORT_TOKEN"));
+
+        IDataStore ds = IDataStore(GMX_DATA_STORE);
+        address controller = _getController();
+        vm.startPrank(controller);
+        ds.addAddress(marketListKey, market);
+        ds.setAddress(keccak256(abi.encode(market, marketTokenField)), market);
+        ds.setAddress(keccak256(abi.encode(market, indexTokenField)), indexToken);
+        ds.setAddress(keccak256(abi.encode(market, longTokenField)), longToken);
+        ds.setAddress(keccak256(abi.encode(market, shortTokenField)), shortToken);
+        vm.stopPrank();
     }
 
     // =========================================================================
@@ -692,7 +823,9 @@ contract AGmxV2ForkTest is Test {
         bytes32 positionKey = keccak256(abi.encode(pool, GMX_ETH_USD_MARKET, ARB_WETH, true));
         bytes32 sizeKey = keccak256(abi.encode(positionKey, keccak256(abi.encode("SIZE_IN_USD"))));
         vm.mockCall(
-            GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector, sizeKey), abi.encode(uint256(0))
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, sizeKey),
+            abi.encode(uint256(0))
         );
 
         // Slow path: mock Reader to report 32 open positions (cap hit).
@@ -701,7 +834,11 @@ contract AGmxV2ForkTest is Test {
         vm.mockCall(
             GMX_READER,
             abi.encodeWithSelector(
-                IGmxReader.getAccountPositions.selector, GMX_DATA_STORE, pool, uint256(0), uint256(32)
+                IGmxReader.getAccountPositions.selector,
+                GMX_DATA_STORE,
+                pool,
+                uint256(0),
+                uint256(32)
             ),
             abi.encode(fakePositions)
         );
@@ -768,7 +905,9 @@ contract AGmxV2ForkTest is Test {
         // ENavView must report the same NAV computed fresh from on-chain state.
         NavView.NavData memory navData = IENavView(pool).getNavDataView();
         assertEq(
-            navData.unitaryValue, storedNav, "ENavView NAV must match stored NAV after mint (pure base-token pool)"
+            navData.unitaryValue,
+            storedNav,
+            "ENavView NAV must match stored NAV after mint (pure base-token pool)"
         );
         // Sanity: NAV must be > 0.
         assertGt(navData.unitaryValue, 0, "NAV must be positive after mint");
@@ -793,8 +932,10 @@ contract AGmxV2ForkTest is Test {
         _executeOrder(orderKey, GMX_ETH_USD_MARKET);
 
         // ── Read real oracle price as baseline ───────────────────────────────
-        GmxValidatedPrice memory realPrice =
-            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+        GmxValidatedPrice memory realPrice = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(
+            ARB_WETH,
+            ""
+        );
 
         // ── Positive PnL: mock +10% oracle price ─────────────────────────────
         vm.mockCall(
@@ -803,8 +944,8 @@ contract AGmxV2ForkTest is Test {
             abi.encode(
                 GmxValidatedPrice({
                     token: ARB_WETH,
-                    min: realPrice.min * 110 / 100,
-                    max: realPrice.max * 110 / 100,
+                    min: (realPrice.min * 110) / 100,
+                    max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
                     blockNumber: realPrice.blockNumber
                 })
@@ -829,8 +970,8 @@ contract AGmxV2ForkTest is Test {
             abi.encode(
                 GmxValidatedPrice({
                     token: ARB_WETH,
-                    min: realPrice.min * 90 / 100,
-                    max: realPrice.max * 90 / 100,
+                    min: (realPrice.min * 90) / 100,
+                    max: (realPrice.max * 90) / 100,
                     timestamp: realPrice.timestamp,
                     blockNumber: realPrice.blockNumber
                 })
@@ -849,7 +990,11 @@ contract AGmxV2ForkTest is Test {
         assertGt(storedNavLowPrice, 0, "NAV must be positive at low price");
 
         // ── Sanity: price direction must be reflected ─────────────────────────
-        assertGt(storedNavHighPrice, storedNavLowPrice, "long position: high price must give higher NAV than low price");
+        assertGt(
+            storedNavHighPrice,
+            storedNavLowPrice,
+            "long position: high price must give higher NAV than low price"
+        );
     }
 
     // =========================================================================
@@ -858,34 +1003,35 @@ contract AGmxV2ForkTest is Test {
 
     /// @dev Returns a default CreateOrderParams for a WETH long increase.
     function _defaultIncreaseParams() private pure returns (IBaseOrderUtils.CreateOrderParams memory) {
-        return IBaseOrderUtils.CreateOrderParams({
-            addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
-                receiver: address(0),
-                cancellationReceiver: address(0),
-                callbackContract: address(0),
-                uiFeeReceiver: address(0),
-                market: GMX_ETH_USD_MARKET,
-                initialCollateralToken: ARB_WETH,
-                swapPath: new address[](0)
-            }),
-            numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
-                sizeDeltaUsd: SIZE_DELTA_USD,
-                initialCollateralDeltaAmount: COLLATERAL_AMOUNT,
-                triggerPrice: 0,
-                acceptablePrice: type(uint256).max, // Long: accept any price
-                executionFee: 0,
-                callbackGasLimit: 0,
-                minOutputAmount: 0,
-                validFromTime: 0
-            }),
-            orderType: Order.OrderType.MarketIncrease,
-            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
-            isLong: true,
-            shouldUnwrapNativeToken: false,
-            autoCancel: false,
-            referralCode: bytes32(0),
-            dataList: new bytes32[](0)
-        });
+        return
+            IBaseOrderUtils.CreateOrderParams({
+                addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                    receiver: address(0),
+                    cancellationReceiver: address(0),
+                    callbackContract: address(0),
+                    uiFeeReceiver: address(0),
+                    market: GMX_ETH_USD_MARKET,
+                    initialCollateralToken: ARB_WETH,
+                    swapPath: new address[](0)
+                }),
+                numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                    sizeDeltaUsd: SIZE_DELTA_USD,
+                    initialCollateralDeltaAmount: COLLATERAL_AMOUNT,
+                    triggerPrice: 0,
+                    acceptablePrice: type(uint256).max, // Long: accept any price
+                    executionFee: 0,
+                    callbackGasLimit: 0,
+                    minOutputAmount: 0,
+                    validFromTime: 0
+                }),
+                orderType: Order.OrderType.MarketIncrease,
+                decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+                isLong: true,
+                shouldUnwrapNativeToken: false,
+                autoCancel: false,
+                referralCode: bytes32(0),
+                dataList: new bytes32[](0)
+            });
     }
 
     /// @dev Returns a CreateOrderParams for a WETH-collateralized ETH/USD short increase.
@@ -900,34 +1046,35 @@ contract AGmxV2ForkTest is Test {
 
     /// @dev Returns a default CreateOrderParams for a WETH long full-close market decrease.
     function _defaultDecreaseParams() private pure returns (IBaseOrderUtils.CreateOrderParams memory) {
-        return IBaseOrderUtils.CreateOrderParams({
-            addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
-                receiver: address(0),
-                cancellationReceiver: address(0),
-                callbackContract: address(0),
-                uiFeeReceiver: address(0),
-                market: GMX_ETH_USD_MARKET,
-                initialCollateralToken: ARB_WETH,
-                swapPath: new address[](0)
-            }),
-            numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
-                sizeDeltaUsd: SIZE_DELTA_USD,
-                initialCollateralDeltaAmount: 0,
-                triggerPrice: 0,
-                acceptablePrice: 0,
-                executionFee: 0,
-                callbackGasLimit: 0,
-                minOutputAmount: 0,
-                validFromTime: 0
-            }),
-            orderType: Order.OrderType.MarketDecrease,
-            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
-            isLong: true,
-            shouldUnwrapNativeToken: false,
-            autoCancel: false,
-            referralCode: bytes32(0),
-            dataList: new bytes32[](0)
-        });
+        return
+            IBaseOrderUtils.CreateOrderParams({
+                addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                    receiver: address(0),
+                    cancellationReceiver: address(0),
+                    callbackContract: address(0),
+                    uiFeeReceiver: address(0),
+                    market: GMX_ETH_USD_MARKET,
+                    initialCollateralToken: ARB_WETH,
+                    swapPath: new address[](0)
+                }),
+                numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                    sizeDeltaUsd: SIZE_DELTA_USD,
+                    initialCollateralDeltaAmount: 0,
+                    triggerPrice: 0,
+                    acceptablePrice: 0,
+                    executionFee: 0,
+                    callbackGasLimit: 0,
+                    minOutputAmount: 0,
+                    validFromTime: 0
+                }),
+                orderType: Order.OrderType.MarketDecrease,
+                decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+                isLong: true,
+                shouldUnwrapNativeToken: false,
+                autoCancel: false,
+                referralCode: bytes32(0),
+                dataList: new bytes32[](0)
+            });
     }
 
     // =========================================================================
@@ -1009,7 +1156,9 @@ contract AGmxV2ForkTest is Test {
 
             bytes32 key = _oracleProviderKey(GMX_ORACLE_ADDRESS, rawTokens[i]);
             entries[k] = OracleProviderEntry({
-                token: rawTokens[i], key: key, originalProvider: IDataStore(GMX_DATA_STORE).getAddress(key)
+                token: rawTokens[i],
+                key: key,
+                originalProvider: IDataStore(GMX_DATA_STORE).getAddress(key)
             });
             vm.prank(controller);
             IDataStore(GMX_DATA_STORE).setAddress(key, GMX_CHAINLINK_PRICE_FEED);
@@ -1049,7 +1198,8 @@ contract AGmxV2ForkTest is Test {
         IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
         vm.prank(keeper);
         handler.executeOrder(
-            orderKey, IGmxOrderHandler.SetPricesParams({ tokens: tokens, providers: providers, data: data })
+            orderKey,
+            IGmxOrderHandler.SetPricesParams({tokens: tokens, providers: providers, data: data})
         );
     }
 
@@ -1096,7 +1246,9 @@ contract AGmxV2ForkTest is Test {
 
         _executeOrder(orderKey, GMX_ETH_USD_MARKET);
 
-        uint256 posCount = IGmxReader(GMX_READER).getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max).length;
+        uint256 posCount = IGmxReader(GMX_READER)
+            .getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max)
+            .length;
         assertEq(posCount, 1, "pool must have exactly 1 executed WETH-collateral GMX position");
     }
 
@@ -1139,7 +1291,9 @@ contract AGmxV2ForkTest is Test {
 
         _executeOrder(orderKey, GMX_ETH_USD_MARKET);
 
-        uint256 posCount = IGmxReader(GMX_READER).getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max).length;
+        uint256 posCount = IGmxReader(GMX_READER)
+            .getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max)
+            .length;
         assertEq(posCount, 1, "pool must have exactly 1 executed USDC-collateral GMX short position");
     }
 
@@ -1289,7 +1443,9 @@ contract AGmxV2ForkTest is Test {
         uint256 navPending = ISmartPoolState(pool).getPoolTokens().unitaryValue;
 
         assertEq(
-            navPending, navBefore, "NAV must be fully stable during pending (collateral + execution fee both tracked)"
+            navPending,
+            navBefore,
+            "NAV must be fully stable during pending (collateral + execution fee both tracked)"
         );
 
         // Execute the order so EApps can value the resulting position.
@@ -1359,8 +1515,10 @@ contract AGmxV2ForkTest is Test {
         uint256 navAfterOpen = ISmartPoolState(pool).getPoolTokens().unitaryValue;
 
         // ── Read real oracle price as baseline ───────────────────────────────
-        GmxValidatedPrice memory realPrice =
-            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+        GmxValidatedPrice memory realPrice = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(
+            ARB_WETH,
+            ""
+        );
 
         // ── Mock price +10%: long position should show unrealized profit ──────
         vm.mockCall(
@@ -1369,8 +1527,8 @@ contract AGmxV2ForkTest is Test {
             abi.encode(
                 GmxValidatedPrice({
                     token: ARB_WETH,
-                    min: realPrice.min * 110 / 100,
-                    max: realPrice.max * 110 / 100,
+                    min: (realPrice.min * 110) / 100,
+                    max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
                     blockNumber: realPrice.blockNumber
                 })
@@ -1390,8 +1548,8 @@ contract AGmxV2ForkTest is Test {
             abi.encode(
                 GmxValidatedPrice({
                     token: ARB_WETH,
-                    min: realPrice.min * 90 / 100,
-                    max: realPrice.max * 90 / 100,
+                    min: (realPrice.min * 90) / 100,
+                    max: (realPrice.max * 90) / 100,
                     timestamp: realPrice.timestamp,
                     blockNumber: realPrice.blockNumber
                 })
@@ -1434,7 +1592,9 @@ contract AGmxV2ForkTest is Test {
         uint256 navAfterClose = ISmartPoolState(pool).getPoolTokens().unitaryValue;
 
         // ── Position must be gone ─────────────────────────────────────────────
-        uint256 posCount = IGmxReader(GMX_READER).getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max).length;
+        uint256 posCount = IGmxReader(GMX_READER)
+            .getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max)
+            .length;
         assertEq(posCount, 0, "pool must have 0 GMX positions after full close");
 
         // ── NAV must be close to pre-open NAV (fees are the only loss) ────────
@@ -1479,8 +1639,10 @@ contract AGmxV2ForkTest is Test {
         // ── Mock Chainlink +10% *before* _executeOrder so the keeper uses it ─
         // _executeOrder internally calls vm.clearMockedCalls() at the end, so
         // neither this test nor subsequent tests see the mock afterward.
-        GmxValidatedPrice memory realPrice =
-            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+        GmxValidatedPrice memory realPrice = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(
+            ARB_WETH,
+            ""
+        );
 
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
@@ -1488,8 +1650,8 @@ contract AGmxV2ForkTest is Test {
             abi.encode(
                 GmxValidatedPrice({
                     token: ARB_WETH,
-                    min: realPrice.min * 110 / 100,
-                    max: realPrice.max * 110 / 100,
+                    min: (realPrice.min * 110) / 100,
+                    max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
                     blockNumber: realPrice.blockNumber
                 })
@@ -1500,7 +1662,9 @@ contract AGmxV2ForkTest is Test {
         _executeOrder(closeKey, GMX_ETH_USD_MARKET); // vm.clearMockedCalls() called inside
 
         // ── Position must be gone ─────────────────────────────────────────────
-        uint256 posCount = IGmxReader(GMX_READER).getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max).length;
+        uint256 posCount = IGmxReader(GMX_READER)
+            .getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max)
+            .length;
         assertEq(posCount, 0, "pool must have 0 GMX positions after full close");
 
         // ── Realized profit: NAV after close must exceed NAV after open ───────
@@ -1629,13 +1793,19 @@ contract AGmxV2ForkTest is Test {
         _executeOrder(orderKey, GMX_ETH_USD_MARKET);
 
         // Read the real position.
-        Position.Props[] memory positions =
-            IGmxReader(GMX_READER).getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max);
+        Position.Props[] memory positions = IGmxReader(GMX_READER).getAccountPositions(
+            GMX_DATA_STORE,
+            pool,
+            0,
+            type(uint256).max
+        );
         assertEq(positions.length, 1, "must have exactly 1 position");
 
         // Get real oracle price for collateral.
-        GmxValidatedPrice memory wethPrice =
-            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+        GmxValidatedPrice memory wethPrice = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(
+            ARB_WETH,
+            ""
+        );
 
         // Build a fake GmxPositionInfo with realistic collateral amounts and
         // explicitly set non-zero claimable funding fees for both long and short tokens.
@@ -1651,7 +1821,9 @@ contract AGmxV2ForkTest is Test {
         });
 
         vm.mockCall(
-            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector), abi.encode(fakeInfos)
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(fakeInfos)
         );
 
         uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
@@ -1693,12 +1865,18 @@ contract AGmxV2ForkTest is Test {
         bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
         _executeOrder(orderKey, GMX_ETH_USD_MARKET);
 
-        Position.Props[] memory positions =
-            IGmxReader(GMX_READER).getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max);
+        Position.Props[] memory positions = IGmxReader(GMX_READER).getAccountPositions(
+            GMX_DATA_STORE,
+            pool,
+            0,
+            type(uint256).max
+        );
         assertEq(positions.length, 1, "must have exactly 1 position");
 
-        GmxValidatedPrice memory wethPrice =
-            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+        GmxValidatedPrice memory wethPrice = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(
+            ARB_WETH,
+            ""
+        );
 
         uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
 
@@ -1714,7 +1892,9 @@ contract AGmxV2ForkTest is Test {
             claimableShort: 0
         });
         vm.mockCall(
-            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector), abi.encode(zeroImpact)
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(zeroImpact)
         );
         ExternalApp[] memory appsNoImpact = IEApps(pool).getAppTokenBalances(gmxFlag);
         vm.clearMockedCalls();
@@ -1732,7 +1912,9 @@ contract AGmxV2ForkTest is Test {
             claimableShort: 0
         });
         vm.mockCall(
-            GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector), abi.encode(posImpact)
+            GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositionInfoList.selector),
+            abi.encode(posImpact)
         );
         ExternalApp[] memory appsWithImpact = IEApps(pool).getAppTokenBalances(gmxFlag);
         vm.clearMockedCalls();
@@ -1775,7 +1957,7 @@ contract AGmxV2ForkTest is Test {
         info.position = pos;
 
         // fees — zero everything except collateralTokenPrice and claimable funding
-        info.fees.collateralTokenPrice = Price.Props({ min: colPriceMin, max: colPriceMax });
+        info.fees.collateralTokenPrice = Price.Props({min: colPriceMin, max: colPriceMax});
         info.fees.funding.claimableLongTokenAmount = claimableLong;
         info.fees.funding.claimableShortTokenAmount = claimableShort;
         // totalCostAmount = 0 (no fees charged in the fake info)
@@ -1895,7 +2077,9 @@ contract AGmxV2ForkTest is Test {
         _executeOrder(closeKey, GMX_ETH_USD_MARKET);
 
         // ── Position must be gone ─────────────────────────────────────────────
-        uint256 posCount = IGmxReader(GMX_READER).getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max).length;
+        uint256 posCount = IGmxReader(GMX_READER)
+            .getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max)
+            .length;
         assertEq(posCount, 0, "pool must have 0 GMX positions after USDC short close");
 
         // ── USDC returned to wallet ───────────────────────────────────────────
@@ -1927,11 +2111,12 @@ contract AGmxV2ForkTest is Test {
 
         uint256 fundingAmount = 0.001 ether;
         uint256 collateralAmount = 0.002 ether;
-        uint256 timeKey = block.timestamp
-            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+        uint256 timeKey = block.timestamp /
+            IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
 
-        bytes32 fundingKey =
-            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, mkt.longToken, pool));
+        bytes32 fundingKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, mkt.longToken, pool)
+        );
         bytes32 collateralKey = keccak256(
             abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, mkt.longToken, timeKey, pool)
         );
@@ -1942,29 +2127,36 @@ contract AGmxV2ForkTest is Test {
         vm.stopPrank();
 
         EventUtils.AddressKeyValue[] memory addrItems = new EventUtils.AddressKeyValue[](6);
-        addrItems[0] = EventUtils.AddressKeyValue({ key: "account", value: pool });
-        addrItems[4] = EventUtils.AddressKeyValue({ key: "market", value: market });
+        addrItems[0] = EventUtils.AddressKeyValue({key: "account", value: pool});
+        addrItems[4] = EventUtils.AddressKeyValue({key: "market", value: market});
         EventUtils.EventLogData memory orderData = EventUtils.EventLogData({
             addressItems: EventUtils.AddressItems({
-                items: addrItems, arrayItems: new EventUtils.AddressArrayKeyValue[](0)
+                items: addrItems,
+                arrayItems: new EventUtils.AddressArrayKeyValue[](0)
             }),
             uintItems: EventUtils.UintItems({
-                items: new EventUtils.UintKeyValue[](0), arrayItems: new EventUtils.UintArrayKeyValue[](0)
+                items: new EventUtils.UintKeyValue[](0),
+                arrayItems: new EventUtils.UintArrayKeyValue[](0)
             }),
             intItems: EventUtils.IntItems({
-                items: new EventUtils.IntKeyValue[](0), arrayItems: new EventUtils.IntArrayKeyValue[](0)
+                items: new EventUtils.IntKeyValue[](0),
+                arrayItems: new EventUtils.IntArrayKeyValue[](0)
             }),
             boolItems: EventUtils.BoolItems({
-                items: new EventUtils.BoolKeyValue[](0), arrayItems: new EventUtils.BoolArrayKeyValue[](0)
+                items: new EventUtils.BoolKeyValue[](0),
+                arrayItems: new EventUtils.BoolArrayKeyValue[](0)
             }),
             bytes32Items: EventUtils.Bytes32Items({
-                items: new EventUtils.Bytes32KeyValue[](0), arrayItems: new EventUtils.Bytes32ArrayKeyValue[](0)
+                items: new EventUtils.Bytes32KeyValue[](0),
+                arrayItems: new EventUtils.Bytes32ArrayKeyValue[](0)
             }),
             bytesItems: EventUtils.BytesItems({
-                items: new EventUtils.BytesKeyValue[](0), arrayItems: new EventUtils.BytesArrayKeyValue[](0)
+                items: new EventUtils.BytesKeyValue[](0),
+                arrayItems: new EventUtils.BytesArrayKeyValue[](0)
             }),
             stringItems: EventUtils.StringItems({
-                items: new EventUtils.StringKeyValue[](0), arrayItems: new EventUtils.StringArrayKeyValue[](0)
+                items: new EventUtils.StringKeyValue[](0),
+                arrayItems: new EventUtils.StringArrayKeyValue[](0)
             })
         });
 
@@ -1975,7 +2167,7 @@ contract AGmxV2ForkTest is Test {
         emit ClaimableCollateralAdded(collateralKey, mkt.longToken, market, timeKey);
 
         vm.prank(controller);
-        (bool success,) = pool.call(
+        (bool success, ) = pool.call(
             abi.encodeWithSelector(IEGmxCallback.afterOrderExecution.selector, bytes32(0), orderData, orderData)
         );
         require(success, "callback failed");
@@ -2005,13 +2197,15 @@ contract AGmxV2ForkTest is Test {
         address longToken = ARB_WETH;
         address shortToken = ARB_USDC;
 
-        uint256 timeKey = block.timestamp
-            / IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+        uint256 timeKey = block.timestamp /
+            IGmxDataStore(GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
 
-        bytes32 longAmountKey =
-            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, longToken, timeKey, pool));
-        bytes32 shortAmountKey =
-            keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, shortToken, timeKey, pool));
+        bytes32 longAmountKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, longToken, timeKey, pool)
+        );
+        bytes32 shortAmountKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, shortToken, timeKey, pool)
+        );
 
         vm.startPrank(controller);
         IGmxDataStore(GMX_DATA_STORE).setUint(longAmountKey, 0.001 ether);
@@ -2022,36 +2216,41 @@ contract AGmxV2ForkTest is Test {
             GMX_READER,
             abi.encodeWithSelector(IGmxReader.getMarket.selector, GMX_DATA_STORE, market),
             abi.encode(
-                Market.Props({
-                    marketToken: market, indexToken: longToken, longToken: longToken, shortToken: shortToken
-                })
+                Market.Props({marketToken: market, indexToken: longToken, longToken: longToken, shortToken: shortToken})
             )
         );
 
         EventUtils.AddressKeyValue[] memory addrItems = new EventUtils.AddressKeyValue[](6);
-        addrItems[0] = EventUtils.AddressKeyValue({ key: "account", value: pool });
-        addrItems[4] = EventUtils.AddressKeyValue({ key: "market", value: market });
+        addrItems[0] = EventUtils.AddressKeyValue({key: "account", value: pool});
+        addrItems[4] = EventUtils.AddressKeyValue({key: "market", value: market});
         EventUtils.EventLogData memory orderData = EventUtils.EventLogData({
             addressItems: EventUtils.AddressItems({
-                items: addrItems, arrayItems: new EventUtils.AddressArrayKeyValue[](0)
+                items: addrItems,
+                arrayItems: new EventUtils.AddressArrayKeyValue[](0)
             }),
             uintItems: EventUtils.UintItems({
-                items: new EventUtils.UintKeyValue[](0), arrayItems: new EventUtils.UintArrayKeyValue[](0)
+                items: new EventUtils.UintKeyValue[](0),
+                arrayItems: new EventUtils.UintArrayKeyValue[](0)
             }),
             intItems: EventUtils.IntItems({
-                items: new EventUtils.IntKeyValue[](0), arrayItems: new EventUtils.IntArrayKeyValue[](0)
+                items: new EventUtils.IntKeyValue[](0),
+                arrayItems: new EventUtils.IntArrayKeyValue[](0)
             }),
             boolItems: EventUtils.BoolItems({
-                items: new EventUtils.BoolKeyValue[](0), arrayItems: new EventUtils.BoolArrayKeyValue[](0)
+                items: new EventUtils.BoolKeyValue[](0),
+                arrayItems: new EventUtils.BoolArrayKeyValue[](0)
             }),
             bytes32Items: EventUtils.Bytes32Items({
-                items: new EventUtils.Bytes32KeyValue[](0), arrayItems: new EventUtils.Bytes32ArrayKeyValue[](0)
+                items: new EventUtils.Bytes32KeyValue[](0),
+                arrayItems: new EventUtils.Bytes32ArrayKeyValue[](0)
             }),
             bytesItems: EventUtils.BytesItems({
-                items: new EventUtils.BytesKeyValue[](0), arrayItems: new EventUtils.BytesArrayKeyValue[](0)
+                items: new EventUtils.BytesKeyValue[](0),
+                arrayItems: new EventUtils.BytesArrayKeyValue[](0)
             }),
             stringItems: EventUtils.StringItems({
-                items: new EventUtils.StringKeyValue[](0), arrayItems: new EventUtils.StringArrayKeyValue[](0)
+                items: new EventUtils.StringKeyValue[](0),
+                arrayItems: new EventUtils.StringArrayKeyValue[](0)
             })
         });
 
@@ -2065,7 +2264,7 @@ contract AGmxV2ForkTest is Test {
         emit ClaimableCollateralAdded(shortAmountKey, shortToken, market, timeKey);
 
         vm.prank(controller);
-        (bool success,) = pool.call(
+        (bool success, ) = pool.call(
             abi.encodeWithSelector(IEGmxCallback.afterOrderExecution.selector, bytes32(0), orderData, orderData)
         );
         require(success, "callback failed");
@@ -2077,34 +2276,41 @@ contract AGmxV2ForkTest is Test {
         address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(controllerRole, 0, 1)[0];
 
         EventUtils.AddressKeyValue[] memory addrItems = new EventUtils.AddressKeyValue[](6);
-        addrItems[0] = EventUtils.AddressKeyValue({ key: "account", value: pool });
-        addrItems[4] = EventUtils.AddressKeyValue({ key: "market", value: market });
+        addrItems[0] = EventUtils.AddressKeyValue({key: "account", value: pool});
+        addrItems[4] = EventUtils.AddressKeyValue({key: "market", value: market});
         EventUtils.EventLogData memory orderData = EventUtils.EventLogData({
             addressItems: EventUtils.AddressItems({
-                items: addrItems, arrayItems: new EventUtils.AddressArrayKeyValue[](0)
+                items: addrItems,
+                arrayItems: new EventUtils.AddressArrayKeyValue[](0)
             }),
             uintItems: EventUtils.UintItems({
-                items: new EventUtils.UintKeyValue[](0), arrayItems: new EventUtils.UintArrayKeyValue[](0)
+                items: new EventUtils.UintKeyValue[](0),
+                arrayItems: new EventUtils.UintArrayKeyValue[](0)
             }),
             intItems: EventUtils.IntItems({
-                items: new EventUtils.IntKeyValue[](0), arrayItems: new EventUtils.IntArrayKeyValue[](0)
+                items: new EventUtils.IntKeyValue[](0),
+                arrayItems: new EventUtils.IntArrayKeyValue[](0)
             }),
             boolItems: EventUtils.BoolItems({
-                items: new EventUtils.BoolKeyValue[](0), arrayItems: new EventUtils.BoolArrayKeyValue[](0)
+                items: new EventUtils.BoolKeyValue[](0),
+                arrayItems: new EventUtils.BoolArrayKeyValue[](0)
             }),
             bytes32Items: EventUtils.Bytes32Items({
-                items: new EventUtils.Bytes32KeyValue[](0), arrayItems: new EventUtils.Bytes32ArrayKeyValue[](0)
+                items: new EventUtils.Bytes32KeyValue[](0),
+                arrayItems: new EventUtils.Bytes32ArrayKeyValue[](0)
             }),
             bytesItems: EventUtils.BytesItems({
-                items: new EventUtils.BytesKeyValue[](0), arrayItems: new EventUtils.BytesArrayKeyValue[](0)
+                items: new EventUtils.BytesKeyValue[](0),
+                arrayItems: new EventUtils.BytesArrayKeyValue[](0)
             }),
             stringItems: EventUtils.StringItems({
-                items: new EventUtils.StringKeyValue[](0), arrayItems: new EventUtils.StringArrayKeyValue[](0)
+                items: new EventUtils.StringKeyValue[](0),
+                arrayItems: new EventUtils.StringArrayKeyValue[](0)
             })
         });
 
         vm.prank(controller);
-        (bool success,) = pool.call(
+        (bool success, ) = pool.call(
             abi.encodeWithSelector(IEGmxCallback.afterOrderExecution.selector, bytes32(0), orderData, orderData)
         );
         require(success, "callback failed");
@@ -2112,13 +2318,23 @@ contract AGmxV2ForkTest is Test {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper interfaces
+// Helper contracts / interfaces
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// @dev Minimal GMX market token for fork parity tests. GMX's claimCollateral calls
+///  `transferOut(token, receiver, amount)` on the market token; this mock simply
+///  forwards the ERC-20 transfer from its own balance.
+contract MockGmxMarketToken {
+    function transferOut(address token, address receiver, uint256 amount) external {
+        IERC20(token).transfer(receiver, amount);
+    }
+}
 
 /// @dev Minimal DataStore interface for oracle provider key reads/writes in tests.
 interface IDataStore {
     function getAddress(bytes32 key) external view returns (address);
     function setAddress(bytes32 key, address value) external returns (address);
+    function addAddress(bytes32 setKey, address value) external;
 }
 
 // Helper: IERC20 with name()

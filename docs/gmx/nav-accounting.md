@@ -6,11 +6,11 @@ Open GMX perpetual positions must be included in the pool's Net Asset Value (NAV
 
 ## Components
 
-| Component | Responsibility |
-|-----------|----------------|
-| `EApps` | Per-call position valuation (called by delegates during deposits/withdrawals) |
-| `ENavView` | View-only NAV computation including GMX (off-chain queries, multi-call) |
-| `NavView` | Shared library: NAV calculation with optional GMX inclusion |
+| Component        | Responsibility                                                                    |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `EApps`          | Per-call position valuation (called by delegates during deposits/withdrawals)     |
+| `ENavView`       | View-only NAV computation including GMX (off-chain queries, multi-call)           |
+| `NavView`        | Shared library: NAV calculation with optional GMX inclusion                       |
 | `IGmxSynthetics` | Interface types: `Position.Props`, `PositionInfo`, `Market.Props`, `MarketPrices` |
 
 ## Position Valuation Flow
@@ -79,6 +79,7 @@ GmxPositionInfo[] memory infos = IGmxReader(_GMX_READER).getAccountPositionInfoL
 ```
 
 Each `PositionInfo` contains:
+
 - `position.numbers.collateralAmount` — deposited collateral
 - `fees.funding.claimableLongTokenAmount` — accrued funding fees (long)
 - `fees.funding.claimableShortTokenAmount` — accrued funding fees (short)
@@ -137,14 +138,14 @@ through constructors. The old `GmxParams` struct in `NavView` has been removed.
 
 ## EApps vs ENavView
 
-| | `EApps` | `ENavView` |
-|---|---|---|
-| Called by | Pool during mint/redeem | Off-chain via staticcall |
-| Execution context | delegatecall from pool | delegatecall from pool |
-| Purpose | Include GMX value in deposit/withdrawal NAV | Read-only NAV snapshot |
-| Gas sensitivity | High (must be cheap for users) | Low (view only) |
-| Chain guard | none (activation gate is sufficient) | none (same) |
-| Active-app gate | ✅ | ✅ |
+|                   | `EApps`                                     | `ENavView`               |
+| ----------------- | ------------------------------------------- | ------------------------ |
+| Called by         | Pool during mint/redeem                     | Off-chain via staticcall |
+| Execution context | delegatecall from pool                      | delegatecall from pool   |
+| Purpose           | Include GMX value in deposit/withdrawal NAV | Read-only NAV snapshot   |
+| Gas sensitivity   | High (must be cheap for users)              | Low (view only)          |
+| Chain guard       | none (activation gate is sufficient)        | none (same)              |
+| Active-app gate   | ✅                                          | ✅                       |
 
 ## Zero-Position Fast Path
 
@@ -174,11 +175,13 @@ if (net > 0) { /* include in NAV */ }
 **Why this is correct:**
 
 GMX has automatic liquidation and ADL (auto-deleveraging) mechanics that kick in before a position's collateral drops to zero. Before the net value can realistically go negative:
+
 1. The position breaches the minimum collateral ratio → GMX marks it for liquidation.
 2. A keeper calls `liquidatePosition` → remaining collateral (minus liquidation fee) is returned to the pool.
 3. The pool receives back whatever collateral survived. It cannot owe GMX anything beyond what was deposited.
 
 When `_computeGmxNetCollateral` returns a negative number, it means:
+
 - Our fee estimate is conservative and overshoots actual fees, **or**
 - The position is already in the liquidation queue (keepers will execute shortly)
 
@@ -207,10 +210,19 @@ GMX closes positions via keeper execution, which sends collateral back to the po
 
 The `EGmxCallback` extension closes the two NAV gaps described above. It receives GMX `afterOrderExecution` callbacks from approved GMX controllers and writes two pieces of data into pool storage:
 
-1. **`trackedMarkets`** — a set of every market that has ever had pool activity. `GmxLib` iterates this set at NAV time and queries `CLAIMABLE_FUNDING_AMOUNT` for both market tokens, so post-close funding fees remain visible.
-2. **`claimableCollateralKeys`** — recorded `(market, token, timeKey)` keys where a decrease execution created a non-zero `CLAIMABLE_COLLATERAL_AMOUNT`. `GmxLib` applies the same factor/reduction/claimed math GMX uses at claim time, so withheld rebates remain in NAV until they are claimed.
+1. **`trackedMarkets`** — markets that currently have an open position or still owe claimable funding fees. `GmxLib` iterates this set at NAV time and queries `CLAIMABLE_FUNDING_AMOUNT` for both market tokens, so post-close funding fees remain visible.
+2. **`claimableCollateralKeys`** — recorded `(market, token, timeKey)` keys where a decrease/liquidation/ADL created a non-zero `CLAIMABLE_COLLATERAL_AMOUNT`. `GmxLib` applies the same factor/reduction/claimed math GMX uses at claim time, so withheld rebates remain in NAV until they are claimed.
 
 The callback is routed via `ExtensionsMap` with `shouldDelegatecall = true`, so it runs in the pool's storage context. Its `onlyGmxController` modifier rejects any caller that is not flagged as a `CONTROLLER` in the GMX `RoleStore`.
+
+#### Scan Size
+
+The callback indexes are **not hard-capped**. Their size is bounded in practice by two mechanisms:
+
+- The 32 open-position limit keeps the number of actively traded markets small.
+- `claimFundingFees` and `claimCollateral` prune entries as soon as the outstanding value is claimed, so the sets do not accumulate stale data.
+
+In the worst case, the NAV scan grows linearly with the number of historic markets that still hold unclaimed funding or collateral for the pool.
 
 ### Tracking Markets at Increase Time
 
@@ -222,5 +234,3 @@ To keep the NAV iteration set from growing unbounded, `AGmxV2` prunes storage wh
 
 - `claimFundingFees` removes the market from `trackedMarkets` if the pool has **no open position** on that market and **no outstanding claimable funding fees** for either token.
 - `claimCollateral` removes the collateral key from `claimableCollateralKeys` once the remaining claimable amount is zero.
-
-

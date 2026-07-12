@@ -71,26 +71,47 @@ Unbounded positions would make GMX Reader calls prohibitively expensive in the N
 ```
 
 **Important implementation detail — NAV reads are unbounded:**  
-The NAV loop (`_getExecutedPositionBalances`, `_getPendingOrderBalances`) always fetches ALL positions and all orders using `getAccountPositions(..., 0, type(uint256).max)`. The 32-position limit only gates *creation*, not *reading*. This means:
+The NAV loop (`_getExecutedPositionBalances`, `_getPendingOrderBalances`) always fetches ALL positions and all orders using `getAccountPositions(..., 0, type(uint256).max)`. The 32-position limit only gates _creation_, not _reading_. This means:
 
 - A position count >32 cannot arise in steady-state (the cap prevents it).
 - If it somehow arose (e.g., a race condition with many simultaneously pending orders), all positions would still be correctly counted in NAV — no positions become "invisible".
 - Collateral is always accounted: `OrderVault` funds are counted via `_getPendingOrderBalances`; executed-position collateral is counted via `_getExecutedPositionBalances`. There is no window where collateral disappears from NAV.
 
+### Callback Storage Pruning
+
+`EGmxCallback` records two small lookup indexes so NAV can find post-close value:
+
+- `trackedMarkets` — markets that have had pool activity, so claimable funding fees can be queried even after all positions are closed.
+- `claimableCollateralKeys` — `(market, token, timeKey)` triples where a decrease/liquidation/ADL created a non-zero `CLAIMABLE_COLLATERAL_AMOUNT`.
+
+These sets are **not hard-capped**. They grow only when value is actually owed to the pool, and they are pruned automatically:
+
+- `claimFundingFees` removes a market from `trackedMarkets` when the pool has no open position on that market and no outstanding claimable funding fees for either token.
+- `claimCollateral` removes a collateral key once its remaining claimable amount is zero.
+
+In steady state the 32 open-position limit keeps the scan small; in the worst case the scan grows linearly with the number of historic markets that still hold unclaimed value.
+
+### Callback Gas Limit
+
+Pool-initiated decrease orders set `callbackContract: address(this)` with a callback gas limit of `500_000`. This caps the gas GMX keepers forward back to the pool callback when the pool owner voluntarily closes a position.
+
+This limit does **not** apply to keeper-triggered liquidation or ADL callbacks. Those are initiated by GMX's `LiquidationUtils` / `AdlUtils`, which use the protocol's own `MAX_CALLBACK_GAS_LIMIT = 4_000_000`. The `500_000` value is therefore only a cost-control knob for owner-triggered closes and does not constrain the main claimable-collateral path (liquidation/ADL).
+
 ### Pending-Order NAV Accounting
 
 `_getPendingOrderBalances` values assets currently held in GMX's `OrderVault`:
 
-| Order type | Counted in NAV | Notes |
-|---|---|---|
-| `MarketIncrease` / `LimitIncrease` | `initialCollateralDeltaAmount` + `executionFee` | Both collateral and fee move to the vault on creation. |
-| `MarketDecrease` / `LimitDecrease` / `StopLossDecrease` | `executionFee` only | Position collateral stays in the DataStore and is valued by `_getExecutedPositionBalances`; counting it here would double-count. |
-| Swap orders | `executionFee` only | `AGmxV2` does not create swap orders. If they were created, the input amount would also need to be counted. |
+| Order type                                              | Counted in NAV                                  | Notes                                                                                                                            |
+| ------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `MarketIncrease` / `LimitIncrease`                      | `initialCollateralDeltaAmount` + `executionFee` | Both collateral and fee move to the vault on creation.                                                                           |
+| `MarketDecrease` / `LimitDecrease` / `StopLossDecrease` | `executionFee` only                             | Position collateral stays in the DataStore and is valued by `_getExecutedPositionBalances`; counting it here would double-count. |
+| Swap orders                                             | `executionFee` only                             | `AGmxV2` does not create swap orders. If they were created, the input amount would also need to be counted.                      |
 
 Because decrease-order execution fees are now counted, a pending decrease no longer creates a temporary NAV gap for the fee portion.
 
 **Pending-order race condition (acknowledged, not fixed):**  
-`createIncreaseOrder` checks the count of *executed* positions at call time. Multiple `createIncreaseOrder` calls before any keeper execution can in theory queue more than 32 orders. However:
+`createIncreaseOrder` checks the count of _executed_ positions at call time. Multiple `createIncreaseOrder` calls before any keeper execution can in theory queue more than 32 orders. However:
+
 1. Each call transfers real collateral from the pool (the pool owner is spending pool funds).
 2. Once executed, all resulting positions are unconditionally included in NAV via the unbounded read.
 3. Pending-order collateral and all execution fees are already counted, so NAV does not drop when orders are created and does not rebound artificially when they execute.
@@ -129,6 +150,7 @@ RequestNotYetCancellable
 ```
 
 This is enforced by GMX's `DataStore` key:
+
 ```
 keccak256(abi.encode("REQUEST_EXPIRATION_TIME")) → 300
 ```
@@ -159,6 +181,7 @@ The adapter passes through to GMX without type-filtering. Frontends should disab
 For WETH (wrapped native) collateral orders, the adapter sends `initialCollateralDeltaAmount + executionFee` to the OrderVault in a single WETH transfer. This is required because GMX deducts the execution fee from the vault's WNT balance — sending only `collateralAmount` would result in less collateral than intended entering the position.
 
 For non-WETH collateral tokens, two separate transfers are made:
+
 1. Collateral token → `initialCollateralDeltaAmount`
 2. WETH → `executionFee`
 
@@ -210,12 +233,33 @@ The `EGmxCallback` extension automatically tracks price-impact rebate collateral
 The adapter does not accept or store a referral code. All orders pass `referralCode: bytes32(0)` to GMX.
 
 **Why removed:** A referral code is registered by a specific address that earns GMX token rebates when the code is used. If the pool operator registered their own code and used it for pool trades:
+
 - The pool gets a fee discount (reduces trading cost → benefits LPs ✓)
 - The operator's EOA gets a GMX token rebate from every trade (value extracted from the system at the expense of GMX's treasury, not the pool's assets directly, but represents a conflict of interest)
 
 Hardcoding `bytes32(0)` removes this conflict entirely with no impact on trading functionality. No discount is earned, but no referrer is enriched.
 
 ---
+
+## Audit Agent Findings
+
+The following findings were raised by an audit-agent review of `EGmxCallback.sol` and `GmxCallbackLib.sol` on a previous commit.
+
+### 1. Missed GMX callbacks permanently hide historical claimable-collateral buckets from NAV accounting
+
+- **Severity:** Low
+- **Contracts:** `contracts/protocol/extensions/EGmxCallback.sol`
+- **Description:** `afterOrderExecution` is the only on-chain path that records `(market, token, timeKey)` collateral keys. GMX invokes callbacks inside a `try/catch`, so order execution continues even if the callback reverts (for example, because the callback gas limit is too low or the payload cannot be decoded). When that happens the pool still owns a real claimable-collateral bucket in GMX's DataStore, but the extension never records the key, so the rebate is excluded from on-chain NAV until it is claimed.
+- **Status:** Acknowledged / not fixed.
+- **Rationale:** The `timeKey` and `market` are publicly observable from the executed order event and block timestamp, so operators can reconstruct missed buckets off-chain and call `claimCollateral` on behalf of the pool. Liquidation/ADL callbacks use GMX's `MAX_CALLBACK_GAS_LIMIT` (4M), making failure unlikely; owner-initiated decrease callbacks use 500k, which is a monitored, owner-controlled parameter.
+
+### 2. Unbounded GMX callback tracking sets can grow until NAV-dependent operations run out of gas
+
+- **Severity:** Low
+- **Contracts:** `contracts/protocol/extensions/EGmxCallback.sol`, `contracts/protocol/libraries/GmxCallbackLib.sol`
+- **Description:** `trackedMarkets` and `claimableCollateralKeys` grow with every new market or `timeKey` bucket that produces value. The 32 open-position limit bounds concurrent positions, but it does not bound historical markets or time buckets. Downstream NAV logic iterates these sets in a single call, so gas cost scales with lifetime size rather than current position count.
+- **Status:** Acknowledged / not fixed.
+- **Rationale:** The sets are pruned automatically when value is claimed — `claimFundingFees` removes markets with no open position and no outstanding funding, and `claimCollateral` removes fully-claimed keys. The pool operator is the only party who can create entries, and the 32 open-position limit bounds active activity. A hard cap on the sets was considered and rejected because it can prevent new legitimate markets from being tracked while old, unclaimed value still occupies slots.
 
 ## Audit Notes
 
