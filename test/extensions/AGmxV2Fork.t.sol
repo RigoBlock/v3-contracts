@@ -565,7 +565,7 @@ contract AGmxV2ForkTest is Test {
 
         (address market, uint256 timeKey) = _setupClaimableCollateral(token, amount);
 
-        // Query EApps in the pool context: this exercises GmxLib._getCallbackBalances and
+        // Query EApps in the pool context: this exercises GmxLib._getClaimableBalances and
         // our reimplemented claimable-collateral formula.
         uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
         ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(gmxFlag);

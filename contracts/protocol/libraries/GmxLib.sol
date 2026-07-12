@@ -79,7 +79,7 @@ library GmxLib {
     function getGmxPositionBalances(address account) internal view returns (AppTokenBalance[] memory balances) {
         AppTokenBalance[] memory posBal = _getExecutedPositionBalances(account);
         AppTokenBalance[] memory ordBal = _getPendingOrderBalances(account);
-        AppTokenBalance[] memory cbBal = _getCallbackBalances(account);
+        AppTokenBalance[] memory cbBal = _getClaimableBalances(account);
 
         uint256 total = posBal.length + ordBal.length + cbBal.length;
         if (total == 0) return balances;
@@ -192,7 +192,7 @@ library GmxLib {
         newCount = count + 1;
     }
 
-    function _getCallbackBalances(address account) private view returns (AppTokenBalance[] memory balances) {
+    function _getClaimableBalances(address account) private view returns (AppTokenBalance[] memory balances) {
         GmxCallbackLib.GmxCallbackSlot storage callbackData = GmxCallbackLib.gmxCallbackData();
         uint256 marketCount = GmxCallbackLib.trackedMarketsCount();
         uint256 keyCount = callbackData.claimableCollateralKeys.values.length;
@@ -210,13 +210,13 @@ library GmxLib {
                 continue;
             }
 
-            uint256 longAmount = _claimableFundingAmount(market, mkt.longToken, account);
+            uint256 longAmount = _getClaimableFundingAmount(market, mkt.longToken, account);
             if (longAmount > 0) {
                 tmp[count++] = AppTokenBalance({token: mkt.longToken, amount: longAmount.toInt256()});
             }
 
             if (mkt.shortToken != mkt.longToken) {
-                uint256 shortAmount = _claimableFundingAmount(market, mkt.shortToken, account);
+                uint256 shortAmount = _getClaimableFundingAmount(market, mkt.shortToken, account);
                 if (shortAmount > 0) {
                     tmp[count++] = AppTokenBalance({token: mkt.shortToken, amount: shortAmount.toInt256()});
                 }
@@ -238,7 +238,7 @@ library GmxLib {
         }
     }
 
-    function _claimableFundingAmount(address market, address token, address account) private view returns (uint256) {
+    function _getClaimableFundingAmount(address market, address token, address account) private view returns (uint256) {
         return
             IGmxDataStore(_GMX_DATA_STORE).getUint(
                 keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, account))
@@ -311,8 +311,8 @@ library GmxLib {
 
     function hasClaimableFundingFees(address account, address market) internal view returns (bool) {
         Market.Props memory mkt = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
-        if (_claimableFundingAmount(market, mkt.longToken, account) > 0) return true;
-        if (mkt.shortToken != mkt.longToken && _claimableFundingAmount(market, mkt.shortToken, account) > 0) {
+        if (_getClaimableFundingAmount(market, mkt.longToken, account) > 0) return true;
+        if (mkt.shortToken != mkt.longToken && _getClaimableFundingAmount(market, mkt.shortToken, account) > 0) {
             return true;
         }
         return false;
