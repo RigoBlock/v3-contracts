@@ -130,7 +130,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                         // verify token in active tokens set, add it otherwise (relevant for pool deployed before v4)
                         if (storedBalance == 0) {
                             // will add to set only if not already stored
-                            activeTokensSet().addUnique(IEOracle(address(this)), token, baseToken);
+                            activeTokensSet().addUnique(IEOracle(address(this)), token, baseToken, poolRegistry);
                         }
 
                         storedBalance += amount;

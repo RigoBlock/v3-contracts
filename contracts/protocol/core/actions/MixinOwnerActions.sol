@@ -151,7 +151,7 @@ abstract contract MixinOwnerActions is MixinActions {
         AddressSet storage acceptedSet = acceptedTokensSet();
 
         if (isAccepted) {
-            acceptedSet.addUnique(IEOracle(address(this)), token, pool().baseToken);
+            acceptedSet.addUnique(IEOracle(address(this)), token, pool().baseToken, poolRegistry);
             // DO NOT add to activeTokensSet here - it will be added in _mint when tokens arrive
             // This prevents attack: accept token -> purge (removes from active) -> mint (NAV drops)
         } else {

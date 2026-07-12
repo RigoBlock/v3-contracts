@@ -6,6 +6,7 @@ import {MixinStorage} from "../immutable/MixinStorage.sol";
 import {IEOracle} from "../../extensions/adapters/interfaces/IEOracle.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {IKyc} from "../../interfaces/IKyc.sol";
+import {IPoolRegistry} from "../../interfaces/IPoolRegistry.sol";
 import {ISmartPoolActions} from "../../interfaces/v4/pool/ISmartPoolActions.sol";
 import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
@@ -33,6 +34,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolTokenNotActive();
     error InvalidOperator();
     error PoolMintTokenNotActive();
+    error PoolMintToPool(address pool);
 
     /*
      * EXTERNAL METHODS
@@ -128,11 +130,12 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         address tokenIn
     ) private returns (uint256) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
+        require(IPoolRegistry(poolRegistry).getPoolIdFromAddress(recipient) == bytes32(0), PoolMintToPool(recipient));
         require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
 
         // Activate tokenIn before the NAV snapshot to include any pre-existing untracked balance.
         if (tokenIn != _BASE_TOKEN_FLAG) {
-            activeTokensSet().addUnique(IEOracle(address(this)), tokenIn, pool().baseToken);
+            activeTokensSet().addUnique(IEOracle(address(this)), tokenIn, pool().baseToken, poolRegistry);
         }
 
         NavComponents memory components = _updateNav();
