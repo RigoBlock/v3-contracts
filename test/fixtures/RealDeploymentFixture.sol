@@ -192,7 +192,8 @@ contract RealDeploymentFixture is Test {
         SmartPool impl = new SmartPool(
             AUTHORITY,
             address(extensionsMapParam),
-            Constants.TOKEN_JAR
+            Constants.TOKEN_JAR,
+            Constants.REGISTRY
         );
         console2.log("Deployed SmartPool implementation:", address(impl));
         return impl;

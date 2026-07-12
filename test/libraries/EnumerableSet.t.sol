@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
-import {EnumerableSet, AddressSet, Bytes32Set} from "../../contracts/protocol/libraries/EnumerableSet.sol";
-import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
+import { Test } from "forge-std/Test.sol";
+import { EnumerableSet, AddressSet, Bytes32Set } from "../../contracts/protocol/libraries/EnumerableSet.sol";
+import { IEOracle } from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
+import { IPoolRegistry } from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
 
 /// @dev Harness for exercising EnumerableSet internal helpers in a non-fork unit test.
 contract EnumerableSetHarness {
@@ -13,8 +14,11 @@ contract EnumerableSetHarness {
     AddressSet internal addressSet;
     Bytes32Set internal bytes32Set;
 
-    function addUnique(address eOracle, address token, address baseToken) external returns (bool) {
-        return addressSet.addUnique(IEOracle(eOracle), token, baseToken);
+    function addUnique(address eOracle, address token, address baseToken, address poolRegistry)
+        external
+        returns (bool)
+    {
+        return addressSet.addUnique(IEOracle(eOracle), token, baseToken, poolRegistry);
     }
 
     function containsAddress(address token) external view returns (bool) {
@@ -53,11 +57,16 @@ contract EnumerableSetTest is Test {
     address internal constant BASE_TOKEN = address(0x1000);
     address internal constant TOKEN = address(0x2000);
     address internal eOracle;
+    address internal poolRegistry;
 
     function setUp() public {
         harness = new EnumerableSetHarness();
         eOracle = makeAddr("eOracle");
+        poolRegistry = makeAddr("poolRegistry");
         vm.mockCall(eOracle, abi.encodeWithSelector(IEOracle.hasPriceFeed.selector, TOKEN), abi.encode(true));
+        vm.mockCall(
+            poolRegistry, abi.encodeWithSelector(IPoolRegistry.getPoolIdFromAddress.selector), abi.encode(bytes32(0))
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -65,24 +74,24 @@ contract EnumerableSetTest is Test {
     // -------------------------------------------------------------------------
 
     function test_AddUnique_BaseToken_ReturnsTrue() public {
-        assertTrue(harness.addUnique(eOracle, BASE_TOKEN, BASE_TOKEN));
+        assertTrue(harness.addUnique(eOracle, BASE_TOKEN, BASE_TOKEN, poolRegistry));
     }
 
     function test_AddUnique_NewToken_ReturnsFalse() public {
-        bool wasActive = harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
+        bool wasActive = harness.addUnique(eOracle, TOKEN, BASE_TOKEN, poolRegistry);
         assertFalse(wasActive);
         assertTrue(harness.containsAddress(TOKEN));
     }
 
     function test_AddUnique_ExistingToken_ReturnsTrue() public {
-        harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
-        bool wasActive = harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
+        harness.addUnique(eOracle, TOKEN, BASE_TOKEN, poolRegistry);
+        bool wasActive = harness.addUnique(eOracle, TOKEN, BASE_TOKEN, poolRegistry);
         assertTrue(wasActive);
     }
 
     function test_AddUnique_DuplicateIsIdempotent() public {
-        harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
-        harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
+        harness.addUnique(eOracle, TOKEN, BASE_TOKEN, poolRegistry);
+        harness.addUnique(eOracle, TOKEN, BASE_TOKEN, poolRegistry);
         assertTrue(harness.containsAddress(TOKEN));
     }
 
@@ -92,9 +101,9 @@ contract EnumerableSetTest is Test {
         vm.mockCall(eOracle, abi.encodeWithSelector(IEOracle.hasPriceFeed.selector, token2), abi.encode(true));
         vm.mockCall(eOracle, abi.encodeWithSelector(IEOracle.hasPriceFeed.selector, token3), abi.encode(true));
 
-        harness.addUnique(eOracle, TOKEN, BASE_TOKEN);
-        harness.addUnique(eOracle, token2, BASE_TOKEN);
-        harness.addUnique(eOracle, token3, BASE_TOKEN);
+        harness.addUnique(eOracle, TOKEN, BASE_TOKEN, poolRegistry);
+        harness.addUnique(eOracle, token2, BASE_TOKEN, poolRegistry);
+        harness.addUnique(eOracle, token3, BASE_TOKEN, poolRegistry);
 
         harness.removeAddress(token2);
         assertFalse(harness.containsAddress(token2));

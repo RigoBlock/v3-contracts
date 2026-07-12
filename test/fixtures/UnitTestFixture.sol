@@ -67,7 +67,8 @@ contract UnitTestFixture is Test {
         deployment.implementation = new SmartPool(
             deployment.authority,
             address(deployment.extensionsMap),
-            tokenJar
+            tokenJar,
+            registry
         );
         console2.log("Deployed SmartPool implementation:", address(deployment.implementation));
 

@@ -6,7 +6,6 @@ import {MixinImmutables} from "./core/immutable/MixinImmutables.sol";
 import {MixinStorage} from "./core/immutable/MixinStorage.sol";
 import {MixinPoolState} from "./core/state/MixinPoolState.sol";
 import {MixinStorageAccessible} from "./core/state/MixinStorageAccessible.sol";
-import {MixinAbstract} from "./core/sys/MixinAbstract.sol";
 import {MixinInitializer} from "./core/sys/MixinInitializer.sol";
 import {MixinFallback} from "./core/sys/MixinFallback.sol";
 
@@ -18,7 +17,6 @@ contract SmartPool is
     MixinStorage,
     MixinFallback,
     MixinInitializer,
-    MixinAbstract,
     MixinPoolState,
     MixinStorageAccessible
 {
@@ -28,8 +26,9 @@ contract SmartPool is
     constructor(
         address authority,
         address extensionsMap,
-        address tokenJar
-    ) MixinImmutables(authority, extensionsMap, tokenJar) {
+        address tokenJar,
+        address poolRegistry
+    ) MixinImmutables(authority, extensionsMap, tokenJar, poolRegistry) {
         // we lock implementation at deploy
         pool().owner = _ZERO_ADDRESS;
         poolParams().kycProvider = _BASE_TOKEN_FLAG;

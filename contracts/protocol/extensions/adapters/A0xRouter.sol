@@ -9,6 +9,7 @@ import {StorageLib} from "../../libraries/StorageLib.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {IA0xRouter} from "./interfaces/IA0xRouter.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 
 import {ISettlerActions} from "0x-settler/src/ISettlerActions.sol";
 import {IAllowanceHolder} from "0x-settler/src/allowanceholder/IAllowanceHolder.sol";
@@ -139,7 +140,12 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
             buyToken = address(0);
         }
         AddressSet storage values = StorageLib.activeTokensSet();
-        values.addUnique(IEOracle(address(this)), buyToken, StorageLib.pool().baseToken);
+        values.addUnique(
+            IEOracle(address(this)),
+            buyToken,
+            StorageLib.pool().baseToken,
+            ISmartPoolImmutable(address(this)).poolRegistry()
+        );
     }
 
     /// @dev Iterates settler actions and validates each selector against the allowlist.

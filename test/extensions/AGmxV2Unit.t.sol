@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {Test} from "forge-std/Test.sol";
-import {IGmxDataStore, IGmxReader, IGmxExchangeRouter} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
-import {Market} from "gmx-synthetics/market/Market.sol";
-import {Position} from "gmx-synthetics/position/Position.sol";
-import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
-import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
-import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
-import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
-import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
-import {IEGmxCallback} from "../../contracts/protocol/extensions/adapters/interfaces/IEGmxCallback.sol";
+import { Test } from "forge-std/Test.sol";
+import { IGmxDataStore, IGmxReader, IGmxExchangeRouter } from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import { Market } from "gmx-synthetics/market/Market.sol";
+import { Position } from "gmx-synthetics/position/Position.sol";
+import { StorageLib } from "../../contracts/protocol/libraries/StorageLib.sol";
+import { GmxCallbackLib } from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
+import { GmxLib } from "../../contracts/protocol/libraries/GmxLib.sol";
+import { AGmxV2 } from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
+import { IAGmxV2 } from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
+import { IEGmxCallback } from "../../contracts/protocol/extensions/adapters/interfaces/IEGmxCallback.sol";
 
 /// @dev Proxy that delegatecalls an AGmxV2 adapter. Implements hasPriceFeed so
 ///  `_trackToken` can skip the oracle check when the token is the base token.
@@ -35,7 +35,17 @@ contract AGmxV2UnitProxy {
         return true;
     }
 
-    receive() external payable {}
+    /// @return The registry address. The adapter calls getPoolIdFromAddress on it,
+    ///  so the proxy exposes that as well and always reports non-pool addresses.
+    function poolRegistry() external view returns (address) {
+        return address(this);
+    }
+
+    function getPoolIdFromAddress(address) external pure returns (bytes32) {
+        return bytes32(0);
+    }
+
+    receive() external payable { }
 }
 
 /// @title AGmxV2UnitTest
@@ -72,12 +82,10 @@ contract AGmxV2UnitTest is Test {
         vm.mockCall(
             GmxLib._GMX_READER,
             abi.encodeWithSelector(IGmxReader.getMarket.selector, GmxLib._GMX_DATA_STORE, market),
-            abi.encode(Market.Props({marketToken: market, indexToken: token, longToken: token, shortToken: token}))
+            abi.encode(Market.Props({ marketToken: market, indexToken: token, longToken: token, shortToken: token }))
         );
         vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
-            abi.encode(uint256(0))
+            GmxLib._GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0))
         );
 
         // Mock router call.
@@ -107,9 +115,7 @@ contract AGmxV2UnitTest is Test {
 
         // claimCollateral amount is zero.
         vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
-            abi.encode(uint256(0))
+            GmxLib._GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0))
         );
 
         address[] memory markets = new address[](1);
@@ -122,11 +128,7 @@ contract AGmxV2UnitTest is Test {
         vm.mockCall(
             address(GmxLib.GMX_ROUTER),
             abi.encodeWithSelector(
-                IGmxExchangeRouter.claimCollateral.selector,
-                markets,
-                tokens,
-                timeKeys,
-                address(proxy)
+                IGmxExchangeRouter.claimCollateral.selector, markets, tokens, timeKeys, address(proxy)
             ),
             abi.encode(new uint256[](1))
         );

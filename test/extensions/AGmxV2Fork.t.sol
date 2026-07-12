@@ -174,10 +174,10 @@ contract AGmxV2ForkTest is Test {
         bytes32 salt = keccak256(abi.encodePacked("GMX_V2_FORK_TEST_V1", block.chainid));
         address extensionsMap = mapDeployer.deployExtensionsMap(params, salt);
 
-        SmartPool impl = new SmartPool(AUTHORITY, extensionsMap, TOKEN_JAR);
-
         // Register new implementation with factory
         address registry = IRigoblockPoolProxyFactory(FACTORY).getRegistry();
+
+        SmartPool impl = new SmartPool(AUTHORITY, extensionsMap, TOKEN_JAR, registry);
         address rigoblockDao = IPoolRegistry(registry).rigoblockDao();
         vm.prank(rigoblockDao);
         IRigoblockPoolProxyFactory(FACTORY).setImplementation(address(impl));

@@ -21,4 +21,9 @@ interface ISmartPoolImmutable {
     /// @dev Used to transfer protocol fees to the buy-back-and-burn contract.
     /// @return Address of the token jar contract.
     function tokenJar() external view returns (address);
+
+    /// @notice Returns the address of the Rigoblock pool registry contract.
+    /// @dev Used to prevent pools from holding shares of other Rigoblock pools.
+    /// @return Address of the pool registry contract.
+    function poolRegistry() external view returns (address);
 }

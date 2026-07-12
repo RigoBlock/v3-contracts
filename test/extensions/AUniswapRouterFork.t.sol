@@ -73,9 +73,8 @@ contract AUniswapRouterForkTest is Test {
         bytes32 salt = keccak256(abi.encodePacked("AUNISWAP_ROUTER_FORK_TEST", block.chainid));
         address extensionsMapAddr = mapDeployer.deployExtensionsMap(params, salt);
 
-        SmartPool impl = new SmartPool(AUTHORITY, extensionsMapAddr, TOKEN_JAR);
-
         address registry = IRigoblockPoolProxyFactory(FACTORY).getRegistry();
+        SmartPool impl = new SmartPool(AUTHORITY, extensionsMapAddr, TOKEN_JAR, registry);
         address rigoblockDao = IPoolRegistry(registry).rigoblockDao();
         vm.prank(rigoblockDao);
         IRigoblockPoolProxyFactory(FACTORY).setImplementation(address(impl));

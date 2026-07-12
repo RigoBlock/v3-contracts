@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
+import {IPoolRegistry} from "../interfaces/IPoolRegistry.sol";
 import {ISmartPoolEvents} from "../interfaces/v4/pool/ISmartPoolEvents.sol";
 
 struct AddressSet {
@@ -41,6 +42,7 @@ struct Pool {
 library EnumerableSet {
     error AddressListExceedsMaxLength();
     error TokenPriceFeedDoesNotExist(address token);
+    error PoolTokenNotAllowed(address token);
 
     // limit size of array to prevent DOS to nav estimates
     uint256 internal constant _MAX_UNIQUE_VALUES = type(uint8).max / 2; // max 128 values
@@ -57,7 +59,8 @@ library EnumerableSet {
         AddressSet storage set,
         IEOracle eOracle,
         address token,
-        address baseToken
+        address baseToken,
+        address poolRegistry
     ) internal returns (bool wasActive) {
         if (token == baseToken) return true;
 
@@ -66,6 +69,7 @@ library EnumerableSet {
 
         if (!wasActive) {
             require(set.addresses.length < _MAX_UNIQUE_VALUES, AddressListExceedsMaxLength());
+            require(IPoolRegistry(poolRegistry).getPoolIdFromAddress(token) == bytes32(0), PoolTokenNotAllowed(token));
             require(eOracle.hasPriceFeed(token), TokenPriceFeedDoesNotExist(token));
             set.addresses.push(token);
             set.positions[token] = set.addresses.length;

@@ -59,7 +59,7 @@ User → Pool Proxy (delegatecall)→ Implementation
 - **Adapters**: Upgradeable via governance (Authority). Protocol integrations (Uniswap, Across source, etc.)
 
 ### Upgrade Implications
-- **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar)`.
+- **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar, registry)`.
 - **Library change (used by an extension)**: The extension must be redeployed (library is compiled into extension bytecode) → new ExtensionsMap → new implementation.
 - **Extension change**: New extension + new ExtensionsMap + new implementation (ExtensionsMap is immutable in impl bytecode).
 - **Adapter change**: New adapter + Authority governance update. No implementation or extension changes needed.

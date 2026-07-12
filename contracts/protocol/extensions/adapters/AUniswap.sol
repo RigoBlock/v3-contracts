@@ -27,6 +27,7 @@ import {StorageLib} from "../../libraries/StorageLib.sol";
 import {IAUniswap} from "./interfaces/IAUniswap.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 
 /// @title AUniswap - Wraps/unwraps native token using uniswapRouter2 selectors.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -72,6 +73,11 @@ contract AUniswap is IAUniswap, IMinimumVersion {
         AddressSet storage values = StorageLib.activeTokensSet();
 
         // update storage with new token
-        values.addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
+        values.addUnique(
+            IEOracle(address(this)),
+            token,
+            StorageLib.pool().baseToken,
+            ISmartPoolImmutable(address(this)).poolRegistry()
+        );
     }
 }

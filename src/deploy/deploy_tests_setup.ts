@@ -251,9 +251,10 @@ const deploy: DeployFunction = async function (
   // implementation will have same address on all chains as long as args are the same
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
-    args: [authority.address, extensionsMapAddress, mockTokenJar.address],
+    args: [authority.address, extensionsMapAddress, mockTokenJar.address, registry.address],
     log: true,
     deterministicDeployment: true,
+    gasLimit: 10000000,
   });
 
   const proxyFactoryInstance = await hre.ethers.getContractAt(
