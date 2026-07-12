@@ -98,6 +98,8 @@ if (cs > 0) tmp[count++] = AppTokenBalance({token: mkt.shortToken, amount: int25
 
 NavView prices each token via `EOracle.convertTokenAmount` using the pool's standard Chainlink feeds.
 
+The `claimableLongTokenAmount` / `claimableShortTokenAmount` values returned by the live Reader are **unflushed** accrued funding for the still-open position. After a decrease order executes, GMX moves the settled portion into the `CLAIMABLE_FUNDING_AMOUNT` DataStore bucket. `GmxLib._getCallbackBalances` reads the DataStore bucket, while `_getExecutedPositionBalances` reads the live Reader projection for any remaining open position. These two sources are non-overlapping for the same market/token: the flushed bucket represents historical funding that has already been removed from the live position projection. This is exercised by the real-fork test `test_ClaimFundingFees_PartialDecreaseFlushesFundingFees` in `test/extensions/AGmxV2Fork.t.sol`, which accrues funding over 30 days, performs a partial decrease, and verifies that claiming the DataStore amount reduces EApps by exactly the claimed value while the remaining position is still valued.
+
 ### 6. Aggregate Value — Native Token Design
 
 `GmxLib` returns **native collateral tokens** in `AppTokenBalance[]`:

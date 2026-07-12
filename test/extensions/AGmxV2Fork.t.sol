@@ -442,6 +442,78 @@ contract AGmxV2ForkTest is Test {
         }
     }
 
+    /// @notice A real-fork proof that flushed DataStore funding fees and live Reader
+    ///  funding-fee projections are additive, not overlapping. We open a WETH long, let
+    ///  funding accrue, then partially decrease to flush accrued funding into GMX's
+    ///  CLAIMABLE_FUNDING_AMOUNT DataStore keys. After the flush, EApps still reports a
+    ///  non-zero WETH balance (the remaining open position) and the DataStore bucket is
+    ///  independently claimable. Claiming it reduces EApps by exactly the claimed amount,
+    ///  showing the same market/token funding was not double counted.
+    function test_ClaimFundingFees_PartialDecreaseFlushesFundingFees() public {
+        _openWethLongPosition();
+
+        // Capture current Chainlink prices before warping; after the warp the real feeds
+        // are too stale to read, so we replay these prices with a fresh timestamp.
+        OracleProviderEntry[] memory entries = _prepareOracleProviders(GMX_ETH_USD_MARKET);
+        GmxValidatedPrice[] memory prices = new GmxValidatedPrice[](entries.length);
+        for (uint256 i; i < entries.length; ++i) {
+            prices[i] = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(entries[i].token, "");
+        }
+
+        // Let funding fees accrue across blocks. A 30-day warp is long enough to produce
+        // a non-zero claimable WETH funding amount for this market at the fork block.
+        vm.warp(block.timestamp + 30 days);
+
+        // Partial decrease (50% size) triggers GMX to settle accrued funding fees for the
+        // decreased portion into the CLAIMABLE_FUNDING_AMOUNT DataStore entries.
+        IBaseOrderUtils.CreateOrderParams memory p = _defaultDecreaseParams();
+        p.numbers.sizeDeltaUsd = SIZE_DELTA_USD / 2;
+
+        vm.prank(poolOwner);
+        bytes32 decreaseKey = IAGmxV2(pool).createDecreaseOrder(p);
+
+        // The fork block's Chainlink feeds become stale after the warp. Mock fresh prices
+        // for keeper execution and for the subsequent EApps reads.
+        _mockChainlinkPrices(entries, prices);
+        _executeOrderWithProviders(decreaseKey, entries);
+
+        // The position must still be open after the partial decrease.
+        uint256 posCount = IGmxReader(GMX_READER)
+            .getAccountPositions(GMX_DATA_STORE, pool, 0, type(uint256).max)
+            .length;
+        assertEq(posCount, 1, "position must remain open after partial decrease");
+
+        // At this point EApps values the remaining open position AND the flushed
+        // CLAIMABLE_FUNDING_AMOUNT DataStore bucket in the same market/token.
+        int256 eappsBefore = _gmxEAppsTokenBalance(ARB_WETH);
+        uint256 wethBefore = IERC20(ARB_WETH).balanceOf(pool);
+
+        address[] memory markets = new address[](1);
+        markets[0] = GMX_ETH_USD_MARKET;
+        address[] memory tokens = new address[](1);
+        tokens[0] = ARB_WETH;
+
+        vm.prank(poolOwner);
+        IAGmxV2(pool).claimFundingFees(markets, tokens, address(this));
+
+        uint256 wethAfter = IERC20(ARB_WETH).balanceOf(pool);
+        uint256 claimed = wethAfter - wethBefore;
+        int256 eappsAfter = _gmxEAppsTokenBalance(ARB_WETH);
+
+        assertGt(claimed, 0, "funding fees must have been flushed and claimed");
+        assertGt(eappsBefore, 0, "EApps must value the position before claim");
+        assertGt(eappsAfter, 0, "EApps must still value the remaining open position after claim");
+
+        // If the live Reader projection and the flushed DataStore bucket overlapped,
+        // EApps would drop by more than the amount actually removed from DataStore.
+        int256 eappsDelta = eappsBefore - eappsAfter;
+        assertApproxEqAbs(uint256(eappsDelta), claimed, 1e15, "EApps WETH decrease must equal claimed funding fees");
+
+        // Restore original oracle providers so this test does not affect shared fork state.
+        _restoreOracleProviders(entries);
+        vm.clearMockedCalls();
+    }
+
     /// @notice claimCollateral removes a fully-claimed collateral key from callback storage.
     function test_ClaimCollateral_RemovesFullyClaimedKey() public {
         address market = GMX_ETH_USD_MARKET;
@@ -1195,6 +1267,68 @@ contract AGmxV2ForkTest is Test {
 
         // Resolve the handler address before the prank — vm.prank is consumed by the
         // first external call, so orderHandler() must not be that call.
+        IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
+        vm.prank(keeper);
+        handler.executeOrder(
+            orderKey,
+            IGmxOrderHandler.SetPricesParams({tokens: tokens, providers: providers, data: data})
+        );
+    }
+
+    /// @dev Mocks the GMX Chainlink price feed to return `prices` with a fresh timestamp
+    ///  for every token in `entries`. This avoids `ChainlinkPriceFeedNotUpdated` reverts
+    ///  after `vm.warp`.
+    function _mockChainlinkPrices(OracleProviderEntry[] memory entries, GmxValidatedPrice[] memory prices) private {
+        for (uint256 i; i < entries.length; ++i) {
+            vm.mockCall(
+                GMX_CHAINLINK_PRICE_FEED,
+                abi.encodeCall(IGmxChainlinkPriceFeedProvider.getOraclePrice, (entries[i].token, bytes(""))),
+                abi.encode(
+                    GmxValidatedPrice({
+                        token: entries[i].token,
+                        min: prices[i].min,
+                        max: prices[i].max,
+                        timestamp: block.timestamp,
+                        blockNumber: block.number
+                    })
+                )
+            );
+        }
+    }
+
+    /// @dev Restores the original oracle providers saved in `entries`.
+    function _restoreOracleProviders(OracleProviderEntry[] memory entries) private {
+        address controller = _getController();
+        for (uint256 i; i < entries.length; ++i) {
+            vm.prank(controller);
+            IDataStore(GMX_DATA_STORE).setAddress(entries[i].key, entries[i].originalProvider);
+        }
+    }
+
+    /// @dev Like `_executeOrder`, but uses the already-redirected providers in `entries`
+    ///  and does NOT restore them or clear mocked calls afterwards.
+    function _executeOrderWithProviders(bytes32 orderKey, OracleProviderEntry[] memory entries) private {
+        address[] memory tokens = new address[](entries.length);
+        address[] memory providers = new address[](entries.length);
+        bytes[] memory data = new bytes[](entries.length);
+        for (uint256 i; i < entries.length; ++i) {
+            tokens[i] = entries[i].token;
+            providers[i] = GMX_CHAINLINK_PRICE_FEED;
+            data[i] = "";
+        }
+
+        bytes32 keeperKey = keccak256(abi.encode("ORDER_KEEPER"));
+        address[] memory members = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keeperKey, 0, 10);
+        address keeper = members.length > 0 ? members[0] : _getController();
+
+        if (members.length == 0) {
+            vm.mockCall(
+                GMX_ROLE_STORE,
+                abi.encodeWithSelector(bytes4(keccak256("hasRole(address,bytes32)")), keeper, keeperKey),
+                abi.encode(true)
+            );
+        }
+
         IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
         vm.prank(keeper);
         handler.executeOrder(
@@ -2268,6 +2402,23 @@ contract AGmxV2ForkTest is Test {
             abi.encodeWithSelector(IEGmxCallback.afterOrderExecution.selector, bytes32(0), orderData, orderData)
         );
         require(success, "callback failed");
+    }
+
+    /// @dev Returns the GMX_V2_POSITIONS EApps balance for `token`.
+    function _gmxEAppsTokenBalance(address token) private returns (int256 total) {
+        uint256 gmxFlag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(gmxFlag);
+        for (uint256 i; i < apps.length; ++i) {
+            if (uint256(apps[i].appType) != uint256(Applications.GMX_V2_POSITIONS)) {
+                continue;
+            }
+            AppTokenBalance[] memory balances = apps[i].balances;
+            for (uint256 j; j < balances.length; ++j) {
+                if (balances[j].token == token) {
+                    total += balances[j].amount;
+                }
+            }
+        }
     }
 
     /// @dev Simulates a GMX keeper `afterOrderExecution` callback for `market`.
