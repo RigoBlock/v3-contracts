@@ -43,6 +43,7 @@
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:ts": "eslint --max-warnings 0 .",
     "docgen": "hardhat docgen",
+    "publish:docs": "./scripts/publish-docs.sh",
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "fmt:sol:protocol": "prettier 'contracts/protocol/**/*.sol' -w",
     "prepack": "yarn build",
