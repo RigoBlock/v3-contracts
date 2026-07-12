@@ -2,6 +2,11 @@ import "hardhat-deploy";
 import "@nomiclabs/hardhat-ethers";
 import { task } from "hardhat/config";
 
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
 task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
     .setAction(async (_, hre) => {
         console.log("Deploying contracts...");
@@ -16,7 +21,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
             await hre.run("sourcify", { writeFailingMetadata: true });
             console.log("Sourcify verification completed.");
         } catch (error) {
-            console.error("Sourcify verification failed:", error.message);
+            console.error("Sourcify verification failed:", getErrorMessage(error));
         }
         await hre.run("sourcify")
 
@@ -36,7 +41,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
                             contractPath = `${sourcePath}:${contractName}`;
                         }
                     } catch (parseError) {
-                        console.warn(`Failed to parse metadata for ${contractName}:`, parseError.message);
+                        console.warn(`Failed to parse metadata for ${contractName}:`, getErrorMessage(parseError));
                     }
                 }
 
@@ -50,7 +55,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
                 });
                 console.log(`Successfully verified ${contractName} at ${address}`);
             } catch (error) {
-                console.error(`Failed to verify ${contractName} at ${address}:`, error.message);
+                console.error(`Failed to verify ${contractName} at ${address}:`, getErrorMessage(error));
             }
         }
     });

@@ -1,6 +1,7 @@
+import "hardhat-deploy";
+import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import "hardhat-deploy/dist/src/type-extensions";
 import { extensionsMapSalt } from "../utils/constants";
 
 const deploy: DeployFunction = async function (
