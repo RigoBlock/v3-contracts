@@ -1121,6 +1121,44 @@ contract GmxLibTest is Test {
         assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), 0);
     }
 
+    /// @notice If GMX increases CLAIMABLE_COLLATERAL_TIME_DIVISOR after the timeKey
+    ///  is recorded, the raw subtraction can underflow. The library must saturate at
+    ///  zero and return an unvested (zero-factor) amount instead of reverting.
+    function test_ClaimableCollateralAmount_DivisorIncrease_DoesNotUnderflow() public {
+        address market = MARKET;
+        address token = COL_TOKEN;
+        uint256 timeKey = block.timestamp + 1;
+        uint256 amount = 0.5 ether;
+
+        bytes32 amountKey = keccak256(
+            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
+        );
+
+        GmxCallbackLib.GmxCallbackSlot storage cb = GmxCallbackLib.gmxCallbackData();
+        cb.claimableCollateralInfo[amountKey] = GmxCallbackLib.ClaimableCollateralInfo({
+            token: token,
+            market: market,
+            timeKey: timeKey
+        });
+
+        // Default all reads to 0 (factor/reduction/claimed/delay are 0).
+        vm.mockCall(GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, amountKey),
+            abi.encode(amount)
+        );
+        // timeKey * divisor is now > block.timestamp, which would underflow without saturation.
+        vm.mockCall(
+            GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector, GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY),
+            abi.encode(uint256(1))
+        );
+
+        // Must not revert; with factor == 0 the claimable amount is 0 (unvested).
+        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), 0);
+    }
+
     /// @notice Callback-recorded funding fees on the short token are also returned.
     function test_GetGmxPositionBalances_CallbackBalances_ShortTokenFunding() public {
         address market = MARKET;

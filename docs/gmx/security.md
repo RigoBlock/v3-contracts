@@ -261,6 +261,34 @@ The following findings were raised by an audit-agent review of `EGmxCallback.sol
 - **Status:** Acknowledged / not fixed.
 - **Rationale:** The sets are pruned automatically when value is claimed — `claimFundingFees` removes markets with no open position and no outstanding funding, and `claimCollateral` removes fully-claimed keys. The pool operator is the only party who can create entries, and the 32 open-position limit bounds active activity. A hard cap on the sets was considered and rejected because it can prevent new legitimate markets from being tracked while old, unclaimed value still occupies slots.
 
+## Audit Agent Findings (GmxLib)
+
+The following findings were raised by an audit-agent review of `GmxLib.sol`.
+
+### 3. 32-position limit can be bypassed with pending increase orders
+
+- **Severity:** Low
+- **Contract:** `contracts/protocol/libraries/GmxLib.sol`
+- **Description:** `assertPositionLimitNotReached` counts only executed positions via `getAccountPositions`. A pool owner could issue many `MarketIncrease` / `LimitIncrease` orders before keepers execute them; once executed, the pool could hold more than 32 positions.
+- **Status:** Acknowledged / not fixed.
+- **Rationale:** The 32-position cap is a gas heuristic, not a security invariant. Only the pool owner can create orders, and each order transfers real collateral from the pool. NAV accounting already reads positions and orders unboundedly (`type(uint256).max`), so no value becomes invisible if the cap is exceeded. The operational risk is bounded by owner-controlled collateral and execution fees.
+
+### 4. Claimable-collateral delay subtraction can underflow
+
+- **Severity:** Low
+- **Contract:** `contracts/protocol/libraries/GmxLib.sol`
+- **Description:** `_getClaimableCollateralAmount` computes `block.timestamp - info.timeKey * CLAIMABLE_COLLATERAL_TIME_DIVISOR`. If GMX governance increases the divisor after a `timeKey` is recorded, the product can exceed `block.timestamp` and cause a panic underflow, reverting NAV queries.
+- **Status:** Fixed.
+- **Fix:** The subtraction is now saturated at zero (`block.timestamp > maturityTime ? ... : 0`), so an increased divisor is treated as "not yet vested" instead of reverting. The full claimable-collateral math still mirrors GMX's own `claimCollateral` logic for the vested case.
+
+### 5. Collateral-only fallback can overstate NAV during oracle/reader failures
+
+- **Severity:** Info
+- **Contract:** `contracts/protocol/libraries/GmxLib.sol`
+- **Description:** If `getAccountPositionInfoList` reverts or the collateral token price is zero, `_computeGmxNetCollateral` and `_fetchPositionInfos` fall back to the raw `collateralAmount`, ignoring negative PnL, price impact, and fees.
+- **Status:** Acknowledged / by design.
+- **Rationale:** This fallback is intentionally conservative: it reports the highest plausible on-chain collateral rather than zero or a reverted NAV. Reverting all NAV-dependent operations (deposits, withdrawals, NAV updates) during a transient oracle or Reader outage would be a worse outcome than a temporary, bounded overstatement. The fallback is documented in `docs/gmx/nav-accounting.md`.
+
 ## Audit Notes
 
 - All entry points: chain guard (`ARBITRUM_CHAIN_ID`) → delegatecall guard (`onlyDelegateCall`) → owner routing in `MixinFallback` (`shouldDelegatecall = msg.sender == pool().owner`)

@@ -162,7 +162,9 @@ Both paths ensure GMX queries add negligible overhead to pools with no activity.
 
 GMX position data inherits Chainlink oracle staleness. `IGmxChainlinkPriceFeedProvider.getOraclePrice(token, "")` delegates to the configured Chainlink aggregator; no additional freshness check is applied inside `GmxLib`. Production usage should ensure Chainlink feeds are live.
 
-`GmxLib._safeGetGmxPrice` wraps the call in a `try/catch` — if the oracle reverts (paused, feed removed, etc.) it returns a zero `Price.Props`, which causes the position to be valued at zero collateral only (conservative fallback via `_collateralOnlyBalances`).
+`GmxLib._safeGetGmxPrice` wraps the call in a `try/catch` — if the oracle reverts (paused, feed removed, etc.) it returns a zero `Price.Props`, which causes the position to be valued at zero collateral only (fallback via `_collateralOnlyBalances`).
+
+> **NAV impact of fallback:** `_collateralOnlyBalances` reports the raw deposited collateral, ignoring unrealised PnL, price impact, and fees. During an oracle or Reader outage this can **overstate** NAV for positions with negative PnL/fees. The alternative — reverting `EApps.getAppTokenBalances` — would halt deposits, withdrawals, and NAV updates for the entire outage, which is considered worse than a temporary, bounded overstatement. This trade-off is recorded as an acknowledged Info finding in `docs/gmx/security.md`.
 
 ## Negative Net Position Value
 

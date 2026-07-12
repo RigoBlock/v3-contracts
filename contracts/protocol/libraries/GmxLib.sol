@@ -279,9 +279,11 @@ library GmxLib {
 
         uint256 reduction = ds.getUint(reductionKey);
         if (factor == 0 && reduction == 0) {
-            uint256 timeDiff = block.timestamp -
-                info.timeKey *
-                ds.getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+            uint256 divisor = ds.getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+            uint256 maturityTime = info.timeKey * divisor;
+            // If GMX changes the time divisor after the key is recorded, maturityTime can
+            // move past block.timestamp. Treat it as not-yet-matured rather than reverting.
+            uint256 timeDiff = block.timestamp > maturityTime ? block.timestamp - maturityTime : 0;
             if (timeDiff > ds.getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_DELAY_KEY)) {
                 factor = _FLOAT_PRECISION;
             }
