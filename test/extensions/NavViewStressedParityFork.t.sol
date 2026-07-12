@@ -10,6 +10,7 @@ import { AGmxV2 } from "../../contracts/protocol/extensions/adapters/AGmxV2.sol"
 import { AUniswapRouter } from "../../contracts/protocol/extensions/adapters/AUniswapRouter.sol";
 import { EApps } from "../../contracts/protocol/extensions/EApps.sol";
 import { ECrosschain } from "../../contracts/protocol/extensions/ECrosschain.sol";
+import { EGmxCallback } from "../../contracts/protocol/extensions/EGmxCallback.sol";
 import { ENavView } from "../../contracts/protocol/extensions/ENavView.sol";
 import { EOracle } from "../../contracts/protocol/extensions/EOracle.sol";
 import { EUpgrade } from "../../contracts/protocol/extensions/EUpgrade.sol";
@@ -134,12 +135,13 @@ contract NavViewStressedParityForkTest is Test {
         // ------------------------------------------------------------------
         grgToken = address(IStaking(ARB_GRG_STAKING).getGrgContract());
         grgTransferProxy = IGrgVaultWithAssetProxy(address(IStaking(ARB_GRG_STAKING).getGrgVault())).grgAssetProxy();
+        address eGmxCallback = address(new EGmxCallback());
         (address agmxV2, address aStaking, address aUniswapRouter) = _deployAdapters();
 
         // ------------------------------------------------------------------
         // 2. Deploy extensions and ExtensionsMap
         // ------------------------------------------------------------------
-        DeploymentParams memory params = _deployExtensions();
+        DeploymentParams memory params = _deployExtensions(eGmxCallback);
         ExtensionsMapDeployer mapDeployer = new ExtensionsMapDeployer();
         bytes32 salt = keccak256(abi.encodePacked("NAV_VIEW_STRESSED_PARITY_FORK_V1", block.chainid));
         address extensionsMap = mapDeployer.deployExtensionsMap(params, salt);
@@ -174,13 +176,19 @@ contract NavViewStressedParityForkTest is Test {
         deal(grgToken, pool, STAKE_AMOUNT);
     }
 
-    function _deployAdapters() private returns (address agmxV2, address aStaking, address aUniswapRouter) {
+    function _deployAdapters()
+        private
+        returns (address agmxV2, address aStaking, address aUniswapRouter)
+    {
         agmxV2 = address(new AGmxV2());
         aStaking = deployCode("out/AStaking.sol/AStaking.json", abi.encode(ARB_GRG_STAKING, grgToken, grgTransferProxy));
         aUniswapRouter = address(new AUniswapRouter(ARB_UNIVERSAL_ROUTER, ARB_UNISWAP_V4_POSM, ARB_WETH));
     }
 
-    function _deployExtensions() private returns (DeploymentParams memory params) {
+    function _deployExtensions(address eGmxCallback)
+        private
+        returns (DeploymentParams memory params)
+    {
         EApps eApps = new EApps(EAppsParams({ grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM }));
         EOracle eOracle = new EOracle(ARB_ORACLE, ARB_WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
@@ -194,7 +202,8 @@ contract NavViewStressedParityForkTest is Test {
                 eOracle: address(eOracle),
                 eUpgrade: address(eUpgrade),
                 eNavView: address(eNavView),
-                eCrosschain: address(eCrosschain)
+                eCrosschain: address(eCrosschain),
+                eGmxCallback: eGmxCallback
             }),
             wrappedNative: ARB_WETH
         });

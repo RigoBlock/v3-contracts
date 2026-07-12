@@ -2,7 +2,7 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
-import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
+import {EnumerableSet, AddressSet, Bytes32Set} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
@@ -11,21 +11,26 @@ import {Applications} from "../../types/Applications.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IAGmxV2} from "./interfaces/IAGmxV2.sol";
+import {IEGmxCallback} from "./interfaces/IEGmxCallback.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 import {IGmxOrderHandler} from "../../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../libraries/GmxLib.sol";
 
 /// @title AGmxV2 - Facilitates smart pool interaction with the GMX v2 DEX.
 /// @custom:security-contact security@rigoblock.com
 contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     using EnumerableSet for AddressSet;
+    using EnumerableSet for Bytes32Set;
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
 
-    string private constant _REQUIRED_VERSION = "4.1.2";
+    string private constant _REQUIRED_VERSION = "4.3.2";
     uint256 private constant _MAX_EXECUTION_FEE = 0.05 ether;
+    // Gas reserved for the decrease-order callback; benchmarked worst case ~349k.
+    uint256 private constant _CALLBACK_GAS_LIMIT = 500_000;
 
     address private immutable _adapter;
 
@@ -48,9 +53,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     function createIncreaseOrder(
         IBaseOrderUtils.CreateOrderParams calldata params
     ) external override nonReentrant onlyDelegateCall returns (bytes32 orderKey) {
-        // Enforce the per-pool position cap, but only if this would open a new position.
-        // Increasing an existing position (same market + collateral + direction) does not
-        // consume a new slot, so the cap is skipped in that case.
+        // Cap concurrent positions (new positions only; increasing an existing slot is allowed).
         GmxLib.assertPositionLimitNotReached(
             address(this),
             params.addresses.market,
@@ -58,18 +61,14 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
             params.isLong
         );
 
-        // Compute execution fee on-chain: fee = adjustedGasLimit × tx.gasprice (same formula
-        // GMX uses in validateExecutionFee).  Guard against extreme gas prices with the cap.
-        uint256 executionFee = GmxLib.computeExecutionFee(true);
+        // Increase orders have no per-order callback; factor=0 excludes callback gas from the fee.
+        uint256 executionFee = GmxLib.computeExecutionFee(true, 0);
         require(executionFee <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
 
         require(params.orderType == Order.OrderType.MarketIncrease, InvalidIncreaseOrderType());
         _trackToken(params.addresses.initialCollateralToken);
 
-        // Proactively track the market's directional PnL token. GMX settles profitable closes
-        // in longToken (longs) or shortToken (shorts), which may differ from the collateral
-        // token. Registering it at increase time ensures NAV counts the proceeds even for
-        // keeper-driven closes/liquidations where the adapter is not invoked.
+        // Track the PnL token so keeper-driven closes/liquidations remain visible to NAV.
         address pnlToken = GmxLib.getPnlToken(params.addresses.market, params.isLong);
         if (pnlToken != params.addresses.initialCollateralToken) {
             _trackToken(pnlToken);
@@ -80,12 +79,11 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         bool collateralIsWrappedNative = params.addresses.initialCollateralToken == GmxLib.WRAPPED_NATIVE;
 
         if (collateralIsWrappedNative) {
-            // WETH collateral: GMX deducts fee from vault WNT, so send collateral + fee in one transfer.
+            // WETH collateral: GMX deducts fee from vault WNT, so send collateral + fee together.
             uint256 total = params.numbers.initialCollateralDeltaAmount + executionFee;
             _ensureWeth(total);
             GmxLib.WRAPPED_NATIVE.safeTransfer(orderVault, total);
         } else {
-            // ERC-20 collateral: send collateral token and WETH fee as separate transfers.
             _ensureWeth(executionFee);
             params.addresses.initialCollateralToken.safeTransfer(
                 orderVault,
@@ -118,13 +116,20 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
                 orderType: Order.OrderType.MarketIncrease,
                 decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
                 isLong: params.isLong,
-                // Keep everything in wrapped form so the pool's ERC-20 accounting stays consistent.
                 shouldUnwrapNativeToken: false,
                 autoCancel: false,
                 referralCode: bytes32(0),
                 dataList: new bytes32[](0)
             })
         );
+
+        // Register pool as the saved callback so liquidations/ADLs reach the extension.
+        GmxLib.GMX_ROUTER.setSavedCallbackContract(params.addresses.market, address(this));
+
+        // Track the market now (not only in the decrease callback) so funding fees are still
+        // queryable even if a future callback fails.
+        _trackMarket(params.addresses.market);
+
         StorageLib.activeApplications().storeApplication(uint256(Applications.GMX_V2_POSITIONS));
     }
 
@@ -132,11 +137,10 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     function createDecreaseOrder(
         IBaseOrderUtils.CreateOrderParams calldata params
     ) external override nonReentrant onlyDelegateCall returns (bytes32 orderKey) {
-        // Compute execution fee on-chain and guard against extreme gas prices.
-        uint256 executionFee = GmxLib.computeExecutionFee(false);
+        // Decrease orders reserve callback gas so afterOrderExecution can record claimable rebates.
+        uint256 executionFee = GmxLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(executionFee <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
 
-        // Decrease orders only require the execution fee (in wrapped native); no collateral transfer.
         address orderVault = GmxLib.GMX_ROUTER.orderHandler().orderVault();
         require(
             params.orderType == Order.OrderType.MarketDecrease ||
@@ -152,7 +156,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
                 addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
                     receiver: address(this),
                     cancellationReceiver: address(this),
-                    callbackContract: address(0),
+                    callbackContract: address(this),
                     uiFeeReceiver: address(this),
                     market: params.addresses.market,
                     initialCollateralToken: params.addresses.initialCollateralToken,
@@ -164,15 +168,13 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
                     triggerPrice: params.numbers.triggerPrice,
                     acceptablePrice: params.numbers.acceptablePrice,
                     executionFee: executionFee,
-                    callbackGasLimit: 0,
+                    callbackGasLimit: _CALLBACK_GAS_LIMIT,
                     minOutputAmount: params.numbers.minOutputAmount,
                     validFromTime: params.numbers.validFromTime
                 }),
                 orderType: params.orderType,
-                // Force NoSwap so the output token is always the collateral token (tracked at
-                // increase time).  Allowing SwapCollateralTokenToPnlToken would return the
-                // market's index token (e.g. WETH on ETH/USD), which is not in the pool's
-                // active-tokens set and would therefore be invisible to NAV computation.
+                // NoSwap keeps output in the tracked collateral token; other modes could return
+                // the untracked index token and break NAV accounting.
                 decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
                 isLong: params.isLong,
                 shouldUnwrapNativeToken: false,
@@ -181,6 +183,9 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
                 dataList: new bytes32[](0)
             })
         );
+
+        // Re-register saved callback in case this market was opened through a prior adapter.
+        GmxLib.GMX_ROUTER.setSavedCallbackContract(params.addresses.market, address(this));
     }
 
     /// @inheritdoc IAGmxV2
@@ -193,10 +198,9 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256 validFromTime,
         bool autoCancel
     ) external override nonReentrant onlyDelegateCall {
-        // Top up the execution fee to current gas price.  Use the increase-order gas limit
-        // (the larger of the two order types) as a conservative upper bound; excess is refunded
-        // by GMX to cancellationReceiver (the pool). Guarded by the same _MAX_EXECUTION_FEE cap.
-        uint256 feeTopUp = GmxLib.computeExecutionFee(true);
+        // Top up fee at current gas price; use decrease-order limit because updated orders may
+        // still trigger the rebate callback.
+        uint256 feeTopUp = GmxLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(feeTopUp <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
         if (feeTopUp > 0) {
             address orderVault = GmxLib.GMX_ROUTER.orderHandler().orderVault();
@@ -217,8 +221,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
 
     /// @inheritdoc IAGmxV2
     function cancelOrder(bytes32 key) external override nonReentrant onlyDelegateCall {
-        // GMX refunds collateral and the leftover execution fee to the cancellationReceiver
-        // (set to address(this) on creation), so tokens return to the pool automatically.
+        // GMX refunds to cancellationReceiver (the pool).
         GmxLib.GMX_ROUTER.cancelOrder(key);
     }
 
@@ -228,12 +231,23 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         address[] calldata tokens,
         address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
-        // Register claimed tokens so the pool NAV includes them.
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }
-
         GmxLib.GMX_ROUTER.claimFundingFees(markets, tokens, address(this));
+
+        // Prune tracked markets that no longer have open positions or outstanding
+        // claimable funding fees. Keeps the NAV iteration set minimal.
+        for (uint256 i; i < markets.length; ++i) {
+            if (
+                GmxCallbackLib.containsTrackedMarket(markets[i]) &&
+                !GmxLib.isMarketActive(address(this), markets[i]) &&
+                !GmxLib.hasClaimableFundingFees(address(this), markets[i])
+            ) {
+                GmxCallbackLib.removeTrackedMarket(markets[i]);
+                emit IEGmxCallback.TrackedMarketRemoved(markets[i]);
+            }
+        }
     }
 
     /// @inheritdoc IAGmxV2
@@ -243,25 +257,50 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256[] calldata timeKeys,
         address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
-        // Register claimed tokens so the pool NAV includes them.
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }
-
         GmxLib.GMX_ROUTER.claimCollateral(markets, tokens, timeKeys, address(this));
+
+        // Discard fully-claimed collateral keys so the NAV loop stops reading them.
+        GmxCallbackLib.GmxCallbackSlot storage callbackData = GmxCallbackLib.gmxCallbackData();
+        for (uint256 i; i < markets.length; ++i) {
+            bytes32 amountKey = keccak256(
+                abi.encode(
+                    GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY,
+                    markets[i],
+                    tokens[i],
+                    timeKeys[i],
+                    address(this)
+                )
+            );
+            if (
+                callbackData.claimableCollateralKeys.contains(amountKey) &&
+                GmxLib.claimableCollateralAmount(amountKey, address(this)) == 0
+            ) {
+                GmxCallbackLib.removeClaimableCollateralKey(amountKey);
+                emit IEGmxCallback.ClaimableCollateralRemoved(amountKey);
+            }
+        }
     }
 
-    /// @dev Adds `token` to the pool's active-tokens set so it is visible to NAV computation when
-    ///  the GMX keeper settles the position and tokens land in the pool wallet.
-    ///  Called at order-create time because there is no callback at settle time.
-    ///  addUnique already skips the base token (token == baseToken check inside), so we only
-    ///  need to guard address(0) here (native ETH — GMX always uses WETH, never address(0)).
+    /// @dev Adds `token` to the pool's active-tokens set for NAV visibility. Called at order-create
+    ///  time because keeper settlement does not invoke the adapter. Guard address(0) because GMX
+    ///  always uses WETH, not the native sentinel.
     function _trackToken(address token) private {
         if (token == address(0)) {
             return;
         }
 
         StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
+    }
+
+    /// @dev Records `market` in callback storage so NAV can query post-close funding fees.
+    function _trackMarket(address market) private {
+        if (!GmxCallbackLib.containsTrackedMarket(market)) {
+            GmxCallbackLib.addTrackedMarket(market);
+            emit IEGmxCallback.TrackedMarketAdded(market);
+        }
     }
 
     /// @dev Ensures the pool holds at least `amount` WETH, wrapping from native ETH if needed.

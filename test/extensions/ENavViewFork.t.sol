@@ -130,7 +130,8 @@ contract ENavViewForkTest is Test {
             eNavView: address(eNavView),
             eOracle: 0xd223Ed82D7341aB535673340aDf2A1A39F9b9B91,
             eUpgrade: 0x6A17ca05b112485Bd5c73215F275Baff7F980ac6,
-            eCrosschain: address(eCrosschain)
+            eCrosschain: address(eCrosschain),
+            eGmxCallback: address(0)
         });
 
         DeploymentParams memory params = DeploymentParams({
