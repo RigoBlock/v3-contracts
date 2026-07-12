@@ -36,24 +36,18 @@ contract AMulticall is IAMulticall {
     }
 
     /// @inheritdoc IAMulticall
-    function multicall(uint256 deadline, bytes[] calldata data)
-        external
-        payable
-        override
-        checkDeadline(deadline)
-        returns (bytes[] memory)
-    {
+    function multicall(
+        uint256 deadline,
+        bytes[] calldata data
+    ) external payable override checkDeadline(deadline) returns (bytes[] memory) {
         return multicall(data);
     }
 
     /// @inheritdoc IAMulticall
-    function multicall(bytes32 previousBlockhash, bytes[] calldata data)
-        external
-        payable
-        override
-        checkPreviousBlockhash(previousBlockhash)
-        returns (bytes[] memory)
-    {
+    function multicall(
+        bytes32 previousBlockhash,
+        bytes[] calldata data
+    ) external payable override checkPreviousBlockhash(previousBlockhash) returns (bytes[] memory) {
         return multicall(data);
     }
 
