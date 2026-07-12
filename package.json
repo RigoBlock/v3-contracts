@@ -42,6 +42,7 @@
     "lint": "yarn lint:sol && yarn lint:ts",
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:ts": "eslint --max-warnings 0 .",
+    "docgen": "hardhat docgen",
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "fmt:sol:protocol": "prettier 'contracts/protocol/**/*.sol' -w",
     "prepack": "yarn build",
@@ -94,6 +95,7 @@
     "solhint": "^5.0.5",
     "solhint-plugin-prettier": "^0.1.0",
     "solidity-coverage": "^0.8.2",
+    "solidity-docgen": "^0.6.0-beta.36",
     "ts-node": "^10.8.1",
     "typescript": "^6.0.3",
     "yargs": "^18.0.0"

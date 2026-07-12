@@ -4,6 +4,7 @@ import "@nomicfoundation/hardhat-verify";
 import "@nomiclabs/hardhat-waffle";
 import { getSingletonFactoryInfo } from "@safe-global/safe-singleton-factory";
 import "solidity-coverage";
+import "solidity-docgen";
 import "hardhat-deploy";
 import dotenv from "dotenv";
 import yargs from "yargs";
@@ -114,6 +115,11 @@ const userConfig: HardhatUserConfig = {
         }
       },
     }
+  },
+  docgen: {
+    outputDir: "docs/api",
+    pages: "files",
+    exclude: ["mocks", "test", "utils", "tokens", "staking", "governance", "rigoToken"],
   },
   networks: {
     hardhat: {
