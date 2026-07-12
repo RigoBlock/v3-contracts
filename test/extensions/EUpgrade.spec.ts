@@ -80,10 +80,10 @@ describe("EUpgrade", async () => {
                 'multicall(bytes[])',
                 [ [encodedUpgradeData] ]
             )
-            // multicall swallows the revert for custom errors shorter than 68 bytes, which includes EUpgradeImplementationIsSameAsCurrent
+            // multicall forwards the underlying custom error
             await expect(
                 user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("")
+            ).to.be.revertedWith("EUpgradeImplementationIsSameAsCurrent")
         })
     })
 })

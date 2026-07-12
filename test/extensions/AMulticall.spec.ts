@@ -63,10 +63,10 @@ describe("AMulticall", async () => {
                 [ [encodedSetImplementation] ]
             )
             // txn will always revert in fallback: setImplementation is not mapped,
-            // pool fallback reverts with PoolMethodNotAllowed, AMulticall swallows the revert reason for custom errors shorter than 68 bytes, which includes PoolMethodNotAllowed, and reverts with a bare revert() --- IGNORE ---
+            // pool fallback reverts with PoolMethodNotAllowed, AMulticall forwards the underlying revert reason.
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("")
+            ).to.be.revertedWith("PoolMethodNotAllowed")
             // if a rogue adapter could be added by the governance, but that is part of the protocol rules.
             await authority.setAdapter(factory.address, true)
             // "d784d426": "setImplementation(address)"
@@ -95,9 +95,11 @@ describe("AMulticall", async () => {
                 'multicall(bytes[])',
                 [ [encodedUpgradeData] ]
             )
+            // in the non-owner staticcall path the inner delegatecall target is the adapter itself,
+            // so no rich revert reason is produced; the transaction still reverts.
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("")
+            ).to.be.reverted
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
             ).to.emit(pool, "Upgraded").withArgs(factory.address)
@@ -112,9 +114,11 @@ describe("AMulticall", async () => {
                 'multicall(bytes[])',
                 [ [encodedSetOwnerData] ]
             )
+            // in the non-owner staticcall path the inner delegatecall target is the adapter itself,
+            // so no rich revert reason is produced; the transaction still reverts.
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("")
+            ).to.be.reverted
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
             ).to.emit(pool, "NewOwner").withArgs(user1.address, user2.address)
@@ -128,9 +132,11 @@ describe("AMulticall", async () => {
                 'multicall(bytes[])',
                 [ [encodedUpgradeData] ]
             )
+            // in the non-owner staticcall path the inner delegatecall target is the adapter itself,
+            // so no rich revert reason is produced; the transaction still reverts.
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("")
+            ).to.be.reverted
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
             ).to.emit(pool, "Upgraded").withArgs(factory.address)
@@ -150,7 +156,7 @@ describe("AMulticall", async () => {
             )
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
-            ).to.be.revertedWith("")
+            ).to.be.reverted
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
             ).to.emit(pool, "NewOwner").withArgs(user1.address, user2.address)
@@ -172,10 +178,23 @@ describe("AMulticall", async () => {
             )
             await expect(
                 user2.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
-            ).to.be.revertedWith("")
+            ).to.be.reverted
             await expect(
                 user1.sendTransaction({ to: pool.address, value: 0, data: recursiveMulticallData})
             ).to.be.reverted
+        })
+
+        it('should propagate custom errors from inner calls', async () => {
+            const { factory, pool } = await setupTests()
+            const encodedUpgradeData = pool.interface.encodeFunctionData('upgradeImplementation')
+            const encodedMulticallData = pool.interface.encodeFunctionData(
+                'multicall(bytes[])',
+                [ [encodedUpgradeData] ]
+            )
+            // implementation has not changed, so upgrade reverts with a custom error
+            await expect(
+                user1.sendTransaction({ to: pool.address, value: 0, data: encodedMulticallData})
+            ).to.be.revertedWith("EUpgradeImplementationIsSameAsCurrent")
         })
     })
 })
