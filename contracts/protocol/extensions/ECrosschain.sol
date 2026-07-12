@@ -89,7 +89,8 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         bool previouslyActive = StorageLib.activeTokensSet().addUnique(
             IEOracle(address(this)),
             token,
-            StorageLib.pool().baseToken
+            StorageLib.pool().baseToken,
+            ISmartPoolImmutable(address(this)).poolRegistry()
         );
 
         if (params.opType == OpType.Transfer) {

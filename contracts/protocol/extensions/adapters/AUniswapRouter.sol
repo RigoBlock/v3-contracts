@@ -22,6 +22,7 @@ import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
 import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";
 
 interface IUniswapRouter {
@@ -192,9 +193,10 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
         // load active tokens from storage
         AddressSet storage values = StorageLib.activeTokensSet();
 
+        address poolRegistry = ISmartPoolImmutable(address(this)).poolRegistry();
         for (uint256 i = 0; i < tokensOut.length; i++) {
             // update storage with new token
-            values.addUnique(IEOracle(address(this)), tokensOut[i], StorageLib.pool().baseToken);
+            values.addUnique(IEOracle(address(this)), tokensOut[i], StorageLib.pool().baseToken, poolRegistry);
         }
     }
 

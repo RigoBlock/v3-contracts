@@ -10,6 +10,7 @@ import {StorageLib} from "../../libraries/StorageLib.sol";
 import {Applications} from "../../types/Applications.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
+import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {IAGmxV2} from "./interfaces/IAGmxV2.sol";
 import {IEGmxCallback} from "./interfaces/IEGmxCallback.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
@@ -292,7 +293,12 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
             return;
         }
 
-        StorageLib.activeTokensSet().addUnique(IEOracle(address(this)), token, StorageLib.pool().baseToken);
+        StorageLib.activeTokensSet().addUnique(
+            IEOracle(address(this)),
+            token,
+            StorageLib.pool().baseToken,
+            ISmartPoolImmutable(address(this)).poolRegistry()
+        );
     }
 
     /// @dev Records `market` in callback storage so NAV can query post-close funding fees.
