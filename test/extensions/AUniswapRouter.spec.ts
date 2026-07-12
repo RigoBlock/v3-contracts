@@ -123,6 +123,8 @@ describe("AUniswapRouter", async () => {
       await expect(extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value }))
         .to.emit(pool, "TokenStatusChanged")
         .withArgs(wethAddress, true)
+        .and.to.emit(extPool, "UniV4PositionAdded")
+        .withArgs(1)
       // first mint does not prompt nav calculations, so lp tokens are not included in active tokens
       let activeTokens = (await pool.getActiveTokens()).activeTokens
       expect(activeTokens.length).to.be.eq(1)
@@ -177,9 +179,12 @@ describe("AUniswapRouter", async () => {
       const extPool = ExtPool.attach(pool.address)
       // minting 2 positions using eth as one of the tokens requires transferring eth to the uniswap router
       await user1.sendTransaction({ to: pool.address, value: ethers.utils.parseEther("2") })
-      await expect(
-        extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
-      ).to.be.not.be.reverted
+      const tx = await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      const receipt = await tx.wait()
+      const addedEvents = receipt.events?.filter((e: any) => e.event === "UniV4PositionAdded") ?? []
+      expect(addedEvents.length).to.be.eq(2)
+      expect(addedEvents[0].args?.tokenId).to.be.eq(1)
+      expect(addedEvents[1].args?.tokenId).to.be.eq(2)
       expect(await univ4Posm.nextTokenId()).to.be.eq(3)
       expect(await univ4Posm.balanceOf(pool.address)).to.be.eq(2)
     })
@@ -521,7 +526,9 @@ describe("AUniswapRouter", async () => {
       v4Planner = new V4Planner()
       // burn will remove any position liquidity in Posm
       v4Planner.addAction(Actions.BURN_POSITION, [expectedTokenId, MAX_UINT128, MAX_UINT128, '0x'])
-      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      await expect(extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value }))
+        .to.emit(extPool, "UniV4PositionRemoved")
+        .withArgs(expectedTokenId)
       expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(0)
       expect((await positionPool.getUniV4TokenIds()).length).to.be.eq(0)
     })
@@ -565,7 +572,9 @@ describe("AUniswapRouter", async () => {
       v4Planner = new V4Planner()
       // burn will remove any position liquidity in Posm
       v4Planner.addAction(Actions.BURN_POSITION, [expectedTokenId, MAX_UINT128, MAX_UINT128, '0x'])
-      await extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value })
+      await expect(extPool.modifyLiquidities(v4Planner.finalize(), MAX_UINT160, { value }))
+        .to.emit(extPool, "UniV4PositionRemoved")
+        .withArgs(expectedTokenId)
       expect(await univ4Posm.getPositionLiquidity(expectedTokenId)).to.be.eq(0)
       const remainingIds = await positionPool.getUniV4TokenIds()
       expect(remainingIds.length).to.be.eq(2)

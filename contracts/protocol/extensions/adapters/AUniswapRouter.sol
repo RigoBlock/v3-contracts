@@ -243,6 +243,8 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
 
                     idsSlot.positions[i] = storedLength;
                     idsSlot.tokenIds.push(i);
+
+                    emit UniV4PositionAdded(i);
                 }
             }
 
@@ -291,6 +293,8 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
 
                         idsSlot.positions[positions[i].tokenId] = 0;
                         idsSlot.tokenIds.pop();
+
+                        emit UniV4PositionRemoved(positions[i].tokenId);
 
                         // remove application in proxy persistent storage. Application must be active after first position mint.
                         if (lastIndex == 0) {
