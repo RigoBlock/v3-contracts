@@ -17,7 +17,7 @@ const argv = yargs(hideBin(process.argv))
   })
   .help(false)
   .version(false)
-  .parse();
+  .parseSync();
 
 // Load environment variables.
 dotenv.config();
@@ -27,7 +27,7 @@ const DEFAULT_MNEMONIC =
   "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
 
 const LOCAL_NETWORKS = ["hardhat", "localhost"];
-const isLiveNetwork = !LOCAL_NETWORKS.includes((argv as any).network as string);
+const isLiveNetwork = !LOCAL_NETWORKS.includes(argv.network);
 
 const sharedNetworkConfig: HttpNetworkUserConfig = {};
 if (PK) {
@@ -38,7 +38,7 @@ if (PK) {
   };
 } else if (isLiveNetwork) {
   throw new Error(
-    `No private key or mnemonic configured. Set PK or MNEMONIC in your .env file before deploying to ${(argv as any).network}.`,
+    `No private key or mnemonic configured. Set PK or MNEMONIC in your .env file before deploying to ${argv.network}.`,
   );
 } else {
   // hardhat/localhost only – safe to use well-known test mnemonic
