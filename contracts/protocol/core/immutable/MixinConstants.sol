@@ -22,6 +22,9 @@ abstract contract MixinConstants is ISmartPool {
 
     bytes32 internal constant _POOL_ACCOUNTS_SLOT = 0xfd7547127f88410746fb7969b9adb4f9e9d8d2436aa2d2277b1103542deb7b8e;
 
+    bytes32 internal constant _POOL_ALLOWANCES_SLOT =
+        0x14e9fc03633d8dc2e5fa025cc3b12bf7e50c59172c3bd46c407ef7a8a5c66840;
+
     bytes32 internal constant _POOL_INIT_SLOT = 0xe48b9bb119adfc3bccddcc581484cc6725fe8d292ebfcec7d67b1f93138d8bd8;
 
     bytes32 internal constant _POOL_TOKENS_SLOT = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;

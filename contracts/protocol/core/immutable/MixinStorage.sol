@@ -15,6 +15,7 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_APPLICATIONS_SLOT == bytes32(uint256(keccak256("pool.proxy.applications")) - 1));
         assert(_OPERATOR_BOOLEAN_SLOT == bytes32(uint256(keccak256("pool.proxy.operator.boolean")) - 1));
         assert(_POOL_ACCOUNTS_SLOT == bytes32(uint256(keccak256("pool.proxy.user.accounts")) - 1));
+        assert(_POOL_ALLOWANCES_SLOT == bytes32(uint256(keccak256("pool.proxy.allowances")) - 1));
         assert(_POOL_INIT_SLOT == bytes32(uint256(keccak256("pool.proxy.initialization")) - 1));
         assert(_POOL_TOKENS_SLOT == bytes32(uint256(keccak256("pool.proxy.token")) - 1));
         assert(_POOL_VARIABLES_SLOT == bytes32(uint256(keccak256("pool.proxy.variables")) - 1));
@@ -32,6 +33,16 @@ abstract contract MixinStorage is MixinImmutables {
     function accounts() internal pure returns (Accounts storage s) {
         assembly {
             s.slot := _POOL_ACCOUNTS_SLOT
+        }
+    }
+
+    struct Allowances {
+        mapping(address owner => mapping(address spender => uint256 amount)) allowances;
+    }
+
+    function allowances() internal pure returns (Allowances storage s) {
+        assembly {
+            s.slot := _POOL_ALLOWANCES_SLOT
         }
     }
 
