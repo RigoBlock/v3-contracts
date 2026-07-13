@@ -23,6 +23,9 @@ export interface VerificationStatusFile {
 const SOURCIFY_ENDPOINT = "https://sourcify.dev/server";
 const ETHERSCAN_V2_ENDPOINT = "https://api.etherscan.io/v2/api";
 const ETHERSCAN_RATE_LIMIT_MS = 210; // ~5 requests/sec for free API keys
+const SOURCIFY_RATE_LIMIT_MS = 210;
+const SOURCIFY_POLL_INTERVAL_MS = 3000;
+const SOURCIFY_POLL_MAX_ATTEMPTS = 40;
 
 function getStatusFilePath(hre: HardhatRuntimeEnvironment): string {
   return path.join(
@@ -158,12 +161,46 @@ function httpsGet(url: string): Promise<{ statusCode: number; data: string }> {
   });
 }
 
+function httpsPost(
+  url: string,
+  body: unknown,
+): Promise<{ statusCode: number; data: string }> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const parsedUrl = new URL(url);
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        resolve({ statusCode: res.statusCode || 0, data });
+      });
+    });
+
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Checks Sourcify verification status for an array of addresses in one request.
+ * Checks Sourcify v2 verification status for an array of addresses.
  * Returns a map address -> verified.
  */
 export async function checkSourcifyBatch(
@@ -174,24 +211,133 @@ export async function checkSourcifyBatch(
   if (addresses.length === 0) return result;
 
   const chainId = await hre.getChainId();
-  const url = `${SOURCIFY_ENDPOINT}/checkByAddresses?addresses=${addresses.join(",")}&chainIds=${chainId}`;
 
-  try {
-    const { data } = await httpsGet(url);
-    const parsed = JSON.parse(data) as Array<{
-      address: string;
-      status: string;
-      chainIds: string[];
-    }>;
-    for (const item of parsed) {
-      result[item.address.toLowerCase()] =
-        item.status === "perfect" || item.status === "partial";
+  for (const address of addresses) {
+    const url = `${SOURCIFY_ENDPOINT}/v2/contract/${chainId}/${address.toLowerCase()}`;
+    try {
+      const { statusCode, data } = await httpsGet(url);
+      if (statusCode === 200) {
+        const parsed = JSON.parse(data) as { match: string | null };
+        result[address.toLowerCase()] =
+          parsed.match === "exact_match" || parsed.match === "match";
+      } else {
+        result[address.toLowerCase()] = false;
+      }
+    } catch (error) {
+      console.error(`Sourcify status check failed for ${address}:`, error);
+      result[address.toLowerCase()] = false;
     }
-  } catch (error) {
-    console.error("Sourcify batch check failed:", error);
+    await sleep(SOURCIFY_RATE_LIMIT_MS);
   }
 
   return result;
+}
+
+interface SourcifyVerifyJob {
+  verificationId: string;
+}
+
+interface SourcifyVerifyStatus {
+  isJobCompleted: boolean;
+  verificationId: string;
+  error?: {
+    customCode: string;
+    message: string;
+  };
+  contract?: {
+    match: string | null;
+  };
+}
+
+/**
+ * Submits a contract to Sourcify v2 for verification.
+ * Constructs the standard JSON input from the deployment metadata and polls
+ * until the verification job completes.
+ */
+export async function verifySourcifyV2(
+  hre: HardhatRuntimeEnvironment,
+  contractName: string,
+  address: string,
+  metadataString: string,
+): Promise<boolean> {
+  const chainId = await hre.getChainId();
+  const metadata = JSON.parse(metadataString) as {
+    language: string;
+    compiler: { version: string };
+    settings: {
+      compilationTarget: Record<string, string>;
+      [key: string]: unknown;
+    };
+    sources: Record<string, { content: string; [key: string]: unknown }>;
+  };
+
+  const sourcePath = Object.keys(metadata.settings.compilationTarget)[0];
+  const contractIdentifier = `${sourcePath}:${metadata.settings.compilationTarget[sourcePath]}`;
+
+  const stdJsonInput = {
+    language: metadata.language,
+    sources: metadata.sources,
+    settings: metadata.settings,
+  };
+
+  const body = {
+    stdJsonInput,
+    compilerVersion: metadata.compiler.version,
+    contractIdentifier,
+  };
+
+  const submitUrl = `${SOURCIFY_ENDPOINT}/v2/verify/${chainId}/${address.toLowerCase()}`;
+  let verificationId: string;
+
+  try {
+    const { statusCode, data } = await httpsPost(submitUrl, body);
+    if (statusCode === 409) {
+      console.log(`${contractName} is already verified on Sourcify.`);
+      return true;
+    }
+    if (statusCode !== 202) {
+      throw new Error(`Unexpected Sourcify response ${statusCode}: ${data}`);
+    }
+    const job = JSON.parse(data) as SourcifyVerifyJob;
+    verificationId = job.verificationId;
+  } catch (error) {
+    console.error(
+      `Sourcify submission failed for ${contractName}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return false;
+  }
+
+  const statusUrl = `${SOURCIFY_ENDPOINT}/v2/verify/${verificationId}`;
+  for (let attempt = 0; attempt < SOURCIFY_POLL_MAX_ATTEMPTS; attempt++) {
+    await sleep(SOURCIFY_POLL_INTERVAL_MS);
+    try {
+      const { statusCode, data } = await httpsGet(statusUrl);
+      if (statusCode !== 200) {
+        console.warn(
+          `Sourcify poll returned ${statusCode} for ${contractName}: ${data}`,
+        );
+        continue;
+      }
+      const status = JSON.parse(data) as SourcifyVerifyStatus;
+      if (!status.isJobCompleted) continue;
+
+      if (status.error) {
+        throw new Error(`${status.error.customCode}: ${status.error.message}`);
+      }
+
+      const match = status.contract?.match;
+      return match === "exact_match" || match === "match";
+    } catch (error) {
+      console.warn(
+        `Sourcify poll failed for ${contractName} (attempt ${attempt + 1}):`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  console.error(`Sourcify verification timed out for ${contractName}.`);
+  return false;
 }
 
 /**

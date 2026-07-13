@@ -5,6 +5,7 @@ import {
   checkEtherscanBatch,
   checkSourcifyBatch,
   isVendorVerified,
+  verifySourcifyV2,
   loadVerificationStatus,
   markVendorUnverified,
   markVendorVerified,
@@ -101,14 +102,16 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
 
       if (
         !taskArgs.skipSourcify &&
-        !isVendorVerified(status, contractName, "sourcify", deployment.address)
+        (taskArgs.forceVerify ||
+          !isVendorVerified(status, contractName, "sourcify", deployment.address))
       ) {
         needsSourcify.push(contractName);
       }
 
       if (
         !taskArgs.skipEtherscan &&
-        !isVendorVerified(status, contractName, "etherscan", deployment.address)
+        (taskArgs.forceVerify ||
+          !isVendorVerified(status, contractName, "etherscan", deployment.address))
       ) {
         needsEtherscan.push(contractName);
       }
@@ -140,18 +143,39 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
         }
 
         console.log(`Verifying ${contractName} on Sourcify...`);
-        try {
-          await hre.run("sourcify", {
-            contractName,
-            writeFailingMetadata: true,
-          });
-          markVendorVerified(
+        if (!deployment.metadata || typeof deployment.metadata !== "string") {
+          console.warn(
+            `Skipping Sourcify for ${contractName}: no metadata available.`,
+          );
+          markVendorUnverified(
             status,
             contractName,
             "sourcify",
             deployment.address,
           );
-          console.log(`Sourcify verification completed for ${contractName}.`);
+          continue;
+        }
+
+        try {
+          const verified = await verifySourcifyV2(
+            hre,
+            contractName,
+            deployment.address,
+            deployment.metadata,
+          );
+          if (verified) {
+            markVendorVerified(
+              status,
+              contractName,
+              "sourcify",
+              deployment.address,
+            );
+            console.log(
+              `Sourcify verification completed for ${contractName}.`,
+            );
+          } else {
+            throw new Error("Sourcify returned non-match status");
+          }
         } catch (error) {
           console.error(
             `Sourcify verification failed for ${contractName}:`,
