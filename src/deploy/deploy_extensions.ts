@@ -186,12 +186,12 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     deterministicDeployment: true,
   });
 
-  /*await deploy("AMulticall", {
+  await deploy("AMulticall", {
     from: deployer,
     args: [],
     log: true,
     deterministicDeployment: true,
-  });*/
+  });
 
   await deploy("AIntents", {
     from: deployer,
