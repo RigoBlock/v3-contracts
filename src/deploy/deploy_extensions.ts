@@ -145,9 +145,16 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   );
   await tx.wait();
 
-  // Retrieve the deployed address from the deployer's mapping.
+  // The deployer stores the address under a hashed salt. Retrieve it so we
+  // don't have to duplicate the CREATE2 computation locally.
+  const hashedSalt = hre.ethers.utils.keccak256(
+    hre.ethers.utils.defaultAbiCoder.encode(
+      ["address", "bytes32"],
+      [deployer, salt],
+    ),
+  );
   const extensionsMapAddress =
-    await extensionsMapDeployerInstance.deployedMaps(deployer, salt);
+    await extensionsMapDeployerInstance.deployedMaps(deployer, hashedSalt);
 
   if (extensionsMapAddress === hre.ethers.constants.AddressZero) {
     throw new Error("ExtensionsMap deployment did not record an address");
