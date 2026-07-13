@@ -1,0 +1,4 @@
+# Legacy pool interfaces must not be modified; changing them would affect bytecode of
+# all importing contracts and could trigger unwanted redeploys in deployment scripts.
+contracts/protocol/interfaces/pool/
+contracts/protocol/IRigoblockV3Pool.sol

@@ -21,6 +21,7 @@ pragma solidity 0.8.28;
 
 import {IEApps} from "../extensions/adapters/interfaces/IEApps.sol";
 import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
+import {IEGmxCallback} from "../extensions/adapters/interfaces/IEGmxCallback.sol";
 import {IENavView} from "../extensions/adapters/interfaces/IENavView.sol";
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 import {IEUpgrade} from "../extensions/adapters/interfaces/IEUpgrade.sol";
@@ -45,6 +46,7 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EUPGRADE_UPGRADE_SELECTOR = IEUpgrade.upgradeImplementation.selector;
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
     bytes4 private constant _ECROSSCHAIN_DONATE_SELECTOR = IECrosschain.donate.selector;
+    bytes4 private constant _EGMX_CALLBACK_AFTER_ORDER_EXECUTION_SELECTOR = IEGmxCallback.afterOrderExecution.selector;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eApps;
@@ -62,6 +64,9 @@ contract ExtensionsMap is IExtensionsMap {
     address public immutable override eCrosschain;
 
     /// @inheritdoc IExtensionsMap
+    address public immutable override eGmxCallback;
+
+    /// @inheritdoc IExtensionsMap
     address public immutable override wrappedNative;
 
     /// @notice Assumes extensions have been correctly initialized.
@@ -73,6 +78,7 @@ contract ExtensionsMap is IExtensionsMap {
         eOracle = params.extensions.eOracle;
         eUpgrade = params.extensions.eUpgrade;
         eCrosschain = params.extensions.eCrosschain;
+        eGmxCallback = params.extensions.eGmxCallback;
         wrappedNative = params.wrappedNative;
 
         // validate immutable constants. Assumes deps are correctly initialized
@@ -87,6 +93,7 @@ contract ExtensionsMap is IExtensionsMap {
         );
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
         assert(_ECROSSCHAIN_DONATE_SELECTOR == type(IECrosschain).interfaceId);
+        assert(_EGMX_CALLBACK_AFTER_ORDER_EXECUTION_SELECTOR == type(IEGmxCallback).interfaceId);
     }
 
     /// @inheritdoc IExtensionsMap
@@ -115,6 +122,9 @@ contract ExtensionsMap is IExtensionsMap {
             shouldDelegatecall = msg.sender == StorageLib.pool().owner;
         } else if (selector == _EUPGRADE_GET_BEACON_SELECTOR) {
             extension = eUpgrade;
+        } else if (selector == _EGMX_CALLBACK_AFTER_ORDER_EXECUTION_SELECTOR) {
+            extension = eGmxCallback;
+            shouldDelegatecall = true;
         } else {
             return (address(0), false);
         }

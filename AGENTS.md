@@ -65,9 +65,12 @@ User → Pool Proxy (delegatecall)→ Implementation
 - **Adapter change**: New adapter + Authority governance update. No implementation or extension changes needed.
 
 ### ExtensionsMap Salt
-- The salt only needs to be bumped when the ExtensionsMap contract code itself changes (new selectors, new routing logic).
-- If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
-- If any extension is redeployed (new address), a new ExtensionsMap must be deployed. The salt should be bumped to produce a new CREATE2 address.
+- **When to bump**: Bump the salt whenever a new ExtensionsMap must be deployed. This happens in two cases:
+  1. The ExtensionsMap contract code itself changes (new selectors, new routing logic).
+  2. Any extension is redeployed to a **new address** (because ExtensionsMap immutably stores extension addresses and CREATE2 cannot overwrite an existing contract).
+- **When NOT to bump**: If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+- **Important**: The deploy script checks `if (map.code.length == 0)` and skips deployment if an ExtensionsMap already exists at the computed CREATE2 address. If the salt is not bumped when an extension address changed, the script will silently reuse the old ExtensionsMap that points to stale extension addresses.
+- **Automation limitation**: The current scripts require manual salt bumps. Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
 
 ### Version Bump
 - Every implementation change MUST bump `VERSION` in `MixinConstants.sol` (e.g., `"4.2.0"` → `"4.3.0"`).

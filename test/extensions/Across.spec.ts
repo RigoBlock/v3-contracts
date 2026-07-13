@@ -66,7 +66,7 @@ describe("Across Integration", () => {
 
         await expect(
           eCrosschain.donate(mockUSDC.address, 1000000, destMessageParams)
-        ).to.be.revertedWith("DonationLock(false)");
+        ).to.be.revertedWith("DonationLock").withArgs(false);
       });
 
       it("should reject calls from deployer", async () => {
@@ -77,7 +77,7 @@ describe("Across Integration", () => {
 
         await expect(
           eCrosschain.connect(owner).donate(mockUSDC.address, 1000000, destMessageParams)
-        ).to.be.revertedWith("DonationLock(false)");
+        ).to.be.revertedWith("DonationLock").withArgs(false);
       });
 
       it("should reject calls from arbitrary user", async () => {
@@ -88,7 +88,7 @@ describe("Across Integration", () => {
 
         await expect(
           eCrosschain.connect(user).donate(mockUSDC.address, 1000000, destMessageParams)
-        ).to.be.revertedWith("DonationLock(false)");
+        ).to.be.revertedWith("DonationLock").withArgs(false);
       });
     });
 

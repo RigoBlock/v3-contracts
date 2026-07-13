@@ -212,6 +212,10 @@ interface IGmxExchangeRouter {
         uint256[] calldata timeKeys,
         address receiver
     ) external payable returns (uint256[] memory claimedAmounts);
+
+    /// @dev Registers `callbackContract` as the saved callback for `market` for the caller's account.
+    ///  The saved callback is invoked for liquidation and ADL order executions.
+    function setSavedCallbackContract(address market, address callbackContract) external payable;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,10 +284,13 @@ interface IGmxReader {
 // RoleStore interface — used in tests to look up keeper address
 // ---------------------------------------------------------------------------
 
-/// @dev Minimal interface to GMX RoleStore for test infrastructure.
+/// @dev Minimal interface to GMX RoleStore for test infrastructure and callback validation.
 interface IGmxRoleStore {
     /// @dev Returns members holding `roleKey` in the range [start, end).
     function getRoleMembers(bytes32 roleKey, uint256 start, uint256 end) external view returns (address[] memory);
+
+    /// @dev Returns true if `account` holds `roleKey`.
+    function hasRole(address account, bytes32 roleKey) external view returns (bool);
 }
 
 // ---------------------------------------------------------------------------
@@ -301,10 +308,13 @@ interface IGmxChainlinkPriceFeedProvider {
 // DataStore interface — used for execution fee estimation
 // ---------------------------------------------------------------------------
 
-/// @dev Minimal interface to GMX DataStore for reading configuration values.
+/// @dev Minimal interface to GMX DataStore for reading and writing uint256 values.
 interface IGmxDataStore {
     /// @dev Returns the uint256 value stored at `key`.
     function getUint(bytes32 key) external view returns (uint256);
+
+    /// @dev Sets the uint256 value at `key`. Caller must hold the CONTROLLER role.
+    function setUint(bytes32 key, uint256 value) external returns (uint256);
 }
 
 

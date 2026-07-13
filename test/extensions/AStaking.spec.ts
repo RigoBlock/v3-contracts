@@ -252,14 +252,14 @@ describe("AStaking", async () => {
             expect(grgBurnAmount.sub(userPoolBalance)).to.be.lte(21) // small rounding error in favor of the pool
             await expect(
                 fullPool.burnForToken(userPoolBalance.add(1), 1, grgToken.address)
-            ).to.be.revertedWith('PoolBurnNotEnough()')
+            ).to.be.revertedWith('PoolBurnNotEnough')
             await fullPool.burnForToken(userPoolBalance, 1, grgToken.address)
             // there is a small residual amount in the pool, due to rounding errors
             expect(await grgToken.balanceOf(pool.address)).to.be.eq(36)
             const totalSupply = await fullPool.totalSupply()
             expect((await fullPool.getPoolTokens()).unitaryValue).to.be.eq(parseEther("1.981180834274851817"))
             expect(await fullPool.totalSupply()).to.be.eq(0)
-            await expect(fullPool.burn(totalSupply, 1)).to.be.revertedWith('PoolBurnNullAmount()')
+            await expect(fullPool.burn(totalSupply, 1)).to.be.revertedWith('PoolBurnNullAmount')
             expect(await hre.ethers.provider.getBalance(fullPool.address)).to.be.eq(2) // residual native balance has not changed
             // assert pool value does not change (need to mint as supply is null)
             await fullPool.mint(user1.address, amount, 0, { value: amount })

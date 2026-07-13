@@ -175,9 +175,14 @@ library NavView {
         } else if (totalValue > 0) {
             unitaryValue = (uint256(totalValue) * 10 ** decimals) / uint256(effectiveSupply);
         } else {
-            // Supply exists but value is 0 or negative (worthless or underwater)
-            // Return 0 to prevent new mints until value recovers
-            unitaryValue = 0;
+            // Match _updateNav behavior: pool has non-positive value, use sentinel 1
+            // to prevent draining at stale NAV.
+            unitaryValue = 1;
+        }
+
+        // Never allow returning 0 - flag for default unitary price of uninitialized pool.
+        if (unitaryValue == 0) {
+            unitaryValue = 1;
         }
 
         return

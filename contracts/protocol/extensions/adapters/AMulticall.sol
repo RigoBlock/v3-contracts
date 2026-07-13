@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // solhint-disable-next-line
-pragma solidity 0.8.17;
+pragma solidity 0.8.28;
 
 import "./interfaces/IAMulticall.sol";
 
@@ -25,12 +25,10 @@ contract AMulticall is IAMulticall {
             (bool success, bytes memory result) = address(this).delegatecall(data[i]);
 
             if (!success) {
-                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
-                if (result.length < 68) revert();
+                // Forward the original revert payload unchanged, preserving custom errors and strings.
                 assembly {
-                    result := add(result, 0x04)
+                    revert(add(result, 0x20), mload(result))
                 }
-                revert(abi.decode(result, (string)));
             }
 
             results[i] = result;
@@ -38,24 +36,18 @@ contract AMulticall is IAMulticall {
     }
 
     /// @inheritdoc IAMulticall
-    function multicall(uint256 deadline, bytes[] calldata data)
-        external
-        payable
-        override
-        checkDeadline(deadline)
-        returns (bytes[] memory)
-    {
+    function multicall(
+        uint256 deadline,
+        bytes[] calldata data
+    ) external payable override checkDeadline(deadline) returns (bytes[] memory) {
         return multicall(data);
     }
 
     /// @inheritdoc IAMulticall
-    function multicall(bytes32 previousBlockhash, bytes[] calldata data)
-        external
-        payable
-        override
-        checkPreviousBlockhash(previousBlockhash)
-        returns (bytes[] memory)
-    {
+    function multicall(
+        bytes32 previousBlockhash,
+        bytes[] calldata data
+    ) external payable override checkPreviousBlockhash(previousBlockhash) returns (bytes[] memory) {
         return multicall(data);
     }
 

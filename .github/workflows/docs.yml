@@ -1,0 +1,42 @@
+name: Publish Docs
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  publish-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.12.0
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            "**/node_modules"
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Publish Solidity API docs
+        env:
+          V3_DOCS_REPO: https://x-access-token:${{ secrets.PUBLISH_GITHUB_TOKEN }}@github.com/RigoBlock/v3-docs.git
+        run: ./scripts/publish-docs.sh

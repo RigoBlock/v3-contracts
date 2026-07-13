@@ -34,7 +34,7 @@ rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
   --match-path "test/libraries/*.t.sol" \
-  --no-match-contract "Fork" \
+  --no-match-contract "Fork|DelegationLibFuzz" \
   --report lcov
 
 mv lcov.info /tmp/foundry_library_lcov.info
@@ -46,7 +46,7 @@ echo "⚡ Step 1/4: Running non-fork test coverage..."
 rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --no-match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PolygonForkTest|PoolDonateTest|AGmxV2ForkTest|A0xRouterUnichainForkTest|AUniswapForkTest|BscPoolUpgradeDebugTest' \
+  --no-match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PolygonForkTest|PoolDonateTest|AGmxV2ForkTest|A0xRouterUnichainForkTest|AUniswapForkTest|BscPoolUpgradeDebugTest|DelegationLibFuzz|ECrosschainFuzzTest' \
   --report lcov
 
 mv lcov.info /tmp/foundry_nofork_lcov.info
@@ -59,6 +59,7 @@ rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
   --match-contract 'A0xRouterForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PoolDonateTest|AGmxV2ForkTest|AUniswapForkTest' \
+  --no-match-contract 'DelegationLibFuzz|ECrosschainFuzzTest' \
   --report lcov
 
 mv lcov.info /tmp/foundry_fork_lcov.info

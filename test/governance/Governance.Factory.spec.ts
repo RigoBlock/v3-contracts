@@ -36,7 +36,7 @@ describe("Governance Factory", async () => {
                     TimeType.Timestamp,
                     'Rigoblock Governance'
                 )
-            ).to.be.revertedWith('VM Exception while processing transaction: reverted with panic code 0x1')
+            ).to.be.revertedWith("panic code 0x1")
             // will revert without reason if assertion in strategy contract fails
             await expect(
                 governanceFactory.createGovernance(
@@ -47,7 +47,7 @@ describe("Governance Factory", async () => {
                     TimeType.Timestamp,
                     'Rigoblock Governance'
                 )
-            ).to.be.revertedWith('VM Exception while processing transaction: reverted with panic code 0x1')
+            ).to.be.revertedWith("panic code 0x1")
             await expect(
                 governanceFactory.createGovernance(
                     implementation,
@@ -57,7 +57,7 @@ describe("Governance Factory", async () => {
                     TimeType.Timestamp,
                     'Any Governance'
                 )
-            ).to.be.revertedWith('VM Exception while processing transaction: reverted with panic code 0x1')
+            ).to.be.revertedWith("panic code 0x1")
         })
 
         it('should emit event when creating new governance', async () => {

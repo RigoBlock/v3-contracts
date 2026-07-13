@@ -1,3 +1,5 @@
+import "hardhat-deploy";
+import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { chainConfig, extensionsMapSalt, zeroExAllowanceHolder, zeroExDeployer } from "../utils/constants";
@@ -90,12 +92,23 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
+  // EGmxCallback is Arbitrum-only; use address zero as a no-op placeholder elsewhere.
+  const eGmxCallback = chainId === 42161
+    ? (await deploy("EGmxCallback", {
+        from: deployer,
+        args: [],
+        log: true,
+        deterministicDeployment: true,
+      })).address
+    : "0x0000000000000000000000000000000000000000";
+
   const extensions = {
     eApps: eApps.address,
     eOracle: eOracle.address,
     eUpgrade: eUpgrade.address,
     eCrosschain: eCrosschain.address,
-    eNavView: eNavView.address
+    eNavView: eNavView.address,
+    eGmxCallback: eGmxCallback
   }
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {

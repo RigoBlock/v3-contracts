@@ -6,11 +6,11 @@ Open GMX perpetual positions must be included in the pool's Net Asset Value (NAV
 
 ## Components
 
-| Component | Responsibility |
-|-----------|----------------|
-| `EApps` | Per-call position valuation (called by delegates during deposits/withdrawals) |
-| `ENavView` | View-only NAV computation including GMX (off-chain queries, multi-call) |
-| `NavView` | Shared library: NAV calculation with optional GMX inclusion |
+| Component        | Responsibility                                                                    |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `EApps`          | Per-call position valuation (called by delegates during deposits/withdrawals)     |
+| `ENavView`       | View-only NAV computation including GMX (off-chain queries, multi-call)           |
+| `NavView`        | Shared library: NAV calculation with optional GMX inclusion                       |
 | `IGmxSynthetics` | Interface types: `Position.Props`, `PositionInfo`, `Market.Props`, `MarketPrices` |
 
 ## Position Valuation Flow
@@ -79,6 +79,7 @@ GmxPositionInfo[] memory infos = IGmxReader(_GMX_READER).getAccountPositionInfoL
 ```
 
 Each `PositionInfo` contains:
+
 - `position.numbers.collateralAmount` — deposited collateral
 - `fees.funding.claimableLongTokenAmount` — accrued funding fees (long)
 - `fees.funding.claimableShortTokenAmount` — accrued funding fees (short)
@@ -96,6 +97,8 @@ if (cs > 0) tmp[count++] = AppTokenBalance({token: mkt.shortToken, amount: int25
 ```
 
 NavView prices each token via `EOracle.convertTokenAmount` using the pool's standard Chainlink feeds.
+
+The `claimableLongTokenAmount` / `claimableShortTokenAmount` values returned by the live Reader are **unflushed** accrued funding for the still-open position. After a decrease order executes, GMX moves the settled portion into the `CLAIMABLE_FUNDING_AMOUNT` DataStore bucket. `GmxLib._getClaimableBalances` reads the DataStore bucket, while `_getExecutedPositionBalances` reads the live Reader projection for any remaining open position. These two sources are non-overlapping for the same market/token: the flushed bucket represents historical funding that has already been removed from the live position projection. This is exercised by the real-fork test `test_ClaimFundingFees_PartialDecreaseFlushesFundingFees` in `test/extensions/AGmxV2Fork.t.sol`, which accrues funding over 30 days, performs a partial decrease, and verifies that claiming the DataStore amount reduces EApps by exactly the claimed value while the remaining position is still valued.
 
 ### 6. Aggregate Value — Native Token Design
 
@@ -137,14 +140,14 @@ through constructors. The old `GmxParams` struct in `NavView` has been removed.
 
 ## EApps vs ENavView
 
-| | `EApps` | `ENavView` |
-|---|---|---|
-| Called by | Pool during mint/redeem | Off-chain via staticcall |
-| Execution context | delegatecall from pool | delegatecall from pool |
-| Purpose | Include GMX value in deposit/withdrawal NAV | Read-only NAV snapshot |
-| Gas sensitivity | High (must be cheap for users) | Low (view only) |
-| Chain guard | none (activation gate is sufficient) | none (same) |
-| Active-app gate | ✅ | ✅ |
+|                   | `EApps`                                     | `ENavView`               |
+| ----------------- | ------------------------------------------- | ------------------------ |
+| Called by         | Pool during mint/redeem                     | Off-chain via staticcall |
+| Execution context | delegatecall from pool                      | delegatecall from pool   |
+| Purpose           | Include GMX value in deposit/withdrawal NAV | Read-only NAV snapshot   |
+| Gas sensitivity   | High (must be cheap for users)              | Low (view only)          |
+| Chain guard       | none (activation gate is sufficient)        | none (same)              |
+| Active-app gate   | ✅                                          | ✅                       |
 
 ## Zero-Position Fast Path
 
@@ -159,7 +162,9 @@ Both paths ensure GMX queries add negligible overhead to pools with no activity.
 
 GMX position data inherits Chainlink oracle staleness. `IGmxChainlinkPriceFeedProvider.getOraclePrice(token, "")` delegates to the configured Chainlink aggregator; no additional freshness check is applied inside `GmxLib`. Production usage should ensure Chainlink feeds are live.
 
-`GmxLib._safeGetGmxPrice` wraps the call in a `try/catch` — if the oracle reverts (paused, feed removed, etc.) it returns a zero `Price.Props`, which causes the position to be valued at zero collateral only (conservative fallback via `_collateralOnlyBalances`).
+`GmxLib._safeGetGmxPrice` wraps the call in a `try/catch` — if the oracle reverts (paused, feed removed, etc.) it returns a zero `Price.Props`, which causes the position to be valued at zero collateral only (fallback via `_collateralOnlyBalances`).
+
+> **NAV impact of fallback:** `_collateralOnlyBalances` reports the raw deposited collateral, ignoring unrealised PnL, price impact, and fees. During an oracle or Reader outage this can **overstate** NAV for positions with negative PnL/fees. The alternative — reverting `EApps.getAppTokenBalances` — would halt deposits, withdrawals, and NAV updates for the entire outage, which is considered worse than a temporary, bounded overstatement. This trade-off is recorded as an acknowledged Info finding in `docs/gmx/security.md`.
 
 ## Negative Net Position Value
 
@@ -174,11 +179,13 @@ if (net > 0) { /* include in NAV */ }
 **Why this is correct:**
 
 GMX has automatic liquidation and ADL (auto-deleveraging) mechanics that kick in before a position's collateral drops to zero. Before the net value can realistically go negative:
+
 1. The position breaches the minimum collateral ratio → GMX marks it for liquidation.
 2. A keeper calls `liquidatePosition` → remaining collateral (minus liquidation fee) is returned to the pool.
 3. The pool receives back whatever collateral survived. It cannot owe GMX anything beyond what was deposited.
 
 When `_computeGmxNetCollateral` returns a negative number, it means:
+
 - Our fee estimate is conservative and overshoots actual fees, **or**
 - The position is already in the liquidation queue (keepers will execute shortly)
 
@@ -203,57 +210,31 @@ In both cases, reporting **zero** is the correct NAV contribution — not a nega
 
 GMX closes positions via keeper execution, which sends collateral back to the pool wallet WITHOUT calling back into the adapter. Open time is the only reliable hook to ensure the collateral token is tracked. If the token arrived via a swap adapter it is already tracked (`_trackToken` is a no-op); if it arrived via direct external transfer, `_trackToken` adds it at open time so the returned collateral is visible after close.
 
-## Known NAV Coverage Gaps
+## GMX Callback Extension (EGmxCallback)
 
-Two GMX accounting scenarios produce a **temporary NAV undercount** until the pool owner takes a manual action. In both cases the missing value is conservative (never an overstatement) and the assets are not lost — they remain claimable from the GMX DataStore.
+The `EGmxCallback` extension closes the two NAV gaps described above. It receives GMX `afterOrderExecution` callbacks from approved GMX controllers and writes two pieces of data into pool storage:
 
----
+1. **`trackedMarkets`** — markets that currently have an open position or still owe claimable funding fees. `GmxLib` iterates this set at NAV time and queries `CLAIMABLE_FUNDING_AMOUNT` for both market tokens, so post-close funding fees remain visible.
+2. **`claimableCollateralKeys`** — recorded `(market, token, timeKey)` keys where a decrease/liquidation/ADL created a non-zero `CLAIMABLE_COLLATERAL_AMOUNT`. `GmxLib` applies the same factor/reduction/claimed math GMX uses at claim time, so withheld rebates remain in NAV until they are claimed.
 
-### Gap 1 — Price-Impact Rebate Collateral
+The callback is routed via `ExtensionsMap` with `shouldDelegatecall = true`, so it runs in the pool's storage context. Its `onlyGmxController` modifier rejects any caller that is not flagged as a `CONTROLLER` in the GMX `RoleStore`.
 
-When a decrease order executes with a sufficiently large negative price impact, GMX withholds a portion of the collateral as a rebate that becomes claimable over time (see [GMX docs — Price Impact Rebates](https://docs.gmx.io/docs/trading/v2#price-impact-rebates)). The claimable amount is keyed by `(market, token, timeKey)` where `timeKey = block.timestamp / DATA_STORE.getUint("CLAIMABLE_COLLATERAL_TIME_DIVISOR")`.
+#### Scan Size
 
-**Why `GmxLib` cannot see it automatically:**
+The callback indexes are **not hard-capped**. Their size is bounded in practice by two mechanisms:
 
-`getAccountPositionInfoList` returns data for *open* positions only. The withheld rebate is stored directly in the GMX DataStore under a per-account, per-time-bucket key; it is not reachable via any Reader view that generic position queries exercise.
+- The 32 open-position limit keeps the number of actively traded markets small.
+- `claimFundingFees` and `claimCollateral` prune entries as soon as the outstanding value is claimed, so the sets do not accumulate stale data.
 
-Receiving notice of a new claimable rebate at order-execution time would require implementing the `afterOrderExecution` GMX keeper callback. The adapter cannot implement this callback because the keeper is not the pool owner — any callback made by the keeper would be routed by `MixinFallback` as a `staticcall` (not a `delegatecall`), so all state writes inside the callback would revert.
+In the worst case, the NAV scan grows linearly with the number of historic markets that still hold unclaimed funding or collateral for the pool.
 
-**Workaround (current):**
+### Tracking Markets at Increase Time
 
-The pool owner computes the `timeKey` off-chain:
-```
-timeKey = executionTimestamp / DATA_STORE.getUint(keccak256("CLAIMABLE_COLLATERAL_TIME_DIVISOR"))
-```
-and calls `AGmxV2.claimCollateral(markets, tokens, timeKeys)`. Once claimed, the collateral lands in the pool wallet and is immediately visible to NAV.
+`AGmxV2.createIncreaseOrder` adds the market to `trackedMarkets` immediately, even though increase orders do not use a per-order callback. If a future decrease callback fails (out-of-gas, keeper misconfiguration, etc.), the market is already known and funding fees can still be queried.
 
-**Future option:** A dedicated GMX callback extension (`EGmxCallback`) could receive `afterOrderExecution` from the keeper. The extension would be delegatecalled for all callers (extensions are always delegatecalled regardless of `msg.sender`), so the keeper could trigger a state write. The extension must restrict `msg.sender` to the GMX role-store controller to prevent arbitrary callers from manipulating stored claimable-collateral keys. This extension is **not currently implemented** — the workaround is acceptable given the rarity of high-price-impact decreases.
+### Cleanup After Claims
 
----
+To keep the NAV iteration set from growing unbounded, `AGmxV2` prunes storage when the pool owner claims:
 
-### Gap 2 — Accrued Funding Fees After Full Position Close
-
-`GmxLib._appendGmxPosBalances` reads `positionInfo.fees.funding.claimableLongTokenAmount` and `claimableShortTokenAmount` from `getAccountPositionInfoList`, which only returns **open** positions. Once the last position on a given market is closed, any unclaimed funding fees that were accruing on that market become invisible to the NAV loop: the `PositionInfo` no longer exists in the Reader response, and the claimable-funding-amount DataStore keys are not queried anywhere.
-
-The amounts remain claimable at:
-```
-keccak256(abi.encode("CLAIMABLE_FUNDING_AMOUNT", market, token, account))
-```
-
-**Impact:** Unclaimed funding fees from a fully-closed market are not reflected in NAV until `AGmxV2.claimFundingFees(markets, tokens)` is called. Funding fee accrual is gradual — the undercount grows slowly and is bounded by the fee rate × position size × time.
-
-**Workaround (current):** The pool owner should call `claimFundingFees` for the relevant markets when closing the last position on that market, or periodically if long-lived positions are held.
-
-**Future option:** The same `EGmxCallback` extension described above could track which markets have ever been active (analogous to maintaining a set of historical markets), enabling the NAV loop to also query closed-market funding fees. This is not currently implemented.
-
----
-
-### Summary
-
-| Gap | Trigger | Missing value type | How to recover |
-|---|---|---|---|
-| Price-impact rebate | High-impact decrease execution | Withheld collateral | Call `claimCollateral(markets, tokens, timeKeys)` |
-| Post-close funding fees | Full position close on a market | Accrued funding fees | Call `claimFundingFees(markets, tokens)` |
-
-Both actions are already exposed by `AGmxV2`. Neither gap creates an NAV overstatement or an exploitable manipulation vector — the pool can only be undervalued relative to true holdings, never overvalued.
-
+- `claimFundingFees` removes the market from `trackedMarkets` if the pool has **no open position** on that market and **no outstanding claimable funding fees** for either token.
+- `claimCollateral` removes the collateral key from `claimableCollateralKeys` once the remaining claimable amount is zero.
