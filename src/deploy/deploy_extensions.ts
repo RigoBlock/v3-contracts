@@ -2,11 +2,14 @@ import "hardhat-deploy";
 import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { chainConfig, extensionsMapSalt, zeroExAllowanceHolder, zeroExDeployer } from "../utils/constants";
+import {
+  chainConfig,
+  extensionsMapSalt,
+  zeroExAllowanceHolder,
+  zeroExDeployer,
+} from "../utils/constants";
 
-const deploy: DeployFunction = async function (
-  hre: HardhatRuntimeEnvironment,
-) {
+const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
@@ -35,19 +38,17 @@ const deploy: DeployFunction = async function (
     from: deployer,
     args: [
       authority.address,
-      deployer  // Rigoblock Dao
+      deployer, // Rigoblock Dao
     ],
     log: true,
     deterministicDeployment: true,
   });
 
-  const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
+  const originalImplementationAddress =
+    "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516";
   const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
     from: deployer,
-    args: [
-      originalImplementationAddress,
-      registry.address
-    ],
+    args: [originalImplementationAddress, registry.address],
     log: true,
     deterministicDeployment: true,
   });
@@ -65,18 +66,19 @@ const deploy: DeployFunction = async function (
     args: [config.oracle, config.weth],
     log: true,
     deterministicDeployment: true,
-  })
-  
+  });
+
   const eApps = await deploy("EApps", {
     from: deployer,
-    args: [
-      [config.stakingProxy, config.univ4Posm],
-    ],
+    args: [[config.stakingProxy, config.univ4Posm]],
     log: true,
     deterministicDeployment: true,
   });
 
-  const navViewParams = {grgStakingProxy: config.stakingProxy, univ4Posm: config.univ4Posm};
+  const navViewParams = {
+    grgStakingProxy: config.stakingProxy,
+    univ4Posm: config.univ4Posm,
+  };
 
   const eNavView = await deploy("ENavView", {
     from: deployer,
@@ -93,14 +95,17 @@ const deploy: DeployFunction = async function (
   });
 
   // EGmxCallback is Arbitrum-only; use address zero as a no-op placeholder elsewhere.
-  const eGmxCallback = chainId === 42161
-    ? (await deploy("EGmxCallback", {
-        from: deployer,
-        args: [],
-        log: true,
-        deterministicDeployment: true,
-      })).address
-    : "0x0000000000000000000000000000000000000000";
+  const eGmxCallback =
+    chainId === 42161
+      ? (
+          await deploy("EGmxCallback", {
+            from: deployer,
+            args: [],
+            log: true,
+            deterministicDeployment: true,
+          })
+        ).address
+      : "0x0000000000000000000000000000000000000000";
 
   const extensions = {
     eApps: eApps.address,
@@ -108,8 +113,8 @@ const deploy: DeployFunction = async function (
     eUpgrade: eUpgrade.address,
     eCrosschain: eCrosschain.address,
     eNavView: eNavView.address,
-    eGmxCallback: eGmxCallback
-  }
+    eGmxCallback: eGmxCallback,
+  };
 
   const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
     from: deployer,
@@ -120,24 +125,31 @@ const deploy: DeployFunction = async function (
 
   const extensionsMapDeployerInstance = await hre.ethers.getContractAt(
     "ExtensionsMapDeployer",
-    extensionsMapDeployer.address
+    extensionsMapDeployer.address,
   );
 
   const params = {
     extensions: extensions,
     wrappedNative: config.weth,
-  }
+  };
 
   // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
   const salt = hre.ethers.utils.formatBytes32String(extensionsMapSalt);
-  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params, salt);
+  const extensionsMapAddress =
+    await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(
+      params,
+      salt,
+    );
 
   // Check if extensionsMapAddress has code (is a deployed contract)
   const code = await hre.ethers.provider.getCode(extensionsMapAddress);
 
-  if (code === '0x') {
+  if (code === "0x") {
     // No code at address, proceed with deployment
-    const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
+    const tx = await extensionsMapDeployerInstance.deployExtensionsMap(
+      params,
+      salt,
+    );
     await tx.wait();
   } else {
     // skip onchain call if the contract is already deployed (would just return the address, so we can skip it)
@@ -206,5 +218,11 @@ const deploy: DeployFunction = async function (
   }
 };
 
-deploy.tags = ['extensions', 'adapters', 'l2-suite', 'main-suite']
+deploy.tags = [
+  "extensions",
+  "implementation",
+  "adapters",
+  "l2-suite",
+  "main-suite",
+];
 export default deploy;
