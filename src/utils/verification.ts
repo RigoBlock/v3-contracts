@@ -323,6 +323,13 @@ export async function verifySourcifyV2(
   }
 
   const statusUrl = `${SOURCIFY_ENDPOINT}/v2/verify/${verificationId}`;
+  const nonRetryableCodes = new Set([
+    "no_match",
+    "extra_file_input_bug",
+    "compiler_error",
+    "invalid_constructor_arguments",
+  ]);
+
   for (let attempt = 0; attempt < SOURCIFY_POLL_MAX_ATTEMPTS; attempt++) {
     await sleep(SOURCIFY_POLL_INTERVAL_MS);
     try {
@@ -337,7 +344,19 @@ export async function verifySourcifyV2(
       if (!status.isJobCompleted) continue;
 
       if (status.error) {
-        throw new Error(`${status.error.customCode}: ${status.error.message}`);
+        if (status.error.customCode === "already_verified") {
+          console.log(`${contractName} is already verified on Sourcify.`);
+          return true;
+        }
+        if (nonRetryableCodes.has(status.error.customCode)) {
+          throw new Error(
+            `${status.error.customCode}: ${status.error.message}`,
+          );
+        }
+        console.warn(
+          `Sourcify poll retryable error for ${contractName}: ${status.error.customCode}`,
+        );
+        continue;
       }
 
       const match = status.contract?.match;
