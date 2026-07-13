@@ -8,10 +8,12 @@ import {
   zeroExAllowanceHolder,
   zeroExDeployer,
 } from "../utils/constants";
+import { enableManagedNonce } from "../utils/nonce";
 
 const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
+  await enableManagedNonce(hre, deployer);
   const { deploy } = deployments;
 
   const chainIdString = await getChainId();

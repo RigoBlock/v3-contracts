@@ -1,4 +1,9 @@
 import type { HardhatUserConfig, HttpNetworkUserConfig } from "hardhat/types";
+
+type Eip1559NetworkConfig = HttpNetworkUserConfig & {
+  maxFeePerGas?: number;
+  maxPriorityFeePerGas?: number;
+};
 import "@nomicfoundation/hardhat-foundry";
 import "@nomicfoundation/hardhat-verify";
 import "@nomiclabs/hardhat-waffle";
@@ -125,8 +130,9 @@ const userConfig: HardhatUserConfig = {
     mainnet: {
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 250000000,
-    },
+      maxFeePerGas: 500_000_000, // 0.5 gwei
+      maxPriorityFeePerGas: 10_000_000, // 0.01 gwei
+    } as Eip1559NetworkConfig,
     xdai: {
       ...sharedNetworkConfig,
       url: "https://xdai.poanetwork.dev",
@@ -138,13 +144,15 @@ const userConfig: HardhatUserConfig = {
     sepolia: {
       ...sharedNetworkConfig,
       url: `https://sepolia.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 4000000000,
-    },
+      maxFeePerGas: 5_000_000_000, // 5 gwei
+      maxPriorityFeePerGas: 100_000_000, // 0.1 gwei
+    } as Eip1559NetworkConfig,
     polygon: {
       ...sharedNetworkConfig,
       url: `https://polygon-mainnet.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 180000000000,
-    },
+      maxFeePerGas: 600_000_000_000, // 600 gwei
+      maxPriorityFeePerGas: 50_000_000_000, // 50 gwei
+    } as Eip1559NetworkConfig,
     volta: {
       ...sharedNetworkConfig,
       url: `https://volta-rpc.energyweb.org`,

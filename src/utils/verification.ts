@@ -25,7 +25,7 @@ const ETHERSCAN_V2_ENDPOINT = "https://api.etherscan.io/v2/api";
 const ETHERSCAN_RATE_LIMIT_MS = 210; // ~5 requests/sec for free API keys
 const SOURCIFY_RATE_LIMIT_MS = 210;
 const SOURCIFY_POLL_INTERVAL_MS = 3000;
-const SOURCIFY_POLL_MAX_ATTEMPTS = 40;
+const SOURCIFY_POLL_MAX_ATTEMPTS = 20;
 
 function getStatusFilePath(hre: HardhatRuntimeEnvironment): string {
   return path.join(
@@ -249,6 +249,18 @@ interface SourcifyVerifyStatus {
   };
 }
 
+class NonRetryableSourcifyError extends Error {}
+
+function formatSourcifyError(
+  contractName: string,
+  customCode: string,
+): string {
+  if (customCode === "extra_file_input_bug") {
+    return `Sourcify cannot verify ${contractName}: known metadata issue (Sourcify #618).`;
+  }
+  return `Sourcify cannot verify ${contractName}: ${customCode}.`;
+}
+
 /**
  * Submits a contract to Sourcify v2 for verification.
  * Constructs the standard JSON input from the deployment metadata and polls
@@ -349,8 +361,8 @@ export async function verifySourcifyV2(
           return true;
         }
         if (nonRetryableCodes.has(status.error.customCode)) {
-          throw new Error(
-            `${status.error.customCode}: ${status.error.message}`,
+          throw new NonRetryableSourcifyError(
+            formatSourcifyError(contractName, status.error.customCode),
           );
         }
         console.warn(
@@ -362,6 +374,9 @@ export async function verifySourcifyV2(
       const match = status.contract?.match;
       return match === "exact_match" || match === "match";
     } catch (error) {
+      if (error instanceof NonRetryableSourcifyError) {
+        throw error;
+      }
       console.warn(
         `Sourcify poll failed for ${contractName} (attempt ${attempt + 1}):`,
         error instanceof Error ? error.message : String(error),
