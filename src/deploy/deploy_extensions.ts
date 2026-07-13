@@ -135,13 +135,28 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
   const salt = hre.ethers.utils.formatBytes32String(extensionsMapSalt);
-  const extensionsMapAddress =
-    await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(
-      params,
-      salt,
-    );
 
-  // Check if extensionsMapAddress has code (is a deployed contract)
+  // Compute the deterministic CREATE2 address locally. We avoid callStatic
+  // because ExtensionsMapDeployer writes transient storage, which reverts in
+  // static calls on some RPCs (e.g., Base).
+  const extensionsMapArtifact =
+    await hre.deployments.getExtendedArtifact("ExtensionsMap");
+  const creationCodeHash = hre.ethers.utils.keccak256(
+    extensionsMapArtifact.bytecode,
+  );
+  const deployerSalt = hre.ethers.utils.keccak256(
+    hre.ethers.utils.defaultAbiCoder.encode(
+      ["address", "bytes32"],
+      [deployer, salt],
+    ),
+  );
+  const extensionsMapAddress = hre.ethers.utils.getCreate2Address(
+    extensionsMapDeployer.address,
+    deployerSalt,
+    creationCodeHash,
+  );
+
+  // Check if ExtensionsMap has code at the computed address
   const code = await hre.ethers.provider.getCode(extensionsMapAddress);
 
   if (code === "0x") {
@@ -152,14 +167,12 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     );
     await tx.wait();
   } else {
-    // skip onchain call if the contract is already deployed (would just return the address, so we can skip it)
+    // skip onchain call if the contract is already deployed
     console.log(`Contract already deployed at ${extensionsMapAddress}`);
   }
 
-  // ExtensionsMap is deployed internally by ExtensionsMapDeployer. Register it
-  // with hardhat-deploy so it is included in verification workflows.
-  const extensionsMapArtifact =
-    await hre.deployments.getExtendedArtifact("ExtensionsMap");
+  // Register ExtensionsMap with hardhat-deploy so it is included in
+  // verification workflows.
   await hre.deployments.save("ExtensionsMap", {
     address: extensionsMapAddress,
     ...extensionsMapArtifact,
