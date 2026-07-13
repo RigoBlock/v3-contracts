@@ -76,6 +76,18 @@ User → Pool Proxy (delegatecall)→ Implementation
 - Every implementation change MUST bump `VERSION` in `MixinConstants.sol` (e.g., `"4.2.0"` → `"4.3.0"`).
 - This applies to ANY change compiled into the implementation: Mixin contracts, libraries, or constructor parameters.
 
+### Shared nonce management
+- All deploy scripts MUST call `enableManagedNonce(hre, deployer)` at the top so that `deploy()` and `deployments.execute()` share a single nonce counter.
+- The helper intercepts `eth_getTransactionCount` RPC calls and patches `JsonRpcSigner` / `Wallet` `sendTransaction`. This makes hardhat-deploy's nonce resolution read from a local counter that is advanced only when a transaction is actually broadcast, preventing `NONCE_EXPIRED` errors on live RPCs.
+- The helper is idempotent; calling it multiple times in the same Hardhat run only initializes the counter once.
+- If a transaction from a previous run is still pending (e.g., due to a gas spike), the next run will see it in the `pending` nonce count and queue new transactions behind it. Resolve or replace the pending transaction first, otherwise the new deployment will also stall.
+
+### Gas pricing on live networks
+- Live network configs in `hardhat.config.ts` set hardcoded EIP-1559 caps (`maxFeePerGas` and `maxPriorityFeePerGas`) per network. This avoids manual per-run fee entry, which is error-prone and can wipe an account with a typo.
+- The nonce helper applies these caps to every deployment transaction, drops any conflicting `gasPrice`, and sends the transaction as type-2.
+- To adjust fees, edit the network entry in `hardhat.config.ts` and review the values carefully before deploying.
+- `maxFeePerGas` is the absolute cap on the total gas fee; on chains with volatile base fees (e.g., Polygon) it should be set high enough to survive spikes. `maxPriorityFeePerGas` is the validator tip.
+
 ## Key Files
 
 ### Core Protocol

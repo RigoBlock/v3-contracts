@@ -3,12 +3,14 @@ import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { chainConfig } from "../utils/constants";
+import { enableManagedNonce } from "../utils/nonce";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
   const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
+  await enableManagedNonce(hre, deployer);
   const { deploy } = deployments;
 
   const chainId = await getChainId();
@@ -91,12 +93,9 @@ const deploy: DeployFunction = async function (
     deterministicDeployment: true,
   });
 
-  await deploy("Inflation", {
+  await deploy("InflationL2", {
     from: deployer,
-    args: [
-      config.rigoToken,
-      stakingProxy.address
-    ],
+    args: [deployer],
     log: true,
     deterministicDeployment: true,
   });

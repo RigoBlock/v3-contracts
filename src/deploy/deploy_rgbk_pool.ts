@@ -7,6 +7,11 @@ import { chainConfig, extensionsMapSalt } from "../utils/constants";
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
+  if (!["hardhat", "localhost"].includes(hre.network.name)) {
+    console.log(`Skipping ${__filename} on ${hre.network.name}`);
+    return;
+  }
+
   const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
