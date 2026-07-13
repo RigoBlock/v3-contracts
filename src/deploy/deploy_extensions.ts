@@ -136,43 +136,27 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
   const salt = hre.ethers.utils.formatBytes32String(extensionsMapSalt);
 
-  // Compute the deterministic CREATE2 address locally. We avoid callStatic
-  // because ExtensionsMapDeployer writes transient storage, which reverts in
-  // static calls on some RPCs (e.g., Base).
-  const extensionsMapArtifact =
-    await hre.deployments.getExtendedArtifact("ExtensionsMap");
-  const creationCodeHash = hre.ethers.utils.keccak256(
-    extensionsMapArtifact.bytecode,
+  // Always call deployExtensionsMap: it is a no-op if ExtensionsMap is already
+  // deployed at the deterministic address. We avoid callStatic because
+  // deployExtensionsMap creates a contract and may revert in static contexts.
+  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(
+    params,
+    salt,
   );
-  const deployerSalt = hre.ethers.utils.keccak256(
-    hre.ethers.utils.defaultAbiCoder.encode(
-      ["address", "bytes32"],
-      [deployer, salt],
-    ),
-  );
-  const extensionsMapAddress = hre.ethers.utils.getCreate2Address(
-    extensionsMapDeployer.address,
-    deployerSalt,
-    creationCodeHash,
-  );
+  await tx.wait();
 
-  // Check if ExtensionsMap has code at the computed address
-  const code = await hre.ethers.provider.getCode(extensionsMapAddress);
+  // Retrieve the deployed address from the deployer's mapping.
+  const extensionsMapAddress =
+    await extensionsMapDeployerInstance.deployedMaps(deployer, salt);
 
-  if (code === "0x") {
-    // No code at address, proceed with deployment
-    const tx = await extensionsMapDeployerInstance.deployExtensionsMap(
-      params,
-      salt,
-    );
-    await tx.wait();
-  } else {
-    // skip onchain call if the contract is already deployed
-    console.log(`Contract already deployed at ${extensionsMapAddress}`);
+  if (extensionsMapAddress === hre.ethers.constants.AddressZero) {
+    throw new Error("ExtensionsMap deployment did not record an address");
   }
 
   // Register ExtensionsMap with hardhat-deploy so it is included in
   // verification workflows.
+  const extensionsMapArtifact =
+    await hre.deployments.getExtendedArtifact("ExtensionsMap");
   await hre.deployments.save("ExtensionsMap", {
     address: extensionsMapAddress,
     ...extensionsMapArtifact,
