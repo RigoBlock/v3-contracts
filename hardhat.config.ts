@@ -138,7 +138,7 @@ const userConfig: HardhatUserConfig = {
     sepolia: {
       ...sharedNetworkConfig,
       url: `https://sepolia.infura.io/v3/${INFURA_KEY}`,
-      gasPrice: 40000000000,
+      gasPrice: 4000000000,
     },
     polygon: {
       ...sharedNetworkConfig,

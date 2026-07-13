@@ -156,6 +156,15 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     console.log(`Contract already deployed at ${extensionsMapAddress}`);
   }
 
+  // ExtensionsMap is deployed internally by ExtensionsMapDeployer. Register it
+  // with hardhat-deploy so it is included in verification workflows.
+  const extensionsMapArtifact =
+    await hre.deployments.getExtendedArtifact("ExtensionsMap");
+  await hre.deployments.save("ExtensionsMap", {
+    address: extensionsMapAddress,
+    ...extensionsMapArtifact,
+  });
+
   const poolImplementation = await deploy("SmartPool", {
     from: deployer,
     args: [authority.address, extensionsMapAddress, config.tokenJar],
@@ -165,11 +174,11 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   /*const proxyFactoryInstance = await hre.ethers.getContractAt(
     "RigoblockPoolProxyFactory",
-    proxyFactory.address
+    proxyFactory.address,
   );
-  const currentImplementation = await proxyFactoryInstance.implementation()
+  const currentImplementation = await proxyFactoryInstance.implementation();
   if (currentImplementation !== poolImplementation.address) {
-    await proxyFactoryInstance.setImplementation(poolImplementation.address)
+    await proxyFactoryInstance.setImplementation(poolImplementation.address);
   }*/
 
   await deploy("AUniswap", {
