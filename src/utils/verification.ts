@@ -274,10 +274,24 @@ export async function verifySourcifyV2(
   const sourcePath = Object.keys(metadata.settings.compilationTarget)[0];
   const contractIdentifier = `${sourcePath}:${metadata.settings.compilationTarget[sourcePath]}`;
 
+  // Sourcify's standard JSON input rejects the `license` field that Solidity
+  // includes in metadata sources, so we strip it before submission.
+  const sources: Record<string, { content: string; [key: string]: unknown }> =
+    {};
+  for (const [path, source] of Object.entries(metadata.sources)) {
+    const { license: _license, ...rest } = source;
+    sources[path] = rest;
+  }
+
+  // `compilationTarget` is metadata, not a valid compiler settings field, so
+  // Sourcify's standard JSON compilation rejects it.
+  const { compilationTarget: _compilationTarget, ...settings } =
+    metadata.settings;
+
   const stdJsonInput = {
     language: metadata.language,
-    sources: metadata.sources,
-    settings: metadata.settings,
+    sources,
+    settings,
   };
 
   const body = {
