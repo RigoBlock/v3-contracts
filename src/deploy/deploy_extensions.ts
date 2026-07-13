@@ -139,11 +139,14 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Always call deployExtensionsMap: it is a no-op if ExtensionsMap is already
   // deployed at the deterministic address. We avoid callStatic because
   // deployExtensionsMap creates a contract and may revert in static contexts.
-  const tx = await extensionsMapDeployerInstance.deployExtensionsMap(
+  // Use deployments.execute so hardhat-deploy tracks the nonce consistently.
+  await hre.deployments.execute(
+    "ExtensionsMapDeployer",
+    { from: deployer, log: true },
+    "deployExtensionsMap",
     params,
     salt,
   );
-  await tx.wait();
 
   // The deployer stores the address under a hashed salt. Retrieve it so we
   // don't have to duplicate the CREATE2 computation locally.
