@@ -77,6 +77,15 @@ export async function enableManagedNonce(
   if (isEnabled) {
     return;
   }
+
+  // The nonce manager is only meant for live/forked deployments. Applying it
+  // to the in-memory hardhat network breaks unit tests that rely on
+  // snapshots/evm_revert, because the managed counter does not reset with the
+  // chain state.
+  if (hre.network.name === "hardhat") {
+    return;
+  }
+
   isEnabled = true;
 
   const networkProvider = hre.network.provider;

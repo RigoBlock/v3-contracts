@@ -80,6 +80,7 @@ User → Pool Proxy (delegatecall)→ Implementation
 - All deploy scripts MUST call `enableManagedNonce(hre, deployer)` at the top so that `deploy()` and `deployments.execute()` share a single nonce counter.
 - The helper intercepts `eth_getTransactionCount` RPC calls and patches `JsonRpcSigner` / `Wallet` `sendTransaction`. This makes hardhat-deploy's nonce resolution read from a local counter that is advanced only when a transaction is actually broadcast, preventing `NONCE_EXPIRED` errors on live RPCs.
 - The helper is idempotent; calling it multiple times in the same Hardhat run only initializes the counter once.
+- The helper is automatically disabled on the in-memory `hardhat` network so it does not interfere with unit tests that use snapshots / `evm_revert`.
 - If a transaction from a previous run is still pending (e.g., due to a gas spike), the next run will see it in the `pending` nonce count and queue new transactions behind it. Resolve or replace the pending transaction first, otherwise the new deployment will also stall.
 
 ### Gas pricing on live networks
