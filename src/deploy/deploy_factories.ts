@@ -1,11 +1,15 @@
+import "hardhat-deploy";
+import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { enableManagedNonce } from "../utils/nonce";
 
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
   const { deployments, getNamedAccounts } = hre;
   const { deployer } = await getNamedAccounts();
+  await enableManagedNonce(hre, deployer);
   const { deploy } = deployments;
 
   const authority = await deploy("Authority", {

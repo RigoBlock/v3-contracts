@@ -47,15 +47,15 @@ All allowed actions route through hardcoded DEX protocol contracts with determin
 | BALANCERV3 / BALANCERV3_VIP | Balancer V3 |
 | PANCAKE_INFINITY / PANCAKE_INFINITY_VIP | PancakeSwap |
 | CURVE_TRICRYPTO_VIP | Curve |
-| MAVERICKV2 / MAVERICKV2_VIP | Maverick V2 |
+| MAVERICKV2 | Maverick V2 |
 | DODOV1 / DODOV2 | DODO |
 | VELODROME | Velodrome |
 | MAKERPSM | Maker PSM |
 | BEBOP | Bebop |
-| EKUBO / EKUBOV3 / EKUBO_VIP / EKUBOV3_VIP | Ekubo |
+| EKUBO / EKUBOV3 / EKUBOV3_VIP | Ekubo |
 | EULERSWAP | Euler |
-| LFJTM | Lifinity/JTM |
 | HANJI | Hanji |
+| CHECK_SLIPPAGE | Exact-output slippage check & payout to vault |
 
 ## Upgrade Considerations
 

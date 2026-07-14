@@ -105,7 +105,8 @@ contract UnitTestFixture is Test {
             eOracle: address(extensions.eOracle),
             eUpgrade: address(extensions.eUpgrade),
             eCrosschain: address(extensions.eCrosschain),
-            eNavView: address(extensions.eNavView)
+            eNavView: address(extensions.eNavView),
+            eGmxCallback: address(0)
         });
 
         DeploymentParams memory params = DeploymentParams({

@@ -161,7 +161,8 @@ contract RealDeploymentFixture is Test {
             eOracle: address(deployment.eOracle),
             eUpgrade: address(deployment.eUpgrade),
             eNavView: address(deployment.eNavView),
-            eCrosschain: address(deployment.eCrosschain)
+            eCrosschain: address(deployment.eCrosschain),
+            eGmxCallback: address(0)
         });
 
         // 2. Deploy ExtensionsMapDeployer

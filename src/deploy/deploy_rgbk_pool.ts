@@ -1,3 +1,5 @@
+import "hardhat-deploy";
+import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { chainConfig, extensionsMapSalt } from "../utils/constants";
@@ -5,6 +7,11 @@ import { chainConfig, extensionsMapSalt } from "../utils/constants";
 const deploy: DeployFunction = async function (
   hre: HardhatRuntimeEnvironment,
 ) {
+  if (!["hardhat", "localhost"].includes(hre.network.name)) {
+    console.log(`Skipping ${__filename} on ${hre.network.name}`);
+    return;
+  }
+
   const { deployments, getNamedAccounts, getChainId } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;

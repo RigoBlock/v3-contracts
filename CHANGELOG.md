@@ -1,3 +1,22 @@
+# [2.5.0](https://github.com/RigoBlock/v3-contracts/compare/v2.4.2...v2.5.0) (2026-07-13)
+
+
+### Bug Fixes
+
+* assert long token price feed ([7188128](https://github.com/RigoBlock/v3-contracts/commit/7188128ea55bd4affb5e8f3f8f49e7665e4800a3))
+* conform erc20 methods to standard ([c1177da](https://github.com/RigoBlock/v3-contracts/commit/c1177da5e6e6e22f77cedab01f23445f03a18ec8))
+* emit log when updating uni token ids ([dffcd96](https://github.com/RigoBlock/v3-contracts/commit/dffcd966a6798ba436ecd373eb1fd0fb015b24be))
+* gmx adapter gas optimization ([d43dcab](https://github.com/RigoBlock/v3-contracts/commit/d43dcab61d51c368d350e4becc2e29e7edf0a824))
+* nav gap with gmx closed positions ([2bc7cab](https://github.com/RigoBlock/v3-contracts/commit/2bc7cab18a7e22f193e92fd54b138a75f3fc92d8))
+* update multicall adapter ([43986df](https://github.com/RigoBlock/v3-contracts/commit/43986df64264c65f70045af02ea69397397bda6f))
+
+
+### Features
+
+* support CHECK_SLIPPAGE action to allow exact output swaps ([9e1a600](https://github.com/RigoBlock/v3-contracts/commit/9e1a6003a85ffe452a6631bceb4b32e5f1aba5e9))
+
+
+
 ## [2.4.2](https://github.com/RigoBlock/v3-contracts/compare/v2.4.1...v2.4.2) (2026-05-19)
 
 
@@ -41,15 +60,6 @@
 ### Features
 
 * perps ([d396377](https://github.com/RigoBlock/v3-contracts/commit/d396377ee69fcd5521897f19e8f4a134680a667d))
-
-
-
-## [2.2.1](https://github.com/RigoBlock/v3-contracts/compare/v2.2.0...v2.2.1) (2026-02-26)
-
-
-### Bug Fixes
-
-* 0x adapter ([f0c59f2](https://github.com/RigoBlock/v3-contracts/commit/f0c59f27e9e2eb68cf90b067c02bcb5936ca352d))
 
 
 

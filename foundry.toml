@@ -24,12 +24,21 @@ ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFacto
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
 
-# enforce compiling tests without via_ir and only some heavy contract with via_ir
-# note: it will only work if tests are using vm.deployCode to deploy contract
-# note: the logged warning is because MockAcrossSpokePool is also found in the second path, define more restrictive paths to silence
+# Enforce compiling project contracts without via-ir. MockAcrossSpokePool needs
+# via-ir to avoid a stack-too-deep error, so it is listed separately. Other mock
+# files are enumerated explicitly to avoid overlapping paths that Foundry cannot
+# merge.
 compilation_restrictions = [
     { paths = "contracts/mocks/MockAcrossSpokePool.sol", via_ir = true },
-    { paths = "contracts/**", via_ir = false },
+    { paths = "contracts/mocks/MockAcrossMulticallHandler.sol", via_ir = false },
+    { paths = "contracts/mocks/MockERC20.sol", via_ir = false },
+    { paths = "contracts/governance/**", via_ir = false },
+    { paths = "contracts/protocol/**", via_ir = false },
+    { paths = "contracts/rigoToken/**", via_ir = false },
+    { paths = "contracts/staking/**", via_ir = false },
+    { paths = "contracts/test/**", via_ir = false },
+    { paths = "contracts/tokens/**", via_ir = false },
+    { paths = "contracts/utils/**", via_ir = false },
 ]
 
 [fmt]

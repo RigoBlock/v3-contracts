@@ -19,6 +19,9 @@ interface IExtensionsMap {
     /// @notice Returns the address of the cross-chain handler extension contract.
     function eCrosschain() external view returns (address);
 
+    /// @notice Returns the address of the GMX v2 callback extension contract.
+    function eGmxCallback() external view returns (address);
+
     /// @notice Returns the address of the wrapped native token.
     /// @dev It is used for initializing it in the pool implementation immutable storage without passing it in the constructor.
     function wrappedNative() external view returns (address);

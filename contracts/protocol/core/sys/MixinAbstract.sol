@@ -3,17 +3,28 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {IERC20} from "../../interfaces/IERC20.sol";
 
-/// @notice This contract makes it easy for clients to track ERC20.
+/// @notice This contract exposes the pool as an ERC20 token while keeping shares non-transferable.
 abstract contract MixinAbstract is IERC20 {
-    /// @dev Non-implemented ERC20 method.
-    function transfer(address to, uint256 value) external override returns (bool success) {}
+    /// @notice Thrown when a non-transferable pool token operation is requested.
+    error PoolTokenOperationNotAllowed();
 
-    /// @dev Non-implemented ERC20 method.
-    function transferFrom(address from, address to, uint256 value) external override returns (bool success) {}
+    /// @dev Pool tokens are not transferable. Reverts as required by the ERC-20 standard.
+    function transfer(address to, uint256 value) external override returns (bool success) {
+        revert PoolTokenOperationNotAllowed();
+    }
 
-    /// @dev Non-implemented ERC20 method.
-    function approve(address spender, uint256 value) external override returns (bool success) {}
+    /// @dev Pool tokens are not transferable. Reverts as required by the ERC-20 standard.
+    function transferFrom(address from, address to, uint256 value) external override returns (bool success) {
+        revert PoolTokenOperationNotAllowed();
+    }
 
-    /// @dev Non-implemented ERC20 method.
-    function allowance(address owner, address spender) external view override returns (uint256) {}
+    /// @dev Pool tokens do not support approvals. Reverts as required by the ERC-20 standard.
+    function approve(address spender, uint256 value) external override returns (bool success) {
+        revert PoolTokenOperationNotAllowed();
+    }
+
+    /// @dev Pool tokens do not support approvals. Allowance is always zero.
+    function allowance(address owner, address spender) external view override returns (uint256) {
+        return 0;
+    }
 }

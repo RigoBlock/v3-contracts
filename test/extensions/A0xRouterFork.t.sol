@@ -652,6 +652,36 @@ contract A0xRouterForkTest is Test {
         }
     }
 
+    /// @notice CHECK_SLIPPAGE (exact-output swaps) passes the adapter's action allowlist.
+    ///  The settler still reverts because the action arguments are fake, but the revert
+    ///  must NOT be ActionNotAllowed from the adapter.
+    function test_CHECK_SLIPPAGE_AllowedByAdapter() public {
+        deal(Constants.ETH_USDC, pool, 10000e6);
+
+        bytes memory checkSlippageAction = abi.encodePacked(
+            ISettlerActions.CHECK_SLIPPAGE.selector,
+            abi.encode(uint256(1e15), Constants.ETH_WETH, pool)
+        );
+
+        bytes[] memory actions = new bytes[](1);
+        actions[0] = checkSlippageAction;
+
+        bytes memory settlerData = abi.encodeWithSelector(
+            SETTLER_EXECUTE_SELECTOR,
+            pool, Constants.ETH_WETH, uint256(1e15),
+            actions, bytes32(0)
+        );
+
+        vm.prank(poolOwner);
+        try IA0xRouter(pool).exec(
+            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
+        ) {
+            revert("Should fail inside settler (bad params)");
+        } catch (bytes memory returnData) {
+            _assertNotOurValidationError(returnData);
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
                             CALLDATA VALIDATION
     //////////////////////////////////////////////////////////////////////////*/
@@ -1115,7 +1145,8 @@ contract A0xRouterForkTest is Test {
             eOracle: address(eOracle),
             eUpgrade: address(eUpgrade),
             eNavView: address(eNavView),
-            eCrosschain: address(eCrosschain)
+            eCrosschain: address(eCrosschain),
+            eGmxCallback: address(0)
         });
 
         // Deploy ExtensionsMap
