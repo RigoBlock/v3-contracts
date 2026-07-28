@@ -224,9 +224,7 @@ contract A0xRouterForkTest is Test {
 
                 vm.prank(poolOwner);
                 vm.expectRevert(abi.encodeWithSelector(IA0xRouter.CounterfeitSettler.selector, bridgeSettler));
-                IA0xRouter(pool).exec(
-                    bridgeSettler, Constants.ETH_USDC, 1000e6, payable(bridgeSettler), settlerData
-                );
+                IA0xRouter(pool).exec(bridgeSettler, Constants.ETH_USDC, 1000e6, payable(bridgeSettler), settlerData);
                 console2.log("Bridge settler correctly rejected");
             } else {
                 console2.log("Bridge settler same as Taker or zero - edge case at this block");
@@ -264,18 +262,16 @@ contract A0xRouterForkTest is Test {
             // Build full settler execute calldata with the bridge action
             bytes memory settlerData = abi.encodeWithSelector(
                 SETTLER_EXECUTE_SELECTOR,
-                pool,               // recipient (passes our adapter validation)
-                Constants.ETH_WETH,  // buyToken (has price feed)
-                uint256(1e15),       // minAmountOut
+                pool, // recipient (passes our adapter validation)
+                Constants.ETH_WETH, // buyToken (has price feed)
+                uint256(1e15), // minAmountOut
                 actions,
                 bytes32(0)
             );
 
             vm.prank(poolOwner);
             vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, bridgeSelectors[i]));
-            IA0xRouter(pool).exec(
-                currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-            );
+            IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
         }
 
         // Pool balance unchanged — revert unwound everything
@@ -297,9 +293,7 @@ contract A0xRouterForkTest is Test {
 
                 vm.prank(poolOwner);
                 vm.expectRevert(abi.encodeWithSelector(IA0xRouter.CounterfeitSettler.selector, featureSettler));
-                IA0xRouter(pool).exec(
-                    featureSettler, Constants.ETH_USDC, 1000e6, payable(featureSettler), settlerData
-                );
+                IA0xRouter(pool).exec(featureSettler, Constants.ETH_USDC, 1000e6, payable(featureSettler), settlerData);
             } catch {
                 console2.log("Feature", featureId, "not available (paused or unregistered)");
             }
@@ -315,11 +309,11 @@ contract A0xRouterForkTest is Test {
         bytes memory basicAction = abi.encodePacked(
             ISettlerActions.BASIC.selector,
             abi.encode(
-                Constants.ETH_USDC,    // sellToken
-                uint256(10000),        // bps = 100%
-                address(0xdeadbeef),   // pool target
-                uint256(0),            // offset
-                bytes("")              // call data
+                Constants.ETH_USDC, // sellToken
+                uint256(10000), // bps = 100%
+                address(0xdeadbeef), // pool target
+                uint256(0), // offset
+                bytes("") // call data
             )
         );
 
@@ -328,18 +322,16 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool,               // recipient
-            Constants.ETH_WETH,  // buyToken
-            uint256(1e15),       // minAmountOut
+            pool, // recipient
+            Constants.ETH_WETH, // buyToken
+            uint256(1e15), // minAmountOut
             actions,
             bytes32(0)
         );
 
         // BASIC passes our validation — reverts inside AllowanceHolder/settler, not from adapter
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        ) {
+        try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData) {
             revert("Should revert inside settler (bad params)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -365,15 +357,15 @@ contract A0xRouterForkTest is Test {
         bytes memory rfqAction = abi.encodePacked(
             rfqSelector,
             abi.encode(
-                pool,                  // recipient
-                address(0),            // permit.permitted.token (placeholder)
-                uint256(0),            // permit.permitted.amount
-                uint256(0),            // permit.nonce
-                uint256(0),            // permit.deadline
-                address(0xdeadbeef),   // maker
-                bytes("fake_sig"),     // makerSig
-                Constants.ETH_USDC,    // takerToken
-                uint256(1000e6)        // maxTakerAmount
+                pool, // recipient
+                address(0), // permit.permitted.token (placeholder)
+                uint256(0), // permit.permitted.amount
+                uint256(0), // permit.nonce
+                uint256(0), // permit.deadline
+                address(0xdeadbeef), // maker
+                bytes("fake_sig"), // makerSig
+                Constants.ETH_USDC, // takerToken
+                uint256(1000e6) // maxTakerAmount
             )
         );
 
@@ -382,18 +374,16 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool,               // recipient (passes adapter validation)
-            Constants.ETH_WETH,  // buyToken (has price feed)
-            uint256(1e15),       // minAmountOut > 0 (required by adapter)
+            pool, // recipient (passes adapter validation)
+            Constants.ETH_WETH, // buyToken (has price feed)
+            uint256(1e15), // minAmountOut > 0 (required by adapter)
             actions,
             bytes32(0)
         );
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, rfqSelector));
-        IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
 
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
     }
@@ -407,10 +397,16 @@ contract A0xRouterForkTest is Test {
         bytes memory rfqVipAction = abi.encodePacked(
             rfqVipSelector,
             abi.encode(
-                pool,                  // recipient
-                address(0), uint256(0), uint256(0), uint256(0), // takerPermit placeholder
-                address(0), uint256(0), uint256(0), uint256(0), // makerPermit placeholder
-                address(0xdeadbeef),   // maker
+                pool, // recipient
+                address(0),
+                uint256(0),
+                uint256(0),
+                uint256(0), // takerPermit placeholder
+                address(0),
+                uint256(0),
+                uint256(0),
+                uint256(0), // makerPermit placeholder
+                address(0xdeadbeef), // maker
                 bytes("fake_maker_sig"),
                 bytes("fake_taker_sig")
             )
@@ -421,15 +417,16 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, rfqVipSelector));
-        IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
 
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
     }
@@ -449,8 +446,17 @@ contract A0xRouterForkTest is Test {
         // Second action: RFQ (must be caught)
         bytes memory rfqAction = abi.encodePacked(
             rfqSelector,
-            abi.encode(pool, address(0), uint256(0), uint256(0), uint256(0),
-                address(0xdead), bytes(""), Constants.ETH_USDC, uint256(1000e6))
+            abi.encode(
+                pool,
+                address(0),
+                uint256(0),
+                uint256(0),
+                uint256(0),
+                address(0xdead),
+                bytes(""),
+                Constants.ETH_USDC,
+                uint256(1000e6)
+            )
         );
 
         bytes[] memory actions = new bytes[](2);
@@ -459,15 +465,16 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, rfqSelector));
-        IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
     }
 
     /// @notice TRANSFER_FROM with recipient != settler is blocked to prevent pool-owner drains.
@@ -488,15 +495,16 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(0),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(0),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.TransferFromRecipientNotSettler.selector, attacker));
-        IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
     }
 
     /// @notice BASIC action is allowed — needed by 0x API for ETH wrapping/unwrapping and
@@ -509,10 +517,10 @@ contract A0xRouterForkTest is Test {
         bytes memory basicAction = abi.encodePacked(
             ISettlerActions.BASIC.selector,
             abi.encode(
-                Constants.ETH_USDC,     // sellToken
-                uint256(10000),         // bps (100%)
-                address(0xdeadbeef),    // pool (arbitrary target)
-                uint256(0),             // offset
+                Constants.ETH_USDC, // sellToken
+                uint256(10000), // bps (100%)
+                address(0xdeadbeef), // pool (arbitrary target)
+                uint256(0), // offset
                 bytes("arbitrary_data")
             )
         );
@@ -522,16 +530,17 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         // BASIC passes our validation. The call reverts inside AllowanceHolder/settler,
         // not from our adapter validation.
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        ) {
+        try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData) {
             revert("Should revert inside settler (bad params)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -554,15 +563,16 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, renegadeSelector));
-        IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
 
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
     }
@@ -584,15 +594,16 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, metatxnSelector));
-        IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
 
         assertEq(IERC20(Constants.ETH_USDC).balanceOf(pool), 10000e6, "Pool USDC unchanged");
     }
@@ -603,25 +614,23 @@ contract A0xRouterForkTest is Test {
 
         bytes4 unknownSelector = bytes4(0xdeadbeef);
 
-        bytes memory unknownAction = abi.encodePacked(
-            unknownSelector,
-            abi.encode(pool, uint256(0))
-        );
+        bytes memory unknownAction = abi.encodePacked(unknownSelector, abi.encode(pool, uint256(0)));
 
         bytes[] memory actions = new bytes[](1);
         actions[0] = unknownAction;
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
         vm.expectRevert(abi.encodeWithSelector(IA0xRouter.ActionNotAllowed.selector, unknownSelector));
-        IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        );
+        IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
     }
 
     /// @notice Valid DEX actions (not RFQ) pass the adapter's action check.
@@ -638,14 +647,15 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        ) {
+        try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData) {
             revert("Should fail inside settler (bad params)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -668,14 +678,15 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(1e15),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e15),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        ) {
+        try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData) {
             revert("Should fail inside settler (bad params)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -700,8 +711,12 @@ contract A0xRouterForkTest is Test {
     /// @notice Unsupported function selector is rejected
     function test_CalldataValidation_UnsupportedSelector() public {
         bytes memory wrongData = abi.encodeWithSelector(
-            bytes4(0xdeadbeef), pool, Constants.ETH_WETH, uint256(1e18),
-            new bytes[](0), bytes32(0)
+            bytes4(0xdeadbeef),
+            pool,
+            Constants.ETH_WETH,
+            uint256(1e18),
+            new bytes[](0),
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
@@ -747,14 +762,15 @@ contract A0xRouterForkTest is Test {
 
         bytes memory settlerData = abi.encodeWithSelector(
             SETTLER_EXECUTE_SELECTOR,
-            pool, Constants.ETH_WETH, uint256(0),
-            actions, bytes32(0)
+            pool,
+            Constants.ETH_WETH,
+            uint256(0),
+            actions,
+            bytes32(0)
         );
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData
-        ) {
+        try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData) {
             revert("Should fail inside settler (bad params)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -837,11 +853,7 @@ contract A0xRouterForkTest is Test {
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
 
         // Mock AllowanceHolder.exec to revert without reason (empty revert)
-        vm.mockCallRevert(
-            ALLOWANCE_HOLDER,
-            abi.encodeWithSelector(EXEC_SELECTOR),
-            ""
-        );
+        vm.mockCallRevert(ALLOWANCE_HOLDER, abi.encodeWithSelector(EXEC_SELECTOR), "");
 
         vm.prank(poolOwner);
         vm.expectRevert();
@@ -914,7 +926,9 @@ contract A0xRouterForkTest is Test {
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, sellAmount, payable(currentSettler), settlerData) {
+        try
+            IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, sellAmount, payable(currentSettler), settlerData)
+        {
             revert("Call should revert inside settler (empty actions)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -947,16 +961,12 @@ contract A0xRouterForkTest is Test {
         uint256 sellAmount = 5000e6;
         deal(Constants.ETH_USDC, pool, sellAmount);
 
-        bytes memory settlerData = _encodeSettlerExecute(
-            pool,
-            Constants.ETH_WETH,
-            1e15
-        );
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e15);
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, sellAmount, payable(currentSettler), settlerData
-        ) {
+        try
+            IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, sellAmount, payable(currentSettler), settlerData)
+        {
             revert("Should revert inside Settler (empty actions)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -970,16 +980,10 @@ contract A0xRouterForkTest is Test {
         deal(pool, 10 ether);
         uint256 poolBalanceBefore = pool.balance;
 
-        bytes memory settlerData = _encodeSettlerExecute(
-            pool,
-            Constants.ETH_USDC,
-            1e6
-        );
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_USDC, 1e6);
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, address(0), 1 ether, payable(currentSettler), settlerData
-        ) {
+        try IA0xRouter(pool).exec(currentSettler, address(0), 1 ether, payable(currentSettler), settlerData) {
             revert("Should revert inside Settler (empty actions)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -996,16 +1000,12 @@ contract A0xRouterForkTest is Test {
 
         // 0x API uses 0xEeee...ee sentinel for native ETH buyToken, not address(0)
         address ETH_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-        bytes memory settlerData = _encodeSettlerExecute(
-            pool,
-            ETH_SENTINEL,
-            1e15
-        );
+        bytes memory settlerData = _encodeSettlerExecute(pool, ETH_SENTINEL, 1e15);
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDC, sellAmount, payable(currentSettler), settlerData
-        ) {
+        try
+            IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, sellAmount, payable(currentSettler), settlerData)
+        {
             revert("Should revert inside Settler (empty actions)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -1017,16 +1017,12 @@ contract A0xRouterForkTest is Test {
         uint256 sellAmount = 5000e6;
         deal(Constants.ETH_USDT, pool, sellAmount);
 
-        bytes memory settlerData = _encodeSettlerExecute(
-            pool,
-            Constants.ETH_WETH,
-            1e15
-        );
+        bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e15);
 
         vm.prank(poolOwner);
-        try IA0xRouter(pool).exec(
-            currentSettler, Constants.ETH_USDT, sellAmount, payable(currentSettler), settlerData
-        ) {
+        try
+            IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDT, sellAmount, payable(currentSettler), settlerData)
+        {
             revert("Should revert inside Settler (empty actions)");
         } catch (bytes memory returnData) {
             _assertNotOurValidationError(returnData);
@@ -1049,11 +1045,7 @@ contract A0xRouterForkTest is Test {
         bytes memory settlerData = _encodeSettlerExecute(pool, Constants.ETH_WETH, 1e18);
 
         // Mock AllowanceHolder.exec to return success (simulates completed swap)
-        vm.mockCall(
-            ALLOWANCE_HOLDER,
-            abi.encodeWithSelector(EXEC_SELECTOR),
-            abi.encode(bytes(""))
-        );
+        vm.mockCall(ALLOWANCE_HOLDER, abi.encodeWithSelector(EXEC_SELECTOR), abi.encode(bytes("")));
 
         vm.prank(poolOwner);
         IA0xRouter(pool).exec(currentSettler, Constants.ETH_USDC, 1000e6, payable(currentSettler), settlerData);
@@ -1077,7 +1069,11 @@ contract A0xRouterForkTest is Test {
         // AllowanceHolder.exec(address,address,uint256,address,bytes)
         assertEq(EXEC_SELECTOR, bytes4(0x2213bc0b), "EXEC_SELECTOR mismatch");
         // Settler.execute((address,address,uint256),bytes[],bytes32)
-        assertEq(ISettlerTakerSubmitted.execute.selector, bytes4(0x1fff991f), "ISettlerTakerSubmitted.execute.selector mismatch");
+        assertEq(
+            ISettlerTakerSubmitted.execute.selector,
+            bytes4(0x1fff991f),
+            "ISettlerTakerSubmitted.execute.selector mismatch"
+        );
         // ActionInvalid(uint256,bytes4,bytes)
         assertEq(ActionInvalid.selector, bytes4(0x3c74eed6), "ActionInvalid selector mismatch");
     }
@@ -1093,14 +1089,7 @@ contract A0xRouterForkTest is Test {
         uint256 minAmountOut
     ) internal pure returns (bytes memory) {
         bytes[] memory actions = new bytes[](0);
-        return abi.encodeWithSelector(
-            SETTLER_EXECUTE_SELECTOR,
-            recipient,
-            buyToken,
-            minAmountOut,
-            actions,
-            bytes32(0)
-        );
+        return abi.encodeWithSelector(SETTLER_EXECUTE_SELECTOR, recipient, buyToken, minAmountOut, actions, bytes32(0));
     }
 
     /// @dev Asserts the revert error IS ActionInvalid from the settler.
@@ -1123,9 +1112,18 @@ contract A0xRouterForkTest is Test {
                 errorSelector := mload(add(returnData, 32))
             }
             assertTrue(errorSelector != IA0xRouter.CounterfeitSettler.selector, "Should not be CounterfeitSettler");
-            assertTrue(errorSelector != IA0xRouter.RecipientNotSmartPool.selector, "Should not be RecipientNotSmartPool");
-            assertTrue(errorSelector != IA0xRouter.UnsupportedSettlerFunction.selector, "Should not be UnsupportedSettlerFunction");
-            assertTrue(errorSelector != IA0xRouter.InvalidSettlerCalldata.selector, "Should not be InvalidSettlerCalldata");
+            assertTrue(
+                errorSelector != IA0xRouter.RecipientNotSmartPool.selector,
+                "Should not be RecipientNotSmartPool"
+            );
+            assertTrue(
+                errorSelector != IA0xRouter.UnsupportedSettlerFunction.selector,
+                "Should not be UnsupportedSettlerFunction"
+            );
+            assertTrue(
+                errorSelector != IA0xRouter.InvalidSettlerCalldata.selector,
+                "Should not be InvalidSettlerCalldata"
+            );
             assertTrue(errorSelector != IA0xRouter.DirectCallNotAllowed.selector, "Should not be DirectCallNotAllowed");
             assertTrue(errorSelector != IA0xRouter.ActionNotAllowed.selector, "Should not be ActionNotAllowed");
         }
@@ -1134,10 +1132,14 @@ contract A0xRouterForkTest is Test {
     /// @dev Deploy extensions, implementation, factory update, pool creation, adapter registration
     function _setupPool() private {
         // Deploy all required extensions
-        EApps eApps = new EApps(EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM}));
+        EApps eApps = new EApps(
+            EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM})
+        );
         EOracle eOracle = new EOracle(Constants.ORACLE, Constants.ETH_WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM}));
+        ENavView eNavView = new ENavView(
+            EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM})
+        );
         ECrosschain eCrosschain = new ECrosschain();
 
         Extensions memory extensions = Extensions({
@@ -1151,10 +1153,7 @@ contract A0xRouterForkTest is Test {
 
         // Deploy ExtensionsMap
         ExtensionsMapDeployer mapDeployer = new ExtensionsMapDeployer();
-        DeploymentParams memory params = DeploymentParams({
-            extensions: extensions,
-            wrappedNative: Constants.ETH_WETH
-        });
+        DeploymentParams memory params = DeploymentParams({extensions: extensions, wrappedNative: Constants.ETH_WETH});
         bytes32 salt = keccak256(abi.encodePacked("A0X_ROUTER_FORK_TEST", block.chainid));
         address extensionsMapAddr = mapDeployer.deployExtensionsMap(params, salt);
 
@@ -1169,7 +1168,7 @@ contract A0xRouterForkTest is Test {
 
         // Create pool with USDC base token
         vm.prank(poolOwner);
-        (pool,) = IRigoblockPoolProxyFactory(FACTORY).createPool("0xForkTest", "0XF", Constants.ETH_USDC);
+        (pool, ) = IRigoblockPoolProxyFactory(FACTORY).createPool("0xForkTest", "0XF", Constants.ETH_USDC);
         console2.log("Pool created:", pool);
 
         // Register A0xRouter adapter in Authority
@@ -1179,7 +1178,17 @@ contract A0xRouterForkTest is Test {
         if (!IAuthority(AUTHORITY).isWhitelister(authorityOwner)) {
             IAuthority(AUTHORITY).setWhitelister(authorityOwner, true);
         }
-        IAuthority(AUTHORITY).addMethod(EXEC_SELECTOR, address(a0xRouter));
+
+        // Replace any production mapping for the selector so the test adapter is used.
+        // Skip if the selector is already mapped to the test adapter to avoid a redundant
+        // remove/add round-trip (Authority has no update method, only remove+add).
+        address oldAdapter = IAuthority(AUTHORITY).getApplicationAdapter(EXEC_SELECTOR);
+        if (oldAdapter != address(a0xRouter)) {
+            if (oldAdapter != address(0)) {
+                IAuthority(AUTHORITY).removeMethod(EXEC_SELECTOR, oldAdapter);
+            }
+            IAuthority(AUTHORITY).addMethod(EXEC_SELECTOR, address(a0xRouter));
+        }
         vm.stopPrank();
 
         // Fund pool: user mints pool tokens
@@ -1191,4 +1200,3 @@ contract A0xRouterForkTest is Test {
         vm.stopPrank();
     }
 }
-

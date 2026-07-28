@@ -1,10 +1,11 @@
 export const AddressOne = "0x0000000000000000000000000000000000000001";
 
 // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
-export const extensionsMapSalt = "extensionsMapSalt7";
+export const extensionsMapSalt = "extensionsMapSalt8";
 
 // 0x Protocol addresses (same on all supported chains)
-export const zeroExAllowanceHolder = "0x0000000000001fF3684f28c67538d4D072C22734";
+export const zeroExAllowanceHolder =
+  "0x0000000000001fF3684f28c67538d4D072C22734";
 export const zeroExDeployer = "0x00000000000004533Fe15556B1E086BB1A72cEae";
 
 interface ChainConfig {
@@ -77,35 +78,35 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
   },
   // Unichain (Chain ID: 130)
   130: {
-      rigoToken: "0x03C2868c6D7fD27575426f395EE081498B1120dd",
-      oracle: "0x54bd666eA7FD8d5404c0593Eab3Dcf9b6E2A3aC4",
-      stakingProxy: "0x550Ed0bFFdbE38e8Bd33446D5c165668Ea071643",
-      weth: "0x4200000000000000000000000000000000000006",
-      univ4Posm: "0x4529A01c7A0410167c5740C487A8DE60232617bf",
-      universalRouter: "0xEf740bf23aCaE26f6492B10de645D6B98dC8Eaf3",
-      tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
-      acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
+    rigoToken: "0x03C2868c6D7fD27575426f395EE081498B1120dd",
+    oracle: "0x54bd666eA7FD8d5404c0593Eab3Dcf9b6E2A3aC4",
+    stakingProxy: "0x550Ed0bFFdbE38e8Bd33446D5c165668Ea071643",
+    weth: "0x4200000000000000000000000000000000000006",
+    univ4Posm: "0x4529A01c7A0410167c5740C487A8DE60232617bf",
+    universalRouter: "0xEf740bf23aCaE26f6492B10de645D6B98dC8Eaf3",
+    tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
+    acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
   },
   // Base (Chain ID: 8453)
   8453: {
-      rigoToken: "0x09188484e1Ab980DAeF53a9755241D759C5B7d60",
-      oracle: "0x59f39091Fd6f47e9D0bCB466F74e305f1709BAC4", 
-      stakingProxy: "0xc758Ea84d6D978fe86Ee29c1fbD47B4F302F1992",
-      weth: "0x4200000000000000000000000000000000000006",
-      univ4Posm: "0x7C5f5A4bBd8fD63184577525326123B519429bDc",
-      universalRouter: "0x6fF5693b99212Da76ad316178A184AB56D299b43",
-      tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
-      acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
+    rigoToken: "0x09188484e1Ab980DAeF53a9755241D759C5B7d60",
+    oracle: "0x59f39091Fd6f47e9D0bCB466F74e305f1709BAC4",
+    stakingProxy: "0xc758Ea84d6D978fe86Ee29c1fbD47B4F302F1992",
+    weth: "0x4200000000000000000000000000000000000006",
+    univ4Posm: "0x7C5f5A4bBd8fD63184577525326123B519429bDc",
+    universalRouter: "0x6fF5693b99212Da76ad316178A184AB56D299b43",
+    tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
+    acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
   },
   // Sepolia (Chain ID: 11155111)
   11155111: {
-      rigoToken: "0x076C619e7ebaBe40746106B66bFBed731F2c1339",
-      oracle: "0xE39CAf28BF7C238A42D4CDffB96587862F41bAC4", 
-      stakingProxy: "0xD40edcc947fF35637233d765CB9efCFc10fC8c22",
-      weth: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
-      univ4Posm: "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4",
-      universalRouter: "0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b",
-      tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
-      acrossSpokePool: "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
+    rigoToken: "0x076C619e7ebaBe40746106B66bFBed731F2c1339",
+    oracle: "0xE39CAf28BF7C238A42D4CDffB96587862F41bAC4",
+    stakingProxy: "0xD40edcc947fF35637233d765CB9efCFc10fC8c22",
+    weth: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    univ4Posm: "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4",
+    universalRouter: "0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b",
+    tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
+    acrossSpokePool: "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
   },
 };

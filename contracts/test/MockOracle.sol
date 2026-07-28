@@ -47,6 +47,15 @@ contract MockOracle {
         state = states[key.toId()];
     }
 
+    /// @notice Test helper to overwrite the observation state for a given pool.
+    function setState(PoolKey calldata poolKey, uint16 index, uint16 cardinality, uint16 cardinalityNext) external {
+        states[poolKey.toId()] = IOracle.ObservationState({
+            index: index,
+            cardinality: cardinality,
+            cardinalityNext: cardinalityNext
+        });
+    }
+
     function observe(
         PoolKey calldata key,
         uint32[] calldata secondsAgos

@@ -39,6 +39,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 - All code must be treated as containing critical vulnerabilities until proven otherwise
 
 **Documentation Issues:**
+
 - AI tends to create excessive .md files instead of updating existing ones
 - Consolidate documentation into fewer, well-organized files
 - Update existing files rather than creating new ones for each iteration
@@ -49,7 +50,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 User → Pool Proxy (delegatecall)→ Implementation
                                    ↓ fallback
                                    Extensions (via ExtensionsMap)
-                                   ↓ fallback  
+                                   ↓ fallback
                                    Adapters (via Authority)
 ```
 
@@ -59,12 +60,14 @@ User → Pool Proxy (delegatecall)→ Implementation
 - **Adapters**: Upgradeable via governance (Authority). Protocol integrations (Uniswap, Across source, etc.)
 
 ### Upgrade Implications
+
 - **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar)`.
 - **Library change (used by an extension)**: The extension must be redeployed (library is compiled into extension bytecode) → new ExtensionsMap → new implementation.
 - **Extension change**: New extension + new ExtensionsMap + new implementation (ExtensionsMap is immutable in impl bytecode).
 - **Adapter change**: New adapter + Authority governance update. No implementation or extension changes needed.
 
 ### ExtensionsMap Salt
+
 - **When to bump**: Bump the salt whenever a new ExtensionsMap must be deployed. This happens in two cases:
   1. The ExtensionsMap contract code itself changes (new selectors, new routing logic).
   2. Any extension is redeployed to a **new address** (because ExtensionsMap immutably stores extension addresses and CREATE2 cannot overwrite an existing contract).
@@ -73,16 +76,20 @@ User → Pool Proxy (delegatecall)→ Implementation
 - **Automation limitation**: The current scripts require manual salt bumps. Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
 
 ### Version Bump
+
 - Every implementation change MUST bump `VERSION` in `MixinConstants.sol` (e.g., `"4.2.0"` → `"4.3.0"`).
 - This applies to ANY change compiled into the implementation: Mixin contracts, libraries, or constructor parameters.
 
 ### Shared nonce management
+
 - All deploy scripts MUST call `enableManagedNonce(hre, deployer)` at the top so that `deploy()` and `deployments.execute()` share a single nonce counter.
 - The helper intercepts `eth_getTransactionCount` RPC calls and patches `JsonRpcSigner` / `Wallet` `sendTransaction`. This makes hardhat-deploy's nonce resolution read from a local counter that is advanced only when a transaction is actually broadcast, preventing `NONCE_EXPIRED` errors on live RPCs.
 - The helper is idempotent; calling it multiple times in the same Hardhat run only initializes the counter once.
+- The helper is automatically disabled on the in-memory `hardhat` network so it does not interfere with unit tests that use snapshots / `evm_revert`.
 - If a transaction from a previous run is still pending (e.g., due to a gas spike), the next run will see it in the `pending` nonce count and queue new transactions behind it. Resolve or replace the pending transaction first, otherwise the new deployment will also stall.
 
 ### Gas pricing on live networks
+
 - Live network configs in `hardhat.config.ts` set hardcoded EIP-1559 caps (`maxFeePerGas` and `maxPriorityFeePerGas`) per network. This avoids manual per-run fee entry, which is error-prone and can wipe an account with a typo.
 - The nonce helper applies these caps to every deployment transaction, drops any conflicting `gasPrice`, and sends the transaction as type-2.
 - To adjust fees, edit the network entry in `hardhat.config.ts` and review the values carefully before deploying.
@@ -91,24 +98,28 @@ User → Pool Proxy (delegatecall)→ Implementation
 ## Key Files
 
 ### Core Protocol
+
 - `contracts/protocol/SmartPool.sol` - Main implementation
 - `contracts/protocol/core/immutable/MixinConstants.sol` - Storage slots
 - `contracts/protocol/core/immutable/MixinStorage.sol` - Storage assertions
 - `contracts/protocol/libraries/StorageLib.sol` - Storage access helpers
 
 ### Extension/Adapter Infrastructure
+
 - `contracts/protocol/deps/ExtensionsMap.sol` - Extension selector mapping
 - `contracts/protocol/deps/ExtensionsMapDeployer.sol` - CREATE2 deployer
 - `contracts/protocol/deps/Authority.sol` - Adapter selector registry
 - `contracts/protocol/types/DeploymentParams.sol` - Deployment types
 
 ### Extensions (Immutable Mapping)
+
 - `EApps.sol` - Application balance queries
 - `EOracle.sol` - Price feeds and token conversions
 - `EUpgrade.sol` - Implementation upgrades
 - `ECrosschain.sol` - Across bridge destination handler
 
 ### Adapters (Upgradeable Mapping)
+
 - `AIntents.sol` - Across bridge source adapter
 - `AUniswap.sol` - Uniswap integration
 - `AStaking.sol` - GRG staking
@@ -116,6 +127,7 @@ User → Pool Proxy (delegatecall)→ Implementation
 - `AMulticall.sol` - Batch transactions
 
 ### Oracle System
+
 Rigoblock uses **BackGeoOracle**, a Uniswap V4 hook that provides manipulation-resistant on-chain price feeds via truncated geometric-mean TWAP and automatic backrunning. The `EOracle` extension wraps the hook and exposes `getTwap()`, `convertTokenAmount()`, and `hasPriceFeed()` to the pool. For a full technical overview of how the hook works, how feeds are registered, and the security model, see [`docs/oracle/BACKGEOORACLE.md`](docs/oracle/BACKGEOORACLE.md).
 
 ## Storage Pattern
@@ -124,11 +136,11 @@ Rigoblock uses **BackGeoOracle**, a Uniswap V4 hook that provides manipulation-r
 
 ```solidity
 // In MixinConstants.sol - use dots to separate namespace components
-bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = 
+bytes32 internal constant _VIRTUAL_SUPPLY_SLOT =
     bytes32(uint256(keccak256("pool.proxy.virtual.supply")) - 1);
 
 // NOT this - avoid mixed dots and camelCase
-bytes32 internal constant _WRONG_SLOT = 
+bytes32 internal constant _WRONG_SLOT =
     bytes32(uint256(keccak256("pool.proxy.virtualSupply")) - 1); // ❌
 
 // In MixinStorage.sol constructor - assert the slot calculation
@@ -149,6 +161,7 @@ function _setValue(address key, uint256 value) private {
 ## Common Operations
 
 ### Read Pool State
+
 ```solidity
 import {StorageLib} from "../../libraries/StorageLib.sol";
 
@@ -159,16 +172,18 @@ uint8 decimals = pool.decimals;
 ```
 
 ### Update NAV
+
 ```solidity
 // ALWAYS update before reading if you need current NAV
 ISmartPoolActions(address(this)).updateUnitaryValue();
 
-ISmartPoolState.PoolTokens memory poolTokens = 
+ISmartPoolState.PoolTokens memory poolTokens =
     ISmartPoolState(address(this)).getPoolTokens();
 uint256 currentNav = poolTokens.unitaryValue;
 ```
 
 ### Safe Token Operations
+
 ```solidity
 using SafeTransferLib for address;
 
@@ -178,6 +193,7 @@ token.safeApprove(spender, amount); // Handles USDT-style tokens
 ```
 
 ### Check Price Feed
+
 ```solidity
 require(
     IEOracle(address(this)).hasPriceFeed(token),
@@ -186,6 +202,7 @@ require(
 ```
 
 ### Convert Token Amounts
+
 ```solidity
 int256 baseAmount = IEOracle(address(this)).convertTokenAmount(
     inputToken,
@@ -202,6 +219,7 @@ int256 baseAmount = IEOracle(address(this)).convertTokenAmount(
 Verify the target's token flow before writing approval code.
 
 **Pattern 1 — Target uses Permit2** (e.g., Uniswap via AUniswapRouter):
+
 ```solidity
 // Layer 1: One-time persistent ERC20 → Permit2 (checked with threshold)
 if (IERC20(token).allowance(address(this), address(_permit2)) < type(uint96).max) {
@@ -212,6 +230,7 @@ _permit2.approve(token, target, type(uint160).max, 0); // expiration=0 → curre
 ```
 
 **Pattern 2 — Target does NOT use Permit2** (e.g., 0x AllowanceHolder via A0xRouter):
+
 ```solidity
 // Per-call: approve exact amount before call, reset to 1 after success
 token.safeApprove(address(target), amount);
@@ -223,6 +242,7 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 ```
 
 **How to determine which pattern to use:**
+
 1. Read the target protocol's docs for their token transfer mechanism
 2. If target supports Permit2 → Pattern 1 (persistent ERC20 + per-call Permit2.approve)
 3. If target uses standard ERC20 transferFrom → Pattern 2 (per-call approve + reset)
@@ -230,11 +250,13 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 5. For native ETH: forward via `{value: value}` — no ERC20 approval needed
 
 **Gas optimization — approval reset to 1, not 0:**
+
 - Resetting to 0 clears storage → next swap pays 20000 gas (zero → non-zero SSTORE)
 - Resetting to 1 keeps slot warm → next swap pays 5000 gas (non-zero → non-zero SSTORE)
 - Always reset to 1 unless there's a specific reason to fully clear
 
 **Native ETH handling in adapters (CRITICAL):**
+
 - NEVER use `msg.value` to forward ETH in adapter calls
 - The adapter runs via delegatecall — `msg.value` comes from the CALLER, not the pool
 - The pool is the vault; derive the ETH value from calldata parameters
@@ -244,6 +266,7 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 - For `InsufficientNativeBalance` check: compare derived `value` to `address(this).balance`
 
 **Testing requirements for new integrations:**
+
 - Test all swap directions: ETH→Token, Token→ETH, Token→Token
 - Test with USDT (special approval behavior)
 - Test on fork with real deployed contracts (not just mocks)
@@ -252,6 +275,7 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 - Verify ETH swaps use pool balance, NOT caller's msg.value
 
 ### New Adapter
+
 1. Create `contracts/protocol/extensions/adapters/YourAdapter.sol`
 2. Create interface in `adapters/interfaces/IYourAdapter.sol`
 3. Add `onlyDelegateCall` modifier
@@ -260,6 +284,7 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 6. Add methods to `Authority.sol` (via governance)
 
 ### New Extension
+
 1. Create `contracts/protocol/extensions/YourExtension.sol`
 2. Create interface in `extensions/adapters/interfaces/IYourExtension.sol`
 3. Take chain-specific params in constructor (store as immutable)
@@ -269,9 +294,10 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 7. Deploy with new salt
 
 ### New Storage
+
 1. Define slot in `MixinConstants.sol`:
    ```solidity
-   bytes32 internal constant _YOUR_SLOT = 
+   bytes32 internal constant _YOUR_SLOT =
        bytes32(uint256(keccak256("pool.proxy.your.feature")) - 1);
    ```
 2. Assert in `MixinStorage.sol` constructor:
@@ -283,16 +309,19 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 ## Testing
 
 ### Unit Tests (Hardhat)
+
 ```bash
 yarn test
 ```
 
 ### Integration Tests (Foundry)
+
 ```bash
 forge test
 ```
 
 ### Fork Testing Pattern
+
 ```solidity
 // Create forks
 uint256 ethFork = vm.createSelectFork("ethereum", Constants.MAINNET_BLOCK);
@@ -337,12 +366,14 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 ## Cross-Chain Considerations
 
 ### Same Address Across Chains
+
 - Authority, Registry, Factory
 - Pool proxies (if deployed with same params)
 - Core implementations
 - Staking suite, Governance core
 
 ### Different Address Per Chain
+
 - ExtensionsMap (extensions have chain-specific params)
 - Individual extensions (EApps, EOracle, EUpgrade, ECrosschain)
 - Governance strategy
@@ -352,16 +383,19 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 **Problem**: Bridging affects NAV on both chains
 
 **Solution - Transfer Mode** (NAV neutral):
+
 - Source: Writes **negative Virtual Supply** (shares = outputValue / NAV)
 - Dest: Writes **positive Virtual Supply** (shares = receivedValue / NAV)
 - NAV unchanged on both chains (effectiveSupply adjusts proportionally)
 
 **Solution - Sync Mode** (NAV changes):
+
 - No virtual supply adjustments
 - NAV changes naturally (tokens leave source, arrive at destination)
 - Use for donations/rebalancing
 
 **Implementation**:
+
 ```solidity
 // Virtual supply storage (single slot per pool)
 bytes32 slot = VIRTUAL_SUPPLY_SLOT;
@@ -411,11 +445,13 @@ When modifying code:
 ### Documentation File Management
 
 **Where to Save Documentation**:
+
 - General docs → `/docs/`
 - Protocol-specific (Across, Uniswap, etc.) → `/docs/<protocol>/`
 - Working documents → Update existing files, don't create many small files
 
 **Workflow**:
+
 1. Create or update single comprehensive document
 2. Update as work progresses
 3. Move to `/docs/` subfolder when complete
@@ -443,9 +479,18 @@ forge test --fork-url $ARBITRUM_RPC_URL -vvv
 # Coverage
 yarn coverage
 
-# Format
-forge fmt
-yarn prettier:write
+# Formatting / Linting
+# ALWAYS use the repo's Prettier config (.prettierrc). Do NOT use forge fmt on protocol contracts
+# because it uses different rules than the existing codebase.
+npx prettier --write <path(s)>
+# or for all protocol Solidity files:
+yarn fmt:sol:protocol
+# or for all Solidity files in contracts/:
+yarn fmt:sol
+# TypeScript files are also formatted by npx prettier --write <path>
+
+# Lint
+yarn lint
 
 # Deploy (see src/deploy/)
 yarn deploy --network arbitrum
@@ -454,6 +499,7 @@ yarn deploy --network arbitrum
 ## Environment Variables
 
 Required for fork tests:
+
 ```bash
 ARBITRUM_RPC_URL=https://...
 OPTIMISM_RPC_URL=https://...
@@ -474,9 +520,11 @@ BASE_RPC_URL=https://...
 - Across integration: docs/across/
 - Deployed contracts: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 - GitHub: https://github.com/RigoBlock/v3-contracts
+
 ### Documentation Update Pattern
 
 When working on a feature or integration:
+
 1. Create or update a single comprehensive document (e.g., `INTEGRATION_GUIDE.md`)
 2. Update as work progresses rather than creating multiple versions
 3. Move to appropriate `/docs/` subfolder when complete
@@ -507,6 +555,7 @@ When making changes:
 - [ ] Test with forks if cross-chain or integration work
 - [ ] Update interfaces and use `@inheritdoc`
 - [ ] Follow existing code style and naming
+- [ ] **Format with the repo Prettier config** — use `npx prettier --write <paths>` (or `yarn fmt:sol:protocol` for protocol contracts). Do NOT use `forge fmt` on protocol/test Solidity files because it applies different formatting rules.
 - [ ] **Use custom errors** (`error ErrorName(params)`) instead of revert strings
 - [ ] Document known limitations clearly
 - [ ] Consider gas optimization (immutables, transient storage)
@@ -562,7 +611,6 @@ When making changes:
 23. **AUDIT FINDINGS REQUIRE INDEPENDENT VERIFICATION BEFORE APPLYING** — Never apply an audit finding without: (1) running the full test suite to detect regressions, (2) verifying through protocol documentation that the fix cannot block any legitimate protocol path, (3) documenting the decision in `/docs/` if preserving production code over the auditor's recommendation. A finding that looks safe in isolation may close off a critical path when the full system is considered. Defend each "not fixed" or "by-design" disposition clearly in the audit status document.
 
 24. **NAMED MAPPING VARIABLES** — All new or modified mappings must use named key and value parameters (Solidity ≥0.8.18 feature). Write `mapping(bytes4 selector => address[] addresses)` not `mapping(bytes4 => address[])`. Both key and value must be named; for nested mappings name all levels: `mapping(address owner => mapping(bytes4 selector => uint256 position))`. This applies to struct fields, state variables, and library-internal structs. Do NOT retrofit old legacy contracts not being modified in the current PR.
-
 
 ## GMX v2 Integration
 
