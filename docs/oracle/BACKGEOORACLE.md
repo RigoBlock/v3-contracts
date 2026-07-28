@@ -87,11 +87,11 @@ contract EOracle is IEOracle {
 
 ### Price Feed Registration
 
-A token is considered to have an active price feed when the oracle pool's `cardinality > 0` (i.e., it has been initialized and has at least one observation). `hasPriceFeed()` returns `true` for:
+A token is considered to have an active price feed when the oracle pool's `cardinality > 1` (i.e., it has at least two observations, the minimum required for a meaningful TWAP). `hasPriceFeed()` returns `true` for:
 
 - `address(0)` (native currency)
 - The chain's wrapped native token (WETH, WMATIC, etc.)
-- Any token whose oracle pool has `cardinality > 0`
+- Any token whose oracle pool has `cardinality > 1`
 
 ### TWAP Calculation
 
@@ -105,7 +105,7 @@ return int24((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos
 
 The window is:
 - **300 seconds** (5 minutes) if cardinality is large enough
-- Otherwise `cardinality * blockTime` (1s on L2s, 8s on Ethereum)
+- Otherwise `(cardinality - 1) * blockTime` (1s on L2s, 8s on Ethereum), because `N` observations span at most `N - 1` block-time intervals. Using `N * blockTime` could request a timestamp before the oldest observation and revert.
 
 The returned tick is converted to a price via `TickMath.getSqrtPriceAtTick()` inside `convertTokenAmount()`.
 
@@ -134,7 +134,7 @@ If the resulting tick is outside `MIN_TICK..MAX_TICK`, the conversion returns `0
 ### Known Limitations
 
 1. **Oracle staleness**: Like any TWAP, the price lags the spot market. Rigoblock's Swap Shield uses this to its advantage — it blocks DEX quotes that deviate too far from the oracle.
-2. **Cardinality = 1**: A pool with only one observation is effectively a spot oracle. Always increase cardinality before relying on a feed for high-value operations.
+2. **Cardinality < 2**: A pool with fewer than two observations cannot compute a TWAP and is rejected by `EOracle.hasPriceFeed()`. Always increase cardinality to at least `2` (and preferably `300`) before a token can be used by a pool.
 3. **Router compatibility**: Routers that do not implement `IMsgSender` will cause reverts on backrun-triggering swaps.
 4. **Native currency mapping**: `address(0)` is used as the sentinel for native currency inside `EOracle`. The hook itself uses `address(0)` as `currency0` for ETH/token pools.
 

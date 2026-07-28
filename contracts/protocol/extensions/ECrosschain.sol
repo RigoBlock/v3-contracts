@@ -43,6 +43,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         bool isLocked = TransientStorage.getDonationLock();
         uint256 balance = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
 
+        // Cache the original token address as WETH is unwrapped to native currency.
+        address originalToken = token;
+
         // 1 is flag for initializing temp storage.
         if (amount == 1) {
             require(!isLocked, DonationLock(isLocked));
@@ -102,10 +105,11 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // Validate NAV integrity (common to both Transfer and Sync modes)
         _validateNavIntegrity(token, amountDelta, storedBalance, previouslyActive);
 
-        emit TokensReceived(msg.sender, token, amountDelta, uint8(params.opType));
+        if (amountDelta > 0) {
+            emit TokensReceived(msg.sender, token, amountDelta, uint8(params.opType));
+        }
 
-        // Unlock donation and clear all temporary storage atomically
-        token.setDonationLock(0);
+        originalToken.setDonationLock(0);
         uint256(0).storeNav();
         uint256(0).storeAssets();
     }
@@ -161,5 +165,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
             navParams.netTotalValue == expectedAssets,
             NavManipulationDetected(expectedAssets, navParams.netTotalValue)
         );
+
+        // Any interleaved operation that affects the supply/asset ratio must not reduce unitary NAV.
+        uint256 storedNav = TransientStorage.getStoredNav();
+        require(navParams.unitaryValue >= storedNav, NavDecreased(storedNav, navParams.unitaryValue));
     }
 }

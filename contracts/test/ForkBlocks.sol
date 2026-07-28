@@ -5,9 +5,10 @@ pragma solidity 0.8.28;
 /// @notice Isolated fork block numbers to minimize cache invalidation
 /// @dev This file is hashed in CI cache key. Only modify when fork blocks need updating.
 library ForkBlocks {
-    /// @notice Mainnet block number after oracle deployment (22,425,175)
-    /// @dev Use this for tests requiring oracle price feeds
-    uint256 internal constant MAINNET_BLOCK = 24_000_000;
+    /// @notice Mainnet block number for fork tests
+    /// @dev Must be after the TEST_POOL implementation upgrade that routes `donate()` through
+    ///      ECrosschain (block 25,530,528). Update only when the cached fork state needs to change.
+    uint256 internal constant MAINNET_BLOCK = 25_600_000;
 
     /// @notice Base chain block number for fork tests
     uint256 internal constant BASE_BLOCK = 39521323;
