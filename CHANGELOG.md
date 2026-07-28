@@ -1,3 +1,12 @@
+## [2.5.1](https://github.com/RigoBlock/v3-contracts/compare/v2.5.0...v2.5.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* phantom virtual supply on donate ([856e143](https://github.com/RigoBlock/v3-contracts/commit/856e143f7ae68ac3169ec39929e3b60cd21058b2))
+
+
+
 # [2.5.0](https://github.com/RigoBlock/v3-contracts/compare/v2.4.2...v2.5.0) (2026-07-13)
 
 
@@ -46,20 +55,6 @@
 ### Features
 
 * agentic delegation ([0fa0194](https://github.com/RigoBlock/v3-contracts/commit/0fa0194552d207e4149b5eaac80a0d54b5f5a8db))
-
-
-
-# [2.3.0](https://github.com/RigoBlock/v3-contracts/compare/v2.2.1...v2.3.0) (2026-03-01)
-
-
-### Bug Fixes
-
-* minor refactoring ([cb15fdf](https://github.com/RigoBlock/v3-contracts/commit/cb15fdf969bd73f6ea47484629682a4a97c2cf29))
-
-
-### Features
-
-* perps ([d396377](https://github.com/RigoBlock/v3-contracts/commit/d396377ee69fcd5521897f19e8f4a134680a667d))
 
 
 
