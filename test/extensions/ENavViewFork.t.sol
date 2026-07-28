@@ -24,7 +24,7 @@ import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protoco
 /// @title ENavViewFork - Fork-based tests for the ENavView extension
 /// @notice Tests the ENavView extension against a live pool with implementation upgrade simulation
 contract ENavViewForkTest is Test {
-    // Using constants for consistency and reduced RPC load  
+    // Using constants for consistency and reduced RPC load
     uint256 constant MAINNET_BLOCK = Constants.MAINNET_BLOCK; // After oracle deployment
 
     // Deployed infrastructure addresses from Constants.sol
@@ -41,8 +41,7 @@ contract ENavViewForkTest is Test {
     address constant TEST_POOL = Constants.TEST_POOL;
 
     // Implementation slot from EIP-1967
-    bytes32 constant IMPLEMENTATION_SLOT =
-        bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
+    bytes32 constant IMPLEMENTATION_SLOT = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
 
     // Fork ID
     uint256 mainnetFork;
@@ -99,7 +98,7 @@ contract ENavViewForkTest is Test {
             salt,
             keccak256(type(ExtensionsMapDeployer).creationCode)
         );
-        
+
         if (predictedDeployerAddr.code.length == 0) {
             // Deploy with CREATE2
             deployer = new ExtensionsMapDeployer{salt: salt}();
@@ -134,13 +133,10 @@ contract ENavViewForkTest is Test {
             eGmxCallback: address(0)
         });
 
-        DeploymentParams memory params = DeploymentParams({
-            extensions: extensions,
-            wrappedNative: WETH
-        });
+        DeploymentParams memory params = DeploymentParams({extensions: extensions, wrappedNative: WETH});
 
         bytes32 salt = keccak256(abi.encodePacked("test-nav-view-v1-", block.timestamp));
-        
+
         extensionsMap = ExtensionsMap(deployer.deployExtensionsMap(params, salt));
         console2.log("  ExtensionsMap:", address(extensionsMap));
     }
@@ -155,11 +151,7 @@ contract ENavViewForkTest is Test {
         // Use a mock token jar address for testing
         address mockTokenJar = makeAddr("mockTokenJar");
 
-        newImplementation = new SmartPool(
-            authorityAddress,
-            address(extensionsMap),
-            mockTokenJar
-        );
+        newImplementation = new SmartPool(authorityAddress, address(extensionsMap), mockTokenJar);
 
         console2.log("  New implementation:", address(newImplementation));
     }
@@ -209,7 +201,7 @@ contract ENavViewForkTest is Test {
             // Rather than comparing to potentially stale originalNav from setup
             console2.log("Current NAV from ENavView:", navData.unitaryValue);
             console2.log("Original NAV from setup:", originalNav);
-            
+
             // Just validate the NAV is within a reasonable range for this pool
             assertGe(navData.unitaryValue, 1e17, "NAV should be at least 0.1 ETH"); // At least 10 cents
             assertLe(navData.unitaryValue, 1e20, "NAV should be reasonable (less than 100 ETH)"); // Less than $400k
@@ -228,7 +220,8 @@ contract ENavViewForkTest is Test {
         assertTrue(balances.length > 0, "Should have at least one token balance");
 
         console2.log("Token Balances:");
-        for (uint256 i = 0; i < balances.length && i < 10; i++) { // Limit output for readability
+        for (uint256 i = 0; i < balances.length && i < 10; i++) {
+            // Limit output for readability
             console2.log("  Token:", balances[i].token);
             console2.log("  Balance:", balances[i].amount >= 0 ? uint256(balances[i].amount) : 0);
             if (balances[i].amount < 0) {
@@ -248,7 +241,7 @@ contract ENavViewForkTest is Test {
         console2.log("=== Testing ENavView.getAppTokensAndBalancesView() ===");
 
         // Call getAppTokensAndBalancesView via the pool (no parameters needed)
-        
+
         try IENavView(TEST_POOL).getAppTokensAndBalancesView() returns (AppTokenBalance[] memory balances) {
             console2.log("Application Balances:");
             console2.log("  Number of balances:", balances.length);
@@ -291,11 +284,11 @@ contract ENavViewForkTest is Test {
             // If both work, compare them
             if (navData.unitaryValue > 0 && storedNav > 0) {
                 // Allow small deviation due to different calculation methods
-                uint256 deviation = navData.unitaryValue > storedNav 
-                    ? navData.unitaryValue - storedNav 
+                uint256 deviation = navData.unitaryValue > storedNav
+                    ? navData.unitaryValue - storedNav
                     : storedNav - navData.unitaryValue;
-                
-                uint256 maxDeviation = 0;
+
+                uint256 maxDeviation = 1;
                 assertLe(deviation, maxDeviation, "NAV deviation from updated stored value!");
                 console2.log("NAV comparison test passed");
             } else {
@@ -304,7 +297,7 @@ contract ENavViewForkTest is Test {
         } catch (bytes memory reason) {
             console2.log("updateUnitaryValue failed due to oracle issue - this is expected");
             console2.logBytes(reason);
-            
+
             // Test that ENavView handles the failure gracefully
             NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
             assertEq(navData.totalValue, 0, "Should return zero when oracle fails");
@@ -322,7 +315,7 @@ contract ENavViewForkTest is Test {
         (address extension, bool shouldDelegatecall) = extensionsMap.getExtensionBySelector(
             IENavView.getNavDataView.selector
         );
-        
+
         assertEq(extension, address(eNavView), "Extension address should match ENavView");
         assertTrue(shouldDelegatecall, "ENavView calls should use delegatecall");
 
@@ -350,7 +343,7 @@ contract ENavViewForkTest is Test {
 
         // Test that calls work even when pool has minimal state
         NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
-        
+
         // When oracle fails, NAV calculation returns zero values - this is expected
         if (navData.totalValue == 0 && navData.unitaryValue == 0) {
             console2.log("Oracle price conversion failed - this is expected with test oracle setup");

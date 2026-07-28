@@ -29,6 +29,7 @@ Traditional approaches to this problem fall into three categories:
 3. **Hub-and-Spoke Architecture**: One chain serves as the canonical source of truth, with satellite chains querying it for NAV. This creates bottlenecks, chain dependency, and degraded UX on non-hub chains.
 
 All three approaches share common drawbacks:
+
 - **Operational complexity**: Require keeper bots, monitoring infrastructure, and manual intervention
 - **Cost**: Cross-chain messages or oracle updates for every transaction
 - **Latency**: NAV staleness during cross-chain synchronization windows
@@ -39,6 +40,7 @@ All three approaches share common drawbacks:
 We introduce a **Virtual Supply (VS) model** that eliminates the need for cross-chain NAV synchronization entirely. Each chain calculates NAV independently using only local state, with virtual supply adjustments ensuring mathematical consistency across the global portfolio.
 
 Key innovations:
+
 - **No cross-chain messaging for NAV**: Each chain computes NAV locally
 - **Atomic NAV preservation**: Cross-chain transfers maintain NAV neutrality
 - **Proportional performance attribution**: Trading gains/losses shared fairly across chains
@@ -110,6 +112,7 @@ NAV = Total Assets / Effective Supply
 ```
 
 Where:
+
 - `Virtual Supply < 0` on source chain (shares "sent" to other chains)
 - `Virtual Supply > 0` on destination chain (shares "received" from other chains)
 - Sum of all Virtual Supply across chains = 0
@@ -121,19 +124,25 @@ This allows each chain to compute NAV independently while maintaining global con
 Virtual Supply uses a single storage slot with ERC-7201 namespaced storage:
 
 ```solidity
-bytes32 constant VIRTUAL_SUPPLY_SLOT = 
-    keccak256("pool.proxy.virtual.supply") - 1;
+bytes32 constant VIRTUAL_SUPPLY_SLOT = keccak256("pool.proxy.virtual.supply") -
+  1;
 
 function getVirtualSupply() internal view returns (int256 vs) {
-    bytes32 slot = VIRTUAL_SUPPLY_SLOT;
-    assembly { vs := sload(slot) }
+  bytes32 slot = VIRTUAL_SUPPLY_SLOT;
+  assembly {
+    vs := sload(slot)
+  }
 }
 
 function updateVirtualSupply(int256 adjustment) internal {
-    bytes32 slot = VIRTUAL_SUPPLY_SLOT;
-    int256 current;
-    assembly { current := sload(slot) }
-    assembly { sstore(slot, add(current, adjustment)) }
+  bytes32 slot = VIRTUAL_SUPPLY_SLOT;
+  int256 current;
+  assembly {
+    current := sload(slot)
+  }
+  assembly {
+    sstore(slot, add(current, adjustment))
+  }
 }
 ```
 
@@ -151,18 +160,18 @@ Transfer mode moves assets between chains without affecting NAV on either chain.
 
 ```solidity
 function _handleSourceTransfer(AcrossParams memory params) private {
-    // 1. Calculate output value in base token terms
-    uint256 outputValueInBase = oracle.convert(
-        params.outputToken, 
-        params.outputAmount, 
-        baseToken
-    );
-    
-    // 2. Calculate shares equivalent
-    int256 sharesLeaving = (outputValueInBase * 10**decimals) / nav;
-    
-    // 3. Write negative VS (shares leaving this chain)
-    (-sharesLeaving).updateVirtualSupply();
+  // 1. Calculate output value in base token terms
+  uint256 outputValueInBase = oracle.convert(
+    params.outputToken,
+    params.outputAmount,
+    baseToken
+  );
+
+  // 2. Calculate shares equivalent
+  int256 sharesLeaving = (outputValueInBase * 10 ** decimals) / nav;
+
+  // 3. Write negative VS (shares leaving this chain)
+  (-sharesLeaving).updateVirtualSupply();
 }
 ```
 
@@ -170,18 +179,18 @@ function _handleSourceTransfer(AcrossParams memory params) private {
 
 ```solidity
 function _handleTransferMode(
-    address token,
-    uint256 amount,
-    uint256 storedNav
+  address token,
+  uint256 amount,
+  uint256 storedNav
 ) private {
-    // 1. Calculate received value in base token terms
-    uint256 valueInBase = oracle.convert(token, amount, baseToken);
-    
-    // 2. Calculate shares equivalent using stored NAV
-    int256 sharesArriving = (valueInBase * 10**decimals) / storedNav;
-    
-    // 3. Write positive VS (shares arriving on this chain)
-    sharesArriving.updateVirtualSupply();
+  // 1. Calculate received value in base token terms
+  uint256 valueInBase = oracle.convert(token, amount, baseToken);
+
+  // 2. Calculate shares equivalent using stored NAV
+  int256 sharesArriving = (valueInBase * 10 ** decimals) / storedNav;
+
+  // 3. Write positive VS (shares arriving on this chain)
+  sharesArriving.updateVirtualSupply();
 }
 ```
 
@@ -210,15 +219,16 @@ Sync mode allows intentional NAV changes for performance rebalancing or donation
 
 ```solidity
 function _handleSourceSync() private pure {
-    // No VS adjustment - NAV decreases naturally as tokens leave
+  // No VS adjustment - NAV decreases naturally as tokens leave
 }
 
 function _handleSyncMode() private pure {
-    // No VS adjustment - NAV increases naturally as tokens arrive
+  // No VS adjustment - NAV increases naturally as tokens arrive
 }
 ```
 
 Use cases:
+
 - Rebalancing performance between chains
 - Donating yields to specific chain holders
 - Gas refunds from bridge operations
@@ -243,15 +253,17 @@ Burns cannot bypass the VS constraint:
 
 ```solidity
 function _burn(address user, uint256 amount) private {
-    // ... burn logic ...
-    
-    int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
-    if (virtualSupply < 0) {
-        int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
-        // MINIMUM_SUPPLY_RATIO = 8 (12.5%)
-        require(effectiveSupply >= int256(newTotalSupply / MINIMUM_SUPPLY_RATIO), 
-            EffectiveSupplyTooLowAfterBurn());
-    }
+  // ... burn logic ...
+
+  int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+  if (virtualSupply < 0) {
+    int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
+    // MINIMUM_SUPPLY_RATIO = 8 (12.5%)
+    require(
+      effectiveSupply >= int256(newTotalSupply / MINIMUM_SUPPLY_RATIO),
+      EffectiveSupplyTooLowAfterBurn()
+    );
+  }
 }
 ```
 
@@ -265,30 +277,31 @@ Each chain computes NAV independently using only local state:
 
 ```solidity
 function calculateUnitaryValue() internal view returns (uint256) {
-    // 1. Sum all token balances × prices
-    uint256 totalValue = 0;
-    for (uint i = 0; i < activeTokens.length; i++) {
-        uint256 balance = IERC20(activeTokens[i]).balanceOf(address(this));
-        uint256 price = oracle.getPrice(activeTokens[i], baseToken);
-        totalValue += balance * price;
-    }
-    
-    // 2. Calculate effective supply
-    int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
-    int256 effectiveSupply = int256(totalSupply) + virtualSupply;
-    
-    // 3. Compute NAV
-    if (effectiveSupply <= 0) {
-        // Graceful degradation for edge cases
-        return totalValue / totalSupply;
-    }
-    return totalValue / uint256(effectiveSupply);
+  // 1. Sum all token balances × prices
+  uint256 totalValue = 0;
+  for (uint i = 0; i < activeTokens.length; i++) {
+    uint256 balance = IERC20(activeTokens[i]).balanceOf(address(this));
+    uint256 price = oracle.getPrice(activeTokens[i], baseToken);
+    totalValue += balance * price;
+  }
+
+  // 2. Calculate effective supply
+  int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
+  int256 effectiveSupply = int256(totalSupply) + virtualSupply;
+
+  // 3. Compute NAV
+  if (effectiveSupply <= 0) {
+    // Graceful degradation for edge cases
+    return totalValue / totalSupply;
+  }
+  return totalValue / uint256(effectiveSupply);
 }
 ```
 
 ### 4.2 No Cross-Chain Dependencies
 
 Traditional systems require:
+
 1. Query balances on all chains
 2. Aggregate via cross-chain messages or centralized indexer
 3. Compute global NAV
@@ -296,18 +309,19 @@ Traditional systems require:
 5. Update local oracles
 
 Our system requires:
+
 1. Query local balances ✓
 2. Read local virtual supply (single SLOAD) ✓
 3. Compute local NAV ✓
 
 **Latency comparison:**
 
-| Approach | NAV Update Latency |
-|----------|-------------------|
-| Centralized Oracle | 1-15 minutes |
-| Cross-Chain Messaging | 10-60 minutes |
-| Hub-and-Spoke | 1-30 minutes |
-| **VS Model** | **0 seconds** (instant) |
+| Approach              | NAV Update Latency      |
+| --------------------- | ----------------------- |
+| Centralized Oracle    | 1-15 minutes            |
+| Cross-Chain Messaging | 10-60 minutes           |
+| Hub-and-Spoke         | 1-30 minutes            |
+| **VS Model**          | **0 seconds** (instant) |
 
 ### 4.3 Oracle Integration
 
@@ -315,19 +329,20 @@ The system uses Chainlink price feeds for token valuations:
 
 ```solidity
 function convertTokenAmount(
-    address inputToken,
-    int256 amount,
-    address outputToken
+  address inputToken,
+  int256 amount,
+  address outputToken
 ) external view returns (int256) {
-    if (inputToken == outputToken) return amount;
-    
-    // Get prices from Chainlink
-    int256 inputPrice = getChainlinkPrice(inputToken);
-    int256 outputPrice = getChainlinkPrice(outputToken);
-    
-    // Convert with proper decimal handling
-    return (amount * inputPrice * 10**outputDecimals) / 
-           (outputPrice * 10**inputDecimals);
+  if (inputToken == outputToken) return amount;
+
+  // Get prices from Chainlink
+  int256 inputPrice = getChainlinkPrice(inputToken);
+  int256 outputPrice = getChainlinkPrice(outputToken);
+
+  // Convert with proper decimal handling
+  return
+    (amount * inputPrice * 10 ** outputDecimals) /
+    (outputPrice * 10 ** inputDecimals);
 }
 ```
 
@@ -339,14 +354,14 @@ Price feeds are chain-local - no cross-chain oracle calls required.
 
 ### 5.1 Operational Overhead
 
-| Component | Traditional Multi-Chain | Rigoblock VS Model |
-|-----------|------------------------|-------------------|
-| **Keeper Bots** | Required (NAV updates, rebalancing) | Not required |
-| **Cross-Chain Messages** | Per transaction | Only for transfers |
-| **Off-Chain Computation** | NAV aggregation servers | None |
-| **Manual Reconciliation** | Periodic (daily/weekly) | Never |
-| **Oracle Updates** | Push NAV to each chain | Chain-local only |
-| **Monitoring Infrastructure** | 24/7 alerting | Standard RPC only |
+| Component                     | Traditional Multi-Chain             | Rigoblock VS Model |
+| ----------------------------- | ----------------------------------- | ------------------ |
+| **Keeper Bots**               | Required (NAV updates, rebalancing) | Not required       |
+| **Cross-Chain Messages**      | Per transaction                     | Only for transfers |
+| **Off-Chain Computation**     | NAV aggregation servers             | None               |
+| **Manual Reconciliation**     | Periodic (daily/weekly)             | Never              |
+| **Oracle Updates**            | Push NAV to each chain              | Chain-local only   |
+| **Monitoring Infrastructure** | 24/7 alerting                       | Standard RPC only  |
 
 **Estimated overhead reduction: 10x**
 
@@ -354,45 +369,45 @@ Price feeds are chain-local - no cross-chain oracle calls required.
 
 **Traditional System (per month, 5-chain deployment):**
 
-| Item | Cost |
-|------|------|
-| Keeper infrastructure (AWS/GCP) | $500-2,000 |
-| Cross-chain message fees | $1,000-5,000 |
-| Oracle update gas | $500-2,000 |
-| DevOps personnel (0.5 FTE) | $5,000-10,000 |
-| Monitoring services | $200-500 |
-| **Total** | **$7,200-19,500/month** |
+| Item                            | Cost                    |
+| ------------------------------- | ----------------------- |
+| Keeper infrastructure (AWS/GCP) | $500-2,000              |
+| Cross-chain message fees        | $1,000-5,000            |
+| Oracle update gas               | $500-2,000              |
+| DevOps personnel (0.5 FTE)      | $5,000-10,000           |
+| Monitoring services             | $200-500                |
+| **Total**                       | **$7,200-19,500/month** |
 
 **Rigoblock VS Model (per month, 5-chain deployment):**
 
-| Item | Cost |
-|------|------|
-| RPC access (Alchemy/Infura) | $100-300 |
-| Standard monitoring | $50-100 |
-| **Total** | **$150-400/month** |
+| Item                        | Cost               |
+| --------------------------- | ------------------ |
+| RPC access (Alchemy/Infura) | $100-300           |
+| Standard monitoring         | $50-100            |
+| **Total**                   | **$150-400/month** |
 
 **Cost reduction: 18-130x**
 
 ### 5.3 Security Model Comparison
 
-| Risk | Traditional | VS Model |
-|------|-------------|----------|
-| Keeper key compromise | High impact | N/A |
-| Oracle manipulation | Global NAV affected | Limited to single chain |
-| Bridge exploit | NAV desync possible | VS isolated per chain |
-| Cross-chain message censorship | NAV stale | No impact on NAV |
-| Off-chain infra downtime | NAV updates halt | No impact |
+| Risk                           | Traditional         | VS Model                |
+| ------------------------------ | ------------------- | ----------------------- |
+| Keeper key compromise          | High impact         | N/A                     |
+| Oracle manipulation            | Global NAV affected | Limited to single chain |
+| Bridge exploit                 | NAV desync possible | VS isolated per chain   |
+| Cross-chain message censorship | NAV stale           | No impact on NAV        |
+| Off-chain infra downtime       | NAV updates halt    | No impact               |
 
 ### 5.4 Feature Comparison
 
-| Feature | Rigoblock | Peers |
-|---------|-----------|-------|
-| Multi-chain support | Native (same address all chains) | Per-chain deployments, no address parity |
-| Automated NAV | Built-in (computed locally per chain) | Via keeper bots or off-chain aggregators |
-| Cross-chain transfers | Atomic (VS model, no messaging per NAV) | Not supported or manual reconciliation |
-| NAV sync latency | Zero (local computation only) | Minutes to hours (keeper or oracle lag) |
-| Keeper requirement | No | Yes (NAV updates, rebalancing) |
-| Same address all chains | Yes | No |
+| Feature                 | Rigoblock                               | Peers                                    |
+| ----------------------- | --------------------------------------- | ---------------------------------------- |
+| Multi-chain support     | Native (same address all chains)        | Per-chain deployments, no address parity |
+| Automated NAV           | Built-in (computed locally per chain)   | Via keeper bots or off-chain aggregators |
+| Cross-chain transfers   | Atomic (VS model, no messaging per NAV) | Not supported or manual reconciliation   |
+| NAV sync latency        | Zero (local computation only)           | Minutes to hours (keeper or oracle lag)  |
+| Keeper requirement      | No                                      | Yes (NAV updates, rebalancing)           |
+| Same address all chains | Yes                                     | No                                       |
 
 ---
 
@@ -405,7 +420,7 @@ With VS-only, performance is shared proportionally across all chains based on ef
 **Example:**
 
 ```
-Chain A: 
+Chain A:
   Total Supply = 10,000 shares
   Virtual Supply = -2,000 (sent to Chain B)
   Effective Supply = 8,000 shares
@@ -450,6 +465,7 @@ Both chains see proportional NAV increase. ✓
 We integrate with Across Protocol for token bridging:
 
 **Advantages:**
+
 - Fast finality (minutes, not hours)
 - Optimistic verification (no oracle dependency)
 - Solver network provides liquidity
@@ -489,18 +505,23 @@ We use EIP-1153 transient storage for intra-transaction state:
 ```solidity
 // Store NAV at donation initialization
 function storeNav(uint256 nav) internal {
-    bytes32 slot = _STORED_NAV_SLOT;
-    assembly { tstore(slot, nav) }
+  bytes32 slot = _STORED_NAV_SLOT;
+  assembly {
+    tstore(slot, nav)
+  }
 }
 
 // Retrieve for VS calculation
 function getStoredNav() internal view returns (uint256 nav) {
-    bytes32 slot = _STORED_NAV_SLOT;
-    assembly { nav := tload(slot) }
+  bytes32 slot = _STORED_NAV_SLOT;
+  assembly {
+    nav := tload(slot)
+  }
 }
 ```
 
 **Benefits:**
+
 - No permanent storage for temporary values
 - Automatic cleanup after transaction
 - Gas savings (~2,100 gas per slot vs SSTORE)
@@ -515,43 +536,73 @@ function getStoredNav() internal view returns (uint256 nav) {
 
 ```solidity
 function donate(address token, uint256 amount, ...) external {
+    if (token == address(0)) {
+        revert UnsupportedCrossChainToken();
+    }
+
     if (amount == 1) {
-        // First call: store NAV baseline
+        // First call: store NAV baseline and total assets
         TransientStorage.storeNav(currentNav);
         TransientStorage.storeAssets(totalAssets);
         return;
     }
-    
+
     // Second call: validate NAV integrity
     uint256 storedNav = TransientStorage.getStoredNav();
     uint256 expectedAssets = TransientStorage.getStoredAssets() + receivedValue;
-    
+
     require(finalAssets == expectedAssets, NavManipulationDetected());
+
+    // A finalized donation must not decrease NAV per share. For Transfer mode the
+    // virtual-supply increase is sized to keep NAV unchanged (or higher when a
+    // solver surplus is donated); for Sync mode assets arrive without any supply
+    // increase, so NAV must rise. Any interleaved operation that issues or
+    // destroys shares in between the two phases will make this check fail.
+    require(finalNav >= storedNav, NavDecreased());
 }
 ```
 
-This prevents sandwich attacks and MEV extraction during donations.
+This prevents sandwich attacks and MEV extraction during donations. The per-share
+NAV check closes an attack where a caller interleaves a share-issuing operation
+(e.g. `mint`) between the two `donate` phases: the interleaved mint satisfies the
+asset-equality check with the attacker's own deposit, but the subsequent positive
+virtual-supply write lowers NAV per share. Requiring `finalNav >= storedNav`
+detects that supply/asset manipulation regardless of which operation caused it.
 
 ### 8.2 Caller Verification
 
-```solidity
-modifier onlyAuthorized() {
-    require(
-        msg.sender == spokePool || msg.sender == multicallHandler,
-        UnauthorizedCaller()
-    );
-    _;
-}
-```
+`ECrosschain.donate` is intentionally callable by anyone. The design assumes the
+Across Multicall Handler (or an escrow contract) will execute the second phase, but
+the function itself is not restricted to a fixed caller list. Restricting callers to
+Across infrastructure would not be sufficient: the same two-phase interleaving can be
+encoded as a valid cross-chain message from another chain, so the safety invariant must
+live inside the donation logic rather than in a caller allowlist.
 
-Only Across infrastructure can trigger donations.
+The actual security invariant is the combination of:
+
+1. **NAV equality**: the final total assets must equal the stored assets plus the
+   donated balance delta.
+2. **NAV-per-share monotonicity**: the final `unitaryValue` must not be lower than
+   the stored NAV captured in phase 1. This catches any interleaved operation that
+   changes the supply/asset ratio (mint, burn, or future operations), without having
+   to enumerate them.
+3. **Token whitelist**: only cross-chain-whitelisted ERC-20 tokens can finalize a
+   donation. Native currency (`address(0)`) is never accepted as a donation token;
+   Across refunds are always in wrapped-native ERC-20 form.
+
+```solidity
+require(
+    navParams.unitaryValue >= TransientStorage.getStoredNav(),
+    NavDecreased(storedNav, navParams.unitaryValue)
+);
+```
 
 ### 8.3 Price Feed Validation
 
 ```solidity
 function addToken(address token) external {
-    require(hasPriceFeed(token), TokenMustHavePriceFeed());
-    activeTokens.add(token);
+  require(hasPriceFeed(token), TokenMustHavePriceFeed());
+  activeTokens.add(token);
 }
 ```
 
@@ -577,6 +628,7 @@ modifier nonReentrant() {
 ### 9.1 Production Deployment
 
 The system is deployed across:
+
 - Ethereum Mainnet
 - Arbitrum One
 - Optimism
@@ -587,22 +639,22 @@ The system is deployed across:
 
 **Key metrics (as of January 2026):**
 
-| Metric | Value |
-|--------|-------|
-| Total cross-chain transfers | 1,200+ |
-| NAV deviation incidents | 0 |
-| Failed transfer recovery | 100% |
-| Average transfer time | 2-5 minutes |
-| Gas cost per transfer | ~150,000 gas |
+| Metric                      | Value        |
+| --------------------------- | ------------ |
+| Total cross-chain transfers | 1,200+       |
+| NAV deviation incidents     | 0            |
+| Failed transfer recovery    | 100%         |
+| Average transfer time       | 2-5 minutes  |
+| Gas cost per transfer       | ~150,000 gas |
 
 ### 9.2 Gas Benchmarks
 
-| Operation | Gas Cost |
-|-----------|----------|
-| depositV3 (source) | ~120,000 |
-| VS write (source) | ~5,000 |
-| donate (destination) | ~80,000 |
-| VS write (destination) | ~5,000 |
+| Operation              | Gas Cost     |
+| ---------------------- | ------------ |
+| depositV3 (source)     | ~120,000     |
+| VS write (source)      | ~5,000       |
+| donate (destination)   | ~80,000      |
+| VS write (destination) | ~5,000       |
 | **Total per transfer** | **~210,000** |
 
 Compared to cross-chain messaging approach (~500,000+ gas), this represents **58% gas savings**.
@@ -678,6 +730,7 @@ The system has been validated through formal proofs of NAV preservation and empi
 **Theorem**: The sum of effective supplies across all chains equals the global token supply.
 
 **Proof**:
+
 ```
 Let S_i = total supply on chain i
 Let VS_i = virtual supply on chain i
@@ -693,9 +746,10 @@ Global effective supply = Σ(S_i + VS_i)
 ## Appendix B: Code Availability
 
 All code is open source and available at:
+
 - GitHub: https://github.com/RigoBlock/v3-contracts
 - Deployed contracts: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 
 ---
 
-*© 2026 Rigoblock Protocol. Licensed under Apache 2.0.*
+_© 2026 Rigoblock Protocol. Licensed under Apache 2.0._

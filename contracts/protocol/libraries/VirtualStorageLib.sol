@@ -22,6 +22,7 @@ library VirtualStorageLib {
     }
 
     function updateVirtualSupply(int256 delta) internal {
+        if (delta == 0) return;
         virtualSupply().supply += delta;
         emit IECrosschain.VirtualSupplyUpdated(delta, virtualSupply().supply);
     }

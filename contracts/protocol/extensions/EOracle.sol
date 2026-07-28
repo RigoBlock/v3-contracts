@@ -99,9 +99,9 @@ contract EOracle is IEOracle {
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         } else {
-            // cardinality > 0 means the oracle pool has been initialised and has at least one observation
+            // cardinality > 1 means the oracle pool has at least two observations.
             (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
-            return state.cardinality > 0;
+            return state.cardinality > 1;
         }
     }
 
@@ -141,7 +141,7 @@ contract EOracle is IEOracle {
     function _getSecondsAgos(uint16 cardinality) private view returns (uint32[] memory secondsAgos) {
         // blocktime cannot be lower than 8 seconds on Ethereum, 1 seconds on any other chain
         uint16 blockTime = block.chainid == 1 ? 8 : 1;
-        uint32 maxSecondsAgos = uint32(cardinality * blockTime);
+        uint32 maxSecondsAgos = uint32(uint16(cardinality - 1) * blockTime);
         secondsAgos = new uint32[](2);
         secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
         secondsAgos[1] = 0;

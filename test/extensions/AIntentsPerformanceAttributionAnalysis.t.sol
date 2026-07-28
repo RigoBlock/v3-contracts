@@ -58,7 +58,10 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
     /// @dev blocktime: 8 seconds on Ethereum, 1 second on other chains
     function _getSecondsAgos(uint16 cardinality) private view returns (uint32[] memory secondsAgos) {
         uint16 blockTime = block.chainid == 1 ? 8 : 1;
-        uint32 maxSecondsAgos = uint32(cardinality * blockTime);
+        // Match EOracle.sol: N observations span at most (N - 1) * blockTime seconds.
+        uint32 maxSecondsAgos = cardinality > 1
+            ? uint32(uint16(cardinality - 1) * blockTime)
+            : 1;
         secondsAgos = new uint32[](2);
         secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
         secondsAgos[1] = 0;
@@ -393,7 +396,10 @@ contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixtu
         }
         
         uint16 blockTime = block.chainid == 1 ? 8 : 1;
-        uint32 maxSecondsAgos = uint32(state.cardinality * blockTime);
+        // Match EOracle.sol: N observations span at most (N - 1) * blockTime seconds.
+        uint32 maxSecondsAgos = state.cardinality > 1
+            ? uint32(uint16(state.cardinality - 1) * blockTime)
+            : 1;
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
         secondsAgos[1] = 0;
