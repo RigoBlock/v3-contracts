@@ -12,6 +12,7 @@ import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
+import {HyperliquidLib} from "../../libraries/HyperliquidLib.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
@@ -37,7 +38,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
         // Notice: the following check adds a little gas overhead, but is necessary to guarantee backwards compatibility with v3. Because all existing
         // v3 vaults have a price feed, we could move the following assertion to the following block, i.e. executing it only on the first mint.
-        require(IEOracle(address(this)).hasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
+        // On HyperEVM the Hyperliquid integration uses USDC as base token; Uniswap V4 is not available there, so the standard hasPriceFeed
+        // check would block every mint/burn. We exempt the USDC collateral token on HyperEVM only, which restricts the vault to USDC-denominated assets.
+        require(_baseTokenHasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
 
         // Always compute net total assets (used for cross-chain donation validation)
         int256 netValue = _computeTotalPoolValue(components.baseToken);
@@ -187,6 +190,16 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                 return 0;
             }
         }
+    }
+
+    /// @dev Returns true when the base token can be priced via the EOracle, or when it is the
+    ///  Hyperliquid USDC collateral token on HyperEVM (where Uniswap V4 is not deployed).
+    ///  The latter exemption restricts the pool to USDC-denominated assets on HyperEVM.
+    function _baseTokenHasPriceFeed(address baseToken) private view returns (bool) {
+        if (HyperliquidLib.isHyperliquidBaseToken(baseToken)) {
+            return true;
+        }
+        return IEOracle(address(this)).hasPriceFeed(baseToken);
     }
 
     /// virtual methods

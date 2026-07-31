@@ -65,6 +65,9 @@ library CrosschainLib {
         } else if (block.chainid == 130) {
             // Unichain
             return token == CrosschainTokens.UNI_USDC || token == CrosschainTokens.UNI_WETH;
+        } else if (block.chainid == 999) {
+            // HyperEVM - only USDC is bridgeable
+            return token == CrosschainTokens.HYPER_USDC;
         }
         return false;
     }
@@ -94,6 +97,9 @@ library CrosschainLib {
         return amount;
     }
 
+    /// @notice HyperEVM MulticallHandler address.
+    address internal constant HYPER_EVM_MULTICALL_HANDLER = 0x5E7840E06fAcCb6d1c3b5F5E0d1d3d07F2829bba;
+
     /// @notice Get the appropriate Across MulticallHandler address for a given chain.
     /// @dev BSC (chain ID 56) uses a different handler than other chains.
     /// @param chainId The destination chain ID.
@@ -102,6 +108,11 @@ library CrosschainLib {
         // BSC uses different multicall handler
         if (chainId == 56) {
             return BSC_MULTICALL_HANDLER;
+        }
+
+        // HyperEVM has its own MulticallHandler deployment
+        if (chainId == 999) {
+            return HYPER_EVM_MULTICALL_HANDLER;
         }
 
         // Most chains use the standard multicall handler
@@ -123,7 +134,8 @@ library CrosschainLib {
             inputToken == CrosschainTokens.BASE_USDC ||
             inputToken == CrosschainTokens.POLY_USDC ||
             inputToken == CrosschainTokens.BSC_USDC ||
-            inputToken == CrosschainTokens.UNI_USDC
+            inputToken == CrosschainTokens.UNI_USDC ||
+            inputToken == CrosschainTokens.HYPER_USDC
         ) {
             require(
                 outputToken == CrosschainTokens.ETH_USDC ||
@@ -132,7 +144,8 @@ library CrosschainLib {
                     outputToken == CrosschainTokens.BASE_USDC ||
                     outputToken == CrosschainTokens.POLY_USDC ||
                     outputToken == CrosschainTokens.BSC_USDC ||
-                    outputToken == CrosschainTokens.UNI_USDC,
+                    outputToken == CrosschainTokens.UNI_USDC ||
+                    outputToken == CrosschainTokens.HYPER_USDC,
                 WrongDestinationToken()
             );
         } else if (

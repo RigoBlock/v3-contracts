@@ -18,6 +18,7 @@ import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {GmxLib} from "../libraries/GmxLib.sol";
+import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
 import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
@@ -91,6 +92,10 @@ contract EApps is IEApps {
             balances = _getUniV4PmBalances();
         } else if (appType == Applications.GMX_V2_POSITIONS) {
             balances = _getGmxV2PositionBalances();
+        } else if (appType == Applications.HYPERLIQUID_PERPS) {
+            balances = _getHyperliquidBalances();
+        } else if (appType == Applications.HYPERLIQUID_PREDICTIONS) {
+            balances = _getHyperliquidPredictionBalances();
         } else {
             revert UnknownApplication(uint256(appType));
         }
@@ -147,6 +152,16 @@ contract EApps is IEApps {
     ///  Delegates entirely to GmxLib so the logic is shared with NavView.
     function _getGmxV2PositionBalances() private view returns (AppTokenBalance[] memory) {
         return GmxLib.getGmxPositionBalances(address(this));
+    }
+
+    /// @dev Returns the net Hyperliquid core-perp account value as a single USDC balance.
+    function _getHyperliquidBalances() private view returns (AppTokenBalance[] memory) {
+        return HyperliquidLib.getHyperliquidBalances(address(this));
+    }
+
+    /// @dev Returns the USDC value of tracked Hyperliquid HIP-4 outcome tokens plus the USDC spot balance.
+    function _getHyperliquidPredictionBalances() private view returns (AppTokenBalance[] memory) {
+        return HyperliquidLib.getPredictionBalances(address(this));
     }
 
     function _findCrossPrice(address token0, address token1) private returns (uint160) {

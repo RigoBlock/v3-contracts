@@ -32,6 +32,10 @@ library Constants {
     /// @dev Re-exported from ForkBlocks for backward compatibility
     uint256 internal constant ARB_BLOCK = ForkBlocks.ARB_BLOCK;
 
+    /// @notice HyperEVM block number for fork tests
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant HYPEREVM_BLOCK = ForkBlocks.HYPEREVM_BLOCK;
+
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
     //////////////////////////////////////////////////////////////*/
@@ -43,6 +47,7 @@ library Constants {
     uint256 internal constant POLYGON_CHAIN_ID = 137;
     uint256 internal constant BSC_CHAIN_ID = 56;
     uint256 internal constant UNICHAIN_CHAIN_ID = 130;
+    uint256 internal constant HYPEREVM_CHAIN_ID = 999;
 
     /*//////////////////////////////////////////////////////////////
                         RIGOBLOCK INFRASTRUCTURE
@@ -201,6 +206,12 @@ library Constants {
     // Unichain - use shared constants
     address internal constant UNI_USDC = CrosschainTokens.UNI_USDC;
     address internal constant UNI_WETH = CrosschainTokens.UNI_WETH;
+
+    // HyperEVM - use shared constants
+    address internal constant HYPER_USDC = CrosschainTokens.HYPER_USDC;
+
+    /// @notice Wrapped HYPE on HyperEVM (canonical system contract).
+    address internal constant HYPER_WHYPE = 0x5555555555555555555555555555555555555555;
 
     // Additional tokens not in crosschain lib (chain-specific)
     address internal constant POLY_WPOL = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;

@@ -7,6 +7,8 @@ enum Applications {
     GRG_STAKING,
     UNIV4_LIQUIDITY,
     GMX_V2_POSITIONS,
+    HYPERLIQUID_PERPS,
+    HYPERLIQUID_PREDICTIONS,
     // append new applications here, up to a total of 255 as a theoretical maximum
     COUNT
 }

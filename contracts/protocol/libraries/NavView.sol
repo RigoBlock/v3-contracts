@@ -23,6 +23,7 @@ import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {GmxLib} from "./GmxLib.sol";
+import {HyperliquidLib} from "./HyperliquidLib.sol";
 /// @title NavView - Internal library for navigation and application view functionality
 /// @notice Provides internal functions to calculate NAV and retrieve application balances
 /// @dev This library contains the core logic for the ENavView extension
@@ -68,6 +69,10 @@ library NavView {
                 appBalances[activeAppIndex] = _getUniV4PmBalances(pool, uniV4Posm);
             } else if (Applications(i) == Applications.GMX_V2_POSITIONS) {
                 appBalances[activeAppIndex] = GmxLib.getGmxPositionBalances(pool);
+            } else if (Applications(i) == Applications.HYPERLIQUID_PERPS) {
+                appBalances[activeAppIndex] = HyperliquidLib.getHyperliquidBalances(pool);
+            } else if (Applications(i) == Applications.HYPERLIQUID_PREDICTIONS) {
+                appBalances[activeAppIndex] = HyperliquidLib.getPredictionBalances(pool);
             } else {
                 continue;
             }
