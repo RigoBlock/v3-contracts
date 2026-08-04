@@ -29,7 +29,7 @@ This guide covers the technical implementation of the Across Protocol integratio
 4. **NavImpactLib.sol** (NAV Validation)
    - Path: `contracts/protocol/libraries/NavImpactLib.sol`
    - Validates Sync mode NAV impact
-   - Enforces 1/MINIMUM_SUPPLY_RATIO effective supply constraint (currently 5% with MINIMUM_SUPPLY_RATIO = 20)
+   - Enforces `1/MINIMUM_SUPPLY_RATIO` effective supply constraint (see `NavImpactLib.sol` for the current numeric value)
 
 ## Transfer Flow
 
@@ -197,17 +197,18 @@ if (effectiveSupply <= 0) {
 unitaryValue = nav / uint256(effectiveSupply);
 ```
 
-### 10% Constraint
+### Effective Supply Constraint
 
 ```solidity
-// NavImpactLib.validateNavImpact()
+// NavImpactLib.validateSupply()
 int256 currentVS = VirtualStorageLib.getVirtualSupply();
 int256 sharesLeaving = (outputValue * 10**decimals / nav).toInt256();
 
 int256 newVS = currentVS - sharesLeaving;  // More negative
 int256 effectiveSupply = int256(totalSupply) + newVS;
 
-// Must maintain at least 1/MINIMUM_SUPPLY_RATIO of total supply (currently 5%)
+// Must maintain at least 1/MINIMUM_SUPPLY_RATIO of total supply.
+// The numeric value of MINIMUM_SUPPLY_RATIO is defined in NavImpactLib.sol.
 require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 

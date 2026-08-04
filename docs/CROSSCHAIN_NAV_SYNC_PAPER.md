@@ -235,17 +235,17 @@ Use cases:
 
 ### 3.3 Safety Constraints
 
-**Effective Supply Buffer (1/MINIMUM_SUPPLY_RATIO = 12.5%):**
+**Effective Supply Buffer (1/MINIMUM_SUPPLY_RATIO):**
 
 To prevent supply exhaustion and maintain pool operability:
 
 ```solidity
-// MINIMUM_SUPPLY_RATIO = 8 (defined in NavImpactLib.sol)
+// The numeric value of MINIMUM_SUPPLY_RATIO is defined in NavImpactLib.sol.
 int256 effectiveSupply = int256(totalSupply) + virtualSupply - sharesLeaving;
 require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 
-This ensures at least 1/MINIMUM_SUPPLY_RATIO (currently 12.5%) of supply remains available for redemptions.
+This ensures at least `1 / MINIMUM_SUPPLY_RATIO` of supply remains available for redemptions. See `NavImpactLib.sol` for the current numeric value.
 
 **Post-Burn Protection:**
 
@@ -258,7 +258,7 @@ function _burn(address user, uint256 amount) private {
   int256 virtualSupply = VirtualStorageLib.getVirtualSupply();
   if (virtualSupply < 0) {
     int256 effectiveSupply = int256(newTotalSupply) + virtualSupply;
-    // MINIMUM_SUPPLY_RATIO = 8 (12.5%)
+    // See NavImpactLib.sol for the current MINIMUM_SUPPLY_RATIO value.
     require(
       effectiveSupply >= int256(newTotalSupply / MINIMUM_SUPPLY_RATIO),
       EffectiveSupplyTooLowAfterBurn()
@@ -679,7 +679,7 @@ Actual: Maximum deviation < 0.0001%
 
 ### 10.1 Current Limitations
 
-1. **Transfer Limit (1 - 1/MINIMUM_SUPPLY_RATIO)**: Cannot transfer more than 87.5% of effective supply in a single transaction (MINIMUM_SUPPLY_RATIO = 8)
+1. **Transfer Limit (1 - 1/MINIMUM_SUPPLY_RATIO)**: Cannot transfer more than `1 - 1/MINIMUM_SUPPLY_RATIO` of effective supply in a single transaction. See `NavImpactLib.sol` for the current numeric value.
 2. **Bridge Dependency**: Relies on Across Protocol availability
 3. **Price Feed Requirement**: All tokens must have Chainlink feeds
 4. **Same Token Pairs**: Cross-chain transfers limited to same-token bridges (USDC↔USDC)
