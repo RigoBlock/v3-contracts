@@ -18,7 +18,7 @@ import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
 
 /// @title AHyperliquidForkTest
 /// @notice HyperEVM fork tests for the Hyperliquid adapter.
-/// @dev Requires HYPERLIQUID_PRC_URL in .env / foundry.toml.
+/// @dev Requires HYPERLIQUID_RPC_URL in .env / foundry.toml.
 contract AHyperliquidForkTest is Test {
     HyperliquidDeploymentFixture public fixture;
 
