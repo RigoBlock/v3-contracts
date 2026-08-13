@@ -202,7 +202,7 @@ For each source chain:
 2. Source ends with negative VS
 3. Destination accumulates positive VS
 
-Note: Effective supply constraint limits single transfer to 87.5% of effective supply
+Note: Effective supply constraint limits single transfer to `1 - 1/MINIMUM_SUPPLY_RATIO` of effective supply. See `NavImpactLib.sol` for the current numeric value.
 ```
 
 ---
@@ -211,11 +211,11 @@ Note: Effective supply constraint limits single transfer to 87.5% of effective s
 
 ### Effective Supply Buffer (1/MINIMUM_SUPPLY_RATIO)
 
-**Rule:** Cannot transfer more than 87.5% of effective supply in a single Transfer.
+**Rule:** Cannot transfer more than `1 - 1/MINIMUM_SUPPLY_RATIO` of effective supply in a single Transfer.
 
 ```solidity
 // NavImpactLib.validateSupply()
-// MINIMUM_SUPPLY_RATIO = 8 (12.5%)
+// MINIMUM_SUPPLY_RATIO is defined in NavImpactLib.sol.
 int256 effectiveSupply = int256(totalSupply) + virtualSupply - sharesLeaving;
 require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
@@ -224,7 +224,7 @@ require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), Effective
 
 ### Post-Burn Protection
 
-**Rule:** Burns cannot push effective supply below 12.5% threshold.
+**Rule:** Burns cannot push effective supply below the `1/MINIMUM_SUPPLY_RATIO` threshold.
 
 ```solidity
 // MixinActions._burn()
@@ -239,9 +239,9 @@ if (virtualSupply < 0) {
 
 ### Workaround for Full Consolidation
 
-1. Transfer 80%
+1. Transfer up to the `1 - 1/MINIMUM_SUPPLY_RATIO` limit
 2. Users burn shares, reducing total supply
-3. Transfer remaining 80% of new effective supply
+3. Transfer up to the new limit
 4. Repeat until consolidated
 
 ---
@@ -279,6 +279,6 @@ The **VS-only model** provides:
 - ✅ Proportional performance attribution by default
 - ✅ Lower gas costs (1 SSTORE per side)
 - ✅ No synchronization complexity
-- ✅ 12.5% safety buffer prevents supply exhaustion
+- ✅ Effective supply buffer prevents supply exhaustion
 - ✅ Post-burn protection prevents constraint bypass
 - ✅ Clear distinction between Transfer (NAV-neutral) and Sync (NAV-impacting)

@@ -120,7 +120,7 @@ Across SpokePool addresses vary by chain - see Constants.sol
 ## Known Limitations
 
 1. **No recovery mechanism**: Across V3 lacks direct token recovery
-2. **Effective supply constraint**: Negative VS limited to 95% of total supply (MINIMUM_SUPPLY_RATIO = 20)
+2. **Effective supply constraint**: Negative VS limited to `1 - 1/MINIMUM_SUPPLY_RATIO` of total supply (see `NavImpactLib.sol` for the current numeric value)
 3. **Bridge fees**: Always reduce NAV (real economic cost)
 4. **Solver surplus**: Small NAV increase in Sync mode (benefits holders)
 
@@ -138,10 +138,10 @@ The implementation uses **Virtual Supply (VS) only** rather than the previous VB
 - ✅ Lower gas costs (one storage write per side)
 - ✅ No VB/VS synchronization complexity
 - ✅ Performance shared proportionally between chains
-- ✅ 5% safety buffer prevents supply exhaustion (MINIMUM_SUPPLY_RATIO = 20)
+- ✅ Effective supply buffer prevents supply exhaustion (ratio defined in `NavImpactLib.sol`)
 
 **Trade-off:**
-- ⚠️ Source cannot send more than 95% of effective supply in a single transfer
+- ⚠️ Source cannot send more than `1 - 1/MINIMUM_SUPPLY_RATIO` of effective supply in a single transfer
 - ⚠️ Post-burn check required to prevent bypassing effective supply limit
 
 ## Resources
