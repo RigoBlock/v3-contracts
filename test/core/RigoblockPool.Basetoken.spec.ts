@@ -1,6 +1,9 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
+import hre, { deployments, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
+import "@nomiclabs/hardhat-waffle";
+import "@ethereum-waffle/chai";
+import "hardhat-deploy";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, utils } from "ethers";
@@ -10,7 +13,7 @@ import { Actions, V4Planner } from "../shared/v4Planner";
 import { deployContract, timeTravel } from "../utils/utils";
 
 describe("BaseTokenProxy", async () => {
-  const [user1, user2] = waffle.provider.getWallets();
+  const [user1, user2] = hre.waffle.provider.getWallets();
   const MAX_TICK_SPACING = 32767;
   const DEFAULT_PAIR = {
     poolKey: {
@@ -87,9 +90,9 @@ describe("BaseTokenProxy", async () => {
       const { pool } = await setupTests();
       const authority = await deployments.get("Authority");
       expect(await pool.authority()).to.be.eq(authority.address);
-      // TODO: we should have an assertion that the version is different if implementation has changed
-      //   so we are prompted to change the version in the deployment constants.
-      expect(await pool.VERSION()).to.be.eq("4.8.0");
+      // This assertion must stay in sync with VERSION in MixinConstants.sol.
+      // See AGENTS.md "Version Bump" for when and how to update it.
+      expect(await pool.VERSION()).to.be.eq("4.4.0");
     });
   });
 

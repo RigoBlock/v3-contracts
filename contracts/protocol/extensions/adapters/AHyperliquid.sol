@@ -15,7 +15,6 @@ import {HLConversions} from "hyper-evm-lib/common/HLConversions.sol";
 import {CoreWriterLib} from "hyper-evm-lib/CoreWriterLib.sol";
 import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
-import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.sol";
 import {IAHyperliquid} from "./interfaces/IAHyperliquid.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 
@@ -33,7 +32,10 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
     using ApplicationsLib for ApplicationsSlot;
     using SafeCast for uint256;
 
-    string private constant _REQUIRED_VERSION = "4.8.0";
+    string private constant _REQUIRED_VERSION = "4.4.0";
+
+    /// @dev Offset of the action-specific params within the raw `sendRawAction` payload.
+    uint256 private constant _ACTION_PARAMS_OFFSET = 4;
 
     /// @dev Asset IDs below this threshold are core perp assets.
     uint64 private constant _ASSET_ID_CORE_SPOT_BASE = 10_000;
@@ -59,7 +61,6 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         return _REQUIRED_VERSION;
     }
 
-    /// @inheritdoc ICoreDepositWallet
     /// @notice Bridges USDC from the pool's HyperEVM balance into HyperCore.
     /// @param amount Amount of USDC to deposit (EVM 6 decimals).
     /// @param destinationDex Must be the core perp dex (0). Spot deposits are not supported.
@@ -67,7 +68,6 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         _bridgeUsdcToCore(address(this), amount, destinationDex);
     }
 
-    /// @inheritdoc ICoreDepositWallet
     /// @notice Bridges USDC from the pool's HyperEVM balance into HyperCore on behalf of the pool.
     /// @param recipient Must be the pool itself, since the pool is the vault and the actor on HyperCore.
     /// @param amount Amount of USDC to deposit (EVM 6 decimals).
@@ -114,29 +114,32 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         require(PrecompileLib.coreUserExists(address(this)), AccountNotActivated());
 
         uint24 actionId = uint24(bytes3(data[1:4]));
+        bytes calldata params = data[_ACTION_PARAMS_OFFSET:];
 
         if (actionId == HLConstants.LIMIT_ORDER_ACTION) {
-            _placeLimitOrder(data);
+            _placeLimitOrder(params);
         } else if (actionId == HLConstants.SPOT_SEND_ACTION) {
-            _spotSend(data);
+            _spotSend(params);
         } else if (actionId == HLConstants.USD_CLASS_TRANSFER_ACTION) {
-            _transferUsdClass(data);
+            _transferUsdClass(params);
         } else if (actionId == HLConstants.CANCEL_ORDER_BY_OID_ACTION) {
-            _cancelOrderByOid(data);
+            _cancelOrderByOid(params);
         } else if (actionId == HLConstants.CANCEL_ORDER_BY_CLOID_ACTION) {
-            _cancelOrderByCloid(data);
+            _cancelOrderByCloid(params);
         } else {
             revert UnsupportedAction(actionId);
         }
 
         // Record the action so the application is not purged during the one-block settlement gap.
         HyperliquidLib.recordAction(0);
+
+        emit ActionSent(actionId);
     }
 
     /// @dev Decodes a LIMIT_ORDER action and routes through CoreWriterLib.placeLimitOrder.
-    function _placeLimitOrder(bytes calldata data) private {
+    function _placeLimitOrder(bytes calldata params) private {
         (uint32 asset, bool isBuy, uint64 limitPx, uint64 sz, bool reduceOnly, uint8 encodedTif, uint128 cloid) = abi
-            .decode(data[4:], (uint32, bool, uint64, uint64, bool, uint8, uint128));
+            .decode(params, (uint32, bool, uint64, uint64, bool, uint8, uint128));
 
         require(sz > 0, InvalidAmount());
         _requireCorePerpAsset(asset);
@@ -148,17 +151,21 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
     ///  pool's HyperEVM balance, and routes through CoreWriterLib.spotSend. This is the second step
     ///  of a withdrawal: funds must already be in the Core spot account (moved there by a prior
     ///  USD_CLASS_TRANSFER with toPerp=false), because CoreWriter has no direct perp-to-EVM bridge.
-    function _spotSend(bytes calldata data) private {
-        (address destinationAddress, uint64 token, uint64 amount) = abi.decode(data[4:], (address, uint64, uint64));
+    function _spotSend(bytes calldata params) private {
+        (address destinationAddress, uint64 token, uint64 amount) = abi.decode(params, (address, uint64, uint64));
 
         require(amount > 0, InvalidAmount());
         require(token == HLConstants.USDC_TOKEN_INDEX, InvalidActionData());
         require(destinationAddress == CoreWriterLib.getSystemAddress(token), InvalidActionData());
 
+        // Track cumulative same-block SPOT_SEND amounts so that multiple withdrawal requests in one
+        // block cannot exceed the available Core spot balance while the precompile view is stale.
+        uint64 pendingSpotSend = HyperliquidLib.recordSpotSend(amount);
+
         // Keep a USDC buffer in the Core spot account for the bridge fee. HyperCore silently drops
         // spot->EVM bridges that leave the account unable to pay the fee.
         uint64 spotTotal = PrecompileLib.spotBalance(address(this), token).total;
-        require(spotTotal >= amount + _BRIDGE_GAS_RESERVE, InsufficientBridgeReserve());
+        require(spotTotal >= amount + pendingSpotSend + _BRIDGE_GAS_RESERVE, InsufficientBridgeReserve());
 
         // Track USDC withdrawals from HyperCore so NAV is not understated during the settlement gap.
         HyperliquidLib.recordAction(-SafeCast.toInt256(HLConversions.weiToEvm(token, amount)));
@@ -169,22 +176,22 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
     /// @dev Decodes a USD_CLASS_TRANSFER action and routes through CoreWriterLib.transferUsdClass.
     ///  This is the first step of a withdrawal: move USDC from Core perp margin to Core spot
     ///  (toPerp=false) before calling SPOT_SEND. Deposits do not need this step.
-    function _transferUsdClass(bytes calldata data) private {
-        (uint64 ntl, bool toPerp) = abi.decode(data[4:], (uint64, bool));
+    function _transferUsdClass(bytes calldata params) private {
+        (uint64 ntl, bool toPerp) = abi.decode(params, (uint64, bool));
         require(ntl > 0, InvalidAmount());
         CoreWriterLib.transferUsdClass(ntl, toPerp);
     }
 
     /// @dev Decodes an OID cancel action and routes through CoreWriterLib.cancelOrderByOrderId.
-    function _cancelOrderByOid(bytes calldata data) private {
-        (uint32 asset, uint64 orderId) = abi.decode(data[4:], (uint32, uint64));
+    function _cancelOrderByOid(bytes calldata params) private {
+        (uint32 asset, uint64 orderId) = abi.decode(params, (uint32, uint64));
         _requireCorePerpAsset(asset);
         CoreWriterLib.cancelOrderByOrderId(asset, orderId);
     }
 
     /// @dev Decodes a CLOID cancel action and routes through CoreWriterLib.cancelOrderByCloid.
-    function _cancelOrderByCloid(bytes calldata data) private {
-        (uint32 asset, uint128 cloid) = abi.decode(data[4:], (uint32, uint128));
+    function _cancelOrderByCloid(bytes calldata params) private {
+        (uint32 asset, uint128 cloid) = abi.decode(params, (uint32, uint128));
         _requireCorePerpAsset(asset);
         CoreWriterLib.cancelOrderByCloid(asset, cloid);
     }

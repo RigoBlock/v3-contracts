@@ -79,6 +79,8 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 - Every implementation change MUST bump `VERSION` in `MixinConstants.sol` (e.g., `"4.2.0"` → `"4.3.0"`).
 - This applies to ANY change compiled into the implementation: Mixin contracts, libraries, or constructor parameters.
+- **Coordinate with the target PR / base branch**: determine the next version from the PR context or existing branch bump, and apply it once per PR. Do not bump multiple times within the same PR; if the base branch already has a higher version, use that version.
+- **Update the corresponding test assertion** in `test/core/RigoblockPool.Basetoken.spec.ts` so the `pool.VERSION()` check matches the new `MixinConstants.sol` value. This test is the guard that reminds future agents to bump the version when the implementation changes.
 
 ### Shared nonce management
 

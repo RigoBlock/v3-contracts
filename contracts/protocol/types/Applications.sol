@@ -20,6 +20,7 @@ struct TokenIdsSlot {
 /// @notice Packed Hyperliquid in-flight accounting.
 /// @dev Fits in a single storage slot.
 struct HyperliquidData {
-    uint128 lastActionBlock;
+    uint64 lastActionBlock;
     int128 inFlightAmount;
+    uint64 pendingSpotSend;
 }

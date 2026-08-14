@@ -6,9 +6,13 @@ import {Test} from "forge-std/Test.sol";
 import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperliquid.sol";
 import {IAHyperliquid} from "../../contracts/protocol/extensions/adapters/interfaces/IAHyperliquid.sol";
 import {HyperliquidLib} from "../../contracts/protocol/libraries/HyperliquidLib.sol";
+import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
+import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
+import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
 import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
 import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {CoreWriterLib} from "hyper-evm-lib/CoreWriterLib.sol";
+import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 
@@ -74,6 +78,17 @@ contract HyperliquidLibHarness {
 
     function recordAction(int256 amount) external {
         HyperliquidLib.recordAction(amount);
+    }
+}
+
+/// @notice Exposes NavView internal library function for coverage testing.
+contract NavViewHarness {
+    function getAppTokenBalances(
+        address pool,
+        address grgStakingProxy,
+        address uniV4Posm
+    ) external view returns (AppTokenBalance[] memory) {
+        return NavView.getAppTokenBalances(pool, grgStakingProxy, uniV4Posm);
     }
 }
 
@@ -187,6 +202,16 @@ contract AHyperliquidUnit is Test {
             _spotBalance,
             abi.encode(account, tokenIndex),
             abi.encode(PrecompileLib.SpotBalance({total: total, hold: 0, entryNtl: 0}))
+        );
+    }
+
+    function _mockAccountMarginSummary(address account, int64 accountValue) private {
+        vm.mockCall(
+            _accountMarginSummary,
+            abi.encode(uint32(0), account),
+            abi.encode(
+                PrecompileLib.AccountMarginSummary({accountValue: accountValue, marginUsed: 0, ntlPos: 0, rawUsd: 0})
+            )
         );
     }
 
@@ -504,6 +529,9 @@ contract AHyperliquidUnit is Test {
             abi.encode(PrecompileLib.SpotBalance({total: 0, hold: 0, entryNtl: 0}))
         );
 
+        // Mock no HyperCore account for the harness so a zero balance is treated as inactive.
+        _mockCoreUserExists(address(libHarness), false);
+
         // Before any action, zero account value means no balances.
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 0);
@@ -515,9 +543,141 @@ contract AHyperliquidUnit is Test {
         assertEq(balances[0].token, _usdc);
         assertEq(balances[0].amount, 1);
 
-        // After advancing one block, the dust is gone and the app can be purged.
+        // After advancing one block, the dust is gone and the app can be purged because the
+        // HyperCore account does not exist.
         vm.roll(block.number + 1);
         balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 0);
+    }
+
+    function testGetHyperliquidBalancesDustWhenAccountExists() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        _mockAccountMarginSummary(address(libHarness), 0);
+        _mockSpotBalance(address(libHarness), HLConstants.USDC_TOKEN_INDEX, 0);
+        _mockCoreUserExists(address(libHarness), true);
+
+        // Even with zero net value and no recent action, an existing HyperCore account keeps the
+        // app active so that live positions/funding are not dropped from NAV.
+        AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].token, _usdc);
+        assertEq(balances[0].amount, 1);
+    }
+
+    function testSendRawActionCancelOrderByOid() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.CANCEL_ORDER_BY_OID_ACTION),
+            abi.encode(uint32(1), uint64(123))
+        );
+
+        vm.expectEmit(true, false, false, false, address(pool));
+        emit IAHyperliquid.ActionSent(HLConstants.CANCEL_ORDER_BY_OID_ACTION);
+        IAHyperliquid(address(pool)).sendRawAction(data);
+
+        MockCoreWriter coreWriter = MockCoreWriter(_coreWriter);
+        bytes memory actionData = coreWriter.lastActionData();
+        assertEq(uint8(actionData[0]), 1);
+        assertEq(uint24(bytes3(BytesSlice.slice(actionData, 1, 3))), HLConstants.CANCEL_ORDER_BY_OID_ACTION);
+
+        (uint32 asset, uint64 orderId) = abi.decode(
+            BytesSlice.slice(actionData, 4, actionData.length - 4),
+            (uint32, uint64)
+        );
+        assertEq(asset, 1);
+        assertEq(orderId, 123);
+    }
+
+    function testSendRawActionCancelOrderByCloid() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.CANCEL_ORDER_BY_CLOID_ACTION),
+            abi.encode(uint32(2), uint128(456))
+        );
+
+        vm.expectEmit(true, false, false, false, address(pool));
+        emit IAHyperliquid.ActionSent(HLConstants.CANCEL_ORDER_BY_CLOID_ACTION);
+        IAHyperliquid(address(pool)).sendRawAction(data);
+
+        MockCoreWriter coreWriter = MockCoreWriter(_coreWriter);
+        bytes memory actionData = coreWriter.lastActionData();
+        assertEq(uint24(bytes3(BytesSlice.slice(actionData, 1, 3))), HLConstants.CANCEL_ORDER_BY_CLOID_ACTION);
+
+        (uint32 asset, uint128 cloid) = abi.decode(
+            BytesSlice.slice(actionData, 4, actionData.length - 4),
+            (uint32, uint128)
+        );
+        assertEq(asset, 2);
+        assertEq(cloid, 456);
+    }
+
+    function testSendRawActionSpotSendCumulativeBoundsSameBlock() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        uint64 amountWei = 100e6 * 1e2; // 6-decimal USDC scaled to 8-decimal Core wei
+        address systemAddress = CoreWriterLib.getSystemAddress(HLConstants.USDC_TOKEN_INDEX);
+
+        // Mock a spot balance that can cover two full sends plus the bridge reserve, but not three.
+        _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, 2 * amountWei + _BRIDGE_GAS_RESERVE());
+
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.SPOT_SEND_ACTION),
+            abi.encode(systemAddress, HLConstants.USDC_TOKEN_INDEX, amountWei)
+        );
+
+        IAHyperliquid(address(pool)).sendRawAction(data);
+        IAHyperliquid(address(pool)).sendRawAction(data);
+
+        // Third send in the same block must revert because the cumulative pending amount exceeds the
+        // available spot balance once the reserve is accounted for.
+        vm.expectRevert(IAHyperliquid.InsufficientBridgeReserve.selector);
+        IAHyperliquid(address(pool)).sendRawAction(data);
+
+        // After rolling to a new block the cumulative counter is reset, so a fresh send succeeds.
+        vm.roll(block.number + 1);
+        _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, amountWei + _BRIDGE_GAS_RESERVE());
+        IAHyperliquid(address(pool)).sendRawAction(data);
+    }
+
+    function testNavViewHyperliquidBranch() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        NavViewHarness navHarness = new NavViewHarness();
+
+        // Mock the pool to report Hyperliquid as the only active application.
+        uint256 packedApps = 1 << uint256(Applications.HYPERLIQUID);
+        vm.mockCall(
+            address(pool),
+            abi.encodeWithSelector(ISmartPoolState.getActiveApplications.selector),
+            abi.encode(packedApps)
+        );
+
+        // NavView always queries GRG_STAKING; mock a zero stake to avoid reverting on address(0).
+        address grgStakingProxy = address(0x123);
+        vm.mockCall(
+            grgStakingProxy,
+            abi.encodeWithSelector(IStaking.getTotalStake.selector, address(pool)),
+            abi.encode(uint256(0))
+        );
+
+        // Mock a non-zero HyperCore account value so the Hyperliquid branch produces a balance.
+        _mockAccountMarginSummary(address(pool), 1_000_000);
+        _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, 0);
+        _mockCoreUserExists(address(pool), true);
+
+        AppTokenBalance[] memory balances = navHarness.getAppTokenBalances(address(pool), grgStakingProxy, address(0));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].token, _usdc);
+        assertEq(balances[0].amount, 10_000);
+    }
+
+    function _BRIDGE_GAS_RESERVE() private pure returns (uint64) {
+        return 1e7;
     }
 }

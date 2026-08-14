@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["ES2017", "DOM"]
+  },
+  "include": ["test/**/*.ts", "types/**/*.ts", "src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

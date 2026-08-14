@@ -9,6 +9,12 @@ import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.so
 /// @dev Runs via delegatecall in the pool context. Non-owner write access is blocked by MixinFallback.
 interface IAHyperliquid is ICoreWriter, ICoreDepositWallet {
     // =========================================================================
+    // Events
+    // =========================================================================
+
+    event ActionSent(uint24 indexed actionId);
+
+    // =========================================================================
     // Errors
     // =========================================================================
 
