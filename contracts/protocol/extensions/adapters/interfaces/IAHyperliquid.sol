@@ -7,6 +7,7 @@ import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.so
 /// @title IAHyperliquid - Interface for the Rigoblock Hyperliquid adapter.
 interface IAHyperliquid is ICoreWriter, ICoreDepositWallet {
     event ActionSent(uint24 indexed actionId);
+    event Deposited(uint256 amount, uint32 destinationDex);
 
     error DirectCallNotAllowed();
     error NotHyperEVM();

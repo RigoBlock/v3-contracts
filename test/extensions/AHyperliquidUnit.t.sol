@@ -278,7 +278,7 @@ contract AHyperliquidUnit is Test {
         bytes memory data = abi.encodePacked(
             uint8(1),
             uint24(HLConstants.USD_CLASS_TRANSFER_ACTION),
-            abi.encode(uint64(100e6), true)
+            abi.encode(uint64(100e6), false)
         );
         IAHyperliquid(address(pool)).sendRawAction(data);
 
@@ -290,7 +290,19 @@ contract AHyperliquidUnit is Test {
 
         (uint64 ntl, bool toPerp) = abi.decode(BytesSlice.slice(actionData, 4, actionData.length - 4), (uint64, bool));
         assertEq(ntl, 100e6);
-        assertTrue(toPerp);
+        assertFalse(toPerp);
+    }
+
+    function testSendRawActionUsdClassTransferToPerpReverts() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.USD_CLASS_TRANSFER_ACTION),
+            abi.encode(uint64(100e6), true)
+        );
+        vm.expectRevert(IAHyperliquid.InvalidActionData.selector);
+        IAHyperliquid(address(pool)).sendRawAction(data);
     }
 
     function testSendRawActionSpotSend() public {

@@ -28,6 +28,10 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
 
     string private constant _REQUIRED_VERSION = "4.4.0";
 
+    /// @dev Byte range of the action ID within the raw `sendRawAction` payload.
+    uint256 private constant _ACTION_ID_START = 1;
+    uint256 private constant _ACTION_ID_END = 4;
+
     /// @dev Offset of the action-specific params within the raw `sendRawAction` payload.
     uint256 private constant _ACTION_PARAMS_OFFSET = 4;
 
@@ -75,7 +79,7 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         require(uint8(data[0]) == 1, InvalidActionData());
         require(PrecompileLib.coreUserExists(address(this)), AccountNotActivated());
 
-        uint24 actionId = uint24(bytes3(data[1:4]));
+        uint24 actionId = uint24(bytes3(data[_ACTION_ID_START:_ACTION_ID_END]));
         bytes calldata params = data[_ACTION_PARAMS_OFFSET:];
 
         if (actionId == HLConstants.LIMIT_ORDER_ACTION) {
@@ -110,6 +114,7 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
 
         StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID));
         HyperliquidLib.recordAction(amount.toInt256());
+        emit Deposited(amount, destinationDex);
     }
 
     function _placeLimitOrder(bytes calldata params) private {
@@ -140,6 +145,9 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
     function _transferUsdClass(bytes calldata params) private {
         (uint64 ntl, bool toPerp) = abi.decode(params, (uint64, bool));
         require(ntl > 0, InvalidAmount());
+        // Spot-to-perp transfers are not tracked; this adapter is perps-only and only uses
+        // perp-to-spot transfers as the first step of a withdrawal.
+        require(!toPerp, InvalidActionData());
         CoreWriterLib.transferUsdClass(ntl, toPerp);
     }
 

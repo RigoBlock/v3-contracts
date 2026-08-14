@@ -13,7 +13,7 @@ Withdrawing back to HyperEVM is operator-driven and necessarily touches the Core
 1. Move USDC from Core perp margin to Core spot with `USD_CLASS_TRANSFER(toPerp = false)`.
 2. Bridge from Core spot to HyperEVM with `SPOT_SEND` targeting the USDC system address.
 
-There is no direct perp-to-EVM bridge in CoreWriter, so both steps are required.
+There is no direct perp-to-EVM bridge in CoreWriter, so both steps are required. Spot-to-perp transfers (`toPerp = true`) are rejected because the adapter is perps-only and does not track spot balances as active NAV tokens.
 
 ## Asset restrictions
 
@@ -25,9 +25,19 @@ There is no direct perp-to-EVM bridge in CoreWriter, so both steps are required.
 
 HyperCore state lags HyperEVM writes by at least one block. `HyperliquidLib` records an in-flight USDC adjustment on every state-affecting action so NAV is not understated during the settlement gap. A cumulative same-block `SPOT_SEND` counter prevents multiple withdrawal requests from exceeding the available Core spot balance while the precompile view is stale.
 
+The in-flight adjustment is applied only in the block in which the action is submitted. If HyperCore remains stale into the next block, NAV may temporarily diverge from the eventual settled state. Pool operators should avoid NAV-sensitive operations (mints, burns, cross-chain transfers) until HyperCore has caught up.
+
+## Limit orders and same-block fills
+
+Limit orders are forwarded as-is to CoreWriter and recorded with a zero in-flight adjustment. Marketable limit orders that fill immediately can change the Core account value before the precompile view reflects the fill. As with deposits and withdrawals, NAV-sensitive operations should wait for HyperCore settlement.
+
 ## Bridge gas reserve
 
 `SPOT_SEND` keeps a small USDC buffer in the Core spot account to pay the spot->EVM bridge fee.
+
+## EOracle on HyperEVM
+
+HyperEVM does not have a deployed Rigoblock BackGeoOracle / Uniswap V4 hook, so `EOracle` is deployed with a zero/dummy oracle address. It is never queried for USDC because `MixinPoolValue` treats USDC as the only valid base token on HyperEVM. Non-USDC tokens are not supported by this integration.
 
 ## References
 
