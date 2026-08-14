@@ -191,7 +191,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
     }
 
-    /// @dev: On HyperEVM base token is restricted to USDC, Hyperliquid's collateral token.
+    /// @dev On HyperEVM base token is restricted to USDC, Hyperliquid's collateral token.
     function _baseTokenHasPriceFeed(address baseToken) private view returns (bool) {
         if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
             return baseToken == HLConstants.usdc();
