@@ -5,9 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {HyperliquidDeploymentFixture} from "../fixtures/HyperliquidDeploymentFixture.sol";
-import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperliquid.sol";
 import {IAHyperliquid} from "../../contracts/protocol/extensions/adapters/interfaces/IAHyperliquid.sol";
-import {HyperliquidLib} from "../../contracts/protocol/libraries/HyperliquidLib.sol";
+import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
+import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 import {ExternalApp, AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Applications} from "../../contracts/protocol/types/Applications.sol";
@@ -27,8 +27,11 @@ contract AHyperliquidForkTest is Test {
     address public aHyperliquid;
     address public usdc;
 
-    /// @notice Hyperliquid account margin summary precompile address.
-    address private constant _ACCOUNT_MARGIN_SUMMARY = 0x000000000000000000000000000000000000080F;
+    /// @notice Hyperliquid read precompiles are mocked because Foundry's EVM does not implement
+    ///  the HyperCore precompiles, even when forking a HyperEVM RPC. The mocks represent the
+    ///  on-chain HyperCore state that the pool would read back after the action settlement delay.
+    /// @dev CoreWriter itself is not mocked; it emits the action log. What is mocked is the
+    ///  read-only precompile state that lags behind the write by at least one block.
 
     function setUp() public {
         fixture = new HyperliquidDeploymentFixture();
@@ -38,6 +41,10 @@ contract AHyperliquidForkTest is Test {
         poolOwner = fixture.poolOwner();
         aHyperliquid = fixture.aHyperliquid();
         usdc = fixture.HYPER_USDC();
+
+        // Foundry does not implement HyperCore read precompiles, so mock the USDC tokenInfo
+        // precompile that CoreWriterLib queries while converting deposit amounts.
+        _mockUsdcTokenInfo();
 
         console2.log("Pool:", pool);
         console2.log("Pool owner:", poolOwner);
@@ -58,27 +65,23 @@ contract AHyperliquidForkTest is Test {
         uint256 poolUsdcBefore = IERC20(usdc).balanceOf(pool);
 
         vm.prank(poolOwner);
-        IAHyperliquid(pool).depositToCore(usdc, 0, depositAmount);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
         uint256 poolUsdcAfter = IERC20(usdc).balanceOf(pool);
         assertEq(poolUsdcBefore - poolUsdcAfter, depositAmount, "Pool USDC should decrease by deposit");
 
         // The Hyperliquid application bit must have been activated by the deposit.
         uint256 activeApps = ISmartPoolState(pool).getActiveApplications();
-        assertTrue(
-            (activeApps & (1 << uint256(Applications.HYPERLIQUID_PERPS))) != 0,
-            "HYPERLIQUID_PERPS should be active"
-        );
+        assertTrue((activeApps & (1 << uint256(Applications.HYPERLIQUID))) != 0, "HYPERLIQUID should be active");
     }
 
     /// @notice Mocks the Hyperliquid account margin summary precompile to return `accountValue` for dex 0.
-    /// @dev Foundry does not implement Hyperliquid precompiles, so we must mock them in fork tests.
     function _mockAccountMarginSummary(int64 accountValue) internal {
         vm.mockCall(
             _ACCOUNT_MARGIN_SUMMARY,
             abi.encode(uint32(0), pool),
             abi.encode(
-                HyperliquidLib.AccountMarginSummary({accountValue: accountValue, marginUsed: 0, ntlPos: 0, rawUsd: 0})
+                PrecompileLib.AccountMarginSummary({accountValue: accountValue, marginUsed: 0, ntlPos: 0, rawUsd: 0})
             )
         );
     }
@@ -90,10 +93,12 @@ contract AHyperliquidForkTest is Test {
         uint256 depositAmount = 10_000e6;
 
         vm.prank(poolOwner);
-        IAHyperliquid(pool).depositToCore(usdc, 0, depositAmount);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
         // Mock the precompile to simulate the deposit having landed in HyperCore perp margin.
-        _mockAccountMarginSummary(int64(uint64(depositAmount)));
+        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+        _mockSpotBalance(pool, 0, 0);
+        _mockUsdcTokenInfo();
 
         // Same-block NAV read: should succeed because of the Hyperliquid base-token carve-out.
         NetAssetsValue memory nav = ISmartPoolActions(pool).updateUnitaryValue();
@@ -114,16 +119,18 @@ contract AHyperliquidForkTest is Test {
         uint256 depositAmount = 10_000e6;
 
         vm.prank(poolOwner);
-        IAHyperliquid(pool).depositToCore(usdc, 0, depositAmount);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
         // Same block: simulate the HyperCore precompile not yet reflecting the deposit.
         _mockAccountMarginSummary(0);
+        _mockSpotBalance(pool, 0, 0);
+        _mockUsdcTokenInfo();
 
-        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID_PERPS));
+        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
 
         bool foundHyperliquid;
         for (uint256 i = 0; i < apps.length; i++) {
-            if (apps[i].appType == uint256(Applications.HYPERLIQUID_PERPS)) {
+            if (apps[i].appType == uint256(Applications.HYPERLIQUID)) {
                 foundHyperliquid = true;
                 assertEq(apps[i].balances.length, 1, "Hyperliquid app should report one balance");
                 assertEq(apps[i].balances[0].token, usdc, "Balance token should be USDC");
@@ -135,49 +142,37 @@ contract AHyperliquidForkTest is Test {
 
         // Next block: precompile reflects the deposit; in-flight amount is no longer added.
         vm.roll(block.number + 1);
-        _mockAccountMarginSummary(int64(uint64(depositAmount)));
+        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
 
-        apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID_PERPS));
+        apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
         for (uint256 i = 0; i < apps.length; i++) {
-            if (apps[i].appType == uint256(Applications.HYPERLIQUID_PERPS)) {
+            if (apps[i].appType == uint256(Applications.HYPERLIQUID)) {
                 assertEq(apps[i].balances[0].amount, int256(depositAmount), "Balance should equal precompile value");
                 break;
             }
         }
     }
 
-    /// @notice Hyperliquid spot precompile addresses.
-    address private constant _SPOT_BALANCE = 0x0000000000000000000000000000000000000801;
-    address private constant _SPOT_PX = 0x0000000000000000000000000000000000000808;
-    address private constant _SPOT_INFO = 0x000000000000000000000000000000000000080b;
-    address private constant _TOKEN_INFO = 0x000000000000000000000000000000000000080C;
+    /// @notice Hyperliquid spot precompile addresses (from hyper-evm-lib).
+    address private constant _SPOT_BALANCE = HLConstants.SPOT_BALANCE_PRECOMPILE_ADDRESS;
+    address private constant _TOKEN_INFO = HLConstants.TOKEN_INFO_PRECOMPILE_ADDRESS;
+    address private constant _ACCOUNT_MARGIN_SUMMARY = HLConstants.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS;
 
-    uint64 private constant _HIP4_ASSET_ID = 100_000_010;
-    uint64 private constant _HIP4_SPOT_INDEX = 1000;
-    uint64 private constant _HIP4_TOKEN_INDEX = 42;
-
-    function _mockSpotInfo() internal {
-        vm.mockCall(
-            _SPOT_INFO,
-            abi.encode(_HIP4_SPOT_INDEX),
-            abi.encode(HyperliquidLib.SpotInfo({name: "BTC-OUTCOME-1", tokens: [uint64(0), _HIP4_TOKEN_INDEX]}))
-        );
-    }
-
-    function _mockTokenInfo(uint64 tokenIndex, string memory name, address evmContract) internal {
+    /// @notice Mocks the tokenInfo precompile for USDC (token index 0).
+    function _mockUsdcTokenInfo() internal {
         vm.mockCall(
             _TOKEN_INFO,
-            abi.encode(tokenIndex),
+            abi.encode(uint64(0)),
             abi.encode(
-                HyperliquidLib.TokenInfo({
-                    name: name,
+                PrecompileLib.TokenInfo({
+                    name: "USDC",
                     spots: new uint64[](0),
                     deployerTradingFeeShare: 0,
                     deployer: address(0),
-                    evmContract: evmContract,
+                    evmContract: usdc,
                     szDecimals: 0,
                     weiDecimals: 8,
-                    evmExtraWeiDecimals: evmContract == address(0) ? int8(0) : int8(2)
+                    evmExtraWeiDecimals: -2
                 })
             )
         );
@@ -187,90 +182,7 @@ contract AHyperliquidForkTest is Test {
         vm.mockCall(
             _SPOT_BALANCE,
             abi.encode(account, tokenIndex),
-            abi.encode(HyperliquidLib.SpotBalance({total: total, hold: 0, entryNtl: 0}))
+            abi.encode(PrecompileLib.SpotBalance({total: total, hold: 0, entryNtl: 0}))
         );
-    }
-
-    function _mockSpotPx(uint64 spotIndex, uint64 price) internal {
-        vm.mockCall(_SPOT_PX, abi.encode(spotIndex), abi.encode(price));
-    }
-
-    function _setupPredictionMocks() internal {
-        _mockSpotInfo();
-        _mockTokenInfo(0, "USDC", usdc);
-        _mockTokenInfo(_HIP4_TOKEN_INDEX, "+10", address(0));
-        _mockSpotPx(_HIP4_SPOT_INDEX, 47_000_000);
-    }
-
-    /// @notice Deposit USDC to HyperCore spot dex and register a prediction token.
-    function testFork_DepositToSpotAndRegisterToken() public {
-        uint256 depositAmount = 10_000e6;
-        _setupPredictionMocks();
-
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).depositToSpot(usdc, depositAmount);
-
-        uint256 activeApps = ISmartPoolState(pool).getActiveApplications();
-        assertTrue(
-            (activeApps & (1 << uint256(Applications.HYPERLIQUID_PREDICTIONS))) != 0,
-            "HYPERLIQUID_PREDICTIONS should be active"
-        );
-
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).registerPredictionToken(_HIP4_ASSET_ID, _HIP4_SPOT_INDEX, _HIP4_TOKEN_INDEX);
-
-        // Advance one block so the in-flight deposit amount is no longer double-counted.
-        vm.roll(block.number + 1);
-
-        // Simulate the deposit having landed in HyperCore spot plus some outcome tokens held.
-        _mockSpotBalance(pool, 0, uint64(depositAmount) * 1e2); // USDC in 8-decimal spot balance
-        _mockSpotBalance(pool, _HIP4_TOKEN_INDEX, 27e8); // 27 outcome tokens
-
-        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(
-            1 << uint256(Applications.HYPERLIQUID_PREDICTIONS)
-        );
-
-        bool foundPredictions;
-        for (uint256 i = 0; i < apps.length; i++) {
-            if (apps[i].appType == uint256(Applications.HYPERLIQUID_PREDICTIONS)) {
-                foundPredictions = true;
-                assertEq(apps[i].balances.length, 1, "Predictions app should report one USDC balance");
-                assertEq(apps[i].balances[0].token, usdc, "Balance token should be USDC");
-                // 10_000 USDC spot + 27 * 0.47 USDC = 10_012.69 USDC in 6 decimals.
-                assertEq(apps[i].balances[0].amount, 10_012_690_000, "Balance should equal spot + outcome value");
-                break;
-            }
-        }
-        assertTrue(foundPredictions, "HYPERLIQUID_PREDICTIONS application should be returned");
-    }
-
-    /// @notice Submit a prediction order after registering the token and depositing to spot.
-    function testFork_SubmitPredictionOrder() public {
-        _setupPredictionMocks();
-
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).depositToSpot(usdc, 10_000e6);
-
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).registerPredictionToken(_HIP4_ASSET_ID, _HIP4_SPOT_INDEX, _HIP4_TOKEN_INDEX);
-
-        HyperliquidLib.LimitOrderParams memory params = HyperliquidLib.LimitOrderParams({
-            asset: uint32(_HIP4_ASSET_ID),
-            isBuy: true,
-            limitPx: 47_400_000,
-            sz: 22,
-            reduceOnly: false,
-            encodedTif: 3,
-            cloid: 0
-        });
-
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).submitPredictionOrder(params);
-
-        // Same-block NAV read succeeds because the USDC spot deposit is still in-flight.
-        _mockSpotBalance(pool, 0, uint64(10_000e6) * 1e2);
-        _mockSpotBalance(pool, _HIP4_TOKEN_INDEX, 22e8); // outcome tokens bought
-        NetAssetsValue memory nav = ISmartPoolActions(pool).updateUnitaryValue();
-        assertGt(nav.unitaryValue, 0, "Unitary value should be positive after prediction order");
     }
 }

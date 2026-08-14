@@ -7,8 +7,7 @@ enum Applications {
     GRG_STAKING,
     UNIV4_LIQUIDITY,
     GMX_V2_POSITIONS,
-    HYPERLIQUID_PERPS,
-    HYPERLIQUID_PREDICTIONS,
+    HYPERLIQUID,
     // append new applications here, up to a total of 255 as a theoretical maximum
     COUNT
 }
@@ -16,4 +15,11 @@ enum Applications {
 struct TokenIdsSlot {
     uint256[] tokenIds;
     mapping(uint256 tokenId => uint256 index) positions;
+}
+
+/// @notice Packed Hyperliquid in-flight accounting.
+/// @dev Fits in a single storage slot.
+struct HyperliquidData {
+    uint128 lastActionBlock;
+    int128 inFlightAmount;
 }

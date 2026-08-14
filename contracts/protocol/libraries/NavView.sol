@@ -69,10 +69,8 @@ library NavView {
                 appBalances[activeAppIndex] = _getUniV4PmBalances(pool, uniV4Posm);
             } else if (Applications(i) == Applications.GMX_V2_POSITIONS) {
                 appBalances[activeAppIndex] = GmxLib.getGmxPositionBalances(pool);
-            } else if (Applications(i) == Applications.HYPERLIQUID_PERPS) {
+            } else if (Applications(i) == Applications.HYPERLIQUID) {
                 appBalances[activeAppIndex] = HyperliquidLib.getHyperliquidBalances(pool);
-            } else if (Applications(i) == Applications.HYPERLIQUID_PREDICTIONS) {
-                appBalances[activeAppIndex] = HyperliquidLib.getPredictionBalances(pool);
             } else {
                 continue;
             }

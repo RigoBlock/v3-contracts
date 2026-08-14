@@ -5,13 +5,12 @@ import {ISmartPool} from "../../ISmartPool.sol";
 import {ISmartPoolImmutable} from "../../interfaces/v4/pool/ISmartPoolImmutable.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
-import {HyperliquidLib} from "../../libraries/HyperliquidLib.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 /// @dev Inheriting from interface is required as we override public variables.
 abstract contract MixinConstants is ISmartPool {
     /// @inheritdoc ISmartPoolImmutable
-    string public constant override VERSION = "4.5.0";
+    string public constant override VERSION = "4.8.0";
 
     bytes32 internal constant _ACCEPTED_TOKENS_SLOT =
         0xa33198d1011bad6f8d9b4a537f82cf21cfac49b1430cf1a99c11aaf4d7325fc6;
@@ -40,10 +39,8 @@ abstract contract MixinConstants is ISmartPool {
 
     bytes32 internal constant _GMX_CALLBACK_SLOT = GmxCallbackLib.GMX_CALLBACK_DATA_SLOT;
 
-    bytes32 internal constant _HYPERLIQUID_DATA_SLOT = HyperliquidLib.HYPERLIQUID_DATA_SLOT;
-
-    bytes32 internal constant _HYPERLIQUID_SPOT_TOKENS_SLOT =
-        0x03aa2efad223f8d0a3bf9825e8fef3da818f65e1faabdd0b5d92bd49cd60ba95;
+    bytes32 internal constant _HYPERLIQUID_DATA_SLOT =
+        0x4afbc3162e1589b633acdf6b7c00223a8c67447dd0ad462eaa13272955dff2a1;
 
     address internal constant _ZERO_ADDRESS = address(0);
 

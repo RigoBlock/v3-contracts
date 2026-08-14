@@ -2,51 +2,55 @@
 // solhint-disable-next-line
 pragma solidity 0.8.28;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
 import {HyperliquidLib} from "../../libraries/HyperliquidLib.sol";
 import {Applications} from "../../types/Applications.sol";
-import {ICoreWriter} from "../../../utils/exchanges/hyperliquid/ICoreWriter.sol";
-import {ICoreDepositWallet} from "../../../utils/exchanges/hyperliquid/ICoreDepositWallet.sol";
+import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
+import {HLConversions} from "hyper-evm-lib/common/HLConversions.sol";
+import {CoreWriterLib} from "hyper-evm-lib/CoreWriterLib.sol";
+import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
+import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
+import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.sol";
 import {IAHyperliquid} from "./interfaces/IAHyperliquid.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 
-/// @title AHyperliquid - Facilitates smart pool interaction with Hyperliquid Core perps and HIP-4 outcome markets.
+/// @title AHyperliquid - Facilitates smart pool interaction with Hyperliquid Core.
 /// @custom:security-contact security@rigoblock.com
-/// @notice Perps and HIP-4 prediction-market integration on HyperEVM. The adapter runs via delegatecall in the pool context.
-/// @dev Guard-style validations (slippage, allowed dex, allowed assets) live here because Rigoblock has no
-///  dHEDGE-style contract-guard registry.
+/// @notice Exposes the canonical Hyperliquid CoreWriter and CoreDepositWallet interfaces
+///  to Rigoblock smart pools. The adapter runs via delegatecall in the pool context.
+/// @dev The pool interacts with Hyperliquid as a USDC-only perps account. Deposits are routed
+///  straight to the Core perp dex. Withdrawals are operator-driven and necessarily touch the
+///  Core spot account: funds must first be moved from perp margin to spot via
+///  `USD_CLASS_TRANSFER(toPerp=false)`, then bridged to HyperEVM via `SPOT_SEND`. The adapter
+///  rejects non-core-perp assets and any action that would introduce tokens other than USDC.
 contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
+    using SafeCast for uint256;
 
-    string private constant _REQUIRED_VERSION = "4.5.0";
+    string private constant _REQUIRED_VERSION = "4.8.0";
 
-    uint256 private constant _BPS_BASE = 10_000;
-    /// @notice Maximum 1% slippage for IOC orders against the Hyperliquid oracle/spot precompile.
-    uint256 private constant _MAX_SLIPPAGE_BPS = 100;
+    /// @dev Asset IDs below this threshold are core perp assets.
+    uint64 private constant _ASSET_ID_CORE_SPOT_BASE = 10_000;
 
-    /// @notice Minimum notional for a HIP-4 order: 10 USDC in HyperCore 8-decimal units.
-    uint256 private constant _MIN_HIP4_NOTIONAL = 10 * 1e8;
+    /// @dev USDC left in the Core spot account to pay the spot->EVM bridge fee.
+    ///  Mirrors dHEDGE's 0.1 USDC reserve (Core wei, 8 decimals for USDC).
+    uint64 private constant _BRIDGE_GAS_RESERVE = 1e7;
 
-    /// @notice USDC is 6 decimals on HyperEVM but 8 decimals on HyperCore. Encoding a `spotSend`
-    ///  action back to HyperEVM requires scaling the amount by 100 to match the HyperCore `wei` format.
-    uint256 private constant _USDC_HYPERCORE_DECIMALS = 1e2;
-
-    uint8 private constant _TIF_GTC = 2;
-    uint8 private constant _TIF_IOC = 3;
-
-    address private immutable _aHyperliquid;
+    address private immutable _adapter;
 
     constructor() {
         require(block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID, NotHyperEVM());
-        _aHyperliquid = address(this);
+        _adapter = address(this);
     }
 
     modifier onlyDelegateCall() {
-        require(address(this) != _aHyperliquid, DirectCallNotAllowed());
+        require(address(this) != _adapter, DirectCallNotAllowed());
         _;
     }
 
@@ -55,248 +59,140 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         return _REQUIRED_VERSION;
     }
 
-    /// @inheritdoc IAHyperliquid
-    function depositToCore(
-        address token,
-        uint32 destinationDex,
-        uint256 amount
+    /// @inheritdoc ICoreDepositWallet
+    /// @notice Bridges USDC from the pool's HyperEVM balance into HyperCore.
+    /// @param amount Amount of USDC to deposit (EVM 6 decimals).
+    /// @param destinationDex Must be the core perp dex (0). Spot deposits are not supported.
+    function deposit(uint256 amount, uint32 destinationDex) external override nonReentrant onlyDelegateCall {
+        _bridgeUsdcToCore(address(this), amount, destinationDex);
+    }
+
+    /// @inheritdoc ICoreDepositWallet
+    /// @notice Bridges USDC from the pool's HyperEVM balance into HyperCore on behalf of the pool.
+    /// @param recipient Must be the pool itself, since the pool is the vault and the actor on HyperCore.
+    /// @param amount Amount of USDC to deposit (EVM 6 decimals).
+    /// @param destinationDex Must be the core perp dex (0). Spot deposits are not supported.
+    function depositFor(
+        address recipient,
+        uint256 amount,
+        uint32 destinationDex
     ) external override nonReentrant onlyDelegateCall {
-        require(token == HyperliquidLib.USDC, InvalidToken());
-        require(amount > 0, InvalidAmount());
-        require(destinationDex == HyperliquidLib.DEX_ID_CORE_PERP, InvalidDex());
-
-        address depositWallet = HyperliquidLib.CORE_DEPOSIT_WALLET;
-
-        token.safeApprove(depositWallet, amount);
-        ICoreDepositWallet(depositWallet).deposit(amount, destinationDex);
-        token.safeApprove(depositWallet, 1);
-
-        StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID_PERPS));
-        HyperliquidLib.recordAction(address(this), int256(amount));
-        emit HyperliquidDepositToCore(token, destinationDex, amount);
+        require(recipient == address(this), InvalidActionData());
+        _bridgeUsdcToCore(recipient, amount, destinationDex);
     }
 
-    /// @inheritdoc IAHyperliquid
-    function withdrawFromCore(uint256 amount) external override nonReentrant onlyDelegateCall {
+    /// @dev Common USDC bridging logic via CoreWriterLib.
+    function _bridgeUsdcToCore(address recipient, uint256 amount, uint32 destinationDex) private {
         require(amount > 0, InvalidAmount());
-        require(amount <= type(uint64).max / _USDC_HYPERCORE_DECIMALS, InvalidAmount());
+        require(destinationDex == HLConstants.DEFAULT_PERP_DEX, InvalidDex());
 
-        uint256 hyperCoreAmount = amount * _USDC_HYPERCORE_DECIMALS;
+        CoreWriterLib.bridgeUsdcToCoreFor(recipient, amount, destinationDex);
 
-        HyperliquidLib.SpotSendParams memory params = HyperliquidLib.SpotSendParams({
-            destinationAddress: HyperliquidLib.USDC_SYSTEM_ADDRESS,
-            token: HyperliquidLib.USDC_TOKEN_INDEX,
-            amount: uint64(hyperCoreAmount)
-        });
+        // CoreWriterLib approves the exact amount. Reset to 1 to keep the ERC20 allowance slot warm.
+        address usdc = HLConstants.usdc();
+        address depositWallet = HLConstants.coreDepositWallet();
+        if (IERC20(usdc).allowance(address(this), depositWallet) > 1) {
+            usdc.safeApprove(depositWallet, 1);
+        }
 
-        ICoreWriter(HyperliquidLib.CORE_WRITER).sendRawAction(HyperliquidLib.encodeSpotSend(params));
-
-        // Subtract the withdrawn amount from perps NAV for one block to cover the HyperCore settlement gap.
-        HyperliquidLib.recordAction(address(this), -int256(amount));
-        emit HyperliquidWithdrawFromCore(amount);
+        StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID));
+        HyperliquidLib.recordAction(amount.toInt256());
     }
 
-    /// @inheritdoc IAHyperliquid
-    function transferUsdClass(uint256 amount, bool toPerp) external override nonReentrant onlyDelegateCall {
-        require(amount > 0, InvalidAmount());
-        require(amount <= type(uint64).max, InvalidAmount());
+    /// @inheritdoc ICoreWriter
+    /// @notice Submits a raw HyperCore action after validation.
+    /// @dev The raw bytes are decoded and routed through hyper-evm-lib typed helpers, which encode
+    ///  the action exactly as CoreWriter expects. This keeps the canonical `sendRawAction(bytes)`
+    ///  entry point while avoiding manual re-implementation of the wire format.
+    /// @param data Raw action bytes: `<1-byte version=1><3-byte actionId><abi-encoded params>`.
+    function sendRawAction(bytes calldata data) external override nonReentrant onlyDelegateCall {
+        require(data.length >= 4, InvalidActionData());
+        require(uint8(data[0]) == 1, InvalidActionData());
 
-        HyperliquidLib.UsdClassTransferParams memory params = HyperliquidLib.UsdClassTransferParams({
-            ntl: uint64(amount),
-            toPerp: toPerp
-        });
+        // CoreWriter silently drops actions when the pool's HyperCore account does not yet exist.
+        // Deposits are exempt because they create the account; all other actions require it.
+        require(PrecompileLib.coreUserExists(address(this)), AccountNotActivated());
 
-        ICoreWriter(HyperliquidLib.CORE_WRITER).sendRawAction(HyperliquidLib.encodeUsdClassTransfer(params));
+        uint24 actionId = uint24(bytes3(data[1:4]));
 
-        // No in-flight NAV adjustment: this is a HyperCore-internal reallocation. NAV is correct once
-        // USDC is consolidated into the same margin class used by the NAV read (core perp).
-        HyperliquidLib.recordAction(address(this), 0);
-        emit HyperliquidUsdClassTransfer(amount, toPerp);
-    }
-
-    /// @inheritdoc IAHyperliquid
-    function submitPerpOrder(
-        HyperliquidLib.LimitOrderParams calldata params
-    ) external override nonReentrant onlyDelegateCall {
-        // Perps-only: asset IDs below 10_000 are core perps. Spot and HIP-3/4 are disallowed.
-        require(params.asset < HyperliquidLib.ASSET_ID_CORE_PERP_MAX, OnlyCorePerp());
-        require(params.sz > 0, InvalidAmount());
-        require(params.encodedTif == _TIF_GTC || params.encodedTif == _TIF_IOC, InvalidTif());
-
-        if (params.encodedTif == _TIF_GTC) {
-            // GTC is only allowed for reduce-only stop-loss / take-profit orders.
-            require(params.reduceOnly, ReduceOnlyGtcOnly());
+        if (actionId == HLConstants.LIMIT_ORDER_ACTION) {
+            _placeLimitOrder(data);
+        } else if (actionId == HLConstants.SPOT_SEND_ACTION) {
+            _spotSend(data);
+        } else if (actionId == HLConstants.USD_CLASS_TRANSFER_ACTION) {
+            _transferUsdClass(data);
+        } else if (actionId == HLConstants.CANCEL_ORDER_BY_OID_ACTION) {
+            _cancelOrderByOid(data);
+        } else if (actionId == HLConstants.CANCEL_ORDER_BY_CLOID_ACTION) {
+            _cancelOrderByCloid(data);
         } else {
-            // IOC orders must pass slippage validation against the Hyperliquid oracle.
-            _validatePerpSlippage(params);
+            revert UnsupportedAction(actionId);
         }
 
-        ICoreWriter(HyperliquidLib.CORE_WRITER).sendRawAction(HyperliquidLib.encodeLimitOrder(params));
-
-        HyperliquidLib.recordAction(address(this), 0);
-        emit HyperliquidPerpOrderSubmitted(
-            params.asset,
-            params.isBuy,
-            params.limitPx,
-            params.sz,
-            params.reduceOnly,
-            params.encodedTif,
-            params.cloid
-        );
+        // Record the action so the application is not purged during the one-block settlement gap.
+        HyperliquidLib.recordAction(0);
     }
 
-    /// @inheritdoc IAHyperliquid
-    function cancelPerpOrderByOids(uint32[] calldata oids) external override nonReentrant onlyDelegateCall {
-        require(oids.length > 0, InvalidAmount());
-        ICoreWriter(HyperliquidLib.CORE_WRITER).sendRawAction(HyperliquidLib.encodeOidCancel(oids));
-        HyperliquidLib.recordAction(address(this), 0);
-        emit HyperliquidOrderCancelled(false, keccak256(abi.encode(oids)));
+    /// @dev Decodes a LIMIT_ORDER action and routes through CoreWriterLib.placeLimitOrder.
+    function _placeLimitOrder(bytes calldata data) private {
+        (uint32 asset, bool isBuy, uint64 limitPx, uint64 sz, bool reduceOnly, uint8 encodedTif, uint128 cloid) = abi
+            .decode(data[4:], (uint32, bool, uint64, uint64, bool, uint8, uint128));
+
+        require(sz > 0, InvalidAmount());
+        _requireCorePerpAsset(asset);
+
+        CoreWriterLib.placeLimitOrder(asset, isBuy, limitPx, sz, reduceOnly, encodedTif, cloid);
     }
 
-    /// @inheritdoc IAHyperliquid
-    function cancelPerpOrderByCloids(uint128[] calldata cloids) external override nonReentrant onlyDelegateCall {
-        require(cloids.length > 0, InvalidAmount());
-        ICoreWriter(HyperliquidLib.CORE_WRITER).sendRawAction(HyperliquidLib.encodeCloidCancel(cloids));
-        HyperliquidLib.recordAction(address(this), 0);
-        emit HyperliquidOrderCancelled(true, keccak256(abi.encode(cloids)));
-    }
+    /// @dev Decodes a SPOT_SEND action, restricts it to USDC bridging from Core spot back to the
+    ///  pool's HyperEVM balance, and routes through CoreWriterLib.spotSend. This is the second step
+    ///  of a withdrawal: funds must already be in the Core spot account (moved there by a prior
+    ///  USD_CLASS_TRANSFER with toPerp=false), because CoreWriter has no direct perp-to-EVM bridge.
+    function _spotSend(bytes calldata data) private {
+        (address destinationAddress, uint64 token, uint64 amount) = abi.decode(data[4:], (address, uint64, uint64));
 
-    /// @inheritdoc IAHyperliquid
-    function depositToSpot(address token, uint256 amount) external override nonReentrant onlyDelegateCall {
-        require(token == HyperliquidLib.USDC, InvalidToken());
         require(amount > 0, InvalidAmount());
+        require(token == HLConstants.USDC_TOKEN_INDEX, InvalidActionData());
+        require(destinationAddress == CoreWriterLib.getSystemAddress(token), InvalidActionData());
 
-        address depositWallet = HyperliquidLib.CORE_DEPOSIT_WALLET;
+        // Keep a USDC buffer in the Core spot account for the bridge fee. HyperCore silently drops
+        // spot->EVM bridges that leave the account unable to pay the fee.
+        uint64 spotTotal = PrecompileLib.spotBalance(address(this), token).total;
+        require(spotTotal >= amount + _BRIDGE_GAS_RESERVE, InsufficientBridgeReserve());
 
-        token.safeApprove(depositWallet, amount);
-        ICoreDepositWallet(depositWallet).deposit(amount, HyperliquidLib.DEX_ID_CORE_SPOT);
-        token.safeApprove(depositWallet, 1);
+        // Track USDC withdrawals from HyperCore so NAV is not understated during the settlement gap.
+        HyperliquidLib.recordAction(-SafeCast.toInt256(HLConversions.weiToEvm(token, amount)));
 
-        StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID_PREDICTIONS));
-        HyperliquidLib.recordSpotAction(address(this), int256(amount));
-        emit HyperliquidSpotDeposit(token, amount);
+        CoreWriterLib.spotSend(destinationAddress, token, amount);
     }
 
-    /// @inheritdoc IAHyperliquid
-    function withdrawFromSpot(uint256 amount) external override nonReentrant onlyDelegateCall {
-        require(amount > 0, InvalidAmount());
-        require(amount <= type(uint64).max / _USDC_HYPERCORE_DECIMALS, InvalidAmount());
-
-        uint256 hyperCoreAmount = amount * _USDC_HYPERCORE_DECIMALS;
-
-        HyperliquidLib.SpotSendParams memory params = HyperliquidLib.SpotSendParams({
-            destinationAddress: HyperliquidLib.USDC_SYSTEM_ADDRESS,
-            token: HyperliquidLib.USDC_TOKEN_INDEX,
-            amount: uint64(hyperCoreAmount)
-        });
-
-        ICoreWriter(HyperliquidLib.CORE_WRITER).sendRawAction(HyperliquidLib.encodeSpotSend(params));
-
-        // Subtract the withdrawn amount from predictions NAV for one block to cover the HyperCore settlement gap.
-        HyperliquidLib.recordSpotAction(address(this), -int256(amount));
-        emit HyperliquidSpotWithdrawal(HyperliquidLib.USDC, amount);
+    /// @dev Decodes a USD_CLASS_TRANSFER action and routes through CoreWriterLib.transferUsdClass.
+    ///  This is the first step of a withdrawal: move USDC from Core perp margin to Core spot
+    ///  (toPerp=false) before calling SPOT_SEND. Deposits do not need this step.
+    function _transferUsdClass(bytes calldata data) private {
+        (uint64 ntl, bool toPerp) = abi.decode(data[4:], (uint64, bool));
+        require(ntl > 0, InvalidAmount());
+        CoreWriterLib.transferUsdClass(ntl, toPerp);
     }
 
-    /// @inheritdoc IAHyperliquid
-    function registerPredictionToken(
-        uint64 assetId,
-        uint64 spotIndex,
-        uint64 tokenIndex
-    ) external override nonReentrant onlyDelegateCall {
-        require(HyperliquidLib.isPredictionMarketAsset(assetId), OnlyPredictionMarket());
-
-        if (!HyperliquidLib.validatePredictionToken(assetId, spotIndex, tokenIndex)) {
-            revert PredictionTokenValidationFailed();
-        }
-
-        HyperliquidLib.recordPredictionToken(assetId, spotIndex, tokenIndex);
-        emit HyperliquidPredictionTokenRegistered(assetId, spotIndex, tokenIndex);
+    /// @dev Decodes an OID cancel action and routes through CoreWriterLib.cancelOrderByOrderId.
+    function _cancelOrderByOid(bytes calldata data) private {
+        (uint32 asset, uint64 orderId) = abi.decode(data[4:], (uint32, uint64));
+        _requireCorePerpAsset(asset);
+        CoreWriterLib.cancelOrderByOrderId(asset, orderId);
     }
 
-    /// @inheritdoc IAHyperliquid
-    function deregisterPredictionToken(
-        uint64 assetId,
-        uint64 tokenIndex
-    ) external override nonReentrant onlyDelegateCall {
-        require(HyperliquidLib.isPredictionMarketAsset(assetId), OnlyPredictionMarket());
-        assetId;
-
-        HyperliquidLib.removePredictionToken(address(this), tokenIndex);
-        emit HyperliquidPredictionTokenDeregistered(assetId, tokenIndex);
+    /// @dev Decodes a CLOID cancel action and routes through CoreWriterLib.cancelOrderByCloid.
+    function _cancelOrderByCloid(bytes calldata data) private {
+        (uint32 asset, uint128 cloid) = abi.decode(data[4:], (uint32, uint128));
+        _requireCorePerpAsset(asset);
+        CoreWriterLib.cancelOrderByCloid(asset, cloid);
     }
 
-    /// @inheritdoc IAHyperliquid
-    function submitPredictionOrder(
-        HyperliquidLib.LimitOrderParams calldata params
-    ) external override nonReentrant onlyDelegateCall {
-        require(HyperliquidLib.isPredictionMarketAsset(params.asset), OnlyPredictionMarket());
-        require(params.sz > 0, InvalidAmount());
-        require(params.encodedTif == _TIF_GTC || params.encodedTif == _TIF_IOC, InvalidTif());
-
-        // Minimum order notional: size * price >= 10 USDC (HyperCore 8 decimals).
-        require(uint256(params.sz) * uint256(params.limitPx) >= _MIN_HIP4_NOTIONAL, PredictionOrderTooSmall());
-
-        if (params.encodedTif == _TIF_GTC) {
-            // GTC is only allowed for reduce-only stop-loss / take-profit orders on HIP-4.
-            require(params.reduceOnly, ReduceOnlyGtcOnly());
-        } else {
-            _validatePredictionSlippage(params);
-        }
-
-        ICoreWriter(HyperliquidLib.CORE_WRITER).sendRawAction(HyperliquidLib.encodeLimitOrder(params));
-
-        HyperliquidLib.recordSpotAction(address(this), 0);
-        emit HyperliquidPerpOrderSubmitted(
-            params.asset,
-            params.isBuy,
-            params.limitPx,
-            params.sz,
-            params.reduceOnly,
-            params.encodedTif,
-            params.cloid
-        );
-    }
-
-    /// @dev Compares the manager's limit price against the Hyperliquid oracle price.
-    /// @dev `limitPx` is assumed to be in the same 8-decimal format used by Hyperliquid core perps.
-    ///  `expectedLimitPx` is computed as `oraclePx * 10**szDecimals * 1e2` to match that scale.
-    function _validatePerpSlippage(HyperliquidLib.LimitOrderParams calldata params) private view {
-        HyperliquidLib.PerpAssetInfo memory info = HyperliquidLib.perpAssetInfo(uint32(params.asset));
-        uint256 expectedPx = uint256(HyperliquidLib.oraclePx(uint32(params.asset))) * 10 ** info.szDecimals * 1e2;
-        uint256 slippage = (expectedPx * _MAX_SLIPPAGE_BPS) / _BPS_BASE;
-
-        if (params.isBuy) {
-            require(params.limitPx <= expectedPx + slippage, SlippageExceeded());
-        } else {
-            require(params.limitPx >= expectedPx - slippage, SlippageExceeded());
-        }
-    }
-
-    /// @dev Compares the manager's limit price against the Hyperliquid spot price for HIP-4 markets.
-    /// @dev For HIP-4 outcome markets `szDecimals` is 0, so `expectedLimitPx` equals `spotPx` in 8 decimals.
-    function _validatePredictionSlippage(HyperliquidLib.LimitOrderParams calldata params) private view {
-        (uint64 spotIndex, ) = _findPredictionToken(params.asset);
-        uint256 expectedPx = HyperliquidLib.normalizedSpotPx(spotIndex);
-        uint256 slippage = (expectedPx * _MAX_SLIPPAGE_BPS) / _BPS_BASE;
-
-        if (params.isBuy) {
-            require(params.limitPx <= expectedPx + slippage, SlippageExceeded());
-        } else {
-            require(params.limitPx >= expectedPx - slippage, SlippageExceeded());
-        }
-    }
-
-    /// @dev Finds the registered prediction token for a given HIP-4 asset ID.
-    /// @return spotIndex The spot market index.
-    /// @return tokenIndex The Hyperliquid token index.
-    function _findPredictionToken(uint64 assetId) private view returns (uint64 spotIndex, uint64 tokenIndex) {
-        HyperliquidLib.HyperliquidSpotTokensSlot storage slot = HyperliquidLib.hyperliquidSpotTokensSlot();
-        uint256 count = slot.tokens.length;
-        for (uint256 i = 0; i < count; i++) {
-            if (slot.tokens[i].assetId == assetId) {
-                return (slot.tokens[i].spotIndex, slot.tokens[i].tokenIndex);
-            }
-        }
-        revert PredictionTokenNotRegistered();
+    /// @dev Rejects spot and any non-core-perp asset IDs.
+    ///  Only core perp assets (< 10_000) are supported because the pool is USDC-only and has no
+    ///  on-chain price feed for spot markets.
+    function _requireCorePerpAsset(uint32 asset) private pure {
+        require(asset < _ASSET_ID_CORE_SPOT_BASE, InvalidActionData());
     }
 }

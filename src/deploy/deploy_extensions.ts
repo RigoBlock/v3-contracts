@@ -158,8 +158,10 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
       [deployer, salt],
     ),
   );
-  const extensionsMapAddress =
-    await extensionsMapDeployerInstance.deployedMaps(deployer, hashedSalt);
+  const extensionsMapAddress = await extensionsMapDeployerInstance.deployedMaps(
+    deployer,
+    hashedSalt,
+  );
 
   if (extensionsMapAddress === hre.ethers.constants.AddressZero) {
     throw new Error("ExtensionsMap deployment did not record an address");
@@ -190,20 +192,7 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     await proxyFactoryInstance.setImplementation(poolImplementation.address);
   }*/
 
-  await deploy("AUniswap", {
-    from: deployer,
-    args: [config.weth],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  await deploy("AUniswapRouter", {
-    from: deployer,
-    args: [config.universalRouter, config.univ4Posm, config.weth],
-    log: true,
-    deterministicDeployment: true,
-  });
-
+  // AMulticall is used by the pool itself and by Across destination instructions.
   await deploy("AMulticall", {
     from: deployer,
     args: [],
@@ -211,19 +200,49 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     deterministicDeployment: true,
   });
 
-  await deploy("AIntents", {
-    from: deployer,
-    args: [config.acrossSpokePool],
-    log: true,
-    deterministicDeployment: true,
-  });
+  // Across is supported wherever a SpokePool is configured.
+  if (config.acrossSpokePool !== hre.ethers.constants.AddressZero) {
+    await deploy("AIntents", {
+      from: deployer,
+      args: [config.acrossSpokePool],
+      log: true,
+      deterministicDeployment: true,
+    });
+  }
 
-  await deploy("A0xRouter", {
-    from: deployer,
-    args: [zeroExAllowanceHolder, zeroExDeployer],
-    log: true,
-    deterministicDeployment: true,
-  });
+  // HyperEVM has no Uniswap V4 / 0x deployments; only Hyperliquid + Across apply.
+  if (chainId !== 999) {
+    await deploy("AUniswap", {
+      from: deployer,
+      args: [config.weth],
+      log: true,
+      deterministicDeployment: true,
+    });
+
+    await deploy("AUniswapRouter", {
+      from: deployer,
+      args: [config.universalRouter, config.univ4Posm, config.weth],
+      log: true,
+      deterministicDeployment: true,
+    });
+
+    await deploy("A0xRouter", {
+      from: deployer,
+      args: [zeroExAllowanceHolder, zeroExDeployer],
+      log: true,
+      deterministicDeployment: true,
+    });
+  }
+
+  // AHyperliquid is HyperEVM-only.
+  if (chainId === 999) {
+    await deploy("AHyperliquid", {
+      from: deployer,
+      args: [],
+      log: true,
+      deterministicDeployment: true,
+    });
+  }
 
   // AGmxV2 is Arbitrum-only; skip silently on all other networks.
   if (chainId === 42161) {

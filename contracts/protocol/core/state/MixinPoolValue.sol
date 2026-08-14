@@ -13,6 +13,7 @@ import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {HyperliquidLib} from "../../libraries/HyperliquidLib.sol";
+import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
@@ -192,12 +193,9 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
     }
 
-    /// @dev Returns true when the base token can be priced via the EOracle, or when it is the
-    ///  Hyperliquid USDC collateral token on HyperEVM (where Uniswap V4 is not deployed).
-    ///  The latter exemption restricts the pool to USDC-denominated assets on HyperEVM.
     function _baseTokenHasPriceFeed(address baseToken) private view returns (bool) {
-        if (HyperliquidLib.isHyperliquidBaseToken(baseToken)) {
-            return true;
+        if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
+            return baseToken == HLConstants.usdc();
         }
         return IEOracle(address(this)).hasPriceFeed(baseToken);
     }

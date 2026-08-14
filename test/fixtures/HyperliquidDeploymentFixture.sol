@@ -14,6 +14,8 @@ import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperliquid.sol";
 import {IAHyperliquid} from "../../contracts/protocol/extensions/adapters/interfaces/IAHyperliquid.sol";
+import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
+import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
@@ -137,17 +139,9 @@ contract HyperliquidDeploymentFixture is Test {
         aHyperliquid = address(new AHyperliquid());
 
         IAuthority(authority).setAdapter(aHyperliquid, true);
-        _addOrReplaceMethod(IAHyperliquid.depositToCore.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.withdrawFromCore.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.transferUsdClass.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.submitPerpOrder.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.cancelPerpOrderByOids.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.cancelPerpOrderByCloids.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.depositToSpot.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.withdrawFromSpot.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.registerPredictionToken.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.deregisterPredictionToken.selector, aHyperliquid);
-        _addOrReplaceMethod(IAHyperliquid.submitPredictionOrder.selector, aHyperliquid);
+        _addOrReplaceMethod(ICoreDepositWallet.deposit.selector, aHyperliquid);
+        _addOrReplaceMethod(ICoreDepositWallet.depositFor.selector, aHyperliquid);
+        _addOrReplaceMethod(ICoreWriter.sendRawAction.selector, aHyperliquid);
 
         console2.log("AHyperliquid authorized");
     }

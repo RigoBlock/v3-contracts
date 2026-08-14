@@ -1,7 +1,7 @@
 export const AddressOne = "0x0000000000000000000000000000000000000001";
 
 // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
-export const extensionsMapSalt = "extensionsMapSalt10";
+export const extensionsMapSalt = "extensionsMapSalt12";
 
 // 0x Protocol addresses (same on all supported chains)
 export const zeroExAllowanceHolder =
@@ -118,6 +118,6 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     univ4Posm: "0x0000000000000000000000000000000000000000",
     universalRouter: "0x0000000000000000000000000000000000000000",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
-    acrossSpokePool: "0x0000000000000000000000000000000000000000",
+    acrossSpokePool: "0x35E63eA3eb0fb7A3bc543C71FB66412e1F6B0E04",
   },
 };

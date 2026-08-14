@@ -105,6 +105,7 @@ library Constants {
     address internal constant ARB_SPOKE_POOL = 0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A;
     address internal constant OPT_SPOKE_POOL = 0x6f26Bf09B1C792e3228e5467807a900A503c0281;
     address internal constant BASE_SPOKE_POOL = 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64;
+    address internal constant HYPER_SPOKE_POOL = 0x35E63eA3eb0fb7A3bc543C71FB66412e1F6B0E04;
 
     /*//////////////////////////////////////////////////////////////
                         ACROSS MULTICALL HANDLERS
@@ -118,6 +119,7 @@ library Constants {
     address internal constant POLY_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
     address internal constant UNI_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
     address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
+    address internal constant HYPER_MULTICALL_HANDLER = 0x5E7840E06fAcCb6d1c3b5F5E0d1d3d07F2829bba;
 
     /*//////////////////////////////////////////////////////////////
                             UNISWAP V4 

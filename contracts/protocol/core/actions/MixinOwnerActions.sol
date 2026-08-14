@@ -9,6 +9,7 @@ import {ISmartPoolOwnerActions} from "../../interfaces/v4/pool/ISmartPoolOwnerAc
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {DelegationData, DelegationLib} from "../../libraries/DelegationLib.sol";
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
+import {Applications} from "../../types/Applications.sol";
 import {Delegation} from "../../types/Delegation.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 
@@ -65,6 +66,7 @@ abstract contract MixinOwnerActions is MixinActions {
         AddressSet storage set = activeTokensSet();
         ApplicationsSlot storage appsBitmap = activeApplications();
         uint256 packedApps = appsBitmap.packedApplications;
+
         ExternalApp[] memory activeApps;
 
         try IEApps(address(this)).getAppTokenBalances(packedApps) returns (ExternalApp[] memory apps) {
