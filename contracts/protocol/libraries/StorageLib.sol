@@ -10,7 +10,6 @@ import {AddressSet, EnumerableSet, Pool} from "./EnumerableSet.sol";
 library StorageLib {
     using EnumerableSet for AddressSet;
 
-    // in the implementation (i.e. during an upgrade), they could be totally removed from here?
     /// @notice persistent storage slots, used to read from proxy storage without having to update implementation
     bytes32 public constant APPLICATIONS_SLOT = 0xdc487a67cca3fd0341a90d1b8834103014d2a61e6a212e57883f8680b8f9c831;
     bytes32 public constant DELEGATION_SLOT = 0x1de728329845ca9693f4e251833e4fd20a461e4f39179bee6e55171aedb6dc19;

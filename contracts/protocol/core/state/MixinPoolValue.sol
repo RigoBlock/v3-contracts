@@ -39,8 +39,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
         // Notice: the following check adds a little gas overhead, but is necessary to guarantee backwards compatibility with v3. Because all existing
         // v3 vaults have a price feed, we could move the following assertion to the following block, i.e. executing it only on the first mint.
-        // On HyperEVM the Hyperliquid integration uses USDC as base token; Uniswap V4 is not available there, so the standard hasPriceFeed
-        // check would block every mint/burn. We exempt the USDC collateral token on HyperEVM only, which restricts the vault to USDC-denominated assets.
         require(_baseTokenHasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
 
         // Always compute net total assets (used for cross-chain donation validation)
@@ -193,6 +191,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         }
     }
 
+    /// @notice: On HyperEVM base token is restricted to USDC, Hyperliquid's collateral token.
     function _baseTokenHasPriceFeed(address baseToken) private view returns (bool) {
         if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
             return baseToken == HLConstants.usdc();

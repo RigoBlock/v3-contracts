@@ -27,7 +27,7 @@ HyperCore state lags HyperEVM writes by at least one block. `HyperliquidLib` rec
 
 ## Bridge gas reserve
 
-`SPOT_SEND` keeps a small USDC buffer in the Core spot account to pay the spot->EVM bridge fee. This mirrors dHEDGE's 0.1 USDC reserve and prevents the bridge from being silently dropped by HyperCore for insufficient fee funds.
+`SPOT_SEND` keeps a small USDC buffer in the Core spot account to pay the spot->EVM bridge fee.
 
 ## References
 

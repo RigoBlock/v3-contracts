@@ -21,9 +21,6 @@ import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 
 /// @title AHyperliquid - Facilitates smart pool interaction with Hyperliquid Core.
 /// @custom:security-contact security@rigoblock.com
-/// @notice Exposes the canonical Hyperliquid CoreWriter and CoreDepositWallet interfaces.
-/// @dev USDC-only perps account. Design and restrictions are documented in
-///  `docs/hyperliquid/INTEGRATION.md`.
 contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
@@ -72,22 +69,6 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         _bridgeUsdcToCore(recipient, amount, destinationDex);
     }
 
-    function _bridgeUsdcToCore(address recipient, uint256 amount, uint32 destinationDex) private {
-        require(amount > 0, InvalidAmount());
-        require(destinationDex == HLConstants.DEFAULT_PERP_DEX, InvalidDex());
-
-        CoreWriterLib.bridgeUsdcToCoreFor(recipient, amount, destinationDex);
-
-        address usdc = HLConstants.usdc();
-        address depositWallet = HLConstants.coreDepositWallet();
-        if (IERC20(usdc).allowance(address(this), depositWallet) > 1) {
-            usdc.safeApprove(depositWallet, 1);
-        }
-
-        StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID));
-        HyperliquidLib.recordAction(amount.toInt256());
-    }
-
     /// @inheritdoc ICoreWriter
     function sendRawAction(bytes calldata data) external override nonReentrant onlyDelegateCall {
         require(data.length >= 4, InvalidActionData());
@@ -113,6 +94,22 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
 
         HyperliquidLib.recordAction(0);
         emit ActionSent(actionId);
+    }
+
+    function _bridgeUsdcToCore(address recipient, uint256 amount, uint32 destinationDex) private {
+        require(amount > 0, InvalidAmount());
+        require(destinationDex == HLConstants.DEFAULT_PERP_DEX, InvalidDex());
+
+        CoreWriterLib.bridgeUsdcToCoreFor(recipient, amount, destinationDex);
+
+        address usdc = HLConstants.usdc();
+        address depositWallet = HLConstants.coreDepositWallet();
+        if (IERC20(usdc).allowance(address(this), depositWallet) > 1) {
+            usdc.safeApprove(depositWallet, 1);
+        }
+
+        StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID));
+        HyperliquidLib.recordAction(amount.toInt256());
     }
 
     function _placeLimitOrder(bytes calldata params) private {
