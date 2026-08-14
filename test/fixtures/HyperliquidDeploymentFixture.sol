@@ -97,12 +97,13 @@ contract HyperliquidDeploymentFixture is Test {
         address grgStakingProxy = address(0);
         address univ4Posm = address(0);
 
-        // Dummy oracle hook: EOracle is never queried for USDC on HyperEVM thanks to the carve-out,
-        // but it is still deployed to satisfy the ExtensionsMap constructor.
-        address dummyOracle = address(0x2);
+        // EOracle is not used on HyperEVM (no Uniswap V4 / BackGeoOracle deployment), but it must
+        // still be deployed to satisfy the ExtensionsMap constructor. The base-token carve-out in
+        // MixinPoolValue prevents any price-feed query when the base token is USDC.
+        address oracle = address(0);
 
         EApps eApps = new EApps(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
-        EOracle eOracle = new EOracle(dummyOracle, HYPER_WHYPE);
+        EOracle eOracle = new EOracle(oracle, HYPER_WHYPE);
         EUpgrade eUpgrade = new EUpgrade(factory);
         ECrosschain eCrosschain = new ECrosschain();
         ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));

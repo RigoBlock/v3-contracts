@@ -112,12 +112,12 @@ contract NavViewTest is Test {
 
     function _mockActiveTokens() internal {
         address[] memory activeTokens = new address[](0);
-        ISmartPoolState.ActiveTokens memory at =
+        ISmartPoolState.ActiveTokens memory activeTokens =
             ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
         vm.mockCall(
             POOL,
             abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector),
-            abi.encode(at)
+            abi.encode(activeTokens)
         );
     }
 
@@ -245,9 +245,9 @@ contract NavViewTest is Test {
 
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = OTHER_TOKEN;
-        ISmartPoolState.ActiveTokens memory at =
+        ISmartPoolState.ActiveTokens memory activeTokens =
             ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
-        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(at));
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(activeTokens));
 
         _mockBaseTokenBalance(500e18);
         vm.mockCall(
@@ -282,9 +282,9 @@ contract NavViewTest is Test {
         // Pool holds 1 ETH (address(0)) and BASE_TOKEN (ERC20)
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = address(0); // native ETH as active token
-        ISmartPoolState.ActiveTokens memory at =
+        ISmartPoolState.ActiveTokens memory activeTokens =
             ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
-        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(at));
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(activeTokens));
 
         // Give POOL 1 ETH
         vm.deal(POOL, 1e18);
@@ -318,9 +318,9 @@ contract NavViewTest is Test {
 
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = OTHER_TOKEN;
-        ISmartPoolState.ActiveTokens memory at =
+        ISmartPoolState.ActiveTokens memory activeTokens =
             ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
-        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(at));
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(activeTokens));
 
         _mockBaseTokenBalance(500e18);
         vm.mockCall(
@@ -391,9 +391,9 @@ contract NavViewTest is Test {
 
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = OTHER_TOKEN;
-        ISmartPoolState.ActiveTokens memory at =
+        ISmartPoolState.ActiveTokens memory activeTokens =
             ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
-        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(at));
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(activeTokens));
 
         _mockBaseTokenBalance(0);
         vm.mockCall(
