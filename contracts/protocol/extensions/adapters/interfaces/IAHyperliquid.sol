@@ -5,18 +5,8 @@ import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
 import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.sol";
 
 /// @title IAHyperliquid - Interface for the Rigoblock Hyperliquid adapter.
-/// @notice Exposes the canonical Hyperliquid CoreWriter and CoreDepositWallet interfaces.
-/// @dev Runs via delegatecall in the pool context. Non-owner write access is blocked by MixinFallback.
 interface IAHyperliquid is ICoreWriter, ICoreDepositWallet {
-    // =========================================================================
-    // Events
-    // =========================================================================
-
     event ActionSent(uint24 indexed actionId);
-
-    // =========================================================================
-    // Errors
-    // =========================================================================
 
     error DirectCallNotAllowed();
     error NotHyperEVM();

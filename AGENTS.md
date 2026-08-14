@@ -77,10 +77,20 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 ### Version Bump
 
-- Every implementation change MUST bump `VERSION` in `MixinConstants.sol` (e.g., `"4.2.0"` → `"4.3.0"`).
-- This applies to ANY change compiled into the implementation: Mixin contracts, libraries, or constructor parameters.
-- **Coordinate with the target PR / base branch**: determine the next version from the PR context or existing branch bump, and apply it once per PR. Do not bump multiple times within the same PR; if the base branch already has a higher version, use that version.
-- **Update the corresponding test assertion** in `test/core/RigoblockPool.Basetoken.spec.ts` so the `pool.VERSION()` check matches the new `MixinConstants.sol` value. This test is the guard that reminds future agents to bump the version when the implementation changes.
+Version bumps are required for ANY change compiled into the implementation (Mixin contracts, libraries, or constructor parameters).
+
+1. **Read the base branch version first.** Open `contracts/protocol/core/immutable/MixinConstants.sol` on the PR's base branch and note the current `VERSION` value. This is the starting point.
+2. **Choose the next version exactly once per PR**, based on the scope of the change:
+   - **Patch** (`4.3.3` → `4.3.4`) for bug fixes, audit fixes, or small non-breaking changes.
+   - **Minor** (`4.3.3` → `4.4.0`) for new features, new integrations, or non-breaking additions.
+   - **Major** (`4.3.3` → `5.0.0`) for breaking changes.
+3. **Apply the chosen version consistently** to:
+   - `VERSION` in `contracts/protocol/core/immutable/MixinConstants.sol`.
+   - `_REQUIRED_VERSION` in any adapter that requires a minimum implementation version.
+   - The `pool.VERSION()` assertion in `test/core/RigoblockPool.Basetoken.spec.ts`.
+4. **Do not bump multiple times within the same PR.** If the base branch already has a higher version, use that version without further bumping.
+
+The `pool.VERSION()` test is the guard that reminds future agents to bump the version when the implementation changes; it must stay in sync with `MixinConstants.sol`.
 
 ### Shared nonce management
 
