@@ -28,13 +28,6 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
 
     string private constant _REQUIRED_VERSION = "4.4.0";
 
-    /// @dev Byte range of the action ID within the raw `sendRawAction` payload.
-    uint256 private constant _ACTION_ID_START = 1;
-    uint256 private constant _ACTION_ID_END = 4;
-
-    /// @dev Offset of the action-specific params within the raw `sendRawAction` payload.
-    uint256 private constant _ACTION_PARAMS_OFFSET = 4;
-
     /// @dev Asset IDs below this threshold are core perp assets.
     uint64 private constant _ASSET_ID_CORE_SPOT_BASE = 10_000;
 
@@ -79,8 +72,8 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         require(uint8(data[0]) == 1, InvalidActionData());
         require(PrecompileLib.coreUserExists(address(this)), AccountNotActivated());
 
-        uint24 actionId = uint24(bytes3(data[_ACTION_ID_START:_ACTION_ID_END]));
-        bytes calldata params = data[_ACTION_PARAMS_OFFSET:];
+        uint24 actionId = uint24(bytes3(data[1:4]));
+        bytes calldata params = data[4:];
 
         if (actionId == HLConstants.LIMIT_ORDER_ACTION) {
             _placeLimitOrder(params);
