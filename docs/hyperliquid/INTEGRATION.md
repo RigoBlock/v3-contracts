@@ -37,7 +37,22 @@ Limit orders are forwarded as-is to CoreWriter and recorded with a zero in-fligh
 
 ## EOracle on HyperEVM
 
-HyperEVM does not have a deployed Rigoblock BackGeoOracle / Uniswap V4 hook, so `EOracle` is deployed with a zero/dummy oracle address. It is never queried for USDC because `MixinPoolValue` treats USDC as the only valid base token on HyperEVM. Non-USDC tokens are not supported by this integration.
+HyperEVM does not have a deployed Rigoblock BackGeoOracle / Uniswap V4 hook, so `EOracle` is deployed with a zero/dummy oracle address. `EOracle.hasPriceFeed` is the single source of truth for whether a token can be priced on a chain:
+
+- On HyperEVM, `EOracle.hasPriceFeed(token)` returns `true` **only** for `USDC` (`HLConstants.usdc()`).
+- It returns `false` for native currency (`address(0)`), wrapped native (`WHYPE`), and every other token.
+
+This behavior is intentional and defines the Hyperliquid integration as **USDC-only**. It is not a bug, and it must not be "fixed" to return `true` for additional tokens.
+
+### Consequences of the USDC-only feed
+
+Any operation that triggers a NAV update — including `mint`, `burn`, cross-chain transfers (`donate`/ECrosschain), and owner NAV reads — will revert if the pool needs a price feed for a non-USDC token. Specifically:
+
+- The pool's **base token** must be USDC. `MixinPoolValue._updateNav` asserts `IEOracle.hasPriceFeed(baseToken)` before computing NAV; on HyperEVM this assertion is equivalent to `baseToken == USDC`.
+- The pool can only own/track **USDC** as an active asset. `EnumerableSet.addUnique` and the application balance logic use `hasPriceFeed` to decide which tokens can enter the active set; non-USDC tokens are rejected.
+- `AHyperliquid` only accepts **USDC** deposits into HyperCore (`destinationDex = 0` and `token == HLConstants.USDC_TOKEN_INDEX`).
+
+In short: on HyperEVM, **USDC is the only valid base token, ownable token, and HyperCore deposit token**. Pools or operations that require pricing for any other token will revert by design.
 
 ## References
 

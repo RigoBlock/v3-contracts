@@ -12,8 +12,6 @@ import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
-import {HyperliquidLib} from "../../libraries/HyperliquidLib.sol";
-import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
 import {NavComponents} from "../../types/NavComponents.sol";
 
@@ -39,7 +37,7 @@ abstract contract MixinPoolValue is MixinOwnerActions {
         // make sure we can later convert token values in base token. Asserted before anything else to prevent potential holder burn failure.
         // Notice: the following check adds a little gas overhead, but is necessary to guarantee backwards compatibility with v3. Because all existing
         // v3 vaults have a price feed, we could move the following assertion to the following block, i.e. executing it only on the first mint.
-        require(_baseTokenHasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
+        require(IEOracle(address(this)).hasPriceFeed(components.baseToken), BaseTokenPriceFeedError());
 
         // Always compute net total assets (used for cross-chain donation validation)
         int256 netValue = _computeTotalPoolValue(components.baseToken);
@@ -189,14 +187,6 @@ abstract contract MixinPoolValue is MixinOwnerActions {
                 return 0;
             }
         }
-    }
-
-    /// @dev On HyperEVM base token is restricted to USDC, Hyperliquid's collateral token.
-    function _baseTokenHasPriceFeed(address baseToken) private view returns (bool) {
-        if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
-            return baseToken == HLConstants.usdc();
-        }
-        return IEOracle(address(this)).hasPriceFeed(baseToken);
     }
 
     /// virtual methods

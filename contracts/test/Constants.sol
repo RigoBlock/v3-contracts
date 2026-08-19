@@ -91,10 +91,10 @@ library Constants {
                         0x SWAP AGGREGATOR
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice 0x AllowanceHolder (Cancun version, same on all supported chains)
+    /// @notice 0x AllowanceHolder (Cancun version, same on all supported chains including HyperEVM).
     address internal constant ZERO_EX_ALLOWANCE_HOLDER = 0x0000000000001fF3684f28c67538d4D072C22734;
 
-    /// @notice 0x Deployer/Registry (same on all chains)
+    /// @notice 0x Deployer/Registry (same on all chains including HyperEVM).
     address internal constant ZERO_EX_DEPLOYER = 0x00000000000004533Fe15556B1E086BB1A72cEae;
 
     /*//////////////////////////////////////////////////////////////
@@ -129,6 +129,8 @@ library Constants {
     address internal constant UNISWAP_V4_POSM = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
     address internal constant BASE_UNISWAP_V4_POSM = 0x7C5f5A4bBd8fD63184577525326123B519429bDc;
     address internal constant POLYGON_UNISWAP_V4_POSM = 0x1Ec2eBf4F37E7363FDfe3551602425af0B3ceef9;
+    /// @notice Uniswap V4 is not deployed on HyperEVM. This sentinel is checked by the Hyperliquid fixture.
+    address internal constant HYPER_UNISWAP_V4_POSM = address(0);
 
     /*//////////////////////////////////////////////////////////////
                             TOKENS - SHARED FROM CrosschainTokens
@@ -161,6 +163,8 @@ library Constants {
 
     /// @dev Uniswap Universal Router v4 on Arbitrum.
     address internal constant ARB_UNIVERSAL_ROUTER = 0xA51afAFe0263b40EdaEf0Df8781eA9aa03E381a3;
+    /// @notice Uniswap Universal Router is not deployed on HyperEVM. This sentinel is checked by the Hyperliquid fixture.
+    address internal constant HYPER_UNIVERSAL_ROUTER = address(0);
 
     /// @notice GMX v2 ExchangeRouter on Arbitrum.
     address internal constant ARB_GMX_EXCHANGE_ROUTER = 0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41;

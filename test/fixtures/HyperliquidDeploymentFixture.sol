@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
-import {ExtensionsMap} from "../../contracts/protocol/deps/ExtensionsMap.sol";
 import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
@@ -13,13 +12,13 @@ import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperliquid.sol";
-import {IAHyperliquid} from "../../contracts/protocol/extensions/adapters/interfaces/IAHyperliquid.sol";
 import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
 import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
+import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
+import {IOwnedUninitialized} from "../../contracts/utils/owned/IOwnedUninitialized.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
-import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
@@ -27,8 +26,16 @@ import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLi
 
 /// @title HyperliquidDeploymentFixture
 /// @notice Deploys real Rigoblock infrastructure on a HyperEVM fork for Hyperliquid integration tests.
-/// @dev Uses a dummy EOracle because Uniswap V4 is not deployed on HyperEVM; the pool is restricted to
-///  USDC-denominated assets by the Hyperliquid base-token carve-out in MixinPoolValue.
+/// @dev Uses a dummy EOracle because Uniswap V4 / BackGeoOracle are not deployed on HyperEVM; the
+///  pool is restricted to USDC-denominated assets by the Hyperliquid carve-out in EOracle.
+/// @dev Before the live HyperEVM Rigoblock deployment, the fixture deploys its own Authority/Registry/Factory.
+///  After launch, it detects live contracts at the addresses in Constants and reuses them, so the same
+///  fixture works both pre- and post-launch.
+/// @dev Uniswap V4 / Universal Router, GRG staking and GMX are not deployed on HyperEVM. The fixture
+///  asserts that the corresponding Constants are address(0). 0x Settler is deployed on HyperEVM and
+///  uses the canonical Constants.ZERO_EX_ALLOWANCE_HOLDER and Constants.ZERO_EX_DEPLOYER addresses.
+///  If a future upgrade adds Uniswap V4 on HyperEVM, the fixture assertions will fail and the tests/docs
+///  must be reviewed before the constants are updated.
 contract HyperliquidDeploymentFixture is Test {
     using SafeTransferLib for address;
 
@@ -48,6 +55,9 @@ contract HyperliquidDeploymentFixture is Test {
     address public poolOwner;
     address public user;
 
+    /// @notice True when the fixture reuses the live Authority/Registry/Factory from Constants.
+    bool public usingLiveInfrastructure;
+
     /// @notice Deploy the fixture on a HyperEVM fork.
     function deployFixture() public {
         vm.createSelectFork("hyperliquid", HYPEREVM_BLOCK);
@@ -61,7 +71,8 @@ contract HyperliquidDeploymentFixture is Test {
         console2.log("USDC:", HYPER_USDC);
         console2.log("WHYPE:", HYPER_WHYPE);
 
-        _deployInfrastructure();
+        _assertNoExternalProtocolsOnHyperEVM();
+        _setupInfrastructure();
         _deployExtensionsAndImplementation();
         _createPool();
         _deployAndAuthorizeAdapter();
@@ -72,7 +83,35 @@ contract HyperliquidDeploymentFixture is Test {
         console2.log("AHyperliquid:", aHyperliquid);
     }
 
-    function _deployInfrastructure() private {
+    /// @notice Future-proofing guardrail: Uniswap V4 is not deployed on HyperEVM at fixture time.
+    /// @dev If these addresses become non-zero, the fixture (and the tests that rely on Hyperliquid
+    ///  being restricted to USDC) will fail. This is intentional: adding Uniswap V4 support on
+    ///  HyperEVM requires explicit test updates and a security review of which tokens and
+    ///  applications may become activatable. 0x Settler is already deployed on HyperEVM and uses the
+    ///  canonical addresses in Constants.ZERO_EX_ALLOWANCE_HOLDER / Constants.ZERO_EX_DEPLOYER.
+    function _assertNoExternalProtocolsOnHyperEVM() private pure {
+        require(Constants.HYPER_UNISWAP_V4_POSM == address(0), "HyperEVM fixture assumes no Uniswap V4 POSM");
+        require(Constants.HYPER_UNIVERSAL_ROUTER == address(0), "HyperEVM fixture assumes no Universal Router");
+    }
+
+    /// @notice Uses live Authority/Registry/Factory when available, otherwise deploys a local copy.
+    function _setupInfrastructure() private {
+        if (Constants.AUTHORITY.code.length > 0 && Constants.FACTORY.code.length > 0) {
+            authority = Constants.AUTHORITY;
+            factory = Constants.FACTORY;
+            registry = IRigoblockPoolProxyFactory(factory).getRegistry();
+            usingLiveInfrastructure = true;
+            console2.log("Using live HyperEVM infrastructure");
+            console2.log("Authority:", authority);
+            console2.log("Registry:", registry);
+            console2.log("Factory:", factory);
+        } else {
+            _deployLocalInfrastructure();
+        }
+    }
+
+    /// @notice Deploys a fresh Authority/Registry/Factory for pre-launch testing.
+    function _deployLocalInfrastructure() private {
         // Deploy authority with fixture as owner. Authority is compiled with 0.8.17, so use deployCode.
         authority = deployCode("out/Authority.sol/Authority.json", abi.encode(address(this)));
         IAuthority(authority).setWhitelister(address(this), true);
@@ -87,19 +126,20 @@ contract HyperliquidDeploymentFixture is Test {
 
         IAuthority(authority).setFactory(factory, true);
 
+        console2.log("Deployed local HyperEVM infrastructure");
         console2.log("Authority:", authority);
         console2.log("Registry:", registry);
         console2.log("Factory:", factory);
     }
 
     function _deployExtensionsAndImplementation() private {
-        // HyperEVM has no Uniswap V4 or GRG staking; pass zero addresses for those dependencies.
+        // HyperEVM has no Uniswap V4, GRG staking, or BackGeoOracle deployments at fixture time;
+        // zero addresses are passed for those dependencies.
         address grgStakingProxy = address(0);
         address univ4Posm = address(0);
 
-        // EOracle is not used on HyperEVM (no Uniswap V4 / BackGeoOracle deployment), but it must
-        // still be deployed to satisfy the ExtensionsMap constructor. The base-token carve-out in
-        // MixinPoolValue prevents any price-feed query when the base token is USDC.
+        // EOracle is required by ExtensionsMap but has no real oracle on HyperEVM. It treats USDC as
+        // having a price feed on HyperEVM because USDC is Hyperliquid's collateral/numeraire.
         address oracle = address(0);
 
         EApps eApps = new EApps(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
@@ -124,7 +164,13 @@ contract HyperliquidDeploymentFixture is Test {
 
         implementation = address(new SmartPool(authority, extensionsMap, Constants.TOKEN_JAR));
 
-        IRigoblockPoolProxyFactory(factory).setImplementation(implementation);
+        if (usingLiveInfrastructure) {
+            address rigoblockDao = IPoolRegistry(registry).rigoblockDao();
+            vm.prank(rigoblockDao);
+            IRigoblockPoolProxyFactory(factory).setImplementation(implementation);
+        } else {
+            IRigoblockPoolProxyFactory(factory).setImplementation(implementation);
+        }
 
         console2.log("ExtensionsMap:", extensionsMap);
         console2.log("Implementation:", implementation);
@@ -139,10 +185,15 @@ contract HyperliquidDeploymentFixture is Test {
     function _deployAndAuthorizeAdapter() private {
         aHyperliquid = address(new AHyperliquid());
 
+        address authorityOwner = IOwnedUninitialized(authority).owner();
+        vm.startPrank(authorityOwner);
+
         IAuthority(authority).setAdapter(aHyperliquid, true);
         _addOrReplaceMethod(ICoreDepositWallet.deposit.selector, aHyperliquid);
         _addOrReplaceMethod(ICoreDepositWallet.depositFor.selector, aHyperliquid);
         _addOrReplaceMethod(ICoreWriter.sendRawAction.selector, aHyperliquid);
+
+        vm.stopPrank();
 
         console2.log("AHyperliquid authorized");
     }
