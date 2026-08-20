@@ -1,7 +1,8 @@
 import fs from "fs";
 import https from "https";
 import path from "path";
-import { Deployment, HardhatRuntimeEnvironment } from "hardhat-deploy/types";
+import { Deployment } from "hardhat-deploy/types";
+import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 export interface VendorStatus {
   verified: boolean;
@@ -28,11 +29,7 @@ const SOURCIFY_POLL_INTERVAL_MS = 3000;
 const SOURCIFY_POLL_MAX_ATTEMPTS = 20;
 
 function getStatusFilePath(hre: HardhatRuntimeEnvironment): string {
-  return path.join(
-    ".rigo",
-    "verification-status",
-    `${hre.network.name}.json`,
-  );
+  return path.join(".rigo", "verification-status", `${hre.network.name}.json`);
 }
 
 export function loadVerificationStatus(
@@ -251,10 +248,7 @@ interface SourcifyVerifyStatus {
 
 class NonRetryableSourcifyError extends Error {}
 
-function formatSourcifyError(
-  contractName: string,
-  customCode: string,
-): string {
+function formatSourcifyError(contractName: string, customCode: string): string {
   if (customCode === "extra_file_input_bug") {
     return `Sourcify cannot verify ${contractName}: known metadata issue (Sourcify #618).`;
   }

@@ -27,7 +27,7 @@ contract EOracleCardinalityTest is Test, UnitTestFixture {
 
         // Deploy a mock token at a deterministic address for the oracle pool key.
         token = makeAddr("testToken");
-        deployCodeTo("out/MockERC20.sol/MockERC20.0.8.28.json", abi.encode("Test Token", "TEST", 18), token);
+        deployCodeTo("out/MockERC20.sol/MockERC20.json", abi.encode("Test Token", "TEST", 18), token);
 
         (poolProxy, ) = IRigoblockPoolProxyFactory(deployment.factory).createPool("test pool", "TEST", address(0));
     }

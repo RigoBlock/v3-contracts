@@ -10,3 +10,5 @@ permit2/=lib/permit2
 @uniswap/v4-periphery/=lib/universal-router/lib/v4-periphery/
 @uniswap/v4-core/=lib/universal-router/lib/v4-periphery/lib/v4-core
 @openzeppelin-legacy/=lib/universal-router/lib/v4-periphery/lib/v4-core/lib/openzeppelin-contracts/
+@openzeppelin/=lib/permit2/lib/openzeppelin-contracts/
+hyper-evm-lib/=lib/hyper-evm-lib/src/

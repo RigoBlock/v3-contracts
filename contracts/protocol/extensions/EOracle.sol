@@ -9,6 +9,8 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
+import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
+import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
 
 contract EOracle is IEOracle {
     using TickMath for int24;
@@ -96,13 +98,17 @@ contract EOracle is IEOracle {
 
     /// @inheritdoc IEOracle
     function hasPriceFeed(address token) external view returns (bool) {
+        // On HyperEVM there is no BackGeoOracle / Uniswap V4 deployment.
+        // USDC is Hyperliquid's collateral and numeraire, so it is the only token treated as having a feed.
+        if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
+            return token == HLConstants.usdc();
+        }
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
-        } else {
-            // cardinality > 1 means the oracle pool has at least two observations.
-            (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
-            return state.cardinality > 1;
         }
+        // cardinality > 1 means the oracle pool has at least two observations.
+        (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
+        return state.cardinality > 1;
     }
 
     /// @inheritdoc IEOracle

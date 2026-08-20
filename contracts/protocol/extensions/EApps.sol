@@ -18,6 +18,7 @@ import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {GmxLib} from "../libraries/GmxLib.sol";
+import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
 import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
@@ -90,7 +91,9 @@ contract EApps is IEApps {
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
             balances = _getUniV4PmBalances();
         } else if (appType == Applications.GMX_V2_POSITIONS) {
-            balances = _getGmxV2PositionBalances();
+            balances = GmxLib.getGmxPositionBalances(address(this));
+        } else if (appType == Applications.HYPERLIQUID) {
+            balances = HyperliquidLib.getHyperliquidBalances(address(this));
         } else {
             revert UnknownApplication(uint256(appType));
         }
@@ -140,13 +143,6 @@ contract EApps is IEApps {
             balances[i * 2 + 1].token = Currency.unwrap(poolKey.currency1);
             balances[i * 2 + 1].amount = amount1.toInt256();
         }
-    }
-
-    /// @dev Returns collateral token amounts net of PnL, fees, and price impact for all open GMX v2
-    ///  positions plus the initial collateral of pending increase orders.
-    ///  Delegates entirely to GmxLib so the logic is shared with NavView.
-    function _getGmxV2PositionBalances() private view returns (AppTokenBalance[] memory) {
-        return GmxLib.getGmxPositionBalances(address(this));
     }
 
     function _findCrossPrice(address token0, address token1) private returns (uint160) {

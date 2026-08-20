@@ -81,12 +81,11 @@ contract EGmxCallback is IEGmxCallback {
             abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
         );
 
-        // Only store keys that actually have claimable collateral.
-        if (IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(amountKey) == 0) {
-            return;
-        }
-
-        if (!callbackData.claimableCollateralKeys.contains(amountKey)) {
+        // Only store keys that actually have claimable collateral and are not already tracked.
+        if (
+            IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(amountKey) != 0 &&
+            !callbackData.claimableCollateralKeys.contains(amountKey)
+        ) {
             callbackData.claimableCollateralKeys.add(amountKey);
             callbackData.claimableCollateralInfo[amountKey] = GmxCallbackLib.ClaimableCollateralInfo({
                 token: token,

@@ -51,14 +51,14 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
 
         // tokens expected by the calls (weth already deployed in the fixture)
         deployCodeTo(
-            "out/MockERC20.sol/MockERC20.0.8.28.json",
+            "out/MockERC20.sol/MockERC20.json",
             abi.encode("USD Coin", "USDC", 6),
             Constants.ETH_USDC
         );
         ethUsdc = Constants.ETH_USDC;
         
         deployCodeTo(
-            "out/MockERC20.sol/MockERC20.0.8.28.json",
+            "out/MockERC20.sol/MockERC20.json",
             abi.encode("Tether USD", "USDT", 6),
             Constants.ETH_USDT
         );
@@ -1840,7 +1840,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         
         // Deploy a mock WETH at the ETH_WETH address and give pool some WETH to transfer
         deployCodeTo(
-            "out/MockERC20.sol/MockERC20.0.8.28.json",
+            "out/MockERC20.sol/MockERC20.json",
             abi.encode("Wrapped Ether", "WETH", 18),
             Constants.ETH_WETH
         );
@@ -1919,7 +1919,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         // Deploy a mock WETH at the ETH_WETH address and give pool some WETH to transfer
         // 5% transfer on ~100 ETH pool - within 10% tolerance
         deployCodeTo(
-            "out/MockERC20.sol/MockERC20.0.8.28.json",
+            "out/MockERC20.sol/MockERC20.json",
             abi.encode("Wrapped Ether", "WETH", 18),
             Constants.ETH_WETH
         );

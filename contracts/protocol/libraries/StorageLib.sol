@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
-import {TokenIdsSlot} from "../types/Applications.sol";
+import {TokenIdsSlot, HyperliquidData} from "../types/Applications.sol";
 import {ApplicationsSlot} from "./ApplicationsLib.sol";
 import {DelegationData} from "./DelegationLib.sol";
 import {AddressSet, EnumerableSet, Pool} from "./EnumerableSet.sol";
@@ -17,6 +17,7 @@ library StorageLib {
     bytes32 public constant POOL_TOKENS_SLOT = 0xf46fb7ff9ff9a406787c810524417c818e45ab2f1997f38c2555c845d23bb9f6;
     bytes32 public constant TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
     bytes32 public constant UNIV4_TOKEN_IDS_SLOT = 0xd87266b00c1e82928c0b0200ad56e2ee648a35d4e9b273d2ac9533471e3b5d3c;
+    bytes32 public constant HYPERLIQUID_DATA_SLOT = 0x4afbc3162e1589b633acdf6b7c00223a8c67447dd0ad462eaa13272955dff2a1;
 
     function pool() internal pure returns (Pool storage s) {
         assembly {
@@ -45,6 +46,13 @@ library StorageLib {
     function activeApplications() internal pure returns (ApplicationsSlot storage s) {
         assembly {
             s.slot := APPLICATIONS_SLOT
+        }
+    }
+
+    function hyperliquidData() internal pure returns (HyperliquidData storage s) {
+        bytes32 slot = HYPERLIQUID_DATA_SLOT;
+        assembly {
+            s.slot := slot
         }
     }
 

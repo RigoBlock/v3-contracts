@@ -22,4 +22,8 @@ library ForkBlocks {
     /// @notice Arbitrum One block number for fork tests (GMX v2 adapter tests).
     /// @dev Block ~430M corresponds to approximately late January 2026.
     uint256 internal constant ARB_BLOCK = 430_000_000;
+
+    /// @notice HyperEVM block number for fork tests.
+    /// @dev HyperEVM mainnet block ~41M (July 2026). Update only when the cached fork state needs to change.
+    uint256 internal constant HYPEREVM_BLOCK = 41_000_000;
 }

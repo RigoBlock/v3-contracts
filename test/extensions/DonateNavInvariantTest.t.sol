@@ -46,7 +46,7 @@ contract DonateNavInvariantTest is Test, UnitTestFixture {
 
         // Deploy mocks at the real mainnet addresses so CrosschainLib.isAllowedCrosschainToken
         // recognizes them when we switch to chainId 1.
-        deployCodeTo("out/MockERC20.sol/MockERC20.0.8.28.json", abi.encode("USD Coin", "USDC", 6), usdc);
+        deployCodeTo("out/MockERC20.sol/MockERC20.json", abi.encode("USD Coin", "USDC", 6), usdc);
         deployCodeTo("out/WETH9.sol/WETH9.json", "", weth);
 
         // A pool whose base token is a bridgeable token (USDC) - used to exercise the interleaved-mint path.

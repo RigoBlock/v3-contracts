@@ -19,6 +19,7 @@
     "build:hardhat": "hardhat compile",
     "build:foundry:ir": "forge compile --via-ir",
     "build:ts": "yarn rimraf dist && tsc",
+    "typecheck:tests": "tsc --project test/tsconfig.json --noEmit",
     "test": "hardhat test --deploy-fixture",
     "test:foundry": "forge test --no-match-path 'test/{extensions/{Polygon,A0xRouterUnichain}Fork,debug/*}.t.sol' --no-match-contract 'DelegationLibFuzz|ECrosschainFuzzTest'",
     "test:foundry:gas": "forge test --no-match-path 'test/{extensions/{Polygon,A0xRouterUnichain}Fork,debug/*}.t.sol' --no-match-contract 'DelegationLibFuzz|ECrosschainFuzzTest' --gas-report 2>&1 | awk '/^╭/{found=1} found' | tee coverage/gas-report.txt",

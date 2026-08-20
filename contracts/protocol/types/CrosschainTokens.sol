@@ -42,4 +42,7 @@ library CrosschainTokens {
     // Unichain
     address internal constant UNI_USDC = 0x078D782b760474a361dDA0AF3839290b0EF57AD6;
     address internal constant UNI_WETH = 0x4200000000000000000000000000000000000006;
+
+    // HyperEVM
+    address internal constant HYPER_USDC = 0xb88339CB7199b77E23DB6E890353E22632Ba630f;
 }
