@@ -18,8 +18,10 @@ struct TokenIdsSlot {
 }
 
 /// @notice Packed Hyperliquid in-flight accounting.
+/// @dev `lastActionCompositeBlock` stores `(l1BlockNumber << 128) | block.number` so that the
+///  in-flight window aligns with HyperCore state updates rather than EVM block production.
 struct HyperliquidData {
-    uint64 lastActionBlock;
+    uint256 lastActionCompositeBlock;
     int128 inFlightAmount;
     uint64 pendingSpotSend;
 }

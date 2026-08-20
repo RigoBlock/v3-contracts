@@ -139,6 +139,7 @@ contract AHyperliquidUnit is Test {
     address private immutable _spotBalance = HLConstants.SPOT_BALANCE_PRECOMPILE_ADDRESS;
     address private immutable _accountMarginSummary = HLConstants.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS;
     address private immutable _coreUserExists = HLConstants.CORE_USER_EXISTS_PRECOMPILE_ADDRESS;
+    address private immutable _l1BlockNumber = HLConstants.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS;
 
     function _mockTokenInfo(
         uint64 tokenIndex,
@@ -191,6 +192,13 @@ contract AHyperliquidUnit is Test {
 
         // Mock the account-existence precompile so sendRawAction tests can run.
         _mockCoreUserExists(address(pool), true);
+
+        // Mock the L1 block number precompile so composite-block in-flight tracking can run.
+        _mockL1BlockNumber();
+    }
+
+    function _mockL1BlockNumber() private {
+        vm.mockCall(_l1BlockNumber, abi.encode(), abi.encode(uint64(block.number)));
     }
 
     function _mockCoreUserExists(address account, bool exists) private {

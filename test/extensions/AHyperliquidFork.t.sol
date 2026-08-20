@@ -78,6 +78,9 @@ contract AHyperliquidForkTest is Test {
         // precompile that CoreWriterLib queries while converting deposit amounts.
         _mockUsdcTokenInfo();
 
+        // Mock the L1 block number precompile used for composite-block in-flight tracking.
+        _mockL1BlockNumber();
+
         console2.log("Pool:", pool);
         console2.log("Pool owner:", poolOwner);
         console2.log("Pool USDC balance:", IERC20(usdc).balanceOf(pool));
@@ -470,10 +473,11 @@ contract AHyperliquidForkTest is Test {
         authority.addMethod(selector, adapter);
     }
 
-    /// @notice Hyperliquid spot precompile addresses (from hyper-evm-lib).
+    /// @notice Hyperliquid read precompile addresses (from hyper-evm-lib).
     address private constant _SPOT_BALANCE = HLConstants.SPOT_BALANCE_PRECOMPILE_ADDRESS;
     address private constant _TOKEN_INFO = HLConstants.TOKEN_INFO_PRECOMPILE_ADDRESS;
     address private constant _ACCOUNT_MARGIN_SUMMARY = HLConstants.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS;
+    address private constant _L1_BLOCK_NUMBER = HLConstants.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS;
 
     /// @notice Mocks the tokenInfo precompile for USDC (token index 0).
     function _mockUsdcTokenInfo() internal {
@@ -501,5 +505,10 @@ contract AHyperliquidForkTest is Test {
             abi.encode(account, tokenIndex),
             abi.encode(PrecompileLib.SpotBalance({total: total, hold: 0, entryNtl: 0}))
         );
+    }
+
+    /// @notice Mocks the L1 block number precompile used for composite-block in-flight tracking.
+    function _mockL1BlockNumber() internal {
+        vm.mockCall(_L1_BLOCK_NUMBER, abi.encode(), abi.encode(uint64(block.number)));
     }
 }

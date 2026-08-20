@@ -18,10 +18,6 @@ library HyperliquidLib {
 
     uint256 internal constant HYPEREVM_CHAIN_ID = 999;
 
-    /// @dev Number of blocks over which a recorded action is considered "recent".
-    ///  A value of 0 means the in-flight adjustment is applied only in the same block as the action.
-    uint256 private constant _ACTION_BLOCK_WINDOW = 0;
-
     /// @notice Returns the signed net Hyperliquid account value as a single USDC balance.
     /// @dev Aggregates core perp margin and spot USDC balance in HyperCore wei units first, then
     ///  converts the signed net amount to EVM decimals once.
@@ -60,17 +56,23 @@ library HyperliquidLib {
     }
 
     function hasRecentAction() private view returns (bool) {
-        uint256 lastBlock = StorageLib.hyperliquidData().lastActionBlock;
-        return lastBlock != 0 && block.number <= lastBlock + _ACTION_BLOCK_WINDOW;
+        uint256 lastCompositeBlock = StorageLib.hyperliquidData().lastActionCompositeBlock;
+        return lastCompositeBlock != 0 && lastCompositeBlock == _compositeBlockNumber();
     }
 
     function ensureBlockFresh() private {
         HyperliquidData storage data = StorageLib.hyperliquidData();
-        if (data.lastActionBlock != block.number) {
+        uint256 compositeBlock = _compositeBlockNumber();
+        if (data.lastActionCompositeBlock != compositeBlock) {
             data.inFlightAmount = 0;
             data.pendingSpotSend = 0;
-            data.lastActionBlock = block.number.toUint64();
+            data.lastActionCompositeBlock = compositeBlock;
         }
+    }
+
+    /// @dev Returns a composite block number keyed to HyperCore's L1 block and the EVM block.
+    function _compositeBlockNumber() private view returns (uint256 compositeBlockNumber) {
+        compositeBlockNumber = (uint256(PrecompileLib.l1BlockNumber()) << 128) | uint128(block.number);
     }
 
     function recordAction(int256 amount) internal {
