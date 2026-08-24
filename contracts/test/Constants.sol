@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
 import {CrosschainTokens} from "../protocol/types/CrosschainTokens.sol";
 import {ForkBlocks} from "./ForkBlocks.sol";
@@ -239,6 +239,12 @@ library Constants {
     /*//////////////////////////////////////////////////////////////
                             GOVERNANCE CONSTANTS
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Wormhole core contract on Ethereum mainnet.
+    address internal constant WORMHOLE_ETHEREUM = 0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B;
+
+    /// @notice Wormhole core contract on HyperEVM.
+    address internal constant WORMHOLE_HYPEREVM = 0x7C0faFc4384551f063e05aee704ab943b8B53aB3;
 
     /// @notice Minimum proposal threshold floor (20k GRG)
     uint256 internal constant PROPOSAL_THRESHOLD_FLOOR_MIN = 20_000e18;

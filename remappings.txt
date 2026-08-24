@@ -12,3 +12,4 @@ permit2/=lib/permit2
 @openzeppelin-legacy/=lib/universal-router/lib/v4-periphery/lib/v4-core/lib/openzeppelin-contracts/
 @openzeppelin/=lib/permit2/lib/openzeppelin-contracts/
 hyper-evm-lib/=lib/hyper-evm-lib/src/
+wormhole-solidity-sdk/=lib/wormhole-solidity-sdk/

@@ -723,5 +723,70 @@ describe("Governance Proxy", async () => {
             // after execution state will find its final state
             expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Executed)
         })
+
+        it('should not let a lowered quorum make an old defeated proposal executable (RIGO-200)', async () => {
+            const { governanceInstance, grgToken, grgTransferProxyAddress, poolAddress, poolId, staking } = await setupTests()
+
+            // user1 stakes 600k GRG and delegates.
+            const user1Amount = parseEther('600000')
+            await grgToken.approve(grgTransferProxyAddress, user1Amount)
+            await staking.stake(user1Amount)
+            await staking.createStakingPool(poolAddress)
+            const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId)
+            const toInfo = new StakeInfo(StakeStatus.Delegated, poolId)
+            await staking.moveStake(fromInfo, toInfo, user1Amount)
+
+            // user2 stakes 1M GRG and delegates.
+            const user2Amount = parseEther('1000000')
+            await grgToken.transfer(user2.address, user2Amount)
+            await grgToken.connect(user2).approve(grgTransferProxyAddress, user2Amount)
+            await staking.connect(user2).stake(user2Amount)
+            await staking.connect(user2).moveStake(fromInfo, toInfo, user2Amount)
+
+            // Advance to just after the current epoch end and start the next epoch,
+            // so the delegated stake becomes active voting power.
+            const advanceToNextEpoch = async () => {
+                const latest = await waffle.provider.getBlock('latest')
+                const epochEnd = await staking.getCurrentEpochEarliestEndTimeInSeconds()
+                await timeTravel({ seconds: epochEnd.sub(latest.timestamp).add(1).toNumber(), mine: true })
+                await staking.endEpoch()
+            }
+
+            await advanceToNextEpoch()
+
+            // Proposal 1: created while the global quorum is 1M. user1 will vote 600k.
+            const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user3.address, user1Amount])
+            const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
+            await governanceInstance.propose([action], description)
+            const { proposal: proposalBefore } = await governanceInstance.getProposalById(1)
+            expect(proposalBefore.quorumThreshold).to.be.eq(parseEther('1000000'))
+
+            // Advance to the next epoch so proposal 1's voting period is active.
+            await advanceToNextEpoch()
+            await governanceInstance.castVote(1, VoteType.For)
+
+            // The voting period is 7 days; advance past it so proposal 1 is defeated.
+            await timeTravel({ days: 8, mine: true })
+            expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Defeated)
+
+            // Proposal 2: lower the global quorum below 1M. user2 votes with 1M to pass it.
+            const lowerQuorumData = governanceInstance.interface.encodeFunctionData('updateThresholds(uint256,uint256)', [parseEther('101000'), parseEther('500000')])
+            const lowerQuorumAction = new ProposedAction(governanceInstance.address, lowerQuorumData, BigNumber.from('0'))
+            await governanceInstance.propose([lowerQuorumAction], 'lower quorum')
+
+            // Advance to the next epoch so proposal 2's voting period is active.
+            await advanceToNextEpoch()
+            await governanceInstance.connect(user2).castVote(2, VoteType.For)
+
+            // Advance past the 7-day voting period so proposal 2 succeeds and can be executed.
+            await timeTravel({ days: 8, mine: true })
+            await expect(governanceInstance.execute(2)).to.emit(governanceInstance, 'ThresholdsUpdated')
+
+            // After lowering the global quorum, proposal 1 must still use its snapshotted quorum.
+            const { proposal: proposalAfter } = await governanceInstance.getProposalById(1)
+            expect(proposalAfter.quorumThreshold).to.be.eq(parseEther('1000000'))
+            expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Defeated)
+            await expect(governanceInstance.execute(1)).to.be.revertedWith('VOTING_EXECUTION_STATE_ERROR')
+        })
     })
 })

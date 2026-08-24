@@ -52,7 +52,9 @@ if (PK) {
   };
 }
 
-if (["mainnet", "sepolia", "polygon", "base", "optimism", "arbitrum", "bsc", "unichain"].includes(argv.network) && INFURA_KEY === undefined) {
+// All live networks require an Infura key, even those that use a chain-specific RPC,
+// to ensure deployments do not run on an environment missing shared credentials.
+if (["mainnet", "sepolia", "polygon", "base", "optimism", "arbitrum", "bsc", "unichain", "hyperliquid"].includes(argv.network) && INFURA_KEY === undefined) {
   throw new Error(
     `Could not find Infura key in env, unable to connect to network ${argv.network}`,
   );
@@ -91,6 +93,7 @@ const userConfig: HardhatUserConfig = {
   solidity: {
     compilers: [
       { version: primarySolidityVersion, settings: soliditySettings },
+      { version: "0.8.36", settings: { ...soliditySettings, evmVersion: "cancun" } },
       { version: "0.8.28", settings: { ...soliditySettings, evmVersion: "cancun" } },
       { version: "0.8.26", settings: { ...soliditySettings, evmVersion: "berlin" } },
       { version: "0.8.17", settings: { ...soliditySettings, evmVersion: "london" } },
@@ -184,6 +187,10 @@ const userConfig: HardhatUserConfig = {
     unichain: {
       ...sharedNetworkConfig,
       url: `https://unichain-mainnet.infura.io/v3/${INFURA_KEY}`,
+    },
+    hyperliquid: {
+      ...sharedNetworkConfig,
+      url: process.env.HYPERLIQUID_RPC_URL || "https://rpc.hyperliquid.xyz/evm",
     },
   },
   deterministicDeployment,

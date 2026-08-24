@@ -37,10 +37,10 @@ interface IGovernanceStrategy {
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
     /// @return Tuple of the proposal state.
-    function getProposalState(IRigoblockGovernance.Proposal calldata proposal, uint256 minimumQuorum)
-        external
-        view
-        returns (IRigoblockGovernance.ProposalState);
+    function getProposalState(
+        IRigoblockGovernance.Proposal calldata proposal,
+        uint256 minimumQuorum
+    ) external view returns (IRigoblockGovernance.ProposalState);
 
     /// @notice Return the voting period.
     /// @return Number of seconds of period duration.
@@ -54,4 +54,12 @@ interface IGovernanceStrategy {
     /// @notice Return a user's voting power.
     /// @param account Address to check votes for.
     function getVotingPower(address account) external view returns (uint256);
+
+    /// @notice Reverts if a proposed action is invalid for this strategy.
+    /// @dev The governance contract calls this hook for every action during
+    ///      execution. Strategies can enforce chain-specific rules (e.g. a
+    ///      Wormhole message must target the local Wormhole core and carry the
+    ///      correct fee) without adding custom logic to the governance contract.
+    /// @param action The action to validate.
+    function validateAction(IRigoblockGovernance.ProposedAction calldata action) external view;
 }

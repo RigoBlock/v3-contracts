@@ -94,7 +94,9 @@ const deploy: DeployFunction = async function (
   });
 
   // TODO: test if following condition necessary
-  await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
+  if (!(await grgTransferProxyInstance.authorized(grgVault.address))) {
+    await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
+  }
 
   const grgVaultInstance = await hre.ethers.getContractAt(
     "GrgVault",

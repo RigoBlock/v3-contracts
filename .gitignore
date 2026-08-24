@@ -16,6 +16,7 @@ solc
 coverage/
 coverage.json
 yarn-error.log
+foundry.lock
 
 #generated contract artifacts
 *artifacts/

@@ -24,7 +24,7 @@ import "../IRigoblockGovernance.sol";
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 abstract contract MixinConstants is IRigoblockGovernance {
     /// @notice Contract version
-    string internal constant VERSION = "1.0.0";
+    string internal constant VERSION = "1.0.1";
 
     /// @notice Maximum operations per proposal
     uint256 internal constant PROPOSAL_MAX_OPERATIONS = 10;

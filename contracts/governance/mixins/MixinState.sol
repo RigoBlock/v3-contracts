@@ -97,11 +97,13 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     function _getProposalState(uint256 proposalId) internal view override returns (ProposalState) {
         require(_proposalCount().value >= proposalId && proposalId > 0, "VOTING_PROPOSAL_ID_ERROR");
         Proposal memory proposal = _proposal().proposalById[proposalId];
-        return
-            IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
-                proposal,
-                _governanceParameters().quorumThreshold
-            );
+        // New proposals snapshot the quorum at creation time. Legacy proposals (created before
+        // this feature) do not have a snapshot and fall back to the current quorum so their
+        // state remains readable and executable.
+        uint256 quorum = proposal.quorumThreshold == 0
+            ? _governanceParameters().quorumThreshold
+            : proposal.quorumThreshold;
+        return IGovernanceStrategy(_governanceParameters().strategy).getProposalState(proposal, quorum);
     }
 
     function _getVotingPower(address account) internal view override returns (uint256) {

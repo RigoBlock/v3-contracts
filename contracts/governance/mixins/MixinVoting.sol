@@ -25,11 +25,10 @@ import "../interfaces/IGovernanceStrategy.sol";
 
 abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceVoting
-    function propose(ProposedAction[] memory actions, string memory description)
-        external
-        override
-        returns (uint256 proposalId)
-    {
+    function propose(
+        ProposedAction[] memory actions,
+        string memory description
+    ) external override returns (uint256 proposalId) {
         uint256 length = actions.length;
         require(_getVotingPower(msg.sender) >= _governanceParameters().proposalThreshold, "GOV_LOW_VOTING_POWER");
         require(length > 0, "GOV_NO_ACTIONS_ERROR");
@@ -47,7 +46,8 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             votesFor: 0,
             votesAgainst: 0,
             votesAbstain: 0,
-            executed: false
+            executed: false,
+            quorumThreshold: _governanceParameters().quorumThreshold
         });
 
         for (uint256 i = 0; i < length; i++) {
@@ -100,8 +100,14 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         for (uint256 i = 0; i < proposal.actionsLength; i++) {
             ProposedAction memory action = _proposedAction().proposedActionbyIndex[proposalId][i];
             address target = action.target;
-            uint256 value = action.value;
             bytes memory data = action.data;
+
+            // The strategy is responsible for validating chain-specific actions
+            // (e.g. ensuring a Wormhole message carries the correct fee). Normal
+            // on-chain actions are validated without side effects.
+            IGovernanceStrategy(_governanceParameters().strategy).validateAction(action);
+
+            uint256 value = action.value;
 
             // we revert with error returned from the target
             // solhint-disable-next-line no-inline-assembly
@@ -119,11 +125,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
     /// @notice Casts a vote for the given proposal.
     /// @dev Only callable during the voting period for that proposal.
-    function _castVote(
-        address voter,
-        uint256 proposalId,
-        VoteType voteType
-    ) private {
+    function _castVote(address voter, uint256 proposalId, VoteType voteType) private {
         require(_getProposalState(proposalId) == ProposalState.Active, "VOTING_CLOSED_ERROR");
         Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, "VOTING_ALREADY_VOTED_ERROR");

@@ -30,11 +30,10 @@ abstract contract MixinUpgrade is MixinStorage {
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function updateThresholds(uint256 newProposalThreshold, uint256 newQuorumThreshold)
-        external
-        override
-        onlyGovernance
-    {
+    function updateThresholds(
+        uint256 newProposalThreshold,
+        uint256 newQuorumThreshold
+    ) external override onlyGovernance {
         GovernanceParameters storage params = _governanceParameters();
         require(
             newProposalThreshold != params.proposalThreshold && newQuorumThreshold != params.quorumThreshold,

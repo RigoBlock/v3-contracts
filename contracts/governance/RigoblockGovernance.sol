@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.36;
 
 import "./mixins/MixinInitializer.sol";
 import "./mixins/MixinState.sol";
