@@ -91,8 +91,10 @@ contract EOracle is IEOracle {
         }
 
         uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(conversionTick);
-        uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96); // Q96 * Q96 = Q192
-        uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
+        // Compute price * 2^96 using FullMath.mulDiv to avoid the intermediate sqrtPriceX96^2
+        // overflowing uint256 for ticks whose sqrtPriceX96 exceeds 2^128 (|tick| > 443,636).
+        uint256 priceX96 = FullMath.mulDiv(uint256(sqrtPriceX96), uint256(sqrtPriceX96), Q96);
+        uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX96, Q96);
         return amount >= 0 ? tokenAmount.toInt256() : -tokenAmount.toInt256();
     }
 
