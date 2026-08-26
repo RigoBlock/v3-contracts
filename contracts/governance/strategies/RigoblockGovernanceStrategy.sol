@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.36;
+pragma solidity 0.8.35;
 
 import "../../staking/interfaces/IStaking.sol";
 import "../../staking/interfaces/IStorage.sol";

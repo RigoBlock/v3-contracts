@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.36;
+pragma solidity 0.8.35;
 
 import {IRigoblockGovernance} from "../IRigoblockGovernance.sol";
 import {IGovernanceCrosschain} from "../interfaces/governance/IGovernanceCrosschain.sol";

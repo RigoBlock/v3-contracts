@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.36;
+pragma solidity 0.8.35;
 
 import {Test} from "forge-std/Test.sol";
 import {MixinStorage} from "../../contracts/governance/mixins/MixinStorage.sol";

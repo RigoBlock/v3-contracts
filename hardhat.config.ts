@@ -93,7 +93,7 @@ const userConfig: HardhatUserConfig = {
   solidity: {
     compilers: [
       { version: primarySolidityVersion, settings: soliditySettings },
-      { version: "0.8.36", settings: { ...soliditySettings, evmVersion: "cancun" } },
+      { version: "0.8.35", settings: { ...soliditySettings, evmVersion: "cancun" } },
       { version: "0.8.28", settings: { ...soliditySettings, evmVersion: "cancun" } },
       { version: "0.8.26", settings: { ...soliditySettings, evmVersion: "berlin" } },
       { version: "0.8.17", settings: { ...soliditySettings, evmVersion: "london" } },
