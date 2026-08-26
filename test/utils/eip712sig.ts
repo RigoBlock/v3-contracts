@@ -10,7 +10,7 @@ export interface SigOpts {
 export async function signEip712Message(opts: SigOpts) {
     const domain = {
         name: 'Rigoblock Governance',
-        version: '1.0.1',
+        version: '1.1.0',
         chainId: 31337,
         verifyingContract: opts.governance
     }

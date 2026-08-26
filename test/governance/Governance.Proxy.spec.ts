@@ -758,8 +758,6 @@ describe("Governance Proxy", async () => {
             const data = grgToken.interface.encodeFunctionData('approve(address,uint256)', [user3.address, user1Amount])
             const action = new ProposedAction(grgToken.address, data, BigNumber.from('0'))
             await governanceInstance.propose([action], description)
-            const { proposal: proposalBefore } = await governanceInstance.getProposalById(1)
-            expect(proposalBefore.quorumThreshold).to.be.eq(parseEther('1000000'))
 
             // Advance to the next epoch so proposal 1's voting period is active.
             await advanceToNextEpoch()
@@ -783,8 +781,6 @@ describe("Governance Proxy", async () => {
             await expect(governanceInstance.execute(2)).to.emit(governanceInstance, 'ThresholdsUpdated')
 
             // After lowering the global quorum, proposal 1 must still use its snapshotted quorum.
-            const { proposal: proposalAfter } = await governanceInstance.getProposalById(1)
-            expect(proposalAfter.quorumThreshold).to.be.eq(parseEther('1000000'))
             expect(await governanceInstance.getProposalState(1)).to.be.eq(ProposalState.Defeated)
             await expect(governanceInstance.execute(1)).to.be.revertedWith('VOTING_EXECUTION_STATE_ERROR')
         })

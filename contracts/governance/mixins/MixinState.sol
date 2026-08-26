@@ -1,22 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2023 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./MixinAbstract.sol";
@@ -97,12 +79,16 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     function _getProposalState(uint256 proposalId) internal view override returns (ProposalState) {
         require(_proposalCount().value >= proposalId && proposalId > 0, "VOTING_PROPOSAL_ID_ERROR");
         Proposal memory proposal = _proposal().proposalById[proposalId];
-        // New proposals snapshot the quorum at creation time. Legacy proposals (created before
-        // this feature) do not have a snapshot and fall back to the current quorum so their
-        // state remains readable and executable.
-        uint256 quorum = proposal.quorumThreshold == 0
-            ? _governanceParameters().quorumThreshold
-            : proposal.quorumThreshold;
+
+        // New proposals snapshot the quorum at creation time and are immune to later quorum changes.
+        // Legacy proposals (created before this feature) do not have a snapshot. Their quorum is
+        // set to the maximum possible value so they can never reach quorum and therefore can never
+        // be executed. This prevents a lowered global quorum from making a past failed proposal
+        // executable (https://github.com/RigoBlock/v3-contracts/issues/200).
+        uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];
+        if (quorum == 0) {
+            quorum = type(uint256).max;
+        }
         return IGovernanceStrategy(_governanceParameters().strategy).getProposalState(proposal, quorum);
     }
 

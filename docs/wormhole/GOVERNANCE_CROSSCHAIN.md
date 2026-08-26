@@ -144,23 +144,24 @@ on target chains, but a separate `CrosschainReceiver` is preferred:
 
 ## Quorum snapshot (issue #200)
 
-When a proposal is created, the current `quorumThreshold` is copied into the
-`Proposal.quorumThreshold` field. All subsequent state checks for that proposal
-use the snapshotted value. If the quorum is later changed by another successful
-proposal, the state of past proposals remains deterministic.
+When a proposal is created, the current `quorumThreshold` is copied into a
+separate `proposalQuorumById` mapping. All subsequent state checks for that
+proposal use the snapshotted value. If the quorum is later changed by another
+successful proposal, the state of past proposals remains deterministic.
 
 Proposals created before this feature was introduced do not have a snapshot;
-their `quorumThreshold` is `0`. `_getProposalState` falls back to the current
-governance quorum for those proposals so their state remains readable and they
-can still be executed. This preserves backwards compatibility for any legacy
-proposals that may exist at upgrade time. New proposals created after the upgrade
-snapshot the quorum at creation time, which fixes [#200][issue-200] for all
-future proposals.
+their mapping entry is `0`. `_getProposalState` treats those legacy proposals as
+if their quorum were `type(uint256).max`, so they can never reach quorum and
+can never be executed. This closes [#200][issue-200] for legacy proposals as
+well: a later reduction of the global quorum cannot resurrect a past failed
+proposal. New proposals created after the upgrade snapshot the quorum at creation
+time and are unaffected by later quorum changes.
 
-The snapshot is appended as the last field of the `Proposal` struct, so existing
-storage offsets for the other fields are unchanged. Because the field is part of
-`Proposal`, clients reading `getProposalById` or `proposals` automatically see
-the snapshotted value; there is no separate per-proposal quorum storage mapping.
+The snapshot is stored in a dedicated mapping rather than appended to the
+`Proposal` struct. This keeps the `Proposal` storage layout and ABI unchanged,
+so existing strategies and external clients remain compatible. The snapshotted
+quorum is an internal implementation detail; external callers receive the
+effective quorum through `getProposalState(proposalId)`.
 
 ## Deployment
 
@@ -184,6 +185,10 @@ Chain-specific Wormhole addresses and chain ids are stored in
   `forge test --match-path test/governance/RigoblockGovernanceStrategy.t.sol`
 - Foundry (quorum snapshot storage layout / backwards compatibility):
   `forge test --match-path test/governance/GovernanceQuorumSnapshot.t.sol`
+- Foundry (local migration simulation):
+  `forge test --match-path test/governance/GovernanceMigration.t.sol`
+- Foundry (mainnet-fork migration simulation):
+  `forge test --match-path test/governance/GovernanceMigrationFork.t.sol`
 - Hardhat (RIGO-200 end-to-end regression with real staking flow):
   `npx hardhat test test/governance/Governance.Proxy.spec.ts --network hardhat`
 

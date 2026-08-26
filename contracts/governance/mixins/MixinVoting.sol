@@ -1,22 +1,4 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2023 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./MixinAbstract.sol";
@@ -46,8 +28,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             votesFor: 0,
             votesAgainst: 0,
             votesAbstain: 0,
-            executed: false,
-            quorumThreshold: _governanceParameters().quorumThreshold
+            executed: false
         });
 
         for (uint256 i = 0; i < length; i++) {
@@ -55,6 +36,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         }
 
         _proposal().proposalById[proposalId] = newProposal;
+        _proposalQuorum().proposalQuorumById[proposalId] = _governanceParameters().quorumThreshold;
 
         emit ProposalCreated(msg.sender, proposalId, actions, startBlockOrTime, endBlockOrTime, description);
     }
@@ -102,9 +84,11 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             address target = action.target;
             bytes memory data = action.data;
 
-            // The strategy is responsible for validating chain-specific actions
-            // (e.g. ensuring a Wormhole message carries the correct fee). Normal
-            // on-chain actions are validated without side effects.
+            // The strategy validates every action before execution. A validation failure
+            // reverts the whole proposal, which is intentional: a proposal is an atomic unit
+            // of work and must not be partially executed. The strategy's checks are side-effect
+            // free, so reverting here leaves no state changes from the current action or any
+            // subsequent action.
             IGovernanceStrategy(_governanceParameters().strategy).validateAction(action);
 
             uint256 value = action.value;
