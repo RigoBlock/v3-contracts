@@ -36,6 +36,29 @@ contract MockOracle {
         });
     }
 
+    /// @notice Initializes observations with a custom constant tick, useful for testing extreme TWAP values.
+    function initializeObservationsWithTick(PoolKey calldata poolKey, int24 tick) external {
+        PoolId id = poolKey.toId();
+        states[id] = IOracle.ObservationState({index: 1, cardinality: 2, cardinalityNext: 2});
+        uint32 initialTimestamp = uint32(block.timestamp);
+        uint32 secondTimestamp = initialTimestamp + 1;
+        observations[id][0] = Observation({
+            blockTimestamp: initialTimestamp,
+            prevTick: tick,
+            tickCumulative: int48(0),
+            secondsPerLiquidityCumulativeX128: uint144(0),
+            initialized: true
+        });
+
+        observations[id][1] = Observation({
+            blockTimestamp: secondTimestamp,
+            prevTick: tick,
+            tickCumulative: int48(tick),
+            secondsPerLiquidityCumulativeX128: uint144(ONE_X96 * 1),
+            initialized: true
+        });
+    }
+
     function getObservation(
         PoolKey calldata key,
         uint256 index
