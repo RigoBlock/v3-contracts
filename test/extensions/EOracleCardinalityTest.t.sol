@@ -14,10 +14,11 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 
-/// @title EOracleCardinalityTest - Regression tests for the cardinality-1 oracle guard.
+/// @title EOracleCardinalityTest - Regression tests for EOracle conversion and cardinality guards.
 /// @notice A BackGeoOracle feed with only one observation cannot compute a meaningful TWAP.
 ///         `EOracle.hasPriceFeed()` must reject cardinality-1 feeds so they cannot be added
 ///         to a pool's active token set and cannot be priced on the NAV path.
+///         Also covers the sqrtPriceX96^2 overflow fix for extreme TWAP ticks.
 contract EOracleCardinalityTest is Test, UnitTestFixture {
     address internal token;
     address internal poolProxy;
@@ -77,5 +78,40 @@ contract EOracleCardinalityTest is Test, UnitTestFixture {
 
         vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, token));
         ISmartPoolOwnerActions(poolProxy).setAcceptableMintToken(token, true);
+    }
+
+    /// @notice Helper to initialize a constant-TWAP oracle feed and warp forward so getTwap returns `tick`.
+    function _initOracleTick(int24 tick) private {
+        deployment.mockOracle.initializeObservationsWithTick(_poolKey(token), tick);
+        vm.warp(block.timestamp + 100);
+    }
+
+    /// @notice Ticks <= 443,636 are safe even with the old square-then-divide math.
+    function test_ConvertTokenAmount_BoundaryTick_Succeeds() public {
+        _initOracleTick(int24(443_636));
+        int256 converted = IEOracle(extensions.eOracle).convertTokenAmount(address(0), 1e18, token);
+        assertGt(converted, 0);
+    }
+
+    /// @notice Tick 443,637 is the first tick where sqrtPriceX96 > 2^128 and squaring overflows uint256.
+    /// @dev Before the fix this reverted with panic 0x11; after the fix it returns a positive amount.
+    function test_ConvertTokenAmount_OverflowBoundaryTick_Succeeds() public {
+        _initOracleTick(int24(443_637));
+        int256 converted = IEOracle(extensions.eOracle).convertTokenAmount(address(0), 1e18, token);
+        assertGt(converted, 0);
+    }
+
+    /// @notice Realistic memecoin-like positive tick (PEPE vs ETH) well past the overflow boundary.
+    function test_ConvertTokenAmount_HighPositiveTick_Succeeds() public {
+        _initOracleTick(int24(500_000));
+        int256 converted = IEOracle(extensions.eOracle).convertTokenAmount(address(0), 1e18, token);
+        assertGt(converted, 0);
+    }
+
+    /// @notice Symmetric negative-conversion-tick path: token -> ETH with a very expensive token.
+    function test_ConvertTokenAmount_HighNegativeConversionTick_Succeeds() public {
+        _initOracleTick(int24(-500_000));
+        int256 converted = IEOracle(extensions.eOracle).convertTokenAmount(token, 1e18, address(0));
+        assertGt(converted, 0);
     }
 }
