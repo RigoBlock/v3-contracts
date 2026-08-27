@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../IRigoblockGovernance.sol";
+import {IRigoblockGovernance} from "../IRigoblockGovernance.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 abstract contract MixinConstants is IRigoblockGovernance {

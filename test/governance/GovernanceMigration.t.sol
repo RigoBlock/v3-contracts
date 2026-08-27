@@ -70,7 +70,17 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         return votingPower;
     }
 
-    function validateAction(IRigoblockGovernance.ProposedAction calldata) external pure {}
+    function beforePropose(
+        IRigoblockGovernance.ProposedAction calldata action
+    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
+        return action;
+    }
+
+    function beforeExecute(
+        IRigoblockGovernance.ProposedAction calldata action
+    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
+        return action;
+    }
 }
 
 /// @title MigrationHarness

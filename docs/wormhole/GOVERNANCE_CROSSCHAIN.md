@@ -48,7 +48,7 @@ action is a normal `ProposedAction`:
 - `data` = `abi.encodeCall(IWormhole.publishMessage, (nonce, encodedPayload, consistencyLevel))`.
 - `value` = `IWormhole(wormhole).messageFee()`.
 
-The `encodedPayload` is `abi.encode(IGovernanceCrosschain.CrossChainPayload)`:
+The `encodedPayload` is `abi.encode(CrossChainPayload)`:
 
 - `targetWormholeChainId`: the destination Wormhole chain id. The receiver
   asserts this matches the local chain, so a VAA intended for another chain

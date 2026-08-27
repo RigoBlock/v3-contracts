@@ -1,28 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinAbstract.sol";
-import "./MixinStorage.sol";
-import "../interfaces/IGovernanceStrategy.sol";
+import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
+import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
+import {MixinAbstract} from "./MixinAbstract.sol";
+import {MixinStorage} from "./MixinStorage.sol";
 
 abstract contract MixinState is MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
-    function getActions(uint256 proposalId) external view override returns (ProposedAction[] memory proposedActions) {
-        Proposal memory proposal = _proposal().proposalById[proposalId];
+    function getActions(uint256 proposalId) external view override returns (IGovernanceVoting.ProposedAction[] memory proposedActions) {
+        IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposal.actionsLength;
-        proposedActions = new ProposedAction[](actionsLength);
+        proposedActions = new IGovernanceVoting.ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
     }
 
     /// @inheritdoc IGovernanceState
-    function getProposalState(uint256 proposalId) external view override returns (ProposalState) {
+    function getProposalState(uint256 proposalId) external view override returns (IGovernanceState.ProposalState) {
         return _getProposalState(proposalId);
     }
 
     /// @inheritdoc IGovernanceState
-    function getReceipt(uint256 proposalId, address voter) external view override returns (Receipt memory) {
+    function getReceipt(uint256 proposalId, address voter) external view override returns (IGovernanceState.Receipt memory) {
         return _receipt().userReceiptByProposal[proposalId][voter];
     }
 
@@ -32,8 +34,8 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function governanceParameters() external view override returns (EnhancedParams memory) {
-        return EnhancedParams({params: _paramsWrapper().governanceParameters, name: _name().value, version: VERSION});
+    function governanceParameters() external view override returns (IGovernanceState.EnhancedParams memory) {
+        return IGovernanceState.EnhancedParams({params: _paramsWrapper().governanceParameters, name: _name().value, version: VERSION});
     }
 
     /// @inheritdoc IGovernanceState
@@ -47,9 +49,9 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function proposals() external view override returns (ProposalWrapper[] memory proposalWrapper) {
+    function proposals() external view override returns (IGovernanceState.ProposalWrapper[] memory proposalWrapper) {
         uint256 length = _getProposalCount();
-        proposalWrapper = new ProposalWrapper[](length);
+        proposalWrapper = new IGovernanceState.ProposalWrapper[](length);
         for (uint256 i = 0; i < length; i++) {
             // proposal count starts at proposalId = 1
             proposalWrapper[i] = getProposalById(i + 1);
@@ -62,10 +64,10 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function getProposalById(uint256 proposalId) public view override returns (ProposalWrapper memory proposalWrapper) {
+    function getProposalById(uint256 proposalId) public view override returns (IGovernanceState.ProposalWrapper memory proposalWrapper) {
         proposalWrapper.proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposalWrapper.proposal.actionsLength;
-        ProposedAction[] memory proposedAction = new ProposedAction[](actionsLength);
+        IGovernanceVoting.ProposedAction[] memory proposedAction = new IGovernanceVoting.ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
@@ -76,19 +78,14 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         return _proposalCount().value;
     }
 
-    function _getProposalState(uint256 proposalId) internal view override returns (ProposalState) {
-        require(_proposalCount().value >= proposalId && proposalId > 0, "VOTING_PROPOSAL_ID_ERROR");
-        Proposal memory proposal = _proposal().proposalById[proposalId];
+    function _getProposalState(uint256 proposalId) internal view override returns (IGovernanceState.ProposalState) {
+        require(_proposalCount().value >= proposalId && proposalId != 0, GovProposalIdInvalid(proposalId));
+        IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
 
-        // New proposals snapshot the quorum at creation time and are immune to later quorum changes.
-        // Legacy proposals (created before this feature) do not have a snapshot. Their quorum is
-        // set to the maximum possible value so they can never reach quorum and therefore can never
-        // be executed. This prevents a lowered global quorum from making a past failed proposal
-        // executable (https://github.com/RigoBlock/v3-contracts/issues/200).
+        // prevent old-format proposals execution if quorum drops
         uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];
-        if (quorum == 0) {
-            quorum = type(uint256).max;
-        }
+        quorum = quorum > 0 ? quorum : type(uint256).max;
+
         return IGovernanceStrategy(_governanceParameters().strategy).getProposalState(proposal, quorum);
     }
 

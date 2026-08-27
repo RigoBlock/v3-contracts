@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.35;
 
-import {IRigoblockGovernance} from "../IRigoblockGovernance.sol";
-import {IGovernanceCrosschain} from "../interfaces/governance/IGovernanceCrosschain.sol";
+import {CrossChainPayload} from "../types/GovernanceTypes.sol";
+import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {ICoreBridge, CoreBridgeVM} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
+// TODO: this contract must inherit its own interface!
 /// @title CrosschainReceiver - Executes governance actions received from Wormhole.
 /// @notice Deployed on target chains (e.g. HyperEVM). Each receiver is configured with
 ///         a trusted Wormhole emitter (the Ethereum mainnet Rigoblock governance proxy)
 ///         and executes the actions it sends in the same order they were published.
 contract CrosschainReceiver {
+    /// @notice Emitted when a cross-chain action is executed on the target chain.
+    /// @param sequence Wormhole sequence number of the consumed VAA.
+    /// @param actionHash keccak256 hash of the executed action.
+    event CrossChainActionExecuted(uint64 sequence, bytes32 actionHash);
+
     /// @notice Wormhole core contract on the current chain.
     ICoreBridge public immutable wormhole;
 
@@ -94,10 +100,7 @@ contract CrosschainReceiver {
         // HelloWorld step 3: replay protection using the verified VAA hash.
         require(!consumed[verifiedVaa.hash], GovReceiverAlreadyConsumed(verifiedVaa.hash));
 
-        IGovernanceCrosschain.CrossChainPayload memory payload = abi.decode(
-            verifiedVaa.payload,
-            (IGovernanceCrosschain.CrossChainPayload)
-        );
+        CrossChainPayload memory payload = abi.decode(verifiedVaa.payload, (CrossChainPayload));
 
         // Step 4: prevent the same VAA from being executed on the wrong chain.
         require(
@@ -122,10 +125,7 @@ contract CrosschainReceiver {
 
         // Process queued messages that are now ready in order.
         while (queuedPayloads[expectedSequence].length != 0) {
-            IGovernanceCrosschain.CrossChainPayload memory queuedPayload = abi.decode(
-                queuedPayloads[expectedSequence],
-                (IGovernanceCrosschain.CrossChainPayload)
-            );
+            CrossChainPayload memory queuedPayload = abi.decode(queuedPayloads[expectedSequence], (CrossChainPayload));
             delete queuedPayloads[expectedSequence];
             _executeAction(expectedSequence, queuedPayload.action);
             expectedSequence++;
@@ -133,10 +133,11 @@ contract CrosschainReceiver {
     }
 
     /// @dev Executes a single action using a low-level call.
-    function _executeAction(uint64 sequence, IRigoblockGovernance.ProposedAction memory action) private {
+    function _executeAction(uint64 sequence, IGovernanceVoting.ProposedAction memory action) private {
         (bool success, bytes memory returndata) = action.target.call{value: action.value}(action.data);
         require(success, GovReceiverExecutionFailed(returndata));
 
-        emit IGovernanceCrosschain.CrossChainActionExecuted(sequence, keccak256(abi.encode(action)));
+        // TODO: do we really want to fire an event here, since there is no state update?
+        emit CrossChainActionExecuted(sequence, keccak256(abi.encode(action)));
     }
 }

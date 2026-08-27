@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.35;
 
-import "../../staking/interfaces/IStaking.sol";
-import "../../staking/interfaces/IStorage.sol";
-import "../IRigoblockGovernance.sol";
-import "../interfaces/IGovernanceStrategy.sol";
-import "../interfaces/governance/IGovernanceCrosschain.sol";
-import "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
+import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
+
+import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
+import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
+import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
+import {CrossChainPayload} from "../types/GovernanceTypes.sol";
+import {IStructs} from "../../staking/interfaces/IStructs.sol";
+import {IStaking} from "../../staking/interfaces/IStaking.sol";
+import {IStorage} from "../../staking/interfaces/IStorage.sol";
 
 contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Wormhole core contract on the same chain as this strategy.
@@ -24,8 +28,14 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Thrown when a Wormhole cross-chain action targets the current chain.
     error GovCrosschainTargetSelf(uint16 targetChainId);
 
-    /// @notice Thrown when a Wormhole cross-chain action does not include the exact fee.
-    error GovCrosschainInvalidValue(uint256 required, uint256 provided);
+    /// @notice Thrown when a Wormhole cross-chain proposal is created outside Ethereum mainnet.
+    error GovCrosschainNotMainnet();
+
+    /// @notice Thrown when the proposal threshold is outside the allowed range.
+    error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
+
+    /// @notice Thrown when the quorum threshold is outside the allowed range.
+    error GovStrategyInvalidQuorumThreshold(uint256 quorumThreshold, uint256 floor, uint256 cap);
 
     constructor(address stakingProxy, address wormhole, uint16 wormholeChainId) {
         _stakingProxy = stakingProxy;
@@ -48,9 +58,9 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function getProposalState(
-        IRigoblockGovernance.Proposal memory proposal,
+        IGovernanceState.Proposal memory proposal,
         uint256 minimumQuorum
-    ) external view override returns (IRigoblockGovernance.ProposalState) {
+    ) external view override returns (IGovernanceState.ProposalState) {
         // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
         // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
         if (block.timestamp <= proposal.startBlockOrTime) {
@@ -68,10 +78,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         }
     }
 
-    function _qualifiedConsensus(
-        IRigoblockGovernance.Proposal memory proposal,
-        uint256 minimumQuorum
-    ) private view returns (bool) {
+    function _qualifiedConsensus(IGovernanceState.Proposal memory proposal, uint256 minimumQuorum) private view returns (bool) {
         return (3 * proposal.votesFor >
             2 *
                 IStaking(_getStakingProxy())
@@ -118,7 +125,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
             cap = cap < 100_000e18 ? 100_000e18 : cap;
         }
 
-        assert(proposalThreshold >= floor && proposalThreshold <= cap);
+        require(
+            proposalThreshold >= floor && proposalThreshold <= cap,
+            GovStrategyInvalidProposalThreshold(proposalThreshold, floor, cap)
+        );
     }
 
     function _assertValidQuorumThreshold(uint256 quorumThreshold) private view {
@@ -135,35 +145,48 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
             cap = cap < 400_000e18 ? 400_000e18 : cap;
         }
 
-        assert(quorumThreshold >= floor && quorumThreshold <= cap);
+        require(
+            quorumThreshold >= floor && quorumThreshold <= cap,
+            GovStrategyInvalidQuorumThreshold(quorumThreshold, floor, cap)
+        );
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function validateAction(IRigoblockGovernance.ProposedAction calldata action) external view override {
+    function beforePropose(
+        IGovernanceVoting.ProposedAction calldata action
+    ) external view override returns (IGovernanceVoting.ProposedAction memory) {
         if (action.target != _wormhole) {
-            return;
+            return action;
         }
 
-        // Wormhole messages are published through ICoreBridge.publishMessage.
-        require(
-            action.data.length >= 4 && bytes4(action.data) == ICoreBridge.publishMessage.selector,
-            GovCrosschainInvalidData()
-        );
+        // Cross-chain proposals are only allowed from Ethereum mainnet
+        require(block.chainid == 1, GovCrosschainNotMainnet());
 
-        // Decode the publishMessage calldata and assert the inner payload is a valid
-        // cross-chain payload that does not target the current chain.
-        (, bytes memory payload, ) = abi.decode(action.data[4:], (uint32, bytes, uint8));
-        IGovernanceCrosschain.CrossChainPayload memory crossChainPayload = abi.decode(
-            payload,
-            (IGovernanceCrosschain.CrossChainPayload)
-        );
+        _assertValidWormholeData(action.data);
+        return action;
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function beforeExecute(IGovernanceVoting.ProposedAction memory action) external view override returns (IGovernanceVoting.ProposedAction memory) {
+        if (action.target != _wormhole) {
+            return action;
+        }
+
+        action.value += ICoreBridge(_wormhole).messageFee();
+
+        return action;
+    }
+
+    /// @notice Decodes a Wormhole publishMessage call and validates its inner payload.
+    function _assertValidWormholeData(bytes calldata data) private view {
+        require(data.length >= 4 && bytes4(data) == ICoreBridge.publishMessage.selector, GovCrosschainInvalidData());
+
+        (, bytes memory payload, ) = abi.decode(data[4:], (uint32, bytes, uint8));
+        CrossChainPayload memory crossChainPayload = abi.decode(payload, (CrossChainPayload));
         require(
             crossChainPayload.targetWormholeChainId != _wormholeChainId,
             GovCrosschainTargetSelf(crossChainPayload.targetWormholeChainId)
         );
-
-        uint256 fee = ICoreBridge(_wormhole).messageFee();
-        require(action.value == fee, GovCrosschainInvalidValue(fee, action.value));
     }
 
     /// @notice It is more gas efficient at deploy to reading immutable from internal method.

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.35;
+import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
-import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
-import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
+import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 
 contract RigoblockGovernanceStrategyTest is Test {
     address internal constant STAKING = address(0x1111);
@@ -22,21 +22,13 @@ contract RigoblockGovernanceStrategyTest is Test {
         vm.mockCall(WORMHOLE, abi.encodeWithSelector(ICoreBridge.messageFee.selector), abi.encode(FEE));
     }
 
-    function _action(
-        address target,
-        bytes memory data,
-        uint256 value
-    ) private pure returns (IGovernanceVoting.ProposedAction memory) {
+    function _action(address target, bytes memory data, uint256 value) private pure returns (IGovernanceVoting.ProposedAction memory) {
         return IGovernanceVoting.ProposedAction({target: target, data: data, value: value});
     }
 
     function _payload(uint16 targetChainId) private pure returns (bytes memory) {
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: TARGET,
-            data: bytes(""),
-            value: 0
-        });
-        IGovernanceCrosschain.CrossChainPayload memory crossChainPayload = IGovernanceCrosschain.CrossChainPayload({
+        IGovernanceVoting.ProposedAction memory action = _action(TARGET, "", 0);
+        CrossChainPayload memory crossChainPayload = CrossChainPayload({
             targetWormholeChainId: targetChainId,
             proposalId: 1,
             action: action
@@ -44,49 +36,58 @@ contract RigoblockGovernanceStrategyTest is Test {
         return abi.encode(crossChainPayload);
     }
 
-    function test_ValidateAction_NonWormhole_Passes() public view {
-        strategy.validateAction(_action(TARGET, "", 0));
+    function _wormholeData(uint16 targetChainId) private pure returns (bytes memory) {
+        return
+            abi.encodeWithSelector(ICoreBridge.publishMessage.selector, uint32(0), _payload(targetChainId), uint8(1));
     }
 
-    function test_ValidateAction_WormholeCorrect_Passes() public view {
-        bytes memory data = abi.encodeWithSelector(
-            ICoreBridge.publishMessage.selector,
-            uint32(0),
-            _payload(TARGET_CHAIN_ID),
-            uint8(1)
-        );
-        strategy.validateAction(_action(WORMHOLE, data, FEE));
+    function test_beforePropose_NonWormhole_Passes() public view {
+        IGovernanceVoting.ProposedAction memory action = _action(TARGET, "", 0);
+        IGovernanceVoting.ProposedAction memory result = strategy.beforePropose(action);
+        assertEq(result.target, action.target);
+        assertEq(result.data, action.data);
+        assertEq(result.value, action.value);
     }
 
-    function test_ValidateAction_WormholeInvalidData_Reverts() public {
+    function test_beforePropose_WormholeCorrect_Passes() public {
+        vm.chainId(1);
+        IGovernanceVoting.ProposedAction memory result = strategy.beforePropose(_action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0));
+        assertEq(result.target, WORMHOLE);
+    }
+
+    function test_beforePropose_NotMainnet_Reverts() public {
+        vm.chainId(LOCAL_CHAIN_ID);
+        vm.expectRevert(RigoblockGovernanceStrategy.GovCrosschainNotMainnet.selector);
+        strategy.beforePropose(_action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0));
+    }
+
+    function test_beforePropose_WormholeInvalidData_Reverts() public {
+        vm.chainId(1);
         bytes memory data = abi.encodePacked(bytes4(keccak256("unknown()")));
         vm.expectRevert(RigoblockGovernanceStrategy.GovCrosschainInvalidData.selector);
-        strategy.validateAction(_action(WORMHOLE, data, FEE));
+        strategy.beforePropose(_action(WORMHOLE, data, 0));
     }
 
-    function test_ValidateAction_WormholeInvalidValue_Reverts() public {
-        bytes memory data = abi.encodeWithSelector(
-            ICoreBridge.publishMessage.selector,
-            uint32(0),
-            _payload(TARGET_CHAIN_ID),
-            uint8(1)
-        );
-        vm.expectRevert(
-            abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidValue.selector, FEE, FEE - 1)
-        );
-        strategy.validateAction(_action(WORMHOLE, data, FEE - 1));
-    }
-
-    function test_ValidateAction_WormholeTargetSelf_Reverts() public {
-        bytes memory data = abi.encodeWithSelector(
-            ICoreBridge.publishMessage.selector,
-            uint32(0),
-            _payload(LOCAL_CHAIN_ID),
-            uint8(1)
-        );
+    function test_beforePropose_WormholeTargetSelf_Reverts() public {
+        vm.chainId(1);
         vm.expectRevert(
             abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainTargetSelf.selector, LOCAL_CHAIN_ID)
         );
-        strategy.validateAction(_action(WORMHOLE, data, FEE));
+        strategy.beforePropose(_action(WORMHOLE, _wormholeData(LOCAL_CHAIN_ID), 0));
+    }
+
+    function test_beforeExecute_NonWormhole_ReturnsUnchanged() public {
+        IGovernanceVoting.ProposedAction memory action = _action(TARGET, "", 0.123 ether);
+        IGovernanceVoting.ProposedAction memory result = strategy.beforeExecute(action);
+        assertEq(result.target, action.target);
+        assertEq(result.data, action.data);
+        assertEq(result.value, action.value);
+    }
+
+    function test_beforeExecute_Wormhole_ReturnsFee() public {
+        IGovernanceVoting.ProposedAction memory action = _action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0);
+        IGovernanceVoting.ProposedAction memory result = strategy.beforeExecute(action);
+        assertEq(result.target, WORMHOLE);
+        assertEq(result.value, FEE);
     }
 }

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.35;
+import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernance.sol";
+import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
@@ -19,9 +21,10 @@ contract GovernanceMigrationForkTest is Test {
     address internal constant PROXY = Constants.GOV_PROXY;
 
     RigoblockGovernance internal newImpl;
+    RigoblockGovernanceStrategy internal newStrategy;
 
     address internal voter = makeAddr("voter");
-    address internal strategy;
+    address internal oldStrategy;
 
     /// @notice Enough GRG to exceed any mainnet quorum threshold and proposal threshold.
     uint256 internal constant VOTER_GRG = 2_000_000e18;
@@ -29,16 +32,29 @@ contract GovernanceMigrationForkTest is Test {
     function setUp() public {
         vm.createSelectFork("mainnet", Constants.MAINNET_BLOCK);
         newImpl = new RigoblockGovernance();
-        strategy = IGovernanceState(PROXY).governanceParameters().params.strategy;
+        oldStrategy = IGovernanceState(PROXY).governanceParameters().params.strategy;
 
-        // Give the test voter enough voting power to create and pass proposals. Strategy
-        // action validation is mocked so the test is not coupled to the live strategy's rules.
+        // Deploy a strategy that supports the new hook interface. The implementation upgrade
+        // introduces beforePropose/beforeExecute calls, so proposals created after the upgrade
+        // need a strategy that implements them.
+        newStrategy = new RigoblockGovernanceStrategy(
+            Constants.GRG_STAKING,
+            Constants.WORMHOLE_ETHEREUM,
+            uint16(2) // Wormhole Ethereum chain id
+        );
+
+        // Give the test voter enough voting power to create and pass proposals. Voting power is
+        // read from the strategy, so we mock it on both the old and the new strategy.
         vm.mockCall(
-            strategy,
+            oldStrategy,
             abi.encodeWithSelector(IGovernanceStrategy.getVotingPower.selector, voter),
             abi.encode(VOTER_GRG)
         );
-        vm.mockCall(strategy, abi.encodeWithSelector(IGovernanceStrategy.validateAction.selector), abi.encode());
+        vm.mockCall(
+            address(newStrategy),
+            abi.encodeWithSelector(IGovernanceStrategy.getVotingPower.selector, voter),
+            abi.encode(VOTER_GRG)
+        );
     }
 
     /// @notice Verifies that the upgrade proposal executes and that historical proposals
@@ -67,8 +83,7 @@ contract GovernanceMigrationForkTest is Test {
     ///     global quorum and reaches Succeeded using the real mainnet strategy.
     function testFork_NewProposal_AfterUpgrade_SnapshotsQuorum() public {
         _executeUpgradeProposal();
-
-        IGovernanceState.EnhancedParams memory params = IGovernanceState(PROXY).governanceParameters();
+        _upgradeStrategyToNewStrategy();
 
         uint256 proposalId = _createVoteAndExecute(_noOpAction());
 
@@ -84,6 +99,7 @@ contract GovernanceMigrationForkTest is Test {
     ///     quorum and can reach Succeeded.
     function testFork_ChangedQuorum_DoesNotResurrectLegacy() public {
         _executeUpgradeProposal();
+        _upgradeStrategyToNewStrategy();
 
         IGovernanceState.EnhancedParams memory params = IGovernanceState(PROXY).governanceParameters();
 
@@ -145,6 +161,22 @@ contract GovernanceMigrationForkTest is Test {
         );
     }
 
+    /// @dev Upgrades the strategy to the new RigoblockGovernanceStrategy that implements the
+    ///     beforePropose/beforeExecute hooks required by the new implementation.
+    /// @notice This is performed by pranking the proxy itself because the focus of the fork test is
+    ///     the implementation migration; a full strategy migration through a separate proposal would
+    ///     require the old strategy to validate actions under rules that predate the new hooks.
+    function _upgradeStrategyToNewStrategy() internal {
+        vm.prank(PROXY);
+        IGovernanceUpgrade(PROXY).upgradeStrategy(address(newStrategy));
+
+        assertEq(
+            IGovernanceState(PROXY).governanceParameters().params.strategy,
+            address(newStrategy),
+            "strategy was not upgraded"
+        );
+    }
+
     /// @dev Returns the EIP-1967 implementation slot used by the governance proxy.
     function _implementationSlot() internal pure returns (bytes32) {
         return 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
@@ -172,9 +204,7 @@ contract GovernanceMigrationForkTest is Test {
 
     /// @dev Creates a proposal as the voter, casts the voter's full voting power for it and
     ///     executes it once the voting period ends.
-    function _createVoteAndExecute(
-        IGovernanceVoting.ProposedAction[] memory actions
-    ) internal returns (uint256 proposalId) {
+    function _createVoteAndExecute(IGovernanceVoting.ProposedAction[] memory actions) internal returns (uint256 proposalId) {
         proposalId = _createProposal(actions, "proposal");
 
         IGovernanceState.ProposalWrapper memory wrapper = IGovernanceState(PROXY).getProposalById(proposalId);

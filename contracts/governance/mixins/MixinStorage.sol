@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import "./MixinImmutables.sol";
+import {MixinImmutables} from "./MixinImmutables.sol";
+import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 
 abstract contract MixinStorage is MixinImmutables {
     // we use the constructor to assert that we are not using occupied storage slots
@@ -16,7 +18,17 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSAL_QUORUM_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.quorum")) - 1));
     }
 
-    function _governanceParameters() internal pure returns (GovernanceParameters storage s) {
+    function _governanceParameters() internal pure returns (IGovernanceState.GovernanceParameters storage s) {
+        assembly {
+            s.slot := _GOVERNANCE_PARAMS_SLOT
+        }
+    }
+
+    struct ParamsWrapper {
+        IGovernanceState.GovernanceParameters governanceParameters;
+    }
+
+    function _paramsWrapper() internal pure returns (ParamsWrapper storage s) {
         assembly {
             s.slot := _GOVERNANCE_PARAMS_SLOT
         }
@@ -42,16 +54,6 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    struct ParamsWrapper {
-        GovernanceParameters governanceParameters;
-    }
-
-    function _paramsWrapper() internal pure returns (ParamsWrapper storage s) {
-        assembly {
-            s.slot := _GOVERNANCE_PARAMS_SLOT
-        }
-    }
-
     struct UintSlot {
         uint256 value;
     }
@@ -63,7 +65,7 @@ abstract contract MixinStorage is MixinImmutables {
     }
 
     struct ProposalByIndex {
-        mapping(uint256 => Proposal) proposalById;
+        mapping(uint256 => IGovernanceState.Proposal) proposalById;
     }
 
     function _proposal() internal pure returns (ProposalByIndex storage s) {
@@ -83,7 +85,7 @@ abstract contract MixinStorage is MixinImmutables {
     }
 
     struct ActionByIndex {
-        mapping(uint256 => mapping(uint256 => ProposedAction)) proposedActionbyIndex;
+        mapping(uint256 => mapping(uint256 => IGovernanceVoting.ProposedAction)) proposedActionbyIndex;
     }
 
     function _proposedAction() internal pure returns (ActionByIndex storage s) {
@@ -93,7 +95,7 @@ abstract contract MixinStorage is MixinImmutables {
     }
 
     struct UserReceipt {
-        mapping(uint256 => mapping(address => Receipt)) userReceiptByProposal;
+        mapping(uint256 => mapping(address => IGovernanceState.Receipt)) userReceiptByProposal;
     }
 
     function _receipt() internal pure returns (UserReceipt storage s) {

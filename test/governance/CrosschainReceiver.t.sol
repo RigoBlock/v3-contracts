@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.35;
+import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge, CoreBridgeVM, GuardianSignature} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 import {CHAIN_ID_ETHEREUM, CHAIN_ID_HYPER_EVM} from "wormhole-solidity-sdk/src/constants/Chains.sol";
 import {CrosschainReceiver} from "../../contracts/governance/crosschain/CrosschainReceiver.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
-import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 
 contract Counter {
@@ -38,14 +39,7 @@ contract CrosschainReceiverTest is Test {
     }
 
     function _encodePayload(IGovernanceVoting.ProposedAction memory action) private pure returns (bytes memory) {
-        return
-            abi.encode(
-                IGovernanceCrosschain.CrossChainPayload({
-                    targetWormholeChainId: TARGET_CHAIN,
-                    proposalId: 1,
-                    action: action
-                })
-            );
+        return abi.encode(CrossChainPayload({targetWormholeChainId: TARGET_CHAIN, proposalId: 1, action: action}));
     }
 
     function _buildVaa(bytes memory payload, uint64 sequence) private view returns (CoreBridgeVM memory) {
@@ -70,12 +64,7 @@ contract CrosschainReceiverTest is Test {
     }
 
     function _buildIncrementAction() private view returns (IGovernanceVoting.ProposedAction memory) {
-        return
-            IGovernanceVoting.ProposedAction({
-                target: address(counter),
-                data: abi.encodeCall(Counter.increment, ()),
-                value: 0
-            });
+        return IGovernanceVoting.ProposedAction({target: address(counter), data: abi.encodeCall(Counter.increment, ()), value: 0});
     }
 
     function test_ReceiveMessage_HappyPath() public {
@@ -102,7 +91,7 @@ contract CrosschainReceiverTest is Test {
     function test_ReceiveMessage_WrongChain_Reverts() public {
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = abi.encode(
-            IGovernanceCrosschain.CrossChainPayload({targetWormholeChainId: 9999, proposalId: 1, action: action})
+            CrossChainPayload({targetWormholeChainId: 9999, proposalId: 1, action: action})
         );
         _mockParseAndVerify(_buildVaa(payload, 1));
 

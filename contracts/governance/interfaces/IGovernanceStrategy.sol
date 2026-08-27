@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../IRigoblockGovernance.sol";
-import "./IRigoblockGovernanceFactory.sol";
+import {IGovernanceState} from "./governance/IGovernanceState.sol";
+import {IGovernanceVoting} from "./governance/IGovernanceVoting.sol";
+import {IRigoblockGovernanceFactory} from "./IRigoblockGovernanceFactory.sol";
 
 interface IGovernanceStrategy {
     /// @notice Reverts if initialization paramters are incorrect.
@@ -20,9 +21,9 @@ interface IGovernanceStrategy {
     /// @param minimumQuorum Number of votes required for a proposal to pass.
     /// @return Tuple of the proposal state.
     function getProposalState(
-        IRigoblockGovernance.Proposal calldata proposal,
+        IGovernanceState.Proposal calldata proposal,
         uint256 minimumQuorum
-    ) external view returns (IRigoblockGovernance.ProposalState);
+    ) external view returns (IGovernanceState.ProposalState);
 
     /// @notice Return the voting period.
     /// @return Number of seconds of period duration.
@@ -37,11 +38,13 @@ interface IGovernanceStrategy {
     /// @param account Address to check votes for.
     function getVotingPower(address account) external view returns (uint256);
 
-    /// @notice Reverts if a proposed action is invalid for this strategy.
-    /// @dev The governance contract calls this hook for every action during
-    ///      execution. Strategies can enforce chain-specific rules (e.g. a
-    ///      Wormhole message must target the local Wormhole core and carry the
-    ///      correct fee) without adding custom logic to the governance contract.
+    /// @notice Validates and optionally modifies an action before it is stored as part of a proposal.
     /// @param action The action to validate.
-    function validateAction(IRigoblockGovernance.ProposedAction calldata action) external view;
+    /// @return The validated (possibly modified) action.
+    function beforePropose(IGovernanceVoting.ProposedAction calldata action) external view returns (IGovernanceVoting.ProposedAction memory);
+
+    /// @notice Returns the action as it should be executed, optionally modifying the value.
+    /// @param action The action to execute.
+    /// @return The action to execute.
+    function beforeExecute(IGovernanceVoting.ProposedAction calldata action) external view returns (IGovernanceVoting.ProposedAction memory);
 }
