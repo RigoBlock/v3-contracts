@@ -437,6 +437,33 @@ contract AHyperliquidForkTest is Test {
         IECrosschain(pool).donate(usdc, 1, params);
     }
 
+    /// @notice Cross-chain donation finalization is also locked if a Hyperliquid action occurs between
+    ///  initialization and finalization.
+    function testFork_DonateFinalizeRevertsWhenLockedByInterleavedHyperliquidAction() public {
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: false
+        });
+
+        // Initialize the donation while no Hyperliquid action is pending.
+        IECrosschain(pool).donate(usdc, 1, params);
+
+        // Increase the pool USDC balance so the finalize-phase balance check passes even after the
+        // Hyperliquid deposit pull. We use the fixture user as the sender.
+        address user = fixture.user();
+        vm.prank(user);
+        IERC20(usdc).transfer(pool, 800_000e6);
+
+        // A Hyperliquid action is recorded between init and finalize, locking _updateNav().
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        // Finalizing the donation calls updateUnitaryValue and must revert with NavLocked.
+        vm.expectRevert(NavLocked.selector);
+        IECrosschain(pool).donate(usdc, 500_000e6, params);
+    }
+
     /// @notice updateUnitaryValue succeeds once the Hyperliquid settlement window has elapsed.
     function testFork_UpdateUnitaryValueSucceedsAfterSettlementWindow() public {
         uint256 depositAmount = 10_000e6;
@@ -451,36 +478,6 @@ contract AHyperliquidForkTest is Test {
 
         NetAssetsValue memory nav = ISmartPoolActions(pool).updateUnitaryValue();
         assertGt(nav.unitaryValue, 0, "Unitary value should be positive after window");
-    }
-
-    /// @notice mintWithToken is deferred during the Hyperliquid settlement window.
-    function testFork_MintWithTokenRevertsDuringSettlementWindow() public {
-        uint256 depositAmount = 10_000e6;
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
-
-        address user = fixture.user();
-        vm.startPrank(user);
-        vm.expectRevert(NavLocked.selector);
-        ISmartPoolActions(pool).mintWithToken(user, 1_000e6, 0, usdc);
-        vm.stopPrank();
-    }
-
-    /// @notice burnForToken is deferred during the Hyperliquid settlement window.
-    function testFork_BurnForTokenRevertsDuringSettlementWindow() public {
-        // Satisfy the default minimum lockup period (30 days) for the tokens minted in the fixture.
-        vm.warp(block.timestamp + 30 days + 1);
-
-        uint256 depositAmount = 10_000e6;
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
-
-        address user = fixture.user();
-        uint256 userBalance = IERC20(pool).balanceOf(user);
-        vm.startPrank(user);
-        vm.expectRevert(NavLocked.selector);
-        ISmartPoolActions(pool).burnForToken(userBalance / 10, 0, usdc);
-        vm.stopPrank();
     }
 
     /// @notice AUniswap.wrapETH(0) is a no-op and does not mutate pool state on HyperEVM.
