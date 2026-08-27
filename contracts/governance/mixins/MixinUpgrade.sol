@@ -1,44 +1,37 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2023 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../interfaces/IGovernanceStrategy.sol";
-import "./MixinStorage.sol"; // storage inherits from interface which declares events
+import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
+import {IGovernanceUpgrade} from "../interfaces/governance/IGovernanceUpgrade.sol";
+import {MixinStorage} from "./MixinStorage.sol";
 
 abstract contract MixinUpgrade is MixinStorage {
+    /// @notice Thrown when an upgrade method is called by an account other than the governance proxy.
+    error GovUpgradeNotApproved();
+
+    /// @notice Thrown when a new threshold, implementation, or strategy is the same as the current one.
+    error GovUpgradeSameAsCurrent();
+
+    /// @notice Thrown when an upgrade target is not a contract.
+    /// @param target The supplied address.
+    error GovUpgradeNotContract(address target);
+
     // upgrades must go through voting, i.e. execute method, which cannot be invoked directly in the implementation
     modifier onlyGovernance() {
-        require(msg.sender == address(this), "GOV_UPGRADE_APPROVAL_ERROR");
+        require(msg.sender == address(this), GovUpgradeNotApproved());
         _;
     }
 
     /// @inheritdoc IGovernanceUpgrade
-    function updateThresholds(uint256 newProposalThreshold, uint256 newQuorumThreshold)
-        external
-        override
-        onlyGovernance
-    {
-        GovernanceParameters storage params = _governanceParameters();
+    function updateThresholds(
+        uint256 newProposalThreshold,
+        uint256 newQuorumThreshold
+    ) external override onlyGovernance {
+        IGovernanceState.GovernanceParameters storage params = _governanceParameters();
         require(
             newProposalThreshold != params.proposalThreshold && newQuorumThreshold != params.quorumThreshold,
-            "UPGRADE_SAME_AS_CURRENT_ERROR"
+            GovUpgradeSameAsCurrent()
         );
         IGovernanceStrategy(params.strategy).assertValidThresholds(newProposalThreshold, newQuorumThreshold);
         params.proposalThreshold = newProposalThreshold;
@@ -52,10 +45,10 @@ abstract contract MixinUpgrade is MixinStorage {
         address currentImplementation = _implementation().value;
 
         // transaction reverted if implementation is same as current
-        require(newImplementation != currentImplementation, "UPGRADE_SAME_AS_CURRENT_ERROR");
+        require(newImplementation != currentImplementation, GovUpgradeSameAsCurrent());
 
         // prevent accidental setting implementation to EOA
-        require(_isContract(newImplementation), "UPGRADE_NOT_CONTRACT_ERROR");
+        require(_isContract(newImplementation), GovUpgradeNotContract(newImplementation));
 
         // we write new address to storage at implementation slot location and emit eip1967 log
         _implementation().value = newImplementation;
@@ -65,8 +58,8 @@ abstract contract MixinUpgrade is MixinStorage {
     /// @inheritdoc IGovernanceUpgrade
     function upgradeStrategy(address newStrategy) external override onlyGovernance {
         address oldStrategy = _governanceParameters().strategy;
-        require(newStrategy != oldStrategy, "UPGRADE_SAME_AS_CURRENT_ERROR");
-        require(_isContract(newStrategy), "UPGRADE_NOT_CONTRACT_ERROR");
+        require(newStrategy != oldStrategy, GovUpgradeSameAsCurrent());
+        require(_isContract(newStrategy), GovUpgradeNotContract(newStrategy));
 
         // we write the new address in the strategy storage slot
         _governanceParameters().strategy = newStrategy;

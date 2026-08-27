@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
 /// @title ForkBlocks - Fork block numbers for testing
 /// @notice Isolated fork block numbers to minimize cache invalidation

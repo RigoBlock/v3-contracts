@@ -2,11 +2,9 @@ import "hardhat-deploy";
 import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { AddressZero } from "@ethersproject/constants"
+import { AddressZero } from "@ethersproject/constants";
 
-const deploy: DeployFunction = async function (
-  hre: HardhatRuntimeEnvironment,
-) {
+const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   if (!["hardhat", "localhost"].includes(hre.network.name)) {
     console.log(`Skipping ${__filename} on ${hre.network.name}`);
     return;
@@ -25,16 +23,16 @@ const deploy: DeployFunction = async function (
 
   const authorityInstance = await hre.ethers.getContractAt(
     "Authority",
-    authority.address
+    authority.address,
   );
-/*
+  /*
   await authorityInstance.setWhitelister(deployer, true);
 */
   const registry = await deploy("PoolRegistry", {
     from: deployer,
     args: [
       authority.address,
-      deployer  // Rigoblock Dao
+      deployer, // Rigoblock Dao
     ],
     log: true,
     deterministicDeployment: true,
@@ -46,7 +44,7 @@ const deploy: DeployFunction = async function (
     args: [
       deployer, // address _setMinter
       deployer, // address _setRigoblock
-      deployer // address _grgHolder
+      deployer, // address _grgHolder
     ],
     log: true,
     deterministicDeployment: true,
@@ -54,49 +52,47 @@ const deploy: DeployFunction = async function (
 
   const rigoTokenInstance = await hre.ethers.getContractAt(
     "RigoToken",
-    rigoToken.address
+    rigoToken.address,
   );
 
   const grgTransferProxy = await deploy("ERC20Proxy", {
     from: deployer,
-    args: [deployer],  // Authorizable(_owner)
+    args: [deployer], // Authorizable(_owner)
     log: true,
     deterministicDeployment: true,
   });
-/*
+
   const grgTransferProxyInstance = await hre.ethers.getContractAt(
     "ERC20Proxy",
-    grgTransferProxy.address
+    grgTransferProxy.address,
   );
-*/
+
   // same on altchains but different from one deployed on Ethereum
   const grgVault = await deploy("GrgVault", {
     from: deployer,
     args: [
       grgTransferProxy.address,
       rigoToken.address,
-      deployer  // Authorizable(_owner)
+      deployer, // Authorizable(_owner)
     ],
     log: true,
     deterministicDeployment: true,
   });
-/*
-  // TODO: test if following condition necessary
-  await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
-*/
+
+  // GrgVault must be authorized in the GRG transfer proxy to move GRG on behalf of stakers.
+  if (!(await grgTransferProxyInstance.authorized(grgVault.address))) {
+    await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address);
+  }
+
   const grgVaultInstance = await hre.ethers.getContractAt(
     "GrgVault",
-    grgVault.address
+    grgVault.address,
   );
 
   // same on altchains but different from one deployed on Ethereum
   const staking = await deploy("Staking", {
     from: deployer,
-    args: [
-        grgVault.address,
-        registry.address,
-        rigoToken.address
-    ],
+    args: [grgVault.address, registry.address, rigoToken.address],
     log: true,
     deterministicDeployment: true,
   });
@@ -105,17 +101,28 @@ const deploy: DeployFunction = async function (
   const stakingProxy = await deploy("StakingProxy", {
     from: deployer,
     args: [
-        staking.address,
-        deployer  // Authorizable(_owner)
+      staking.address,
+      deployer, // Authorizable(_owner)
     ],
     log: true,
     deterministicDeployment: true,
   });
-/*
-  await grgVaultInstance.addAuthorizedAddress(deployer)
-  await grgVaultInstance.setStakingProxy(stakingProxy.address)
-  await grgVaultInstance.removeAuthorizedAddress(deployer)
-*/
+  if (!(await grgVaultInstance.authorized(deployer))) {
+    await grgVaultInstance.addAuthorizedAddress(deployer);
+  }
+  await grgVaultInstance.setStakingProxy(stakingProxy.address);
+  await grgVaultInstance.removeAuthorizedAddress(deployer);
+
+  // same on altchains but different from one deployed on Ethereum
+  const inflation = await deploy("Inflation", {
+    from: deployer,
+    args: [rigoToken.address, stakingProxy.address],
+    log: true,
+    deterministicDeployment: true,
+  });
+
+  await rigoTokenInstance.changeMintingAddress(inflation.address);
+
   const governanceFactory = await deploy("RigoblockGovernanceFactory", {
     from: deployer,
     args: [],
@@ -132,11 +139,15 @@ const deploy: DeployFunction = async function (
 
   const governanceStrategy = await deploy("RigoblockGovernanceStrategy", {
     from: deployer,
-    args: [stakingProxy.address],
+    args: [
+      stakingProxy.address,
+      "0x1111111111111111111111111111111111111111",
+      1,
+    ],
     log: true,
     deterministicDeployment: true,
   });
 };
 
-deploy.tags = ['governance-tests', 'l2-suite', 'main-suite']
+deploy.tags = ["governance-tests", "l2-suite", "main-suite"];
 export default deploy;

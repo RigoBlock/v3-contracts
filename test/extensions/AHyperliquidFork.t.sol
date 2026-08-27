@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
+import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
@@ -384,7 +385,7 @@ contract AHyperliquidForkTest is Test {
 
         vm.startPrank(poolOwner);
         vm.expectRevert();
-        IAGovernance(pool).propose(new IRigoblockGovernance.ProposedAction[](0), "");
+        IAGovernance(pool).propose(new IGovernanceVoting.ProposedAction[](0), "");
         vm.stopPrank();
 
         assertEq(ISmartPoolState(pool).getActiveApplications(), appsBefore, "No application bit changed");

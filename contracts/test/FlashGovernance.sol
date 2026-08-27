@@ -2,11 +2,11 @@
 
 pragma solidity >0.8.0 <0.9.0;
 
-import "../governance/IRigoblockGovernance.sol";
-import "../governance/interfaces/governance/IGovernanceVoting.sol";
-import "../staking/interfaces/IStaking.sol";
-import "../staking/interfaces/IStructs.sol";
-import "../tokens/ERC20/IERC20.sol";
+import {IRigoblockGovernance} from "../governance/IRigoblockGovernance.sol";
+import {IGovernanceVoting} from "../governance/interfaces/governance/IGovernanceVoting.sol";
+import {IStaking} from "../staking/interfaces/IStaking.sol";
+import {IStructs} from "../staking/interfaces/IStructs.sol";
+import {IERC20} from "../tokens/ERC20/IERC20.sol";
 
 /// @notice The following contract simulates a flash transaction.
 /// @dev Flash loan of GRG is emulated by transferring GRG to this contract before attack.
@@ -37,14 +37,20 @@ contract FlashGovernance {
         IStaking(_stakingProxy).endEpoch();
         IRigoblockGovernance(_governance).castVote(1, IGovernanceVoting.VoteType.For);
         // should revert with reason voting closed, as state changed, not with already voted
-        try IRigoblockGovernance(_governance).castVote(1, IGovernanceVoting.VoteType.For) {} catch Error(
-            string memory revertReason
-        ) {
+        try IRigoblockGovernance(_governance).castVote(1, IGovernanceVoting.VoteType.For) {
+            revert("second castVote should have reverted");
+        } catch Error(string memory revertReason) {
             emit CatchStringEvent(revertReason);
+        } catch (bytes memory returnData) {
+            emit ReturnDataEvent(returnData);
         }
         // should not be able to execute
-        try IRigoblockGovernance(_governance).execute(1) {} catch Error(string memory revertReason) {
+        try IRigoblockGovernance(_governance).execute(1) {
+            revert("execute should have reverted");
+        } catch Error(string memory revertReason) {
             emit CatchStringEvent(revertReason);
+        } catch (bytes memory returnData) {
+            emit ReturnDataEvent(returnData);
         }
         IStaking(_stakingProxy).moveStake(
             IStructs.StakeInfo(IStructs.StakeStatus.DELEGATED, poolId),

@@ -2,7 +2,7 @@ import "hardhat-deploy";
 import "@nomiclabs/hardhat-ethers";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { chainConfig } from "../utils/constants";
+import { chainConfig, mainnetGovernanceProxy } from "../utils/constants";
 import { enableManagedNonce } from "../utils/nonce";
 
 const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
@@ -24,6 +24,51 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const config = chainConfig[chainIdNum];
 
+  // Mainnet is the source of cross-chain governance messages: deploy the full
+  // governance suite (factory, implementation, strategy) there.
+  if (chainIdNum === 1) {
+    await deploy("RigoblockGovernanceFactory", {
+      from: deployer,
+      args: [],
+      log: true,
+      deterministicDeployment: true,
+    });
+
+    await deploy("RigoblockGovernance", {
+      from: deployer,
+      args: [],
+      log: true,
+      deterministicDeployment: true,
+    });
+
+    await deploy("RigoblockGovernanceStrategy", {
+      from: deployer,
+      args: [config.stakingProxy, config.wormhole, config.wormholeChainId],
+      log: true,
+      deterministicDeployment: true,
+    });
+    return;
+  }
+
+  // Receiver chains execute governance actions coming from Ethereum mainnet.
+  // This includes chains with no staking proxy (e.g. HyperEVM) and chains where
+  // the local staking proxy is being deprecated for governance (e.g. Unichain).
+  if (config.wormhole != "0x0000000000000000000000000000000000000000") {
+    await deploy("CrosschainReceiver", {
+      from: deployer,
+      args: [
+        config.wormhole,
+        2,
+        hre.ethers.utils.hexZeroPad(mainnetGovernanceProxy, 32),
+      ],
+      log: true,
+      deterministicDeployment: true,
+    });
+    return;
+  }
+
+  // Fallback for legacy L2s without Wormhole config: keep deploying the full
+  // governance suite until they are migrated to cross-chain governance.
   await deploy("RigoblockGovernanceFactory", {
     from: deployer,
     args: [],
@@ -40,7 +85,7 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   await deploy("RigoblockGovernanceStrategy", {
     from: deployer,
-    args: [config.stakingProxy],
+    args: [config.stakingProxy, config.wormhole, config.wormholeChainId],
     log: true,
     deterministicDeployment: true,
   });
