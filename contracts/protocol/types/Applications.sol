@@ -20,8 +20,11 @@ struct TokenIdsSlot {
 /// @notice Packed Hyperliquid in-flight accounting.
 /// @dev `lastActionCompositeBlock` stores `(l1BlockNumber << 128) | block.number` so that the
 ///  in-flight window aligns with HyperCore state updates rather than EVM block production.
+/// @dev `lastActionTimestamp` records when any Hyperliquid action was last recorded. It is used by
+///  the core implementation to defer NAV-sensitive operations (mint/burn) for a short settlement window.
 struct HyperliquidData {
     uint256 lastActionCompositeBlock;
     int128 inFlightAmount;
     uint64 pendingSpotSend;
+    uint48 lastActionTimestamp;
 }

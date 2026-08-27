@@ -26,7 +26,7 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
     using ApplicationsLib for ApplicationsSlot;
     using SafeCast for uint256;
 
-    string private constant _REQUIRED_VERSION = "4.4.0";
+    string private constant _REQUIRED_VERSION = "4.4.1";
 
     /// @dev Asset IDs below this threshold are core perp assets.
     uint64 private constant _ASSET_ID_CORE_SPOT_BASE = 10_000;
@@ -131,7 +131,6 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         uint64 spotTotal = PrecompileLib.spotBalance(address(this), token).total;
         require(spotTotal >= amount + pendingSpotSend + _BRIDGE_GAS_RESERVE, InsufficientBridgeReserve());
 
-        HyperliquidLib.recordAction(-SafeCast.toInt256(HLConversions.weiToEvm(token, amount)));
         CoreWriterLib.spotSend(destinationAddress, token, amount);
     }
 

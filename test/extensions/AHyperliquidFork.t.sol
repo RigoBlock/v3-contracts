@@ -7,6 +7,7 @@ import {console2} from "forge-std/console2.sol";
 import {HyperliquidDeploymentFixture} from "../fixtures/HyperliquidDeploymentFixture.sol";
 import {IAHyperliquid} from "../../contracts/protocol/extensions/adapters/interfaces/IAHyperliquid.sol";
 import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
+import {CoreWriterLib} from "hyper-evm-lib/CoreWriterLib.sol";
 import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
@@ -43,9 +44,10 @@ import {IAllowanceHolder} from "0x-settler/src/allowanceholder/IAllowanceHolder.
 import {IDeployer} from "0x-settler/src/deployer/IDeployer.sol";
 import {Feature} from "0x-settler/src/deployer/Feature.sol";
 
-/// @dev Local copy of the error selector so we do not need to import the implementation.
+/// @dev Local copies of error selectors so we do not need to import the implementation.
 error BaseTokenPriceFeedError();
 error TokenPriceFeedDoesNotExist(address token);
+error NavLocked();
 
 /// @title AHyperliquidForkTest
 /// @notice HyperEVM fork tests for the Hyperliquid adapter.
@@ -121,7 +123,7 @@ contract AHyperliquidForkTest is Test {
         );
     }
 
-    /// @notice NAV read does not revert after depositing to HyperCore.
+    /// @notice NAV read does not revert after the Hyperliquid settlement window elapses.
     /// @dev The test mocks the HyperCore account-value precompile because Foundry's EVM does not
     ///  implement it. The mock represents a later state in which the deposit is observable, without
     ///  asserting anything about production settlement timing.
@@ -136,7 +138,9 @@ contract AHyperliquidForkTest is Test {
         _mockSpotBalance(pool, 0, 0);
         _mockUsdcTokenInfo();
 
-        // Same-block NAV read: should succeed because of the Hyperliquid base-token carve-out.
+        // Warp past the settlement window before reading NAV.
+        vm.warp(block.timestamp + 61 seconds);
+
         NetAssetsValue memory nav = ISmartPoolActions(pool).updateUnitaryValue();
         assertGt(nav.unitaryValue, 0, "Unitary value should be positive");
 
@@ -262,6 +266,191 @@ contract AHyperliquidForkTest is Test {
 
         // Defensive: assert all other known application bits are off.
         assertEq(activeApps & ~hyperliquidBit, 0, "No application other than HYPERLIQUID should be active");
+    }
+
+    /// @notice A spot-send withdrawal request must not change the pool's unitary value once the
+    ///  settlement window elapses. Deflating NAV before the EVM-side USDC credit arrives would
+    ///  understate the pool's value.
+    function testFork_SpotSendWithdrawalDoesNotChangeNavAfterSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+
+        // Activate the Hyperliquid application and record an in-flight deposit.
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        // Warp past the deposit window so the pre-request NAV read is allowed.
+        vm.warp(block.timestamp + 61 seconds);
+
+        // Simulate a Core state where the pool already holds 20k USDC in the spot account.
+        uint64 spotAmountWei = 20_000e6 * 1e2;
+        _mockAccountMarginSummary(0);
+        _mockSpotBalance(pool, HLConstants.USDC_TOKEN_INDEX, spotAmountWei);
+
+        NetAssetsValue memory navBefore = ISmartPoolActions(pool).updateUnitaryValue();
+
+        uint64 withdrawAmountWei = 5_000e6 * 1e2;
+        address systemAddress = CoreWriterLib.getSystemAddress(HLConstants.USDC_TOKEN_INDEX);
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.SPOT_SEND_ACTION),
+            abi.encode(systemAddress, HLConstants.USDC_TOKEN_INDEX, withdrawAmountWei)
+        );
+
+        _mockCoreUserExists(pool, true);
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).sendRawAction(data);
+
+        // Warp past the spot-send window before reading NAV again.
+        vm.warp(block.timestamp + 61 seconds);
+
+        NetAssetsValue memory navAfter = ISmartPoolActions(pool).updateUnitaryValue();
+        assertEq(navAfter.unitaryValue, navBefore.unitaryValue, "Spot-send request must not change unitaryValue");
+    }
+
+    /// @notice Minting is deferred during the 60-second Hyperliquid settlement window.
+    function testFork_MintRevertsDuringSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        address user = fixture.user();
+        vm.startPrank(user);
+        vm.expectRevert(NavLocked.selector);
+        ISmartPoolActions(pool).mint(user, 1_000e6, 0);
+        vm.stopPrank();
+    }
+
+    /// @notice Minting succeeds once the Hyperliquid settlement window has elapsed.
+    function testFork_MintSucceedsAfterSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        vm.warp(block.timestamp + 61 seconds);
+
+        // Mock Core state so the post-window NAV update succeeds.
+        _mockAccountMarginSummary(0);
+        _mockSpotBalance(pool, HLConstants.USDC_TOKEN_INDEX, 0);
+
+        address user = fixture.user();
+        uint256 userBalanceBefore = IERC20(pool).balanceOf(user);
+        vm.startPrank(user);
+        ISmartPoolActions(pool).mint(user, 1_000e6, 0);
+        vm.stopPrank();
+
+        assertGt(IERC20(pool).balanceOf(user), userBalanceBefore, "Mint should increase user balance");
+    }
+
+    /// @notice Burning is deferred during the 60-second Hyperliquid settlement window.
+    function testFork_BurnRevertsDuringSettlementWindow() public {
+        // Satisfy the default minimum lockup period (30 days) for the tokens minted in the fixture.
+        vm.warp(block.timestamp + 30 days + 1);
+
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        address user = fixture.user();
+        uint256 userBalance = IERC20(pool).balanceOf(user);
+        vm.startPrank(user);
+        vm.expectRevert(NavLocked.selector);
+        ISmartPoolActions(pool).burn(userBalance / 10, 0);
+        vm.stopPrank();
+    }
+
+    /// @notice Burning succeeds once the Hyperliquid settlement window has elapsed.
+    function testFork_BurnSucceedsAfterSettlementWindow() public {
+        // Satisfy the default minimum lockup period (30 days) for the tokens minted in the fixture.
+        vm.warp(block.timestamp + 30 days + 1);
+
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        vm.warp(block.timestamp + 61 seconds);
+
+        // Mock Core state so the post-window NAV update succeeds.
+        _mockAccountMarginSummary(0);
+        _mockSpotBalance(pool, HLConstants.USDC_TOKEN_INDEX, 0);
+
+        address user = fixture.user();
+        uint256 userBalance = IERC20(pool).balanceOf(user);
+        vm.startPrank(user);
+        ISmartPoolActions(pool).burn(userBalance / 10, 0);
+        vm.stopPrank();
+
+        assertLt(IERC20(pool).balanceOf(user), userBalance, "Burn should decrease user balance");
+    }
+
+    /// @notice NAV-sensitive operations must revert during the Hyperliquid settlement window.
+    /// @dev Any call that triggers `_updateNav()` is locked for 60 seconds after a Hyperliquid action
+    ///  so a stale HyperCore snapshot cannot be stored or used for share issuance/redemption.
+    function testFork_UpdateUnitaryValueRevertsDuringSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        vm.expectRevert(NavLocked.selector);
+        ISmartPoolActions(pool).updateUnitaryValue();
+    }
+
+    /// @notice The settlement lock is triggered by any Hyperliquid action, not just deposits.
+    function testFork_SendRawActionLocksUpdateUnitaryValue() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        // Warp past the deposit window so the subsequent action resets the timestamp.
+        vm.warp(block.timestamp + 61 seconds);
+
+        _mockCoreUserExists(pool, true);
+        _mockSpotBalance(pool, HLConstants.USDC_TOKEN_INDEX, 20_000e6 * 1e2);
+
+        uint64 withdrawAmountWei = 5_000e6 * 1e2;
+        address systemAddress = CoreWriterLib.getSystemAddress(HLConstants.USDC_TOKEN_INDEX);
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.SPOT_SEND_ACTION),
+            abi.encode(systemAddress, HLConstants.USDC_TOKEN_INDEX, withdrawAmountWei)
+        );
+
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).sendRawAction(data);
+
+        // The spot send reset the settlement window, so updateUnitaryValue must revert again.
+        vm.expectRevert(NavLocked.selector);
+        ISmartPoolActions(pool).updateUnitaryValue();
+    }
+
+    /// @notice Cross-chain donation initialization is a NAV-sensitive operation and is locked.
+    function testFork_DonateInitRevertsDuringSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: false
+        });
+
+        vm.expectRevert(NavLocked.selector);
+        IECrosschain(pool).donate(usdc, 1, params);
+    }
+
+    /// @notice updateUnitaryValue succeeds once the Hyperliquid settlement window has elapsed.
+    function testFork_UpdateUnitaryValueSucceedsAfterSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        vm.warp(block.timestamp + 61 seconds);
+
+        // Mock Core state so the post-window NAV update succeeds.
+        _mockAccountMarginSummary(0);
+        _mockSpotBalance(pool, HLConstants.USDC_TOKEN_INDEX, 0);
+
+        NetAssetsValue memory nav = ISmartPoolActions(pool).updateUnitaryValue();
+        assertGt(nav.unitaryValue, 0, "Unitary value should be positive after window");
     }
 
     /// @notice AUniswap.wrapETH(0) is a no-op and does not mutate pool state on HyperEVM.
@@ -477,6 +666,7 @@ contract AHyperliquidForkTest is Test {
     address private constant _SPOT_BALANCE = HLConstants.SPOT_BALANCE_PRECOMPILE_ADDRESS;
     address private constant _TOKEN_INFO = HLConstants.TOKEN_INFO_PRECOMPILE_ADDRESS;
     address private constant _ACCOUNT_MARGIN_SUMMARY = HLConstants.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS;
+    address private constant _CORE_USER_EXISTS = HLConstants.CORE_USER_EXISTS_PRECOMPILE_ADDRESS;
     address private constant _L1_BLOCK_NUMBER = HLConstants.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS;
 
     /// @notice Mocks the tokenInfo precompile for USDC (token index 0).
@@ -510,5 +700,10 @@ contract AHyperliquidForkTest is Test {
     /// @notice Mocks the L1 block number precompile used for composite-block in-flight tracking.
     function _mockL1BlockNumber() internal {
         vm.mockCall(_L1_BLOCK_NUMBER, abi.encode(), abi.encode(uint64(block.number)));
+    }
+
+    /// @notice Mocks the Core user-existence precompile.
+    function _mockCoreUserExists(address account, bool exists) internal {
+        vm.mockCall(_CORE_USER_EXISTS, abi.encode(account), abi.encode(exists));
     }
 }

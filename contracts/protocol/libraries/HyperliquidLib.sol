@@ -68,6 +68,7 @@ library HyperliquidLib {
             data.pendingSpotSend = 0;
             data.lastActionCompositeBlock = compositeBlock;
         }
+        data.lastActionTimestamp = uint48(block.timestamp);
     }
 
     /// @dev Returns a composite block number keyed to HyperCore's L1 block and the EVM block.

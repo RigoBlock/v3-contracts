@@ -23,9 +23,11 @@ There is no direct perp-to-EVM bridge in CoreWriter, so both steps are required.
 
 ## NAV / settlement gap
 
-HyperCore state lags HyperEVM writes by at least one block. `HyperliquidLib` records an in-flight USDC adjustment on every state-affecting action so NAV is not understated during the settlement gap. A cumulative same-block `SPOT_SEND` counter prevents multiple withdrawal requests from exceeding the available Core spot balance while the precompile view is stale.
+HyperCore state lags HyperEVM writes by at least one block. `HyperliquidLib` records an in-flight USDC adjustment on deposits and a cumulative same-block `SPOT_SEND` counter on withdrawals so NAV is not understated or overcommitted during the settlement gap.
 
-The in-flight adjustment is applied only in the block in which the action is submitted. If HyperCore remains stale into the next block, NAV may temporarily diverge from the eventual settled state. Pool operators should avoid NAV-sensitive operations (mints, burns, cross-chain transfers) until HyperCore has caught up.
+To protect share issuers and redeemers from transacting against a stale HyperCore snapshot, `mint` and `burn` are deferred for `60 seconds` after any Hyperliquid action (`deposit`, `sendRawAction`, etc.). This settlement window is enforced on-chain by `MixinActions._requireHyperliquidSettlementNotPending()`, which reads `StorageLib.hyperliquidData().lastActionTimestamp` and reverts if the most recent action is within the window. The guard applies to all Hyperliquid actions, not just deposits, because limit orders, spot sends and USD-class transfers can all move Core value.
+
+Operators and users should still avoid relying on same-block NAV for economically consequential operations, because HyperCore settlement can remain stale into the next block even after the on-chain guard expires.
 
 ## Limit orders and same-block fills
 

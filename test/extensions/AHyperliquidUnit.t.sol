@@ -697,6 +697,58 @@ contract AHyperliquidUnit is Test {
         assertEq(balances[0].amount, 10_000);
     }
 
+    /// @notice A spot-send withdrawal request must not change the Hyperliquid app balance in the same
+    ///  block, because the EVM-side USDC credit happens later. Deflating the balance at request time
+    ///  would incorrectly depress NAV while the funds are still owned by the pool (in transit).
+    function testSpotSendWithdrawalDoesNotChangeNavInRequestBlock() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        NavViewHarness navHarness = new NavViewHarness();
+        address grgStakingProxy = address(0x123);
+        uint64 spotAmountWei = 200e6 * 1e2;
+        uint64 withdrawAmountWei = 50e6 * 1e2;
+
+        // Mock the pool as having only the Hyperliquid application active.
+        uint256 packedApps = 1 << uint256(Applications.HYPERLIQUID);
+        vm.mockCall(
+            address(pool),
+            abi.encodeWithSelector(ISmartPoolState.getActiveApplications.selector),
+            abi.encode(packedApps)
+        );
+
+        // NavView queries GRG staking even when the bit is off; mock a zero stake.
+        vm.mockCall(
+            grgStakingProxy,
+            abi.encodeWithSelector(IStaking.getTotalStake.selector, address(pool)),
+            abi.encode(uint256(0))
+        );
+
+        // HyperCore holds 200 USDC for the pool; zero perp account value.
+        _mockAccountMarginSummary(address(pool), 0);
+        _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, spotAmountWei);
+        _mockCoreUserExists(address(pool), true);
+
+        AppTokenBalance[] memory balances = navHarness.getAppTokenBalances(address(pool), grgStakingProxy, address(0));
+        assertEq(balances.length, 1);
+        int256 appBalanceBefore = balances[0].amount;
+        assertEq(appBalanceBefore, 200e6);
+
+        // Request a 50 USDC spot-send withdrawal from HyperCore.
+        address systemAddress = CoreWriterLib.getSystemAddress(HLConstants.USDC_TOKEN_INDEX);
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.SPOT_SEND_ACTION),
+            abi.encode(systemAddress, HLConstants.USDC_TOKEN_INDEX, withdrawAmountWei)
+        );
+        IAHyperliquid(address(pool)).sendRawAction(data);
+
+        // Same-block app balance must be unchanged: the funds have not yet arrived on EVM and the
+        // pool still owns them while they are in transit.
+        balances = navHarness.getAppTokenBalances(address(pool), grgStakingProxy, address(0));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].amount, appBalanceBefore, "Spot-send request must not deflate NAV");
+    }
+
     function _BRIDGE_GAS_RESERVE() private pure returns (uint64) {
         return 1e7;
     }

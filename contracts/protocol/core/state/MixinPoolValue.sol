@@ -10,6 +10,7 @@ import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
+import {StorageLib} from "../../libraries/StorageLib.sol";
 import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {ExternalApp} from "../../types/ExternalApp.sol";
@@ -25,10 +26,16 @@ abstract contract MixinPoolValue is MixinOwnerActions {
     using SafeCast for uint256;
 
     error BaseTokenPriceFeedError();
+    error NavLocked();
 
     /// @notice Uses transient storage to keep track of unique token balances.
     /// @dev With null total supply a pool will return the last stored value.
     function _updateNav() internal override returns (NavComponents memory components) {
+        if (block.chainid == _HYPEREVM_CHAIN_ID) {
+            uint256 l = StorageLib.hyperliquidData().lastActionTimestamp; // TODO: check if should implement the method in MixinStorage instead/as well
+            require(l == 0 || block.timestamp >= l + _INFLIGHT_WINDOW, NavLocked());
+        }
+
         components.unitaryValue = poolTokens().unitaryValue;
         components.totalSupply = poolTokens().totalSupply;
         components.baseToken = pool().baseToken;
