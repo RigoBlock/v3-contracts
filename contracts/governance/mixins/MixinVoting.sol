@@ -40,9 +40,6 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @param provided The amount of native tokens sent with the call.
     error GovExecutionValueMismatch(uint256 required, uint256 provided);
 
-    /// @notice Thrown when refunding excess native tokens to the caller fails.
-    error GovRefundFailed();
-
     /// @inheritdoc IGovernanceVoting
     function propose(
         IGovernanceVoting.ProposedAction[] memory actions,
@@ -190,7 +187,8 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
         // if vote reaches qualified majority we prepare execution at next block
         if (_getProposalState(proposalId) == IGovernanceState.ProposalState.Qualified) {
-            proposal.endBlockOrTime = _paramsWrapper().governanceParameters.timeType == IGovernanceState.TimeType.Timestamp
+            proposal.endBlockOrTime = _paramsWrapper().governanceParameters.timeType ==
+                IGovernanceState.TimeType.Timestamp
                 ? block.timestamp
                 : block.number;
         }

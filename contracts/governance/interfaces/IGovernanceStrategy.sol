@@ -41,10 +41,14 @@ interface IGovernanceStrategy {
     /// @notice Validates and optionally modifies an action before it is stored as part of a proposal.
     /// @param action The action to validate.
     /// @return The validated (possibly modified) action.
-    function beforePropose(IGovernanceVoting.ProposedAction calldata action) external view returns (IGovernanceVoting.ProposedAction memory);
+    function beforePropose(
+        IGovernanceVoting.ProposedAction calldata action
+    ) external view returns (IGovernanceVoting.ProposedAction memory);
 
     /// @notice Returns the action as it should be executed, optionally modifying the value.
     /// @param action The action to execute.
     /// @return The action to execute.
-    function beforeExecute(IGovernanceVoting.ProposedAction calldata action) external view returns (IGovernanceVoting.ProposedAction memory);
+    function beforeExecute(
+        IGovernanceVoting.ProposedAction calldata action
+    ) external view returns (IGovernanceVoting.ProposedAction memory);
 }

@@ -78,7 +78,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         }
     }
 
-    function _qualifiedConsensus(IGovernanceState.Proposal memory proposal, uint256 minimumQuorum) private view returns (bool) {
+    function _qualifiedConsensus(
+        IGovernanceState.Proposal memory proposal,
+        uint256 minimumQuorum
+    ) private view returns (bool) {
         return (3 * proposal.votesFor >
             2 *
                 IStaking(_getStakingProxy())
@@ -167,7 +170,9 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function beforeExecute(IGovernanceVoting.ProposedAction memory action) external view override returns (IGovernanceVoting.ProposedAction memory) {
+    function beforeExecute(
+        IGovernanceVoting.ProposedAction memory action
+    ) external view override returns (IGovernanceVoting.ProposedAction memory) {
         if (action.target != _wormhole) {
             return action;
         }

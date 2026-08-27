@@ -9,7 +9,9 @@ import {MixinStorage} from "./MixinStorage.sol";
 
 abstract contract MixinState is MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
-    function getActions(uint256 proposalId) external view override returns (IGovernanceVoting.ProposedAction[] memory proposedActions) {
+    function getActions(
+        uint256 proposalId
+    ) external view override returns (IGovernanceVoting.ProposedAction[] memory proposedActions) {
         IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposal.actionsLength;
         proposedActions = new IGovernanceVoting.ProposedAction[](actionsLength);
@@ -24,7 +26,10 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function getReceipt(uint256 proposalId, address voter) external view override returns (IGovernanceState.Receipt memory) {
+    function getReceipt(
+        uint256 proposalId,
+        address voter
+    ) external view override returns (IGovernanceState.Receipt memory) {
         return _receipt().userReceiptByProposal[proposalId][voter];
     }
 
@@ -35,7 +40,12 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceState
     function governanceParameters() external view override returns (IGovernanceState.EnhancedParams memory) {
-        return IGovernanceState.EnhancedParams({params: _paramsWrapper().governanceParameters, name: _name().value, version: VERSION});
+        return
+            IGovernanceState.EnhancedParams({
+                params: _paramsWrapper().governanceParameters,
+                name: _name().value,
+                version: VERSION
+            });
     }
 
     /// @inheritdoc IGovernanceState
@@ -64,10 +74,14 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function getProposalById(uint256 proposalId) public view override returns (IGovernanceState.ProposalWrapper memory proposalWrapper) {
+    function getProposalById(
+        uint256 proposalId
+    ) public view override returns (IGovernanceState.ProposalWrapper memory proposalWrapper) {
         proposalWrapper.proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposalWrapper.proposal.actionsLength;
-        IGovernanceVoting.ProposedAction[] memory proposedAction = new IGovernanceVoting.ProposedAction[](actionsLength);
+        IGovernanceVoting.ProposedAction[] memory proposedAction = new IGovernanceVoting.ProposedAction[](
+            actionsLength
+        );
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
