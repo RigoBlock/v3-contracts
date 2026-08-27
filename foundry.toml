@@ -6,7 +6,6 @@ test = "test"
 cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
-auto_detect_remappings = false
 gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNavImpactPool", "TestSafeTransferLib", "ExtensionsMap", "RigoblockPoolProxy.0.8.17"]
 fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
 ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
