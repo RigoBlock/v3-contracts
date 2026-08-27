@@ -453,6 +453,36 @@ contract AHyperliquidForkTest is Test {
         assertGt(nav.unitaryValue, 0, "Unitary value should be positive after window");
     }
 
+    /// @notice mintWithToken is deferred during the Hyperliquid settlement window.
+    function testFork_MintWithTokenRevertsDuringSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        address user = fixture.user();
+        vm.startPrank(user);
+        vm.expectRevert(NavLocked.selector);
+        ISmartPoolActions(pool).mintWithToken(user, 1_000e6, 0, usdc);
+        vm.stopPrank();
+    }
+
+    /// @notice burnForToken is deferred during the Hyperliquid settlement window.
+    function testFork_BurnForTokenRevertsDuringSettlementWindow() public {
+        // Satisfy the default minimum lockup period (30 days) for the tokens minted in the fixture.
+        vm.warp(block.timestamp + 30 days + 1);
+
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        address user = fixture.user();
+        uint256 userBalance = IERC20(pool).balanceOf(user);
+        vm.startPrank(user);
+        vm.expectRevert(NavLocked.selector);
+        ISmartPoolActions(pool).burnForToken(userBalance / 10, 0, usdc);
+        vm.stopPrank();
+    }
+
     /// @notice AUniswap.wrapETH(0) is a no-op and does not mutate pool state on HyperEVM.
     function testFork_AUniswap_WrapZeroIsNoOp() public {
         _deployAndAuthorizeAUniswap();
