@@ -394,7 +394,7 @@ contract AHyperliquidForkTest is Test {
         ISmartPoolActions(pool).updateUnitaryValue();
     }
 
-    /// @notice The settlement lock is triggered by any Hyperliquid action, not just deposits.
+    /// @notice The settlement lock is triggered by spot-send withdrawals as well as deposits.
     function testFork_SendRawActionLocksUpdateUnitaryValue() public {
         uint256 depositAmount = 10_000e6;
         vm.prank(poolOwner);
@@ -420,6 +420,25 @@ contract AHyperliquidForkTest is Test {
         // The spot send reset the settlement window, so updateUnitaryValue must revert again.
         vm.expectRevert(NavLocked.selector);
         ISmartPoolActions(pool).updateUnitaryValue();
+    }
+
+    /// @notice Perp trading actions do NOT trigger the settlement lock, so NAV reads stay available.
+    function testFork_LimitOrderDoesNotLockUpdateUnitaryValue() public {
+        _mockCoreUserExists(pool, true);
+
+        uint32 asset = 0; // core perp asset
+        bytes memory data = abi.encodePacked(
+            uint8(1),
+            uint24(HLConstants.LIMIT_ORDER_ACTION),
+            abi.encode(asset, true, uint64(1), uint64(1), false, uint8(0), uint128(1))
+        );
+
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).sendRawAction(data);
+
+        // updateUnitaryValue must succeed because only deposits and spot sends lock NAV.
+        NetAssetsValue memory nav = ISmartPoolActions(pool).updateUnitaryValue();
+        assertGt(nav.unitaryValue, 0, "Unitary value should be readable after a limit order");
     }
 
     /// @notice Cross-chain donation initialization is a NAV-sensitive operation and is locked.

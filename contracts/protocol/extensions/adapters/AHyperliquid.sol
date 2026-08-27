@@ -89,7 +89,6 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
             revert UnsupportedAction(actionId);
         }
 
-        HyperliquidLib.recordAction(0);
         emit ActionSent(actionId);
     }
 
@@ -132,6 +131,9 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         require(spotTotal >= amount + pendingSpotSend + _BRIDGE_GAS_RESERVE, InsufficientBridgeReserve());
 
         CoreWriterLib.spotSend(destinationAddress, token, amount);
+
+        // Record the withdrawal so NAV-sensitive operations are deferred while HyperCore settles.
+        HyperliquidLib.recordAction(0);
     }
 
     function _transferUsdClass(bytes calldata params) private {
