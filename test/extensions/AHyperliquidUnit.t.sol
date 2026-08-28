@@ -473,6 +473,7 @@ contract AHyperliquidUnit is Test {
     function testGetHyperliquidBalancesWithAccountValue() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
+        // Perp account value is already in 6-decimal USDC: 1_000_000 = 1 USDC.
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
@@ -491,13 +492,13 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 10_000); // 1_000_000 HyperCore wei / 1e2 -> 10_000 EVM USDC
+        assertEq(balances[0].amount, 1_000_000); // 1 USDC (6 dec)
     }
 
     function testGetHyperliquidBalancesReturnsNegativeNet() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
-        // Perp account value -0.01 USDC Core wei, zero spot -> return -0.01 USDC (EVM 6-dec).
+        // Perp account value -1 USDC (6 dec), zero spot -> return -1 USDC.
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
@@ -515,18 +516,18 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, -10_000, "Negative net balance should be returned as-is");
+        assertEq(balances[0].amount, -1_000_000, "Negative net balance should be returned as-is");
     }
 
     function testGetHyperliquidBalancesNegativePerpOffsetBySpot() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
-        // Perp -0.5 USDC Core wei, spot +1.5 USDC Core wei -> net 1 USDC (EVM 6-dec).
+        // Perp -0.5 USDC (6 dec), spot +1.5 USDC (8-dec wei) -> net 1 USDC (6 dec).
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
             abi.encode(
-                PrecompileLib.AccountMarginSummary({accountValue: -50_000_000, marginUsed: 0, ntlPos: 0, rawUsd: 0})
+                PrecompileLib.AccountMarginSummary({accountValue: -500_000, marginUsed: 0, ntlPos: 0, rawUsd: 0})
             )
         );
 
@@ -693,7 +694,7 @@ contract AHyperliquidUnit is Test {
             abi.encode(uint256(0))
         );
 
-        // Mock a non-zero HyperCore account value so the Hyperliquid branch produces a balance.
+        // Mock a non-zero HyperCore perp account value (6-dec USDC) so the Hyperliquid branch produces a balance.
         _mockAccountMarginSummary(address(pool), 1_000_000);
         _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, 0);
         _mockCoreUserExists(address(pool), true);
@@ -701,7 +702,7 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = navHarness.getAppTokenBalances(address(pool), grgStakingProxy, address(0));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 10_000);
+        assertEq(balances[0].amount, 1_000_000);
     }
 
     /// @notice A spot-send withdrawal request does not deflate the Hyperliquid balance, because no

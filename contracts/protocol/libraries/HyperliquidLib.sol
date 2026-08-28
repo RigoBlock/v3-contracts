@@ -29,11 +29,16 @@ library HyperliquidLib {
     /// @notice Unsafe variant of `getHyperliquidBalances` that does not check the settlement lock.
     /// @dev Designed to inspect nav offchain even during temporary potential hyperEvm state lags.
     function getHyperliquidBalancesUnsafe(address account) internal view returns (AppTokenBalance[] memory balances) {
-        int256 totalRawWei = int256(
+        // Perp account value is already denominated in USDC with 6 decimals (margin + unrealised pnl + funding).
+        int256 perpValue = int256(
             PrecompileLib.accountMarginSummary(HLConstants.DEFAULT_PERP_DEX, account).accountValue
-        ) + int256(uint256(PrecompileLib.spotBalance(account, HLConstants.USDC_TOKEN_INDEX).total));
+        );
 
-        int256 totalUsdcValue = _weiToEvmSigned(HLConstants.USDC_TOKEN_INDEX, totalRawWei);
+        // Core spot USDC balance is returned in 8-decimal wei; scale it to 6-decimal EVM USDC.
+        uint64 spotTotalWei = PrecompileLib.spotBalance(account, HLConstants.USDC_TOKEN_INDEX).total;
+        int256 spotValue = int256(HLConversions.weiToEvm(HLConstants.USDC_TOKEN_INDEX, spotTotalWei));
+
+        int256 totalUsdcValue = perpValue + spotValue;
 
         bool recentAction = _hasRecentAction();
         if (recentAction) {
@@ -68,16 +73,6 @@ library HyperliquidLib {
         } else {
             data.inFlightAmount += amount.toInt128();
         }
-    }
-
-    function _weiToEvmSigned(uint64 token, int256 amountWei) private view returns (int256) {
-        if (amountWei == 0) return 0;
-
-        bool isNegative = amountWei < 0;
-        uint256 absWei = isNegative ? uint256(-amountWei) : uint256(amountWei);
-        int256 evmAmount = SafeCast.toInt256(HLConversions.weiToEvm(token, absWei.toUint64()));
-
-        return isNegative ? -evmAmount : evmAmount;
     }
 
     function _hasRecentAction() private view returns (bool) {

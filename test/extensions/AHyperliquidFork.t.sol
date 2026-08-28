@@ -139,7 +139,7 @@ contract AHyperliquidForkTest is Test {
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
         // Mock the precompile to simulate a state where the deposit is observable in HyperCore.
-        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+        _mockAccountMarginSummary(int64(uint64(depositAmount)));
         _mockSpotBalance(pool, 0, 0);
         _mockUsdcTokenInfo();
 
@@ -152,7 +152,7 @@ contract AHyperliquidForkTest is Test {
 
         // Roll forward and mock the precompile again to exercise a subsequent NAV read.
         vm.roll(block.number + 1);
-        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+        _mockAccountMarginSummary(int64(uint64(depositAmount)));
         NetAssetsValue memory nextNav = ISmartPoolActions(pool).updateUnitaryValue();
         assertEq(nextNav.unitaryValue, nav.unitaryValue, "Subsequent NAV read should match settled value");
     }
@@ -182,7 +182,7 @@ contract AHyperliquidForkTest is Test {
         // Warp past the settlement window and mock a caught-up Core state.
         vm.warp(block.timestamp + 129 seconds);
         vm.roll(block.number + 1);
-        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+        _mockAccountMarginSummary(int64(uint64(depositAmount)));
 
         ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
         bool foundHyperliquid;
@@ -433,7 +433,7 @@ contract AHyperliquidForkTest is Test {
         // is unchanged.
         vm.warp(block.timestamp + 129 seconds);
         vm.roll(block.number + 130);
-        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+        _mockAccountMarginSummary(int64(uint64(depositAmount)));
 
         NavView.NavData memory navAfter = IENavView(pool).getNavDataView();
         assertEq(navAfter.unitaryValue, unitaryBefore, "Settled NAV should match pre-deposit value");
@@ -449,7 +449,7 @@ contract AHyperliquidForkTest is Test {
         vm.roll(block.number + 130);
 
         // Mock a caught-up Core state so the view returns the settled NAV.
-        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+        _mockAccountMarginSummary(int64(uint64(depositAmount)));
         _mockSpotBalance(pool, 0, 0);
 
         NavView.NavData memory navData = IENavView(pool).getNavDataView();
