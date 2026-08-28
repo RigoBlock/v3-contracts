@@ -11,7 +11,6 @@ import {StorageLib} from "../../libraries/StorageLib.sol";
 import {HyperliquidLib} from "../../libraries/HyperliquidLib.sol";
 import {Applications} from "../../types/Applications.sol";
 import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
-import {HLConversions} from "hyper-evm-lib/common/HLConversions.sol";
 import {CoreWriterLib} from "hyper-evm-lib/CoreWriterLib.sol";
 import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
@@ -105,7 +104,7 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         }
 
         StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID));
-        HyperliquidLib.recordAction(amount.toInt256());
+        HyperliquidLib.recordAction(amount.toInt256(), false);
         emit Deposited(amount, destinationDex);
     }
 
@@ -126,14 +125,11 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         require(token == HLConstants.USDC_TOKEN_INDEX, InvalidActionData());
         require(destinationAddress == CoreWriterLib.getSystemAddress(token), InvalidActionData());
 
-        uint64 pendingSpotSend = HyperliquidLib.recordSpotSend(amount);
+        uint64 pendingSpotSend = HyperliquidLib.recordAction(int256(uint256(amount)), true);
         uint64 spotTotal = PrecompileLib.spotBalance(address(this), token).total;
         require(spotTotal >= amount + pendingSpotSend + _BRIDGE_GAS_RESERVE, InsufficientBridgeReserve());
 
         CoreWriterLib.spotSend(destinationAddress, token, amount);
-
-        // Record the withdrawal so NAV-sensitive operations are deferred while HyperCore settles.
-        HyperliquidLib.recordAction(0);
     }
 
     function _transferUsdClass(bytes calldata params) private {

@@ -12,6 +12,7 @@ import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
+import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {DestinationMessageParams, OpType} from "../../contracts/protocol/types/Crosschain.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
@@ -22,6 +23,7 @@ import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/poo
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IERC20 as IForgeERC20} from "@forge-std/interfaces/IERC20.sol";
+import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {AUniswap} from "../../contracts/protocol/extensions/adapters/AUniswap.sol";
@@ -128,8 +130,11 @@ contract AHyperliquidForkTest is Test {
     ///  implement it. The mock represents a later state in which the deposit is observable, without
     ///  asserting anything about production settlement timing.
     function testFork_NavAfterDeposit() public {
-        uint256 depositAmount = 10_000e6;
+        // Establish a baseline NAV before any Hyperliquid action.
+        NetAssetsValue memory navBefore = ISmartPoolActions(pool).updateUnitaryValue();
+        assertGt(navBefore.unitaryValue, 0, "Baseline unitary value should be positive");
 
+        uint256 depositAmount = 10_000e6;
         vm.prank(poolOwner);
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
@@ -138,23 +143,27 @@ contract AHyperliquidForkTest is Test {
         _mockSpotBalance(pool, 0, 0);
         _mockUsdcTokenInfo();
 
-        // Warp past the settlement window before reading NAV.
-        vm.warp(block.timestamp + 61 seconds);
+        // Warp past the settlement window and roll forward so the same-block in-flight amount is reset.
+        vm.warp(block.timestamp + 129 seconds);
+        vm.roll(block.number + 130);
 
         NetAssetsValue memory nav = ISmartPoolActions(pool).updateUnitaryValue();
-        assertGt(nav.unitaryValue, 0, "Unitary value should be positive");
+        assertEq(nav.unitaryValue, navBefore.unitaryValue, "Unitary value should be unchanged after deposit settles");
 
         // Roll forward and mock the precompile again to exercise a subsequent NAV read.
         vm.roll(block.number + 1);
+        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
         NetAssetsValue memory nextNav = ISmartPoolActions(pool).updateUnitaryValue();
-        assertGt(nextNav.unitaryValue, 0, "Unitary value should remain positive next block");
+        assertEq(nextNav.unitaryValue, nav.unitaryValue, "Subsequent NAV read should match settled value");
     }
 
-    /// @notice Verifies the Hyperliquid perps application reports a balance while the precompile
-    ///  return value is mocked to lag behind the write.
+    /// @notice NAV reads are locked during the settlement window even when the precompile is mocked
+    ///  to lag behind the write, because only time, not block count, can guarantee that HyperCore state
+    ///  has caught up. After the window elapses the balance is read from the caught-up precompile.
     /// @dev Because Foundry does not implement HyperCore read precompiles, the test explicitly
-    ///  supplies both a lagging value and a caught-up value. This proves the in-flight tracking
-    ///  avoids a stale balance, not that production HyperCore updates in exactly one block.
+    ///  supplies both a lagging value and a caught-up value. This proves the settlement lock
+    ///  blocks stale reads and that the in-flight adjustment is no longer required once the window
+    ///  has passed.
     function testFork_InFlightBalanceDuringGap() public {
         uint256 depositAmount = 10_000e6;
 
@@ -166,31 +175,27 @@ contract AHyperliquidForkTest is Test {
         _mockSpotBalance(pool, 0, 0);
         _mockUsdcTokenInfo();
 
-        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
+        // The settlement lock is enforced inside getHyperliquidBalances, so any NAV estimate reverts.
+        vm.expectRevert(NavLocked.selector);
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
 
+        // Warp past the settlement window and mock a caught-up Core state.
+        vm.warp(block.timestamp + 129 seconds);
+        vm.roll(block.number + 1);
+        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+
+        ExternalApp[] memory apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
         bool foundHyperliquid;
         for (uint256 i = 0; i < apps.length; i++) {
             if (apps[i].appType == uint256(Applications.HYPERLIQUID)) {
                 foundHyperliquid = true;
                 assertEq(apps[i].balances.length, 1, "Hyperliquid app should report one balance");
                 assertEq(apps[i].balances[0].token, usdc, "Balance token should be USDC");
-                assertEq(apps[i].balances[0].amount, int256(depositAmount), "Balance should equal in-flight deposit");
-                break;
-            }
-        }
-        assertTrue(foundHyperliquid, "Hyperliquid application should be returned");
-
-        // Roll forward and mock the precompile with a caught-up value to exercise the non-in-flight path.
-        vm.roll(block.number + 1);
-        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
-
-        apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
-        for (uint256 i = 0; i < apps.length; i++) {
-            if (apps[i].appType == uint256(Applications.HYPERLIQUID)) {
                 assertEq(apps[i].balances[0].amount, int256(depositAmount), "Balance should equal precompile value");
                 break;
             }
         }
+        assertTrue(foundHyperliquid, "Hyperliquid application should be returned");
     }
 
     /// @notice EOracle on HyperEVM must only recognize USDC as having a price feed.
@@ -279,7 +284,7 @@ contract AHyperliquidForkTest is Test {
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
         // Warp past the deposit window so the pre-request NAV read is allowed.
-        vm.warp(block.timestamp + 61 seconds);
+        vm.warp(block.timestamp + 129 seconds);
 
         // Simulate a Core state where the pool already holds 20k USDC in the spot account.
         uint64 spotAmountWei = 20_000e6 * 1e2;
@@ -301,13 +306,13 @@ contract AHyperliquidForkTest is Test {
         IAHyperliquid(pool).sendRawAction(data);
 
         // Warp past the spot-send window before reading NAV again.
-        vm.warp(block.timestamp + 61 seconds);
+        vm.warp(block.timestamp + 129 seconds);
 
         NetAssetsValue memory navAfter = ISmartPoolActions(pool).updateUnitaryValue();
         assertEq(navAfter.unitaryValue, navBefore.unitaryValue, "Spot-send request must not change unitaryValue");
     }
 
-    /// @notice Minting is deferred during the 60-second Hyperliquid settlement window.
+    /// @notice Minting is deferred during the 128-second Hyperliquid settlement window.
     function testFork_MintRevertsDuringSettlementWindow() public {
         uint256 depositAmount = 10_000e6;
         vm.prank(poolOwner);
@@ -326,7 +331,7 @@ contract AHyperliquidForkTest is Test {
         vm.prank(poolOwner);
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
-        vm.warp(block.timestamp + 61 seconds);
+        vm.warp(block.timestamp + 129 seconds);
 
         // Mock Core state so the post-window NAV update succeeds.
         _mockAccountMarginSummary(0);
@@ -341,7 +346,7 @@ contract AHyperliquidForkTest is Test {
         assertGt(IERC20(pool).balanceOf(user), userBalanceBefore, "Mint should increase user balance");
     }
 
-    /// @notice Burning is deferred during the 60-second Hyperliquid settlement window.
+    /// @notice Burning is deferred during the 128-second Hyperliquid settlement window.
     function testFork_BurnRevertsDuringSettlementWindow() public {
         // Satisfy the default minimum lockup period (30 days) for the tokens minted in the fixture.
         vm.warp(block.timestamp + 30 days + 1);
@@ -367,7 +372,7 @@ contract AHyperliquidForkTest is Test {
         vm.prank(poolOwner);
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
-        vm.warp(block.timestamp + 61 seconds);
+        vm.warp(block.timestamp + 129 seconds);
 
         // Mock Core state so the post-window NAV update succeeds.
         _mockAccountMarginSummary(0);
@@ -383,7 +388,7 @@ contract AHyperliquidForkTest is Test {
     }
 
     /// @notice NAV-sensitive operations must revert during the Hyperliquid settlement window.
-    /// @dev Any call that triggers `_updateNav()` is locked for 60 seconds after a Hyperliquid action
+    /// @dev Any call that triggers `_updateNav()` is locked for 128 seconds after a Hyperliquid action
     ///  so a stale HyperCore snapshot cannot be stored or used for share issuance/redemption.
     function testFork_UpdateUnitaryValueRevertsDuringSettlementWindow() public {
         uint256 depositAmount = 10_000e6;
@@ -394,6 +399,63 @@ contract AHyperliquidForkTest is Test {
         ISmartPoolActions(pool).updateUnitaryValue();
     }
 
+    /// @notice Off-chain NAV view methods remain readable during the settlement window, but they
+    ///  report a stale NAV because HyperCore has not yet caught up. On-chain NAV writes still revert.
+    function testFork_NavViewReadsStaleNavDuringSettlementWindow() public {
+        // Capture the pre-deposit NAV.
+        NavView.NavData memory navBefore = IENavView(pool).getNavDataView();
+        uint256 unitaryBefore = navBefore.unitaryValue;
+        assertGt(unitaryBefore, 0, "Pre-deposit NAV should be positive");
+
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        // Move one EVM block forward so the same-block in-flight amount is cleared, but stay well
+        // inside the time-based settlement window. HyperCore is still mocked as lagging (zero).
+        vm.roll(block.number + 1);
+        _mockAccountMarginSummary(0);
+        _mockSpotBalance(pool, 0, 0);
+        _mockCoreUserExists(pool, true);
+
+        // On-chain NAV write reverts because the settlement window is still open.
+        vm.expectRevert(NavLocked.selector);
+        ISmartPoolActions(pool).updateUnitaryValue();
+
+        // Off-chain view succeeds but reads the lagging Core balance (zero), so it reports a stale NAV
+        // that is lower than the pre-deposit value because the pool's USDC has already left the wallet
+        // but has not yet been credited by the HyperCore precompile.
+        NavView.NavData memory navDuring = IENavView(pool).getNavDataView();
+        assertLt(navDuring.unitaryValue, unitaryBefore, "Off-chain NAV should be stale during window");
+
+        // After the settlement window elapses and HyperCore reflects the deposit, the settled NAV
+        // matches the pre-deposit value: USDC has moved from the pool wallet to HyperCore, total value
+        // is unchanged.
+        vm.warp(block.timestamp + 129 seconds);
+        vm.roll(block.number + 130);
+        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+
+        NavView.NavData memory navAfter = IENavView(pool).getNavDataView();
+        assertEq(navAfter.unitaryValue, unitaryBefore, "Settled NAV should match pre-deposit value");
+    }
+
+    /// @notice Off-chain NAV view methods succeed once the settlement window has elapsed.
+    function testFork_NavViewSucceedsAfterSettlementWindow() public {
+        uint256 depositAmount = 10_000e6;
+        vm.prank(poolOwner);
+        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
+
+        vm.warp(block.timestamp + 129 seconds);
+        vm.roll(block.number + 130);
+
+        // Mock a caught-up Core state so the view returns the settled NAV.
+        _mockAccountMarginSummary(int64(uint64(depositAmount * 1e2)));
+        _mockSpotBalance(pool, 0, 0);
+
+        NavView.NavData memory navData = IENavView(pool).getNavDataView();
+        assertGt(navData.unitaryValue, 0, "NavView should report a positive unitary value after the window");
+    }
+
     /// @notice The settlement lock is triggered by spot-send withdrawals as well as deposits.
     function testFork_SendRawActionLocksUpdateUnitaryValue() public {
         uint256 depositAmount = 10_000e6;
@@ -401,7 +463,7 @@ contract AHyperliquidForkTest is Test {
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
         // Warp past the deposit window so the subsequent action resets the timestamp.
-        vm.warp(block.timestamp + 61 seconds);
+        vm.warp(block.timestamp + 129 seconds);
 
         _mockCoreUserExists(pool, true);
         _mockSpotBalance(pool, HLConstants.USDC_TOKEN_INDEX, 20_000e6 * 1e2);
@@ -489,7 +551,7 @@ contract AHyperliquidForkTest is Test {
         vm.prank(poolOwner);
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
 
-        vm.warp(block.timestamp + 61 seconds);
+        vm.warp(block.timestamp + 129 seconds);
 
         // Mock Core state so the post-window NAV update succeeds.
         _mockAccountMarginSummary(0);

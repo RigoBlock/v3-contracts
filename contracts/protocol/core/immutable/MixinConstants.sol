@@ -62,8 +62,4 @@ abstract contract MixinConstants is ISmartPool {
     uint48 internal constant _MAX_LOCKUP = 30 days;
 
     uint48 internal constant _MIN_LOCKUP = 1 days;
-
-    uint256 internal constant _HYPEREVM_CHAIN_ID = 999;
-
-    uint48 internal constant _INFLIGHT_WINDOW = 60 seconds;
 }

@@ -61,6 +61,7 @@ if (["mainnet", "sepolia", "polygon", "base", "optimism", "arbitrum", "bsc", "un
 import "./src/tasks/local_verify"
 import "./src/tasks/deploy_contracts"
 import "./src/tasks/show_codesize"
+import "./src/tasks/hyperliquid"
 import { BigNumber } from "@ethersproject/bignumber";
 
 const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28"
@@ -185,6 +186,15 @@ const userConfig: HardhatUserConfig = {
       ...sharedNetworkConfig,
       url: `https://unichain-mainnet.infura.io/v3/${INFURA_KEY}`,
     },
+    hyperliquid: {
+      ...sharedNetworkConfig,
+      url: process.env.HYPERLIQUID_RPC_URL || "",
+      // HyperEVM has 1s small blocks (3M gas) and 60s big blocks (30M gas).
+      // Large protocol contracts must be deployed in big blocks; the deployer account must first
+      // set the Core user flag `usingBigBlocks: true` via a HyperCore action.
+      maxFeePerGas: 1_000_000_000, // 1 gwei cap
+      maxPriorityFeePerGas: 10_000_000, // 0.01 gwei tip
+    } as Eip1559NetworkConfig,
   },
   deterministicDeployment,
   namedAccounts: {
@@ -258,6 +268,14 @@ const userConfig: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.etherscan.io/v2/api?chainid=130",
           browserURL: "https://uniscan.xyz"
+        }
+      },
+      {
+        network: "hyperliquid",
+        chainId: 999,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=999",
+          browserURL: "https://hyperevmscan.io"
         }
       }
     ]
