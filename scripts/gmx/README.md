@@ -1,7 +1,7 @@
 # GMX fallback feed maintenance scripts
 
 This folder contains helper scripts for maintaining the hardcoded Chainlink
-fallback feeds used by `GmxFallbackPriceFeed.getFallbackPriceFeed()` for GMX
+fallback feeds used by `GmxFallback.getFallbackPriceFeed()` for GMX
 synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
 
 ## Workflow
@@ -54,7 +54,7 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
    node scripts/gmx/generate_gmx_fallback_solidity.js
    ```
 
-   Patches `contracts/protocol/types/GmxFallbackPriceFeed.sol` in-place,
+   Patches `contracts/protocol/types/GmxFallback.sol` in-place,
    replacing only the body between `// GMX_FALLBACK_LOOKUP_START` and
    `// GMX_FALLBACK_LOOKUP_END` with a packed, batched lookup. Each entry is
    encoded as `bytes32(feedAddress << 96 | exponent)`, where
@@ -85,7 +85,7 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
   to deploy at 200 optimizer runs.
 - `getFallbackPriceFeed` returns only `(address feed, uint256 multiplier)`;
   the token address is the caller's input, so it is not copied back out.
-- The function lives in `contracts/protocol/types/GmxFallbackPriceFeed.sol`
+- The function lives in `contracts/protocol/types/GmxFallback.sol`
   and is imported by both `GmxLib` (NAV calculations) and `GmxAdapterLib`
   (adapter order validation), so the fallback data is shared without forcing
   adapter-only helpers into the NAV code path.

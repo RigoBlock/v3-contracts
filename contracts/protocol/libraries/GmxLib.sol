@@ -5,10 +5,10 @@ import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
-import {IGmxReader, IGmxExchangeRouter, GmxPositionInfo, GmxMarketPrices, GmxOrderInfo} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxExchangeRouter, GmxPositionInfo, GmxMarketPrices, GmxOrderInfo, GmxValidatedPrice} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {GmxClaimableHelpers} from "../types/GmxClaimableHelpers.sol";
-import {GmxFallbackPriceFeed} from "../types/GmxFallbackPriceFeed.sol";
+import {GmxFallback} from "../types/GmxFallback.sol";
 import {GmxConstants} from "../types/GmxConstants.sol";
 import {GmxCallbackLib} from "./GmxCallbackLib.sol";
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
@@ -56,6 +56,19 @@ library GmxLib {
         uint256 offset = _copyBalances(balances, 0, posBal);
         offset = _copyBalances(balances, offset, ordBal);
         _copyBalances(balances, offset, cbBal);
+    }
+
+    /// @notice Returns the best available GMX price for `token`.
+    /// @dev Tries the GMX Chainlink price provider first, falls back to a hardcoded Chainlink aggregator.
+    ///  Returns a zero Price.Props when the token cannot be priced or the fallback is stale/invalid.
+    function getGmxPrice(address token) internal view returns (Price.Props memory price) {
+        try IGmxChainlinkPriceFeedProvider(GmxConstants._GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
+            GmxValidatedPrice memory validated
+        ) {
+            price = Price.Props({min: validated.min, max: validated.max});
+        } catch {
+            price = GmxFallback.getFallbackPrice(token);
+        }
     }
 
     function _getExecutedPositionBalances(address account) private view returns (AppTokenBalance[] memory balances) {
@@ -155,7 +168,7 @@ library GmxLib {
                 return (cache[i].price, count);
             }
         }
-        price = GmxFallbackPriceFeed.getGmxPrice(token);
+        price = getGmxPrice(token);
         cache[count] = TokenPrice({token: token, price: price});
         newCount = count + 1;
     }

@@ -10,11 +10,11 @@
 - **Pool is the token vault** — collateral is held in the pool until an order is submitted
 
 ```solidity
-// All canonical addresses are constants in GmxLib (no constructor params needed):
-address internal constant GMX_EXCHANGE_ROUTER = 0x1C3fa76...;  // in GmxLib.sol
-address internal constant WRAPPED_NATIVE = 0x82aF49...;         // WETH on Arbitrum
-address private constant _GMX_READER = 0x470fbC...;
-address private constant _GMX_DATA_STORE = 0xFD70de...;
+// All canonical addresses are constants in GmxConstants (no constructor params needed):
+IGmxExchangeRouter internal constant GMX_ROUTER = IGmxExchangeRouter(0x1C3fa76...);  // in GmxConstants.sol
+address internal constant WRAPPED_NATIVE = 0x82aF49...;                              // WETH on Arbitrum
+address internal constant _GMX_READER = 0x470fbC...;
+address internal constant _GMX_DATA_STORE = 0xFD70de...;
 uint256 internal constant ARBITRUM_CHAIN_ID = 42161;
 
 // Delegatecall guard (the only immutable in AGmxV2):
@@ -29,7 +29,7 @@ address private immutable _adapter;  // = address(this) at deploy time
 1. Pool owner calls createIncreaseOrder(params)
 2. Adapter validates:
    - `MixinFallback` routes call via `delegatecall` only if `msg.sender == pool().owner`; non-owners are `staticcall`ed
-   - position count < 32 (GmxLib.MaxGmxPositionsReached)
+   - position count < 32 (GmxAdapterLib.MaxGmxPositionsReached)
    - computedFee <= 0.05 ETH (ExecutionFeeExceedsMax)
    - the market's `indexToken` is priced by the GMX provider or by the hardcoded fallback list (UnpricedIndexToken)
 3. Transfer collateral to GMX OrderVault:
@@ -139,11 +139,11 @@ function _assertPositionLimitNotReached() private view {
 The adapter registers a `chainId = 42161` (Arbitrum One) guard. Any attempt to use the GMX adapter on a non-Arbitrum chain reverts with `NotArbitrum`:
 
 ```solidity
-// GmxLib exports the canonical value; AGmxV2 imports it instead of duplicating.
-uint256 internal constant ARBITRUM_CHAIN_ID = 42161;  // in GmxLib.sol
+// GmxConstants exports the canonical value; AGmxV2 imports it instead of duplicating.
+uint256 internal constant ARBITRUM_CHAIN_ID = 42161;  // in GmxConstants.sol
 
 // AGmxV2 constructor — checked ONCE at deployment:
-require(block.chainid == GmxLib.ARBITRUM_CHAIN_ID, NotArbitrum());
+require(block.chainid == GmxConstants.ARBITRUM_CHAIN_ID, NotArbitrum());
 ```
 
 The guard lives **only in the constructor**, not on individual entry points.
@@ -202,7 +202,7 @@ Accepting a referral code as a constructor parameter would allow the pool operat
 These are GMX-specific pitfalls discovered during implementation.
 General adapter pitfalls live in AGENTS.md.
 
-1. **`ARBITRUM_CHAIN_ID` lives in `GmxLib`** — `GmxLib.ARBITRUM_CHAIN_ID` is `internal` — the single canonical constant. `AGmxV2` imports it from `GmxLib`. Never define a duplicate `_ARBITRUM_CHAIN_ID` in the adapter or elsewhere.
+1. **`ARBITRUM_CHAIN_ID` lives in `GmxConstants`** — `GmxConstants.ARBITRUM_CHAIN_ID` is the single canonical constant. `AGmxV2` imports it from `GmxConstants`. Never define a duplicate `_ARBITRUM_CHAIN_ID` in the adapter or elsewhere.
 
 2. **No chain-ID guard in `GmxLib.getGmxPositionBalances`** — The real guard is the app-activation bit (`GMX_V2_POSITIONS`), set only via `AGmxV2.createIncreaseOrder`, which is constructor-guarded to Arbitrum. A `block.chainid` check inside `GmxLib` is redundant and hides the real guard. Do not add one.
 

@@ -7,7 +7,7 @@ import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxDataStore, GmxValidatedP
 import {GmxCallbackLib} from "./GmxCallbackLib.sol";
 import {GmxClaimableHelpers} from "../types/GmxClaimableHelpers.sol";
 import {GmxConstants} from "../types/GmxConstants.sol";
-import {GmxFallbackPriceFeed} from "../types/GmxFallbackPriceFeed.sol";
+import {GmxFallback} from "../types/GmxFallback.sol";
 
 /// @title GmxAdapterLib
 /// @notice Adapter-facing GMX v2 helpers used by `AGmxV2`. These functions are
@@ -50,8 +50,7 @@ library GmxAdapterLib {
         ) {
             return true;
         } catch {
-            (address feed, ) = GmxFallbackPriceFeed.getFallbackPriceFeed(token);
-            return feed != address(0);
+            return GmxFallback.getFallbackPrice(token).min > 0;
         }
     }
 

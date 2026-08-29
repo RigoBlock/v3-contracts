@@ -12,7 +12,6 @@ import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.so
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
-import {GmxFallbackPriceFeed} from "../../contracts/protocol/types/GmxFallbackPriceFeed.sol";
 
 /// @dev Thin harness so GmxLib / GmxAdapterLib internal functions can be called
 ///      via external calls, enabling vm.expectRevert for functions that may revert.
@@ -35,7 +34,7 @@ contract GmxLibHarness {
     }
 
     function safeGetGmxPrice(address token) external view returns (Price.Props memory) {
-        return GmxFallbackPriceFeed.getGmxPrice(token);
+        return GmxLib.getGmxPrice(token);
     }
 
     function isIndexTokenPriced(address token) external view returns (bool) {

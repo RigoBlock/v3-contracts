@@ -2,7 +2,7 @@ const fs = require("fs");
 const { ethers } = require("ethers");
 
 const INPUT = "scripts/gmx/gmx_fallback_feeds_with_multipliers.json";
-const CONTRACT = "contracts/protocol/types/GmxFallbackPriceFeed.sol";
+const CONTRACT = "contracts/protocol/types/GmxFallback.sol";
 
 const fallback = JSON.parse(fs.readFileSync(INPUT, "utf8"));
 

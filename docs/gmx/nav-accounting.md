@@ -6,12 +6,17 @@ Open GMX perpetual positions must be included in the pool's Net Asset Value (NAV
 
 ## Components
 
-| Component        | Responsibility                                                                    |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `EApps`          | Per-call position valuation (called by delegates during deposits/withdrawals)     |
-| `ENavView`       | View-only NAV computation including GMX (off-chain queries, multi-call)           |
-| `NavView`        | Shared library: NAV calculation with optional GMX inclusion                       |
-| `IGmxSynthetics` | Interface types: `Position.Props`, `PositionInfo`, `Market.Props`, `MarketPrices` |
+| Component              | Responsibility                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `EApps`                | Per-call position valuation (called by delegates during deposits/withdrawals)     |
+| `ENavView`             | View-only NAV computation including GMX (off-chain queries, multi-call)           |
+| `NavView`              | Shared library: NAV calculation with optional GMX inclusion                       |
+| `GmxLib`               | NAV-only position/order/callback balance assembly                                 |
+| `GmxAdapterLib`        | Adapter-only helpers: execution fee, position limit, market queries               |
+| `GmxFallback` | Hardcoded Chainlink fallback feeds for synthetic GMX index tokens                 |
+| `GmxClaimableHelpers`  | Shared DataStore readers for claimable funding/collateral amounts                 |
+| `GmxConstants`         | Shared canonical Arbitrum addresses and GMX DataStore key hashes                  |
+| `IGmxSynthetics`       | Interface types: `Position.Props`, `PositionInfo`, `Market.Props`, `MarketPrices` |
 
 ## Position Valuation Flow
 
@@ -49,19 +54,20 @@ If `positions.length == 0`, valuation returns 0 without hitting `getAccountPosit
 
 ### 3. Fetch Markets
 
-Each position references a `market` address. The `getAccountPositionInfoList` call requires `GmxMarketPrices` per market. Current prices are fetched from `GmxLib._safeGetGmxPrice`:
+Each position references a `market` address. The `getAccountPositionInfoList` call requires `GmxMarketPrices` per market. Current prices are fetched from `GmxLib.getGmxPrice`:
 
 ```solidity
-// GmxLib uses the hardcoded Chainlink provider constant (Arbitrum One):
+// GmxFallback uses the hardcoded Chainlink provider constant (Arbitrum One):
 // address private constant _GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61...;
 GmxValidatedPrice memory validated =
     IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "");
 Price.Props memory price = Price.Props({ min: validated.min, max: validated.max });
 ```
 
-All GMX addresses (`_GMX_READER`, `_GMX_DATA_STORE`, `_GMX_REFERRAL_STORAGE`,
-`_GMX_CHAINLINK_PRICE_FEED`, `_WRAPPED_NATIVE`) are **private constants** in
-`GmxLib.sol` — they are NOT threaded through constructor parameters.
+All canonical GMX addresses (`_GMX_READER`, `_GMX_DATA_STORE`, `_GMX_REFERRAL_STORAGE`,
+`_GMX_CHAINLINK_PRICE_FEED`, `_WRAPPED_NATIVE`, `ARBITRUM_CHAIN_ID`) live in
+`GmxConstants.sol` and are re-exported by `GmxLib.sol` for backward compatibility —
+they are NOT threaded through constructor parameters.
 
 ### 4. Fallback Chainlink Feeds for Synthetic Index Tokens
 
@@ -70,7 +76,7 @@ Data Streams and therefore have no on-chain `priceFeed` entry in the GMX
 Chainlink provider. If such a token were left unpriced, any position using it as
 an index token would have its unrealised PnL excluded from NAV.
 
-`GmxLib` keeps a hardcoded, sorted list of `FallbackPriceFeedData` entries that
+`GmxFallback` keeps a hardcoded, batched list of fallback entries that
 map each synthetic index token address to an on-chain Chainlink USD aggregator
 and a multiplier:
 
@@ -83,7 +89,7 @@ uint256 scaledPrice = (answer * multiplier) / 1e30;
   provider or the fallback list.
 - `AGmxV2.createIncreaseOrder()` rejects markets whose `indexToken` is not priced,
   preventing new NAV blind spots.
-- The fallback list lives in `GmxLib._fallbackFeeds()` and is maintained by the
+- The fallback list lives in `GmxFallback.getFallbackPriceFeed()` and is maintained by the
   scripts in `scripts/gmx/`.
 
 ### 5. Get Position Info
@@ -143,22 +149,25 @@ if (net > 0) tmp[count++] = AppTokenBalance({token: colToken, amount: net});
 
 ## Address Constants (Arbitrum One)
 
-All GMX addresses are **private constants** inside `GmxLib`:
+All canonical GMX addresses live in `GmxConstants.sol`:
 
 ```solidity
 uint256 internal constant ARBITRUM_CHAIN_ID          = 42161;
-address private  constant _GMX_READER                = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
-address private  constant _GMX_DATA_STORE            = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
-address private  constant _GMX_REFERRAL_STORAGE      = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d;
-address private  constant _GMX_CHAINLINK_PRICE_FEED  = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
-address private  constant _WRAPPED_NATIVE            = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1; // WETH
+address internal constant _GMX_READER                = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
+address internal constant _GMX_DATA_STORE            = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
+address internal constant _GMX_REFERRAL_STORAGE      = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d;
+address internal constant _GMX_CHAINLINK_PRICE_FEED  = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
+address internal constant WRAPPED_NATIVE             = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1; // WETH
 ```
 
-`ARBITRUM_CHAIN_ID` is `internal` so `AGmxV2` (the adapter) can import it from
-`GmxLib` instead of maintaining its own copy.
+`GmxLib` re-exports these constants so existing consumers keep working, but
+new code should import `GmxConstants` directly.
+
+`AGmxV2` and `EGmxCallback` import `GmxConstants` instead of `GmxLib` so the
+adapter/callback surface does not pull NAV-only code into their bytecode.
 
 `ENavView` constructor now takes **only 2 parameters**: `grgStakingProxy` and
-`univ4Posm` — GMX addresses are embedded in `GmxLib` constants, not threaded
+`univ4Posm` — GMX addresses are embedded in `GmxConstants`, not threaded
 through constructors. The old `GmxParams` struct in `NavView` has been removed.
 
 ## EApps vs ENavView
@@ -185,7 +194,7 @@ Both paths ensure GMX queries add negligible overhead to pools with no activity.
 
 GMX position data inherits Chainlink oracle staleness. `IGmxChainlinkPriceFeedProvider.getOraclePrice(token, "")` delegates to the configured Chainlink aggregator; no additional freshness check is applied inside `GmxLib`. Production usage should ensure Chainlink feeds are live.
 
-`GmxLib._safeGetGmxPrice` wraps the call in a `try/catch` — if the oracle reverts (paused, feed removed, etc.) it returns a zero `Price.Props`, which causes the position to be valued at zero collateral only (fallback via `_collateralOnlyBalances`).
+`GmxLib.getGmxPrice` wraps the call in a `try/catch` — if the oracle reverts (paused, feed removed, etc.) it falls back to the hardcoded Chainlink aggregator. If the fallback is also unavailable/stale, it returns a zero `Price.Props`, which causes the position to be valued at zero collateral only (fallback via `_collateralOnlyBalances`).
 
 > **NAV impact of fallback:** `_collateralOnlyBalances` reports the raw deposited collateral, ignoring unrealised PnL, price impact, and fees. During an oracle or Reader outage this can **overstate** NAV for positions with negative PnL/fees. The alternative — reverting `EApps.getAppTokenBalances` — would halt deposits, withdrawals, and NAV updates for the entire outage, which is considered worse than a temporary, bounded overstatement. This trade-off is recorded as an acknowledged Info finding in `docs/gmx/security.md`.
 
