@@ -4,8 +4,6 @@ const { ethers } = require("ethers");
 const INPUT = "scripts/gmx/gmx_fallback_feeds_with_multipliers.json";
 const CONTRACT = "contracts/protocol/libraries/GmxLib.sol";
 
-const GROUP_SIZE = 6;
-
 const fallback = JSON.parse(fs.readFileSync(INPUT, "utf8"));
 
 // Sort by checksummed token address using numeric order, required by the batched lookup.
@@ -17,48 +15,88 @@ const sorted = fallback
     return aBig < bBig ? -1 : aBig > bBig ? 1 : 0;
   });
 
-function buildGroups() {
-  const groups = [];
-  for (let i = 0; i < sorted.length; i += GROUP_SIZE) {
-    const slice = sorted.slice(i, i + GROUP_SIZE);
-    groups.push({
-      max: slice[slice.length - 1].token,
-      entries: slice,
-      isLast: i + GROUP_SIZE >= sorted.length,
-    });
+function computeExponent(multiplier) {
+  const str = multiplier.toString();
+  if (!/^10*$/.test(str)) {
+    throw new Error(`Multiplier ${multiplier} is not a power of 10`);
   }
-  return groups;
+  return str.length - 1;
+}
+
+function packEntry(e) {
+  const exponent = computeExponent(e.multiplier);
+  const feed = BigInt.asUintN(160, BigInt(e.feedAddress));
+  // Pack feed address (160 bits) in the high 160 bits and the exponent in the low 96 bits.
+  const packed = (feed << 96n) | BigInt.asUintN(96, BigInt(exponent));
+  return `0x${packed.toString(16).padStart(64, "0")}`;
+}
+
+function firstNibble(token) {
+  return (BigInt.asUintN(160, BigInt(token)) >> 156n).toString(10);
+}
+
+function buildGroups() {
+  // Groups by leading hex nibble of the token address. Each branch is a small
+  // integer comparison, which is cheaper and more compact than comparing a
+  // full 20-byte boundary address.
+  const boundaries = [3, 7, 10, 13];
+  const groups = boundaries.map((bound) => ({ bound, entries: [] }));
+  const lastGroup = { entries: [] };
+
+  for (const e of sorted) {
+    const nibble = firstNibble(e.token);
+    let placed = false;
+    for (const g of groups) {
+      if (nibble < g.bound) {
+        g.entries.push(e);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) lastGroup.entries.push(e);
+  }
+
+  return { bounded: groups, last: lastGroup };
 }
 
 function emitEntry(e) {
-  return `        if (token == ${e.token}) return (${e.feedAddress}, ${e.multiplier});`;
+  const packed = packEntry(e);
+  return `            if (token == ${e.token}) packed = ${packed};`;
 }
 
 function buildFunction() {
-  const groups = buildGroups();
+  const { bounded, last } = buildGroups();
   const lines = [
     "    /// @dev Hardcoded Chainlink fallback feeds for GMX synthetic index tokens.",
-    "    ///  The multiplier converts the aggregator answer (feedDecimals) to GMX's 1e30",
-    "    ///  token-unit price. Returns `(address(0), 0)` for unmapped tokens.",
+    "    ///  Each entry is packed as `bytes32(feedAddress << 96 | exponent)` where",
+    "    ///  `multiplier = 10 ** exponent`. Returns `(address(0), 0)` for unmapped tokens.",
     "    function _getFallbackPriceFeed(address token) private pure returns (address feed, uint256 multiplier) {",
+    "        bytes32 packed;",
+    "        uint256 nibble = uint160(token) >> 156;",
   ];
 
-  for (const g of groups) {
-    if (!g.isLast) {
-      lines.push(`        if (token <= ${g.max}) {`);
-      for (const e of g.entries) {
-        lines.push(`            ${emitEntry(e).trimStart()}`);
-      }
-      lines.push("            return (address(0), 0);");
-      lines.push("        }");
-    } else {
-      for (const e of g.entries) {
-        lines.push(emitEntry(e));
-      }
+  for (let i = 0; i < bounded.length; ++i) {
+    const g = bounded[i];
+    const keyword = i === 0 ? "if" : "} else if";
+    lines.push(`        ${keyword} (nibble < ${g.bound}) {`);
+    for (const e of g.entries) {
+      lines.push(emitEntry(e));
     }
   }
 
-  lines.push("        return (address(0), 0);");
+  if (last.entries.length > 0) {
+    lines.push("        } else {");
+    for (const e of last.entries) {
+      lines.push(emitEntry(e));
+    }
+  }
+  lines.push("        }");
+
+  lines.push("        if (packed != bytes32(0)) {");
+  lines.push("            uint256 packedData = uint256(packed);");
+  lines.push("            feed = address(uint160(packedData >> 96));");
+  lines.push("            multiplier = 10 ** (packedData & type(uint96).max);");
+  lines.push("        }");
   lines.push("    }");
   return lines.join("\n");
 }
@@ -83,7 +121,7 @@ function patchContract() {
 
   fs.writeFileSync(CONTRACT, before + replacement + after, "utf8");
   console.log(
-    `Patched ${CONTRACT} with ${sorted.length} fallback entries (${new Date().toISOString()})`,
+    `Patched ${CONTRACT} with ${sorted.length} packed fallback entries (${new Date().toISOString()})`,
   );
 }
 

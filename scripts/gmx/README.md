@@ -1,7 +1,7 @@
 # GMX fallback feed maintenance scripts
 
 This folder contains helper scripts for maintaining the hardcoded Chainlink
-fallback feeds used by `GmxLib._fallbackFeeds()` for GMX synthetic index
+fallback feeds used by `GmxLib._getFallbackPriceFeed()` for GMX synthetic index
 tokens that have a Data Stream feed but no on-chain `priceFeed`.
 
 ## Workflow
@@ -55,9 +55,9 @@ tokens that have a Data Stream feed but no on-chain `priceFeed`.
    ```
 
    Patches `contracts/protocol/libraries/GmxLib.sol` in-place, replacing only
-   the `_fallbackFeeds()` body with the sorted `FallbackPriceFeedData[N]` array.
-   The binary-search helper and fallback price logic in `GmxLib.sol` are left
-   untouched.
+   the body between `// GMX_FALLBACK_LOOKUP_START` and `// GMX_FALLBACK_LOOKUP_END`
+   with a packed, batched lookup. Each entry is encoded as
+   `bytes32(feedAddress << 96 | exponent)`, where `multiplier = 10 ** exponent`.
 
    Use `--stdout` to print the generated block instead of patching the file:
 
@@ -65,15 +65,25 @@ tokens that have a Data Stream feed but no on-chain `priceFeed`.
    node scripts/gmx/generate_gmx_fallback_solidity.js --stdout
    ```
 
+5. **Verify contract sizes**
+
+   Production deployments use 200 optimizer runs. Always check sizes with:
+
+   ```bash
+   FOUNDRY_OPTIMIZER_RUNS=200 forge build --sizes
+   ```
+
+   The default Foundry profile (`optimizer_runs = 1_000_000` in `foundry.toml`)
+   reports smaller contracts, so it is misleading for deployability checks.
+
 ## Notes
 
-- The production code uses a **binary search over a memory array**. A batched
-  address-interval lookup is ~10× cheaper in runtime gas (measured: binary
-  search ~2.9–4.5 k gas, batched lookup ~0.27–0.48 k gas for the 27-entry list)
-  but increases the bytecode of `EApps`/`ENavView` enough to push it over the
-  contract-size limit, so binary search is the practical choice.
+- The lookup is a **batched address-nibble grouping**. Entries are split by the
+  first hex digit of the token address (`uint160(token) >> 156`) and then
+  compared directly inside each bucket. This is gas-efficient and compact enough
+  to deploy at 200 optimizer runs.
 - `_getFallbackPriceFeed` returns only `(address feed, uint256 multiplier)`;
   the token address is the caller's input, so it is not copied back out.
-- When the list grows, the generate script automatically emits the new array
-  size (`FallbackPriceFeedData[N]`). The binary-search helper itself stays the
-  same because it reads `feeds.length`.
+- When the list grows, the generate script re-balances the buckets automatically.
+  Adding many new tokens may eventually require moving the registry to an
+  external module; the current design is intended to fit the release set.
