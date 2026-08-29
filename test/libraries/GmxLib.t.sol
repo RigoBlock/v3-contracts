@@ -8,12 +8,14 @@ import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IGmxReader, IGmxDataStore, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice, GmxPositionInfo, GmxPositionFees, GmxPositionFundingFees, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
 import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
+import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
+import {GmxFallbackPriceFeed} from "../../contracts/protocol/types/GmxFallbackPriceFeed.sol";
 
-/// @dev Thin harness so GmxLib internal functions can be called via external
-///      calls, enabling vm.expectRevert for functions that may revert.
+/// @dev Thin harness so GmxLib / GmxAdapterLib internal functions can be called
+///      via external calls, enabling vm.expectRevert for functions that may revert.
 contract GmxLibHarness {
     function assertPositionLimitNotReached(
         address account,
@@ -21,23 +23,23 @@ contract GmxLibHarness {
         address collateralToken,
         bool isLong
     ) external view {
-        GmxLib.assertPositionLimitNotReached(account, market, collateralToken, isLong);
+        GmxAdapterLib.assertPositionLimitNotReached(account, market, collateralToken, isLong);
     }
 
     function isMarketActive(address account, address market) external view returns (bool) {
-        return GmxLib.isMarketActive(account, market);
+        return GmxAdapterLib.isMarketActive(account, market);
     }
 
     function hasClaimableFundingFees(address account, address market) external view returns (bool) {
-        return GmxLib.hasClaimableFundingFees(account, market);
+        return GmxAdapterLib.hasClaimableFundingFees(account, market);
     }
 
     function safeGetGmxPrice(address token) external view returns (Price.Props memory) {
-        return GmxLib._safeGetGmxPrice(token);
+        return GmxFallbackPriceFeed.getGmxPrice(token);
     }
 
     function isIndexTokenPriced(address token) external view returns (bool) {
-        return GmxLib.isIndexTokenPriced(token);
+        return GmxAdapterLib.isIndexTokenPriced(token);
     }
 }
 
@@ -119,7 +121,7 @@ contract GmxLibTest is Test {
         );
 
         vm.txGasPrice(1 gwei);
-        uint256 fee = GmxLib.computeExecutionFee(true, 0);
+        uint256 fee = GmxAdapterLib.computeExecutionFee(true, 0);
 
         // baseGasLimit = 100_000 + 3×50_000 = 250_000
         // adjustedGasLimit = 250_000 + (2_000_000 × 1.1) = 250_000 + 2_200_000 = 2_450_000
@@ -157,7 +159,7 @@ contract GmxLibTest is Test {
         );
 
         vm.txGasPrice(2 gwei);
-        uint256 fee = GmxLib.computeExecutionFee(false, 0);
+        uint256 fee = GmxAdapterLib.computeExecutionFee(false, 0);
 
         uint256 baseGasLimit = feeBase + 3 * feePerOracle;
         uint256 adjustedGasLimit = baseGasLimit + (orderGas * multiplierFactor) / FLOAT_PRECISION;
@@ -181,7 +183,7 @@ contract GmxLibTest is Test {
         );
 
         // Should not revert. Reader should NOT be called.
-        GmxLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
+        GmxAdapterLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
     }
 
     /// @notice Slow path: new position, count < 32 → succeeds.
@@ -201,7 +203,7 @@ contract GmxLibTest is Test {
         Position.Props[] memory positions = new Position.Props[](5);
         vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
-        GmxLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
+        GmxAdapterLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
     }
 
     /// @notice Slow path: new position, count == 32 → MaxGmxPositionsReached.
@@ -220,7 +222,7 @@ contract GmxLibTest is Test {
         Position.Props[] memory positions = new Position.Props[](32);
         vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
-        vm.expectRevert(GmxLib.MaxGmxPositionsReached.selector);
+        vm.expectRevert(GmxAdapterLib.MaxGmxPositionsReached.selector);
         gmxHarness.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
     }
 
@@ -865,7 +867,7 @@ contract GmxLibTest is Test {
             abi.encode(_buildMarket())
         );
 
-        assertEq(GmxLib.getPnlToken(MARKET, true), LONG_TOKEN, "long PnL token must be longToken");
+        assertEq(GmxAdapterLib.getPnlToken(MARKET, true), LONG_TOKEN, "long PnL token must be longToken");
     }
 
     /// @notice Short positions settle PnL in the market's shortToken.
@@ -876,7 +878,7 @@ contract GmxLibTest is Test {
             abi.encode(_buildMarket())
         );
 
-        assertEq(GmxLib.getPnlToken(MARKET, false), SHORT_TOKEN, "short PnL token must be shortToken");
+        assertEq(GmxAdapterLib.getPnlToken(MARKET, false), SHORT_TOKEN, "short PnL token must be shortToken");
     }
 
     /// @notice Verifies that claimable funding fees and collateral rebates recorded by
@@ -1058,7 +1060,7 @@ contract GmxLibTest is Test {
 
     function test_ClaimableCollateralAmount_NoInfo_ReturnsZero() public view {
         bytes32 amountKey = keccak256(abi.encode("amountKey", MARKET, COL_TOKEN, uint256(1), POOL));
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, POOL), 0);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, POOL), 0);
     }
 
     function test_ClaimableCollateralAmount_WithInfo_NoDelay() public {
@@ -1087,7 +1089,7 @@ contract GmxLibTest is Test {
             abi.encode(amount)
         );
 
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), amount);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, address(this)), amount);
     }
 
     /// @notice When factor <= reduction, the final factor is clamped to 0.
@@ -1132,7 +1134,7 @@ contract GmxLibTest is Test {
             abi.encode(uint256(20))
         );
 
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), 0);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, address(this)), 0);
     }
 
     /// @notice If GMX increases CLAIMABLE_COLLATERAL_TIME_DIVISOR after the timeKey
@@ -1173,7 +1175,7 @@ contract GmxLibTest is Test {
         );
 
         // Must not revert; with factor == 0 the claimable amount is 0 (unvested).
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), 0);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, address(this)), 0);
     }
 
     /// @notice Callback-recorded funding fees on the short token are also returned.

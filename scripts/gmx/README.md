@@ -1,8 +1,8 @@
 # GMX fallback feed maintenance scripts
 
 This folder contains helper scripts for maintaining the hardcoded Chainlink
-fallback feeds used by `GmxLib._getFallbackPriceFeed()` for GMX synthetic index
-tokens that have a Data Stream feed but no on-chain `priceFeed`.
+fallback feeds used by `GmxFallbackPriceFeed.getFallbackPriceFeed()` for GMX
+synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
 
 ## Workflow
 
@@ -54,10 +54,11 @@ tokens that have a Data Stream feed but no on-chain `priceFeed`.
    node scripts/gmx/generate_gmx_fallback_solidity.js
    ```
 
-   Patches `contracts/protocol/libraries/GmxLib.sol` in-place, replacing only
-   the body between `// GMX_FALLBACK_LOOKUP_START` and `// GMX_FALLBACK_LOOKUP_END`
-   with a packed, batched lookup. Each entry is encoded as
-   `bytes32(feedAddress << 96 | exponent)`, where `multiplier = 10 ** exponent`.
+   Patches `contracts/protocol/types/GmxFallbackPriceFeed.sol` in-place,
+   replacing only the body between `// GMX_FALLBACK_LOOKUP_START` and
+   `// GMX_FALLBACK_LOOKUP_END` with a packed, batched lookup. Each entry is
+   encoded as `bytes32(feedAddress << 96 | exponent)`, where
+   `multiplier = 10 ** exponent`.
 
    Use `--stdout` to print the generated block instead of patching the file:
 
@@ -82,8 +83,12 @@ tokens that have a Data Stream feed but no on-chain `priceFeed`.
   first hex digit of the token address (`uint160(token) >> 156`) and then
   compared directly inside each bucket. This is gas-efficient and compact enough
   to deploy at 200 optimizer runs.
-- `_getFallbackPriceFeed` returns only `(address feed, uint256 multiplier)`;
+- `getFallbackPriceFeed` returns only `(address feed, uint256 multiplier)`;
   the token address is the caller's input, so it is not copied back out.
+- The function lives in `contracts/protocol/types/GmxFallbackPriceFeed.sol`
+  and is imported by both `GmxLib` (NAV calculations) and `GmxAdapterLib`
+  (adapter order validation), so the fallback data is shared without forcing
+  adapter-only helpers into the NAV code path.
 - When the list grows, the generate script re-balances the buckets automatically.
   Adding many new tokens may eventually require moving the registry to an
   external module; the current design is intended to fit the release set.

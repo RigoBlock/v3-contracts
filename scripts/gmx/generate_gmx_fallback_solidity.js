@@ -2,7 +2,7 @@ const fs = require("fs");
 const { ethers } = require("ethers");
 
 const INPUT = "scripts/gmx/gmx_fallback_feeds_with_multipliers.json";
-const CONTRACT = "contracts/protocol/libraries/GmxLib.sol";
+const CONTRACT = "contracts/protocol/types/GmxFallbackPriceFeed.sol";
 
 const fallback = JSON.parse(fs.readFileSync(INPUT, "utf8"));
 
@@ -70,7 +70,7 @@ function buildFunction() {
     "    /// @dev Hardcoded Chainlink fallback feeds for GMX synthetic index tokens.",
     "    ///  Each entry is packed as `bytes32(feedAddress << 96 | exponent)` where",
     "    ///  `multiplier = 10 ** exponent`. Returns `(address(0), 0)` for unmapped tokens.",
-    "    function _getFallbackPriceFeed(address token) private pure returns (address feed, uint256 multiplier) {",
+    "    function getFallbackPriceFeed(address token) internal pure returns (address feed, uint256 multiplier) {",
     "        bytes32 packed;",
     "        uint256 nibble = uint160(token) >> 156;",
   ];

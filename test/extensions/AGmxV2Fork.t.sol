@@ -40,6 +40,7 @@ import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
+import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
@@ -555,7 +556,7 @@ contract AGmxV2ForkTest is Test {
         IAGmxV2(pool).claimCollateral(markets, tokens, timeKeys, address(this));
     }
 
-    /// @notice Fork parity: the reimplemented `GmxLib.claimableCollateralAmount` formula
+    /// @notice Fork parity: the reimplemented `GmxAdapterLib.claimableCollateralAmount` formula
     ///  returns exactly the same WETH amount that GMX's real `claimCollateral` transfers.
     ///  We manufacture a liquidation/ADL-like claimable-collateral state in the DataStore
     ///  (as CONTROLLER), simulate the callback that records the key, and assert parity.
@@ -915,7 +916,7 @@ contract AGmxV2ForkTest is Test {
             abi.encode(fakePositions)
         );
         vm.prank(poolOwner);
-        vm.expectRevert(GmxLib.MaxGmxPositionsReached.selector);
+        vm.expectRevert(GmxAdapterLib.MaxGmxPositionsReached.selector);
         IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
     }
 

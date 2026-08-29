@@ -6,7 +6,7 @@ import {Market} from "gmx-synthetics/market/Market.sol";
 import {IGmxDataStore, IGmxReader, IGmxRoleStore} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {Bytes32Set, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {GmxCallbackLib} from "../libraries/GmxCallbackLib.sol";
-import {GmxLib} from "../libraries/GmxLib.sol";
+import {GmxConstants} from "../types/GmxConstants.sol";
 import {IEGmxCallback} from "./adapters/interfaces/IEGmxCallback.sol";
 
 /// @title EGmxCallback
@@ -25,12 +25,12 @@ contract EGmxCallback is IEGmxCallback {
     error NotArbitrum();
 
     constructor() {
-        require(block.chainid == GmxLib.ARBITRUM_CHAIN_ID, NotArbitrum());
+        require(block.chainid == GmxConstants.ARBITRUM_CHAIN_ID, NotArbitrum());
     }
 
     modifier onlyGmxController() {
         require(
-            IGmxRoleStore(GmxLib._GMX_ROLE_STORE).hasRole(msg.sender, _CONTROLLER_ROLE_STORE_KEY),
+            IGmxRoleStore(GmxConstants._GMX_ROLE_STORE).hasRole(msg.sender, _CONTROLLER_ROLE_STORE_KEY),
             NotGmxController()
         );
         _;
@@ -61,8 +61,11 @@ contract EGmxCallback is IEGmxCallback {
         // Record claimable collateral keys for both market tokens. Price-impact rebates
         // are time-locked, so we only store the key for later NAV/claiming.
         uint256 timeKey = block.timestamp /
-            IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
-        Market.Props memory marketInfo = IGmxReader(GmxLib._GMX_READER).getMarket(GmxLib._GMX_DATA_STORE, market);
+            IGmxDataStore(GmxConstants._GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+        Market.Props memory marketInfo = IGmxReader(GmxConstants._GMX_READER).getMarket(
+            GmxConstants._GMX_DATA_STORE,
+            market
+        );
 
         _recordClaimableCollateral(callbackData, market, marketInfo.longToken, timeKey);
         if (marketInfo.longToken != marketInfo.shortToken) {
@@ -83,7 +86,7 @@ contract EGmxCallback is IEGmxCallback {
 
         // Only store keys that actually have claimable collateral and are not already tracked.
         if (
-            IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(amountKey) != 0 &&
+            IGmxDataStore(GmxConstants._GMX_DATA_STORE).getUint(amountKey) != 0 &&
             !callbackData.claimableCollateralKeys.contains(amountKey)
         ) {
             callbackData.claimableCollateralKeys.add(amountKey);

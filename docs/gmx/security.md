@@ -63,7 +63,7 @@ if (params.executionFee > maxExecutionFee) revert ExecutionFeeExceedsMax();
 Unbounded positions would make GMX Reader calls prohibitively expensive in the NAV loop. The adapter enforces a **32 unique-position cap** at `createIncreaseOrder` time:
 
 ```solidity
-// GmxLib.assertPositionLimitNotReached (called from createIncreaseOrder only)
+// GmxAdapterLib.assertPositionLimitNotReached (called from createIncreaseOrder only)
 //
 // If a matching position already exists (same market + collateralToken + isLong),
 // this is an increase — no new slot is consumed, the check is skipped.

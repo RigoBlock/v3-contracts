@@ -41,7 +41,7 @@ address private immutable _adapter;  // = address(this) at deploy time
 
 ### Execution Fee Auto-Computation
 
-All three order entry points (`createIncreaseOrder`, `createDecreaseOrder`, `updateOrder`) compute the execution fee on-chain via `GmxLib.computeExecutionFee`. No fee parameter is required from callers.
+All three order entry points (`createIncreaseOrder`, `createDecreaseOrder`, `updateOrder`) compute the execution fee on-chain via `GmxAdapterLib.computeExecutionFee`. No fee parameter is required from callers.
 
 ```
 fee = adjustedGasLimit × tx.gasprice

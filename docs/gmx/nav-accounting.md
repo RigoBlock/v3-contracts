@@ -79,7 +79,7 @@ and a multiplier:
 uint256 scaledPrice = (answer * multiplier) / 1e30;
 ```
 
-- `GmxLib.isIndexTokenPriced()` returns `true` for tokens priced by either the GMX
+- `GmxAdapterLib.isIndexTokenPriced()` returns `true` for tokens priced by either the GMX
   provider or the fallback list.
 - `AGmxV2.createIncreaseOrder()` rejects markets whose `indexToken` is not priced,
   preventing new NAV blind spots.
