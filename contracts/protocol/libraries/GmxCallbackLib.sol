@@ -3,16 +3,9 @@ pragma solidity ^0.8.28;
 
 import {EnumerableSet, Bytes32Set} from "./EnumerableSet.sol";
 
-/// @title GmxCallbackLib
-/// @notice Storage layout and helpers for the GMX v2 order callback extension.
-///  The data is stored in the pool proxy and updated by `EGmxCallback` when
-///  GMX keepers execute, cancel, or freeze orders.
-/// @dev All state is ERC-7201 namespaced; `MixinStorage` asserts the slot.
 library GmxCallbackLib {
     using EnumerableSet for Bytes32Set;
 
-    /// @notice ERC-7201 slot for GMX callback data.
-    /// @dev Must stay in sync with `MixinStorage` assertion.
     bytes32 internal constant GMX_CALLBACK_DATA_SLOT =
         0xef0ce2d52a301ad6c6e80df0060b9ecd4dec1ba111fe46b11bf9055649205071;
 
@@ -30,8 +23,6 @@ library GmxCallbackLib {
     error InvalidCallbackAccount();
 
     /// @notice Metadata for a recorded claimable-collateral DataStore key.
-    ///  The factor/reduction/claimed keys are recomputed at NAV time to minimize
-    ///  callback gas costs.
     struct ClaimableCollateralInfo {
         address token;
         address market;

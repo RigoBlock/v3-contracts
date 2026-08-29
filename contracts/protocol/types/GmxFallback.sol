@@ -80,6 +80,8 @@ function getFallbackPriceFeed(address token) pure returns (Feed) {
 /// @notice Hardcoded Chainlink fallback feeds for GMX synthetic index tokens
 ///  that have a Data Stream feed but no on-chain `priceFeed`.
 library GmxFallback {
+    uint256 private constant _FALLBACK_HEARTBEAT = 24 hours;
+
     /// @dev Reads a hardcoded Chainlink fallback aggregator for tokens GMX prices via Data Streams. The multiplier is computed as
     ///  `10^60 / 10^feedDecimals / 10^tokenDecimals` so that `answer * multiplier / 1e30` yields a GMX 1e30 token-unit price.
     function getFallbackPrice(address token) internal view returns (Price.Props memory price) {
@@ -89,7 +91,7 @@ library GmxFallback {
 
         try IPriceFeed(feed).latestRoundData() returns (uint80, int256 answer, uint256, uint256 updatedAt, uint80) {
             if (answer <= 0) return price;
-            if (updatedAt + GmxConstants._FALLBACK_HEARTBEAT < block.timestamp) return price;
+            if (updatedAt + _FALLBACK_HEARTBEAT < block.timestamp) return price;
 
             uint256 scaled = (uint256(answer) * multiplier) / GmxConstants._FLOAT_PRECISION;
             price = Price.Props({min: scaled, max: scaled});

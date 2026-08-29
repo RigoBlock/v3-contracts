@@ -3,10 +3,7 @@ pragma solidity ^0.8.28;
 
 import {IGmxExchangeRouter} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 
-/// @title GmxConstants
 /// @notice Chain-specific GMX v2 constants shared across the protocol.
-///  Kept in a types library so both NAV (`GmxLib`) and adapter (`GmxAdapterLib`)
-///  code can use them without creating a circular dependency.
 library GmxConstants {
     uint256 internal constant ARBITRUM_CHAIN_ID = 42161;
     address internal constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
@@ -27,7 +24,6 @@ library GmxConstants {
     bytes32 internal constant _KEY_INCREASE_ORDER_GAS = keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
     bytes32 internal constant _KEY_DECREASE_ORDER_GAS = keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
     uint256 internal constant _FLOAT_PRECISION = 1e30;
-    uint256 internal constant _FALLBACK_HEARTBEAT = 24 hours;
 
     uint256 internal constant _ORDER_ORACLE_PRICE_COUNT = 3;
 }

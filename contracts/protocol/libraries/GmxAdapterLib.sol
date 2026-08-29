@@ -9,13 +9,9 @@ import {GmxClaimableHelpers} from "../types/GmxClaimableHelpers.sol";
 import {GmxConstants} from "../types/GmxConstants.sol";
 import {GmxFallback} from "../types/GmxFallback.sol";
 
-/// @title GmxAdapterLib
-/// @notice Adapter-facing GMX v2 helpers used by `AGmxV2`. These functions are
-///  kept out of `GmxLib` so that the NAV-only code path stays focused and small.
 library GmxAdapterLib {
     error MaxGmxPositionsReached();
 
-    /// @notice Computes the GMX execution fee for an order.
     function computeExecutionFee(bool isIncrease, uint256 callbackGasLimit) internal view returns (uint256) {
         IGmxDataStore ds = IGmxDataStore(GmxConstants._GMX_DATA_STORE);
         uint256 orderGasLimit = ds.getUint(
@@ -31,18 +27,15 @@ library GmxAdapterLib {
         return adjustedGasLimit * tx.gasprice;
     }
 
-    /// @notice Returns the PnL token of a GMX market.
     function getPnlToken(address market, bool isLong) internal view returns (address) {
         Market.Props memory mkt = IGmxReader(GmxConstants._GMX_READER).getMarket(GmxConstants._GMX_DATA_STORE, market);
         return isLong ? mkt.longToken : mkt.shortToken;
     }
 
-    /// @notice Returns the indexToken of a GMX market.
     function getMarketIndexToken(address market) internal view returns (address) {
         return IGmxReader(GmxConstants._GMX_READER).getMarket(GmxConstants._GMX_DATA_STORE, market).indexToken;
     }
 
-    /// @notice Returns true if `token` can be priced by the GMX provider or by a hardcoded fallback feed.
     function isIndexTokenPriced(address token) internal view returns (bool) {
         if (token == address(0)) return false;
         try IGmxChainlinkPriceFeedProvider(GmxConstants._GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
@@ -54,8 +47,6 @@ library GmxAdapterLib {
         }
     }
 
-    /// @notice Reverts if the account has reached the maximum number of open GMX positions
-    ///  for a new market/collateral/direction slot.
     function assertPositionLimitNotReached(
         address account,
         address market,
@@ -79,7 +70,6 @@ library GmxAdapterLib {
         );
     }
 
-    /// @notice Returns true if the account has any open position in `market`.
     function isMarketActive(address account, address market) internal view returns (bool) {
         Position.Props[] memory positions = IGmxReader(GmxConstants._GMX_READER).getAccountPositions(
             GmxConstants._GMX_DATA_STORE,
@@ -93,7 +83,6 @@ library GmxAdapterLib {
         return false;
     }
 
-    /// @notice Returns true if the account has any claimable funding fees in `market`.
     function hasClaimableFundingFees(address account, address market) internal view returns (bool) {
         Market.Props memory mkt = IGmxReader(GmxConstants._GMX_READER).getMarket(GmxConstants._GMX_DATA_STORE, market);
         if (GmxClaimableHelpers.getClaimableFundingAmount(market, mkt.longToken, account) > 0) return true;
@@ -106,7 +95,6 @@ library GmxAdapterLib {
         return false;
     }
 
-    /// @notice Returns the claimable collateral amount for a recorded claimable-collateral key.
     function claimableCollateralAmount(bytes32 amountKey, address account) internal view returns (uint256) {
         GmxCallbackLib.ClaimableCollateralInfo memory info = GmxCallbackLib.gmxCallbackData().claimableCollateralInfo[
             amountKey

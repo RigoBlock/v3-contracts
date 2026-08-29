@@ -36,7 +36,6 @@ library GmxLib {
     bytes32 internal constant _KEY_INCREASE_ORDER_GAS = GmxConstants._KEY_INCREASE_ORDER_GAS;
     bytes32 internal constant _KEY_DECREASE_ORDER_GAS = GmxConstants._KEY_DECREASE_ORDER_GAS;
     uint256 internal constant _FLOAT_PRECISION = GmxConstants._FLOAT_PRECISION;
-    uint256 internal constant _FALLBACK_HEARTBEAT = GmxConstants._FALLBACK_HEARTBEAT;
     uint256 internal constant _ORDER_ORACLE_PRICE_COUNT = GmxConstants._ORDER_ORACLE_PRICE_COUNT;
 
     struct TokenPrice {

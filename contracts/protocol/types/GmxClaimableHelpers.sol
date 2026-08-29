@@ -5,12 +5,7 @@ import {IGmxDataStore} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {GmxCallbackLib} from "../libraries/GmxCallbackLib.sol";
 import {GmxConstants} from "./GmxConstants.sol";
 
-/// @title GmxClaimableHelpers
-/// @notice Shared view helpers for reading GMX claimable funding and collateral
-///  amounts from the DataStore. Used by both NAV (`GmxLib`) and the adapter
-///  (`GmxAdapterLib`) without pulling adapter code into NAV extensions.
 library GmxClaimableHelpers {
-    /// @notice Returns the claimable funding amount for `(market, token, account)`.
     function getClaimableFundingAmount(address market, address token, address account) internal view returns (uint256) {
         return
             IGmxDataStore(GmxConstants._GMX_DATA_STORE).getUint(
@@ -18,7 +13,6 @@ library GmxClaimableHelpers {
             );
     }
 
-    /// @notice Returns the claimable collateral amount for a recorded collateral key.
     function getClaimableCollateralAmount(
         bytes32 amountKey,
         GmxCallbackLib.ClaimableCollateralInfo memory info,
