@@ -46,6 +46,30 @@ modifier onlyDelegateCall() {
 
 ---
 
+## Token / Address Injection
+
+All GMX-related storage writes happen through either `AGmxV2` (owner-only adapter calls) or `EGmxCallback` (GMX controller-only callbacks). Neither path allows an arbitrary non-GMX token or address to be stored.
+
+### `AGmxV2` writes
+
+- `StorageLib.activeApplications().storeApplication(GMX_V2_POSITIONS)` stores only a single application bit; no token address is written.
+- `_trackToken(token)` is private and is called with:
+  - `params.addresses.initialCollateralToken` from the order struct (validated by GMX as a market token at execution time, and the market's `indexToken` must be priced before the order is accepted)
+  - `pnlToken` derived from `GmxAdapterLib.getPnlToken(market, isLong)`, which reads the real GMX `Market.Props`
+  - tokens passed by the pool owner to `claimFundingFees` / `claimCollateral` (owner-provided arrays)
+- `_trackToken` rejects `address(0)` and `StorageLib.activeTokensSet().addUnique` rejects any token that does not have a price feed, so a non-token address cannot be registered for NAV.
+- `_trackMarket(market)` stores only market addresses coming from the order struct or from GMX callback event data.
+- The 32-position limit in `GmxAdapterLib.assertPositionLimitNotReached` bounds the number of distinct position keys.
+
+### `EGmxCallback` writes
+
+- `trackedMarkets` is added only from validated order event data (`orderData.addressItems.items[4]`).
+- `claimableCollateralKeys` is recorded only when `IGmxDataStore(...).getUint(amountKey) != 0` for the emitted `(market, token, timeKey)`. A non-GMX token/market has no GMX DataStore entry and therefore produces no key.
+
+In summary: no non-owner can reach these writes, and even the pool owner cannot inject an address that lacks a GMX DataStore entry or a protocol price feed.
+
+---
+
 ## Resource Limits
 
 ### Execution Fee Cap
@@ -53,10 +77,11 @@ modifier onlyDelegateCall() {
 Each order requires a keeper execution fee paid in WETH. Without a ceiling, a malicious owner could drain the pool's WETH balance via execution fees. The adapter enforces:
 
 ```solidity
-if (params.executionFee > maxExecutionFee) revert ExecutionFeeExceedsMax();
+uint256 executionFee = GmxAdapterLib.computeExecutionFee(...);
+if (executionFee > _MAX_EXECUTION_FEE) revert ExecutionFeeExceedsMax();
 ```
 
-`maxExecutionFee` is a parameter set by governance. Excess fees above what GMX requires are refunded to the pool by the keeper after execution.
+`_MAX_EXECUTION_FEE` is a constant (`0.05 ether`). Excess fees above what GMX uses are refunded to the pool by the keeper after execution.
 
 ### Position Count Limit
 
@@ -124,7 +149,7 @@ Because decrease-order execution fees are now counted, a pending decrease no lon
 GMX v2 perpetuals are deployed on Arbitrum One only (`chainId = 42161`). An on-chain guard prevents deployment on incorrect chains:
 
 ```solidity
-if (block.chainid != _ARB_CHAIN_ID) revert NotArbitrum();
+if (block.chainid != GmxConstants.ARBITRUM_CHAIN_ID) revert NotArbitrum();
 ```
 
 This is checked at every adapter entry point. Pools on Ethereum mainnet, Base, Optimism, etc., cannot call GMX functions even if the adapter bytecode is present in the Authority registry.

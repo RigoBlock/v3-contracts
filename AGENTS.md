@@ -630,7 +630,7 @@ See `docs/gmx/` for the full GMX integration guide. Key rules for AI agents:
 
 - `GmxLib` returns **native collateral tokens** (not WETH). See `docs/gmx/nav-accounting.md`.
 - Always call `_trackToken(collateralToken)` in `createIncreaseOrder`. See `docs/gmx/architecture.md#token-tracking`.
-- `ARBITRUM_CHAIN_ID` is defined in `GmxLib` — never duplicate it.
+- `ARBITRUM_CHAIN_ID` is defined in `GmxConstants` and re-exported by `GmxLib` — never duplicate it.
 - The chain guard is the `GMX_V2_POSITIONS` activation bit, not a `block.chainid` check in `GmxLib`.
 - For P&L fork tests, mock the Chainlink oracle BEFORE `_executeOrder`. See `docs/gmx/architecture.md#common-pitfalls`.
 - **32-position cap**: `assertPositionLimitNotReached` blocks NEW positions (non-matching market+collateral+direction) when 32 are open. Increasing an EXISTING position is allowed at any count. The NAV loop uses `type(uint256).max` — it reads ALL positions, never just 32.

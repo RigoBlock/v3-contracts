@@ -33,7 +33,7 @@ Before querying GMX, `EApps` checks whether the pool has any GMX activity via `A
 ```
 
 This gate is the **primary multi-chain safety boundary**: because `AGmxV2.createIncreaseOrder`
-guards its constructor with `GmxLib.ARBITRUM_CHAIN_ID`, the `GMX_V2_POSITIONS` bit is
+guards its constructor with `GmxConstants.ARBITRUM_CHAIN_ID`, the `GMX_V2_POSITIONS` bit is
 never set on non-Arbitrum deployments, so `GmxLib` is never called there.
 
 `GmxLib.getGmxPositionBalances` itself intentionally has **no chain-ID guard**.

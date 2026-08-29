@@ -83,8 +83,9 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
   first hex digit of the token address (`uint160(token) >> 156`) and then
   compared directly inside each bucket. This is gas-efficient and compact enough
   to deploy at 200 optimizer runs.
-- `getFallbackPriceFeed` returns only `(address feed, uint256 multiplier)`;
-  the token address is the caller's input, so it is not copied back out.
+- `getFallbackPriceFeed` returns a packed `Feed` (`bytes32`);
+  callers decode it as `address(feed) << 96 | exponent`, where `multiplier = 10 ** exponent`.
+  The token address is the caller's input, so it is not copied back out.
 - The function lives in `contracts/protocol/types/GmxFallback.sol`
   and is imported by both `GmxLib` (NAV calculations) and `GmxAdapterLib`
   (adapter order validation), so the fallback data is shared without forcing
