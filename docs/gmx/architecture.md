@@ -31,6 +31,7 @@ address private immutable _adapter;  // = address(this) at deploy time
    - `MixinFallback` routes call via `delegatecall` only if `msg.sender == pool().owner`; non-owners are `staticcall`ed
    - position count < 32 (GmxLib.MaxGmxPositionsReached)
    - computedFee <= 0.05 ETH (ExecutionFeeExceedsMax)
+   - the market's `indexToken` is priced by the GMX provider or by the hardcoded fallback list (UnpricedIndexToken)
 3. Transfer collateral to GMX OrderVault:
    - if collateral == WETH: transfer (initialCollateral + executionFee) WETH
    - if collateral != WETH: transfer collateral + transfer executionFee WETH separately
@@ -108,11 +109,11 @@ Note: `getAccountPositionCount` is an internal library function (`PositionStoreU
 
 GMX's `decreasePositionSwapType` controls implicit output swaps during position settlement:
 
-| Value | Output token |
-|---|---|
-| `NoSwap` | Collateral token (what was used to open) |
+| Value                           | Output token                                             |
+| ------------------------------- | -------------------------------------------------------- |
+| `NoSwap`                        | Collateral token (what was used to open)                 |
 | `SwapPnlTokenToCollateralToken` | Collateral token (PnL index token swapped to collateral) |
-| `SwapCollateralTokenToPnlToken` | **Market index token** (e.g. WETH on ETH/USD) |
+| `SwapCollateralTokenToPnlToken` | **Market index token** (e.g. WETH on ETH/USD)            |
 
 If `SwapCollateralTokenToPnlToken` were allowed, the settlement output would be the market's index/long token — a token we have no `_trackToken` record for — making it permanently invisible to NAV. The adapter forces `decreasePositionSwapType: NoSwap` so the output is always the collateral token already in the active-tokens set.
 
@@ -124,11 +125,12 @@ The adapter enforces a maximum of 32 concurrent GMX positions per pool (`_MAX_GM
 
 ```solidity
 function _assertPositionLimitNotReached() private view {
-    require(
-        _reader.getAccountPositions(_dataStore, address(this), 0, _MAX_GMX_POSITIONS).length
-            < _MAX_GMX_POSITIONS,
-        MaxGmxPositionsReached()
-    );
+  require(
+    _reader
+      .getAccountPositions(_dataStore, address(this), 0, _MAX_GMX_POSITIONS)
+      .length < _MAX_GMX_POSITIONS,
+    MaxGmxPositionsReached()
+  );
 }
 ```
 
@@ -146,6 +148,7 @@ require(block.chainid == GmxLib.ARBITRUM_CHAIN_ID, NotArbitrum());
 
 The guard lives **only in the constructor**, not on individual entry points.
 This is correct by design:
+
 - The adapter is deployed as an immutable contract at a fixed address.
 - The constructor check proves the adapter was deployed on Arbitrum.
 - Individual entry points are protected by `onlyDelegateCall` (no direct calls)
@@ -155,6 +158,7 @@ The **real multi-chain boundary** is the app-activation gate in `EApps`/`GmxLib`
 because `GMX_V2_POSITIONS` is only set when `createIncreaseOrder` runs (which
 requires the adapter to be deployed and registered in Authority), pools on
 non-Arbitrum chains never have this bit set and `GmxLib` is never invoked.
+
 ## Active Application Tracking
 
 When a position is created, GMX is registered as an **active application** in the pool's app registry:

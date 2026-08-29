@@ -7,6 +7,7 @@ import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IGmxReader, IGmxDataStore, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice, GmxPositionInfo, GmxPositionFees, GmxPositionFundingFees, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
@@ -29,6 +30,14 @@ contract GmxLibHarness {
 
     function hasClaimableFundingFees(address account, address market) external view returns (bool) {
         return GmxLib.hasClaimableFundingFees(account, market);
+    }
+
+    function safeGetGmxPrice(address token) external view returns (Price.Props memory) {
+        return GmxLib._safeGetGmxPrice(token);
+    }
+
+    function isIndexTokenPriced(address token) external view returns (bool) {
+        return GmxLib.isIndexTokenPriced(token);
     }
 }
 
@@ -71,6 +80,11 @@ contract GmxLibTest is Test {
     address internal constant INDEX_TOKEN = address(0x4000);
     address internal constant LONG_TOKEN = address(0x5000);
     address internal constant SHORT_TOKEN = address(0x6000);
+
+    // LIT / USD fallback (tokenDecimals = 18, feedDecimals = 8, multiplier = 1e34).
+    address internal constant LIT_TOKEN = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db;
+    address internal constant LIT_FEED = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
+    uint256 internal constant LIT_MULTIPLIER = 10000000000000000000000000000000000;
 
     // =========================================================================
     // computeExecutionFee
@@ -1151,7 +1165,10 @@ contract GmxLibTest is Test {
         // timeKey * divisor is now > block.timestamp, which would underflow without saturation.
         vm.mockCall(
             GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector, GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY),
+            abi.encodeWithSelector(
+                IGmxDataStore.getUint.selector,
+                GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY
+            ),
             abi.encode(uint256(1))
         );
 
@@ -1231,5 +1248,115 @@ contract GmxLibTest is Test {
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(address(this));
         assertEq(balances.length, 0);
+    }
+
+    // =========================================================================
+    // Fallback price feeds for GMX Data Stream index tokens
+    // =========================================================================
+
+    function test_SafeGetGmxPrice_Fallback_LIT() public {
+        uint256 answer = 0.5e8; // $0.50, 8 decimals
+        uint256 expected = (answer * LIT_MULTIPLIER) / FLOAT_PRECISION;
+
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LIT_TOKEN, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(answer), uint256(0), block.timestamp, uint80(1))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(LIT_TOKEN);
+        assertEq(price.min, expected);
+        assertEq(price.max, expected);
+    }
+
+    function test_SafeGetGmxPrice_Fallback_Stale() public {
+        vm.warp(block.timestamp + 26 hours);
+
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LIT_TOKEN, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0.5e8), uint256(0), block.timestamp - 25 hours, uint80(1))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(LIT_TOKEN);
+        assertEq(price.min, 0);
+        assertEq(price.max, 0);
+    }
+
+    function test_SafeGetGmxPrice_Fallback_InvalidAnswer() public {
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LIT_TOKEN, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0), uint256(0), block.timestamp, uint80(1))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(LIT_TOKEN);
+        assertEq(price.min, 0);
+        assertEq(price.max, 0);
+    }
+
+    function test_SafeGetGmxPrice_Provider() public {
+        address token = COL_TOKEN;
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode(GmxValidatedPrice(token, 2e30, 3e30, block.timestamp, block.number))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(token);
+        assertEq(price.min, 2e30);
+        assertEq(price.max, 3e30);
+    }
+
+    function test_IsIndexTokenPriced_Provider() public {
+        address token = LIT_TOKEN;
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode(GmxValidatedPrice(token, 1e30, 1e30, block.timestamp, block.number))
+        );
+
+        assertTrue(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    function test_IsIndexTokenPriced_Fallback() public {
+        address token = LIT_TOKEN;
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+
+        assertTrue(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    function test_IsIndexTokenPriced_NotMapped() public {
+        address token = address(0xABCD);
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+
+        assertFalse(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    function test_IsIndexTokenPriced_ZeroAddress() public {
+        assertFalse(gmxHarness.isIndexTokenPriced(address(0)));
     }
 }

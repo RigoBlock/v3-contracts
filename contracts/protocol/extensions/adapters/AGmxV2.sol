@@ -74,6 +74,12 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
             _trackToken(pnlToken);
         }
 
+        // Reject markets whose indexToken cannot be priced through the GMX provider or a
+        // hardcoded fallback. Opening positions on unmapped synthetic tokens would hide
+        // unrealized PnL from NAV.
+        address indexToken = GmxLib.getMarketIndexToken(params.addresses.market);
+        require(GmxLib.isIndexTokenPriced(indexToken), UnpricedIndexToken(indexToken));
+
         address orderVault = GmxLib.GMX_ROUTER.orderHandler().orderVault();
 
         bool collateralIsWrappedNative = params.addresses.initialCollateralToken == GmxLib.WRAPPED_NATIVE;

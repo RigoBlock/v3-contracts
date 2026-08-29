@@ -22,6 +22,12 @@ interface IAGmxV2 {
     ///  Prevents pool operators from accidentally (or maliciously) draining the pool's WETH balance.
     error ExecutionFeeExceedsMax();
 
+    /// @notice Thrown when the market's index token has no on-chain price path.
+    ///  GMX prices some synthetic index tokens via Data Streams only; Rigoblock uses a
+    ///  hardcoded fallback mapping to on-chain Chainlink aggregators, and blocks markets
+    ///  not present in that mapping to avoid NAV blind spots.
+    error UnpricedIndexToken(address indexToken);
+
     /// @notice Emitted when the pool's combined WETH + native ETH balance is insufficient to cover the execution fee.
     error InsufficientNativeBalance();
 

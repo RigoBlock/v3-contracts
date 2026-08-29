@@ -63,7 +63,30 @@ All GMX addresses (`_GMX_READER`, `_GMX_DATA_STORE`, `_GMX_REFERRAL_STORAGE`,
 `_GMX_CHAINLINK_PRICE_FEED`, `_WRAPPED_NATIVE`) are **private constants** in
 `GmxLib.sol` — they are NOT threaded through constructor parameters.
 
-### 4. Get Position Info
+### 4. Fallback Chainlink Feeds for Synthetic Index Tokens
+
+Some GMX synthetic index tokens (e.g. LIT/USD, XMR/USD) are priced off-chain via
+Data Streams and therefore have no on-chain `priceFeed` entry in the GMX
+Chainlink provider. If such a token were left unpriced, any position using it as
+an index token would have its unrealised PnL excluded from NAV.
+
+`GmxLib` keeps a hardcoded, sorted list of `FallbackPriceFeedData` entries that
+map each synthetic index token address to an on-chain Chainlink USD aggregator
+and a multiplier:
+
+```solidity
+// multiplier = 10^60 / 10^feedDecimals / 10^tokenDecimals
+uint256 scaledPrice = (answer * multiplier) / 1e30;
+```
+
+- `GmxLib.isIndexTokenPriced()` returns `true` for tokens priced by either the GMX
+  provider or the fallback list.
+- `AGmxV2.createIncreaseOrder()` rejects markets whose `indexToken` is not priced,
+  preventing new NAV blind spots.
+- The fallback list lives in `GmxLib._fallbackFeeds()` and is maintained by the
+  scripts in `scripts/gmx/`.
+
+### 5. Get Position Info
 
 ```solidity
 GmxPositionInfo[] memory infos = IGmxReader(_GMX_READER).getAccountPositionInfoList(
@@ -85,7 +108,7 @@ Each `PositionInfo` contains:
 - `fees.funding.claimableShortTokenAmount` — accrued funding fees (short)
 - `pnlAfterPriceImpact` — unrealised PnL in USD (18 decimals)
 
-### 5. Funding Fee Inclusion
+### 6. Funding Fee Inclusion
 
 Claimable funding fees are returned as native market tokens — not converted to any common denomination:
 
@@ -100,7 +123,7 @@ NavView prices each token via `EOracle.convertTokenAmount` using the pool's stan
 
 The `claimableLongTokenAmount` / `claimableShortTokenAmount` values returned by the live Reader are **unflushed** accrued funding for the still-open position. After a decrease order executes, GMX moves the settled portion into the `CLAIMABLE_FUNDING_AMOUNT` DataStore bucket. `GmxLib._getClaimableBalances` reads the DataStore bucket, while `_getExecutedPositionBalances` reads the live Reader projection for any remaining open position. These two sources are non-overlapping for the same market/token: the flushed bucket represents historical funding that has already been removed from the live position projection. This is exercised by the real-fork test `test_ClaimFundingFees_PartialDecreaseFlushesFundingFees` in `test/extensions/AGmxV2Fork.t.sol`, which accrues funding over 30 days, performs a partial decrease, and verifies that claiming the DataStore amount reduces EApps by exactly the claimed value while the remaining position is still valued.
 
-### 6. Aggregate Value — Native Token Design
+### 7. Aggregate Value — Native Token Design
 
 `GmxLib` returns **native collateral tokens** in `AppTokenBalance[]`:
 

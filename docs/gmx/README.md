@@ -24,24 +24,24 @@ Pool Owner → SmartPool.fallback()
 
 ## Key Components
 
-| Component | File | Role |
-|-----------|------|------|
-| `AGmxV2` | `contracts/protocol/extensions/adapters/AGmxV2.sol` | Adapter: order management |
-| `IAGmxV2` | `contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol` | Adapter interface |
-| `EApps` | `contracts/protocol/extensions/EApps.sol` | Extension: per-call position valuation |
-| `ENavView` | `contracts/protocol/extensions/ENavView.sol` | Extension: view-only NAV computation |
-| `NavView` | `contracts/protocol/libraries/NavView.sol` | Library: NAV calculation helpers |
-| `IGmxSynthetics` | `contracts/utils/exchanges/gmx/IGmxSynthetics.sol` | GMX interface definitions |
+| Component        | File                                                            | Role                                   |
+| ---------------- | --------------------------------------------------------------- | -------------------------------------- |
+| `AGmxV2`         | `contracts/protocol/extensions/adapters/AGmxV2.sol`             | Adapter: order management              |
+| `IAGmxV2`        | `contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol` | Adapter interface                      |
+| `EApps`          | `contracts/protocol/extensions/EApps.sol`                       | Extension: per-call position valuation |
+| `ENavView`       | `contracts/protocol/extensions/ENavView.sol`                    | Extension: view-only NAV computation   |
+| `NavView`        | `contracts/protocol/libraries/NavView.sol`                      | Library: NAV calculation helpers       |
+| `IGmxSynthetics` | `contracts/utils/exchanges/gmx/IGmxSynthetics.sol`              | GMX interface definitions              |
 
 ## Deployed Addresses (Arbitrum One)
 
-| Contract | Address |
-|----------|---------|
-| ExchangeRouter | `0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41` |
-| DataStore | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` |
-| Reader | `0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789` |
+| Contract                      | Address                                      |
+| ----------------------------- | -------------------------------------------- |
+| ExchangeRouter                | `0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41` |
+| DataStore                     | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` |
+| Reader                        | `0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789` |
 | Chainlink Price Feed Provider | `0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B` |
-| Referral Storage | `0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d` |
+| Referral Storage              | `0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d` |
 
 ## GMX Interface Source
 
@@ -50,4 +50,7 @@ Interfaces are defined in `contracts/utils/exchanges/gmx/IGmxSynthetics.sol`. Th
 ---
 
 For details on NAV accounting, see [nav-accounting.md](./nav-accounting.md).  
+For details on the hardcoded fallback feeds for synthetic index tokens, see
+`scripts/gmx/README.md` and the "Fallback Chainlink Feeds" section in
+[nav-accounting.md](./nav-accounting.md).  
 For security analysis, see [security.md](./security.md).

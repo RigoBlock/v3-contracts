@@ -5,6 +5,7 @@ import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
+import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
 import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxDataStore, IGmxExchangeRouter, IGmxRoleStore, GmxValidatedPrice, GmxPositionInfo, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {GmxCallbackLib} from "./GmxCallbackLib.sol";
@@ -32,6 +33,7 @@ library GmxLib {
     bytes32 private constant _KEY_INCREASE_ORDER_GAS = keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
     bytes32 private constant _KEY_DECREASE_ORDER_GAS = keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
     uint256 private constant _FLOAT_PRECISION = 1e30;
+    uint256 private constant _FALLBACK_HEARTBEAT = 24 hours;
 
     uint256 private constant _ORDER_ORACLE_PRICE_COUNT = 3;
 
@@ -40,6 +42,52 @@ library GmxLib {
     struct TokenPrice {
         address token;
         Price.Props price;
+    }
+
+    /// @dev Hardcoded Chainlink fallback feeds for GMX synthetic index tokens.
+    ///  The multiplier converts the aggregator answer (feedDecimals) to GMX's 1e30
+    ///  token-unit price. Returns `(address(0), 0)` for unmapped tokens.
+    function _getFallbackPriceFeed(address token) private pure returns (address feed, uint256 multiplier) {
+        if (token <= 0x2e73bDBee83D91623736D514b0BB41f2afd9C7Fd) {
+            if (token == 0x0315441076FF6d3eA09814a2F90a1f980cF03e9e) return (0x46306F3795342117721D8DEd50fbcF6DF2b3cc10, 10000000000000000000000000000000000);
+            if (token == 0x13674172E6E44D31d4bE489d5184f3457c40153A) return (0x8c76E8cab5ef3B410a318DDb82d83Ed47D7d2701, 10000000000000000000000000000000000000000);
+            if (token == 0x13983f27Ce9365055a6a553233c49fE28e70103e) return (0xCCa91A477fBF466D676B2056bfDfDA94f343a64F, 10000000000000000000000000000000000);
+            if (token == 0x197aa2DE1313c7AD50184234490E12409B2a1f95) return (0x4a85B128EBDaFC24d5CB611e161376ffDECeB289, 10000000000000000000000000000000000000000000);
+            if (token == 0x2aAB60E62f05d17e58dEc982870bfAdc7F4e7ADF) return (0xAD57D7c059E2aFef2241EB6EF43559f8a409897E, 10000000000000000000000000000000000);
+            if (token == 0x2e73bDBee83D91623736D514b0BB41f2afd9C7Fd) return (0x1b47b4124b9A5094C59710E6b9126e5e32a4fb8E, 1000000000000000000000000);
+            return (address(0), 0);
+        }
+        if (token <= 0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5) {
+            if (token == 0x3E57D02f9d196873e55727382974b02EdebE6bfd) return (0x0E278D14B4bf6429dDB0a1B353e2Ae8A4e128C93, 1000000000000000000000000);
+            if (token == 0x3f8f0dCE4dCE4d0D1d0871941e79CDA82cA50d0B) return (0xdc49F292ad1bb3DAb6C11363d74ED06F38b9bd9C, 100000000000000000000000000000000000000000000);
+            if (token == 0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5) return (0x26DC0763135Db2EC0dC4563148AC57eB48Ed0BAd, 10000000000000000000000000000000000);
+            if (token == 0x55e85A147a1029b985384822c0B2262dF8023452) return (0xCc9742d77622eE9abBF1Df03530594f9097bDcB3, 10000000000000000000000000000000000);
+            if (token == 0x67ADABbAd211eA9b3B4E2fd0FD165E593De1e983) return (0x4f861F14246229530a881D32C8d26D78b8c48BE6, 10000000000000000000000000000000000);
+            if (token == 0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5) return (0x21082CA28570f0ccfb089465bFaEfDc77b00D367, 1000000000000000000000000);
+            return (address(0), 0);
+        }
+        if (token <= 0x9c74772b713a1B032aEB173E28683D937E51921c) {
+            if (token == 0x8F6cCb99d4Fd0B4095915147b5ae3bbDb8075394) return (0xFeaC1A3936514746e70170c0f539e70b23d36F19, 10000000000000000000000000000000000);
+            if (token == 0x95c317066CF214b2E6588B2685D949384504F51e) return (0x47C38C695639aE97A00f57D6D9f5ece1DebB033C, 10000000000000000000000000000000000);
+            if (token == 0x9759C297fb6C91e252c7292cECa30a509558E5De) return (0xA0C8611b0CfB31Bc8AdE3189ae2b982c90D9302f, 10000000000000000000000000000000000);
+            if (token == 0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964) return (0x17d8D87dF3E279c737568aB0C5cC3fF750aB763e, 10000000000000000000000000000000000);
+            if (token == 0x9c060B2fA953b5f69879a8B7B81f62BFfEF360be) return (0x0C997958ccE7A0403AEA7E34d14bbaDA897B5bb3, 1000000000000000000000000);
+            if (token == 0x9c74772b713a1B032aEB173E28683D937E51921c) return (0x82BA56a2fADF9C14f17D08bc51bDA0bDB83A8934, 10000000000000000000000000000000000);
+            return (address(0), 0);
+        }
+        if (token <= 0xc5dbD52Ae5a927Cf585B884011d0C7631C9974c6) {
+            if (token == 0xB2f7cefaeEb08Aa347705ac829a7b8bE2FB560f3) return (0x0301e5D0A8f7490444ebd1921E3d0f0fe7722786, 10000000000000000000000000000000000000000000);
+            if (token == 0xB46A094Bc4B0adBD801E14b9DB95e05E28962764) return (0x5698690a7B7B84F6aa985ef7690A8A7288FBc9c8, 100000000000000000000000000000000000000000000);
+            if (token == 0xB79Eb5BA64A167676694bB41bc1640F95d309a2F) return (0xE56BEA9Ff0780D668f92a9ab4Ace1D713CaA1016, 10000000000000000000000000000000000);
+            if (token == 0xBaf07cF91D413C0aCB2b7444B9Bf13b4e03c9D71) return (0x3a9659C071dD3C37a8b1A2363409A8D41B2Feae3, 10000000000000000000000000000000000000000000000);
+            if (token == 0xC5799ab6E2818fD8d0788dB8D156B0c5db1Bf97b) return (0x4b13Dd76De990Db9A2Dab58D35C2c02E5e3AE848, 10000000000000000000000000000000000);
+            if (token == 0xc5dbD52Ae5a927Cf585B884011d0C7631C9974c6) return (0x5a0a07CD0E9e4754B3FeC4Fb1ee1a5baBbaa6051, 100000000000000000000000000000000000);
+            return (address(0), 0);
+        }
+        if (token == 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db) return (0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b, 10000000000000000000000000000000000);
+        if (token == 0xEcc5eb985Ddbb8335b175b0A2A1144E4c978F1f6) return (0x0B2aB7AE5276F6f466f8e62953138B106dD19A63, 10000000000000000000000000000000000);
+        if (token == 0xF67b2a901D674B443Fa9f6DB2A689B37c07fD4fE) return (0x1E48733Eeee02468b674b69958b046EB6A0a7d94, 10000000000000000000000000000000000);
+        return (address(0), 0);
     }
 
     function computeExecutionFee(bool isIncrease, uint256 callbackGasLimit) internal view returns (uint256) {
@@ -56,6 +104,24 @@ library GmxLib {
     function getPnlToken(address market, bool isLong) internal view returns (address) {
         Market.Props memory mkt = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
         return isLong ? mkt.longToken : mkt.shortToken;
+    }
+
+    /// @notice Returns the indexToken of a GMX market.
+    function getMarketIndexToken(address market) internal view returns (address) {
+        return IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market).indexToken;
+    }
+
+    /// @notice Returns true if `token` can be priced by the GMX provider or by a hardcoded fallback feed.
+    function isIndexTokenPriced(address token) internal view returns (bool) {
+        if (token == address(0)) return false;
+        try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
+            GmxValidatedPrice memory
+        ) {
+            return true;
+        } catch {
+            (address feed, ) = _getFallbackPriceFeed(token);
+            return feed != address(0);
+        }
     }
 
     function assertPositionLimitNotReached(
@@ -429,12 +495,30 @@ library GmxLib {
         }
     }
 
-    function _safeGetGmxPrice(address token) private view returns (Price.Props memory price) {
+    function _safeGetGmxPrice(address token) internal view returns (Price.Props memory price) {
         if (token == address(0)) return price;
         try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
             GmxValidatedPrice memory validated
         ) {
             price = Price.Props({min: validated.min, max: validated.max});
+        } catch {
+            price = _getFallbackPrice(token);
+        }
+    }
+
+    /// @dev Reads a hardcoded Chainlink fallback aggregator for tokens GMX prices via Data Streams.
+    ///  The multiplier is computed as 10^60 / 10^feedDecimals / 10^tokenDecimals so that
+    ///  `answer * multiplier / 1e30` yields a GMX 1e30 token-unit price.
+    function _getFallbackPrice(address token) private view returns (Price.Props memory price) {
+        (address feed, uint256 multiplier) = _getFallbackPriceFeed(token);
+        if (feed == address(0)) return price;
+
+        try IPriceFeed(feed).latestRoundData() returns (uint80, int256 answer, uint256, uint256 updatedAt, uint80) {
+            if (answer <= 0) return price;
+            if (updatedAt + _FALLBACK_HEARTBEAT < block.timestamp) return price;
+
+            uint256 scaled = (uint256(answer) * multiplier) / _FLOAT_PRECISION;
+            price = Price.Props({min: scaled, max: scaled});
         } catch {}
     }
 

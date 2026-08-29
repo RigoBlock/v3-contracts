@@ -2,9 +2,13 @@
 pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {IGmxDataStore, IGmxReader, IGmxExchangeRouter} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IGmxDataStore, IGmxReader, IGmxExchangeRouter, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
+import {Order} from "gmx-synthetics/order/Order.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
+import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
+import {IWETH9} from "../../contracts/protocol/interfaces/IWETH9.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
@@ -45,6 +49,8 @@ contract AGmxV2UnitTest is Test {
     AGmxV2UnitProxy internal proxy;
     address internal market;
     address internal token;
+
+    address internal constant GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
 
     function setUp() public {
         vm.chainId(GmxLib.ARBITRUM_CHAIN_ID);
@@ -169,5 +175,133 @@ contract AGmxV2UnitTest is Test {
         vm.store(address(proxy), infoSlot, bytes32(uint256(uint160(token))));
         vm.store(address(proxy), bytes32(uint256(infoSlot) + 1), bytes32(uint256(uint160(market))));
         vm.store(address(proxy), bytes32(uint256(infoSlot) + 2), bytes32(uint256(1)));
+    }
+
+    function _buildCreateOrderParams(
+        address _market,
+        address _collateralToken,
+        bool _isLong
+    ) internal pure returns (IBaseOrderUtils.CreateOrderParams memory) {
+        return
+            IBaseOrderUtils.CreateOrderParams({
+                addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                    receiver: address(0),
+                    cancellationReceiver: address(0),
+                    callbackContract: address(0),
+                    uiFeeReceiver: address(0),
+                    market: _market,
+                    initialCollateralToken: _collateralToken,
+                    swapPath: new address[](0)
+                }),
+                numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                    sizeDeltaUsd: 1e30,
+                    initialCollateralDeltaAmount: 1e18,
+                    triggerPrice: 0,
+                    acceptablePrice: 0,
+                    executionFee: 0,
+                    callbackGasLimit: 0,
+                    minOutputAmount: 0,
+                    validFromTime: 0
+                }),
+                orderType: Order.OrderType.MarketIncrease,
+                decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+                isLong: _isLong,
+                shouldUnwrapNativeToken: false,
+                autoCancel: false,
+                referralCode: bytes32(0),
+                dataList: new bytes32[](0)
+            });
+    }
+
+    function test_CreateIncreaseOrder_UnmappedIndexToken_Reverts() public {
+        address indexToken = makeAddr("unmappedIndexToken");
+        vm.deal(address(proxy), 1 ether);
+
+        _mockCreateOrderInfrastructure();
+
+        // Market props: indexToken is unmapped.
+        vm.mockCall(
+            GmxLib._GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GmxLib._GMX_DATA_STORE, market),
+            abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
+        );
+        // GMX provider has no feed for the unmapped token.
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encode("no price feed")
+        );
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
+
+        vm.expectRevert(abi.encodeWithSelector(IAGmxV2.UnpricedIndexToken.selector, indexToken));
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    function test_CreateIncreaseOrder_MappedIndexToken_Succeeds() public {
+        address indexToken = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db; // LIT / USD
+        vm.deal(address(proxy), 1 ether);
+
+        _mockCreateOrderInfrastructure();
+
+        vm.mockCall(
+            GmxLib._GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, GmxLib._GMX_DATA_STORE, market),
+            abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
+        );
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encode(GmxValidatedPrice(indexToken, 1e30, 1e30, block.timestamp, block.number))
+        );
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
+
+        // Succeeds without reverting.
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    /// @dev Mocks the GMX DataStore, Reader, Router, OrderHandler and OrderVault calls
+    ///  that createIncreaseOrder needs regardless of the market being tested.
+    function _mockCreateOrderInfrastructure() internal {
+        address orderHandler = makeAddr("orderHandler");
+        address orderVault = makeAddr("orderVault");
+
+        // Execution fee reads return zero so the fee is small.
+        vm.mockCall(
+            GmxLib._GMX_DATA_STORE,
+            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
+            abi.encode(uint256(0))
+        );
+        // No existing positions.
+        vm.mockCall(
+            GmxLib._GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encode(new Position.Props[](0))
+        );
+        // Pretend the pool already holds enough WETH so the adapter does not need to call deposit().
+        vm.mockCall(
+            GmxLib.WRAPPED_NATIVE,
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(proxy)),
+            abi.encode(uint256(2 ether))
+        );
+        // Router -> handler -> vault.
+        vm.mockCall(
+            address(GmxLib.GMX_ROUTER),
+            abi.encodeWithSelector(IGmxExchangeRouter.orderHandler.selector),
+            abi.encode(orderHandler)
+        );
+        vm.mockCall(orderHandler, abi.encodeWithSelector(IGmxOrderHandler.orderVault.selector), abi.encode(orderVault));
+        // createOrder succeeds and the adapter registers a saved callback.
+        vm.mockCall(
+            address(GmxLib.GMX_ROUTER),
+            abi.encodeWithSelector(IGmxExchangeRouter.createOrder.selector),
+            abi.encode(bytes32(uint256(1)))
+        );
+        vm.mockCall(
+            address(GmxLib.GMX_ROUTER),
+            abi.encodeWithSelector(IGmxExchangeRouter.setSavedCallbackContract.selector),
+            abi.encode()
+        );
     }
 }
