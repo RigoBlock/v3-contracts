@@ -3,12 +3,18 @@ set -e
 
 # Foundry coverage with fork/non-fork split and merge
 #
-# Problem: Foundry's lcov reporter doesn't generate DA (line) entries for source
-# files exercised only by fork tests when running alongside non-fork tests.
-# Non-fork tests emit DA:N,0 for all lines, and fork tests only add FN/FNDA/BRDA
-# without DA entries — so line coverage stays at 0%.
+# Problem: Foundry's lcov reporter does not reliably merge line hits (DA records)
+# when fork and non-fork tests run in the same invocation. Running them separately
+# and merging with lcov solves that.
 #
-# Solution: Run fork and non-fork tests separately, then merge with lcov.
+# Workaround for Foundry coverage bug: if ~/.foundry/cache/rpc has just been
+# cleared, the very first `forge coverage` run corrupts line-level coverage for
+# internal libraries inlined into non-fork test contracts (e.g. HyperliquidLib),
+# recording DA:0 even though the code is executed. Running one fast test before
+# the split coverage steps warms up Foundry's instrumentation and avoids the bug.
+#
+# IMPORTANT: this script is intended to run with a warm RPC cache. If you must
+# clear the cache, do it before this script and let the warm-up step below run.
 
 COVERAGE_FILTER='--no-match-coverage "mocks/|examples/|test/|tokens/|utils/"'
 
@@ -33,6 +39,16 @@ echo "⚡ Step 0/4: Building all contracts once..."
 forge build
 
 echo "   ✅ Full build complete"
+
+# ─── Step 0b: Warm-up run to work around Foundry instrumentation bug ──
+# After a cold RPC cache, Foundry's first coverage run produces DA:0 for some
+# inlined internal libraries. Running a single fast non-fork test first warms up
+# the coverage instrumentation so the subsequent split steps record real line hits.
+echo "⚡ Step 0b/4: Warming up coverage instrumentation..."
+
+forge test --match-contract AHyperliquidUnit --match-test testDeployRevertsOnNonHyperEVM >/dev/null 2>&1 || true
+
+echo "   ✅ Warm-up complete"
 
 # ─── Step 1: Library unit tests (isolated run) ────────────────────────
 # Internal libraries are inlined into production contracts. When all non-fork
