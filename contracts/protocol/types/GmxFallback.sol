@@ -13,6 +13,8 @@ type Feed is bytes32;
 function getFallbackPriceFeed(address token) pure returns (Feed) {
     uint256 nibble = uint160(token) >> 156;
     bytes32 packed;
+
+    // GMX_FALLBACK_LOOKUP_START
     if (nibble < 3) {
         if (token == 0x0315441076FF6d3eA09814a2F90a1f980cF03e9e)
             packed = 0x46306f3795342117721d8ded50fbcf6df2b3cc10000000000000000000000022;
@@ -73,6 +75,8 @@ function getFallbackPriceFeed(address token) pure returns (Feed) {
         if (token == 0xF67b2a901D674B443Fa9f6DB2A689B37c07fD4fE)
             packed = 0x1e48733eeee02468b674b69958b046eb6a0a7d94000000000000000000000022;
     }
+    // GMX_FALLBACK_LOOKUP_END
+
     return Feed.wrap(packed);
 }
 
@@ -87,6 +91,7 @@ library GmxFallback {
     function getFallbackPrice(address token) internal view returns (Price.Props memory price) {
         uint256 packedData = uint256(Feed.unwrap(getFallbackPriceFeed(token)));
         address feed = address(uint160(packedData >> 96));
+        if (feed == address(0)) return price;
         uint256 multiplier = 10 ** (packedData & type(uint96).max);
 
         try IPriceFeed(feed).latestRoundData() returns (uint80, int256 answer, uint256, uint256 updatedAt, uint80) {

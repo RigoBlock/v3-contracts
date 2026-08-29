@@ -1324,6 +1324,20 @@ contract GmxLibTest is Test {
         assertEq(price.max, 3e30);
     }
 
+    /// @notice Unmapped tokens return a zero price without calling the zero address feed.
+    function test_SafeGetGmxPrice_UnmappedToken_ReturnsZero() public {
+        address token = address(0xABCD);
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(token);
+        assertEq(price.min, 0);
+        assertEq(price.max, 0);
+    }
+
     function test_IsIndexTokenPriced_Provider() public {
         address token = LIT_TOKEN;
         vm.mockCall(
@@ -1342,8 +1356,30 @@ contract GmxLibTest is Test {
             abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
             abi.encode("no price feed")
         );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0.5e8), uint256(0), block.timestamp, uint80(1))
+        );
 
         assertTrue(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    /// @notice A fallback feed that returns a non-positive price is treated as unpriced.
+    function test_IsIndexTokenPriced_Fallback_InvalidPrice_ReturnsFalse() public {
+        address token = LIT_TOKEN;
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0), uint256(0), block.timestamp, uint80(1))
+        );
+
+        assertFalse(gmxHarness.isIndexTokenPriced(token));
     }
 
     function test_IsIndexTokenPriced_NotMapped() public {

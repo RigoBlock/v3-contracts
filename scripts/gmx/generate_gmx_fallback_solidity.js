@@ -61,43 +61,30 @@ function buildGroups() {
 
 function emitEntry(e) {
   const packed = packEntry(e);
-  return `            if (token == ${e.token}) packed = ${packed};`;
+  return `        if (token == ${e.token}) packed = ${packed};`;
 }
 
-function buildFunction() {
+function buildLookupBlock() {
   const { bounded, last } = buildGroups();
-  const lines = [
-    "    /// @dev Hardcoded Chainlink fallback feeds for GMX synthetic index tokens.",
-    "    ///  Each entry is packed as `bytes32(feedAddress << 96 | exponent)` where",
-    "    ///  `multiplier = 10 ** exponent`. Returns `(address(0), 0)` for unmapped tokens.",
-    "    function getFallbackPriceFeed(address token) internal pure returns (address feed, uint256 multiplier) {",
-    "        bytes32 packed;",
-    "        uint256 nibble = uint160(token) >> 156;",
-  ];
+  const lines = [];
 
   for (let i = 0; i < bounded.length; ++i) {
     const g = bounded[i];
     const keyword = i === 0 ? "if" : "} else if";
-    lines.push(`        ${keyword} (nibble < ${g.bound}) {`);
+    lines.push(`    ${keyword} (nibble < ${g.bound}) {`);
     for (const e of g.entries) {
       lines.push(emitEntry(e));
     }
   }
 
   if (last.entries.length > 0) {
-    lines.push("        } else {");
+    lines.push("    } else {");
     for (const e of last.entries) {
       lines.push(emitEntry(e));
     }
   }
-  lines.push("        }");
-
-  lines.push("        if (packed != bytes32(0)) {");
-  lines.push("            uint256 packedData = uint256(packed);");
-  lines.push("            feed = address(uint160(packedData >> 96));");
-  lines.push("            multiplier = 10 ** (packedData & type(uint96).max);");
-  lines.push("        }");
   lines.push("    }");
+
   return lines.join("\n");
 }
 
@@ -117,7 +104,7 @@ function patchContract() {
 
   const before = sol.slice(0, startIdx);
   const after = sol.slice(endIdx + endMarker.length);
-  const replacement = `${startMarker}\n\n${buildFunction()}\n\n${endMarker}`;
+  const replacement = `${startMarker}\n${buildLookupBlock()}\n${endMarker}`;
 
   fs.writeFileSync(CONTRACT, before + replacement + after, "utf8");
   console.log(
@@ -132,7 +119,7 @@ function printToStdout() {
   console.log("// Source: Chainlink on-chain aggregators on Arbitrum");
   console.log("// Generated on", new Date().toISOString());
   console.log("");
-  console.log(buildFunction());
+  console.log(buildLookupBlock());
 }
 
 if (process.argv.includes("--stdout")) {
