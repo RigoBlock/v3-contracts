@@ -117,7 +117,7 @@ function patchContract() {
 
   const before = sol.slice(0, startIdx);
   const after = sol.slice(endIdx + endMarker.length);
-  const replacement = buildFunction();
+  const replacement = `${startMarker}\n\n${buildFunction()}\n\n${endMarker}`;
 
   fs.writeFileSync(CONTRACT, before + replacement + after, "utf8");
   console.log(
