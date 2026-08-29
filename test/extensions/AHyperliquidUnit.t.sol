@@ -76,8 +76,16 @@ contract HyperliquidLibHarness {
         return HyperliquidLib.getHyperliquidBalances(account);
     }
 
+    function getHyperliquidBalancesUnsafe(address account) external view returns (AppTokenBalance[] memory) {
+        return HyperliquidLib.getHyperliquidBalancesUnsafe(account);
+    }
+
     function recordAction(int256 amount) external {
-        HyperliquidLib.recordAction(amount);
+        HyperliquidLib.recordAction(amount, false);
+    }
+
+    function recordSpotSend(uint64 amount) external returns (uint64 pendingBefore) {
+        return HyperliquidLib.recordAction(int256(uint256(amount)), true);
     }
 }
 
@@ -465,6 +473,7 @@ contract AHyperliquidUnit is Test {
     function testGetHyperliquidBalancesWithAccountValue() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
+        // Perp account value is already in 6-decimal USDC: 1_000_000 = 1 USDC.
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
@@ -483,13 +492,13 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 10_000); // 1_000_000 HyperCore wei / 1e2 -> 10_000 EVM USDC
+        assertEq(balances[0].amount, 1_000_000); // 1 USDC (6 dec)
     }
 
     function testGetHyperliquidBalancesReturnsNegativeNet() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
-        // Perp account value -0.01 USDC Core wei, zero spot -> return -0.01 USDC (EVM 6-dec).
+        // Perp account value -1 USDC (6 dec), zero spot -> return -1 USDC.
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
@@ -507,18 +516,18 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, -10_000, "Negative net balance should be returned as-is");
+        assertEq(balances[0].amount, -1_000_000, "Negative net balance should be returned as-is");
     }
 
     function testGetHyperliquidBalancesNegativePerpOffsetBySpot() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
-        // Perp -0.5 USDC Core wei, spot +1.5 USDC Core wei -> net 1 USDC (EVM 6-dec).
+        // Perp -0.5 USDC (6 dec), spot +1.5 USDC (8-dec wei) -> net 1 USDC (6 dec).
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
             abi.encode(
-                PrecompileLib.AccountMarginSummary({accountValue: -50_000_000, marginUsed: 0, ntlPos: 0, rawUsd: 0})
+                PrecompileLib.AccountMarginSummary({accountValue: -500_000, marginUsed: 0, ntlPos: 0, rawUsd: 0})
             )
         );
 
@@ -556,15 +565,14 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 0);
 
-        // After recording an action, zero account value returns 1 wei dust to prevent purge.
+        // Recording an action arms the settlement lock, so any NAV estimate reverts in the same block.
         libHarness.recordAction(0);
-        balances = libHarness.getHyperliquidBalances(address(libHarness));
-        assertEq(balances.length, 1);
-        assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 1);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        libHarness.getHyperliquidBalances(address(libHarness));
 
-        // After advancing one block, the dust is gone and the app can be purged because the
-        // HyperCore account does not exist.
+        // After the window elapses and a new block starts, the in-flight dust is reset and the app
+        // can be purged because the HyperCore account does not exist.
+        vm.warp(block.timestamp + 129 seconds);
         vm.roll(block.number + 1);
         balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 0);
@@ -686,7 +694,7 @@ contract AHyperliquidUnit is Test {
             abi.encode(uint256(0))
         );
 
-        // Mock a non-zero HyperCore account value so the Hyperliquid branch produces a balance.
+        // Mock a non-zero HyperCore perp account value (6-dec USDC) so the Hyperliquid branch produces a balance.
         _mockAccountMarginSummary(address(pool), 1_000_000);
         _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, 0);
         _mockCoreUserExists(address(pool), true);
@@ -694,7 +702,83 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = navHarness.getAppTokenBalances(address(pool), grgStakingProxy, address(0));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 10_000);
+        assertEq(balances[0].amount, 1_000_000);
+    }
+
+    /// @notice A spot-send withdrawal request does not deflate the Hyperliquid balance, because no
+    ///  in-flight withdrawal subtraction is applied. The locked getter reverts during the settlement
+    ///  window while the unsafe view continues to report the raw Core balance.
+    function testSpotSendWithdrawalDoesNotChangeNavAfterWindow() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        HyperliquidLibHarness harness = new HyperliquidLibHarness();
+        uint64 spotAmountWei = 200e6 * 1e2;
+
+        // HyperCore holds 200 USDC for the pool; zero perp account value.
+        _mockAccountMarginSummary(address(harness), 0);
+        _mockSpotBalance(address(harness), HLConstants.USDC_TOKEN_INDEX, spotAmountWei);
+        _mockCoreUserExists(address(harness), true);
+
+        AppTokenBalance[] memory balances = harness.getHyperliquidBalancesUnsafe(address(harness));
+        assertEq(balances.length, 1);
+        int256 appBalanceBefore = balances[0].amount;
+        assertEq(appBalanceBefore, 200e6);
+
+        // Simulate the spot-send action's effect on storage: record a zero in-flight adjustment and
+        // stamp the current timestamp. The settlement lock arms immediately.
+        harness.recordAction(0);
+
+        // The locked getter reverts during the window.
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        harness.getHyperliquidBalances(address(harness));
+
+        // The unsafe view still reports the raw Core balance, which does not subtract the pending send.
+        balances = harness.getHyperliquidBalancesUnsafe(address(harness));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].amount, appBalanceBefore, "Spot-send request must not deflate NAV");
+
+        // After the window elapses the locked getter returns the same unchanged balance.
+        vm.warp(block.timestamp + 129 seconds);
+        balances = harness.getHyperliquidBalances(address(harness));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].amount, appBalanceBefore, "Spot-send request must not deflate NAV");
+    }
+
+    /// @notice `getHyperliquidBalances` reverts with `NavLocked()` during the settlement window and
+    ///  succeeds once the window has elapsed.
+    function testGetHyperliquidBalancesRevertsDuringSettlementWindow() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+        HyperliquidLibHarness harness = new HyperliquidLibHarness();
+
+        _mockAccountMarginSummary(address(harness), 0);
+        _mockSpotBalance(address(harness), HLConstants.USDC_TOKEN_INDEX, 0);
+        _mockCoreUserExists(address(harness), true);
+
+        // No action recorded yet: balance query succeeds.
+        harness.getHyperliquidBalances(address(harness));
+
+        // Record any action to arm the lock.
+        harness.recordAction(0);
+
+        // During the window the Hyperliquid balance query itself must revert.
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        harness.getHyperliquidBalances(address(harness));
+
+        // Warp just past the window; the query succeeds again.
+        vm.warp(block.timestamp + 129 seconds);
+        harness.getHyperliquidBalances(address(harness));
+    }
+
+    /// @notice `recordAction` with `isSpotSend=true` accumulates same-block spot-send amounts.
+    function testRecordSpotSendCumulativeSameBlock() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        uint64 amount = 100e6 * 1e2;
+        uint64 pending1 = libHarness.recordSpotSend(amount);
+        assertEq(pending1, 0, "First spot-send should have zero prior pending amount");
+
+        uint64 pending2 = libHarness.recordSpotSend(amount);
+        assertEq(pending2, amount, "Second spot-send should see the first amount as pending");
     }
 
     function _BRIDGE_GAS_RESERVE() private pure returns (uint64) {

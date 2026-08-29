@@ -9,6 +9,7 @@ import {
   zeroExDeployer,
 } from "../utils/constants";
 import { enableManagedNonce } from "../utils/nonce";
+import { enableHyperEVMBigBlocks } from "../utils/hyperliquid";
 
 const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts, getChainId } = hre;
@@ -25,6 +26,18 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     } else {
       throw new Error(`Unsupported network: Chain ID ${chainIdString}`);
     }
+  }
+
+  // HyperEVM deployers must direct their transactions to big blocks, otherwise
+  // large protocol contracts exceed the small-block gas limit. We attempt to set
+  // the address-level usingBigBlocks flag automatically via the Hyperliquid API.
+  // This requires the deployer to be an existing HyperCore user (e.g. to have
+  // received USDC on HyperCore); if it is not, the API call fails and the user
+  // must fund the Core account first.
+  if (chainId === 999) {
+    const signer = await hre.ethers.getSigner(deployer);
+    console.log("Enabling HyperEVM big blocks for the deployer...");
+    await enableHyperEVMBigBlocks(signer, false);
   }
 
   const config = chainConfig[chainId];

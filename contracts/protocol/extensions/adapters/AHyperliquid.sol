@@ -11,7 +11,6 @@ import {StorageLib} from "../../libraries/StorageLib.sol";
 import {HyperliquidLib} from "../../libraries/HyperliquidLib.sol";
 import {Applications} from "../../types/Applications.sol";
 import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
-import {HLConversions} from "hyper-evm-lib/common/HLConversions.sol";
 import {CoreWriterLib} from "hyper-evm-lib/CoreWriterLib.sol";
 import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
@@ -26,7 +25,7 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
     using ApplicationsLib for ApplicationsSlot;
     using SafeCast for uint256;
 
-    string private constant _REQUIRED_VERSION = "4.4.0";
+    string private constant _REQUIRED_VERSION = "4.4.1";
 
     /// @dev Asset IDs below this threshold are core perp assets.
     uint64 private constant _ASSET_ID_CORE_SPOT_BASE = 10_000;
@@ -89,7 +88,6 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
             revert UnsupportedAction(actionId);
         }
 
-        HyperliquidLib.recordAction(0);
         emit ActionSent(actionId);
     }
 
@@ -106,7 +104,7 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         }
 
         StorageLib.activeApplications().storeApplication(uint256(Applications.HYPERLIQUID));
-        HyperliquidLib.recordAction(amount.toInt256());
+        HyperliquidLib.recordAction(amount.toInt256(), false);
         emit Deposited(amount, destinationDex);
     }
 
@@ -127,11 +125,10 @@ contract AHyperliquid is IAHyperliquid, IMinimumVersion, ReentrancyGuardTransien
         require(token == HLConstants.USDC_TOKEN_INDEX, InvalidActionData());
         require(destinationAddress == CoreWriterLib.getSystemAddress(token), InvalidActionData());
 
-        uint64 pendingSpotSend = HyperliquidLib.recordSpotSend(amount);
+        uint64 pendingSpotSend = HyperliquidLib.recordAction(int256(uint256(amount)), true);
         uint64 spotTotal = PrecompileLib.spotBalance(address(this), token).total;
         require(spotTotal >= amount + pendingSpotSend + _BRIDGE_GAS_RESERVE, InsufficientBridgeReserve());
 
-        HyperliquidLib.recordAction(-SafeCast.toInt256(HLConversions.weiToEvm(token, amount)));
         CoreWriterLib.spotSend(destinationAddress, token, amount);
     }
 

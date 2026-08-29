@@ -54,6 +54,7 @@ library NavView {
         address uniV4Posm
     ) internal view returns (AppTokenBalance[] memory balances) {
         uint256 packedApps = ISmartPoolState(pool).getActiveApplications();
+
         uint256 appsCount = uint256(Applications.COUNT);
         AppTokenBalance[][] memory appBalances = new AppTokenBalance[][](appsCount);
         uint256 activeAppIndex;
@@ -70,7 +71,7 @@ library NavView {
             } else if (Applications(i) == Applications.GMX_V2_POSITIONS) {
                 appBalances[activeAppIndex] = GmxLib.getGmxPositionBalances(pool);
             } else if (Applications(i) == Applications.HYPERLIQUID) {
-                appBalances[activeAppIndex] = HyperliquidLib.getHyperliquidBalances(pool);
+                appBalances[activeAppIndex] = HyperliquidLib.getHyperliquidBalancesUnsafe(pool);
             } else {
                 continue;
             }
@@ -244,6 +245,9 @@ library NavView {
         address pool,
         address grgStakingProxy
     ) private view returns (AppTokenBalance[] memory balances) {
+        // Skip staking on chains where the GRG staking proxy is not deployed (e.g. HyperEVM).
+        if (grgStakingProxy == address(0)) return balances;
+
         uint256 stakingBalance = IStaking(grgStakingProxy).getTotalStake(pool);
 
         // Continue querying unclaimed rewards only with positive balance

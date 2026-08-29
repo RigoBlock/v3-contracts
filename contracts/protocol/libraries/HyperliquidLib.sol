@@ -17,18 +17,30 @@ library HyperliquidLib {
     using SafeCast for int256;
 
     uint256 internal constant HYPEREVM_CHAIN_ID = 999;
+    uint48 internal constant _SETTLEMENT_WINDOW = 128 seconds;
 
-    /// @notice Returns the signed net Hyperliquid account value as a single USDC balance.
-    /// @dev Aggregates core perp margin and spot USDC balance in HyperCore wei units first, then
-    ///  converts the signed net amount to EVM decimals once.
+    error NavLocked();
+
     function getHyperliquidBalances(address account) internal view returns (AppTokenBalance[] memory balances) {
-        int256 totalRawWei = int256(
+        _assertNavUnlocked();
+        return getHyperliquidBalancesUnsafe(account);
+    }
+
+    /// @notice Unsafe variant of `getHyperliquidBalances` that does not check the settlement lock.
+    /// @dev Designed to inspect nav offchain even during temporary potential hyperEvm state lags.
+    function getHyperliquidBalancesUnsafe(address account) internal view returns (AppTokenBalance[] memory balances) {
+        // Perp account value is already denominated in USDC with 6 decimals (margin + unrealised pnl + funding).
+        int256 perpValue = int256(
             PrecompileLib.accountMarginSummary(HLConstants.DEFAULT_PERP_DEX, account).accountValue
-        ) + int256(uint256(PrecompileLib.spotBalance(account, HLConstants.USDC_TOKEN_INDEX).total));
+        );
 
-        int256 totalUsdcValue = _weiToEvmSigned(HLConstants.USDC_TOKEN_INDEX, totalRawWei);
+        // Core spot USDC balance is returned in 8-decimal wei; scale it to 6-decimal EVM USDC.
+        uint64 spotTotalWei = PrecompileLib.spotBalance(account, HLConstants.USDC_TOKEN_INDEX).total;
+        int256 spotValue = int256(HLConversions.weiToEvm(HLConstants.USDC_TOKEN_INDEX, spotTotalWei));
 
-        bool recentAction = hasRecentAction();
+        int256 totalUsdcValue = perpValue + spotValue;
+
+        bool recentAction = _hasRecentAction();
         if (recentAction) {
             totalUsdcValue += StorageLib.hyperliquidData().inFlightAmount;
         }
@@ -45,22 +57,7 @@ library HyperliquidLib {
         balances[0] = AppTokenBalance({token: HLConstants.usdc(), amount: totalUsdcValue});
     }
 
-    function _weiToEvmSigned(uint64 token, int256 amountWei) private view returns (int256) {
-        if (amountWei == 0) return 0;
-
-        bool isNegative = amountWei < 0;
-        uint256 absWei = isNegative ? uint256(-amountWei) : uint256(amountWei);
-        int256 evmAmount = SafeCast.toInt256(HLConversions.weiToEvm(token, absWei.toUint64()));
-
-        return isNegative ? -evmAmount : evmAmount;
-    }
-
-    function hasRecentAction() private view returns (bool) {
-        uint256 lastCompositeBlock = StorageLib.hyperliquidData().lastActionCompositeBlock;
-        return lastCompositeBlock != 0 && lastCompositeBlock == _compositeBlockNumber();
-    }
-
-    function ensureBlockFresh() private {
+    function recordAction(int256 amount, bool isSpotSend) internal returns (uint64 pendingBefore) {
         HyperliquidData storage data = StorageLib.hyperliquidData();
         uint256 compositeBlock = _compositeBlockNumber();
         if (data.lastActionCompositeBlock != compositeBlock) {
@@ -68,6 +65,19 @@ library HyperliquidLib {
             data.pendingSpotSend = 0;
             data.lastActionCompositeBlock = compositeBlock;
         }
+        data.lastActionTimestamp = uint48(block.timestamp);
+
+        if (isSpotSend) {
+            pendingBefore = data.pendingSpotSend;
+            data.pendingSpotSend = pendingBefore + SafeCast.toUint64(uint256(amount));
+        } else {
+            data.inFlightAmount += amount.toInt128();
+        }
+    }
+
+    function _hasRecentAction() private view returns (bool) {
+        uint256 lastCompositeBlock = StorageLib.hyperliquidData().lastActionCompositeBlock;
+        return lastCompositeBlock != 0 && lastCompositeBlock == _compositeBlockNumber();
     }
 
     /// @dev Returns a composite block number keyed to HyperCore's L1 block and the EVM block.
@@ -75,15 +85,10 @@ library HyperliquidLib {
         compositeBlockNumber = (uint256(PrecompileLib.l1BlockNumber()) << 128) | uint128(block.number);
     }
 
-    function recordAction(int256 amount) internal {
-        ensureBlockFresh();
-        StorageLib.hyperliquidData().inFlightAmount += amount.toInt128();
-    }
-
-    function recordSpotSend(uint64 amount) internal returns (uint64 pendingSpotSend) {
-        ensureBlockFresh();
-        HyperliquidData storage data = StorageLib.hyperliquidData();
-        pendingSpotSend = data.pendingSpotSend;
-        data.pendingSpotSend = pendingSpotSend + amount;
+    function _assertNavUnlocked() private view {
+        uint48 unlockAt = StorageLib.hyperliquidData().lastActionTimestamp;
+        if (unlockAt != 0) {
+            require(block.timestamp >= unlockAt + _SETTLEMENT_WINDOW, NavLocked());
+        }
     }
 }
