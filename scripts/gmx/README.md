@@ -54,11 +54,11 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
    node scripts/gmx/generate_gmx_fallback_solidity.js
    ```
 
-   Patches `contracts/protocol/types/GmxFallback.sol` in-place,
-   replacing only the body between `// GMX_FALLBACK_LOOKUP_START` and
-   `// GMX_FALLBACK_LOOKUP_END` with a packed, batched lookup. Each entry is
-   encoded as `bytes32(feedAddress << 96 | exponent)`, where
-   `multiplier = 10 ** exponent`.
+   Patches `contracts/protocol/types/GmxFallback.sol` in-place and
+   regenerates `test/libraries/GmxFallback.t.sol`, replacing only the body
+   between `// GMX_FALLBACK_LOOKUP_START` and `// GMX_FALLBACK_LOOKUP_END`
+   with a packed, batched lookup. Each entry is encoded as
+   `uint168(feedAddress << 8 | exponent)`, where `multiplier = 10 ** exponent`.
 
    Use `--stdout` to print the generated block instead of patching the file:
 
@@ -83,9 +83,12 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
   first hex digit of the token address (`uint160(token) >> 156`) and then
   compared directly inside each bucket. This is gas-efficient and compact enough
   to deploy at 200 optimizer runs.
-- `getFallbackPriceFeed` returns a packed `Feed` (`bytes32`);
-  callers decode it as `address(feed) << 96 | exponent`, where `multiplier = 10 ** exponent`.
+- `getFallbackPriceFeed` returns a packed `Feed` (`uint168`);
+  callers decode it as `address(feed) << 8 | exponent`, where `multiplier = 10 ** exponent`.
   The token address is the caller's input, so it is not copied back out.
+- `test/libraries/GmxFallback.t.sol` is regenerated alongside the contract and
+  asserts that every mapped token returns the correct feed address and exponent,
+  while unmapped tokens return the zero feed address.
 - The function lives in `contracts/protocol/types/GmxFallback.sol`
   and is imported by both `GmxLib` (NAV calculations) and `GmxAdapterLib`
   (adapter order validation), so the fallback data is shared without forcing

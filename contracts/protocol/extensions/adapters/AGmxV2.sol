@@ -28,7 +28,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
 
-    string private constant _REQUIRED_VERSION = "4.3.2";
+    string private constant _REQUIRED_VERSION = "4.4.1";
     uint256 private constant _MAX_EXECUTION_FEE = 0.05 ether;
     // Gas reserved for the decrease-order callback; benchmarked worst case ~349k.
     uint256 private constant _CALLBACK_GAS_LIMIT = 500_000;

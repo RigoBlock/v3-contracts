@@ -217,9 +217,9 @@ contract AGmxV2ForkTest is Test {
     // Tests — adapter metadata
     // =========================================================================
 
-    /// @notice The adapter must report the required protocol version as 4.3.2.
+    /// @notice The adapter must report the required protocol version as 4.4.1.
     function test_RequiredVersion() public view {
-        assertEq(IMinimumVersion(address(agmxV2)).requiredVersion(), "4.3.2");
+        assertEq(IMinimumVersion(address(agmxV2)).requiredVersion(), "4.4.1");
     }
 
     /// @notice Direct calls to the adapter are blocked.
