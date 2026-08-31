@@ -114,12 +114,12 @@ becomes part of NAV. The NAV integrity check therefore credits the pre-existing 
 in `expectedAssets` so that the strict equality with `netTotalValue` holds.
 
 ```solidity
-uint256 navAmount = amountDelta;
+uint256 tokenAmount = amountDelta;
 if (!previouslyActive) {
-    if (token == originalToken) {
-        navAmount += storedBalance; // full standard-token balance is now counted
-    } else if (token == address(0) && originalToken == wrappedNative) {
-        navAmount = address(this).balance; // full native balance is now counted
+    if (isUnwrap) {
+        tokenAmount = address(this).balance; // full native balance is now counted
+    } else {
+        tokenAmount += storedBalance; // full standard-token balance is now counted
     }
 }
 ```
