@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+import {GMX_ROUTER, _MAX_GMX_POSITIONS} from "../../contracts/protocol/types/GmxConstants.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
@@ -1268,7 +1270,7 @@ contract AGmxV2ForkTest is Test {
 
         // Resolve the handler address before the prank — vm.prank is consumed by the
         // first external call, so orderHandler() must not be that call.
-        IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
+        IGmxOrderHandler handler = GMX_ROUTER.orderHandler();
         vm.prank(keeper);
         handler.executeOrder(
             orderKey,
@@ -1330,7 +1332,7 @@ contract AGmxV2ForkTest is Test {
             );
         }
 
-        IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
+        IGmxOrderHandler handler = GMX_ROUTER.orderHandler();
         vm.prank(keeper);
         handler.executeOrder(
             orderKey,

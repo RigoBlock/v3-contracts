@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
+import {_FLOAT_PRECISION} from "./GmxConstants.sol";
+
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
 import {IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
-import {GmxConstants} from "./GmxConstants.sol";
 
 type Feed is uint168;
 
@@ -72,7 +73,7 @@ library GmxFallback {
             if (answer <= 0) return price;
             if (updatedAt + _FALLBACK_HEARTBEAT < block.timestamp) return price;
 
-            uint256 scaled = (uint256(answer) * multiplier) / GmxConstants._FLOAT_PRECISION;
+            uint256 scaled = (uint256(answer) * multiplier) / _FLOAT_PRECISION;
             price = Price.Props({min: scaled, max: scaled});
         } catch {}
     }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE} from "../../contracts/protocol/types/GmxConstants.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {IGmxDataStore, IGmxReader, IGmxExchangeRouter, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
@@ -53,11 +55,11 @@ contract AGmxV2UnitTest is Test {
     address internal constant GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
 
     function setUp() public {
-        vm.chainId(GmxLib.ARBITRUM_CHAIN_ID);
+        vm.chainId(ARBITRUM_CHAIN_ID);
         adapter = new AGmxV2();
         proxy = new AGmxV2UnitProxy(address(adapter));
         market = makeAddr("market");
-        token = GmxLib.WRAPPED_NATIVE;
+        token = WRAPPED_NATIVE;
 
         // Base token == token so _trackToken returns early without oracle calls.
         vm.store(address(proxy), bytes32(uint256(StorageLib.POOL_INIT_SLOT) + 2), bytes32(uint256(uint160(token))));
@@ -69,22 +71,18 @@ contract AGmxV2UnitTest is Test {
 
         // No open positions.
         vm.mockCall(
-            GmxLib._GMX_READER,
+            _GMX_READER,
             abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
             abi.encode(new Position.Props[](0))
         );
 
         // No claimable funding fees.
         vm.mockCall(
-            GmxLib._GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, GmxLib._GMX_DATA_STORE, market),
+            _GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: token, longToken: token, shortToken: token}))
         );
-        vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
-            abi.encode(uint256(0))
-        );
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
 
         // Mock router call.
         address[] memory markets = new address[](1);
@@ -92,7 +90,7 @@ contract AGmxV2UnitTest is Test {
         address[] memory tokens = new address[](1);
         tokens[0] = token;
         vm.mockCall(
-            address(GmxLib.GMX_ROUTER),
+            address(GMX_ROUTER),
             abi.encodeWithSelector(IGmxExchangeRouter.claimFundingFees.selector, markets, tokens, address(proxy)),
             abi.encode(new uint256[](1))
         );
@@ -112,11 +110,7 @@ contract AGmxV2UnitTest is Test {
         _setClaimableCollateralKey(amountKey);
 
         // claimCollateral amount is zero.
-        vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
-            abi.encode(uint256(0))
-        );
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
 
         address[] memory markets = new address[](1);
         markets[0] = market;
@@ -126,7 +120,7 @@ contract AGmxV2UnitTest is Test {
         timeKeys[0] = timeKey;
 
         vm.mockCall(
-            address(GmxLib.GMX_ROUTER),
+            address(GMX_ROUTER),
             abi.encodeWithSelector(
                 IGmxExchangeRouter.claimCollateral.selector,
                 markets,
@@ -221,8 +215,8 @@ contract AGmxV2UnitTest is Test {
 
         // Market props: indexToken is unmapped.
         vm.mockCall(
-            GmxLib._GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, GmxLib._GMX_DATA_STORE, market),
+            _GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
         );
         // GMX provider has no feed for the unmapped token.
@@ -245,8 +239,8 @@ contract AGmxV2UnitTest is Test {
         _mockCreateOrderInfrastructure();
 
         vm.mockCall(
-            GmxLib._GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, GmxLib._GMX_DATA_STORE, market),
+            _GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
         );
         vm.mockCall(
@@ -268,38 +262,34 @@ contract AGmxV2UnitTest is Test {
         address orderVault = makeAddr("orderVault");
 
         // Execution fee reads return zero so the fee is small.
-        vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
-            abi.encode(uint256(0))
-        );
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
         // No existing positions.
         vm.mockCall(
-            GmxLib._GMX_READER,
+            _GMX_READER,
             abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
             abi.encode(new Position.Props[](0))
         );
         // Pretend the pool already holds enough WETH so the adapter does not need to call deposit().
         vm.mockCall(
-            GmxLib.WRAPPED_NATIVE,
+            WRAPPED_NATIVE,
             abi.encodeWithSelector(IERC20.balanceOf.selector, address(proxy)),
             abi.encode(uint256(2 ether))
         );
         // Router -> handler -> vault.
         vm.mockCall(
-            address(GmxLib.GMX_ROUTER),
+            address(GMX_ROUTER),
             abi.encodeWithSelector(IGmxExchangeRouter.orderHandler.selector),
             abi.encode(orderHandler)
         );
         vm.mockCall(orderHandler, abi.encodeWithSelector(IGmxOrderHandler.orderVault.selector), abi.encode(orderVault));
         // createOrder succeeds and the adapter registers a saved callback.
         vm.mockCall(
-            address(GmxLib.GMX_ROUTER),
+            address(GMX_ROUTER),
             abi.encodeWithSelector(IGmxExchangeRouter.createOrder.selector),
             abi.encode(bytes32(uint256(1)))
         );
         vm.mockCall(
-            address(GmxLib.GMX_ROUTER),
+            address(GMX_ROUTER),
             abi.encodeWithSelector(IGmxExchangeRouter.setSavedCallbackContract.selector),
             abi.encode()
         );

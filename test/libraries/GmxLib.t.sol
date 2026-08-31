@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
+import {WRAPPED_NATIVE, _POSITION_SIZE_IN_USD_KEY, _FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
@@ -68,10 +70,10 @@ contract GmxLibTest is Test {
     bytes32 internal constant KEY_FEE_MULTIPLIER = keccak256(abi.encode("ESTIMATED_GAS_FEE_MULTIPLIER_FACTOR"));
     bytes32 internal constant KEY_INCREASE_ORDER_GAS = keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
     bytes32 internal constant KEY_DECREASE_ORDER_GAS = keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
-    // Matches GmxLib._POSITION_SIZE_IN_USD_KEY
+    // Matches _POSITION_SIZE_IN_USD_KEY
     bytes32 internal constant POSITION_SIZE_IN_USD_KEY = keccak256(abi.encode("SIZE_IN_USD"));
 
-    // 1e30 — GmxLib._FLOAT_PRECISION
+    // 1e30 — _FLOAT_PRECISION
     uint256 internal constant FLOAT_PRECISION = 1e30;
 
     // Reused test addresses

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
+import {_GMX_DATA_STORE, _FLOAT_PRECISION} from "./GmxConstants.sol";
+
 import {IGmxDataStore} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {GmxCallbackLib} from "../libraries/GmxCallbackLib.sol";
-import {GmxConstants} from "./GmxConstants.sol";
 
 library GmxClaimableHelpers {
     function getClaimableFundingAmount(address market, address token, address account) internal view returns (uint256) {
         return
-            IGmxDataStore(GmxConstants._GMX_DATA_STORE).getUint(
+            IGmxDataStore(_GMX_DATA_STORE).getUint(
                 keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, account))
             );
     }
@@ -18,7 +19,7 @@ library GmxClaimableHelpers {
         GmxCallbackLib.ClaimableCollateralInfo memory info,
         address account
     ) internal view returns (uint256 claimableAmount_) {
-        IGmxDataStore ds = IGmxDataStore(GmxConstants._GMX_DATA_STORE);
+        IGmxDataStore ds = IGmxDataStore(_GMX_DATA_STORE);
         uint256 amount = ds.getUint(amountKey);
         if (amount == 0) return 0;
 
@@ -53,13 +54,13 @@ library GmxClaimableHelpers {
             // move past block.timestamp. Treat it as not-yet-matured rather than reverting.
             uint256 timeDiff = block.timestamp > maturityTime ? block.timestamp - maturityTime : 0;
             if (timeDiff > ds.getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_DELAY_KEY)) {
-                factor = GmxConstants._FLOAT_PRECISION;
+                factor = _FLOAT_PRECISION;
             }
         }
 
         factor = factor > reduction ? factor - reduction : 0;
 
-        uint256 adjusted = (amount * factor) / GmxConstants._FLOAT_PRECISION;
+        uint256 adjusted = (amount * factor) / _FLOAT_PRECISION;
         uint256 claimed = ds.getUint(claimedKey);
         claimableAmount_ = adjusted > claimed ? adjusted - claimed : 0;
     }

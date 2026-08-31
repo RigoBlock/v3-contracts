@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
+import {WRAPPED_NATIVE, _GMX_READER, _GMX_DATA_STORE, _GMX_REFERRAL_STORAGE, _GMX_CHAINLINK_PRICE_FEED} from "../types/GmxConstants.sol";
+
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
@@ -9,7 +11,6 @@ import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxExchangeRouter, GmxPosit
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {GmxClaimableHelpers} from "../types/GmxClaimableHelpers.sol";
 import {GmxFallback} from "../types/GmxFallback.sol";
-import {GmxConstants} from "../types/GmxConstants.sol";
 import {GmxCallbackLib} from "./GmxCallbackLib.sol";
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 
@@ -18,25 +19,6 @@ import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 ///  code path so `ENavView` / `EApps` stay as small as possible.
 library GmxLib {
     using SafeCast for uint256;
-
-    // Re-export shared GMX constants so existing consumers/tests do not break.
-    uint256 internal constant ARBITRUM_CHAIN_ID = GmxConstants.ARBITRUM_CHAIN_ID;
-    address internal constant WRAPPED_NATIVE = GmxConstants.WRAPPED_NATIVE;
-    IGmxExchangeRouter internal constant GMX_ROUTER = GmxConstants.GMX_ROUTER;
-    address internal constant _GMX_READER = GmxConstants._GMX_READER;
-    address internal constant _GMX_DATA_STORE = GmxConstants._GMX_DATA_STORE;
-    address internal constant _GMX_ROLE_STORE = GmxConstants._GMX_ROLE_STORE;
-    address internal constant _GMX_REFERRAL_STORAGE = GmxConstants._GMX_REFERRAL_STORAGE;
-    address internal constant _GMX_CHAINLINK_PRICE_FEED = GmxConstants._GMX_CHAINLINK_PRICE_FEED;
-    uint256 internal constant _MAX_GMX_POSITIONS = GmxConstants._MAX_GMX_POSITIONS;
-    bytes32 internal constant _KEY_FEE_BASE = GmxConstants._KEY_FEE_BASE;
-    bytes32 internal constant _KEY_FEE_PER_ORACLE = GmxConstants._KEY_FEE_PER_ORACLE;
-    bytes32 internal constant _POSITION_SIZE_IN_USD_KEY = GmxConstants._POSITION_SIZE_IN_USD_KEY;
-    bytes32 internal constant _KEY_FEE_MULTIPLIER = GmxConstants._KEY_FEE_MULTIPLIER;
-    bytes32 internal constant _KEY_INCREASE_ORDER_GAS = GmxConstants._KEY_INCREASE_ORDER_GAS;
-    bytes32 internal constant _KEY_DECREASE_ORDER_GAS = GmxConstants._KEY_DECREASE_ORDER_GAS;
-    uint256 internal constant _FLOAT_PRECISION = GmxConstants._FLOAT_PRECISION;
-    uint256 internal constant _ORDER_ORACLE_PRICE_COUNT = GmxConstants._ORDER_ORACLE_PRICE_COUNT;
 
     struct TokenPrice {
         address token;
@@ -61,7 +43,7 @@ library GmxLib {
     /// @dev Tries the GMX Chainlink price provider first, falls back to a hardcoded Chainlink aggregator.
     ///  Returns a zero Price.Props when the token cannot be priced or the fallback is stale/invalid.
     function getGmxPrice(address token) internal view returns (Price.Props memory price) {
-        try IGmxChainlinkPriceFeedProvider(GmxConstants._GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
+        try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
             GmxValidatedPrice memory validated
         ) {
             price = Price.Props({min: validated.min, max: validated.max});

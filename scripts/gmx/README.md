@@ -88,7 +88,12 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
   The token address is the caller's input, so it is not copied back out.
 - `test/libraries/GmxFallback.t.sol` is regenerated alongside the contract and
   asserts that every mapped token returns the correct feed address and exponent,
-  while unmapped tokens return the zero feed address.
+  while unmapped tokens return the zero feed address. The expected exponent is
+  computed in the test as `60 - feedDecimals - tokenDecimals` to catch rogue
+  multipliers produced by the script.
+- `test/extensions/GmxFallbackFork.t.sol` is also regenerated and verifies the
+  on-chain Chainlink aggregator decimals and the packed exponent against the
+  JSON metadata on an Arbitrum fork.
 - The function lives in `contracts/protocol/types/GmxFallback.sol`
   and is imported by both `GmxLib` (NAV calculations) and `GmxAdapterLib`
   (adapter order validation), so the fallback data is shared without forcing
