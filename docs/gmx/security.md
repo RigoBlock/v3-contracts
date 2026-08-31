@@ -46,6 +46,30 @@ modifier onlyDelegateCall() {
 
 ---
 
+## Token / Address Injection
+
+All GMX-related storage writes happen through either `AGmxV2` (owner-only adapter calls) or `EGmxCallback` (GMX controller-only callbacks). Neither path allows an arbitrary non-GMX token or address to be stored.
+
+### `AGmxV2` writes
+
+- `StorageLib.activeApplications().storeApplication(GMX_V2_POSITIONS)` stores only a single application bit; no token address is written.
+- `_trackToken(token)` is private and is called with:
+  - `params.addresses.initialCollateralToken` from the order struct (validated by GMX as a market token at execution time, and the market's `indexToken` must be priced before the order is accepted)
+  - `pnlToken` derived from `GmxAdapterLib.getPnlToken(market, isLong)`, which reads the real GMX `Market.Props`
+  - tokens passed by the pool owner to `claimFundingFees` / `claimCollateral` (owner-provided arrays)
+- `_trackToken` rejects `address(0)` and `StorageLib.activeTokensSet().addUnique` rejects any token that does not have a price feed, so a non-token address cannot be registered for NAV.
+- `_trackMarket(market)` stores only market addresses coming from the order struct or from GMX callback event data.
+- The 32-position limit in `GmxAdapterLib.assertPositionLimitNotReached` bounds the number of distinct position keys.
+
+### `EGmxCallback` writes
+
+- `trackedMarkets` is added only from validated order event data (`orderData.addressItems.items[4]`).
+- `claimableCollateralKeys` is recorded only when `IGmxDataStore(...).getUint(amountKey) != 0` for the emitted `(market, token, timeKey)`. A non-GMX token/market has no GMX DataStore entry and therefore produces no key.
+
+In summary: no non-owner can reach these writes, and even the pool owner cannot inject an address that lacks a GMX DataStore entry or a protocol price feed.
+
+---
+
 ## Resource Limits
 
 ### Execution Fee Cap
@@ -53,17 +77,18 @@ modifier onlyDelegateCall() {
 Each order requires a keeper execution fee paid in WETH. Without a ceiling, a malicious owner could drain the pool's WETH balance via execution fees. The adapter enforces:
 
 ```solidity
-if (params.executionFee > maxExecutionFee) revert ExecutionFeeExceedsMax();
+uint256 executionFee = GmxAdapterLib.computeExecutionFee(...);
+if (executionFee > _MAX_EXECUTION_FEE) revert ExecutionFeeExceedsMax();
 ```
 
-`maxExecutionFee` is a parameter set by governance. Excess fees above what GMX requires are refunded to the pool by the keeper after execution.
+`_MAX_EXECUTION_FEE` is a constant (`0.05 ether`). Excess fees above what GMX uses are refunded to the pool by the keeper after execution.
 
 ### Position Count Limit
 
-Unbounded positions would make GMX Reader calls prohibitively expensive in the NAV loop. The adapter enforces a **32 unique-position cap** at `createIncreaseOrder` time:
+Unbounded positions would make GMX Reader calls prohibitively expensive in the NAV loop. The adapter enforces a **32 unique-position cap** at `createIncreaseOrder` time via `GmxAdapterLib.assertPositionLimitNotReached`:
 
 ```solidity
-// GmxLib.assertPositionLimitNotReached (called from createIncreaseOrder only)
+// GmxAdapterLib.assertPositionLimitNotReached (called from createIncreaseOrder only)
 //
 // If a matching position already exists (same market + collateralToken + isLong),
 // this is an increase — no new slot is consumed, the check is skipped.
@@ -124,7 +149,7 @@ Because decrease-order execution fees are now counted, a pending decrease no lon
 GMX v2 perpetuals are deployed on Arbitrum One only (`chainId = 42161`). An on-chain guard prevents deployment on incorrect chains:
 
 ```solidity
-if (block.chainid != _ARB_CHAIN_ID) revert NotArbitrum();
+if (block.chainid != GmxConstants.ARBITRUM_CHAIN_ID) revert NotArbitrum();
 ```
 
 This is checked at every adapter entry point. Pools on Ethereum mainnet, Base, Optimism, etc., cannot call GMX functions even if the adapter bytecode is present in the Authority registry.
@@ -205,7 +230,7 @@ Bounded by `maxExecutionFee`. Excess fees above what GMX uses are refunded by th
 
 **Why it matters for NAV:**
 
-`GmxLib._safeGetGmxPrice` calls `ChainlinkPriceFeedProvider.getOraclePrice()` directly — bypassing GMX's `Oracle.validateSequencerUp()`. If the Arbitrum sequencer is down or has recently restarted, the Chainlink feeds return stale L2 prices without reverting.
+`GmxLib.getGmxPrice` calls `ChainlinkPriceFeedProvider.getOraclePrice()` directly — bypassing GMX's `Oracle.validateSequencerUp()`. If the Arbitrum sequencer is down or has recently restarted, the Chainlink feeds return stale L2 prices without reverting.
 
 **Design decision — accept stale prices:**
 
@@ -268,7 +293,7 @@ The following findings were raised by an audit-agent review of `GmxLib.sol`.
 ### 3. 32-position limit can be bypassed with pending increase orders
 
 - **Severity:** Low
-- **Contract:** `contracts/protocol/libraries/GmxLib.sol`
+- **Contract:** `contracts/protocol/libraries/GmxAdapterLib.sol`
 - **Description:** `assertPositionLimitNotReached` counts only executed positions via `getAccountPositions`. A pool owner could issue many `MarketIncrease` / `LimitIncrease` orders before keepers execute them; once executed, the pool could hold more than 32 positions.
 - **Status:** Acknowledged / not fixed.
 - **Rationale:** The 32-position cap is a gas heuristic, not a security invariant. Only the pool owner can create orders, and each order transfers real collateral from the pool. NAV accounting already reads positions and orders unboundedly (`type(uint256).max`), so no value becomes invisible if the cap is exceeded. The operational risk is bounded by owner-controlled collateral and execution fees.
@@ -276,15 +301,15 @@ The following findings were raised by an audit-agent review of `GmxLib.sol`.
 ### 4. Claimable-collateral delay subtraction can underflow
 
 - **Severity:** Low
-- **Contract:** `contracts/protocol/libraries/GmxLib.sol`
-- **Description:** `_getClaimableCollateralAmount` computes `block.timestamp - info.timeKey * CLAIMABLE_COLLATERAL_TIME_DIVISOR`. If GMX governance increases the divisor after a `timeKey` is recorded, the product can exceed `block.timestamp` and cause a panic underflow, reverting NAV queries.
+- **Contracts:** `contracts/protocol/libraries/GmxLib.sol`, `contracts/protocol/types/GmxClaimableHelpers.sol`
+- **Description:** `GmxClaimableHelpers.getClaimableCollateralAmount` computes `block.timestamp - info.timeKey * CLAIMABLE_COLLATERAL_TIME_DIVISOR`. If GMX governance increases the divisor after a `timeKey` is recorded, the product can exceed `block.timestamp` and cause a panic underflow, reverting NAV queries.
 - **Status:** Fixed.
 - **Fix:** The subtraction is now saturated at zero (`block.timestamp > maturityTime ? ... : 0`), so an increased divisor is treated as "not yet vested" instead of reverting. The full claimable-collateral math still mirrors GMX's own `claimCollateral` logic for the vested case.
 
 ### 5. Collateral-only fallback can overstate NAV during oracle/reader failures
 
 - **Severity:** Info
-- **Contract:** `contracts/protocol/libraries/GmxLib.sol`
+- **Contracts:** `contracts/protocol/libraries/GmxLib.sol`, `contracts/protocol/types/GmxFallback.sol`
 - **Description:** If `getAccountPositionInfoList` reverts or the collateral token price is zero, `_computeGmxNetCollateral` and `_fetchPositionInfos` fall back to the raw `collateralAmount`, ignoring negative PnL, price impact, and fees.
 - **Status:** Acknowledged / by design.
 - **Rationale:** This fallback is intentionally conservative: it reports the highest plausible on-chain collateral rather than zero or a reverted NAV. Reverting all NAV-dependent operations (deposits, withdrawals, NAV updates) during a transient oracle or Reader outage would be a worse outcome than a temporary, bounded overstatement. The fallback is documented in `docs/gmx/nav-accounting.md`.

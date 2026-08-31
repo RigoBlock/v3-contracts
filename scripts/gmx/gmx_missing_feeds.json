@@ -1,0 +1,808 @@
+{
+  "missing": [
+    "0xB46A094Bc4B0adBD801E14b9DB95e05E28962764",
+    "0x0000000000000000000000000000000000000000",
+    "0x3E57D02f9d196873e55727382974b02EdebE6bfd",
+    "0xBaf07cF91D413C0aCB2b7444B9Bf13b4e03c9D71",
+    "0x606C3e5075e5555e79Aa15F1E9FACB776F96C248",
+    "0x2cD2eB61D17b78239Fcd19aafF72981B5D5eF319",
+    "0x9c74772b713a1B032aEB173E28683D937E51921c",
+    "0x197aa2DE1313c7AD50184234490E12409B2a1f95",
+    "0x55e85A147a1029b985384822c0B2262dF8023452",
+    "0x3f8f0dCE4dCE4d0D1d0871941e79CDA82cA50d0B",
+    "0xb06aa7E4af937C130dDade66f6ed7642716fe07A",
+    "0xB2f7cefaeEb08Aa347705ac829a7b8bE2FB560f3",
+    "0x1FD10E767187A92f0AB2ABDEEF4505e319cA06B2",
+    "0x75B9AdD873641b253718810E6c65dB6d72311FD0",
+    "0x3Eea56A1ccCdbfB70A26aD381C71Ee17E4c8A15F",
+    "0xaF770F03518686a365300ab35AD860e99967B2f0",
+    "0x6792c5B8962ffbDD020c6b6FD0Be7b182e0e33a3",
+    "0x5503CF72f54b6d692d36BBCD391516A7dE068687",
+    "0xc33D9C096e74aa4f571E9417b69a19C4A1e72ef2",
+    "0xdaf0A71608938F762e37eC5F72F670Cc44703454",
+    "0xc5dbD52Ae5a927Cf585B884011d0C7631C9974c6",
+    "0x82BB89fcc64c5d4016C5Ed1AB016bB0D1C20D6C3",
+    "0x3AeBb98f57081DcBEb0B8EA823Cf84900A31e5D8",
+    "0xfdE73EddbE6c5712A12B72c470F8FE5c77A7fF17",
+    "0x0739Ad7AeA69aD36EdEb91b0e55cAC140427c632",
+    "0xBb69bd9dc152C2c0F083507641a46193d2B61EBb",
+    "0x37a645648dF29205C6261289983FB04ECD70b4B3",
+    "0xaca341E61aB6177B0b0Df46a612e4311F8a7605f",
+    "0x67ADABbAd211eA9b3B4E2fd0FD165E593De1e983",
+    "0x4C1dac9b6eAf122Fe3DE824c1C2220413F3aC197",
+    "0xB6672496214C90134A9223894e709F26A5eED362",
+    "0xEcFB4718aD19b626A77491895a2f99ea0cedEd08",
+    "0x83D5944E7f5EF1d8432002d3cb062e1012f6F8e6",
+    "0xcA543Cb8bCC76e4E0A034F56EB40a1029bDFd70E",
+    "0x8F6cCb99d4Fd0B4095915147b5ae3bbDb8075394",
+    "0xfEd500Df379427Fbc48BDaf3b511b519c7eCCD26",
+    "0x1f3407Ea067DfBDF6dEb6bBFdA4869215fB0ab77",
+    "0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964",
+    "0xd3898c6570974AEca38a8ACf22fd60739e528A99",
+    "0x13674172E6E44D31d4bE489d5184f3457c40153A",
+    "0xd1738d37401a0A71f7E382d2cFeCD3ab69687017",
+    "0x9c060B2fA953b5f69879a8B7B81f62BFfEF360be",
+    "0xb736be525A65326513351058427d1f47B0CfB045",
+    "0x72Cd3a21aA7A898028d9501868Fbe6dED0020434",
+    "0xEb2A83b973f4dbB9511D92dd40d2ba4C683f0971",
+    "0xd37F01A3379f052FEF70F63c0Be27931891aa2B9",
+    "0x91c6a8F6aFAC036F4ABf1bA55f4E76892E865E4a",
+    "0x4249F6e0808bEfF7368AaAD3F7A3Fd511F61Ee60",
+    "0xEcc5eb985Ddbb8335b175b0A2A1144E4c978F1f6",
+    "0xC5799ab6E2818fD8d0788dB8D156B0c5db1Bf97b",
+    "0x465A31E5bA29b8EAcC860d499D714a6f07e56E85",
+    "0xB79Eb5BA64A167676694bB41bc1640F95d309a2F",
+    "0xF67b2a901D674B443Fa9f6DB2A689B37c07fD4fE",
+    "0xc5ff0eB026dB972F95DF3dfF04e697d8b660092a",
+    "0x96Ee343E36E8642627FAEa235D57a9FEC8a6e34f",
+    "0x2e73bDBee83D91623736D514b0BB41f2afd9C7Fd",
+    "0xc4017CFe7D7eaBDE63d3252caBF26A286fE2B1E0",
+    "0xdB58EB7f408EbA2176eCb44A4696292605cCEB39",
+    "0x95c317066CF214b2E6588B2685D949384504F51e",
+    "0x2aAB60E62f05d17e58dEc982870bfAdc7F4e7ADF",
+    "0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5",
+    "0xeeA41ceA2204D1156De1BDF2CF4ab6184d17f90B",
+    "0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5",
+    "0x426FE015a5F4E6Ad4E6497ad79265D07EA9F121e",
+    "0x9759C297fb6C91e252c7292cECa30a509558E5De",
+    "0xF01D2AA2f3f903A93D57c4Bf672C8096DE485FA7",
+    "0x5dB4692926C8ceebF6Da0995358Bbc438F3fd80C",
+    "0xcF558864c6B130Ce76d20641D008ebd4871eDED0",
+    "0xe7304E9F4ca383BD6312a5179cdC7B40B96A6F5a",
+    "0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db",
+    "0x7624cccCc59361D583F28BEC40D37e7771d2ef5D",
+    "0x7F2A3967bd0999A860E13Ab8DC34aF98675CC208",
+    "0x84D523493Aac127025AC770981a54C9601326A41",
+    "0xc48d782c5C54157d37d2Fa4E6BA27E8cf57Da956",
+    "0xE41902f9aD379A8CC34A34efa00F5c3EE5112bC8",
+    "0xa8Ffb545d5cBF1F44E3eBA123D60372cD267D73c",
+    "0x9C5C4b9BA1fEBA72186f50d8Ae7C58b1D7f0B12F",
+    "0x620aC65BE29066Bb9D1E92C65b35B9fD321Fb963",
+    "0x13983f27Ce9365055a6a553233c49fE28e70103e",
+    "0x8CBd0d5d81e7957123E6D8fFaE657a40bDC5691b",
+    "0xfe71D55D0080b6995Ec2C3f48b7702c86e200766",
+    "0x0315441076FF6d3eA09814a2F90a1f980cF03e9e"
+  ],
+  "all": [
+    {
+      "token": "0x47904963fc8b2340414262125aF798B9655E58Cd",
+      "hasPrice": true,
+      "feed": "0x6ce185860a4963106506C203335A2910413708e9",
+      "multiplier": "100000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+      "hasPrice": true,
+      "feed": "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xC4da4c24fd591125c3F47b340b6f4f76111883d8",
+      "hasPrice": true,
+      "feed": "0x9A7FB1b3950837a8D9b40517626E11D4127C098C",
+      "multiplier": "100000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07",
+      "hasPrice": true,
+      "feed": "0x24ceA4b8ce57cdA5058b924B9B9987992450590c",
+      "multiplier": "10000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xB46A094Bc4B0adBD801E14b9DB95e05E28962764",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+      "hasPrice": true,
+      "feed": "0x9C917083fDb403ab5ADbEC26Ee294f6EcAda2720",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+      "hasPrice": true,
+      "feed": "0x86E53CF1B870786351Da77A57575e79CB55812CB",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+      "hasPrice": true,
+      "feed": "0xb2A824043730FE05F3DA2efaFa1CBbe83fa548D6",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x0000000000000000000000000000000000000000",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xc14e065b0067dE91534e032868f5Ac6ecf2c6868",
+      "hasPrice": true,
+      "feed": "0xB4AD57B52aB9141de9926a3e0C8dc6264c2ef205",
+      "multiplier": "10000000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xa9004A5421372E1D83fB1f85b0fc986c912f91f3",
+      "hasPrice": true,
+      "feed": "0x6970460aabF80C5BE983C6b74e5D06dEDCA95D4A",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+      "hasPrice": true,
+      "feed": "0xaD1d5344AaDE45F43E596773Bcc4c423EAbdD034",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x7D7F1765aCbaF847b9A1f7137FE8Ed4931FbfEbA",
+      "hasPrice": true,
+      "feed": "0xCDA67618e51762235eacA373894F0C79256768fa",
+      "multiplier": "10000000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0x1FF7F3EFBb9481Cbd7db4F932cBCD4467144237C",
+      "hasPrice": true,
+      "feed": "0xBF5C3fB2633e924598A46B9D07a174a9DBcF57C0",
+      "multiplier": "10000000000000000000000000000"
+    },
+    {
+      "token": "0x565609fAF65B92F7be02468acF86f8979423e514",
+      "hasPrice": true,
+      "feed": "0x8bf61728eeDCE2F32c456454d87B5d6eD6150208",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xaC800FD6159c2a2CB8fC31EF74621eB430287a5A",
+      "hasPrice": true,
+      "feed": "0x205aaD468a11fd5D34fA7211bC6Bad5b3deB9b98",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a",
+      "hasPrice": true,
+      "feed": "0xDB98056FecFff59D032aB628337A4887110df3dB",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x25d887Ce7a35172C62FeBFD67a1856F20FaEbB00",
+      "hasPrice": true,
+      "feed": "0x02DEd5a7EDDA750E3Eb240b54437a54d57b74dBE",
+      "multiplier": "1000000000000000000000000"
+    },
+    {
+      "token": "0xA1b91fe9FD52141Ff8cac388Ce3F10BFDc1dE79d",
+      "hasPrice": true,
+      "feed": "0xF7Ee427318d2Bd0EEd3c63382D0d52Ad8A68f90D",
+      "multiplier": "10000000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0x3E57D02f9d196873e55727382974b02EdebE6bfd",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x74885b4D524d497261259B38900f54e6dbAd2210",
+      "hasPrice": true,
+      "feed": "0x221912ce795669f628c51c69b7d0873eDA9C03bB",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xBaf07cF91D413C0aCB2b7444B9Bf13b4e03c9D71",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x1E15d08f3CA46853B692EE28AE9C7a0b88a9c994",
+      "hasPrice": true,
+      "feed": "0x76998C22eEa325A11dc6971Cedcf533E9740F854",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x606C3e5075e5555e79Aa15F1E9FACB776F96C248",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x2cD2eB61D17b78239Fcd19aafF72981B5D5eF319",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x9c74772b713a1B032aEB173E28683D937E51921c",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x7f9FBf9bDd3F4105C478b996B648FE6e828a1e98",
+      "hasPrice": true,
+      "feed": "0x221912ce795669f628c51c69b7d0873eDA9C03bB",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x197aa2DE1313c7AD50184234490E12409B2a1f95",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x55e85A147a1029b985384822c0B2262dF8023452",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x3f8f0dCE4dCE4d0D1d0871941e79CDA82cA50d0B",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x38676f62d166f5CE7De8433F51c6B3D6D9d66C19",
+      "hasPrice": true,
+      "feed": "0x4096b9bfB4c34497B7a3939D4f629cf65EBf5634",
+      "multiplier": "10000000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xb06aa7E4af937C130dDade66f6ed7642716fe07A",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xB2f7cefaeEb08Aa347705ac829a7b8bE2FB560f3",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x938aef36CAaFbcB37815251B602168087eC14648",
+      "hasPrice": true,
+      "feed": "0x6aCcBB82aF71B8a576B4C05D4aF92A83A035B991",
+      "multiplier": "10000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0x1FD10E767187A92f0AB2ABDEEF4505e319cA06B2",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x75B9AdD873641b253718810E6c65dB6d72311FD0",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x3Eea56A1ccCdbfB70A26aD381C71Ee17E4c8A15F",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xaF770F03518686a365300ab35AD860e99967B2f0",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x6792c5B8962ffbDD020c6b6FD0Be7b182e0e33a3",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x5503CF72f54b6d692d36BBCD391516A7dE068687",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8",
+      "hasPrice": true,
+      "feed": "0x66853E19d73c0F9301fe099c324A1E9726953433",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x53186c8419BEB83fE4Da74F7875041a1287337ED",
+      "hasPrice": true,
+      "feed": "0xD9f615A9b820225edbA2d821c4A696a0924051c6",
+      "multiplier": "10000000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xc33D9C096e74aa4f571E9417b69a19C4A1e72ef2",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xE958f107b467d5172573F761d26931D658C1b436",
+      "hasPrice": true,
+      "feed": "0xa6bC5bAF2000424e90434bA7104ee399dEe80DEc",
+      "multiplier": "1000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xdaf0A71608938F762e37eC5F72F670Cc44703454",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xc5dbD52Ae5a927Cf585B884011d0C7631C9974c6",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x82BB89fcc64c5d4016C5Ed1AB016bB0D1C20D6C3",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x3AeBb98f57081DcBEb0B8EA823Cf84900A31e5D8",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xfdE73EddbE6c5712A12B72c470F8FE5c77A7fF17",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x0739Ad7AeA69aD36EdEb91b0e55cAC140427c632",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x30021aFA4767Ad66aA52A06dF8a5AB3acA9371fD",
+      "hasPrice": true,
+      "feed": "0x373510BDa1ab7e873c731968f4D81B685f520E4B",
+      "multiplier": "10000000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xfa4F8E582214eBCe1A08eB2a65e08082053E441F",
+      "hasPrice": true,
+      "feed": "0xE2CB592D636c500a6e469628054F09d58e4d91BB",
+      "multiplier": "10000000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xfe1Aac2CD9C5cC77b58EeCfE75981866ed0c8b7a",
+      "hasPrice": true,
+      "feed": "0x9eE96caa9972c801058CAA8E23419fc6516FbF7e",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xBb69bd9dc152C2c0F083507641a46193d2B61EBb",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x37a645648dF29205C6261289983FB04ECD70b4B3",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xaca341E61aB6177B0b0Df46a612e4311F8a7605f",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x67ADABbAd211eA9b3B4E2fd0FD165E593De1e983",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x9D678B4Dd38a6E01df8090aEB7974aD71142b05f",
+      "hasPrice": true,
+      "feed": "0xA43A34030088E6510FecCFb77E88ee5e7ed0fE64",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x4C1dac9b6eAf122Fe3DE824c1C2220413F3aC197",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xB6672496214C90134A9223894e709F26A5eED362",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xEcFB4718aD19b626A77491895a2f99ea0cedEd08",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x83D5944E7f5EF1d8432002d3cb062e1012f6F8e6",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xcA543Cb8bCC76e4E0A034F56EB40a1029bDFd70E",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x580b373Ac16803BB0133356F470f3c7EEF54151B",
+      "hasPrice": true,
+      "feed": "0x256654437f1ADA8057684b18d742eFD14034C400",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x8F6cCb99d4Fd0B4095915147b5ae3bbDb8075394",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xfDFA0A749dA3bCcee20aE0B4AD50E39B26F58f7C",
+      "hasPrice": true,
+      "feed": "0xf9ce4fE2F0EcE0362cb416844AE179a49591D567",
+      "multiplier": "100000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xfEd500Df379427Fbc48BDaf3b511b519c7eCCD26",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x1f3407Ea067DfBDF6dEb6bBFdA4869215fB0ab77",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x8904De84c3bB3B7D2383F934Af40FcB3Ef82F28b",
+      "hasPrice": true,
+      "feed": "0xdE9f0894670c4EFcacF370426F10C3AD2Cdf147e",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xa8193C55C34Ed22e1Dbe73FD5Adc668E51578a67",
+      "hasPrice": true,
+      "feed": "0x1940fEd49cDBC397941f2D336eb4994D599e568B",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0xd3898c6570974AEca38a8ACf22fd60739e528A99",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x13674172E6E44D31d4bE489d5184f3457c40153A",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xd1738d37401a0A71f7E382d2cFeCD3ab69687017",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xe5f01aeAcc8288E9838A60016AB00d7b6675900b",
+      "hasPrice": true,
+      "feed": "0xaebDA2c976cfd1eE1977Eac079B4382acb849325",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x9c060B2fA953b5f69879a8B7B81f62BFfEF360be",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xb736be525A65326513351058427d1f47B0CfB045",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x955cd91eEaE618F5a7b49E1e3c7482833B10DAb4",
+      "hasPrice": true,
+      "feed": "0x37DDEE84dE03d039e1Bf809b7a01EDd2c4665771",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x72Cd3a21aA7A898028d9501868Fbe6dED0020434",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xEb2A83b973f4dbB9511D92dd40d2ba4C683f0971",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xB7EfE7c7f059E84Ab87A83A169c583Fb4A54fAc3",
+      "hasPrice": true,
+      "feed": "0xea320E4d688B143A3bFBF1b4a5cc4B986fCa086c",
+      "multiplier": "100000000000000000000000000000000000000000000"
+    },
+    {
+      "token": "0xd37F01A3379f052FEF70F63c0Be27931891aa2B9",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x3B6f801C0052Dfe0Ac80287D611F31B7c47B9A6b",
+      "hasPrice": true,
+      "feed": "0x851175a919f36c8e30197c09a9A49dA932c2CC00",
+      "multiplier": "10000000000000000000000000000000000"
+    },
+    {
+      "token": "0x91c6a8F6aFAC036F4ABf1bA55f4E76892E865E4a",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x4249F6e0808bEfF7368AaAD3F7A3Fd511F61Ee60",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xEcc5eb985Ddbb8335b175b0A2A1144E4c978F1f6",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xC5799ab6E2818fD8d0788dB8D156B0c5db1Bf97b",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x465A31E5bA29b8EAcC860d499D714a6f07e56E85",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xB79Eb5BA64A167676694bB41bc1640F95d309a2F",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xF67b2a901D674B443Fa9f6DB2A689B37c07fD4fE",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xc5ff0eB026dB972F95DF3dfF04e697d8b660092a",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x96Ee343E36E8642627FAEa235D57a9FEC8a6e34f",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x2e73bDBee83D91623736D514b0BB41f2afd9C7Fd",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xc4017CFe7D7eaBDE63d3252caBF26A286fE2B1E0",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xdB58EB7f408EbA2176eCb44A4696292605cCEB39",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x95c317066CF214b2E6588B2685D949384504F51e",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x2aAB60E62f05d17e58dEc982870bfAdc7F4e7ADF",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xB96e60CA3a7677b29f1e10dd109E952B275038Be",
+      "hasPrice": true,
+      "feed": "0x0225781042C46dB247e009FFEAd5aEf044f3E7BE",
+      "multiplier": "1000000000000000000000000"
+    },
+    {
+      "token": "0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xeeA41ceA2204D1156De1BDF2CF4ab6184d17f90B",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x426FE015a5F4E6Ad4E6497ad79265D07EA9F121e",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x9759C297fb6C91e252c7292cECa30a509558E5De",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xF01D2AA2f3f903A93D57c4Bf672C8096DE485FA7",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x5dB4692926C8ceebF6Da0995358Bbc438F3fd80C",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xcF558864c6B130Ce76d20641D008ebd4871eDED0",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xe7304E9F4ca383BD6312a5179cdC7B40B96A6F5a",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x7624cccCc59361D583F28BEC40D37e7771d2ef5D",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x7F2A3967bd0999A860E13Ab8DC34aF98675CC208",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x84D523493Aac127025AC770981a54C9601326A41",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xc48d782c5C54157d37d2Fa4E6BA27E8cf57Da956",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xE41902f9aD379A8CC34A34efa00F5c3EE5112bC8",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xa8Ffb545d5cBF1F44E3eBA123D60372cD267D73c",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x9C5C4b9BA1fEBA72186f50d8Ae7C58b1D7f0B12F",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x620aC65BE29066Bb9D1E92C65b35B9fD321Fb963",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x13983f27Ce9365055a6a553233c49fE28e70103e",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x8CBd0d5d81e7957123E6D8fFaE657a40bDC5691b",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0xfe71D55D0080b6995Ec2C3f48b7702c86e200766",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    },
+    {
+      "token": "0x0315441076FF6d3eA09814a2F90a1f980cF03e9e",
+      "hasPrice": false,
+      "feed": "0x0000000000000000000000000000000000000000",
+      "multiplier": "0"
+    }
+  ]
+}
