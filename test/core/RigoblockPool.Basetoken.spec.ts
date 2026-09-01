@@ -1,6 +1,9 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
+import hre, { deployments, ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
+import "@nomiclabs/hardhat-waffle";
+import "@ethereum-waffle/chai";
+import "hardhat-deploy";
 import { AddressZero } from "@ethersproject/constants";
 import { parseEther } from "@ethersproject/units";
 import { BigNumber, utils } from "ethers";
@@ -10,7 +13,7 @@ import { Actions, V4Planner } from "../shared/v4Planner";
 import { deployContract, timeTravel } from "../utils/utils";
 
 describe("BaseTokenProxy", async () => {
-  const [user1, user2] = waffle.provider.getWallets();
+  const [user1, user2] = hre.waffle.provider.getWallets();
   const MAX_TICK_SPACING = 32767;
   const DEFAULT_PAIR = {
     poolKey: {
@@ -87,9 +90,9 @@ describe("BaseTokenProxy", async () => {
       const { pool } = await setupTests();
       const authority = await deployments.get("Authority");
       expect(await pool.authority()).to.be.eq(authority.address);
-      // TODO: we should have an assertion that the version is different if implementation has changed
-      //   so we are prompted to change the version in the deployment constants.
-      expect(await pool.VERSION()).to.be.eq("4.3.3");
+      // This assertion must stay in sync with VERSION in MixinConstants.sol.
+      // See AGENTS.md "Version Bump" for when and how to update it.
+      expect(await pool.VERSION()).to.be.eq("4.4.1");
     });
   });
 
@@ -281,6 +284,7 @@ describe("BaseTokenProxy", async () => {
       await oracle.initializeObservations(poolKey);
       const dustAmount = parseEther("0.000999");
       expect(await pool.decimals()).to.be.eq(18);
+      await grgToken.approve(pool.address, dustAmount);
       await expect(pool.mint(user1.address, dustAmount, 0))
         .to.be.revertedWith("PoolAmountSmallerThanMinimum")
         .withArgs(1000);
@@ -471,7 +475,7 @@ describe("BaseTokenProxy", async () => {
       await factory.createPool("USDC pool", "USDP", usdc.address);
       const poolUsdc = pool.attach(newPool.newPoolAddress);
       expect(await poolUsdc.decimals()).to.be.eq(6);
-      await usdc.transfer(user2.address, 2000000);
+      await usdc.transfer(user2.address, 10000000);
       const poolKey = {
         currency0: AddressZero,
         currency1: usdc.address,
@@ -497,9 +501,9 @@ describe("BaseTokenProxy", async () => {
         .to.emit(poolUsdc, "Transfer")
         .withArgs(AddressZero, user2.address, unit.sub(markup))
         .and.to.not.emit(poolUsdc, "NewNav");
-      await expect(poolUsdc.connect(user2).mint(user2.address, 999, 0))
-        .to.be.revertedWith("PoolAmountSmallerThanMinimum")
-        .withArgs(1000);
+      await expect(
+        poolUsdc.connect(user2).mint(user2.address, 999, 0),
+      ).to.be.revertedWith("NonFractionable");
       // TODO: verify setting minimum period to 2 will set to 10?
       await timeTravel({ seconds: 2592000, mine: true });
       const burnAmount = 6000;

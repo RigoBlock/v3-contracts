@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+import {GMX_ROUTER, _MAX_GMX_POSITIONS} from "../../contracts/protocol/types/GmxConstants.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
@@ -40,6 +42,7 @@ import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
+import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
@@ -216,9 +219,9 @@ contract AGmxV2ForkTest is Test {
     // Tests — adapter metadata
     // =========================================================================
 
-    /// @notice The adapter must report the required protocol version as 4.3.2.
+    /// @notice The adapter must report the required protocol version as 4.4.1.
     function test_RequiredVersion() public view {
-        assertEq(IMinimumVersion(address(agmxV2)).requiredVersion(), "4.3.2");
+        assertEq(IMinimumVersion(address(agmxV2)).requiredVersion(), "4.4.1");
     }
 
     /// @notice Direct calls to the adapter are blocked.
@@ -555,7 +558,7 @@ contract AGmxV2ForkTest is Test {
         IAGmxV2(pool).claimCollateral(markets, tokens, timeKeys, address(this));
     }
 
-    /// @notice Fork parity: the reimplemented `GmxLib.claimableCollateralAmount` formula
+    /// @notice Fork parity: the reimplemented `GmxAdapterLib.claimableCollateralAmount` formula
     ///  returns exactly the same WETH amount that GMX's real `claimCollateral` transfers.
     ///  We manufacture a liquidation/ADL-like claimable-collateral state in the DataStore
     ///  (as CONTROLLER), simulate the callback that records the key, and assert parity.
@@ -915,7 +918,7 @@ contract AGmxV2ForkTest is Test {
             abi.encode(fakePositions)
         );
         vm.prank(poolOwner);
-        vm.expectRevert(GmxLib.MaxGmxPositionsReached.selector);
+        vm.expectRevert(GmxAdapterLib.MaxGmxPositionsReached.selector);
         IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
     }
 
@@ -1267,7 +1270,7 @@ contract AGmxV2ForkTest is Test {
 
         // Resolve the handler address before the prank — vm.prank is consumed by the
         // first external call, so orderHandler() must not be that call.
-        IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
+        IGmxOrderHandler handler = GMX_ROUTER.orderHandler();
         vm.prank(keeper);
         handler.executeOrder(
             orderKey,
@@ -1329,7 +1332,7 @@ contract AGmxV2ForkTest is Test {
             );
         }
 
-        IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
+        IGmxOrderHandler handler = GMX_ROUTER.orderHandler();
         vm.prank(keeper);
         handler.executeOrder(
             orderKey,

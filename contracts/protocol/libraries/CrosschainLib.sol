@@ -17,6 +17,7 @@ library CrosschainLib {
     /// @notice Across MulticallHandler addresses
     address internal constant DEFAULT_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
     address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
+    address internal constant HYPER_EVM_MULTICALL_HANDLER = 0x5E7840E06fAcCb6d1c3b5F5E0d1d3d07F2829bba;
 
     /// @notice Check if a token is allowed for cross-chain operations on the current chain.
     /// @param token The token address to check.
@@ -65,6 +66,9 @@ library CrosschainLib {
         } else if (block.chainid == 130) {
             // Unichain
             return token == CrosschainTokens.UNI_USDC || token == CrosschainTokens.UNI_WETH;
+        } else if (block.chainid == 999) {
+            // HyperEVM - only USDC is bridgeable
+            return token == CrosschainTokens.HYPER_USDC;
         }
         return false;
     }
@@ -99,13 +103,13 @@ library CrosschainLib {
     /// @param chainId The destination chain ID.
     /// @return handler The MulticallHandler address for the specified chain.
     function getAcrossHandler(uint256 chainId) internal pure returns (address handler) {
-        // BSC uses different multicall handler
         if (chainId == 56) {
             return BSC_MULTICALL_HANDLER;
+        } else if (chainId == 999) {
+            return HYPER_EVM_MULTICALL_HANDLER;
+        } else {
+            return DEFAULT_MULTICALL_HANDLER;
         }
-
-        // Most chains use the standard multicall handler
-        return DEFAULT_MULTICALL_HANDLER;
     }
 
     /// @notice Validates that input and output tokens are compatible for cross-chain bridging.
@@ -123,7 +127,8 @@ library CrosschainLib {
             inputToken == CrosschainTokens.BASE_USDC ||
             inputToken == CrosschainTokens.POLY_USDC ||
             inputToken == CrosschainTokens.BSC_USDC ||
-            inputToken == CrosschainTokens.UNI_USDC
+            inputToken == CrosschainTokens.UNI_USDC ||
+            inputToken == CrosschainTokens.HYPER_USDC
         ) {
             require(
                 outputToken == CrosschainTokens.ETH_USDC ||
@@ -132,7 +137,8 @@ library CrosschainLib {
                     outputToken == CrosschainTokens.BASE_USDC ||
                     outputToken == CrosschainTokens.POLY_USDC ||
                     outputToken == CrosschainTokens.BSC_USDC ||
-                    outputToken == CrosschainTokens.UNI_USDC,
+                    outputToken == CrosschainTokens.UNI_USDC ||
+                    outputToken == CrosschainTokens.HYPER_USDC,
                 WrongDestinationToken()
             );
         } else if (

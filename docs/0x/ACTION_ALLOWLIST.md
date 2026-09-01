@@ -8,11 +8,65 @@ The 0x API routes swaps through Settler contracts. Each swap contains a `bytes[]
 where each element starts with a 4-byte action selector (e.g., `UNISWAPV3`, `BASIC`).
 A0xRouter validates every action selector against a whitelist before forwarding to AllowanceHolder.
 
-## Blocked Actions
+## Allowed Actions
 
-### BASIC
-Calls arbitrary `pool` address with arbitrary `data`. An attacker could craft calldata that invokes
-`token.transfer()` or `token.approve()` through BASIC, draining pool assets.
+Most allowed actions route through hardcoded DEX protocol contracts with deterministic behavior.
+
+| Action | Protocol / Purpose |
+|--------|-------------------|
+| TRANSFER_FROM | ERC20 pull |
+| NATIVE_CHECK | ETH balance assertion |
+| POSITIVE_SLIPPAGE | Surplus capture |
+| UNISWAPV2 | Uniswap V2 |
+| UNISWAPV3 / UNISWAPV3_VIP | Uniswap V3 |
+| UNISWAPV4 / UNISWAPV4_VIP | Uniswap V4 |
+| BALANCERV3 / BALANCERV3_VIP | Balancer V3 |
+| PANCAKE_INFINITY / PANCAKE_INFINITY_VIP | PancakeSwap |
+| CURVE_TRICRYPTO_VIP | Curve (Arbitrum only in current 0x Settler deployments) |
+| MAVERICKV2 | Maverick V2 |
+| DODOV1 / DODOV2 | DODO |
+| MAKERPSM | Maker PSM |
+| BEBOP | Bebop |
+| EKUBO / EKUBOV3 / EKUBOV3_VIP | Ekubo |
+| EULERSWAP | Euler |
+| HANJI | Hanji |
+| CHECK_SLIPPAGE | Exact-output slippage check & payout to vault |
+| BASIC | Native wrapping/unwrapping and optional 0x affiliate fees (see below) |
+
+> ⚠️ **Allowlist vs. chain-specific 0x support**  
+> The list above is the adapter-level allowlist: selectors not on it are rejected with
+> `ActionNotAllowed`. 0x Settler dispatch is chain-specific; an allowed selector that is not
+> implemented on the current chain will revert inside the Settler with `ActionInvalid`. For example,
+> `VELODROME` is not currently dispatched by any TakerSubmitted Settler in the pinned 0x-settler
+> submodule, and `EULERSWAP` is commented out on Base. Do not treat these as adapter bugs; the
+> adapter intentionally accepts the superset so it does not need per-chain redeployments every time
+> 0x adds or removes a DEX on a single chain.
+
+### `BASIC` — why it is allowed
+
+`BASIC` is **not** a generic DEX action in our integration; it is required by the 0x API for
+chain-native wrapping/unwrapping and for optional affiliate-fee payments. The current usage is:
+
+1. **Wrap native → wrapped native**  
+   `BASIC(sellToken = 0xEeee...ee, bps, target = wrappedNative, offset = 0, data = "")`  
+   Sends native currency to the wrapped-native contract, which credits wrapped native back to the
+   Settler. The final slippage check then forwards the wrapped native to the pool.
+
+2. **Unwrap wrapped native → native**  
+   `BASIC(sellToken = wrappedNative, bps, target = wrappedNative, offset = 4, data = withdraw(0))`  
+   Calls `wrappedNative.withdraw(amount)`. The Settler receives native currency, which the final
+   slippage check forwards to the pool.
+
+3. **Optional 0x affiliate fee** (currently accepted, see security note below)  
+   `BASIC(sellToken = feeToken, bps = swapFeeBps, target = swapFeeRecipient, offset = 0, data = "")`  
+   Transfers a portion of the trade to an arbitrary fee recipient. This is the same trust model as
+   any pool-operator-controlled swap: the operator (or a delegated agent) chooses the quote, and a
+   fee is just a cost of execution.
+
+The Settler's own `_isRestrictedTarget()` prevents `BASIC` from calling Permit2, AllowanceHolder,
+or the Settler itself, so it cannot be used as a confused-deputy attack against those contracts.
+
+## Blocked Actions
 
 ### RFQ / RFQ_VIP
 Off-chain pricing with no on-chain reference. A rogue market maker combined with a phished
@@ -32,30 +86,36 @@ adapter. Unnecessary attack surface — blocked by default.
 Any selector not in the allowlist is blocked. This provides forward security: when 0x adds new
 action types to `ISettlerActions`, they are blocked until the adapter is explicitly updated.
 
-## Allowed Actions
+## Trust model: operator is not trustless
 
-All allowed actions route through hardcoded DEX protocol contracts with deterministic behavior:
+`A0xRouter` is called via `delegatecall` from a pool only when the caller is the pool owner or a
+delegated address (`MixinFallback.sol`). The adapter is an execution vehicle, not a custody guard.
+A malicious or compromised operator can already extract value through any swap adapter by:
 
-| Action | Protocol |
-|--------|----------|
-| TRANSFER_FROM | ERC20 pull |
-| NATIVE_CHECK | ETH balance assertion |
-| POSITIVE_SLIPPAGE | Surplus capture |
-| UNISWAPV2 | Uniswap V2 |
-| UNISWAPV3 / UNISWAPV3_VIP | Uniswap V3 |
-| UNISWAPV4 / UNISWAPV4_VIP | Uniswap V4 |
-| BALANCERV3 / BALANCERV3_VIP | Balancer V3 |
-| PANCAKE_INFINITY / PANCAKE_INFINITY_VIP | PancakeSwap |
-| CURVE_TRICRYPTO_VIP | Curve |
-| MAVERICKV2 | Maverick V2 |
-| DODOV1 / DODOV2 | DODO |
-| VELODROME | Velodrome |
-| MAKERPSM | Maker PSM |
-| BEBOP | Bebop |
-| EKUBO / EKUBOV3 / EKUBOV3_VIP | Ekubo |
-| EULERSWAP | Euler |
-| HANJI | Hanji |
-| CHECK_SLIPPAGE | Exact-output slippage check & payout to vault |
+- setting an extremely unfavorable `minAmountOut` and sandwiching the trade from an external wallet,
+- routing the pool into a worthless or attacker-controlled token that satisfies the price-feed check.
+
+Therefore, `BASIC` does not introduce a new class of fund loss. It is constrained to the same
+operator-trust assumption as `UNISWAPV3`, `UNISWAPV4`, etc. For the same reason the adapter does not
+second-guess `minAmountOut`: the operator is expected to quote and execute swaps in the pool's
+interest, exactly as with the Uniswap adapter.
+
+## Open security enhancements
+
+- **0x fees** ([issue #864](https://github.com/RigoBlock/v3-contracts/issues/864))  
+  Both 0x protocol fees and optional affiliate fees are paid through the `BASIC` action. Because the
+  fee recipient is encoded in the calldata, the adapter can overwrite the fee recipient with the pool
+  address (or set the fee bps to zero) so the fee amount remains in the pool rather than leaking to an
+  arbitrary address. This is the same approach already used for other aggregator integrations. The
+  swap still executes correctly when the protocol-fee recipient is overwritten or the bps are zeroed;
+  the protocol fee is just a calldata-encoded transfer, not a settlement invariant.
+
+- **Wrapped-native-only `BASIC`**  
+  A future adapter could pass the chain-specific `wrappedNative` address to the constructor and
+  enforce `target == wrappedNative` for every `BASIC` action (e.g., by overwriting the target in the
+  calldata). This would remove fee support and block any future non-WETH use of `BASIC`. Because the
+  operator can still extract value in other ways, this is a defense-in-depth improvement, not a critical
+  fix.
 
 ## Upgrade Considerations
 

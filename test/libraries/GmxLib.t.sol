@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
+import {WRAPPED_NATIVE, _POSITION_SIZE_IN_USD_KEY, _FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IGmxReader, IGmxDataStore, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice, GmxPositionInfo, GmxPositionFees, GmxPositionFundingFees, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
+import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 
-/// @dev Thin harness so GmxLib internal functions can be called via external
-///      calls, enabling vm.expectRevert for functions that may revert.
+/// @dev Thin harness so GmxLib / GmxAdapterLib internal functions can be called
+///      via external calls, enabling vm.expectRevert for functions that may revert.
 contract GmxLibHarness {
     function assertPositionLimitNotReached(
         address account,
@@ -20,15 +24,23 @@ contract GmxLibHarness {
         address collateralToken,
         bool isLong
     ) external view {
-        GmxLib.assertPositionLimitNotReached(account, market, collateralToken, isLong);
+        GmxAdapterLib.assertPositionLimitNotReached(account, market, collateralToken, isLong);
     }
 
     function isMarketActive(address account, address market) external view returns (bool) {
-        return GmxLib.isMarketActive(account, market);
+        return GmxAdapterLib.isMarketActive(account, market);
     }
 
     function hasClaimableFundingFees(address account, address market) external view returns (bool) {
-        return GmxLib.hasClaimableFundingFees(account, market);
+        return GmxAdapterLib.hasClaimableFundingFees(account, market);
+    }
+
+    function safeGetGmxPrice(address token) external view returns (Price.Props memory) {
+        return GmxLib.getGmxPrice(token);
+    }
+
+    function isIndexTokenPriced(address token) external view returns (bool) {
+        return GmxAdapterLib.isIndexTokenPriced(token);
     }
 }
 
@@ -58,10 +70,10 @@ contract GmxLibTest is Test {
     bytes32 internal constant KEY_FEE_MULTIPLIER = keccak256(abi.encode("ESTIMATED_GAS_FEE_MULTIPLIER_FACTOR"));
     bytes32 internal constant KEY_INCREASE_ORDER_GAS = keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
     bytes32 internal constant KEY_DECREASE_ORDER_GAS = keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
-    // Matches GmxLib._POSITION_SIZE_IN_USD_KEY
+    // Matches _POSITION_SIZE_IN_USD_KEY
     bytes32 internal constant POSITION_SIZE_IN_USD_KEY = keccak256(abi.encode("SIZE_IN_USD"));
 
-    // 1e30 — GmxLib._FLOAT_PRECISION
+    // 1e30 — _FLOAT_PRECISION
     uint256 internal constant FLOAT_PRECISION = 1e30;
 
     // Reused test addresses
@@ -71,6 +83,11 @@ contract GmxLibTest is Test {
     address internal constant INDEX_TOKEN = address(0x4000);
     address internal constant LONG_TOKEN = address(0x5000);
     address internal constant SHORT_TOKEN = address(0x6000);
+
+    // LIT / USD fallback (tokenDecimals = 18, feedDecimals = 8, multiplier = 1e34).
+    address internal constant LIT_TOKEN = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db;
+    address internal constant LIT_FEED = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
+    uint256 internal constant LIT_MULTIPLIER = 10000000000000000000000000000000000;
 
     // =========================================================================
     // computeExecutionFee
@@ -105,7 +122,7 @@ contract GmxLibTest is Test {
         );
 
         vm.txGasPrice(1 gwei);
-        uint256 fee = GmxLib.computeExecutionFee(true, 0);
+        uint256 fee = GmxAdapterLib.computeExecutionFee(true, 0);
 
         // baseGasLimit = 100_000 + 3×50_000 = 250_000
         // adjustedGasLimit = 250_000 + (2_000_000 × 1.1) = 250_000 + 2_200_000 = 2_450_000
@@ -143,7 +160,7 @@ contract GmxLibTest is Test {
         );
 
         vm.txGasPrice(2 gwei);
-        uint256 fee = GmxLib.computeExecutionFee(false, 0);
+        uint256 fee = GmxAdapterLib.computeExecutionFee(false, 0);
 
         uint256 baseGasLimit = feeBase + 3 * feePerOracle;
         uint256 adjustedGasLimit = baseGasLimit + (orderGas * multiplierFactor) / FLOAT_PRECISION;
@@ -167,7 +184,7 @@ contract GmxLibTest is Test {
         );
 
         // Should not revert. Reader should NOT be called.
-        GmxLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
+        GmxAdapterLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
     }
 
     /// @notice Slow path: new position, count < 32 → succeeds.
@@ -187,7 +204,7 @@ contract GmxLibTest is Test {
         Position.Props[] memory positions = new Position.Props[](5);
         vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
-        GmxLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
+        GmxAdapterLib.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
     }
 
     /// @notice Slow path: new position, count == 32 → MaxGmxPositionsReached.
@@ -206,7 +223,7 @@ contract GmxLibTest is Test {
         Position.Props[] memory positions = new Position.Props[](32);
         vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(positions));
 
-        vm.expectRevert(GmxLib.MaxGmxPositionsReached.selector);
+        vm.expectRevert(GmxAdapterLib.MaxGmxPositionsReached.selector);
         gmxHarness.assertPositionLimitNotReached(POOL, MARKET, COL_TOKEN, isLong);
     }
 
@@ -851,7 +868,7 @@ contract GmxLibTest is Test {
             abi.encode(_buildMarket())
         );
 
-        assertEq(GmxLib.getPnlToken(MARKET, true), LONG_TOKEN, "long PnL token must be longToken");
+        assertEq(GmxAdapterLib.getPnlToken(MARKET, true), LONG_TOKEN, "long PnL token must be longToken");
     }
 
     /// @notice Short positions settle PnL in the market's shortToken.
@@ -862,7 +879,7 @@ contract GmxLibTest is Test {
             abi.encode(_buildMarket())
         );
 
-        assertEq(GmxLib.getPnlToken(MARKET, false), SHORT_TOKEN, "short PnL token must be shortToken");
+        assertEq(GmxAdapterLib.getPnlToken(MARKET, false), SHORT_TOKEN, "short PnL token must be shortToken");
     }
 
     /// @notice Verifies that claimable funding fees and collateral rebates recorded by
@@ -1044,7 +1061,7 @@ contract GmxLibTest is Test {
 
     function test_ClaimableCollateralAmount_NoInfo_ReturnsZero() public view {
         bytes32 amountKey = keccak256(abi.encode("amountKey", MARKET, COL_TOKEN, uint256(1), POOL));
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, POOL), 0);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, POOL), 0);
     }
 
     function test_ClaimableCollateralAmount_WithInfo_NoDelay() public {
@@ -1073,7 +1090,7 @@ contract GmxLibTest is Test {
             abi.encode(amount)
         );
 
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), amount);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, address(this)), amount);
     }
 
     /// @notice When factor <= reduction, the final factor is clamped to 0.
@@ -1118,7 +1135,7 @@ contract GmxLibTest is Test {
             abi.encode(uint256(20))
         );
 
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), 0);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, address(this)), 0);
     }
 
     /// @notice If GMX increases CLAIMABLE_COLLATERAL_TIME_DIVISOR after the timeKey
@@ -1151,12 +1168,15 @@ contract GmxLibTest is Test {
         // timeKey * divisor is now > block.timestamp, which would underflow without saturation.
         vm.mockCall(
             GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector, GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY),
+            abi.encodeWithSelector(
+                IGmxDataStore.getUint.selector,
+                GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY
+            ),
             abi.encode(uint256(1))
         );
 
         // Must not revert; with factor == 0 the claimable amount is 0 (unvested).
-        assertEq(GmxLib.claimableCollateralAmount(amountKey, address(this)), 0);
+        assertEq(GmxAdapterLib.claimableCollateralAmount(amountKey, address(this)), 0);
     }
 
     /// @notice Callback-recorded funding fees on the short token are also returned.
@@ -1231,5 +1251,151 @@ contract GmxLibTest is Test {
 
         AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(address(this));
         assertEq(balances.length, 0);
+    }
+
+    // =========================================================================
+    // Fallback price feeds for GMX Data Stream index tokens
+    // =========================================================================
+
+    function test_SafeGetGmxPrice_Fallback_LIT() public {
+        uint256 answer = 0.5e8; // $0.50, 8 decimals
+        uint256 expected = (answer * LIT_MULTIPLIER) / FLOAT_PRECISION;
+
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LIT_TOKEN, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(answer), uint256(0), block.timestamp, uint80(1))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(LIT_TOKEN);
+        assertEq(price.min, expected);
+        assertEq(price.max, expected);
+    }
+
+    function test_SafeGetGmxPrice_Fallback_Stale() public {
+        vm.warp(block.timestamp + 26 hours);
+
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LIT_TOKEN, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0.5e8), uint256(0), block.timestamp - 25 hours, uint80(1))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(LIT_TOKEN);
+        assertEq(price.min, 0);
+        assertEq(price.max, 0);
+    }
+
+    function test_SafeGetGmxPrice_Fallback_InvalidAnswer() public {
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, LIT_TOKEN, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0), uint256(0), block.timestamp, uint80(1))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(LIT_TOKEN);
+        assertEq(price.min, 0);
+        assertEq(price.max, 0);
+    }
+
+    function test_SafeGetGmxPrice_Provider() public {
+        address token = COL_TOKEN;
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode(GmxValidatedPrice(token, 2e30, 3e30, block.timestamp, block.number))
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(token);
+        assertEq(price.min, 2e30);
+        assertEq(price.max, 3e30);
+    }
+
+    /// @notice Unmapped tokens return a zero price without calling the zero address feed.
+    function test_SafeGetGmxPrice_UnmappedToken_ReturnsZero() public {
+        address token = address(0xABCD);
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+
+        Price.Props memory price = gmxHarness.safeGetGmxPrice(token);
+        assertEq(price.min, 0);
+        assertEq(price.max, 0);
+    }
+
+    function test_IsIndexTokenPriced_Provider() public {
+        address token = LIT_TOKEN;
+        vm.mockCall(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode(GmxValidatedPrice(token, 1e30, 1e30, block.timestamp, block.number))
+        );
+
+        assertTrue(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    function test_IsIndexTokenPriced_Fallback() public {
+        address token = LIT_TOKEN;
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0.5e8), uint256(0), block.timestamp, uint80(1))
+        );
+
+        assertTrue(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    /// @notice A fallback feed that returns a non-positive price is treated as unpriced.
+    function test_IsIndexTokenPriced_Fallback_InvalidPrice_ReturnsFalse() public {
+        address token = LIT_TOKEN;
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            LIT_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0), uint256(0), block.timestamp, uint80(1))
+        );
+
+        assertFalse(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    function test_IsIndexTokenPriced_NotMapped() public {
+        address token = address(0xABCD);
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
+            abi.encode("no price feed")
+        );
+
+        assertFalse(gmxHarness.isIndexTokenPriced(token));
+    }
+
+    function test_IsIndexTokenPriced_ZeroAddress() public {
+        assertFalse(gmxHarness.isIndexTokenPriced(address(0)));
     }
 }

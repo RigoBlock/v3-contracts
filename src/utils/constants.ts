@@ -1,7 +1,7 @@
 export const AddressOne = "0x0000000000000000000000000000000000000001";
 
 // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
-export const extensionsMapSalt = "extensionsMapSalt8";
+export const extensionsMapSalt = "extensionsMapSalt12";
 
 // 0x Protocol addresses (same on all supported chains)
 export const zeroExAllowanceHolder =
@@ -108,5 +108,16 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
+  },
+  // HyperEVM (Chain ID: 999)
+  999: {
+    rigoToken: "0x0000000000000000000000000000000000000000",
+    oracle: "0x0000000000000000000000000000000000000000",
+    stakingProxy: "0x0000000000000000000000000000000000000000",
+    weth: "0x5555555555555555555555555555555555555555",
+    univ4Posm: "0x0000000000000000000000000000000000000000",
+    universalRouter: "0x0000000000000000000000000000000000000000",
+    tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
+    acrossSpokePool: "0x35E63eA3eb0fb7A3bc543C71FB66412e1F6B0E04",
   },
 };

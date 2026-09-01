@@ -32,6 +32,10 @@ library Constants {
     /// @dev Re-exported from ForkBlocks for backward compatibility
     uint256 internal constant ARB_BLOCK = ForkBlocks.ARB_BLOCK;
 
+    /// @notice HyperEVM block number for fork tests
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant HYPEREVM_BLOCK = ForkBlocks.HYPEREVM_BLOCK;
+
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
     //////////////////////////////////////////////////////////////*/
@@ -43,6 +47,7 @@ library Constants {
     uint256 internal constant POLYGON_CHAIN_ID = 137;
     uint256 internal constant BSC_CHAIN_ID = 56;
     uint256 internal constant UNICHAIN_CHAIN_ID = 130;
+    uint256 internal constant HYPEREVM_CHAIN_ID = 999;
 
     /*//////////////////////////////////////////////////////////////
                         RIGOBLOCK INFRASTRUCTURE
@@ -86,10 +91,10 @@ library Constants {
                         0x SWAP AGGREGATOR
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice 0x AllowanceHolder (Cancun version, same on all supported chains)
+    /// @notice 0x AllowanceHolder (Cancun version, same on all supported chains including HyperEVM).
     address internal constant ZERO_EX_ALLOWANCE_HOLDER = 0x0000000000001fF3684f28c67538d4D072C22734;
 
-    /// @notice 0x Deployer/Registry (same on all chains)
+    /// @notice 0x Deployer/Registry (same on all chains including HyperEVM).
     address internal constant ZERO_EX_DEPLOYER = 0x00000000000004533Fe15556B1E086BB1A72cEae;
 
     /*//////////////////////////////////////////////////////////////
@@ -100,6 +105,7 @@ library Constants {
     address internal constant ARB_SPOKE_POOL = 0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A;
     address internal constant OPT_SPOKE_POOL = 0x6f26Bf09B1C792e3228e5467807a900A503c0281;
     address internal constant BASE_SPOKE_POOL = 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64;
+    address internal constant HYPER_SPOKE_POOL = 0x35E63eA3eb0fb7A3bc543C71FB66412e1F6B0E04;
 
     /*//////////////////////////////////////////////////////////////
                         ACROSS MULTICALL HANDLERS
@@ -113,6 +119,7 @@ library Constants {
     address internal constant POLY_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
     address internal constant UNI_MULTICALL_HANDLER = 0x924a9f036260DdD5808007E1AA95f08eD08aA569;
     address internal constant BSC_MULTICALL_HANDLER = 0xAC537C12fE8f544D712d71ED4376a502EEa944d7;
+    address internal constant HYPER_MULTICALL_HANDLER = 0x5E7840E06fAcCb6d1c3b5F5E0d1d3d07F2829bba;
 
     /*//////////////////////////////////////////////////////////////
                             UNISWAP V4 
@@ -122,6 +129,8 @@ library Constants {
     address internal constant UNISWAP_V4_POSM = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
     address internal constant BASE_UNISWAP_V4_POSM = 0x7C5f5A4bBd8fD63184577525326123B519429bDc;
     address internal constant POLYGON_UNISWAP_V4_POSM = 0x1Ec2eBf4F37E7363FDfe3551602425af0B3ceef9;
+    /// @notice Uniswap V4 is not deployed on HyperEVM. This sentinel is checked by the Hyperliquid fixture.
+    address internal constant HYPER_UNISWAP_V4_POSM = address(0);
 
     /*//////////////////////////////////////////////////////////////
                             TOKENS - SHARED FROM CrosschainTokens
@@ -154,6 +163,8 @@ library Constants {
 
     /// @dev Uniswap Universal Router v4 on Arbitrum.
     address internal constant ARB_UNIVERSAL_ROUTER = 0xA51afAFe0263b40EdaEf0Df8781eA9aa03E381a3;
+    /// @notice Uniswap Universal Router is not deployed on HyperEVM. This sentinel is checked by the Hyperliquid fixture.
+    address internal constant HYPER_UNIVERSAL_ROUTER = address(0);
 
     /// @notice GMX v2 ExchangeRouter on Arbitrum.
     address internal constant ARB_GMX_EXCHANGE_ROUTER = 0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41;
@@ -201,6 +212,12 @@ library Constants {
     // Unichain - use shared constants
     address internal constant UNI_USDC = CrosschainTokens.UNI_USDC;
     address internal constant UNI_WETH = CrosschainTokens.UNI_WETH;
+
+    // HyperEVM - use shared constants
+    address internal constant HYPER_USDC = CrosschainTokens.HYPER_USDC;
+
+    /// @notice Wrapped HYPE on HyperEVM (canonical system contract).
+    address internal constant HYPER_WHYPE = 0x5555555555555555555555555555555555555555;
 
     // Additional tokens not in crosschain lib (chain-specific)
     address internal constant POLY_WPOL = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;

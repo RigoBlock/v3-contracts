@@ -9,6 +9,8 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
+import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
+import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
 
 contract EOracle is IEOracle {
     using TickMath for int24;
@@ -89,20 +91,26 @@ contract EOracle is IEOracle {
         }
 
         uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(conversionTick);
-        uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96); // Q96 * Q96 = Q192
-        uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX192, Q96 * Q96); // Q192 / Q192 = Q0, so no need for further adjustment
+        // Compute price * 2^96 using FullMath.mulDiv to avoid the intermediate sqrtPriceX96^2
+        // overflowing uint256 for ticks whose sqrtPriceX96 exceeds 2^128 (|tick| > 443,636).
+        uint256 priceX96 = FullMath.mulDiv(uint256(sqrtPriceX96), uint256(sqrtPriceX96), Q96);
+        uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX96, Q96);
         return amount >= 0 ? tokenAmount.toInt256() : -tokenAmount.toInt256();
     }
 
     /// @inheritdoc IEOracle
     function hasPriceFeed(address token) external view returns (bool) {
+        // On HyperEVM there is no BackGeoOracle / Uniswap V4 deployment.
+        // USDC is Hyperliquid's collateral and numeraire, so it is the only token treated as having a feed.
+        if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
+            return token == HLConstants.usdc();
+        }
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
-        } else {
-            // cardinality > 1 means the oracle pool has at least two observations.
-            (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
-            return state.cardinality > 1;
         }
+        // cardinality > 1 means the oracle pool has at least two observations.
+        (, IOracle.ObservationState memory state) = _getPool(_ZERO_ADDRESS, token, _oracle);
+        return state.cardinality > 1;
     }
 
     /// @inheritdoc IEOracle

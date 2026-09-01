@@ -77,8 +77,20 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 ### Version Bump
 
-- Every implementation change MUST bump `VERSION` in `MixinConstants.sol` (e.g., `"4.2.0"` → `"4.3.0"`).
-- This applies to ANY change compiled into the implementation: Mixin contracts, libraries, or constructor parameters.
+Version bumps are required for ANY change compiled into the implementation (Mixin contracts, libraries, or constructor parameters).
+
+1. **Read the base branch version first.** Open `contracts/protocol/core/immutable/MixinConstants.sol` on the PR's base branch and note the current `VERSION` value. This is the starting point.
+2. **Choose the next version exactly once per PR**, based on the scope of the change:
+   - **Patch** (`4.3.3` → `4.3.4`) for bug fixes, audit fixes, or small non-breaking changes.
+   - **Minor** (`4.3.3` → `4.4.0`) for new features, new integrations, or non-breaking additions.
+   - **Major** (`4.3.3` → `5.0.0`) for breaking changes.
+3. **Apply the chosen version consistently** to:
+   - `VERSION` in `contracts/protocol/core/immutable/MixinConstants.sol`.
+   - `_REQUIRED_VERSION` in any adapter that requires a minimum implementation version.
+   - The `pool.VERSION()` assertion in `test/core/RigoblockPool.Basetoken.spec.ts`.
+4. **Do not bump multiple times within the same PR.** If the base branch already has a higher version, use that version without further bumping.
+
+The `pool.VERSION()` test is the guard that reminds future agents to bump the version when the implementation changes; it must stay in sync with `MixinConstants.sol`.
 
 ### Shared nonce management
 
@@ -618,7 +630,7 @@ See `docs/gmx/` for the full GMX integration guide. Key rules for AI agents:
 
 - `GmxLib` returns **native collateral tokens** (not WETH). See `docs/gmx/nav-accounting.md`.
 - Always call `_trackToken(collateralToken)` in `createIncreaseOrder`. See `docs/gmx/architecture.md#token-tracking`.
-- `ARBITRUM_CHAIN_ID` is defined in `GmxLib` — never duplicate it.
+- `ARBITRUM_CHAIN_ID` is defined in `GmxConstants` and re-exported by `GmxLib` — never duplicate it.
 - The chain guard is the `GMX_V2_POSITIONS` activation bit, not a `block.chainid` check in `GmxLib`.
 - For P&L fork tests, mock the Chainlink oracle BEFORE `_executeOrder`. See `docs/gmx/architecture.md#common-pitfalls`.
 - **32-position cap**: `assertPositionLimitNotReached` blocks NEW positions (non-matching market+collateral+direction) when 32 are open. Increasing an EXISTING position is allowed at any count. The NAV loop uses `type(uint256).max` — it reads ALL positions, never just 32.

@@ -29,7 +29,7 @@ This guide covers the technical implementation of the Across Protocol integratio
 4. **NavImpactLib.sol** (NAV Validation)
    - Path: `contracts/protocol/libraries/NavImpactLib.sol`
    - Validates Sync mode NAV impact
-   - Enforces 1/MINIMUM_SUPPLY_RATIO effective supply constraint (currently 5% with MINIMUM_SUPPLY_RATIO = 20)
+   - Enforces `1/MINIMUM_SUPPLY_RATIO` effective supply constraint (see `NavImpactLib.sol` for the current numeric value)
 
 ## Transfer Flow
 
@@ -105,6 +105,88 @@ operation (e.g. `mint`) between the two `donate()` phases: the interleaved mint 
 the asset-equality check with the caller's own deposit, but the subsequent positive
 virtual-supply write would lower NAV per share. The per-share invariant detects that
 manipulation without having to enumerate callers.
+
+## Pre-existing Balance Handling in `donate()`
+
+When `donate()` activates a token that was not previously in the pool's active set,
+the token's full balance (pre-existing `storedBalance` plus the newly received `amountDelta`)
+becomes part of NAV. The NAV integrity check therefore credits the pre-existing balance
+in `expectedAssets` so that the strict equality with `netTotalValue` holds.
+
+```solidity
+uint256 tokenAmount = amountDelta;
+if (!previouslyActive) {
+    if (isUnwrap) {
+        tokenAmount = address(this).balance; // full native balance is now counted
+    } else {
+        tokenAmount += storedBalance; // full standard-token balance is now counted
+    }
+}
+```
+
+This applies to **standard tokens** (locked balance, activation flag, and conversion token
+are all the same) and to the **wrapped-native unwrap path** (final conversion token is
+native, so the full native balance is counted).
+
+### Wrapped-native Unwrap Exception
+
+When the incoming token is the chain's wrapped native token and `shouldUnwrapNative` is true,
+the extension withdraws only the **newly received `amountDelta`** and rewrites the accounting
+token to native (`address(0)`). The pre-existing WETH balance is intentionally **not**
+unwrapped and therefore must **not** be added to the native expected assets. However, native
+is the token that is actually becoming active, so the **full current native balance**
+after the withdraw must be counted:
+
+- `storedBalance` describes WETH at lock time and is **not** used for native.
+- `previouslyActive` describes native after the rewrite.
+- The correction uses the full native balance (`address(this).balance` after the withdraw),
+  which is `pre-existing native + any native received between lock and finalize + amountDelta`.
+
+#### Why we cannot use only the WETH balance delta
+
+A WETH-only check would compare `IERC20(wrappedNative).balanceOf(pool)` before and after the
+donate flow and ignore native. That is off-spec because in the unwrap path the token being
+activated is **native**, not WETH. The spec requires counting the full balance of the token
+that becomes active. If the pool already held native while native was inactive, a WETH-only
+check would exclude that pre-existing native balance from `expectedAssets` while `netTotalValue`
+counts it, causing the strict equality to fail. The implementation therefore reads
+`address(this).balance` after the withdraw, which naturally equals `pre-existing native +
+amountDelta` and matches what `netTotalValue` will observe once native becomes active.
+
+The result is that a pool can hold WETH dust and still receive unwrapping cross-chain
+deliveries; only the bridge amount is converted to native, while any pre-existing WETH
+remains untouched. Native pre-balances are not separately locked (the lock is taken against
+WETH), so the correction uses the current native balance at validation time. This is
+consistent with the standard-token rule: when a token becomes active, its full current
+balance is counted in `expectedAssets`. Any ETH that entered the pool between the lock and
+validation is therefore included in both `expectedAssets` and `netTotalValue`, preserving
+the strict equality.
+
+#### Why the latest native balance does not open an accounting gap
+
+Using the current `address(this).balance` means any native ETH that is sent to the pool
+between the lock and the finalize call is included in the NAV integrity check. When native
+was **inactive** before the donation this is deliberate and safe:
+
+1. **Both sides of the equation see the same balance.** `expectedAssets` uses
+   `address(this).balance`; `netTotalValue` is recomputed by `updateUnitaryValue()` after the
+   withdraw and also sees that same balance. The strict equality therefore still holds.
+2. **Virtual supply is not inflated.** `_updateVirtualSupply()` uses the bridge `amount`
+   from calldata, not the native balance. An interleaved native transfer increases NAV but
+   does not mint new shares or virtual supply; it is a NAV-per-share increase for existing
+   holders.
+3. **No reentrancy vector.** `donate()` is guarded by `nonReentrant`. A plain native transfer
+   with empty calldata only increases the balance and cannot reenter the donation flow.
+
+If an attacker sends native ETH between the two phases while native is inactive, the worst
+outcome is a donation to existing shareholders, not a manipulation of NAV accounting or
+virtual supply.
+
+**Edge case:** if native was **already active** before the donation, the correction is not
+applied (`previouslyActive == true`), so an interleaved native transfer changes `netTotalValue`
+without changing `expectedAssets` and the strict equality reverts. This is a temporary denial
+of service on the unwrapping path, not a fund-loss bug. It requires native to be active and
+an untrusted party to insert a native transfer between the lock and finalize calls.
 
 ## Virtual Supply Management
 
@@ -197,17 +279,18 @@ if (effectiveSupply <= 0) {
 unitaryValue = nav / uint256(effectiveSupply);
 ```
 
-### 10% Constraint
+### Effective Supply Constraint
 
 ```solidity
-// NavImpactLib.validateNavImpact()
+// NavImpactLib.validateSupply()
 int256 currentVS = VirtualStorageLib.getVirtualSupply();
 int256 sharesLeaving = (outputValue * 10**decimals / nav).toInt256();
 
 int256 newVS = currentVS - sharesLeaving;  // More negative
 int256 effectiveSupply = int256(totalSupply) + newVS;
 
-// Must maintain at least 1/MINIMUM_SUPPLY_RATIO of total supply (currently 5%)
+// Must maintain at least 1/MINIMUM_SUPPLY_RATIO of total supply.
+// The numeric value of MINIMUM_SUPPLY_RATIO is defined in NavImpactLib.sol.
 require(effectiveSupply >= int256(totalSupply / MINIMUM_SUPPLY_RATIO), EffectiveSupplyTooLow());
 ```
 

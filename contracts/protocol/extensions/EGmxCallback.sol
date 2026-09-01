@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE} from "../types/GmxConstants.sol";
+
 import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {IGmxDataStore, IGmxReader, IGmxRoleStore} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {Bytes32Set, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {GmxCallbackLib} from "../libraries/GmxCallbackLib.sol";
-import {GmxLib} from "../libraries/GmxLib.sol";
 import {IEGmxCallback} from "./adapters/interfaces/IEGmxCallback.sol";
 
 /// @title EGmxCallback
@@ -25,14 +26,11 @@ contract EGmxCallback is IEGmxCallback {
     error NotArbitrum();
 
     constructor() {
-        require(block.chainid == GmxLib.ARBITRUM_CHAIN_ID, NotArbitrum());
+        require(block.chainid == ARBITRUM_CHAIN_ID, NotArbitrum());
     }
 
     modifier onlyGmxController() {
-        require(
-            IGmxRoleStore(GmxLib._GMX_ROLE_STORE).hasRole(msg.sender, _CONTROLLER_ROLE_STORE_KEY),
-            NotGmxController()
-        );
+        require(IGmxRoleStore(_GMX_ROLE_STORE).hasRole(msg.sender, _CONTROLLER_ROLE_STORE_KEY), NotGmxController());
         _;
     }
 
@@ -61,8 +59,8 @@ contract EGmxCallback is IEGmxCallback {
         // Record claimable collateral keys for both market tokens. Price-impact rebates
         // are time-locked, so we only store the key for later NAV/claiming.
         uint256 timeKey = block.timestamp /
-            IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
-        Market.Props memory marketInfo = IGmxReader(GmxLib._GMX_READER).getMarket(GmxLib._GMX_DATA_STORE, market);
+            IGmxDataStore(_GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+        Market.Props memory marketInfo = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
 
         _recordClaimableCollateral(callbackData, market, marketInfo.longToken, timeKey);
         if (marketInfo.longToken != marketInfo.shortToken) {
@@ -81,12 +79,11 @@ contract EGmxCallback is IEGmxCallback {
             abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(this))
         );
 
-        // Only store keys that actually have claimable collateral.
-        if (IGmxDataStore(GmxLib._GMX_DATA_STORE).getUint(amountKey) == 0) {
-            return;
-        }
-
-        if (!callbackData.claimableCollateralKeys.contains(amountKey)) {
+        // Only store keys that actually have claimable collateral and are not already tracked.
+        if (
+            IGmxDataStore(_GMX_DATA_STORE).getUint(amountKey) != 0 &&
+            !callbackData.claimableCollateralKeys.contains(amountKey)
+        ) {
             callbackData.claimableCollateralKeys.add(amountKey);
             callbackData.claimableCollateralInfo[amountKey] = GmxCallbackLib.ClaimableCollateralInfo({
                 token: token,

@@ -238,12 +238,19 @@ function requireGenuineSettler(uint128 featureId, address allegedSettler) {
 | UNISWAPV2 | UniswapV2/fork swap | Yes |
 | UNISWAPV4 | UniswapV4 swap | Yes |
 | RFQ | Request-for-Quote fill | No |
-| BASIC | Generic DEX interaction | Yes |
-| CURVE | Curve pool swap | Yes |
-| VELODROME | Velodrome/Aerodrome swap | Yes |
+| BASIC | Native wrapping/unwrapping and optional 0x fees | Yes (see `ACTION_ALLOWLIST.md`) |
+| CURVE_TRICRYPTO_VIP | Curve pool swap | Chain-specific |
 | MAVERICKV2 | MaverickV2 swap | Yes |
-| BALANCERV3 | BalancerV3 swap | Yes |
-| DODO | DODO swap | Yes |
+| BALANCERV3 / BALANCERV3_VIP | Balancer V3 swap | Yes |
+| DODOV1 / DODOV2 | DODO swap | Yes |
+| MAKERPSM | Maker PSM | Yes |
+| BEBOP | Bebop | Yes |
+| EKUBO / EKUBOV3 / EKUBOV3_VIP | Ekubo | Yes |
+| EULERSWAP | Euler | Chain-specific |
+| HANJI | Hanji | Yes |
+| RFQ / RFQ_VIP | Request-for-Quote fill | No (blocked) |
+| RENEGADE | Dark pool DEX | No (blocked) |
+| METATXN_* | Meta-transaction flows | No (blocked) |
 
 ## Common Pitfalls
 

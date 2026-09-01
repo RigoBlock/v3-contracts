@@ -34,6 +34,7 @@ jobs:
       BASE_MAINNET_RPC_URL: ${{ secrets.BASE_MAINNET_RPC_URL }}
       POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
       UNICHAIN_RPC_URL: ${{ secrets.UNICHAIN_RPC_URL }}
+      HYPERLIQUID_RPC_URL: ${{ secrets.HYPERLIQUID_RPC_URL }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -46,7 +47,10 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: "v1.7.1"
+
+      - name: Verify Foundry version
+        run: forge --version
 
       - name: Install LCOV
         run: |

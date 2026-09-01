@@ -1,79 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
+import {WRAPPED_NATIVE, _GMX_READER, _GMX_DATA_STORE, _GMX_REFERRAL_STORAGE, _GMX_CHAINLINK_PRICE_FEED} from "../types/GmxConstants.sol";
+
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
-import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxDataStore, IGmxExchangeRouter, IGmxRoleStore, GmxValidatedPrice, GmxPositionInfo, GmxExecutionPriceResult, GmxMarketPrices, GmxOrderInfo} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxExchangeRouter, GmxPositionInfo, GmxMarketPrices, GmxOrderInfo, GmxValidatedPrice} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
+import {GmxClaimableHelpers} from "../types/GmxClaimableHelpers.sol";
+import {GmxFallback} from "../types/GmxFallback.sol";
 import {GmxCallbackLib} from "./GmxCallbackLib.sol";
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 
+/// @title GmxLib
+/// @notice NAV-only GMX v2 helpers. Keeps the adapter surface out of the NAV
+///  code path so `ENavView` / `EApps` stay as small as possible.
 library GmxLib {
     using SafeCast for uint256;
-
-    uint256 internal constant ARBITRUM_CHAIN_ID = 42161;
-    address internal constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-
-    IGmxExchangeRouter internal constant GMX_ROUTER = IGmxExchangeRouter(0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41);
-
-    address internal constant _GMX_READER = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
-    address internal constant _GMX_DATA_STORE = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
-    address internal constant _GMX_ROLE_STORE = 0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72;
-    address private constant _GMX_REFERRAL_STORAGE = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d;
-    address private constant _GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
-    uint256 private constant _MAX_GMX_POSITIONS = 32;
-
-    bytes32 private constant _KEY_FEE_BASE = keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));
-    bytes32 private constant _KEY_FEE_PER_ORACLE = keccak256(abi.encode("ESTIMATED_GAS_FEE_PER_ORACLE_PRICE"));
-    bytes32 private constant _POSITION_SIZE_IN_USD_KEY = keccak256(abi.encode("SIZE_IN_USD"));
-    bytes32 private constant _KEY_FEE_MULTIPLIER = keccak256(abi.encode("ESTIMATED_GAS_FEE_MULTIPLIER_FACTOR"));
-    bytes32 private constant _KEY_INCREASE_ORDER_GAS = keccak256(abi.encode("INCREASE_ORDER_GAS_LIMIT"));
-    bytes32 private constant _KEY_DECREASE_ORDER_GAS = keccak256(abi.encode("DECREASE_ORDER_GAS_LIMIT"));
-    uint256 private constant _FLOAT_PRECISION = 1e30;
-
-    uint256 private constant _ORDER_ORACLE_PRICE_COUNT = 3;
-
-    error MaxGmxPositionsReached();
 
     struct TokenPrice {
         address token;
         Price.Props price;
-    }
-
-    function computeExecutionFee(bool isIncrease, uint256 callbackGasLimit) internal view returns (uint256) {
-        IGmxDataStore ds = IGmxDataStore(_GMX_DATA_STORE);
-        uint256 orderGasLimit = ds.getUint(isIncrease ? _KEY_INCREASE_ORDER_GAS : _KEY_DECREASE_ORDER_GAS);
-        uint256 baseGasLimit = ds.getUint(_KEY_FEE_BASE) + _ORDER_ORACLE_PRICE_COUNT * ds.getUint(_KEY_FEE_PER_ORACLE);
-        uint256 multiplierFactor = ds.getUint(_KEY_FEE_MULTIPLIER);
-        uint256 adjustedGasLimit = baseGasLimit +
-            ((orderGasLimit + callbackGasLimit) * multiplierFactor) /
-            _FLOAT_PRECISION;
-        return adjustedGasLimit * tx.gasprice;
-    }
-
-    function getPnlToken(address market, bool isLong) internal view returns (address) {
-        Market.Props memory mkt = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
-        return isLong ? mkt.longToken : mkt.shortToken;
-    }
-
-    function assertPositionLimitNotReached(
-        address account,
-        address market,
-        address collateralToken,
-        bool isLong
-    ) internal view {
-        bytes32 positionKey = keccak256(abi.encode(account, market, collateralToken, isLong));
-        if (IGmxDataStore(_GMX_DATA_STORE).getUint(keccak256(abi.encode(positionKey, _POSITION_SIZE_IN_USD_KEY))) > 0) {
-            return;
-        }
-
-        require(
-            IGmxReader(_GMX_READER).getAccountPositions(_GMX_DATA_STORE, account, 0, _MAX_GMX_POSITIONS).length <
-                _MAX_GMX_POSITIONS,
-            MaxGmxPositionsReached()
-        );
     }
 
     function getGmxPositionBalances(address account) internal view returns (AppTokenBalance[] memory balances) {
@@ -88,6 +37,19 @@ library GmxLib {
         uint256 offset = _copyBalances(balances, 0, posBal);
         offset = _copyBalances(balances, offset, ordBal);
         _copyBalances(balances, offset, cbBal);
+    }
+
+    /// @notice Returns the best available GMX price for `token`.
+    /// @dev Tries the GMX Chainlink price provider first, falls back to a hardcoded Chainlink aggregator.
+    ///  Returns a zero Price.Props when the token cannot be priced or the fallback is stale/invalid.
+    function getGmxPrice(address token) internal view returns (Price.Props memory price) {
+        try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
+            GmxValidatedPrice memory validated
+        ) {
+            price = Price.Props({min: validated.min, max: validated.max});
+        } catch {
+            price = GmxFallback.getFallbackPrice(token);
+        }
     }
 
     function _getExecutedPositionBalances(address account) private view returns (AppTokenBalance[] memory balances) {
@@ -187,7 +149,7 @@ library GmxLib {
                 return (cache[i].price, count);
             }
         }
-        price = _safeGetGmxPrice(token);
+        price = getGmxPrice(token);
         cache[count] = TokenPrice({token: token, price: price});
         newCount = count + 1;
     }
@@ -210,13 +172,13 @@ library GmxLib {
                 continue;
             }
 
-            uint256 longAmount = _getClaimableFundingAmount(market, mkt.longToken, account);
+            uint256 longAmount = GmxClaimableHelpers.getClaimableFundingAmount(market, mkt.longToken, account);
             if (longAmount > 0) {
                 tmp[count++] = AppTokenBalance({token: mkt.longToken, amount: longAmount.toInt256()});
             }
 
             if (mkt.shortToken != mkt.longToken) {
-                uint256 shortAmount = _getClaimableFundingAmount(market, mkt.shortToken, account);
+                uint256 shortAmount = GmxClaimableHelpers.getClaimableFundingAmount(market, mkt.shortToken, account);
                 if (shortAmount > 0) {
                     tmp[count++] = AppTokenBalance({token: mkt.shortToken, amount: shortAmount.toInt256()});
                 }
@@ -226,7 +188,7 @@ library GmxLib {
         for (uint256 i; i < keyCount; ++i) {
             bytes32 key = callbackData.claimableCollateralKeys.values[i];
             GmxCallbackLib.ClaimableCollateralInfo memory info = callbackData.claimableCollateralInfo[key];
-            uint256 amount = _getClaimableCollateralAmount(key, info, account);
+            uint256 amount = GmxClaimableHelpers.getClaimableCollateralAmount(key, info, account);
             if (amount > 0) {
                 tmp[count++] = AppTokenBalance({token: info.token, amount: amount.toInt256()});
             }
@@ -236,94 +198,6 @@ library GmxLib {
         for (uint256 i; i < count; ++i) {
             balances[i] = tmp[i];
         }
-    }
-
-    function _getClaimableFundingAmount(address market, address token, address account) private view returns (uint256) {
-        return
-            IGmxDataStore(_GMX_DATA_STORE).getUint(
-                keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, account))
-            );
-    }
-
-    function _getClaimableCollateralAmount(
-        bytes32 amountKey,
-        GmxCallbackLib.ClaimableCollateralInfo memory info,
-        address account
-    ) private view returns (uint256 claimableAmount_) {
-        IGmxDataStore ds = IGmxDataStore(_GMX_DATA_STORE);
-        uint256 amount = ds.getUint(amountKey);
-        if (amount == 0) return 0;
-
-        bytes32 factorTimeKey = keccak256(
-            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_FACTOR_KEY, info.market, info.token, info.timeKey)
-        );
-        bytes32 factorKey = keccak256(
-            abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_FACTOR_KEY, info.market, info.token, info.timeKey, account)
-        );
-        bytes32 reductionKey = keccak256(
-            abi.encode(
-                GmxCallbackLib.CLAIMABLE_COLLATERAL_REDUCTION_FACTOR_KEY,
-                info.market,
-                info.token,
-                info.timeKey,
-                account
-            )
-        );
-        bytes32 claimedKey = keccak256(
-            abi.encode(GmxCallbackLib.CLAIMED_COLLATERAL_AMOUNT_KEY, info.market, info.token, info.timeKey, account)
-        );
-
-        uint256 factor = ds.getUint(factorTimeKey);
-        uint256 factorForAccount = ds.getUint(factorKey);
-        if (factorForAccount > factor) factor = factorForAccount;
-
-        uint256 reduction = ds.getUint(reductionKey);
-        if (factor == 0 && reduction == 0) {
-            uint256 divisor = ds.getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
-            uint256 maturityTime = info.timeKey * divisor;
-            // If GMX changes the time divisor after the key is recorded, maturityTime can
-            // move past block.timestamp. Treat it as not-yet-matured rather than reverting.
-            uint256 timeDiff = block.timestamp > maturityTime ? block.timestamp - maturityTime : 0;
-            if (timeDiff > ds.getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_DELAY_KEY)) {
-                factor = _FLOAT_PRECISION;
-            }
-        }
-
-        factor = factor > reduction ? factor - reduction : 0;
-
-        uint256 adjusted = (amount * factor) / _FLOAT_PRECISION;
-        uint256 claimed = ds.getUint(claimedKey);
-        claimableAmount_ = adjusted > claimed ? adjusted - claimed : 0;
-    }
-
-    function isMarketActive(address account, address market) internal view returns (bool) {
-        Position.Props[] memory positions = IGmxReader(_GMX_READER).getAccountPositions(
-            _GMX_DATA_STORE,
-            account,
-            0,
-            type(uint256).max
-        );
-        for (uint256 i; i < positions.length; ++i) {
-            if (positions[i].addresses.market == market) return true;
-        }
-        return false;
-    }
-
-    function hasClaimableFundingFees(address account, address market) internal view returns (bool) {
-        Market.Props memory mkt = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
-        if (_getClaimableFundingAmount(market, mkt.longToken, account) > 0) return true;
-        if (mkt.shortToken != mkt.longToken && _getClaimableFundingAmount(market, mkt.shortToken, account) > 0) {
-            return true;
-        }
-        return false;
-    }
-
-    function claimableCollateralAmount(bytes32 amountKey, address account) internal view returns (uint256) {
-        GmxCallbackLib.ClaimableCollateralInfo memory info = GmxCallbackLib.gmxCallbackData().claimableCollateralInfo[
-            amountKey
-        ];
-        if (info.token == address(0)) return 0;
-        return _getClaimableCollateralAmount(amountKey, info, account);
     }
 
     function _getPendingOrderBalances(address account) private view returns (AppTokenBalance[] memory balances) {
@@ -398,14 +272,22 @@ library GmxLib {
             return posInfo.position.numbers.collateralAmount.toInt256();
         }
 
-        int256 basePnlCollateral = _usdToCollateral(posInfo.basePnlUsd, colPrice);
-        int256 impactCollateral = _usdToCollateral(posInfo.executionPriceResult.totalImpactUsd, colPrice);
+        (int256 basePnlCollateral, int256 impactCollateral) = _getPnlCollaterals(posInfo, colPrice);
 
         netCollateral =
             posInfo.position.numbers.collateralAmount.toInt256() +
             basePnlCollateral +
             impactCollateral -
             posInfo.fees.totalCostAmount.toInt256();
+    }
+
+    /// @notice Converts both PnL components of a position from USD to collateral units.
+    function _getPnlCollaterals(
+        GmxPositionInfo memory posInfo,
+        Price.Props memory price
+    ) private pure returns (int256 basePnlCollateral, int256 impactCollateral) {
+        basePnlCollateral = _usdToCollateral(posInfo.basePnlUsd, price);
+        impactCollateral = _usdToCollateral(posInfo.executionPriceResult.totalImpactUsd, price);
     }
 
     function _usdToCollateral(int256 usd, Price.Props memory price) private pure returns (int256) {
@@ -427,15 +309,6 @@ library GmxLib {
                 amount: positions[i].numbers.collateralAmount.toInt256()
             });
         }
-    }
-
-    function _safeGetGmxPrice(address token) private view returns (Price.Props memory price) {
-        if (token == address(0)) return price;
-        try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
-            GmxValidatedPrice memory validated
-        ) {
-            price = Price.Props({min: validated.min, max: validated.max});
-        } catch {}
     }
 
     function _ceilDiv(uint256 a, uint256 b) private pure returns (uint256) {

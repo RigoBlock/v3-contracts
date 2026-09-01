@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0-or-later
-pragma solidity >0.7.0 <0.9.0;
+pragma solidity 0.8.28;
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
@@ -31,6 +31,29 @@ contract MockOracle {
             blockTimestamp: secondTimestamp,
             prevTick: int24(200),
             tickCumulative: int48(int24(100) * int32(1)),
+            secondsPerLiquidityCumulativeX128: uint144(ONE_X96 * 1),
+            initialized: true
+        });
+    }
+
+    /// @notice Initializes observations with a custom constant tick, useful for testing extreme TWAP values.
+    function initializeObservationsWithTick(PoolKey calldata poolKey, int24 tick) external {
+        PoolId id = poolKey.toId();
+        states[id] = IOracle.ObservationState({index: 1, cardinality: 2, cardinalityNext: 2});
+        uint32 initialTimestamp = uint32(block.timestamp);
+        uint32 secondTimestamp = initialTimestamp + 1;
+        observations[id][0] = Observation({
+            blockTimestamp: initialTimestamp,
+            prevTick: tick,
+            tickCumulative: int48(0),
+            secondsPerLiquidityCumulativeX128: uint144(0),
+            initialized: true
+        });
+
+        observations[id][1] = Observation({
+            blockTimestamp: secondTimestamp,
+            prevTick: tick,
+            tickCumulative: int48(tick),
             secondsPerLiquidityCumulativeX128: uint144(ONE_X96 * 1),
             initialized: true
         });
