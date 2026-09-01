@@ -33,6 +33,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     error PoolTokenNotActive();
     error InvalidOperator();
     error PoolMintTokenNotActive();
+    error NonFractionable();
 
     /*
      * EXTERNAL METHODS
@@ -55,7 +56,9 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     ) external payable override nonReentrant returns (uint256 recipientAmount) {
         // Check owner has explicitly accepted this token for minting
         require(acceptedTokensSet().isActive(tokenIn), PoolMintTokenNotActive());
-        // Token will be activated in _mint before the NAV snapshot.
+
+        // Activate tokenIn before the NAV snapshot to include any pre-existing untracked balance.
+        activeTokensSet().addUnique(IEOracle(address(this)), tokenIn, pool().baseToken);
         recipientAmount = _mint(recipient, amountIn, amountOutMin, tokenIn);
     }
 
@@ -78,14 +81,14 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     /// @inheritdoc ISmartPoolActions
     /// @dev Reentrancy protection provided by calling functions (mint, burn, depositV3, donate)
     function updateUnitaryValue() external override returns (NetAssetsValue memory navParams) {
-        NavComponents memory components = _updateNav();
+        NavComponents memory c = _updateNav();
 
         // Division by zero already handled in _updateNav() -> MixinPoolValue._updatePoolValue()
         // Zero supply returns stored NAV without update
         navParams = NetAssetsValue({
-            unitaryValue: components.unitaryValue,
-            netTotalValue: components.netTotalValue,
-            netTotalLiabilities: components.netTotalLiabilities
+            unitaryValue: c.unitaryValue,
+            netTotalValue: c.netTotalValue,
+            netTotalLiabilities: c.netTotalLiabilities
         });
     }
 
@@ -129,26 +132,24 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     ) private returns (uint256) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
         require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
+        require(amountIn >= 10_000, NonFractionable());
 
-        // Activate tokenIn before the NAV snapshot to include any pre-existing untracked balance.
-        if (tokenIn != _BASE_TOKEN_FLAG) {
-            activeTokensSet().addUnique(IEOracle(address(this)), tokenIn, pool().baseToken);
-        }
-
-        NavComponents memory components = _updateNav();
+        NavComponents memory c = _updateNav();
         address kycProvider = poolParams().kycProvider;
+        uint256 spread = (amountIn * _getSpread()) / _SPREAD_BASE;
 
         // require whitelisted user if kyc is enforced
         if (!kycProvider.isAddressZero()) {
             require(IKyc(kycProvider).isWhitelistedUser(recipient), PoolCallerNotWhitelisted());
         }
 
-        _assertBiggerThanMinimum(amountIn);
-        uint256 spread = (amountIn * _getSpread()) / _SPREAD_BASE;
+        if (tokenIn == _BASE_TOKEN_FLAG) tokenIn = c.baseToken;
 
-        if (tokenIn == _BASE_TOKEN_FLAG) {
-            tokenIn = components.baseToken;
-        }
+        uint256 grossAmount = tokenIn != c.baseToken
+            ? uint256(IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), c.baseToken))
+            : amountIn;
+
+        _assertBiggerThanMinimum(grossAmount, c.decimals);
 
         if (tokenIn.isAddressZero()) {
             require(msg.value == amountIn, PoolMintAmountIn());
@@ -161,14 +162,11 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
         amountIn -= spread;
 
-        if (tokenIn != components.baseToken) {
-            // convert the tokenIn amount into base token amount BEFORE calculating mintedAmount
-            amountIn = uint256(
-                IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), components.baseToken)
-            );
+        if (tokenIn != c.baseToken) {
+            amountIn = uint256(IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), c.baseToken));
         }
 
-        uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
+        uint256 mintedAmount = (amountIn * 10 ** c.decimals) / c.unitaryValue;
         poolTokens().totalSupply += mintedAmount;
 
         // allocate pool token transfers and log events.
@@ -219,7 +217,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         require(block.timestamp >= userAccount.activation, PoolMinimumPeriodNotEnough());
 
         // update stored pool value
-        NavComponents memory components = _updateNav();
+        NavComponents memory c = _updateNav();
 
         /// @notice allocate pool token transfers and log events.
         uint256 burntAmount = _allocateBurnTokens(amountIn, userAccount.userBalance);
@@ -231,7 +229,7 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         NavImpactLib.validateSupply(poolTokens().totalSupply, virtualSupply);
 
         // slither-disable-next-line divide-before-multiply
-        netRevenue = (burntAmount * components.unitaryValue) / 10 ** decimals();
+        netRevenue = (burntAmount * c.unitaryValue) / 10 ** decimals();
 
         address baseToken = pool().baseToken;
 
@@ -293,9 +291,9 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
         return amountIn;
     }
 
-    function _assertBiggerThanMinimum(uint256 amount) private view {
+    function _assertBiggerThanMinimum(uint256 amount, uint8 poolDecimals) private pure {
         require(
-            amount >= 10 ** decimals() / _MINIMUM_ORDER_DIVISOR,
+            amount >= 10 ** poolDecimals / _MINIMUM_ORDER_DIVISOR,
             PoolAmountSmallerThanMinimum(_MINIMUM_ORDER_DIVISOR)
         );
     }

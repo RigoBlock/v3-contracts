@@ -284,6 +284,7 @@ describe("BaseTokenProxy", async () => {
       await oracle.initializeObservations(poolKey);
       const dustAmount = parseEther("0.000999");
       expect(await pool.decimals()).to.be.eq(18);
+      await grgToken.approve(pool.address, dustAmount);
       await expect(pool.mint(user1.address, dustAmount, 0))
         .to.be.revertedWith("PoolAmountSmallerThanMinimum")
         .withArgs(1000);
@@ -474,7 +475,7 @@ describe("BaseTokenProxy", async () => {
       await factory.createPool("USDC pool", "USDP", usdc.address);
       const poolUsdc = pool.attach(newPool.newPoolAddress);
       expect(await poolUsdc.decimals()).to.be.eq(6);
-      await usdc.transfer(user2.address, 2000000);
+      await usdc.transfer(user2.address, 10000000);
       const poolKey = {
         currency0: AddressZero,
         currency1: usdc.address,
@@ -500,9 +501,9 @@ describe("BaseTokenProxy", async () => {
         .to.emit(poolUsdc, "Transfer")
         .withArgs(AddressZero, user2.address, unit.sub(markup))
         .and.to.not.emit(poolUsdc, "NewNav");
-      await expect(poolUsdc.connect(user2).mint(user2.address, 999, 0))
-        .to.be.revertedWith("PoolAmountSmallerThanMinimum")
-        .withArgs(1000);
+      await expect(
+        poolUsdc.connect(user2).mint(user2.address, 999, 0),
+      ).to.be.revertedWith("NonFractionable");
       // TODO: verify setting minimum period to 2 will set to 10?
       await timeTravel({ seconds: 2592000, mine: true });
       const burnAmount = 6000;
