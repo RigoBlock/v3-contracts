@@ -132,11 +132,11 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
     ) private returns (uint256) {
         require(recipient != _ZERO_ADDRESS, PoolMintInvalidRecipient());
         require(msg.sender == recipient || isOperator(recipient, msg.sender), InvalidOperator());
-        require(amountIn >= 10_000, NonFractionable());
+        require(amountIn >= _SPREAD_BASE, NonFractionable());
 
         NavComponents memory c = _updateNav();
-        address kycProvider = poolParams().kycProvider;
         uint256 spread = (amountIn * _getSpread()) / _SPREAD_BASE;
+        address kycProvider = poolParams().kycProvider;
 
         // require whitelisted user if kyc is enforced
         if (!kycProvider.isAddressZero()) {
