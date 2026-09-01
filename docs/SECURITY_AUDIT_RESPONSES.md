@@ -315,13 +315,17 @@ function refundVault(address token) external nonReentrant {
 - **baseDecimals > tokenInDecimals**: realistic orders reverted. For example, a WETH-based pool (18 decimals) accepting USDC (6 decimals) required `10^15` USDC units (1 billion USDC) to clear the guard.
 - **baseDecimals < tokenInDecimals**: the guard became negligible. For example, a USDC-based pool (6 decimals) accepted 1,000 wei of WETH (18 decimals), which converted to 0 base units and minted 0 pool tokens.
 
-**Fix applied**: `_mint` now resolves `tokenIn` to the actual token address, converts the gross `amountIn` to base-token units, and calls `_assertBiggerThanMinimum(amountInBase)` before the spread is deducted. The remaining `amountInGross - spread` is then converted a second time to base-token units to compute `mintedAmount`. The minimum is checked against the same economic value for both `mint()` and `mintWithToken()`, and the spread is always computed and transferred in the input token.
+**Fix applied**: `_mint` now requires `amountIn >= 10_000` (`NonFractionable()`), resolves `tokenIn` to the actual token address, converts the gross `amountIn` to base-token units, and calls `_assertBiggerThanMinimum(amountInBase)` before the spread is deducted. The remaining `amountInGross - spread` is then converted a second time to base-token units to compute `mintedAmount`. The minimum is checked against the same economic value for both `mint()` and `mintWithToken()`, and the spread is always computed and transferred in the input token.
 
 **Why the minimum must be checked on the gross converted amount**:
 
 - **Predictable threshold**: The threshold `10 ** decimals() / 1e3` always means exactly one thousandth of a base token, whether the caller uses `mint()` or `mintWithToken()`. If the minimum were checked on the net amount (after spread), the effective minimum would depend on the current spread, forcing clients to overestimate their input to account for a fee that is removed before the check. Gross-check keeps the minimum a property of the pool, not of the payment token or the spread.
 - **Avoids rejecting legitimate orders**: A `mintWithToken` order whose gross value is above the minimum but whose net value falls just below it would be rejected under a net-check. The gross value is the economic size of the order, so it is the natural guard.
 - **Cleaner spread accounting**: The spread is always computed and transferred in the input token. Evaluating the minimum on the gross converted amount keeps the two concerns separate: the minimum guards the order size, the spread is the protocol fee.
+
+**Why a `NonFractionable` floor is needed**:
+
+The minimum order size is denominated in the base token (`10 ** decimals / 1000`). For a low-decimal or very valuable mint token, the raw tokenIn amount that equals the base minimum can be so small that the spread rounds to zero. For example, with a 1 bps spread an amount of 9,999 tokenIn units yields `spread = 0`. The `NonFractionable` check (`amountIn >= 10_000`) is a protocol-level floor that guarantees the spread is at least one unit for any token that clears the guard, regardless of decimals or price. It is applied to every mint before the oracle conversion so that the protocol fee cannot be rounded away.
 
 **Why two oracle conversions are necessary**:
 
@@ -332,6 +336,8 @@ function refundVault(address token) external nonReentrant {
 **Design notes**:
 
 - The threshold is `10 ** decimals() / 1e3`, i.e. one thousandth of a base token, and now consistently measures the economic value being minted.
+- The `NonFractionable` floor of `10_000` tokenIn units is independent of the base minimum and protects the protocol fee on low-decimal / high-value mint tokens.
+- For a 6-decimal base token such as USDC, the `NonFractionable` floor is larger than the base minimum (`10_000` vs `1_000` units), so the effective minimum for base-token `mint()` becomes `10_000` units. For high-decimal base tokens such as WETH the base minimum (`1e15` wei) dominates.
 - The gross check means a `mintWithToken` order that is exactly at the minimum edge will mint slightly fewer pool tokens than the same base-token `mint()` call, because the spread is removed after the minimum is validated. This is the intended behaviour: the minimum guards the order size, the spread is the protocol fee.
 
 **Why a decimal-scaled threshold is not acceptable**:
@@ -359,8 +365,19 @@ Equivalently, they can call the oracle directly to convert `minimumBase` from th
 
 **Tests**:
 
-- `test/core/MintWithTokenMinimumMismatch.t.sol` covers both decimal-mismatch directions on a mainnet fork.
+- `test/core/MintWithTokenMinimumMismatch.t.sol` covers both decimal-mismatch directions on a mainnet fork, including explicit `NonFractionable` reverts for inputs below `10_000` units and `PoolAmountSmallerThanMinimum` reverts for inputs above the floor but below the base minimum.
+- `test/core/RigoblockPool.Basetoken.spec.ts` asserts the `NonFractionable` floor on a 6-decimal base-token mint.
 - `test/core/RigoblockPool.MintWithToken.spec.ts` was updated to assert the minimum is enforced on the gross converted base amount.
+
+**Burn / `burnForToken` dust rounding is accepted, not a vulnerability**:
+
+- The protocol fee is protected on the mint side by the `NonFractionable` floor, but the same floor is intentionally **not** applied to `burn` or `burnForToken`.
+- On `burn`, `spread = (netRevenue * _getSpread()) / _SPREAD_BASE` is computed in base-token units. If a user burns a dust amount of pool tokens, `netRevenue` can be smaller than `_SPREAD_BASE / _getSpread()`, so the spread rounds to zero. Example: a USDC-base pool (6 decimals) with the default 10 bps spread — burning pool tokens worth 1 USDC unit yields `spread = 0`.
+- On `burnForToken`, the output amount is converted to `tokenOut`. If `tokenOut` has fewer decimals or a much higher unit value than the base token, the converted output can round to zero. Example: a USDC-base pool redeeming to WBTC (8 decimals, ~$70k/BTC) — a tiny redemption can convert to less than 1 satoshi and send 0 WBTC to the user.
+- These cases are **economically negligible** by definition (dust amounts) and **intentionally allowed** for two reasons:
+  1. **Anti-DoS**: enforcing a minimum burn size would trap residual balances forever. A holder could split a position into small pieces and be unable to clear the last piece, leaving dead state in the pool.
+  2. **Gas economics**: the gas cost of a burn transaction already exceeds the 1 bps protocol fee on a dust redemption, so the user gains no practical benefit from "fee avoidance".
+- The formal protocol fee guarantee applies to economically meaningful operations. Dust redemptions may receive zero output and pay zero spread; this is documented behavior, not a specification violation.
 
 **Production exposure**: All sampled V4 pools on Ethereum and Arbitrum returned empty `getAcceptedMintTokens()` arrays at the time of the report, so the bug was not exploitable in production. It becomes active only if a pool operator adds a non-base acceptable token with mismatched decimals.
 

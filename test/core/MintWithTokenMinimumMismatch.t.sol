@@ -6,11 +6,12 @@ pragma solidity 0.8.28;
 //
 // Before the fix, _assertBiggerThanMinimum was called before converting amountIn to
 // base units, causing a decimal mismatch for any token whose decimals differ from the
-// base token. After the fix, the gross input is converted to base units and checked
-// against the minimum before the spread is deducted. The remaining amount is then
-// converted to base units a second time to compute the minted pool tokens. Two oracle
-// conversions are required because the minimum must be evaluated on the gross value
-// while the minted amount is calculated from the net value.
+// base token. After the fix, _mint first enforces a 10_000-unit NonFractionable floor on
+// the raw input, then converts the gross input to base units and checks it against the
+// minimum before the spread is deducted. The remaining amount is then converted to
+// base units a second time to compute the minted pool tokens. Two oracle conversions
+// are required because the minimum must be evaluated on the gross value while the
+// minted amount is calculated from the net value.
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
@@ -20,6 +21,7 @@ import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 
 error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
+error NonFractionable();
 
 contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
     /// @notice Test the high-impact direction: base token has more decimals than tokenIn.
@@ -51,6 +53,29 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
         console2.log("minted pool tokens for 100k USDC:", minted);
     }
 
+    /// @notice Sub-fractionable WETH amounts must revert before the oracle conversion.
+    function test_WethIntoUsdcBase_NonFractionableReverts() public {
+        address[] memory baseTokens = new address[](1);
+        baseTokens[0] = Constants.ETH_USDC;
+        deployFixture(baseTokens);
+        vm.selectFork(mainnetForkId);
+
+        address poolAddr = ethereum.pool;
+
+        vm.prank(poolOwner);
+        ISmartPool(payable(poolAddr)).setAcceptableMintToken(Constants.ETH_WETH, true);
+
+        // 9,999 wei of WETH is below the 10,000-unit NonFractionable floor.
+        uint256 amountIn = 9_999;
+        deal(Constants.ETH_WETH, user, amountIn);
+
+        vm.startPrank(user);
+        IERC20(Constants.ETH_WETH).approve(poolAddr, type(uint256).max);
+        vm.expectRevert(NonFractionable.selector);
+        ISmartPool(payable(poolAddr)).mintWithToken(user, amountIn, 0, Constants.ETH_WETH);
+        vm.stopPrank();
+    }
+
     /// @notice Test the mirror direction: base token has fewer decimals than tokenIn.
     ///  Before the fix, 1,000 wei of WETH cleared the guard for a USDC-based pool and
     ///  minted 0 pool tokens. After the fix, the guard is checked against the gross
@@ -66,8 +91,9 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
         vm.prank(poolOwner);
         ISmartPool(payable(poolAddr)).setAcceptableMintToken(Constants.ETH_WETH, true);
 
-        // 1,000 wei of WETH converts to far less than the 1,000 USDC-unit minimum.
-        uint256 amountIn = 1000;
+        // 10,000 wei of WETH passes the NonFractionable check but still converts to
+        // far less than the 1,000 USDC-unit minimum.
+        uint256 amountIn = 10_000;
         deal(Constants.ETH_WETH, user, amountIn);
 
         vm.startPrank(user);
@@ -103,6 +129,29 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
         console2.log("minted pool tokens for 0.01 WETH:", minted);
     }
 
+    /// @notice Sub-fractionable USDC amounts must revert before the oracle conversion.
+    function test_UsdcIntoWethBase_NonFractionableReverts() public {
+        address[] memory baseTokens = new address[](1);
+        baseTokens[0] = Constants.ETH_WETH;
+        deployFixture(baseTokens);
+        vm.selectFork(mainnetForkId);
+
+        address poolAddr = ethereum.pool;
+
+        vm.prank(poolOwner);
+        ISmartPool(payable(poolAddr)).setAcceptableMintToken(Constants.ETH_USDC, true);
+
+        // 9,999 USDC units is below the 10,000-unit NonFractionable floor.
+        uint256 amountIn = 9_999 * 1e0;
+        deal(Constants.ETH_USDC, user, amountIn);
+
+        vm.startPrank(user);
+        IERC20(Constants.ETH_USDC).approve(poolAddr, type(uint256).max);
+        vm.expectRevert(NonFractionable.selector);
+        ISmartPool(payable(poolAddr)).mintWithToken(user, amountIn, 0, Constants.ETH_USDC);
+        vm.stopPrank();
+    }
+
     /// @notice USDC amounts that convert to less than 0.001 WETH must still revert.
     function test_UsdcIntoWethBase_DustAmountReverts() public {
         address[] memory baseTokens = new address[](1);
@@ -115,8 +164,9 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
         vm.prank(poolOwner);
         ISmartPool(payable(poolAddr)).setAcceptableMintToken(Constants.ETH_USDC, true);
 
-        // 0.001 USDC converts to far less than 0.001 WETH.
-        uint256 amountIn = 0.001 * 1e6;
+        // 0.01 USDC (10,000 units) passes the NonFractionable check but still converts
+        // to far less than 0.001 WETH at normal prices.
+        uint256 amountIn = 0.01 * 1e6;
         deal(Constants.ETH_USDC, user, amountIn);
 
         vm.startPrank(user);

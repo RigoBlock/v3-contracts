@@ -501,9 +501,9 @@ describe("BaseTokenProxy", async () => {
         .to.emit(poolUsdc, "Transfer")
         .withArgs(AddressZero, user2.address, unit.sub(markup))
         .and.to.not.emit(poolUsdc, "NewNav");
-      await expect(poolUsdc.connect(user2).mint(user2.address, 999, 0))
-        .to.be.revertedWith("PoolAmountSmallerThanMinimum")
-        .withArgs(1000);
+      await expect(
+        poolUsdc.connect(user2).mint(user2.address, 999, 0),
+      ).to.be.revertedWith("NonFractionable");
       // TODO: verify setting minimum period to 2 will set to 10?
       await timeTravel({ seconds: 2592000, mine: true });
       const burnAmount = 6000;
