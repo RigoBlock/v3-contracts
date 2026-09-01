@@ -143,29 +143,40 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
             require(IKyc(kycProvider).isWhitelistedUser(recipient), PoolCallerNotWhitelisted());
         }
 
-        _assertBiggerThanMinimum(amountIn);
-        uint256 spread = (amountIn * _getSpread()) / _SPREAD_BASE;
-
         if (tokenIn == _BASE_TOKEN_FLAG) {
             tokenIn = components.baseToken;
         }
 
+        uint256 amountInGross = amountIn;
+        uint256 spread = (amountInGross * _getSpread()) / _SPREAD_BASE;
+
+        if (tokenIn != components.baseToken) {
+            // The minimum is enforced on the gross input value expressed in base-token units.
+            // Checking it after the spread would let tiny inputs round the spread to zero while
+            // still clearing the minimum, allowing a protocol-fee bypass.
+            amountIn = uint256(
+                IEOracle(address(this)).convertTokenAmount(tokenIn, amountInGross.toInt256(), components.baseToken)
+            );
+        }
+        _assertBiggerThanMinimum(amountIn);
+
         if (tokenIn.isAddressZero()) {
-            require(msg.value == amountIn, PoolMintAmountIn());
+            require(msg.value == amountInGross, PoolMintAmountIn());
             _getTokenJar().safeTransferNative(spread);
         } else {
             require(msg.value == 0, NativeCurrencyNotAccepted());
-            tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
+            tokenIn.safeTransferFrom(msg.sender, address(this), amountInGross);
             tokenIn.safeTransfer(_getTokenJar(), spread);
         }
 
-        amountIn -= spread;
+        amountInGross -= spread;
 
         if (tokenIn != components.baseToken) {
-            // convert the tokenIn amount into base token amount BEFORE calculating mintedAmount
             amountIn = uint256(
-                IEOracle(address(this)).convertTokenAmount(tokenIn, amountIn.toInt256(), components.baseToken)
+                IEOracle(address(this)).convertTokenAmount(tokenIn, amountInGross.toInt256(), components.baseToken)
             );
+        } else {
+            amountIn = amountInGross;
         }
 
         uint256 mintedAmount = (amountIn * 10 ** components.decimals) / components.unitaryValue;
