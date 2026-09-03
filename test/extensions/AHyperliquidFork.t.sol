@@ -15,6 +15,7 @@ import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfa
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {DestinationMessageParams, OpType} from "../../contracts/protocol/types/Crosschain.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
+import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
@@ -247,6 +248,72 @@ contract AHyperliquidForkTest is Test {
         // Phase 2: attempt to finalize the donation. Only USDC is allowed on HyperEVM.
         vm.expectRevert(CrosschainLib.UnsupportedCrossChainToken.selector);
         IECrosschain(pool).donate(whype, bridgeAmount, params);
+    }
+
+    /// @notice Regression: the production cross-chain path on HyperEVM (a USDC donation) finalizes.
+    /// @dev EOracle.convertTokenAmount used to fetch the target TWAP before the identity
+    ///  short-circuit, so USDC->USDC on HyperEVM (oracle hook = address(0)) reverted and bricked
+    ///  every cross-chain transfer into USDC-denominated pools on HyperEVM.
+    /// @dev Uses a fresh pool so the NAV stored at lock equals the default 10^decimals: a USDC
+    ///  donation must then mint exactly `amount` of virtual supply.
+    function testFork_ECrosschain_DonateUsdc_Transfer_Succeeds() public {
+        vm.prank(poolOwner);
+        (address freshPool, ) = IRigoblockPoolProxyFactory(fixture.factory()).createPool("USDC Fresh", "FUSDC", usdc);
+
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: false
+        });
+        uint256 amount = 100_000e6;
+
+        // The NAV stored by the lock phase determines the share calculation in _updateVirtualSupply:
+        // mintedAmount = amountValueInBase * 10^decimals / storedNav. Read it upfront to assert the
+        // exact expected virtual supply increase.
+        uint256 storedNav = ISmartPoolActions(freshPool).updateUnitaryValue().unitaryValue;
+        uint8 decimals = ISmartPoolState(freshPool).getPool().decimals;
+        uint256 expectedDelta = (amount * 10 ** decimals) / storedNav;
+        assertEq(expectedDelta, amount, "At default NAV the virtual supply delta must equal the USDC amount");
+
+        // Phase 1: lock the current USDC balance.
+        IECrosschain(freshPool).donate(usdc, 1, params);
+
+        // Simulate the bridge delivering USDC to the pool.
+        deal(usdc, freshPool, amount);
+
+        int256 vsBefore = int256(uint256(vm.load(freshPool, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(vsBefore, 0, "Virtual supply should start at 0");
+
+        // Phase 2: finalize. Identity USDC->USDC conversion must not consult the absent oracle.
+        IECrosschain(freshPool).donate(usdc, amount, params);
+
+        int256 vsAfter = int256(uint256(vm.load(freshPool, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertGt(vsAfter, vsBefore, "Virtual supply must increase after an inbound transfer");
+        assertEq(
+            uint256(vsAfter - vsBefore),
+            expectedDelta,
+            "Virtual supply must increase by exactly amount * 10^decimals / NAV"
+        );
+    }
+
+    /// @notice Same regression for Sync mode donations (rebalancing/donation path).
+    function testFork_ECrosschain_DonateUsdc_Sync_Succeeds() public {
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: false
+        });
+        uint256 amount = 100_000e6;
+        uint256 navBefore = ISmartPoolActions(pool).updateUnitaryValue().netTotalValue;
+
+        IECrosschain(pool).donate(usdc, 1, params);
+        deal(usdc, pool, IERC20(usdc).balanceOf(pool) + amount);
+
+        // Sync mode: no virtual supply update, but NAV validation runs identity conversion.
+        IECrosschain(pool).donate(usdc, amount, params);
+
+        int256 vs = int256(uint256(vm.load(pool, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        assertEq(vs, 0, "Sync mode must not modify virtual supply");
+        uint256 navAfter = ISmartPoolActions(pool).updateUnitaryValue().netTotalValue;
+        assertEq(navAfter - navBefore, amount, "Sync donation must increase net total assets");
     }
 
     /// @notice Only the Hyperliquid application bit can be activated on HyperEVM.

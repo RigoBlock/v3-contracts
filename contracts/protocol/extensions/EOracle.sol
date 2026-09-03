@@ -18,6 +18,7 @@ contract EOracle is IEOracle {
 
     address private constant _ZERO_ADDRESS = address(0);
     uint256 private constant Q96 = 2 ** 96;
+    int24 private constant _TWAP_UNSET = type(int24).max;
 
     address private immutable _wrappedNative;
     IOracle private immutable _oracle;
@@ -33,12 +34,7 @@ contract EOracle is IEOracle {
         int256[] calldata amounts,
         address targetToken
     ) external view returns (int256 totalConvertedAmount) {
-        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS)
-            ? int24(0)
-            : getTwap(targetToken);
-        for (uint256 i = 0; i < tokens.length; i++) {
-            totalConvertedAmount += _convertTokenAmount(tokens[i], amounts[i], targetToken, ethToTargetTokenTwap);
-        }
+        totalConvertedAmount = _convertTokenAmounts(tokens, amounts, targetToken);
     }
 
     /// @inheritdoc IEOracle
@@ -47,55 +43,59 @@ contract EOracle is IEOracle {
         int256 amount,
         address targetToken
     ) external view override returns (int256 convertedAmount) {
-        int24 ethToTargetTokenTwap = (targetToken == _wrappedNative || targetToken == _ZERO_ADDRESS)
-            ? int24(0)
-            : getTwap(targetToken);
-        convertedAmount = _convertTokenAmount(token, amount, targetToken, ethToTargetTokenTwap);
+        address[] memory tokens = new address[](1);
+        int256[] memory amounts = new int256[](1);
+        tokens[0] = token;
+        amounts[0] = amount;
+        convertedAmount = _convertTokenAmounts(tokens, amounts, targetToken);
     }
 
-    function _convertTokenAmount(
-        address token,
-        int256 amount,
-        address targetToken,
-        int24 ethToTargetTokenTwap
-    ) private view returns (int256) {
-        if (targetToken == _wrappedNative) {
-            targetToken = _ZERO_ADDRESS;
-        }
+    function _convertTokenAmounts(
+        address[] memory tokens,
+        int256[] memory amounts,
+        address targetToken
+    ) private view returns (int256 total) {
+        if (targetToken == _wrappedNative) targetToken = _ZERO_ADDRESS;
 
-        if (token == _wrappedNative) {
-            token = _ZERO_ADDRESS;
-        }
+        int24 nativeToTargetTwap = _TWAP_UNSET;
+        int256 amount;
+        address token;
 
-        if (amount == 0 || token == targetToken) {
-            return amount;
-        }
+        for (uint256 i = 0; i < tokens.length; i++) {
+            amount = amounts[i];
+            token = tokens[i];
 
-        uint256 absAmount = uint256(amount >= 0 ? amount : -amount);
-        int24 conversionTick;
+            // early return when oracle call is not needed
+            if (amount == 0 || token == targetToken) {
+                total += amount;
+                continue;
+            }
 
-        if (token == _ZERO_ADDRESS) {
-            // Direct conversion from ETH to targetToken
-            conversionTick = ethToTargetTokenTwap;
-        } else {
-            if (targetToken == _ZERO_ADDRESS) {
-                // Direct conversion from token to ETH
+            if (nativeToTargetTwap == _TWAP_UNSET) {
+                nativeToTargetTwap = targetToken == _ZERO_ADDRESS ? int24(0) : getTwap(targetToken);
+            }
+
+            if (token == _wrappedNative) token = _ZERO_ADDRESS;
+
+            uint256 absAmount = uint256(amount >= 0 ? amount : -amount);
+            int24 conversionTick;
+            if (token == _ZERO_ADDRESS) {
+                conversionTick = nativeToTargetTwap;
+            } else if (targetToken == _ZERO_ADDRESS) {
                 conversionTick = -getTwap(token);
             } else {
-                conversionTick = -(getTwap(token) - ethToTargetTokenTwap);
-
+                conversionTick = -(getTwap(token) - nativeToTargetTwap);
                 if (conversionTick < TickMath.MIN_TICK || conversionTick > TickMath.MAX_TICK) {
-                    return 0;
+                    continue;
                 }
             }
-        }
 
-        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(conversionTick);
-        // Compute price * 2^96 using FullMath.mulDiv to avoid the intermediate sqrtPriceX96^2
-        // overflowing uint256 for ticks whose sqrtPriceX96 exceeds 2^128 (|tick| > 443,636).
-        uint256 priceX96 = FullMath.mulDiv(uint256(sqrtPriceX96), uint256(sqrtPriceX96), Q96);
-        uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX96, Q96);
-        return amount >= 0 ? tokenAmount.toInt256() : -tokenAmount.toInt256();
+            uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(conversionTick);
+            // Compute price using FullMath.mulDiv to avoid the intermediate sqrtPriceX96^2 overflow for tick > 443,636
+            uint256 priceX96 = FullMath.mulDiv(uint256(sqrtPriceX96), uint256(sqrtPriceX96), Q96);
+            uint256 tokenAmount = FullMath.mulDiv(absAmount, priceX96, Q96);
+            total += amount >= 0 ? tokenAmount.toInt256() : -tokenAmount.toInt256();
+        }
     }
 
     /// @inheritdoc IEOracle
