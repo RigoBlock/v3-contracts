@@ -43,7 +43,6 @@ contract EOracle is IEOracle {
         int256 amount,
         address targetToken
     ) external view override returns (int256 convertedAmount) {
-        if (amount == 0 || token == targetToken) return amount;
         address[] memory tokens = new address[](1);
         int256[] memory amounts = new int256[](1);
         tokens[0] = token;
