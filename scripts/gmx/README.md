@@ -41,12 +41,14 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
    node scripts/gmx/compute_multipliers.js
    ```
 
-   Reads `gmx_fallback_feeds.json`, queries each aggregator's decimals, and
-   writes `scripts/gmx/gmx_fallback_feeds_with_multipliers.json`.
-
-   **Merging:** existing entries whose on-chain query fails are preserved with
-   their previous multiplier, so a flaky RPC call does not wipe manually-corrected
-   values.
+   Reads `gmx_fallback_feeds.json` and, for each entry, queries on Arbitrum:
+   the Chainlink aggregator's `decimals()`, and GMX's on-chain
+   `DATA_STREAM_MULTIPLIER` (`10^(42 - tokenDecimals)`) from the GMX
+   DataStore. Token decimals are **always derived from GMX's on-chain
+   config** — the script throws and refuses to write output if a token has
+   no multiplier or a non-power-of-10 multiplier, so the exponent
+   `60 - feedDecimals - tokenDecimals` can never silently fall back to a
+   wrong default. Writes `scripts/gmx/gmx_fallback_feeds_with_multipliers.json`.
 
 4. **Generate Solidity**
 
@@ -91,9 +93,12 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
   while unmapped tokens return the zero feed address. The expected exponent is
   computed in the test as `60 - feedDecimals - tokenDecimals` to catch rogue
   multipliers produced by the script.
-- `test/extensions/GmxFallbackFork.t.sol` is also regenerated and verifies the
-  on-chain Chainlink aggregator decimals and the packed exponent against the
-  JSON metadata on an Arbitrum fork.
+- `test/extensions/GmxFallbackFork.t.sol` is also regenerated and verifies on
+  an Arbitrum fork that each packed exponent matches GMX's own on-chain
+  config: the Chainlink aggregator `decimals()` and the DataStore
+  `DATA_STREAM_MULTIPLIER` (from which token decimals are derived as
+  `42 - log10(multiplier)`). This is the guard against a wrong multiplier
+  ever reaching the contract again.
 - The function lives in `contracts/protocol/types/GmxFallback.sol`
   and is imported by both `GmxLib` (NAV calculations) and `GmxAdapterLib`
   (adapter order validation), so the fallback data is shared without forcing

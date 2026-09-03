@@ -238,8 +238,8 @@
     "feedName": "ZEC / USD",
     "decimals": 18,
     "feedDecimals": 18,
-    "tokenDecimals": 18,
-    "multiplier": "1000000000000000000000000"
+    "tokenDecimals": 8,
+    "multiplier": "10000000000000000000000000000000000"
   },
   {
     "indexToken": "0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5",
@@ -249,8 +249,8 @@
     "feedName": "AR / USD",
     "decimals": 8,
     "feedDecimals": 8,
-    "tokenDecimals": 18,
-    "multiplier": "10000000000000000000000000000000000"
+    "tokenDecimals": 12,
+    "multiplier": "10000000000000000000000000000000000000000"
   },
   {
     "indexToken": "0x9759C297fb6C91e252c7292cECa30a509558E5De",

@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
+import {IGmxDataStore} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {_GMX_DATA_STORE} from "../../contracts/protocol/types/GmxConstants.sol";
 import {GmxFallback, Feed, getFallbackPriceFeed} from "../../contracts/protocol/types/GmxFallback.sol";
 
 /// @title GmxFallbackFork
@@ -98,8 +100,8 @@ contract GmxFallbackFork is Test {
                 0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5,
                 0x26DC0763135Db2EC0dC4563148AC57eB48Ed0BAd,
                 8,
-                18,
-                34
+                12,
+                40
             )
         );
         entries.push(
@@ -125,8 +127,8 @@ contract GmxFallbackFork is Test {
                 0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5,
                 0x21082CA28570f0ccfb089465bFaEfDc77b00D367,
                 18,
-                18,
-                24
+                8,
+                34
             )
         );
         entries.push(
@@ -266,24 +268,47 @@ contract GmxFallbackFork is Test {
         );
     }
 
-    /// @notice The hardcoded Chainlink feed decimals match the on-chain aggregator.
-    /// @dev GMX synthetic index tokens are not always deployed ERC20 contracts, so
-    ///  tokenDecimals from the JSON is trusted and only the feed decimals are verified on-chain.
-    function test_FallbackMetadata_MatchesOnChainDecimals() public {
+    /// @dev GMX stores `tokenDecimals` for synthetic index tokens only as the on-chain
+    ///  Data Stream multiplier `10^(42 - tokenDecimals)`. Deriving it from there — rather
+    ///  than trusting any local config — is what catches a wrong table row.
+    function _gmxTokenDecimals(address token) internal view returns (uint256) {
+        bytes32 prefix = keccak256(abi.encode("DATA_STREAM_MULTIPLIER"));
+        bytes32 key = keccak256(abi.encode(prefix, token));
+        uint256 multiplier = IGmxDataStore(_GMX_DATA_STORE).getUint(key);
+        require(multiplier != 0, "missing GMX DATA_STREAM_MULTIPLIER");
+
+        uint256 exponent;
+        uint256 m = multiplier;
+        while (m >= 10) {
+            m /= 10;
+            unchecked {
+                ++exponent;
+            }
+        }
+        require(m == 1, "GMX DATA_STREAM_MULTIPLIER is not a power of 10");
+        return 42 - exponent;
+    }
+
+    /// @notice The hardcoded Chainlink feed decimals match the on-chain aggregator and the
+    ///  packed exponent matches GMX's own on-chain token decimals, so the multiplier can
+    ///  never again silently assume the wrong token scale (e.g. a default of 18).
+    function test_FallbackMetadata_MatchesOnChainGmxConfig() public {
         vm.createSelectFork("arbitrum");
 
         for (uint256 i; i < entries.length; ++i) {
             FallbackEntry memory e = entries[i];
 
             uint8 onChainFeedDecimals = IPriceFeed(e.feed).decimals();
-            uint8 expectedExponent = 60 - e.feedDecimals - e.tokenDecimals;
-
             assertEq(onChainFeedDecimals, e.feedDecimals, "on-chain feed decimals mismatch");
+
+            uint256 gmxTokenDecimals = _gmxTokenDecimals(e.token);
+            assertEq(gmxTokenDecimals, e.tokenDecimals, "GMX token decimals mismatch");
 
             Feed packed = getFallbackPriceFeed(e.token);
             uint256 data = Feed.unwrap(packed);
             uint8 exponent = uint8(data & type(uint8).max);
-            assertEq(exponent, expectedExponent, "packed exponent mismatch");
+            uint8 expectedExponent = 60 - e.feedDecimals - uint8(gmxTokenDecimals);
+            assertEq(exponent, expectedExponent, "packed exponent inconsistent with on-chain GMX config");
         }
     }
 }

@@ -97,8 +97,8 @@ contract GmxFallbackTest is Test {
                 0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5,
                 0x26DC0763135Db2EC0dC4563148AC57eB48Ed0BAd,
                 8,
-                18,
-                34
+                12,
+                40
             )
         );
         entries.push(
@@ -124,8 +124,8 @@ contract GmxFallbackTest is Test {
                 0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5,
                 0x21082CA28570f0ccfb089465bFaEfDc77b00D367,
                 18,
-                18,
-                24
+                8,
+                34
             )
         );
         entries.push(

@@ -4,37 +4,58 @@ const { ethers } = require("ethers");
 const INPUT = "scripts/gmx/gmx_fallback_feeds.json";
 const OUTPUT = "scripts/gmx/gmx_fallback_feeds_with_multipliers.json";
 
-const fallback = JSON.parse(fs.readFileSync(INPUT, "utf8"));
-const configText = fs.readFileSync(
-  "lib/gmx-synthetics/config/tokens.ts",
-  "utf8",
+// GMX DataStore on Arbitrum. The authoritative `tokenDecimals` for synthetic
+// index tokens is derived from the on-chain DATA_STREAM_MULTIPLIER
+// (`10^(42 - tokenDecimals)`), NOT from a local config file: tokens missing
+// from the vendored config previously fell back to a wrong hardcoded default.
+const GMX_DATA_STORE = "0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8";
+
+const DATA_STREAM_MULTIPLIER_PREFIX = ethers.utils.keccak256(
+  ethers.utils.defaultAbiCoder.encode(["string"], ["DATA_STREAM_MULTIPLIER"]),
 );
 
-const arbitrumConfig = configText.split("arbitrum:")[1].split("avax:")[0];
-const tokenRegex = /([A-Z][A-Z0-9._]*):\s*\{([\s\S]*?)\n\s*\},?/g;
+function dataStreamMultiplierKey(token) {
+  return ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["bytes32", "address"],
+      [DATA_STREAM_MULTIPLIER_PREFIX, token],
+    ),
+  );
+}
 
-const tokenDecimals = {};
-let match;
-while ((match = tokenRegex.exec(arbitrumConfig)) !== null) {
-  const symbol = match[1];
-  const body = match[2];
-  const decMatch = body.match(/decimals:\s*(\d+)/);
-  if (decMatch) {
-    tokenDecimals[symbol] = parseInt(decMatch[1]);
+/// @dev Inverts `multiplier = 10^(42 - tokenDecimals)`, reverting on any
+///  non-conforming value so a bad entry never silently produces a multiplier.
+function tokenDecimalsFromMultiplier(symbol, multiplier) {
+  if (multiplier.isZero()) {
+    throw new Error(`${symbol}: no DATA_STREAM_MULTIPLIER on GMX DataStore`);
   }
+  const str = multiplier.toString();
+  if (!/^10*$/.test(str)) {
+    throw new Error(
+      `${symbol}: DATA_STREAM_MULTIPLIER ${str} is not a power of 10`,
+    );
+  }
+  const exponent = str.length - 1;
+  const tokenDecimals = 42 - exponent;
+  if (tokenDecimals < 0 || tokenDecimals > 18) {
+    throw new Error(
+      `${symbol}: DATA_STREAM_MULTIPLIER implies implausible tokenDecimals ${tokenDecimals}`,
+    );
+  }
+  return tokenDecimals;
 }
 
 const provider = new ethers.providers.JsonRpcProvider(
   "https://arb1.arbitrum.io/rpc",
 );
-const feedAbi = [
-  "function decimals() view returns (uint8)",
-  "function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)",
-];
+
+const dataStoreAbi = ["function getUint(bytes32 key) view returns (uint256)"];
+const feedAbi = ["function decimals() view returns (uint8)"];
 
 async function main() {
-  // Start from the existing file so manual overrides or previously-computed
-  // entries are preserved even if the current RPC call fails.
+  // Start from the existing file so previously-computed entries are preserved
+  // if a single entry fails; the loop below re-derives every multiplier from
+  // on-chain state and throws on mismatch rather than trusting stale data.
   let existing = [];
   if (fs.existsSync(OUTPUT)) {
     existing = JSON.parse(fs.readFileSync(OUTPUT, "utf8"));
@@ -45,41 +66,57 @@ async function main() {
     existingByToken[e.indexToken.toLowerCase()] = e;
   }
 
+  const fallback = JSON.parse(fs.readFileSync(INPUT, "utf8"));
+  const dataStore = new ethers.Contract(GMX_DATA_STORE, dataStoreAbi, provider);
+
   const results = [];
+  const errors = [];
   for (const entry of fallback) {
-    const key = entry.indexToken.toLowerCase();
+    const token = ethers.utils.getAddress(entry.indexToken);
     try {
       const feed = new ethers.Contract(entry.feedAddress, feedAbi, provider);
-      const feedDecimals = await feed.decimals();
-      const tokenDec = tokenDecimals[entry.symbol] || 18;
-      const multiplier = ethers.BigNumber.from(10).pow(
+      const [feedDecimals, multiplier] = await Promise.all([
+        feed.decimals(),
+        dataStore.getUint(dataStreamMultiplierKey(token)),
+      ]);
+      const tokenDec = tokenDecimalsFromMultiplier(entry.symbol, multiplier);
+      const computed = ethers.BigNumber.from(10).pow(
         60 - feedDecimals - tokenDec,
       );
+
+      const previous = existingByToken[token.toLowerCase()];
+      if (previous && previous.multiplier !== computed.toString()) {
+        console.warn(
+          `${entry.symbol}: multiplier changed ${previous.multiplier} -> ${computed.toString()} ` +
+            `(feedDecimals=${feedDecimals}, tokenDecimals=${tokenDec})`,
+        );
+      }
 
       results.push({
         ...entry,
         feedDecimals,
         tokenDecimals: tokenDec,
-        multiplier: multiplier.toString(),
+        multiplier: computed.toString(),
       });
       console.log(
-        `${entry.symbol} ${entry.indexToken} feed=${feedDecimals} token=${tokenDec} mult=${multiplier.toString()}`,
+        `${entry.symbol} ${token} feed=${feedDecimals} token=${tokenDec} mult=${computed.toString()}`,
       );
     } catch (e) {
-      const previous = existingByToken[key];
-      if (previous) {
-        console.warn(
-          `RPC failed for ${entry.symbol}; preserving existing multiplier (${previous.multiplier})`,
-        );
-        results.push(previous);
-      } else {
-        console.error(`Error ${entry.symbol}:`, e.message);
-      }
+      errors.push(`${entry.symbol}: ${e.message}`);
     }
+  }
+
+  if (errors.length > 0) {
+    console.error(`Failed to derive multipliers for ${errors.length} entries:`);
+    for (const err of errors) console.error("  " + err);
+    throw new Error("Refusing to write output with missing entries");
   }
 
   fs.writeFileSync(OUTPUT, JSON.stringify(results, null, 2));
   console.log(`Wrote ${results.length} entries to ${OUTPUT}`);
 }
 
-main().catch(console.error);
+main().catch((e) => {
+  console.error(e.message);
+  process.exit(1);
+});
