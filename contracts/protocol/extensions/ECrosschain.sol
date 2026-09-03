@@ -117,10 +117,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // This increases effective supply, keeping NAV unchanged
         address baseToken = StorageLib.pool().baseToken;
 
-        // Convert amount to base token value for share calculation
-        uint256 amountValueInBase = IEOracle(address(this))
-            .convertTokenAmount(token, amount.toInt256(), baseToken)
-            .toUint256();
+        uint256 amountValueInBase = token == baseToken
+            ? amount
+            : uint256(IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken));
 
         uint8 poolDecimals = StorageLib.pool().decimals;
         uint256 storedNav = TransientStorage.getStoredNav();
@@ -154,9 +153,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         if (tokenAmount > 0) {
-            expectedAssets += IEOracle(address(this))
-                .convertTokenAmount(token, tokenAmount.toInt256(), baseToken)
-                .toUint256();
+            expectedAssets += token == baseToken
+                ? tokenAmount
+                : uint256(IEOracle(address(this)).convertTokenAmount(token, tokenAmount.toInt256(), baseToken));
         }
 
         // slither-disable-next-line incorrect-equality

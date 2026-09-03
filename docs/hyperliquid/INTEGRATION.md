@@ -58,6 +58,8 @@ HyperEVM does not have a deployed Rigoblock BackGeoOracle / Uniswap V4 hook, so 
 
 This behavior is intentional and defines the Hyperliquid integration as **USDC-only**. It is not a bug, and it must not be "fixed" to return `true` for additional tokens.
 
+A related invariant holds in `EOracle.convertTokenAmount` / `convertBatchTokenAmounts`: **identity conversions (amount == 0 or token == targetToken) never consult the oracle**, and the target TWAP is computed lazily, only when a batch element actually requires conversion. This is what allows USDC-denominated flows (e.g. cross-chain `donate` finalization, where USDC is converted to the USDC base token) to work on HyperEVM despite the absent oracle. Non-identity conversions still revert, as they should: there is genuinely no feed.
+
 ### Consequences of the USDC-only feed
 
 Any operation that triggers a NAV update — including `mint`, `burn`, cross-chain transfers (`donate`/ECrosschain), and owner NAV reads — will revert if the pool needs a price feed for a non-USDC token. Specifically:
