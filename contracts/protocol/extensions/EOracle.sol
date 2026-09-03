@@ -75,9 +75,7 @@ contract EOracle is IEOracle {
                 nativeToTargetTwap = targetToken == _ZERO_ADDRESS ? int24(0) : getTwap(targetToken);
             }
 
-            if (token == _wrappedNative) {
-                token = _ZERO_ADDRESS;
-            }
+            if (token == _wrappedNative) token = _ZERO_ADDRESS;
 
             uint256 absAmount = uint256(amount >= 0 ? amount : -amount);
             int24 conversionTick;
