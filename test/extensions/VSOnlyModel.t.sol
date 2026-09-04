@@ -19,7 +19,7 @@ import {OpType, DestinationMessageParams} from "../../contracts/protocol/types/C
 ///         - Sync: NAV-impacting on both chains (no VS adjustments)
 ///         - Effective supply = totalSupply + virtualSupply (can be negative)
 ///         - Effective supply cap: must be >= totalSupply / MINIMUM_SUPPLY_RATIO (currently 12.5%) when VS < 0
-contract VSOnlyModelTest is Test, RealDeploymentFixture {
+contract VSOnlyModelForkTest is Test, RealDeploymentFixture {
 
     // Storage slot for virtual supply (from MixinConstants)
     bytes32 internal constant _VIRTUAL_SUPPLY_SLOT = 

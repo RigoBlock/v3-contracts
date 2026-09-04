@@ -41,12 +41,14 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
    node scripts/gmx/compute_multipliers.js
    ```
 
-   Reads `gmx_fallback_feeds.json`, queries each aggregator's decimals, and
-   writes `scripts/gmx/gmx_fallback_feeds_with_multipliers.json`.
-
-   **Merging:** existing entries whose on-chain query fails are preserved with
-   their previous multiplier, so a flaky RPC call does not wipe manually-corrected
-   values.
+   Reads `gmx_fallback_feeds.json` and, for each entry, queries on Arbitrum:
+   the Chainlink aggregator's `decimals()`, and GMX's on-chain
+   `DATA_STREAM_MULTIPLIER` (`10^(42 - tokenDecimals)`) from the GMX
+   DataStore. Token decimals are **always derived from GMX's on-chain
+   config** — the script throws and refuses to write output if a token has
+   no multiplier or a non-power-of-10 multiplier, so the exponent
+   `60 - feedDecimals - tokenDecimals` can never silently fall back to a
+   wrong default. Writes `scripts/gmx/gmx_fallback_feeds_with_multipliers.json`.
 
 4. **Generate Solidity**
 
@@ -54,11 +56,22 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
    node scripts/gmx/generate_gmx_fallback_solidity.js
    ```
 
-   Patches `contracts/protocol/types/GmxFallback.sol` in-place and
-   regenerates `test/libraries/GmxFallback.t.sol`, replacing only the body
-   between `// GMX_FALLBACK_LOOKUP_START` and `// GMX_FALLBACK_LOOKUP_END`
-   with a packed, batched lookup. Each entry is encoded as
+   Patches `contracts/protocol/types/GmxFallback.sol` in-place (replacing
+   only the body between `// GMX_FALLBACK_LOOKUP_START` and
+   `// GMX_FALLBACK_LOOKUP_END` with a packed, batched lookup),
+   regenerates `test/libraries/GmxFallback.t.sol`, and rewrites the marked
+   section (`// GMX_FALLBACK_FORK_TESTS_START` /
+   `// GMX_FALLBACK_FORK_TESTS_END`) inside `test/extensions/AGmxV2Fork.t.sol`,
+   leaving the rest of that file untouched. Each entry is encoded as
    `uint168(feedAddress << 8 | exponent)`, where `multiplier = 10 ** exponent`.
+
+   The generator emits raw formatting — always run Prettier afterwards,
+   otherwise the committed files drift on every regeneration:
+
+   ```bash
+   npx prettier --write contracts/protocol/types/GmxFallback.sol \
+     test/libraries/GmxFallback.t.sol test/extensions/AGmxV2Fork.t.sol
+   ```
 
    Use `--stdout` to print the generated block instead of patching the file:
 
@@ -91,9 +104,27 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
   while unmapped tokens return the zero feed address. The expected exponent is
   computed in the test as `60 - feedDecimals - tokenDecimals` to catch rogue
   multipliers produced by the script.
-- `test/extensions/GmxFallbackFork.t.sol` is also regenerated and verifies the
-  on-chain Chainlink aggregator decimals and the packed exponent against the
-  JSON metadata on an Arbitrum fork.
+- The generated fork-test section inside `test/extensions/AGmxV2Fork.t.sol`
+  (single suite `AGmxV2ForkTest`) verifies on an Arbitrum fork that each
+  packed exponent matches GMX's own on-chain config: the Chainlink
+  aggregator `decimals()` and the DataStore `DATA_STREAM_MULTIPLIER` (from
+  which token decimals are derived as `42 - log10(multiplier)`). It also
+  asserts end-to-end that the price returned by `getFallbackPrice` equals
+  the live aggregator answer scaled by the derived multiplier, and that
+  every mapped feed is fresh (within the 24h `_FALLBACK_HEARTBEAT`). This
+  is the guard against a wrong multiplier ever reaching the contract again.
+- **Pinned fork block.** The fork test uses `Constants.ARB_BLOCK`
+  (`contracts/test/ForkBlocks.sol`), not the latest block: CI caches fork
+  state keyed by the `ForkBlocks.sol` hash, so chain data is populated once
+  when the block is bumped, not on every run. Bump the block deliberately and
+  re-run the Arbitrum fork suites (`AGmxV2ForkTest` in
+  `test/extensions/AGmxV2Fork.t.sol`, `GmxLitPoolFork`, `AUniswapRouterFork`,
+  `NavViewStressedParityFork`). The test fails loudly, with a "bump
+  `ForkBlocks.ARB_BLOCK`" hint, when a mapped token's feed or GMX multiplier
+  did not exist at the pinned block — i.e. the token was listed after it.
+  Regular block bumps also clear dead mappings: the freshness assertion fails
+  at the new block for any feed that has gone stale (market delisted /
+  Chainlink paused), prompting removal of the dead entry.
 - The function lives in `contracts/protocol/types/GmxFallback.sol`
   and is imported by both `GmxLib` (NAV calculations) and `GmxAdapterLib`
   (adapter order validation), so the fallback data is shared without forcing
@@ -101,3 +132,8 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
 - When the list grows, the generate script re-balances the buckets automatically.
   Adding many new tokens may eventually require moving the registry to an
   external module; the current design is intended to fit the release set.
+- **Bug bounty scope.** The mapping is generated and verified against chain state at
+  the pinned `Constants.ARB_BLOCK`. Mapping changes that result solely from bumping the
+  pinned block (stale Chainlink Data Streams, GMX deprecating synthetic tokens) are
+  informative maintenance and out of scope of the bug bounty program; wrong
+  multipliers/feeds relative to on-chain GMX config at the pinned block are in scope.

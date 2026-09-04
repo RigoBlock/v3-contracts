@@ -366,7 +366,7 @@ require(navParams.netTotalValue == expectedAssets, NavManipulationDetected(expec
 forge test --match-path "test/extensions/*" -vv
 
 # Run specific VS model tests
-forge test --match-contract VSOnlyModelTest -vvv
+forge test --match-contract VSOnlyModelForkTest -vvv
 ```
 
 ### Fork Tests

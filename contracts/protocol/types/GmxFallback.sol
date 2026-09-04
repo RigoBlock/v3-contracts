@@ -26,10 +26,10 @@ function getFallbackPriceFeed(address token) pure returns (Feed) {
     } else if (nibble < 7) {
         if (token == 0x3E57D02f9d196873e55727382974b02EdebE6bfd) packed = 0x0e278d14b4bf6429ddb0a1b353e2ae8a4e128c9318;
         if (token == 0x3f8f0dCE4dCE4d0D1d0871941e79CDA82cA50d0B) packed = 0xdc49f292ad1bb3dab6c11363d74ed06f38b9bd9c2c;
-        if (token == 0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5) packed = 0x26dc0763135db2ec0dc4563148ac57eb48ed0bad22;
+        if (token == 0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5) packed = 0x26dc0763135db2ec0dc4563148ac57eb48ed0bad28;
         if (token == 0x55e85A147a1029b985384822c0B2262dF8023452) packed = 0xcc9742d77622ee9abbf1df03530594f9097bdcb322;
         if (token == 0x67ADABbAd211eA9b3B4E2fd0FD165E593De1e983) packed = 0x4f861f14246229530a881d32c8d26d78b8c48be622;
-        if (token == 0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5) packed = 0x21082ca28570f0ccfb089465bfaefdc77b00d36718;
+        if (token == 0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5) packed = 0x21082ca28570f0ccfb089465bfaefdc77b00d36722;
     } else if (nibble < 10) {
         if (token == 0x8F6cCb99d4Fd0B4095915147b5ae3bbDb8075394) packed = 0xfeac1a3936514746e70170c0f539e70b23d36f1922;
         if (token == 0x95c317066CF214b2E6588B2685D949384504F51e) packed = 0x47c38c695639ae97a00f57d6d9f5ece1debb033c22;
