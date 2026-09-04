@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {GMX_ROUTER, _MAX_GMX_POSITIONS} from "../../contracts/protocol/types/GmxConstants.sol";
+import {GMX_ROUTER, _MAX_GMX_POSITIONS, _GMX_DATA_STORE, _FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -36,8 +36,10 @@ import {IMinimumVersion} from "../../contracts/protocol/extensions/adapters/inte
 import {ExternalApp, AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
-import {IGmxReader, IGmxDataStore, IGmxRoleStore, IGmxOrderHandler, IGmxExchangeRouter, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice, GmxPositionInfo, GmxExecutionPriceResult, GmxOrderInfo} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IGmxReader, IGmxDataStore, IGmxRoleStore, IGmxOrderHandler, IGmxExchangeRouter, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice, GmxMarketPrices, GmxPositionInfo, GmxExecutionPriceResult, GmxOrderInfo} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
 import {Price} from "gmx-synthetics/price/Price.sol";
+import {GmxFallback, Feed, getFallbackPriceFeed} from "../../contracts/protocol/types/GmxFallback.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
@@ -100,6 +102,16 @@ contract AGmxV2ForkTest is Test {
 
     /// @dev Position size: 2× leverage on 1 WETH (~$2 000), so ~$4 000 USD.
     uint256 private constant SIZE_DELTA_USD = 4_000 * GMX_USD;
+
+    /// @dev LIT/USD synthetic-index market on Arbitrum (index token has no GMX on-chain priceFeed).
+    address private constant LIT_USD_MARKET = 0x044dFE01863CE85f9ECd5639eE5485c90AC320FC;
+    address private constant LIT_INDEX_TOKEN = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db;
+    address private constant LIT_FALLBACK_FEED = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
+
+    /// @dev LIT position collateral: WETH for long, USDC for short (~2× leverage).
+    uint256 private constant LIT_COLLATERAL_AMOUNT_WETH = 1 ether;
+    uint256 private constant LIT_COLLATERAL_AMOUNT_USDC = 4_000 * 1e6;
+    uint256 private constant LIT_SIZE_DELTA_USD = 8_000 * GMX_USD;
 
     // Events from EGmxCallback, duplicated here for expectEmit assertions.
     event TrackedMarketAdded(address indexed market);
@@ -174,7 +186,7 @@ contract AGmxV2ForkTest is Test {
             }),
             wrappedNative: ARB_WETH
         });
-        bytes32 salt = keccak256(abi.encodePacked("GMX_V2_FORK_TEST_V1", block.chainid));
+        bytes32 salt = keccak256(abi.encodePacked("GMX_V2_FORK_TEST_V2", block.chainid));
         address extensionsMap = mapDeployer.deployExtensionsMap(params, salt);
 
         SmartPool impl = new SmartPool(AUTHORITY, extensionsMap, TOKEN_JAR);
@@ -201,18 +213,19 @@ contract AGmxV2ForkTest is Test {
         if (!IAuthority(AUTHORITY).isWhitelister(authorityOwner)) {
             IAuthority(AUTHORITY).setWhitelister(authorityOwner, true);
         }
-        IAuthority(AUTHORITY).addMethod(IAGmxV2.createIncreaseOrder.selector, address(agmxV2));
-        IAuthority(AUTHORITY).addMethod(IAGmxV2.createDecreaseOrder.selector, address(agmxV2));
-        IAuthority(AUTHORITY).addMethod(IAGmxV2.updateOrder.selector, address(agmxV2));
-        IAuthority(AUTHORITY).addMethod(IAGmxV2.cancelOrder.selector, address(agmxV2));
-        IAuthority(AUTHORITY).addMethod(IAGmxV2.claimFundingFees.selector, address(agmxV2));
-        IAuthority(AUTHORITY).addMethod(IAGmxV2.claimCollateral.selector, address(agmxV2));
+        _addMethodForceUpdate(IAGmxV2.createIncreaseOrder.selector);
+        _addMethodForceUpdate(IAGmxV2.createDecreaseOrder.selector);
+        _addMethodForceUpdate(IAGmxV2.updateOrder.selector);
+        _addMethodForceUpdate(IAGmxV2.cancelOrder.selector);
+        _addMethodForceUpdate(IAGmxV2.claimFundingFees.selector);
+        _addMethodForceUpdate(IAGmxV2.claimCollateral.selector);
         vm.stopPrank();
 
         // ------------------------------------------------------------------
-        // 6. Fund pool with WETH (deal directly to pool — covers collateral + fees)
+        // 6. Fund pool with WETH and USDC (covers collateral + fees for long/short)
         // ------------------------------------------------------------------
         deal(ARB_WETH, pool, 10 ether);
+        deal(ARB_USDC, pool, 20_000e6);
     }
 
     // =========================================================================
@@ -455,17 +468,21 @@ contract AGmxV2ForkTest is Test {
     function test_ClaimFundingFees_PartialDecreaseFlushesFundingFees() public {
         _openWethLongPosition();
 
-        // Capture current Chainlink prices before warping; after the warp the real feeds
-        // are too stale to read, so we replay these prices with a fresh timestamp.
-        OracleProviderEntry[] memory entries = _prepareOracleProviders(GMX_ETH_USD_MARKET);
-        GmxValidatedPrice[] memory prices = new GmxValidatedPrice[](entries.length);
-        for (uint256 i; i < entries.length; ++i) {
-            prices[i] = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(entries[i].token, "");
-        }
-
-        // Let funding fees accrue across blocks. A 30-day warp is long enough to produce
-        // a non-zero claimable WETH funding amount for this market at the fork block.
-        vm.warp(block.timestamp + 30 days);
+        // Seed claimable funding deterministically instead of relying on the market's organic
+        // funding rate at the pinned block, which can be zero or pay the opposite side (the
+        // accrual is block-dependent and made this test fail after ARB_BLOCK was bumped).
+        // GMX settles claimable funding on decrease as
+        // (latestClaimableFundingAmountPerSize - position.cached) * sizeInUsd / 1e30
+        // (PositionPricingUtils.getFundingFees), so bumping the CLAIMABLE_FUNDING_AMOUNT_PER_SIZE
+        // accumulator by `delta` flushes ~delta * sizeInUsd / 1e30, i.e. ~0.5 WETH here.
+        bytes32 prefix = keccak256(abi.encode("CLAIMABLE_FUNDING_AMOUNT_PER_SIZE"));
+        bytes32 key = keccak256(abi.encode(prefix, GMX_ETH_USD_MARKET, ARB_WETH, true));
+        uint256 current = IDataStore(GMX_DATA_STORE).getUint(key);
+        uint256 perSizeDelta = (0.5e18 * 1e30) / SIZE_DELTA_USD;
+        // DataStore stores uintValues[key] at keccak256(abi.encode(key, 0)) (slot 0 mapping).
+        bytes32 slot = keccak256(abi.encode(key, uint256(0)));
+        vm.store(GMX_DATA_STORE, slot, bytes32(current + perSizeDelta));
+        assertEq(IDataStore(GMX_DATA_STORE).getUint(key), current + perSizeDelta, "seed failed");
 
         // Partial decrease (50% size) triggers GMX to settle accrued funding fees for the
         // decreased portion into the CLAIMABLE_FUNDING_AMOUNT DataStore entries.
@@ -475,10 +492,7 @@ contract AGmxV2ForkTest is Test {
         vm.prank(poolOwner);
         bytes32 decreaseKey = IAGmxV2(pool).createDecreaseOrder(p);
 
-        // The fork block's Chainlink feeds become stale after the warp. Mock fresh prices
-        // for keeper execution and for the subsequent EApps reads.
-        _mockChainlinkPrices(entries, prices);
-        _executeOrderWithProviders(decreaseKey, entries);
+        _executeOrder(decreaseKey, GMX_ETH_USD_MARKET);
 
         // The position must still be open after the partial decrease.
         uint256 posCount = IGmxReader(GMX_READER)
@@ -511,10 +525,6 @@ contract AGmxV2ForkTest is Test {
         // EApps would drop by more than the amount actually removed from DataStore.
         int256 eappsDelta = eappsBefore - eappsAfter;
         assertApproxEqAbs(uint256(eappsDelta), claimed, 1e15, "EApps WETH decrease must equal claimed funding fees");
-
-        // Restore original oracle providers so this test does not affect shared fork state.
-        _restoreOracleProviders(entries);
-        vm.clearMockedCalls();
     }
 
     /// @notice claimCollateral removes a fully-claimed collateral key from callback storage.
@@ -1070,6 +1080,302 @@ contract AGmxV2ForkTest is Test {
             storedNavLowPrice,
             "long position: high price must give higher NAV than low price"
         );
+    }
+
+    // =========================================================================
+    // Tests — synthetic index token (LIT/USD) via hardcoded Chainlink fallback feed
+    // =========================================================================
+
+    /// @notice A long position profits when the synthetic index token price rises.
+    function test_LongSyntheticIndex_PriceUp_Profit() public {
+        _openLitLongPosition();
+
+        int256 baselinePnl = _basePnlUsd();
+        assertGt(_positionUsdValue(), 0, "baseline position value must be positive");
+
+        // Higher LIT price → long profit → base PnL becomes positive.
+        _mockFallbackLitPrice(500_000_000); // $5.00 in 8-decimal Chainlink answer
+        int256 highPricePnl = _basePnlUsd();
+
+        assertGt(highPricePnl, baselinePnl, "long base PnL must increase when index price rises");
+        assertGt(highPricePnl, 0, "long must be in profit when index price rises");
+    }
+
+    /// @notice A long position loses when the synthetic index token price falls.
+    function test_LongSyntheticIndex_PriceDown_Loss() public {
+        _openLitLongPosition();
+
+        int256 baselinePnl = _basePnlUsd();
+        assertGt(_positionUsdValue(), 0, "baseline position value must be positive");
+
+        // Lower LIT price → long loss → base PnL becomes negative.
+        _mockFallbackLitPrice(200_000_000); // $2.00 in 8-decimal Chainlink answer
+        int256 lowPricePnl = _basePnlUsd();
+
+        assertLt(lowPricePnl, baselinePnl, "long base PnL must decrease when index price falls");
+        assertLt(lowPricePnl, 0, "long must be at a loss when index price falls");
+    }
+
+    /// @notice A short position loses when the synthetic index token price rises.
+    function test_ShortSyntheticIndex_PriceUp_Loss() public {
+        _openLitShortPosition();
+
+        int256 baselinePnl = _basePnlUsd();
+        assertGt(_positionUsdValue(), 0, "baseline position value must be positive");
+
+        // Higher LIT price → short loss → base PnL becomes negative.
+        _mockFallbackLitPrice(500_000_000);
+        int256 highPricePnl = _basePnlUsd();
+
+        assertLt(highPricePnl, baselinePnl, "short base PnL must decrease when index price rises");
+        assertLt(highPricePnl, 0, "short must be at a loss when index price rises");
+    }
+
+    /// @notice A short position profits when the synthetic index token price falls.
+    function test_ShortSyntheticIndex_PriceDown_Profit() public {
+        _openLitShortPosition();
+
+        int256 baselinePnl = _basePnlUsd();
+        assertGt(_positionUsdValue(), 0, "baseline position value must be positive");
+
+        // Lower LIT price → short profit → base PnL becomes positive.
+        _mockFallbackLitPrice(200_000_000);
+        int256 lowPricePnl = _basePnlUsd();
+
+        assertGt(lowPricePnl, baselinePnl, "short base PnL must increase when index price falls");
+        assertGt(lowPricePnl, 0, "short must be in profit when index price falls");
+    }
+
+    // =========================================================================
+    // Helpers — LIT/USD synthetic index positions and keeper execution
+    // =========================================================================
+
+    function _openLitLongPosition() private returns (bytes32 orderKey) {
+        _setupLitFallback();
+        IBaseOrderUtils.CreateOrderParams memory p = _litLongParams();
+        vm.prank(poolOwner);
+        orderKey = IAGmxV2(pool).createIncreaseOrder(p);
+        _executeLitOrder(orderKey);
+    }
+
+    function _openLitShortPosition() private returns (bytes32 orderKey) {
+        _setupLitFallback();
+        IBaseOrderUtils.CreateOrderParams memory p = _litShortParams();
+        vm.prank(poolOwner);
+        orderKey = IAGmxV2(pool).createIncreaseOrder(p);
+        _executeLitOrder(orderKey);
+    }
+
+    /// @dev Etches a minimal bytecode over the LIT fallback aggregator before vm.mockCall
+    ///  intercepts latestRoundData(), so Foundry does not hit "call to non-contract address"
+    ///  on any code path that reads the feed outside the mocked selector. Then provides a
+    ///  stable baseline ($3.496 / LIT) for order creation and baseline valuation. Kept out
+    ///  of setUp on purpose: the fallback-feed fork tests below read the REAL LIT feed.
+    function _setupLitFallback() private {
+        vm.etch(LIT_FALLBACK_FEED, hex"00");
+        _mockFallbackLitPrice(349_657_975);
+    }
+
+    function _litLongParams() private pure returns (IBaseOrderUtils.CreateOrderParams memory) {
+        return
+            IBaseOrderUtils.CreateOrderParams({
+                addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                    receiver: address(0),
+                    cancellationReceiver: address(0),
+                    callbackContract: address(0),
+                    uiFeeReceiver: address(0),
+                    market: LIT_USD_MARKET,
+                    initialCollateralToken: ARB_WETH,
+                    swapPath: new address[](0)
+                }),
+                numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                    sizeDeltaUsd: LIT_SIZE_DELTA_USD,
+                    initialCollateralDeltaAmount: LIT_COLLATERAL_AMOUNT_WETH,
+                    triggerPrice: 0,
+                    acceptablePrice: type(uint256).max,
+                    executionFee: 0,
+                    callbackGasLimit: 0,
+                    minOutputAmount: 0,
+                    validFromTime: 0
+                }),
+                orderType: Order.OrderType.MarketIncrease,
+                decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+                isLong: true,
+                shouldUnwrapNativeToken: false,
+                autoCancel: false,
+                referralCode: bytes32(0),
+                dataList: new bytes32[](0)
+            });
+    }
+
+    function _litShortParams() private pure returns (IBaseOrderUtils.CreateOrderParams memory) {
+        return
+            IBaseOrderUtils.CreateOrderParams({
+                addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                    receiver: address(0),
+                    cancellationReceiver: address(0),
+                    callbackContract: address(0),
+                    uiFeeReceiver: address(0),
+                    market: LIT_USD_MARKET,
+                    initialCollateralToken: ARB_USDC,
+                    swapPath: new address[](0)
+                }),
+                numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                    sizeDeltaUsd: LIT_SIZE_DELTA_USD,
+                    initialCollateralDeltaAmount: LIT_COLLATERAL_AMOUNT_USDC,
+                    triggerPrice: 0,
+                    acceptablePrice: 0, // Short: accept any price
+                    executionFee: 0,
+                    callbackGasLimit: 0,
+                    minOutputAmount: 0,
+                    validFromTime: 0
+                }),
+                orderType: Order.OrderType.MarketIncrease,
+                decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+                isLong: false,
+                shouldUnwrapNativeToken: false,
+                autoCancel: false,
+                referralCode: bytes32(0),
+                dataList: new bytes32[](0)
+            });
+    }
+
+    /// @dev Executes a LIT/USD order like `_executeOrder`, but additionally mocks oracle
+    ///  prices for keeper execution (LIT has no GMX on-chain feed, so the redirected
+    ///  provider must return a valid 1e30-per-atom price). Afterwards re-establishes the
+    ///  fallback environment: LIT's provider is redirected back to the GMX Chainlink
+    ///  provider address and mocked to revert, and the fallback LIT price is re-mocked,
+    ///  so valuation exercises the hardcoded fallback feed.
+    function _executeLitOrder(bytes32 orderKey) private {
+        OracleProviderEntry[] memory entries = _prepareOracleProviders(LIT_USD_MARKET);
+
+        GmxValidatedPrice[] memory prices = new GmxValidatedPrice[](entries.length);
+        for (uint256 i; i < entries.length; ++i) {
+            prices[i] = _executionPrice(entries[i].token);
+        }
+        _mockChainlinkPrices(entries, prices);
+
+        _callExecuteOrder(orderKey, entries);
+        _restoreOracleProviders(entries);
+        vm.clearMockedCalls();
+
+        bytes32 litProviderKey = _oracleProviderKey(GMX_ORACLE_ADDRESS, LIT_INDEX_TOKEN);
+        vm.prank(_getController());
+        IDataStore(GMX_DATA_STORE).setAddress(litProviderKey, GMX_CHAINLINK_PRICE_FEED);
+
+        _mockFallbackLitPrice(349_657_975);
+        _mockGmxProviderRevert(LIT_INDEX_TOKEN);
+    }
+
+    /// @dev Fixed execution prices for the LIT/USD market tokens. LIT has no GMX on-chain
+    ///  feed, so the redirected provider must return a valid 1e30-per-atom price.
+    function _executionPrice(address token) private view returns (GmxValidatedPrice memory) {
+        if (token == LIT_INDEX_TOKEN) {
+            return
+                GmxValidatedPrice({
+                    token: token,
+                    min: 3_496_579_750_000, // ~$3.496 / LIT atom in 1e30 units
+                    max: 3_496_579_750_000,
+                    timestamp: block.timestamp,
+                    blockNumber: block.number
+                });
+        }
+        if (token == ARB_WETH) {
+            return
+                GmxValidatedPrice({
+                    token: token,
+                    min: 2_450_000_000_000_000, // ~$2,450 / WETH atom in 1e30 units
+                    max: 2_450_000_000_000_000,
+                    timestamp: block.timestamp,
+                    blockNumber: block.number
+                });
+        }
+        if (token == ARB_USDC) {
+            return
+                GmxValidatedPrice({
+                    token: token,
+                    min: 1_000_000_000_000_000_000_000_000_000, // ~$1.00 / USDC atom in 1e30 units
+                    max: 1_000_000_000_000_000_000_000_000_000,
+                    timestamp: block.timestamp,
+                    blockNumber: block.number
+                });
+        }
+        revert("unknown token for execution price");
+    }
+
+    function _mockFallbackLitPrice(int256 chainlinkAnswer) private {
+        vm.mockCall(
+            LIT_FALLBACK_FEED,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), chainlinkAnswer, uint256(0), block.timestamp, uint80(1))
+        );
+    }
+
+    function _mockGmxProviderRevert(address token) private {
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeCall(IGmxChainlinkPriceFeedProvider.getOraclePrice, (token, bytes(""))),
+            ""
+        );
+    }
+
+    // =========================================================================
+    // Helpers — synthetic index valuation
+    // =========================================================================
+
+    /// @dev Returns the base unrealised PnL (in GMX 1e30 USD) of the pool's first
+    ///  GMX position, using the fallback LIT feed for the synthetic index token.
+    function _basePnlUsd() private view returns (int256) {
+        Position.Props[] memory positions = IGmxReader(GMX_READER).getAccountPositions(
+            GMX_DATA_STORE,
+            pool,
+            0,
+            type(uint256).max
+        );
+        require(positions.length > 0, "no GMX position");
+
+        uint256 n = positions.length;
+        address[] memory markets = new address[](n);
+        GmxMarketPrices[] memory marketPrices = new GmxMarketPrices[](n);
+        for (uint256 i; i < n; ++i) {
+            Market.Props memory mkt = IGmxReader(GMX_READER).getMarket(GMX_DATA_STORE, positions[i].addresses.market);
+            markets[i] = positions[i].addresses.market;
+            marketPrices[i] = GmxMarketPrices({
+                indexTokenPrice: GmxLib.getGmxPrice(mkt.indexToken),
+                longTokenPrice: GmxLib.getGmxPrice(mkt.longToken),
+                shortTokenPrice: GmxLib.getGmxPrice(mkt.shortToken)
+            });
+        }
+
+        GmxPositionInfo[] memory infos = IGmxReader(GMX_READER).getAccountPositionInfoList(
+            GMX_DATA_STORE,
+            GMX_REFERRAL_STORAGE,
+            pool,
+            markets,
+            marketPrices,
+            address(0),
+            0,
+            type(uint256).max
+        );
+        require(infos.length > 0, "no position info");
+        return infos[0].basePnlUsd;
+    }
+
+    /// @dev Returns the total USD value of all GMX position balances, using the
+    ///  fallback LIT feed for the synthetic index token.
+    function _positionUsdValue() private view returns (uint256 totalUsd) {
+        AppTokenBalance[] memory balances = GmxLib.getGmxPositionBalances(pool);
+        for (uint256 i; i < balances.length; ++i) {
+            address token = balances[i].token;
+            int256 amount = balances[i].amount;
+            if (amount <= 0) continue;
+
+            Price.Props memory price = GmxLib.getGmxPrice(token);
+            // Skip unpriced tokens (should not happen for WETH/USDC/LIT).
+            if (price.min == 0) continue;
+
+            totalUsd += (uint256(amount) * price.min) / GMX_USD;
+        }
     }
 
     // =========================================================================
@@ -2469,6 +2775,382 @@ contract AGmxV2ForkTest is Test {
         );
         require(success, "callback failed");
     }
+
+    /// @dev Remove any existing mapping for `selector` then register it to `agmxV2`.
+    ///      Must be called while pranking the authority owner/whitelister. Needed because the
+    ///      live Authority may already register the selectors (adapter deployed since the
+    ///      pinned block), which would revert addMethod with SELECTOR_EXISTS_ERROR.
+    function _addMethodForceUpdate(bytes4 selector) private {
+        address existing = IAuthority(AUTHORITY).getApplicationAdapter(selector);
+        if (existing != address(0)) {
+            IAuthority(AUTHORITY).removeMethod(selector, existing);
+        }
+        IAuthority(AUTHORITY).addMethod(selector, address(agmxV2));
+    }
+
+    // GMX_FALLBACK_FORK_TESTS_START
+    /// @dev Fork tests that verify the hardcoded fallback metadata matches on-chain reality.
+    ///  This section is generated by scripts/gmx/generate_gmx_fallback_solidity.js.
+    ///  Do not edit manually; re-run the generator after updating the JSON source.
+    /// @dev Forks at the pinned `Constants.ARB_BLOCK` (see ForkBlocks.sol): CI caches fork state per
+    ///  block, so the baseline is fixed and not re-fetched on every run. Loud failures with a
+    ///  "bump ForkBlocks.ARB_BLOCK" hint mean the token was listed after the pinned block — update
+    ///  the block deliberately. The freshness assertion instead means the feed was already stale at
+    ///  the pinned block, i.e. the mapping entry is dead and should be removed.
+    struct FallbackEntry {
+        address token;
+        address feed;
+        uint8 feedDecimals;
+        uint8 tokenDecimals;
+        uint8 exponent;
+    }
+
+    FallbackEntry[] internal fallbackEntries;
+
+    constructor() {
+        fallbackEntries.push(
+            FallbackEntry(
+                0x0315441076FF6d3eA09814a2F90a1f980cF03e9e,
+                0x46306F3795342117721D8DEd50fbcF6DF2b3cc10,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x13674172E6E44D31d4bE489d5184f3457c40153A,
+                0x8c76E8cab5ef3B410a318DDb82d83Ed47D7d2701,
+                8,
+                12,
+                40
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x13983f27Ce9365055a6a553233c49fE28e70103e,
+                0xCCa91A477fBF466D676B2056bfDfDA94f343a64F,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x197aa2DE1313c7AD50184234490E12409B2a1f95,
+                0x4a85B128EBDaFC24d5CB611e161376ffDECeB289,
+                8,
+                9,
+                43
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x2aAB60E62f05d17e58dEc982870bfAdc7F4e7ADF,
+                0xAD57D7c059E2aFef2241EB6EF43559f8a409897E,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x2e73bDBee83D91623736D514b0BB41f2afd9C7Fd,
+                0x1b47b4124b9A5094C59710E6b9126e5e32a4fb8E,
+                18,
+                18,
+                24
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x3E57D02f9d196873e55727382974b02EdebE6bfd,
+                0x0E278D14B4bf6429dDB0a1B353e2Ae8A4e128C93,
+                18,
+                18,
+                24
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x3f8f0dCE4dCE4d0D1d0871941e79CDA82cA50d0B,
+                0xdc49F292ad1bb3DAb6C11363d74ED06F38b9bd9C,
+                8,
+                8,
+                44
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5,
+                0x26DC0763135Db2EC0dC4563148AC57eB48Ed0BAd,
+                8,
+                12,
+                40
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x55e85A147a1029b985384822c0B2262dF8023452,
+                0xCc9742d77622eE9abBF1Df03530594f9097bDcB3,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x67ADABbAd211eA9b3B4E2fd0FD165E593De1e983,
+                0x4f861F14246229530a881D32C8d26D78b8c48BE6,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5,
+                0x21082CA28570f0ccfb089465bFaEfDc77b00D367,
+                18,
+                8,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x8F6cCb99d4Fd0B4095915147b5ae3bbDb8075394,
+                0xFeaC1A3936514746e70170c0f539e70b23d36F19,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x95c317066CF214b2E6588B2685D949384504F51e,
+                0x47C38C695639aE97A00f57D6D9f5ece1DebB033C,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x9759C297fb6C91e252c7292cECa30a509558E5De,
+                0xA0C8611b0CfB31Bc8AdE3189ae2b982c90D9302f,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964,
+                0x17d8D87dF3E279c737568aB0C5cC3fF750aB763e,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x9c060B2fA953b5f69879a8B7B81f62BFfEF360be,
+                0x0C997958ccE7A0403AEA7E34d14bbaDA897B5bb3,
+                18,
+                18,
+                24
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0x9c74772b713a1B032aEB173E28683D937E51921c,
+                0x82BA56a2fADF9C14f17D08bc51bDA0bDB83A8934,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xB2f7cefaeEb08Aa347705ac829a7b8bE2FB560f3,
+                0x0301e5D0A8f7490444ebd1921E3d0f0fe7722786,
+                8,
+                9,
+                43
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xB46A094Bc4B0adBD801E14b9DB95e05E28962764,
+                0x5698690a7B7B84F6aa985ef7690A8A7288FBc9c8,
+                8,
+                8,
+                44
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xB79Eb5BA64A167676694bB41bc1640F95d309a2F,
+                0xE56BEA9Ff0780D668f92a9ab4Ace1D713CaA1016,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xBaf07cF91D413C0aCB2b7444B9Bf13b4e03c9D71,
+                0x3a9659C071dD3C37a8b1A2363409A8D41B2Feae3,
+                8,
+                6,
+                46
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xC5799ab6E2818fD8d0788dB8D156B0c5db1Bf97b,
+                0x4b13Dd76De990Db9A2Dab58D35C2c02E5e3AE848,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xc5dbD52Ae5a927Cf585B884011d0C7631C9974c6,
+                0x5a0a07CD0E9e4754B3FeC4Fb1ee1a5baBbaa6051,
+                18,
+                7,
+                35
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db,
+                0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xEcc5eb985Ddbb8335b175b0A2A1144E4c978F1f6,
+                0x0B2aB7AE5276F6f466f8e62953138B106dD19A63,
+                8,
+                18,
+                34
+            )
+        );
+        fallbackEntries.push(
+            FallbackEntry(
+                0xF67b2a901D674B443Fa9f6DB2A689B37c07fD4fE,
+                0x1E48733Eeee02468b674b69958b046EB6A0a7d94,
+                8,
+                18,
+                34
+            )
+        );
+    }
+
+    /// @dev GMX stores `tokenDecimals` for synthetic index tokens only as the on-chain
+    ///  Data Stream multiplier `10^(42 - tokenDecimals)`. Deriving it from there — rather
+    ///  than trusting any local config — is what catches a wrong table row.
+    function _gmxTokenDecimals(address token) internal view returns (uint256) {
+        bytes32 prefix = keccak256(abi.encode("DATA_STREAM_MULTIPLIER"));
+        bytes32 key = keccak256(abi.encode(prefix, token));
+        uint256 multiplier = IGmxDataStore(_GMX_DATA_STORE).getUint(key);
+        require(
+            multiplier != 0,
+            "missing GMX DATA_STREAM_MULTIPLIER at pinned ARB_BLOCK - token listed later? bump ForkBlocks.ARB_BLOCK"
+        );
+
+        uint256 exponent;
+        uint256 m = multiplier;
+        while (m >= 10) {
+            m /= 10;
+            unchecked {
+                ++exponent;
+            }
+        }
+        require(m == 1, "GMX DATA_STREAM_MULTIPLIER is not a power of 10");
+        return 42 - exponent;
+    }
+
+    /// @notice The hardcoded Chainlink feed decimals match the on-chain aggregator and the
+    ///  packed exponent matches GMX's own on-chain token decimals, so the multiplier can
+    ///  never again silently assume the wrong token scale (e.g. a default of 18).
+    function test_FallbackMetadata_MatchesOnChainGmxConfig() public {
+        vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
+
+        for (uint256 i; i < fallbackEntries.length; ++i) {
+            FallbackEntry memory e = fallbackEntries[i];
+
+            require(
+                e.feed.code.length != 0,
+                "feed has no code at pinned ARB_BLOCK - token listed later? bump ForkBlocks.ARB_BLOCK"
+            );
+
+            uint8 onChainFeedDecimals = IPriceFeed(e.feed).decimals();
+            assertEq(onChainFeedDecimals, e.feedDecimals, "on-chain feed decimals mismatch");
+
+            uint256 gmxTokenDecimals = _gmxTokenDecimals(e.token);
+            assertEq(gmxTokenDecimals, e.tokenDecimals, "GMX token decimals mismatch");
+
+            Feed packed = getFallbackPriceFeed(e.token);
+            uint256 data = Feed.unwrap(packed);
+            uint8 exponent = uint8(data & type(uint8).max);
+            uint8 expectedExponent = 60 - e.feedDecimals - uint8(gmxTokenDecimals);
+            assertEq(exponent, expectedExponent, "packed exponent inconsistent with on-chain GMX config");
+        }
+    }
+
+    /// @notice End-to-end: the price returned by `getFallbackPrice` equals the live Chainlink
+    ///  answer scaled by `10^(60 - feedDecimals - gmxTokenDecimals) / 1e30`, where
+    ///  `gmxTokenDecimals` comes from GMX's on-chain DATA_STREAM_MULTIPLIER. This asserts the
+    ///  packed multiplier produces the correct absolute price, not just a self-consistent one.
+    function test_GetFallbackPrice_MatchesLiveFeedScaling() public {
+        vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
+
+        uint256[] memory expectedPrices = new uint256[](fallbackEntries.length);
+        uint256 maxUpdatedAt;
+
+        for (uint256 i; i < fallbackEntries.length; ++i) {
+            FallbackEntry memory e = fallbackEntries[i];
+            require(
+                e.feed.code.length != 0,
+                "feed has no code at pinned ARB_BLOCK - token listed later? bump ForkBlocks.ARB_BLOCK"
+            );
+            (, int256 answer, , uint256 updatedAt, ) = IPriceFeed(e.feed).latestRoundData();
+            require(
+                answer > 0,
+                "non-positive feed answer at pinned ARB_BLOCK - feed deployed later? bump ForkBlocks.ARB_BLOCK"
+            );
+
+            // A mapped feed must be live: in production a feed stale by more than the 24h
+            // heartbeat (_FALLBACK_HEARTBEAT) yields a zero price, i.e. a dead mapping entry.
+            // Assert freshness at fork time, before the warp below masks it.
+            assertGe(updatedAt + 24 hours, block.timestamp, "mapped feed is stale past the 24h heartbeat");
+
+            uint256 gmxTokenDecimals = _gmxTokenDecimals(e.token);
+            expectedPrices[i] =
+                (uint256(answer) * 10 ** (60 - e.feedDecimals - uint8(gmxTokenDecimals))) /
+                _FLOAT_PRECISION;
+
+            if (updatedAt > maxUpdatedAt) maxUpdatedAt = updatedAt;
+        }
+
+        // Make the 24h heartbeat check deterministic regardless of the fork block timestamp.
+        vm.warp(maxUpdatedAt + 1);
+
+        for (uint256 i; i < fallbackEntries.length; ++i) {
+            Price.Props memory price = GmxFallback.getFallbackPrice(fallbackEntries[i].token);
+            assertGt(price.min, 0, "fallback price is zero");
+            assertEq(price.min, price.max, "fallback price min != max");
+            assertEq(price.min, expectedPrices[i], "fallback price != live answer with expected scaling");
+        }
+    }
+    // GMX_FALLBACK_FORK_TESTS_END
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2489,6 +3171,7 @@ interface IDataStore {
     function getAddress(bytes32 key) external view returns (address);
     function setAddress(bytes32 key, address value) external returns (address);
     function addAddress(bytes32 setKey, address value) external;
+    function getUint(bytes32 key) external view returns (uint256);
 }
 
 // Helper: IERC20 with name()

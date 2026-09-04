@@ -20,8 +20,11 @@ library ForkBlocks {
     uint256 internal constant UNICHAIN_BLOCK = 41_291_300;
 
     /// @notice Arbitrum One block number for fork tests (GMX v2 adapter tests).
-    /// @dev Block ~430M corresponds to approximately late January 2026.
-    uint256 internal constant ARB_BLOCK = 430_000_000;
+    /// @dev Block ~501.6M corresponds to approximately early September 2026. Must have
+    ///      archive availability on the CI RPC. Update only when the cached fork state needs
+    ///      to change; the fallback fork tests in AGmxV2ForkTest fail loudly with a "bump ForkBlocks.ARB_BLOCK" hint
+    ///      when a GMX synthetic token listed after this block is added to the fallback table.
+    uint256 internal constant ARB_BLOCK = 501_600_000;
 
     /// @notice HyperEVM block number for fork tests.
     /// @dev HyperEVM mainnet block ~41M (July 2026). Update only when the cached fork state needs to change.

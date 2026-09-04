@@ -92,6 +92,14 @@ uint256 scaledPrice = (answer * multiplier) / 1e30;
 - The fallback list lives in `GmxFallback.getFallbackPriceFeed()` and is maintained by the
   scripts in `scripts/gmx/`.
 
+**Bug bounty scope note.** The fallback mapping is generated against a pinned fork block
+(`Constants.ARB_BLOCK`), and the fork tests verify it against chain state at that block.
+Changes to the mapping that result solely from bumping the pinned block — e.g. a Chainlink
+Data Stream going stale, or GMX deprecating/delisting a synthetic token — are considered
+informative maintenance, not vulnerabilities, and are out of scope of the bug bounty
+program. In-scope findings are wrong multipliers/feeds relative to on-chain GMX config at
+the pinned block, or code defects in the pricing logic itself.
+
 ### 5. Get Position Info
 
 ```solidity
