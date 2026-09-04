@@ -9,6 +9,7 @@ import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.so
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Price} from "gmx-synthetics/price/Price.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 
 contract GmxLitPoolForkHarness {
     function isIndexTokenPriced(address token) external view returns (bool) {
@@ -43,7 +44,7 @@ contract GmxLitPoolFork is Test {
     GmxLitPoolForkHarness internal harness;
 
     function setUp() public {
-        vm.createSelectFork("arbitrum");
+        vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
         harness = new GmxLitPoolForkHarness();
     }
 
