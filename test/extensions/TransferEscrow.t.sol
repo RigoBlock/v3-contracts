@@ -9,10 +9,10 @@ import {EscrowFactory, OpType} from "../../contracts/protocol/libraries/EscrowFa
 import {Escrow} from "../../contracts/protocol/deps/Escrow.sol";
 import {DestinationMessageParams} from "../../contracts/protocol/types/Crosschain.sol";
 
-/// @title EscrowWorkingTest - Working tests for Escrow refundVault functionality
+/// @title EscrowWorkingForkTest - Working tests for Escrow refundVault functionality
 /// @notice Tests escrow token claiming and donation to pool with proper mock implementations
 /// @dev Uses fork testing to access real Across-whitelisted tokens (USDC, WETH, etc.)
-contract EscrowWorkingTest is Test {
+contract EscrowWorkingForkTest is Test {
     using SafeTransferLib for address;
     
     MockPoolForEscrow mockPool;

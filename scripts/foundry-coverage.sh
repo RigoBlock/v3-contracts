@@ -70,25 +70,31 @@ mv lcov.info /tmp/foundry_library_lcov.info
 echo "   ✅ Library unit test coverage generated"
 
 # ─── Step 2: Non-fork tests ─────────────────────────────────────────
+# Fork tests are recognized by the "Fork" contract-name convention — any new
+# fork test is picked up automatically by Step 3, no edits to this script needed.
+# Only intentionally non-conforming names are listed explicitly below.
 echo "⚡ Step 2/4: Running non-fork test coverage..."
 
 rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --no-match-contract 'A0xRouterForkTest|AHyperliquidForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PolygonForkTest|PoolDonateTest|AGmxV2ForkTest|A0xRouterUnichainForkTest|AUniswapForkTest|BscPoolUpgradeDebugTest|DelegationLibFuzz|ECrosschainFuzzTest' \
+  --no-match-contract 'Fork|BscPoolUpgradeDebugTest|DelegationLibFuzz|ECrosschainFuzzTest' \
   --report lcov
 
 mv lcov.info /tmp/foundry_nofork_lcov.info
 echo "   ✅ Non-fork coverage generated"
 
 # ─── Step 3: Fork tests ─────────────────────────────────────────────
+# Convention: every fork test contract name must contain "Fork".
+# PolygonForkTest and A0xRouterUnichainForkTest are excluded from CI coverage
+# (see foundry.toml: local-only / optional networks).
 echo "⚡ Step 3/4: Running fork test coverage..."
 
 rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --match-contract 'A0xRouterForkTest|AHyperliquidForkTest|ENavViewForkTest|AIntentsRealForkTest|EscrowWorkingTest|VSOnlyModelTest|AIntentsPerformanceAttributionAnalysisTest|PoolDonateTest|AGmxV2ForkTest|AUniswapForkTest' \
-  --no-match-contract 'DelegationLibFuzz|ECrosschainFuzzTest' \
+  --match-contract 'Fork' \
+  --no-match-contract 'PolygonForkTest|A0xRouterUnichainForkTest|DelegationLibFuzz|ECrosschainFuzzTest' \
   --report lcov
 
 mv lcov.info /tmp/foundry_fork_lcov.info

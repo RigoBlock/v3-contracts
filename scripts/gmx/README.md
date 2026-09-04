@@ -57,10 +57,19 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
    ```
 
    Patches `contracts/protocol/types/GmxFallback.sol` in-place and
-   regenerates `test/libraries/GmxFallback.t.sol`, replacing only the body
+   regenerates `test/libraries/GmxFallback.t.sol` and
+   `test/extensions/GmxFallbackFork.t.sol`, replacing only the body
    between `// GMX_FALLBACK_LOOKUP_START` and `// GMX_FALLBACK_LOOKUP_END`
    with a packed, batched lookup. Each entry is encoded as
    `uint168(feedAddress << 8 | exponent)`, where `multiplier = 10 ** exponent`.
+
+   The generator emits raw formatting — always run Prettier afterwards,
+   otherwise the committed files drift on every regeneration:
+
+   ```bash
+   npx prettier --write contracts/protocol/types/GmxFallback.sol \
+     test/libraries/GmxFallback.t.sol test/extensions/GmxFallbackFork.t.sol
+   ```
 
    Use `--stdout` to print the generated block instead of patching the file:
 
