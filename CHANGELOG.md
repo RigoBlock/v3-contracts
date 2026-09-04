@@ -1,3 +1,13 @@
+## [2.6.1](https://github.com/RigoBlock/v3-contracts/compare/v2.6.0...v2.6.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* EOracle conversion ([612be46](https://github.com/RigoBlock/v3-contracts/commit/612be468ea1cfd964ebf41036e47c8e3fc9b2295))
+* gmx mappings ([1cd38e3](https://github.com/RigoBlock/v3-contracts/commit/1cd38e36fdbd1c63013efa16bf8699e40d547a89))
+
+
+
 # [2.6.0](https://github.com/RigoBlock/v3-contracts/compare/v2.5.2...v2.6.0) (2026-09-01)
 
 
@@ -54,15 +64,6 @@
 ### Features
 
 * support CHECK_SLIPPAGE action to allow exact output swaps ([9e1a600](https://github.com/RigoBlock/v3-contracts/commit/9e1a6003a85ffe452a6631bceb4b32e5f1aba5e9))
-
-
-
-## [2.4.2](https://github.com/RigoBlock/v3-contracts/compare/v2.4.1...v2.4.2) (2026-05-19)
-
-
-### Bug Fixes
-
-* prompt conventional changelog version bump ([1510d4c](https://github.com/RigoBlock/v3-contracts/commit/1510d4c41ec9bca59cf7a204440e167264eeea8b))
 
 
 
