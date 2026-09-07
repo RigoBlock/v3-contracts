@@ -58,7 +58,7 @@ function getFallbackPriceFeed(address token) pure returns (Feed) {
 /// @notice Hardcoded Chainlink fallback feeds for GMX synthetic index tokens
 ///  that have a Data Stream feed but no on-chain `priceFeed`.
 library GmxFallback {
-    uint256 private constant _FALLBACK_HEARTBEAT = 24 hours;
+    uint256 private constant _FALLBACK_HEARTBEAT = 26 hours;
 
     /// @dev Reads a hardcoded Chainlink fallback aggregator for tokens GMX prices via Data Streams. The multiplier is computed as
     ///  `10^60 / 10^feedDecimals / 10^tokenDecimals` so that `answer * multiplier / 1e30` yields a GMX 1e30 token-unit price.

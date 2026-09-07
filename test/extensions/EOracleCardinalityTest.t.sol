@@ -11,6 +11,7 @@ import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/poo
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
@@ -21,6 +22,8 @@ import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.so
 ///         to a pool's active token set and cannot be priced on the NAV path.
 ///         Also covers the sqrtPriceX96^2 overflow fix for extreme TWAP ticks.
 contract EOracleCardinalityTest is Test, UnitTestFixture {
+    using PoolIdLibrary for PoolKey;
+
     address internal token;
     address internal poolProxy;
 
@@ -201,5 +204,80 @@ contract EOracleCardinalityTest is Test, UnitTestFixture {
         } catch {
             // expected: no oracle deployed
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Regression: uint16 overflow panic in _getSecondsAgos at high cardinality on mainnet
+    // -------------------------------------------------------------------------
+
+    /// @notice Initialize a constant-tick-200 feed, raise its cardinality via setState, and plant a
+    ///         valid observation at the last index so the mock's observe() (which iterates up to
+    ///         cardinality) resolves both TWAP queries to consistent cumulatives instead of an
+    ///         uninitialized zero observation. Warps so that secondsAgo = 300 targets the first
+    ///         observation (tickCumulative 0) and secondsAgo = 0 interpolates 300 seconds at tick
+    ///         200 from the planted observation, i.e. TWAP = (60000 - 0) / 300 = 200.
+    function _initHighCardinalityOracle(uint16 cardinality) private {
+        PoolKey memory key = _poolKey(token);
+        uint32 t0 = uint32(block.timestamp);
+        deployment.mockOracle.initializeObservationsWithTick(key, 200);
+        deployment.mockOracle.setState(key, cardinality - 1, cardinality, cardinality);
+
+        // plant Observation{blockTimestamp: t0, prevTick: 200, tickCumulative: 0, initialized: true}
+        // at observations[poolId][cardinality - 1] (first storage variable of MockOracle, slot 0;
+        // the fixed-size array element sits at keccak256(poolId . 0) + index)
+        bytes32 baseSlot = keccak256(abi.encode(key.toId(), uint256(0)));
+        bytes32 obsSlot = bytes32(uint256(baseSlot) + uint256(cardinality - 1));
+        uint256 word = (uint256(1) << 248) | (uint256(uint24(200)) << 32) | uint256(t0);
+        vm.store(address(deployment.mockOracle), obsSlot, bytes32(word));
+
+        vm.warp(t0 + 300);
+    }
+
+    /// @notice Boundary that always worked: cardinality 8192 on mainnet (blockTime 8) gives
+    ///         (8192 - 1) * 8 = 65528, which still fits uint16. getTwap must return the
+    ///         constant-200 TWAP.
+    function test_Cardinality8192Mainnet_GetTwapSucceeds() public {
+        vm.chainId(1);
+        _initHighCardinalityOracle(8192);
+        assertEq(IEOracle(extensions.eOracle).getTwap(token), int24(200));
+    }
+
+    /// @notice Regression: at cardinality 8193 on mainnet, the old formula
+    ///         uint16((8193 - 1) * 8) = uint16(65536) overflowed and panicked with 0x11 inside
+    ///         getTwap, bricking NAV updates for every pool holding the token. After the fix
+    ///         getTwap returns the same TWAP as the low-cardinality case.
+    function test_Cardinality8193Mainnet_GetTwapSucceeds() public {
+        vm.chainId(1);
+        _initHighCardinalityOracle(8193);
+        assertEq(IEOracle(extensions.eOracle).getTwap(token), int24(200));
+    }
+
+    /// @notice Max uint16 cardinality 65535 on mainnet: (65535 - 1) * 8 = 524272. This case was
+    ///         never exercised before the fix and panicked with 0x11.
+    function test_CardinalityMaxMainnet_GetTwapSucceeds() public {
+        vm.chainId(1);
+        _initHighCardinalityOracle(65535);
+        assertEq(IEOracle(extensions.eOracle).getTwap(token), int24(200));
+    }
+
+    /// @notice The NAV conversion path must also succeed at cardinality 8193 on mainnet (it
+    ///         panicked with 0x11 before the fix).
+    function test_Cardinality8193Mainnet_ConvertTokenAmountSucceeds() public {
+        vm.chainId(1);
+        _initHighCardinalityOracle(8193);
+        int256 converted = IEOracle(extensions.eOracle).convertTokenAmount(address(0), 1e18, token);
+        assertGt(converted, 0);
+    }
+
+    /// @notice secondsAgos capping: both cardinality 8192 and 8193 exceed the 300-second cap on
+    ///         mainnet, so both must return the identical TWAP.
+    function test_Cardinality8192vs8193Mainnet_SameTwap() public {
+        vm.chainId(1);
+        _initHighCardinalityOracle(8192);
+        int24 twap8192 = IEOracle(extensions.eOracle).getTwap(token);
+        _initHighCardinalityOracle(8193);
+        int24 twap8193 = IEOracle(extensions.eOracle).getTwap(token);
+        assertEq(twap8192, int24(200));
+        assertEq(twap8192, twap8193);
     }
 }
