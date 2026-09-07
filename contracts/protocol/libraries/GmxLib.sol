@@ -61,24 +61,26 @@ library GmxLib {
         );
         if (positions.length == 0) return balances;
 
-        (GmxPositionInfo[] memory posInfos, Market.Props[] memory marketStructs) = _fetchPositionInfos(
-            positions,
-            account
-        );
+        (
+            GmxPositionInfo[] memory posInfos,
+            Market.Props[] memory marketStructs,
+            GmxMarketPrices[] memory marketPrices
+        ) = _fetchPositionInfos(positions, account);
 
         if (posInfos.length == 0) return _collateralOnlyBalances(positions);
 
-        return _buildPositionBalances(posInfos, marketStructs);
+        return _buildPositionBalances(posInfos, marketStructs, marketPrices);
     }
 
     function _buildPositionBalances(
         GmxPositionInfo[] memory posInfos,
-        Market.Props[] memory marketStructs
+        Market.Props[] memory marketStructs,
+        GmxMarketPrices[] memory marketPrices
     ) private pure returns (AppTokenBalance[] memory balances) {
         AppTokenBalance[] memory tmp = new AppTokenBalance[](posInfos.length * 3);
         uint256 count;
         for (uint256 i; i < posInfos.length; ++i) {
-            count = _appendGmxPosBalances(tmp, count, posInfos[i], marketStructs[i]);
+            count = _appendGmxPosBalances(tmp, count, posInfos[i], marketStructs[i], marketPrices[i]);
         }
         balances = new AppTokenBalance[](count);
         for (uint256 i; i < count; ++i) {
@@ -89,11 +91,19 @@ library GmxLib {
     function _fetchPositionInfos(
         Position.Props[] memory positions,
         address account
-    ) private view returns (GmxPositionInfo[] memory posInfos, Market.Props[] memory marketStructs) {
+    )
+        private
+        view
+        returns (
+            GmxPositionInfo[] memory posInfos,
+            Market.Props[] memory marketStructs,
+            GmxMarketPrices[] memory marketPrices
+        )
+    {
         uint256 n = positions.length;
         address[] memory markets = new address[](n);
         marketStructs = new Market.Props[](n);
-        GmxMarketPrices[] memory marketPrices = new GmxMarketPrices[](n);
+        marketPrices = new GmxMarketPrices[](n);
 
         TokenPrice[] memory tokenCache = new TokenPrice[](n * 3);
         uint256 tokenCacheCount;
@@ -243,10 +253,11 @@ library GmxLib {
         AppTokenBalance[] memory tmp,
         uint256 count,
         GmxPositionInfo memory posInfo,
-        Market.Props memory mkt
+        Market.Props memory mkt,
+        GmxMarketPrices memory mktPrices
     ) private pure returns (uint256) {
         address colToken = posInfo.position.addresses.collateralToken;
-        int256 net = _computeGmxNetCollateral(posInfo);
+        int256 net = _computeGmxNetCollateral(posInfo, mktPrices.indexTokenPrice);
 
         if (net > 0) {
             tmp[count++] = AppTokenBalance({token: colToken, amount: net});
@@ -265,10 +276,15 @@ library GmxLib {
         return count;
     }
 
-    function _computeGmxNetCollateral(GmxPositionInfo memory posInfo) private pure returns (int256 netCollateral) {
+    function _computeGmxNetCollateral(
+        GmxPositionInfo memory posInfo,
+        Price.Props memory indexPrice
+    ) private pure returns (int256 netCollateral) {
         Price.Props memory colPrice = posInfo.fees.collateralTokenPrice;
 
-        if (colPrice.min == 0 || colPrice.max == 0) {
+        // A zero index price fabricates a +/-100% PnL; a zero collateral price breaks the
+        // USD-to-collateral conversion. Value collateral-only in both cases.
+        if (colPrice.min == 0 || colPrice.max == 0 || indexPrice.min == 0 || indexPrice.max == 0) {
             return posInfo.position.numbers.collateralAmount.toInt256();
         }
 
