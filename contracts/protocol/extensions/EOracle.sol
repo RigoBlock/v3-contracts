@@ -148,10 +148,10 @@ contract EOracle is IEOracle {
 
     function _getSecondsAgos(uint16 cardinality) private view returns (uint32[] memory secondsAgos) {
         // blocktime cannot be lower than 8 seconds on Ethereum, 1 seconds on any other chain
-        uint16 blockTime = block.chainid == 1 ? 8 : 1;
-        uint32 maxSecondsAgos = uint32(uint16(cardinality - 1) * blockTime);
+        uint256 blockTime = block.chainid == 1 ? 8 : 1;
+        uint256 maxSecondsAgos = uint256(cardinality - 1) * blockTime;
         secondsAgos = new uint32[](2);
-        secondsAgos[0] = maxSecondsAgos > 300 ? 300 : maxSecondsAgos;
+        secondsAgos[0] = maxSecondsAgos > 300 ? 300 : uint32(maxSecondsAgos);
         secondsAgos[1] = 0;
     }
 }

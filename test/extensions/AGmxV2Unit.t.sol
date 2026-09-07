@@ -5,6 +5,7 @@ import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER, _GMX_READER, _GMX_DATA_ST
 
 import {Test} from "forge-std/Test.sol";
 import {IGmxDataStore, IGmxReader, IGmxExchangeRouter, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
@@ -252,6 +253,69 @@ contract AGmxV2UnitTest is Test {
         IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
 
         // Succeeds without reverting.
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    /// @notice LIT/USD is priced via the hardcoded fallback feed. When that feed is past
+    ///  the 26h staleness bound the index token is unpriced and the increase must revert.
+    function test_CreateIncreaseOrder_StaleFallbackIndexToken_Reverts() public {
+        address indexToken = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db; // LIT / USD
+        address litFeed = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
+        vm.warp(1_700_000_000);
+        vm.deal(address(proxy), 1 ether);
+
+        _mockCreateOrderInfrastructure();
+
+        vm.mockCall(
+            _GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
+        );
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            litFeed,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0.5e8), uint256(0), block.timestamp - 27 hours, uint80(1))
+        );
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
+
+        vm.expectRevert(abi.encodeWithSelector(IAGmxV2.UnpricedIndexToken.selector, indexToken));
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    /// @notice SPY regression at the exposure gate: fallback feed updated just past its
+    ///  24h heartbeat (+25s jitter) but within the 26h bound must NOT block the increase.
+    function test_CreateIncreaseOrder_HeartbeatJitterFallbackIndexToken_Succeeds() public {
+        address indexToken = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db; // LIT / USD
+        address litFeed = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
+        vm.warp(1_700_000_000);
+        vm.deal(address(proxy), 1 ether);
+
+        _mockCreateOrderInfrastructure();
+
+        vm.mockCall(
+            _GMX_READER,
+            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
+        );
+        vm.mockCallRevert(
+            GMX_CHAINLINK_PRICE_FEED,
+            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encode("no price feed")
+        );
+        vm.mockCall(
+            litFeed,
+            abi.encodeWithSelector(IPriceFeed.latestRoundData.selector),
+            abi.encode(uint80(1), int256(0.5e8), uint256(0), block.timestamp - 24 hours - 25 seconds, uint80(1))
+        );
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
+
         proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
     }
 

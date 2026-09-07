@@ -111,7 +111,9 @@ synthetic index tokens that have a Data Stream feed but no on-chain `priceFeed`.
   which token decimals are derived as `42 - log10(multiplier)`). It also
   asserts end-to-end that the price returned by `getFallbackPrice` equals
   the live aggregator answer scaled by the derived multiplier, and that
-  every mapped feed is fresh (within the 24h `_FALLBACK_HEARTBEAT`). This
+  every mapped feed is fresh (within the 26h `_FALLBACK_HEARTBEAT` staleness
+  bound, which exceeds the largest guarded feed heartbeat of 24h to absorb
+  publication jitter on ordinary heartbeat rounds). This
   is the guard against a wrong multiplier ever reaching the contract again.
 - **Pinned fork block.** The fork test uses `Constants.ARB_BLOCK`
   (`contracts/test/ForkBlocks.sol`), not the latest block: CI caches fork

@@ -3127,10 +3127,10 @@ contract AGmxV2ForkTest is Test {
                 "non-positive feed answer at pinned ARB_BLOCK - feed deployed later? bump ForkBlocks.ARB_BLOCK"
             );
 
-            // A mapped feed must be live: in production a feed stale by more than the 24h
-            // heartbeat (_FALLBACK_HEARTBEAT) yields a zero price, i.e. a dead mapping entry.
+            // A mapped feed must be live: in production a feed stale by more than the 26h
+            // staleness bound (_FALLBACK_HEARTBEAT) yields a zero price, i.e. a dead mapping entry.
             // Assert freshness at fork time, before the warp below masks it.
-            assertGe(updatedAt + 24 hours, block.timestamp, "mapped feed is stale past the 24h heartbeat");
+            assertGe(updatedAt + 26 hours, block.timestamp, "mapped feed is stale past the 26h staleness bound");
 
             uint256 gmxTokenDecimals = _gmxTokenDecimals(e.token);
             expectedPrices[i] =
@@ -3140,7 +3140,7 @@ contract AGmxV2ForkTest is Test {
             if (updatedAt > maxUpdatedAt) maxUpdatedAt = updatedAt;
         }
 
-        // Make the 24h heartbeat check deterministic regardless of the fork block timestamp.
+        // Make the staleness check deterministic regardless of the fork block timestamp.
         vm.warp(maxUpdatedAt + 1);
 
         for (uint256 i; i < fallbackEntries.length; ++i) {

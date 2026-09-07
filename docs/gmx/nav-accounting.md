@@ -204,6 +204,21 @@ GMX position data inherits Chainlink oracle staleness. `IGmxChainlinkPriceFeedPr
 
 `GmxLib.getGmxPrice` wraps the call in a `try/catch` — if the oracle reverts (paused, feed removed, etc.) it falls back to the hardcoded Chainlink aggregator. If the fallback is also unavailable/stale, it returns a zero `Price.Props`, which causes the position to be valued at zero collateral only (fallback via `_collateralOnlyBalances`).
 
+### Why the fallback heartbeat is 26 hours
+
+`_FALLBACK_HEARTBEAT` must **strictly exceed** the largest heartbeat among the guarded feeds. 26 of the 27 fallback rows are crypto feeds that publish every few minutes, so the bound never binds for them. The 27th row is SPY/USD, whose only guaranteed publication is its own 24-hour heartbeat. Measured on Arbitrum, ordinary heartbeat-only SPY rounds have landed +6s, +13s and +25s past the 24h mark — with a 24h bound the staleness guard fires on the publication jitter of a perfectly healthy round, mispricing every GMX position in the pool for the duration. 26h absorbs the jitter with ~240x margin and also tolerates multi-hour Chainlink infrastructure delays. Residual semantics between 24h and 26h of a genuinely dead feed: the last answer is still returned and PnL is computed off the last price. Past the bound the price reads zero, which is handled as below.
+
+### Zero-price semantics
+
+A zero index-token price must never reach GMX's PnL math: GMX's `getPositionPnlUsd` does not guard against it and would fabricate a −100% (long) or +100% (short) PnL. `_computeGmxNetCollateral` therefore checks both the collateral price and the index-token price (`GmxLib.sol`), and if either reads zero it values the position **collateral-only** — deposited collateral without unrealised PnL, price impact, or fees. Note this is deliberate: collateral could legitimately price near zero in a total collapse, and collateral-only is the conservative treatment in both cases.
+
+### Checks deliberately not performed
+
+The following are intentionally omitted; please do not report them:
+
+- **`updatedAt` in the future** (`updatedAt > block.timestamp`): would require a Chainlink aggregator stamping rounds with a future timestamp. That is a catastrophic feed failure, i.e. third-party oracle misbehaviour, which is out of scope of the bug bounty program. No gas is spent guarding it.
+- **Per-feed heartbeat bounds**: the single 26h constant covers all rows; a per-feed bound packed into the `uint168` would add lookup cost for no security gain (see margin argument above).
+
 > **NAV impact of fallback:** `_collateralOnlyBalances` reports the raw deposited collateral, ignoring unrealised PnL, price impact, and fees. During an oracle or Reader outage this can **overstate** NAV for positions with negative PnL/fees. The alternative — reverting `EApps.getAppTokenBalances` — would halt deposits, withdrawals, and NAV updates for the entire outage, which is considered worse than a temporary, bounded overstatement. This trade-off is recorded as an acknowledged Info finding in `docs/gmx/security.md`.
 
 ## Negative Net Position Value
