@@ -73,11 +73,11 @@ User → Pool Proxy (delegatecall)→ Implementation
   2. Any extension is redeployed to a **new address** (because ExtensionsMap immutably stores extension addresses and CREATE2 cannot overwrite an existing contract).
 - **When NOT to bump**: If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
 - **Important**: The deploy script checks `if (map.code.length == 0)` and skips deployment if an ExtensionsMap already exists at the computed CREATE2 address. If the salt is not bumped when an extension address changed, the script will silently reuse the old ExtensionsMap that points to stale extension addresses.
-- **Automation limitation**: The current scripts require manual salt bumps. Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
+- **Automation limitation**: The current scripts require manual salt bumps. The salt lives in `src/utils/constants.ts` (`extensionsMapSalt`, e.g. `"extensionsMapSalt15"`): bump the numeric suffix in the same PR that changes an extension. Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
 
 ### Version Bump
 
-Version bumps are required for ANY change compiled into the implementation (Mixin contracts, libraries, or constructor parameters).
+Version bumps are required for ANY change that requires redeploying the implementation. That includes: changes compiled into the implementation itself (Mixin contracts, libraries, or constructor parameters) **and extension changes**: an extension redeploy (e.g. `ECrosschain`) requires a new ExtensionsMap (immutable constructor parameter of the implementation), so a new implementation is compiled with a new `VERSION` even though the implementation source is unchanged. The salt bump (`extensionsMapSalt`) and the `VERSION` bump are independent and both are required for an extension change. Note: commit 4b1d66c4 skipped the `VERSION` bump for an `ECrosschain` change — that was incorrect, do not treat it as precedent.
 
 1. **Read the base branch version first.** Open `contracts/protocol/core/immutable/MixinConstants.sol` on the PR's base branch and note the current `VERSION` value. This is the starting point.
 2. **Choose the next version exactly once per PR**, based on the scope of the change:
@@ -449,7 +449,7 @@ When modifying code:
 
 - NatSpec all public/external functions
 - Use `@inheritdoc` for interface implementations
-- Document known limitations clearly (see docs/across/KNOWN_ISSUES_AND_EDGE_CASES.md)
+- Document known limitations clearly (see docs/across/IMPLEMENTATION_GUIDE.md)
 - **Keep inline code comments strictly minimal**: only what is needed to understand core functionality. Readers should infer "what" from code; comments should only explain non-obvious "why".
 - **Design rationale, audit responses, and known limitations belong in `/docs/`**, not in source code. A one-line comment may reference the relevant doc section if needed.
 - **Do NOT add verbose NatSpec justifying design decisions or mentioning future features** in contract source. Example: the reason `receive()` is `payable` (while `fallback()` is non-payable) is documented in `docs/staking/CANTINA_FINDINGS_STATUS.md`, not in the contract.
@@ -558,6 +558,7 @@ When making changes:
 - [ ] Preserve storage layout (never reorder/remove storage)
 - [ ] Use existing patterns (extensions, adapters, storage access)
 - [ ] Add storage slot assertions if adding new storage (dot notation in names)
+- [ ] **Extension changed → bump `extensionsMapSalt`** in `src/utils/constants.ts` in the same PR (new extension address ⇒ new ExtensionsMap ⇒ new implementation) **and bump `VERSION`** in `MixinConstants.sol` (the new implementation carries a new constructor parameter, so it is a new implementation deployment even though no implementation source changed)
 - [ ] Verify security (delegatecall context, access control)
 - [ ] **Add `override` keyword** to interface implementations
 - [ ] **Fix all compilation warnings** in new code (not required for legacy code)
