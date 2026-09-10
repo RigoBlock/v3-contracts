@@ -158,11 +158,13 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
                 : IEOracle(address(this)).convertTokenAmount(token, tokenAmount.toInt256(), baseToken).toUint256();
         }
 
-        // slither-disable-next-line incorrect-equality
-        require(
-            navParams.netTotalValue == expectedAssets,
-            NavManipulationDetected(expectedAssets, navParams.netTotalValue)
-        );
+        // The snapshot converts the donated token's balance in one pass while the check converts only the delta
+        // (and unwrapping moves value between two converted tokens), so the legitimate rounding gap is 1 wei.
+        uint256 netTotalValue = navParams.netTotalValue;
+        uint256 navDelta = netTotalValue > expectedAssets
+            ? netTotalValue - expectedAssets
+            : expectedAssets - netTotalValue;
+        require(navDelta <= 1, NavManipulationDetected(expectedAssets, netTotalValue));
 
         // Any interleaved operation that affects the supply/asset ratio must not reduce unitary NAV.
         uint256 storedNav = TransientStorage.getStoredNav();

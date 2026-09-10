@@ -354,7 +354,40 @@ function setDonationLock(uint256 amount) internal {
 
 ```solidity
 // Validate no unexpected NAV changes during donation
-require(navParams.netTotalValue == expectedAssets, NavManipulationDetected(expectedAssets, navParams.netTotalValue));
+require(navDelta <= MAX_NAV_ROUNDING_WEI, NavManipulationDetected(expectedAssets, navParams.netTotalValue));
+```
+
+The check compares the fresh NAV against the lock-time snapshot plus the converted donation.
+An exact-equality check here is wrong: the two sides group the oracle's fixed-point conversion
+differently. The snapshot (taken by `updateUnitaryValue()` at lock) converts the donated token's
+pre-existing balance `D` together with the rest of the book, while the validation converts only the
+donated delta `X`. Since the oracle floors each conversion (`FullMath.mulDiv` at `EOracle`), the
+floor-sum inequality applies at an unchanged price (both calls run in the same transaction):
+
+```
+floor(D*p) + floor(X*p) <= floor((D+X)*p) <= floor(D*p) + floor(X*p) + 1
+```
+
+So the two sides can legitimately differ by exactly 1 wei whenever `frac(D*p) + frac(X*p) >= 1`.
+This fired in production (BSC, block 120895984): a vault already holding an active USDC dust
+balance reverted a legitimate Across fill with `NavManipulationDetected`, and the solver's
+simulation kept reverting on every retry with the same (D, X, price). The bound is symmetric
+(`MAX_NAV_ROUNDING_WEI = 1`): unwrapping WETH moves value between two converted tokens (WETH out,
+native in) and can shift the combined gap by one further wei in either direction.
+
+The 1-wei tolerance does not weaken the check: any real manipulation (interleaved swap, mint,
+burn, token movement, oracle tick change) moves NAV by far more than 1 wei, and the
+`unitaryValue >= storedNav` guard below still blocks any dilution of existing holders.
+
+Regression coverage: `ECrosschainUnit.t.sol` (`RoundingBound_DustyActiveToken`),
+`ECrosschainFuzz.t.sol` (`WethDustActiveToken`), `ECrosschainNavRoundingFork.t.sol` (real
+BackGeoOracle, engineered 1-wei gap, plus a manipulation soundness test), and
+`ECrosschainUnwrapWethPrebalanceFork.t.sol` (native-balance correction, including the
+`±1` wei unwrap case).
+
+```solidity
+// Any interleaved operation that affects the supply/asset ratio must not reduce unitary NAV.
+require(navParams.unitaryValue >= storedNav, NavDecreased(storedNav, navParams.unitaryValue));
 ```
 
 ## Testing

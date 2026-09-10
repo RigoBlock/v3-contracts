@@ -527,6 +527,69 @@ contract ECrosschainUnwrapWethPrebalanceForkTest is Test, RealDeploymentFixture 
     }
 
     /*//////////////////////////////////////////////////////////////////////////
+                ZERO-DELTA UNWRAP & NON-WETH shouldUnwrapNative ARE HARMLESS
+    //////////////////////////////////////////////////////////////////////////*/
+
+    /// @dev A zero-amount unwrap finalize (no WETH delivered) is permitted: it activates the
+    ///  native token, pulls any pre-existing ETH into NAV via the native-balance correction,
+    ///  and mints zero virtual supply. This pins the accounting of the
+    ///  `tokenAmount = address(this).balance` branch for the case where nothing was unwrapped.
+    function test_Unwrap_ZeroAmountDelivery_ActivatesNative_MintsNoVirtualSupply() public {
+        uint256 nativePreBalance = 0.05e18;
+        address griefer = address(0xBAD);
+        address donor = Constants.ETH_MULTICALL_HANDLER;
+
+        // Pre-existing native balance, inactive (receive() gift, no calldata).
+        deal(griefer, nativePreBalance);
+        vm.prank(griefer);
+        (bool sent, ) = ethereum.pool.call{value: nativePreBalance}("");
+        require(sent, "native send failed");
+
+        int256 virtualSupplyBefore = int256(uint256(vm.load(ethereum.pool, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+
+        vm.startPrank(donor);
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 1, _unwrapTransfer()); // lock
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 0, _unwrapTransfer()); // no delivery
+        vm.stopPrank();
+
+        int256 virtualSupplyAfter = int256(uint256(vm.load(ethereum.pool, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+
+        assertEq(virtualSupplyAfter, virtualSupplyBefore, "zero delivery mints no virtual supply");
+        assertEq(ethereum.pool.balance, nativePreBalance, "native balance untouched");
+
+        // Native is now active: a repeat zero-delta unwrap (previouslyActive = true) also passes.
+        vm.startPrank(donor);
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 1, _unwrapTransfer());
+        IECrosschain(ethereum.pool).donate(Constants.ETH_WETH, 0, _unwrapTransfer());
+        vm.stopPrank();
+
+        assertEq(ethereum.pool.balance, nativePreBalance, "native balance still untouched");
+    }
+
+    /// @dev `shouldUnwrapNative` on a non-WETH whitelisted token is a no-op: the unwrap branch
+    ///  requires token == wrappedNative, so the native balance must not be read or modified.
+    function test_Unwrap_NonWethToken_ShouldUnwrapIgnored() public {
+        uint256 donation = 1000e6;
+        address donor = Constants.ETH_MULTICALL_HANDLER;
+        uint256 usdcBefore = IERC20(Constants.ETH_USDC).balanceOf(ethereum.pool);
+
+        deal(Constants.ETH_USDC, donor, donation);
+        DestinationMessageParams memory unwrapUsdc = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: true
+        });
+
+        vm.startPrank(donor);
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, 1, unwrapUsdc);
+        IERC20(Constants.ETH_USDC).transfer(ethereum.pool, donation);
+        IECrosschain(ethereum.pool).donate(Constants.ETH_USDC, donation, unwrapUsdc);
+        vm.stopPrank();
+
+        assertEq(IERC20(Constants.ETH_USDC).balanceOf(ethereum.pool), usdcBefore + donation, "USDC stays in pool");
+        assertEq(ethereum.pool.balance, 0, "native balance untouched by non-WETH unwrap flag");
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
                             HELPERS
     //////////////////////////////////////////////////////////////////////////*/
 
