@@ -354,7 +354,8 @@ function setDonationLock(uint256 amount) internal {
 
 ```solidity
 // Validate no unexpected NAV changes during donation
-require(navDelta <= MAX_NAV_ROUNDING_WEI, NavManipulationDetected(expectedAssets, navParams.netTotalValue));
+require(netTotalValue >= expectedAssets, NavManipulationDetected(expectedAssets, netTotalValue));
+require(netTotalValue - expectedAssets <= 1, NavManipulationDetected(expectedAssets, netTotalValue));
 ```
 
 The check compares the fresh NAV against the lock-time snapshot plus the converted donation.
@@ -371,19 +372,25 @@ floor(D*p) + floor(X*p) <= floor((D+X)*p) <= floor(D*p) + floor(X*p) + 1
 So the two sides can legitimately differ by exactly 1 wei whenever `frac(D*p) + frac(X*p) >= 1`.
 This fired in production (BSC, block 120895984): a vault already holding an active USDC dust
 balance reverted a legitimate Across fill with `NavManipulationDetected`, and the solver's
-simulation kept reverting on every retry with the same (D, X, price). The bound is symmetric
-(`MAX_NAV_ROUNDING_WEI = 1`): unwrapping WETH moves value between two converted tokens (WETH out,
-native in) and can shift the combined gap by one further wei in either direction.
+simulation kept reverting on every retry with the same (D, X, price).
+
+The tolerance is one-directional: floor rounding can only push fresh NAV *above* the reconstructed
+expectation, never below it. The first require therefore rejects any negative delta, however small:
+a deficit of even 1 wei means value left the pool between lock and finalize (manipulation), it
+cannot be rounding. The second require bounds the positive rounding gap at 1 wei. This holds for
+every path, including WETH unwrap (the unwrapped native amount is converted with the same floor on
+both sides).
 
 The 1-wei tolerance does not weaken the check: any real manipulation (interleaved swap, mint,
 burn, token movement, oracle tick change) moves NAV by far more than 1 wei, and the
 `unitaryValue >= storedNav` guard below still blocks any dilution of existing holders.
 
-Regression coverage: `ECrosschainUnit.t.sol` (`RoundingBound_DustyActiveToken`),
-`ECrosschainFuzz.t.sol` (`WethDustActiveToken`), `ECrosschainNavRoundingFork.t.sol` (real
-BackGeoOracle, engineered 1-wei gap, plus a manipulation soundness test), and
-`ECrosschainUnwrapWethPrebalanceFork.t.sol` (native-balance correction, including the
-`±1` wei unwrap case).
+Regression coverage: `ECrosschainUnit.t.sol` (`RoundingBound_DustyActiveToken` for the +1 wei
+gap, `NullDelta_DustyActiveToken` for the exact-match case, `NegativeDeltaOneWei_Reverts` for
+the one-directional bound), `ECrosschainFuzz.t.sol` (`WethDustActiveToken`),
+`ECrosschainNavRoundingFork.t.sol` (real BackGeoOracle, engineered 1-wei gap, plus a manipulation
+soundness test), and `ECrosschainUnwrapWethPrebalanceFork.t.sol` (native-balance correction,
+including the `±1` wei unwrap case).
 
 ```solidity
 // Any interleaved operation that affects the supply/asset ratio must not reduce unitary NAV.

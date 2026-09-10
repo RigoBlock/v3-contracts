@@ -158,13 +158,13 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
                 : IEOracle(address(this)).convertTokenAmount(token, tokenAmount.toInt256(), baseToken).toUint256();
         }
 
-        // The snapshot converts the donated token's balance in one pass while the check converts only the delta
-        // (and unwrapping moves value between two converted tokens), so the legitimate rounding gap is 1 wei.
+        // The snapshot converts the donated token's balance in one pass while the check converts only the delta,
+        // so fresh NAV can only exceed the reconstructed expectation - by at most 1 wei of floor rounding.
         uint256 netTotalValue = navParams.netTotalValue;
-        uint256 navDelta = netTotalValue > expectedAssets
-            ? netTotalValue - expectedAssets
-            : expectedAssets - netTotalValue;
-        require(navDelta <= 1, NavManipulationDetected(expectedAssets, netTotalValue));
+        require(
+            netTotalValue >= expectedAssets && netTotalValue - expectedAssets <= 1,
+            NavManipulationDetected(expectedAssets, netTotalValue)
+        );
 
         // Any interleaved operation that affects the supply/asset ratio must not reduce unitary NAV.
         uint256 storedNav = TransientStorage.getStoredNav();

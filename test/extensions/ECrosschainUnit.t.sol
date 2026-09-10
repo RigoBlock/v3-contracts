@@ -1952,29 +1952,69 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
     //////////////////////////////////////////////////////////////////////////*/
 
     /// @notice Regression: donating to a pool that already holds an ACTIVE balance of a non-base
-    ///         token must succeed even when the separate dust/delta conversions misalign by 1 wei
+    ///         token must succeed when the separate dust/delta conversions misalign by 1 wei
     ///         against the fresh single-pass NAV conversion (Sync mode).
     /// @dev Pre-fix this reverted with NavManipulationDetected. The donated amount is found at
     ///      runtime by scanning the oracle for a misaligning amount, so the test does not depend
     ///      on any particular oracle price.
     function test_ECrosschain_SyncMode_RoundingBound_DustyActiveToken_Succeeds() public {
-        _roundingBoundDonate(OpType.Sync);
+        _roundingBoundDonate(OpType.Sync, 1);
     }
 
     /// @notice Same rounding regression for Transfer mode (virtual supply minted from `amount`).
     function test_ECrosschain_TransferMode_RoundingBound_DustyActiveToken_Succeeds() public {
-        _roundingBoundDonate(OpType.Transfer);
+        _roundingBoundDonate(OpType.Transfer, 1);
     }
 
-    /// @dev Activates USDC on an ETH-base pool leaving an active dust balance, then donates an
-    ///      amount X where floor(D*p) + floor(X*p) < floor((D+X)*p). The fresh NAV converts
-    ///      (D + X) in one pass while the validation adds convert(X) to the snapshot (which
-    ///      included convert(D)): the gap is exactly 1 wei.
+    /// @notice With no fractional carry, the conversion groupings agree exactly: the delta between
+    ///         fresh NAV and snapshot + convert(delta) must be null.
+    function test_ECrosschain_SyncMode_NullDelta_DustyActiveToken_Succeeds() public {
+        _roundingBoundDonate(OpType.Sync, 0);
+    }
+
+    function test_ECrosschain_TransferMode_NullDelta_DustyActiveToken_Succeeds() public {
+        _roundingBoundDonate(OpType.Transfer, 0);
+    }
+
+    /// @notice The rounding allowance is one-directional: floor rounding can only push fresh NAV
+    ///         above the reconstructed expectation. In the opposite direction the delta must be
+    ///         null - a deficit of even 1 wei means value left the pool and must revert.
+    function test_ECrosschain_TransferMode_NegativeDeltaOneWei_Reverts() public {
+        (
+            DestinationMessageParams memory params,
+            uint256 donation,
+            uint256 donationValue,
+            uint256 navAtLock
+        ) = _setupDustyDonation(OpType.Transfer, 0);
+
+        IECrosschain(poolProxy).donate(ethUsdc, 1, params); // lock
+        MockERC20(ethUsdc).mint(poolProxy, donation);
+        vm.deal(poolProxy, poolProxy.balance - 1); // 1 wei of base value leaves between lock and finalize
+
+        uint256 expectedAssets = navAtLock + donationValue;
+        vm.expectRevert(
+            abi.encodeWithSelector(IECrosschain.NavManipulationDetected.selector, expectedAssets, expectedAssets - 1)
+        );
+        IECrosschain(poolProxy).donate(ethUsdc, donation, params);
+        vm.chainId(31337);
+    }
+
+    /// @dev Activates USDC on an ETH-base pool leaving an active dust balance, then finds a
+    ///      donation amount X whose conversion grouping differs from the snapshot by exactly
+    ///      expectedGap wei: floor(D*p) + floor(X*p) + expectedGap == floor((D+X)*p). The fresh
+    ///      NAV converts (D + X) in one pass while the validation adds convert(X) to the snapshot
+    ///      (which included convert(D)). Also deals native balance and returns the snapshot NAV.
     /// @dev The mock oracle must be initialized BEFORE warping, otherwise the second observation
     ///      sits in the future and the TWAP collapses to tick 0 (price 1, exact conversions).
     ///      The misaligning amount is found with local math: convertTokenAmount(2^96) returns
     ///      priceX96 exactly, so floor(a * p) = FullMath.mulDiv(a, priceX96, 2^96) off-chain.
-    function _roundingBoundDonate(OpType opType) internal {
+    function _setupDustyDonation(
+        OpType opType,
+        uint256 expectedGap
+    )
+        internal
+        returns (DestinationMessageParams memory params, uint256 donation, uint256 donationValue, uint256 navAtLock)
+    {
         deployment.mockOracle.initializeObservations(
             PoolKey({
                 currency0: Currency.wrap(address(0)),
@@ -1988,7 +2028,7 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
 
         address baseToken = ISmartPoolState(poolProxy).getPool().baseToken;
         assertEq(baseToken, address(0), "poolProxy base token must be native ETH");
-        DestinationMessageParams memory params = DestinationMessageParams({opType: opType, shouldUnwrapNative: false});
+        params = DestinationMessageParams({opType: opType, shouldUnwrapNative: false});
 
         // 1. Activate USDC with a first donation, leaving an active dust balance.
         MockERC20(ethUsdc).mint(poolProxy, 2000e6);
@@ -1997,6 +2037,10 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         MockERC20(ethUsdc).mint(poolProxy, 100e6);
         // activation converts (dust + delta) once on both sides, so it is exact even pre-fix
         IECrosschain(poolProxy).donate(ethUsdc, 100e6, params);
+
+        // Transfer mode mints virtual supply; give the pool a small native balance so NAV reflects
+        // assets while keeping the minted shares large enough to be observable
+        vm.deal(poolProxy, 0.01 ether);
 
         // 2. priceX96 from a single oracle call: convertTokenAmount(2^96) == priceX96 exactly.
         uint256 q96 = uint256(1) << 96;
@@ -2017,31 +2061,53 @@ contract ECrosschainUnitTest is Test, UnitTestFixture {
         dust += adj;
         MockERC20(ethUsdc).mint(poolProxy, adj);
 
-        // 4. Find a donation where the fractional parts cross 1. The amount is kept large
-        //    (>= 1000 USDC) so Transfer mode mints a non-zero virtual supply.
-        uint256 donation;
+        // 4. Find a donation whose fractional parts produce exactly expectedGap. The amount is
+        //    kept large (>= 1000 USDC) so Transfer mode mints a non-zero virtual supply.
+        //    Crossing (frac(dust) + frac(x) >= 1) gives gap 1, staying below gives gap 0.
         uint256 need = q96 - mulmod(dust, priceX96, q96); // in (0.05, 0.25] * q96
         for (uint256 candidate = 1_000_000_000; candidate <= 1_000_100_000; candidate++) {
-            if (mulmod(candidate, priceX96, q96) >= need) {
+            bool crosses = mulmod(candidate, priceX96, q96) >= need;
+            if (crosses == (expectedGap == 1)) {
                 donation = candidate;
                 break;
             }
         }
-        assertGe(donation, 1_000_000_000, "must find a misaligning donation amount");
+        assertGe(donation, 1_000_000_000, "must find a donation amount with the requested gap");
 
-        // 5. Sanity: the real oracle confirms the operands differ by exactly the 1-wei bound.
+        // 5. Sanity: the real oracle confirms the operands differ by exactly expectedGap.
         uint256 dustValue = uint256(IEOracle(poolProxy).convertTokenAmount(ethUsdc, int256(dust), baseToken));
-        uint256 donationValue = uint256(IEOracle(poolProxy).convertTokenAmount(ethUsdc, int256(donation), baseToken));
+        donationValue = uint256(IEOracle(poolProxy).convertTokenAmount(ethUsdc, int256(donation), baseToken));
         uint256 combinedValue = uint256(
             IEOracle(poolProxy).convertTokenAmount(ethUsdc, int256(dust + donation), baseToken)
         );
-        assertEq(dustValue + donationValue + 1, combinedValue, "engineered gap must be exactly 1 wei");
+        assertEq(dustValue + donationValue + expectedGap, combinedValue, "engineered gap must equal expectedGap");
 
-        // 6. Lock with USDC active and dusty, then donate: pre-fix the exact-equality check
-        //    reverted with NavManipulationDetected; post-fix the 1-wei bound allows it.
-        int256 vsBefore = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
+        navAtLock = ISmartPoolActions(poolProxy).updateUnitaryValue().netTotalValue;
+    }
+
+    /// @dev Lock with USDC active and dusty, pin the exact delta donate validates (fresh
+    ///      single-pass NAV exceeds snapshot + convert(delta) by exactly expectedGap), then
+    ///      finalize: pre-fix the exact-equality check reverted with NavManipulationDetected;
+    ///      post-fix the 1-wei one-directional bound allows it.
+    function _roundingBoundDonate(OpType opType, uint256 expectedGap) internal {
+        (
+            DestinationMessageParams memory params,
+            uint256 donation,
+            uint256 donationValue,
+            uint256 navAtLock
+        ) = _setupDustyDonation(opType, expectedGap);
+
         IECrosschain(poolProxy).donate(ethUsdc, 1, params); // lock
         MockERC20(ethUsdc).mint(poolProxy, donation);
+        uint256 expectedAssets = navAtLock + donationValue;
+        uint256 actualNav = ISmartPoolActions(poolProxy).updateUnitaryValue().netTotalValue;
+        assertEq(
+            actualNav,
+            expectedAssets + expectedGap,
+            "fresh NAV must exceed snapshot + convert(delta) by exactly expectedGap"
+        );
+
+        int256 vsBefore = int256(uint256(vm.load(poolProxy, VirtualStorageLib.VIRTUAL_SUPPLY_SLOT)));
         vm.expectEmit(true, true, true, true);
         emit IECrosschain.TokensReceived(address(this), ethUsdc, donation, uint8(opType));
         IECrosschain(poolProxy).donate(ethUsdc, donation, params); // must succeed after the fix
