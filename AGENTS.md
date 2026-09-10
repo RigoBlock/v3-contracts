@@ -77,7 +77,7 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 ### Version Bump
 
-Version bumps are required for ANY change compiled into the implementation (Mixin contracts, libraries, or constructor parameters) — **except extension-only changes**: an extension redeploy (e.g. `ECrosschain`) does not modify implementation source, so `VERSION` stays unchanged (precedent: commit 4b1d66c4). The deployment still requires a new extension + new ExtensionsMap + new implementation (carrying the new map address), which is covered by bumping `extensionsMapSalt`, not `VERSION`.
+Version bumps are required for ANY change that requires redeploying the implementation. That includes: changes compiled into the implementation itself (Mixin contracts, libraries, or constructor parameters) **and extension changes**: an extension redeploy (e.g. `ECrosschain`) requires a new ExtensionsMap (immutable constructor parameter of the implementation), so a new implementation is compiled with a new `VERSION` even though the implementation source is unchanged. The salt bump (`extensionsMapSalt`) and the `VERSION` bump are independent and both are required for an extension change. Note: commit 4b1d66c4 skipped the `VERSION` bump for an `ECrosschain` change — that was incorrect, do not treat it as precedent.
 
 1. **Read the base branch version first.** Open `contracts/protocol/core/immutable/MixinConstants.sol` on the PR's base branch and note the current `VERSION` value. This is the starting point.
 2. **Choose the next version exactly once per PR**, based on the scope of the change:
@@ -558,7 +558,7 @@ When making changes:
 - [ ] Preserve storage layout (never reorder/remove storage)
 - [ ] Use existing patterns (extensions, adapters, storage access)
 - [ ] Add storage slot assertions if adding new storage (dot notation in names)
-- [ ] **Extension changed → bump `extensionsMapSalt`** in `src/utils/constants.ts` in the same PR (new extension address ⇒ new ExtensionsMap ⇒ new implementation)
+- [ ] **Extension changed → bump `extensionsMapSalt`** in `src/utils/constants.ts` in the same PR (new extension address ⇒ new ExtensionsMap ⇒ new implementation) **and bump `VERSION`** in `MixinConstants.sol` (the new implementation carries a new constructor parameter, so it is a new implementation deployment even though no implementation source changed)
 - [ ] Verify security (delegatecall context, access control)
 - [ ] **Add `override` keyword** to interface implementations
 - [ ] **Fix all compilation warnings** in new code (not required for legacy code)
