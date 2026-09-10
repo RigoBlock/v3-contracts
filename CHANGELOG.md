@@ -1,3 +1,12 @@
+## [2.6.3](https://github.com/RigoBlock/v3-contracts/compare/v2.6.2...v2.6.3) (2026-09-10)
+
+
+### Bug Fixes
+
+* 1wei donate rounding error ([5d79afd](https://github.com/RigoBlock/v3-contracts/commit/5d79afd46f748db2e3e1a7f9e9dd4727da5cebe0))
+
+
+
 ## [2.6.2](https://github.com/RigoBlock/v3-contracts/compare/v2.6.1...v2.6.2) (2026-09-07)
 
 
@@ -45,15 +54,6 @@
 ### Bug Fixes
 
 * **ci:** remove npm registry-url to enable OIDC trusted publishing ([fe422ec](https://github.com/RigoBlock/v3-contracts/commit/fe422ec33e191d353d4fc53f4e26349265f02ed3))
-
-
-
-## [2.5.1](https://github.com/RigoBlock/v3-contracts/compare/v2.5.0...v2.5.1) (2026-07-28)
-
-
-### Bug Fixes
-
-* phantom virtual supply on donate ([856e143](https://github.com/RigoBlock/v3-contracts/commit/856e143f7ae68ac3169ec39929e3b60cd21058b2))
 
 
 
