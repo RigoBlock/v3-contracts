@@ -83,6 +83,18 @@ Fix: the lock is asserted in the `HYPERLIQUID` branch of `EApps` (fail-closed �
 
 Note: an interleaved Hyperliquid deposit between donation init and finalize still reverts — with `NavManipulationDetected` from the strict NAV-integrity check rather than `NavLocked`. The donation invariant only accounts for the token-balance delta, so a pending Core credit between phases is conservatively flagged as a NAV change.
 
+#### Robustness of the cross-chain fill
+
+A legitimate destination-chain fill cannot revert from the settlement lock, the in-flight add-back, or an interleaved action, for three independent reasons:
+
+1. **The production fill is atomic.** The Across `MulticallHandler` executes the whole fill — `donate(1)` → token transfer → `donate(amount)` — in a single transaction. No external transaction can interleave between phases, and the transient donation lock persists across the phases of that one transaction.
+2. **A non-atomic interleave reverts earlier.** The donation lock is transient storage: it is cleared when the transaction ends. A `donate` finalize attempted in a later transaction, after any number of interleaved external transactions, reverts with `DonationLock(false)` because the init phase is no longer detectable. `NavManipulationDetected` is reachable only by constructing init and finalize as separate calls inside one transaction.
+3. **No third party can insert a Hyperliquid write into the atomic fill.** Adapter write access is gated by `msg.sender == pool().owner` in `MixinFallback`: a call from the `MulticallHandler` (or any non-owner address) is routed via `staticcall`, so any state write reverts. The only party able to construct an interleaved atomic batch is the pool owner — via an owner-crafted `AMulticall` — and such a batch can only grief the owner's own fill, which is not a DOS vector against other parties. `NavManipulationDetected` on this path is defense-in-depth against instruction substitution, exercisable in tests only.
+
+Timing interacts with none of this: both phases route through the exempt `updateUnitaryValue`, so a fill succeeds whether it lands in the same EVM block as a Hyperliquid action (the in-flight amount applies identically at both phases), in the following blocks inside the window (the Core precompile has caught up per the interaction-timings sequence), or after the window. A front-running operator deposit does not break the fill either: the deposit is NAV-neutral and is reflected identically at both donation phases. Delayed Core actions (limit-order fills, vault transfers) execute between EVM blocks and therefore cannot land between the atomic phases.
+
+The residual operator-griefing surface accepted by design is limited to locking `mint`/`burn`/`purge` via repeated dust actions, and is covered by the known-limitation paragraph above. Destination-chain `donate` fills are fully immune to it; bug reports claiming a nav-lock DOS of cross-chain `donate` should be dispositioned as not applicable.
+
 Regression coverage: `testFork_DonateSucceedsDuringSettlementWindow` and `testFork_DonateFinalizeRevertsOnInterleavedHyperliquidAction` in `test/extensions/AHyperliquidFork.t.sol`.
 
 ### External transfers and the lock

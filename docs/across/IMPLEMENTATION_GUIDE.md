@@ -112,7 +112,8 @@ settlement lock (`HyperliquidLib.assertNavUnlocked`, asserted in the `HYPERLIQUI
 of `EApps`). Fills are therefore never blocked by the lock. Details and regression tests:
 [`docs/hyperliquid/INTEGRATION.md`](../hyperliquid/INTEGRATION.md) ("Cross-chain donate
 exemption"). Note that an interleaved Hyperliquid deposit between the two phases still
-reverts with `NavManipulationDetected` from the NAV-integrity check.
+reverts with `NavManipulationDetected` from the NAV-integrity check — see "Robustness of
+the cross-chain fill" in that document for why legitimate fills can never hit this path.
 
 ## Pre-existing Balance Handling in `donate()`
 
