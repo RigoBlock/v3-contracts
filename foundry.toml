@@ -10,6 +10,14 @@ gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNav
 fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
 ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 
+# Isolate mode is the default since Foundry v1.8.0. It must stay disabled here: the ECrosschain
+# donation-lock tests model the production two-phase `donate` as separate top-level calls, and the
+# lock is transient storage — under isolate mode each top-level call is a separate transaction and
+# EIP-1153 clears the lock between the two calls. In production both phases execute atomically in a
+# single MulticallHandler transaction, so the transient lock is correct on-chain; isolate mode would
+# make the tests contradict mainnet semantics.
+isolate = false
+
 # Fork test conventions:
 # - Fork tests never rely on a global --fork-url. Each test pins a hardcoded block via
 #   vm.createSelectFork("<chain>", Constants.X_BLOCK), where the block numbers live in

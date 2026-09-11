@@ -11,6 +11,7 @@ import {AddressSet, EnumerableSet} from "../../libraries/EnumerableSet.sol";
 import {NavImpactLib} from "../../libraries/NavImpactLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
+import {TransientStorage} from "../../libraries/TransientStorage.sol";
 import {VirtualStorageLib} from "../../libraries/VirtualStorageLib.sol";
 import {NavComponents, NetAssetsValue} from "../../types/NavComponents.sol";
 
@@ -80,8 +81,13 @@ abstract contract MixinActions is MixinStorage, ReentrancyGuardTransient {
 
     /// @inheritdoc ISmartPoolActions
     /// @dev Reentrancy protection provided by calling functions (mint, burn, depositV3, donate)
+    /// @dev updateUnitaryValue is the only method explicitly exempt from the Hyperliquid settlement lock
+    /// @dev (asserted in the Hyperliquid branch of EApps): it is NAV-neutral, and crosschain donate
+    /// @dev routes through it.
     function updateUnitaryValue() external override returns (NetAssetsValue memory navParams) {
+        TransientStorage.setNavLockExempt(true);
         NavComponents memory c = _updateNav();
+        TransientStorage.setNavLockExempt(false);
 
         // Division by zero already handled in _updateNav() -> MixinPoolValue._updatePoolValue()
         // Zero supply returns stored NAV without update
