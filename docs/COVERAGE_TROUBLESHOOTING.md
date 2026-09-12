@@ -1,5 +1,11 @@
 # Coverage Troubleshooting Guide
 
+> **Hardhat 3 migration note**: `solidity-coverage` does not support Hardhat 3 yet, so
+> `yarn coverage:hardhat` is temporarily disabled and CI uploads Foundry coverage only.
+> `coverage:all` / `yarn coverage` run Foundry coverage and the analysis report treats
+> every line Foundry misses as uncovered. Restore the Hardhat half once solidity-coverage
+> adds Hardhat 3 support.
+
 ## Inconsistent Coverage in CI
 
 ### Problem
