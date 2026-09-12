@@ -1,5 +1,5 @@
-import {waffle} from "hardhat"
-import { VoteType } from "./utils"
+import {network} from "hardhat";
+import {VoteType} from "./utils";
 
 export interface SigOpts {
     governance?: string;
@@ -24,8 +24,9 @@ export async function signEip712Message(opts: SigOpts) {
         proposalId: opts.proposalId,
         voteType: opts.voteType
     }
-    const signer = waffle.provider.getSigner()
-    const signature = await signer._signTypedData(domain, types, value)
+    const {ethers} = await network.getOrCreate();
+    const signer = (await ethers.getSigners())[0];
+    const signature = await signer.signTypedData(domain, types, value);
     return {
       "signature": signature,
       "domain": domain,
