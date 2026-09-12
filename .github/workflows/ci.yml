@@ -97,9 +97,21 @@ jobs:
           verbose: true
           disable_search: true
 
-      - name: Verify coverage file was uploaded
+      - name: Upload Hardhat coverage to Codecov
+        if: github.actor != 'dependabot[bot]'
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: hardhat
+          name: hardhat-coverage
+          fail_ci_if_error: true
+          verbose: true
+          disable_search: true
+
+      - name: Verify both coverage files were uploaded
         if: github.actor != 'dependabot[bot]'
         run: |
-          echo "✅ Foundry coverage report uploaded successfully"
-          echo "Hardhat coverage is temporarily disabled (solidity-coverage does not support Hardhat 3 yet)"
-          echo "Codecov report: https://app.codecov.io/gh/${{ github.repository }}/commit/${{ github.sha }}"
+          echo "✅ Both coverage reports uploaded successfully"
+          echo "Codecov will merge them automatically"
+          echo "Check: https://app.codecov.io/gh/${{ github.repository }}/commit/${{ github.sha }}"

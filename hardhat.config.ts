@@ -15,7 +15,6 @@ import {localVerifyTask} from "./src/tasks/local_verify.js";
 import {deployContractsTask} from "./src/tasks/deploy_contracts.js";
 import {codesizeTask, yulcodeTask} from "./src/tasks/show_codesize.js";
 import {hyperliquidBigBlocksTask} from "./src/tasks/hyperliquid.js";
-import {NETWORK_FEE_CAPS} from "./src/utils/networkFees.js";
 import {buildInfoFixTask} from "./src/tasks/build_info_fix.js";
 
 const argv = yargs(hideBin(process.argv))
@@ -40,8 +39,8 @@ const isLiveNetwork = !LOCAL_NETWORKS.includes(argv.network);
 
 // EIP-1559 fee caps per live network live in src/utils/networkFees.ts and are
 // applied to every transaction by the managed-nonce helper (src/utils/nonce.ts)
-// at signing time.
-void NETWORK_FEE_CAPS;
+// at signing time. Hardhat 3's network config has no fields for EIP-1559 caps
+// (only gasPrice), so they cannot be declared here.
 
 const sharedNetworkConfig = {} as {accounts?: string[] | {mnemonic: string}};
 if (PK) {
@@ -229,8 +228,8 @@ const userConfig: HardhatUserConfig = {
       // HyperEVM has 1s small blocks (3M gas) and 60s big blocks (30M gas).
       // Large protocol contracts must be deployed in big blocks; the deployer account must first
       // set the Core user flag `usingBigBlocks: true` via a HyperCore action (see
-      // `hardhat hyperliquid:enable-big-blocks`). Fee caps for this network live in
-      // NETWORK_FEE_CAPS above and are applied by the managed-nonce helper.
+      // `hardhat hyperliquid:enable-big-blocks`). Fee caps for this network
+      // live in src/utils/networkFees.ts and are applied by the managed-nonce helper.
     },
   },
   test: {
