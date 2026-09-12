@@ -1,158 +1,174 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
-import "@nomiclabs/hardhat-ethers";
-import { AddressZero } from "@ethersproject/constants";
-import { parseEther } from "@ethersproject/units";
-import { BigNumber, Contract } from "ethers";
+import { network } from "hardhat";
+import { parseEther } from "ethers";
 
 describe("TestFixedMath", async () => {
-    const [ user1, user2 ] = waffle.provider.getWallets()
+  describe("mul", async () => {
+    it("should overflow with error", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const overflowAmount = 2n ** 200n;
+      await expect(
+        testFixedMath.mul(overflowAmount, overflowAmount),
+      ).to.be.revertedWith("MULTIPLICATION_OVERFLOW_ERROR");
+    });
+  });
 
-    const setupTests = deployments.createFixture(async () => {
-        const TestFixedMath = await hre.ethers.getContractFactory("TestLibFixedMath")
-        const testFixedMath = await TestFixedMath.deploy()
-        return {
-            testFixedMath
-        }
-    })
+  describe("div", async () => {
+    it("should revert if dividing by 0", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const amount = 2n ** 20n;
+      await expect(testFixedMath.div(amount, 0)).to.be.revertedWith(
+        "DIVISION_BY_ZERO_ERROR",
+      );
+    });
 
-    describe("mul", async () => {
-        it('should overflow with error', async () => {
-            const { testFixedMath } = await setupTests()
-            const overflowAmount = BigNumber.from('2').pow(200)
-            await expect(testFixedMath.mul(overflowAmount, overflowAmount))
-                .to.be.revertedWith("MULTIPLICATION_OVERFLOW_ERROR")
-        })
-    })
+    it("should overflow with error", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const minFidedValue = -(2n ** 255n);
+      await expect(testFixedMath.div(minFidedValue, -1))
+        // won't overflow division as will overflow mul op first
+        //.to.be.revertedWith("DIVISION_OVERFLOW_ERROR")
+        .to.be.revertedWith("MULTIPLICATION_OVERFLOW_ERROR");
+    });
+  });
 
-    describe("div", async () => {
-        it('should revert if dividing by 0', async () => {
-            const { testFixedMath } = await setupTests()
-            const amount = BigNumber.from('2').pow(20)
-            await expect(testFixedMath.div(amount, 0))
-                .to.be.revertedWith("DIVISION_BY_ZERO_ERROR")
-        })
+  describe("muldiv", async () => {
+    it("should overflow with error", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const minFidedValue = -(2n ** 255n) / 2n;
+      await expect(
+        testFixedMath.mulDiv(minFidedValue, 2, -1),
+      ).to.be.revertedWith("DIVISION_OVERFLOW_ERROR");
+    });
+  });
 
-        it('should overflow with error', async () => {
-            const { testFixedMath } = await setupTests()
-            const minFidedValue = BigNumber.from('2').pow(255).mul(-1)
-            await expect(testFixedMath.div(minFidedValue, -1))
-                // won't overflow division as will overflow mul op first
-                //.to.be.revertedWith("DIVISION_OVERFLOW_ERROR")
-                .to.be.revertedWith("MULTIPLICATION_OVERFLOW_ERROR")
-        })
-    })
+  describe("ln", async () => {
+    it("should overflow with error", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      await expect(testFixedMath.ln(-50)).to.be.revertedWith(
+        "X_TOO_SMALL_ERROR",
+      );
+    });
 
-    describe("muldiv", async () => {
-        it('should overflow with error', async () => {
-            const { testFixedMath } = await setupTests()
-            const minFidedValue = BigNumber.from('2').pow(255).mul(-1).div(2)
-            await expect(testFixedMath.mulDiv(minFidedValue, 2, -1))
-                .to.be.revertedWith("DIVISION_OVERFLOW_ERROR")
-        })
-    })
+    it("should revert with min exp value", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const minExpValue = -(2n ** 255n);
+      await expect(testFixedMath.ln(minExpValue)).to.be.revertedWith(
+        "X_TOO_SMALL_ERROR",
+      );
+    });
 
-    describe("ln", async () => {
-        it('should overflow with error', async () => {
-            const { testFixedMath } = await setupTests()
-            await expect(testFixedMath.ln(-50)).to.be.revertedWith("X_TOO_SMALL_ERROR")
-        })
+    it("reverts with big x", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      // reverts with lower than expected numbers, prob due to decimals required
+      const maxInt = 2n ** 128n - 2n;
+      await expect(testFixedMath.ln(maxInt)).to.be.revertedWith(
+        "X_TOO_LARGE_ERROR",
+      );
+    });
 
-        it('should revert with min exp value', async () => {
-            const { testFixedMath } = await setupTests()
-            const minExpValue = BigNumber.from('2').pow(255).mul(-1)
-            await expect(testFixedMath.ln(minExpValue)).to.be.revertedWith("X_TOO_SMALL_ERROR")
-        })
+    it("should return log", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      let ln;
+      ln = await testFixedMath.ln(parseEther("1.05"));
+      expect(ln).to.be.lt(0);
+      ln = await testFixedMath.ln(parseEther("0.73"));
+      expect(ln).to.be.lt(0);
+      ln = await testFixedMath.ln(parseEther("0.21"));
+      ln = await testFixedMath.ln(parseEther("1.065"));
+      ln = await testFixedMath.ln(parseEther("0.36"));
+      ln = await testFixedMath.ln(parseEther("0.99"));
+      const firstThreshold = 2154696114062189943324672n;
+      ln = await testFixedMath.ln(firstThreshold);
+      expect(ln).to.be.lt(0);
+    });
 
-        it('reverts with big x', async () => {
-            const { testFixedMath } = await setupTests()
-            // reverts with lower than expected numbers, prob due to decimals required
-            const maxInt = BigNumber.from('2').pow(128).sub(2)
-            await expect(testFixedMath.ln(maxInt))
-                .to.be.revertedWith("X_TOO_LARGE_ERROR")
-        })
+    it("returns min ln", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const lnMinVal = 30920707162n;
+      const expMinVal = -10867768093537472176861526524852097253376n;
+      const minLn = await testFixedMath.ln(lnMinVal);
+      const ln = await testFixedMath.ln(lnMinVal - 1n);
+      expect(ln).to.be.eq(minLn);
+      expect(ln).to.be.eq(expMinVal);
+      await testFixedMath.ln(lnMinVal + 1n);
+    });
+  });
 
-        it('should return log', async () => {
-            const { testFixedMath } = await setupTests()
-            let ln
-            ln = await testFixedMath.ln(parseEther('1.05'))
-            expect(ln).to.be.lt(0)
-            ln = await testFixedMath.ln(parseEther("0.73"))
-            expect(ln).to.be.lt(0)
-            ln = await testFixedMath.ln(parseEther("0.21"))
-            ln = await testFixedMath.ln(parseEther("1.065"))
-            ln = await testFixedMath.ln(parseEther("0.36"))
-            ln = await testFixedMath.ln(parseEther("0.99"))
-            const firstThreshold = 2154696114062189943324672
-            ln = await testFixedMath.ln(BigInt(firstThreshold))
-            expect(ln).to.be.lt(0)
-        })
+  describe("exp", async () => {
+    it("reverts with large number", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      await testFixedMath.exp(-50);
+      await expect(testFixedMath.exp(2)).to.be.revertedWith(
+        "X_TOO_LARGE_ERROR",
+      );
+    });
 
-        it('returns min ln', async () => {
-            const { testFixedMath } = await setupTests()
-            const lnMinVal = 30920707162
-            const expMinVal = -10867768093537472176861526524852097253376
-            const minLn = await testFixedMath.ln(lnMinVal)
-            const ln = await testFixedMath.ln(BigNumber.from(lnMinVal).sub(1))
-            expect(ln).to.be.eq(minLn)
-            expect(Number(ln)).to.be.eq(Number(expMinVal))
-            await testFixedMath.ln(BigNumber.from(lnMinVal).add(1))
-        })
-    })
+    it("runs exponent", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const expMinVal = -10867768093537472176861526524852097253376n;
+      let value;
+      value = await testFixedMath.exp(expMinVal - 1n);
+      expect(value).to.be.eq(0n);
+      value = await testFixedMath.exp(expMinVal);
+      expect(value).to.be.not.eq(0n);
+      await testFixedMath.exp(-10866000000000000000000n);
+      await testFixedMath.exp(-32);
+      await testFixedMath.exp(-16);
+    });
+  });
 
-    describe("exp", async () => {
-        it('reverts with large number', async () => {
-            const { testFixedMath } = await setupTests()
-            await testFixedMath.exp(-50)
-            await expect(testFixedMath.exp(2)).to.be.revertedWith("X_TOO_LARGE_ERROR")
-        })
+  describe("uintMul", async () => {
+    it("runs exponent", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      await testFixedMath.uintMul(-50, 60);
+    });
 
-        it('runs exponent', async () => {
-            const { testFixedMath } = await setupTests()
-            const expMinVal = -10867768093537472176861526524852097253376
-            let value
-            value = await testFixedMath.exp(BigInt(expMinVal) - BigInt("1"))
-            expect(value).to.be.eq(0)
-            value = await testFixedMath.exp(BigInt(expMinVal))
-            expect(value).to.be.not.eq(0)
-            await testFixedMath.exp(BigNumber.from('-10866000000000000000000'))
-            await testFixedMath.exp(-32)
-            await testFixedMath.exp(-16)
-        })
-    })
+    it("reverts with big u", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const maxUint = 2n ** 255n;
+      await expect(testFixedMath.uintMul(-50, maxUint)).to.be.revertedWith(
+        "U_TOO_LARGE_ERROR",
+      );
+    });
+  });
 
-    describe("uintMul", async () => {
-        it('runs exponent', async () => {
-            const { testFixedMath } = await setupTests()
-            await testFixedMath.uintMul(-50, 60)
-        })
+  describe("toFixed", async () => {
+    it("runs exponent", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      await testFixedMath.toFixed(40, 50);
+    });
 
-        it('reverts with big u', async () => {
-            const { testFixedMath } = await setupTests()
-            const maxUint = BigNumber.from('2').pow(255)
-            await expect(testFixedMath.uintMul(-50, maxUint))
-                .to.be.revertedWith("U_TOO_LARGE_ERROR")
-        })
-    })
+    it("reverts with big n", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const maxUint = 2n ** 255n;
+      await expect(testFixedMath.toFixed(maxUint, 2)).to.be.revertedWith(
+        "N_TOO_LARGE_ERROR",
+      );
+    });
 
-    describe("toFixed", async () => {
-        it('runs exponent', async () => {
-            const { testFixedMath } = await setupTests()
-            await testFixedMath.toFixed(40, 50)
-        })
-
-        it('reverts with big n', async () => {
-            const { testFixedMath } = await setupTests()
-            const maxUint = BigNumber.from('2').pow(255)
-            await expect(testFixedMath.toFixed(maxUint, 2))
-                .to.be.revertedWith("N_TOO_LARGE_ERROR")
-        })
-
-        it('reverts with big d', async () => {
-            const { testFixedMath } = await setupTests()
-            const maxUint = BigNumber.from('2').pow(255)
-            await expect(testFixedMath.toFixed(2, maxUint))
-                .to.be.revertedWith("D_TOO_LARGE_ERROR")
-        })
-    })
-})
+    it("reverts with big d", async () => {
+      const { ethers } = await network.getOrCreate();
+      const testFixedMath = await ethers.deployContract("TestLibFixedMath");
+      const maxUint = 2n ** 255n;
+      await expect(testFixedMath.toFixed(2, maxUint)).to.be.revertedWith(
+        "D_TOO_LARGE_ERROR",
+      );
+    });
+  });
+});

@@ -1,34 +1,38 @@
 import { expect } from "chai";
-import hre, { deployments, waffle } from "hardhat";
-import "@nomiclabs/hardhat-ethers";
-import { AddressZero } from "@ethersproject/constants";
-import { parseEther } from "@ethersproject/units";
+import { network } from "hardhat";
+import { ZeroAddress, parseEther } from "ethers";
 import { deployContract } from "../utils/utils";
-import { BigNumber } from "ethers";
+import { getFixedGasSigners } from "../shared/helper";
+import { createFixture } from "../utils/fixtures";
 
 describe("ReentrancyGuard", async () => {
-    const [ user1 ] = waffle.provider.getWallets()
-    const MAX_TICK_SPACING = 32767
+  const MAX_TICK_SPACING = 32767;
 
-    const setupTests = deployments.createFixture(async ({ deployments }) => {
-        await deployments.fixture('tests-setup')
-        const RigoblockPoolProxyFactory = await deployments.get("RigoblockPoolProxyFactory")
-        const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
-        const HookInstance = await deployments.get("MockOracle")
-        const Hook = await hre.ethers.getContractFactory("MockOracle")
-        return {
-            factory: Factory.attach(RigoblockPoolProxyFactory.address),
-            oracle: Hook.attach(HookInstance.address),
-        }
-    });
+  const setupTests = createFixture(["tests-setup"], async ({ get }) => {
+    const { ethers } = await network.getOrCreate();
+    const factory = await ethers.getContractAt(
+      "RigoblockPoolProxyFactory",
+      (await get("RigoblockPoolProxyFactory")).address,
+    );
+    const oracle = await ethers.getContractAt(
+      "MockOracle",
+      (await get("MockOracle")).address,
+    );
+    return {
+      factory,
+      oracle,
+    };
+  });
 
-    describe("nonReentrant", async () => {
-        // The following test produces an effective reentrancy attack, however because the transaction is reverted with error
-        // "POOL_TRANSFER_FROM_FAILED_ERROR" when the pool makes a low-level call to the rogue token, we cannot return the
-        // expected error "REENTRANCY_ILLEGAL"
-        it('should fail when trying to mint', async () => {
-            const { factory, oracle } = await setupTests()
-            const source = `
+  describe("nonReentrant", async () => {
+    // The following test produces an effective reentrancy attack, however because the transaction is reverted with error
+    // "TokenTransferFromFailed" when the pool makes a low-level call to the rogue token, we cannot return the
+    // expected error "REENTRANCY_ILLEGAL"
+    it("should fail when trying to mint", async () => {
+      const [user1] = await getFixedGasSigners();
+      const { factory, oracle } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      const source = `
             contract RogueToken {
                 uint256 public totalSupply = 1e24;
                 uint8 public decimals = 18;
@@ -55,33 +59,56 @@ describe("ReentrancyGuard", async () => {
                 function balanceOf(address _who) external view returns (uint256) {
                     return balances[_who];
                 }
-            }`
-            const rogueToken = await deployContract(user1, source)
-            const { newPoolAddress } = await factory.callStatic.createPool(
-                'testpool',
-                'TEST',
-                rogueToken.address
-            )
-            await factory.createPool('testpool', 'TEST', rogueToken.address)
-            const PoolInterface = await hre.ethers.getContractFactory("SmartPool")
-            const pool = PoolInterface.attach(newPoolAddress)
-            const TestReentrancyAttack = await hre.ethers.getContractFactory("TestReentrancyAttack")
-            const testReentrancyAttack = await TestReentrancyAttack.deploy(newPoolAddress)
-            await rogueToken.init(testReentrancyAttack.address)
-            const tokenAmount = parseEther("100")
-            await rogueToken.transfer(testReentrancyAttack.address, tokenAmount)
-            const poolKey = { currency0: AddressZero, currency1: rogueToken.address, fee: 0, tickSpacing: MAX_TICK_SPACING, hooks: oracle.address }
-            await oracle.initializeObservations(poolKey)
-            await expect(testReentrancyAttack.mintPool()).to.be.revertedWith('TokenTransferFromFailed')
-            expect(await testReentrancyAttack.count()).to.be.eq(0)
-            await testReentrancyAttack.setMaxCount(1)
-            await testReentrancyAttack.mintPool()
-            expect(await testReentrancyAttack.count()).to.be.eq(2)
-            const etherAmount = parseEther("10")
-            const spread =  BigNumber.from((await pool.getPoolParams()).spread)
-            const expectedMintedAmount = etherAmount.sub(etherAmount.mul(spread).div(10000))
-            expect(await pool.balanceOf(testReentrancyAttack.address)).to.be.eq(expectedMintedAmount)
-            expect(await rogueToken.balanceOf(pool.address)).to.be.eq(expectedMintedAmount)
-        })
-    })
-})
+            }`;
+      const rogueToken = await deployContract(user1 as any, source);
+      const newPoolAddress = (
+        await factory.createPool.staticCall(
+          "testpool",
+          "TEST",
+          await rogueToken.getAddress(),
+        )
+      )[0];
+      await factory.createPool(
+        "testpool",
+        "TEST",
+        await rogueToken.getAddress(),
+      );
+      const pool = await ethers.getContractAt("SmartPool", newPoolAddress);
+      const testReentrancyAttack = await ethers.deployContract(
+        "TestReentrancyAttack",
+        [newPoolAddress],
+      );
+      await rogueToken.init(await testReentrancyAttack.getAddress());
+      const tokenAmount = parseEther("100");
+      await rogueToken.transfer(
+        await testReentrancyAttack.getAddress(),
+        tokenAmount,
+      );
+      const poolKey = {
+        currency0: ZeroAddress,
+        currency1: await rogueToken.getAddress(),
+        fee: 0,
+        tickSpacing: MAX_TICK_SPACING,
+        hooks: await oracle.getAddress(),
+      };
+      await oracle.initializeObservations(poolKey);
+      await expect(
+        testReentrancyAttack.mintPool(),
+      ).to.be.revertedWithCustomError(pool, "TokenTransferFromFailed");
+      expect(await testReentrancyAttack.count()).to.be.eq(0n);
+      await testReentrancyAttack.setMaxCount(1);
+      await testReentrancyAttack.mintPool();
+      expect(await testReentrancyAttack.count()).to.be.eq(2n);
+      const etherAmount = parseEther("10");
+      const spread = (await pool.getPoolParams()).spread;
+      const expectedMintedAmount =
+        etherAmount - (etherAmount * spread) / 10000n;
+      expect(
+        await pool.balanceOf(await testReentrancyAttack.getAddress()),
+      ).to.be.eq(expectedMintedAmount);
+      expect(await rogueToken.balanceOf(await pool.getAddress())).to.be.eq(
+        expectedMintedAmount,
+      );
+    });
+  });
+});

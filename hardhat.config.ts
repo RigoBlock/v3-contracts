@@ -1,19 +1,22 @@
-import type { HardhatUserConfig, HttpNetworkUserConfig } from "hardhat/types";
+import type { HardhatUserConfig } from "hardhat/config";
 
-type Eip1559NetworkConfig = HttpNetworkUserConfig & {
-  maxFeePerGas?: number;
-  maxPriorityFeePerGas?: number;
-};
-import "@nomicfoundation/hardhat-foundry";
-import "@nomicfoundation/hardhat-verify";
-import "@nomiclabs/hardhat-waffle";
-import { getSingletonFactoryInfo } from "@safe-global/safe-singleton-factory";
-import "solidity-coverage";
-import "solidity-docgen";
-import "hardhat-deploy";
+import HardhatMocha from "@nomicfoundation/hardhat-mocha";
+import HardhatEthers from "@nomicfoundation/hardhat-ethers";
+import HardhatEthersChaiMatchers from "@nomicfoundation/hardhat-ethers-chai-matchers";
+import HardhatNetworkHelpers from "@nomicfoundation/hardhat-network-helpers";
+import HardhatVerify from "@nomicfoundation/hardhat-verify";
+import HardhatFoundry from "@nomicfoundation/hardhat-foundry";
+import HardhatDeploy from "hardhat-deploy";
+import HardhatMarkup from "@solarity/hardhat-markup";
 import dotenv from "dotenv";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+
+import { localVerifyTask } from "./src/tasks/local_verify.js";
+import { deployContractsTask } from "./src/tasks/deploy_contracts.js";
+import { codesizeTask, yulcodeTask } from "./src/tasks/show_codesize.js";
+import { hyperliquidBigBlocksTask } from "./src/tasks/hyperliquid.js";
+import { buildInfoFixTask } from "./src/tasks/build_info_fix.js";
 
 const argv = yargs(hideBin(process.argv))
   .option("network", {
@@ -26,7 +29,15 @@ const argv = yargs(hideBin(process.argv))
 
 // Load environment variables.
 dotenv.config();
-const { NODE_URL, INFURA_KEY, MNEMONIC, ETHERSCAN_API_KEY, PK, SOLIDITY_VERSION, SOLIDITY_SETTINGS, CUSTOM_DETERMINISTIC_DEPLOYMENT } = process.env;
+const {
+  NODE_URL,
+  INFURA_KEY,
+  MNEMONIC,
+  ETHERSCAN_API_KEY,
+  PK,
+  SOLIDITY_VERSION,
+  SOLIDITY_SETTINGS,
+} = process.env;
 
 const DEFAULT_MNEMONIC =
   "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
@@ -34,7 +45,14 @@ const DEFAULT_MNEMONIC =
 const LOCAL_NETWORKS = ["hardhat", "localhost"];
 const isLiveNetwork = !LOCAL_NETWORKS.includes(argv.network);
 
-const sharedNetworkConfig: HttpNetworkUserConfig = {};
+// EIP-1559 fee caps per live network live in src/utils/networkFees.ts and are
+// applied to every transaction by the managed-nonce helper (src/utils/nonce.ts)
+// at signing time. Hardhat 3's network config has no fields for EIP-1559 caps
+// (only gasPrice), so they cannot be declared here.
+
+const sharedNetworkConfig = {} as {
+  accounts?: string[] | { mnemonic: string };
+};
 if (PK) {
   sharedNetworkConfig.accounts = [PK];
 } else if (MNEMONIC && MNEMONIC.trim() !== "") {
@@ -52,263 +70,225 @@ if (PK) {
   };
 }
 
-if (["mainnet", "sepolia", "polygon", "base", "optimism", "arbitrum", "bsc", "unichain"].includes(argv.network) && INFURA_KEY === undefined) {
+if (
+  [
+    "mainnet",
+    "sepolia",
+    "polygon",
+    "base",
+    "optimism",
+    "arbitrum",
+    "bsc",
+    "unichain",
+  ].includes(argv.network) &&
+  INFURA_KEY === undefined
+) {
   throw new Error(
     `Could not find Infura key in env, unable to connect to network ${argv.network}`,
   );
 }
 
-import "./src/tasks/local_verify"
-import "./src/tasks/deploy_contracts"
-import "./src/tasks/show_codesize"
-import "./src/tasks/hyperliquid"
-import { BigNumber } from "@ethersproject/bignumber";
-import { execSync } from "child_process";
-import { subtask } from "hardhat/config";
-import { TASK_COMPILE_GET_REMAPPINGS } from "hardhat/builtin-tasks/task-names";
-
-// Foundry v1.8's `forge remappings` emits context-prefixed remappings (e.g.
-// `lib/<nested>/:ds-test/=...`) for duplicated nested libs, which the hardhat-foundry
-// plugin's parser rejects ("remapping contexts are not allowed"), breaking compilation.
-// Override the plugin's remapping subtask with the same logic minus the context lines:
-// they only disambiguate imports inside the nested lib itself, which Hardhat never compiles.
-subtask(TASK_COMPILE_GET_REMAPPINGS).setAction(async () => {
-  const output = execSync("forge remappings", { encoding: "utf-8" });
-  const remappings: Record<string, string> = {};
-  for (const line of output.split(/\r\n|\r|\n/)) {
-    if (line.trim() === "" || line.includes(":")) {
-      continue;
+const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28";
+const soliditySettings = !!SOLIDITY_SETTINGS
+  ? {
+      ...JSON.parse(SOLIDITY_SETTINGS),
+      evmVersion: process.env.EVM_VERSION || "cancun",
     }
-    const separatorIndex = line.indexOf("=");
-    const from = line.slice(0, separatorIndex);
-    if (remappings[from] === undefined) {
-      remappings[from] = line.slice(separatorIndex + 1);
-    }
-  }
-  return remappings;
-});
+  : undefined;
 
-const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28"
-const soliditySettings = !!SOLIDITY_SETTINGS ? {
-  ...JSON.parse(SOLIDITY_SETTINGS),
-  evmVersion: process.env.EVM_VERSION || "cancun"
-} : undefined;
+const defaultProfile = {
+  compilers: [
+    { version: primarySolidityVersion, settings: soliditySettings },
+    {
+      version: "0.8.28",
+      settings: { ...soliditySettings, evmVersion: "cancun" },
+    },
+    {
+      version: "0.8.26",
+      settings: { ...soliditySettings, evmVersion: "berlin" },
+    },
+    {
+      version: "0.8.17",
+      settings: { ...soliditySettings, evmVersion: "london" },
+    },
+  ].map((compiler) => ({
+    ...compiler,
+    settings: {
+      ...compiler.settings,
+      evmVersion: compiler.settings?.evmVersion || soliditySettings?.evmVersion,
+    },
+  })),
+  overrides: {
+    "contracts/protocol/proxies/RigoblockPoolProxy.sol": {
+      version: "0.8.17",
+      settings: { ...soliditySettings, evmVersion: "london" },
+    },
+    "contracts/mocks/MockAcrossSpokePool.sol": {
+      version: "0.8.28",
+      settings: {
+        ...soliditySettings,
+        viaIR: true,
+        evmVersion: "cancun",
+      },
+    },
+  },
+};
 
-const deterministicDeployment = CUSTOM_DETERMINISTIC_DEPLOYMENT == "true" ?
-  (network: string) => {
-    const info = getSingletonFactoryInfo(parseInt(network))
-    if (!info) return undefined
-    return {
-      factory: info.address,
-      deployer: info.signerAddress,
-      funding: BigNumber.from(info.gasLimit).mul(BigNumber.from(info.gasPrice)).toString(),
-      signedTx: info.transaction
-    }
-  } : undefined
+const edrSimulatedConfig = {
+  type: "edr-simulated" as const,
+  // SmartPool's deployed bytecode is 24585 bytes, 9 bytes over the EIP-170 cap;
+  // tests and local deploys must tolerate it.
+  allowUnlimitedContractSize: true,
+  blockGasLimit: 100_000_000,
+  gas: 16_000_000,
+};
 
 const userConfig: HardhatUserConfig = {
+  plugins: [
+    HardhatMocha,
+    HardhatEthers,
+    HardhatEthersChaiMatchers,
+    HardhatNetworkHelpers,
+    HardhatVerify,
+    HardhatFoundry,
+    HardhatDeploy,
+    HardhatMarkup,
+  ],
+  tasks: [
+    buildInfoFixTask,
+    localVerifyTask,
+    deployContractsTask,
+    codesizeTask,
+    yulcodeTask,
+    hyperliquidBigBlocksTask,
+  ],
+  markup: {
+    outdir: "docs/api-raw",
+    skipFiles: ["contracts/mocks", "contracts/test"],
+  },
   paths: {
     artifacts: "build/artifacts",
     cache: "build/cache",
-    deploy: "src/deploy",
-    sources: "contracts"
+    sources: "contracts",
+    // Solidity tests are run by Foundry (`forge test`), not Hardhat. Point
+    // HH3's built-in solidity-test runner at a nonexistent dir so `hardhat test`
+    // only runs the mocha specs under `test/`.
+    tests: { mocha: "test", solidity: "test-solidity-none" },
   },
   solidity: {
-    compilers: [
-      { version: primarySolidityVersion, settings: soliditySettings },
-      { version: "0.8.28", settings: { ...soliditySettings, evmVersion: "cancun" } },
-      { version: "0.8.26", settings: { ...soliditySettings, evmVersion: "berlin" } },
-      { version: "0.8.17", settings: { ...soliditySettings, evmVersion: "london" } },
-    ].map(compiler => ({
-      ...compiler,
-      settings: {
-        ...compiler.settings,
-        evmVersion: compiler.settings?.evmVersion || soliditySettings?.evmVersion
-      }
-    })),
-    overrides: {
-      "contracts/protocol/proxies/RigoblockPoolProxy.sol": {
-        version: "0.8.17",
-        settings: { ...soliditySettings, evmVersion: "london" }
-      },
-      "contracts/mocks/MockAcrossSpokePool.sol": {
-        version: "0.8.28",
-        settings: { 
-          ...soliditySettings,
-          viaIR: true,
-          evmVersion: "cancun"
-        }
-      },
-    }
-  },
-  docgen: {
-    outputDir: "docs/api",
-    pages: "files",
-    exclude: ["mocks", "test", "utils", "tokens", "staking", "governance", "rigoToken"],
+    profiles: {
+      // NOTE: hardhat-deploy v2's `deploy` task compiles with the `production`
+      // build profile. Hardhat 3 auto-generates that profile from `default` but
+      // STRIPS compiler `settings` (including `viaIR`), so it must be declared
+      // explicitly here with the same settings or compilation fails
+      // (MockAcrossSpokePool needs viaIR).
+      default: defaultProfile,
+      production: defaultProfile,
+    },
   },
   networks: {
-    hardhat: {
-      allowUnlimitedContractSize: true,
-      blockGasLimit: 100000000,
-      gas: 16000000,
-    },
+    // Hardhat 3's implicit in-memory network is named `default` (used by
+    // `hardhat test` and `network.getOrCreate()`); `node` is the network served
+    // by `hardhat node`. `hardhat` is kept for explicit `--network hardhat` use.
+    // All three share the same edr-simulated settings.
+    default: edrSimulatedConfig,
+    node: edrSimulatedConfig,
+    hardhat: edrSimulatedConfig,
     mainnet: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
-      maxFeePerGas: 500_000_000, // 0.5 gwei
-      maxPriorityFeePerGas: 10_000_000, // 0.01 gwei
-    } as Eip1559NetworkConfig,
+    },
     xdai: {
+      type: "http",
       ...sharedNetworkConfig,
       url: "https://xdai.poanetwork.dev",
     },
     ewc: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://rpc.energyweb.org`,
     },
     sepolia: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://sepolia.infura.io/v3/${INFURA_KEY}`,
-      maxFeePerGas: 5_000_000_000, // 5 gwei
-      maxPriorityFeePerGas: 100_000_000, // 0.1 gwei
-    } as Eip1559NetworkConfig,
+    },
     polygon: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://polygon-mainnet.infura.io/v3/${INFURA_KEY}`,
-      maxFeePerGas: 600_000_000_000, // 600 gwei
-      maxPriorityFeePerGas: 50_000_000_000, // 50 gwei
-    } as Eip1559NetworkConfig,
+    },
     volta: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://volta-rpc.energyweb.org`,
     },
     bsc: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://bsc-dataseed.binance.org/`,
     },
     arbitrum: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://arb1.arbitrum.io/rpc`,
     },
     optimism: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://mainnet.optimism.io`,
     },
     fantomTestnet: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://rpc.testnet.fantom.network/`,
     },
     avalanche: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://api.avax.network/ext/bc/C/rpc`,
     },
     base: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://mainnet.base.org`,
     },
     unichain: {
+      type: "http",
       ...sharedNetworkConfig,
       url: `https://unichain-mainnet.infura.io/v3/${INFURA_KEY}`,
     },
     hyperliquid: {
+      type: "http",
       ...sharedNetworkConfig,
-      url: process.env.HYPERLIQUID_RPC_URL || "",
+      url: process.env.HYPERLIQUID_RPC_URL || "http://localhost:8545",
       // HyperEVM has 1s small blocks (3M gas) and 60s big blocks (30M gas).
       // Large protocol contracts must be deployed in big blocks; the deployer account must first
-      // set the Core user flag `usingBigBlocks: true` via a HyperCore action.
-      maxFeePerGas: 1_000_000_000, // 1 gwei cap
-      maxPriorityFeePerGas: 10_000_000, // 0.01 gwei tip
-    } as Eip1559NetworkConfig,
+      // set the Core user flag `usingBigBlocks: true` via a HyperCore action (see
+      // `hardhat hyperliquid:enable-big-blocks`). Fee caps for this network
+      // live in src/utils/networkFees.ts and are applied by the managed-nonce helper.
+    },
   },
-  deterministicDeployment,
-  namedAccounts: {
-    deployer: 0,
+  test: {
+    mocha: {
+      timeout: 2000000,
+    },
   },
-  mocha: {
-    timeout: 2000000,
-  },
-  etherscan: {
-    apiKey: ETHERSCAN_API_KEY ?? '',
-    customChains: [
-      {
-        network: "mainnet",
-        chainId: 1,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=1",
-          browserURL: "https://etherscan.io"
-        }
-      },
-      {
-        network: "sepolia",
-        chainId: 11155111,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=11155111",
-          browserURL: "https://sepolia.etherscan.io"
-        }
-      },
-      {
-        network: "optimisticEthereum",
-        chainId: 10,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=10",
-          browserURL: "https://optimistic.etherscan.io"
-        }
-      },
-      {
-        network: "arbitrumOne",
-        chainId: 42161,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=42161",
-          browserURL: "https://arbiscan.io"
-        }
-      },
-      {
-        network: "bsc",
-        chainId: 56,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=56",
-          browserURL: "https://bscscan.com"
-        }
-      },
-      {
-        network: "polygon",
-        chainId: 137,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=137",
-          browserURL: "https://polygonscan.com"
-        }
-      },
-      {
-        network: "base",
-        chainId: 8453,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=8453",
-          browserURL: "https://basescan.org"
-        }
-      },
-      {
-        network: "unichain",
-        chainId: 130,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=130",
-          browserURL: "https://uniscan.xyz"
-        }
-      },
-      {
-        network: "hyperliquid",
-        chainId: 999,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=999",
-          browserURL: "https://hyperevmscan.io"
-        }
-      }
-    ]
+  // Hardhat 3's verify plugin has no customChains: it resolves explorers from
+  // the chain registry and Etherscan's chainlist, and the v2 API takes a
+  // `chainid` parameter, so a single API key covers every supported network.
+  verify: {
+    etherscan: {
+      apiKey: ETHERSCAN_API_KEY ?? "",
+    },
   },
 };
 if (NODE_URL) {
   userConfig.networks!!.custom = {
+    type: "http",
     ...sharedNetworkConfig,
     url: NODE_URL,
-  }
+  };
 }
-export default userConfig
+export default userConfig;

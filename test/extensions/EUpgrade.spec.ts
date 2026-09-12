@@ -1,89 +1,120 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
-import "@nomiclabs/hardhat-ethers";
-import { AddressZero } from "@ethersproject/constants";
+import { network } from "hardhat";
+import { ZeroAddress } from "ethers";
+import { connect, getFixedGasSigners } from "../shared/helper";
+import { createFixture } from "../utils/fixtures";
 
 describe("EUpgrade", async () => {
-    const [ user1, user2 ] = waffle.provider.getWallets()
+  const setupTests = createFixture(["tests-setup"], async ({ get }) => {
+    const [user1, user2] = await getFixedGasSigners();
+    const { ethers } = await network.getOrCreate();
+    const authority = await ethers.getContractAt(
+      "Authority",
+      (await get("Authority")).address,
+    );
+    const factory = await ethers.getContractAt(
+      "RigoblockPoolProxyFactory",
+      (await get("RigoblockPoolProxyFactory")).address,
+    );
+    const { newPoolAddress } = await factory.createPool.staticCall(
+      "testpool",
+      "TEST",
+      ZeroAddress,
+    );
+    await factory.createPool("testpool", "TEST", ZeroAddress);
+    const pool = await ethers.getContractAt(
+      "IRigoblockPoolExtended",
+      newPoolAddress,
+    );
+    const eUpgrade = await ethers.deployContract("EUpgrade", [
+      await factory.getAddress(),
+    ]);
+    const multicallAddress = (await get("AMulticall")).address;
+    await authority.setAdapter(await eUpgrade.getAddress(), true);
+    // "466f3dc3": "upgradeImplementation()"
+    await authority.addMethod("0x466f3dc3", await eUpgrade.getAddress());
+    // "2d6b3a6b": "getBeacon()"
+    await authority.addMethod("0x2d6b3a6b", await eUpgrade.getAddress());
+    return {
+      authority,
+      eUpgrade,
+      multicallAddress,
+      pool,
+      factory,
+      newPoolAddress,
+      user1,
+      user2,
+    };
+  });
 
-    const setupTests = deployments.createFixture(async ({ deployments }) => {
-        await deployments.fixture('tests-setup')
-        const AuthorityInstance = await deployments.get("Authority")
-        const Authority = await hre.ethers.getContractFactory("Authority")
-        const authority = Authority.attach(AuthorityInstance.address)
-        const FactoryInstance = await deployments.get("RigoblockPoolProxyFactory")
-        const Factory = await hre.ethers.getContractFactory("RigoblockPoolProxyFactory")
-        const factory = Factory.attach(FactoryInstance.address)
-        const { newPoolAddress } = await factory.callStatic.createPool(
-            'testpool',
-            'TEST',
-            AddressZero
-        )
-        await factory.createPool('testpool', 'TEST', AddressZero)
-        const pool = await hre.ethers.getContractAt("IRigoblockPoolExtended", newPoolAddress)
-        const EUpgrade = await hre.ethers.getContractFactory("EUpgrade")
-        const eUpgrade = await EUpgrade.deploy(FactoryInstance.address)
-        await authority.setAdapter(eUpgrade.address, true)
-        // "466f3dc3": "upgradeImplementation()"
-        await authority.addMethod("0x466f3dc3", eUpgrade.address)
-        // "2d6b3a6b": "getBeacon()"
-        authority.addMethod("0x2d6b3a6b", eUpgrade.address)
-        return {
-            authority,
-            EUpgrade,
-            eUpgrade,
-            pool,
-            factory,
-            newPoolAddress
-        }
-    })
+  describe("upgradeImplementation", async () => {
+    it("should revert if called directly", async () => {
+      const { eUpgrade } = await setupTests();
+      await expect(
+        eUpgrade.upgradeImplementation(),
+      ).to.be.revertedWithCustomError(eUpgrade, "EUpgradeDirectCall");
+    });
 
-    describe("upgradeImplementation", async () => {
-        it('should revert if called directly', async () => {
-            const { eUpgrade } = await setupTests()
-            await expect(eUpgrade.upgradeImplementation())
-                .to.be.revertedWith('EUpgradeDirectCall')
-        })
+    it("should revert if new implementation is same as current", async () => {
+      const { eUpgrade, pool } = await setupTests();
+      await expect(pool.upgradeImplementation()).to.be.revertedWithCustomError(
+        eUpgrade,
+        "EUpgradeImplementationIsSameAsCurrent",
+      );
+    });
 
-        it('should revert if new implementation is same as current', async () => {
-            const { pool } = await setupTests()
-            await expect(pool.upgradeImplementation())
-                .to.be.revertedWith('EUpgradeImplementationIsSameAsCurrent')
-        })
+    it("should upgrade implementation", async () => {
+      const { factory, pool } = await setupTests();
+      await factory.setImplementation(await factory.getAddress());
+      await expect(pool.upgradeImplementation())
+        .to.emit(pool, "Upgraded")
+        .withArgs(await factory.getAddress());
+    });
 
-        it('should upgrade implementation', async () => {
-            const { factory, pool } = await setupTests()
-            await factory.setImplementation(factory.address)
-            await expect(pool.upgradeImplementation())
-                .to.emit(pool, "Upgraded").withArgs(factory.address)
-        })
+    // when a user who is not the pool owner tries to upgrade the implementation a staticcall is made to the extension, instead of a delegatecall
+    it("should revert if caller is not pool owner", async () => {
+      const { eUpgrade, factory, pool, user2 } = await setupTests();
+      await factory.setImplementation(await factory.getAddress());
+      await expect(
+        connect(pool, user2).upgradeImplementation(),
+      ).to.be.revertedWithCustomError(eUpgrade, "EUpgradeDirectCall");
+    });
 
-        // when a user who is not the pool owner tries to upgrade the implementation a staticcall is made to the extension, instead of a delegatecall
-        it('should revert if caller is not pool owner', async () => {
-            const { factory, pool } = await setupTests()
-            await factory.setImplementation(factory.address)
-            await expect(pool.connect(user2).upgradeImplementation())
-                .to.be.revertedWith('EUpgradeDirectCall')
-        })
-
-        it('should not allow multicall to upgrade for non-owner', async () => {
-            const { authority, factory, pool, newPoolAddress } = await setupTests()
-            //await factory.setImplementation(factory.address)
-            const encodedUpgradeData = pool.interface.encodeFunctionData('upgradeImplementation')
-            const MulticallPool = await hre.ethers.getContractFactory("AMulticall")
-            const multicallPool = MulticallPool.attach(newPoolAddress)
-            const MulticallAdapterInstance = await deployments.get("AMulticall")
-            await authority.setAdapter(MulticallAdapterInstance.address, true)
-            // "ac9650d8": "multicall(bytes[])"
-            await authority.addMethod("0xac9650d8", MulticallAdapterInstance.address)
-            const encodedMulticallData = multicallPool.interface.encodeFunctionData(
-                'multicall(bytes[])',
-                [ [encodedUpgradeData] ]
-            )
-            // multicall forwards the underlying custom error
-            await expect(
-                user1.sendTransaction({ to: newPoolAddress, value: 0, data: encodedMulticallData})
-            ).to.be.revertedWith("EUpgradeImplementationIsSameAsCurrent")
-        })
-    })
-})
+    it("should not allow multicall to upgrade for non-owner", async () => {
+      const {
+        authority,
+        eUpgrade,
+        multicallAddress,
+        newPoolAddress,
+        pool,
+        user1,
+      } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      const encodedUpgradeData = pool.interface.encodeFunctionData(
+        "upgradeImplementation",
+      );
+      const multicallPool = await ethers.getContractAt(
+        "AMulticall",
+        newPoolAddress,
+      );
+      await authority.setAdapter(multicallAddress, true);
+      // "ac9650d8": "multicall(bytes[])"
+      await authority.addMethod("0xac9650d8", multicallAddress);
+      const encodedMulticallData = multicallPool.interface.encodeFunctionData(
+        "multicall(bytes[])",
+        [[encodedUpgradeData]],
+      );
+      // multicall forwards the underlying custom error
+      await expect(
+        user1.sendTransaction({
+          to: newPoolAddress,
+          value: 0,
+          data: encodedMulticallData,
+        }),
+      ).to.be.revertedWithCustomError(
+        eUpgrade,
+        "EUpgradeImplementationIsSameAsCurrent",
+      );
+    });
+  });
+});

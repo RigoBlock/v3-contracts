@@ -1,5 +1,10 @@
 # Coverage Troubleshooting Guide
 
+> **Hardhat 3 migration note**: `yarn coverage:hardhat` now uses Hardhat 3's built-in
+> coverage (`hardhat test --coverage`), which writes `coverage/lcov.info` (plus an HTML
+> report) that CI uploads to Codecov alongside the Foundry report. The old
+> `solidity-coverage` plugin is no longer needed and was removed.
+
 ## Inconsistent Coverage in CI
 
 ### Problem

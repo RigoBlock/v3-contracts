@@ -8,13 +8,14 @@ echo "════════════════════════�
 echo ""
 
 # Check if coverage files exist
+hardhat_lcov_available=true
 if [ ! -f "coverage/lcov.info" ]; then
-    echo "❌ Hardhat coverage file not found!"
-    exit 1
+    echo "⚠️  Hardhat coverage file not found (solidity-coverage does not support Hardhat 3 yet) — analyzing Foundry coverage only"
+    hardhat_lcov_available=false
 fi
 
 if [ ! -f "coverage/foundry_lcov.info" ]; then
-    echo "❌ Foundry coverage file not found!"  
+    echo "❌ Foundry coverage file not found!"
     exit 1
 fi
 
@@ -23,8 +24,13 @@ echo ""
 
 # Analyze Hardhat coverage
 echo "🔨 HARDHAT COVERAGE:"
-hardhat_total_lines=$(grep -c "^DA:" coverage/lcov.info || echo "0")
-hardhat_hit_lines=$(grep "^DA:" coverage/lcov.info | grep -v ",0$" | wc -l || echo "0")
+if [ "$hardhat_lcov_available" = true ]; then
+    hardhat_total_lines=$(grep -c "^DA:" coverage/lcov.info || echo "0")
+    hardhat_hit_lines=$(grep "^DA:" coverage/lcov.info | grep -v ",0$" | wc -l || echo "0")
+else
+    hardhat_total_lines=0
+    hardhat_hit_lines=0
+fi
 if [ "$hardhat_total_lines" -gt 0 ]; then
     hardhat_pct=$(awk "BEGIN {printf \"%.2f\", ($hardhat_hit_lines/$hardhat_total_lines)*100}")
 else
@@ -53,18 +59,20 @@ temp_foundry="/tmp/foundry_missing.txt"
 temp_common="/tmp/common_missing.txt"
 
 # Extract missing lines from Hardhat coverage (normalize paths to relative)
-awk '
-/^SF:/ { 
+if [ "$hardhat_lcov_available" = true ]; then
+    awk '
+/^SF:/ {
     current_file = substr($0, 4)
     # Normalize absolute paths to relative
     gsub(/.*\/contracts\//, "contracts/", current_file)
 }
-/^DA:.*,0$/ { 
+/^DA:.*,0$/ {
     line_num = substr($0, 4)
     gsub(/,0$/, "", line_num)
     print current_file ":" line_num
 }
 ' coverage/lcov.info > "$temp_hardhat"
+fi
 
 # Extract missing lines from Foundry coverage (deduplicate and only count truly uncovered)
 awk '
@@ -89,6 +97,12 @@ awk '
     delete max_hits
 }
 ' coverage/foundry_lcov.info > "$temp_foundry"
+
+# Without Hardhat coverage, every line Foundry misses is effectively uncovered,
+# so treat all Foundry-missing lines as the intersection.
+if [ "$hardhat_lcov_available" != true ]; then
+    cp "$temp_foundry" "$temp_hardhat"
+fi
 
 # Find lines that are missing in BOTH reports (intersection)
 comm -12 <(sort "$temp_hardhat") <(sort "$temp_foundry") > "$temp_common"
@@ -132,7 +146,7 @@ END {
 rm -f "$temp_hardhat" "$temp_foundry" "$temp_common"
 
 echo ""
-echo "📤 Uploading both Hardhat and Foundry coverage files to Codecov"
+echo "📤 Uploading coverage files to Codecov (Foundry only until solidity-coverage supports Hardhat 3)"
 echo "   Codecov will intelligently merge them for final reporting"
 echo ""
 echo "════════════════════════════════════════════════════════════════"

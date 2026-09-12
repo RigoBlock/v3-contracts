@@ -100,6 +100,13 @@ Version bumps are required for ANY change that requires redeploying the implemen
 
 The `pool.VERSION()` test is the guard that reminds future agents to bump the version when the implementation changes; it must stay in sync with `MixinConstants.sol`.
 
+### Deterministic deployment & cross-chain address parity (HARD REQUIREMENT)
+
+- **Same address on every chain is a spec, not a nicety.** Authority is at `0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472` on all chains, produced by `create2(Safe singleton factory 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7, salt 0, init code)`.
+- All production chain ids are declared in `PRODUCTION_CHAIN_IDS` in `rocketh/config.ts` with Safe's singleton factory as `deterministicDeployment`. The `deployScript` wrapper in `rocketh/deploy.ts` **throws** on any live chain not in that list — never let a deploy fall back to rocketh's default CREATE2 factory. When adding a chain: add its id + Safe factory entry to `rocketh/config.ts` (the factory address/signed tx are chain-independent; `@safe-global/safe-singleton-factory` has them).
+- **Hardhat 3 changes the CBOR metadata tail** (`project/` source namespacing — a build-info format contract, not configurable), which changes CREATE2 addresses even though the executable bytecode is identical. `readArtifact` (`rocketh/artifacts.ts`) restores the authoritative tail from `rocketh/canonical-cbor.json` for every contract whose executable code is unchanged, so fresh chains reproduce the established addresses. Only the metadata stamp is canonicalized — the deployed executable code is always what the current toolchain compiled from current sources.
+- **After deploying an upgrade to the authoritative chain (mainnet), regenerate the tails**: `npx hardhat run scripts/generate-canonical-cbor.ts --network hardhat`. Contracts whose code legitimately changed keep the current build's tail; since metadata depends only on source + settings (never on the chain), all chains still compute identical addresses for them.
+
 ### Shared nonce management
 
 - All deploy scripts MUST call `enableManagedNonce(hre, deployer)` at the top so that `deploy()` and `deployments.execute()` share a single nonce counter.
@@ -391,11 +398,23 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 - Pool proxies (if deployed with same params)
 - Core implementations
 - Staking suite, Governance core
+- **ExtensionsMap** — see below
+
+**ExtensionsMap has NO constructor parameters.** The deployment params (extension
+addresses, wrapped native) are written to the `ExtensionsMapDeployer`'s storage and
+read by the ExtensionsMap constructor at deploy time (`msg.sender` context). The map is
+always deployed via `ExtensionsMapDeployer.deployExtensionsMap(params, salt)`, and its
+CREATE2 address depends only on three chain-independent inputs: the deployer contract's
+address, the salt, and `type(ExtensionsMap).creationCode`. Same code + same salt ⇒ same
+address on every chain (mainnet's map is at `0x591cc27B8fc9D9BCd93375B0F4d3a2cd23F1a007`).
+Apparent mismatches on production chains (e.g. arbitrum/hyperliquid) are upgrade-timing
+artifacts — those chains received the map under an older deployer/salt generation — not a
+by-design per-chain address. A fresh chain with the current code and current salt always
+reproduces the canonical address.
 
 ### Different Address Per Chain
 
-- ExtensionsMap (extensions have chain-specific params)
-- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain)
+- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain) — chain-specific constructor params
 - Governance strategy
 
 ### NAV Integrity in Cross-Chain Transfers
