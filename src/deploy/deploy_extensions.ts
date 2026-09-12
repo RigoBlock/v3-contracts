@@ -41,11 +41,20 @@ export default deployScript(
           domain: unknown,
           types: unknown,
           message: unknown,
-        ) =>
-          signerProvider.request({
+        ) => {
+          // Hardhat signs eth_signTypedData_v4 locally via micro-eth-signer,
+          // which requires an explicit primaryType field.
+          const primaryType = Object.keys(
+            types as Record<string, unknown>,
+          ).find((key) => key !== "EIP712Domain");
+          return signerProvider.request({
             method: "eth_signTypedData_v4",
-            params: [deployer, JSON.stringify({ domain, types, message })],
-          } as any) as unknown as Promise<string>,
+            params: [
+              deployer as `0x${string}`,
+              { domain, types, message, primaryType },
+            ],
+          }) as unknown as Promise<string>;
+        },
       } as unknown as ethers.Signer;
       console.log("Enabling HyperEVM big blocks for the deployer...");
       await enableHyperEVMBigBlocks(signer, false);
@@ -196,11 +205,15 @@ export default deployScript(
     const salt = ethers.encodeBytes32String(extensionsMapSalt);
 
     // Always call deployExtensionsMap: it is a no-op if ExtensionsMap is already
-    // deployed at the deterministic address.
+    // deployed at the deterministic address. The gas limit is fixed instead of
+    // estimated: load-balanced RPCs (Base in particular) have returned estimates
+    // for the cheap no-op path while execution needed the CREATE2 deployment
+    // (~390k gas), and the unused portion is refunded anyway.
     await env.executeByName("ExtensionsMapDeployer", {
       account: deployer,
       functionName: "deployExtensionsMap",
       args: [params, salt],
+      gas: 1_500_000n,
     });
 
     // The deployer stores the address under a hashed salt. Retrieve it so we
@@ -211,16 +224,28 @@ export default deployScript(
         [deployer, salt],
       ),
     );
-    const extensionsMapAddress = (await env.readByName(
-      "ExtensionsMapDeployer",
-      {
+    const readMapAddress = () =>
+      env.readByName("ExtensionsMapDeployer", {
         functionName: "deployedMaps",
         args: [deployer, hashedSalt],
-      },
-    )) as string;
+      }) as Promise<string>;
+    let extensionsMapAddress = await readMapAddress();
+
+    // On slow-confirmation chains the receipt can be visible on one RPC node
+    // while eth_call on another still lags behind; poll before giving up.
+    for (
+      let attempt = 0;
+      extensionsMapAddress === ethers.ZeroAddress && attempt < 12;
+      attempt++
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      extensionsMapAddress = await readMapAddress();
+    }
 
     if (extensionsMapAddress === ethers.ZeroAddress) {
-      throw new Error("ExtensionsMap deployment did not record an address");
+      throw new Error(
+        "ExtensionsMap deployment did not record an address; the transaction may have landed after the retries elapsed — re-run the script",
+      );
     }
 
     // Register ExtensionsMap so it is included in verification workflows.
@@ -249,10 +274,16 @@ export default deployScript(
     // hyperliquid, fresh chains), uncomment to point the factory at the newly
     // deployed implementation. Reverts once governance owns the factory —
     // hence commented by default.
-    /*const currentImplementation = (await env.readByName("RigoblockPoolProxyFactory", {
-      functionName: "implementation",
-    })) as string;
-    if (currentImplementation.toLowerCase() !== poolImplementation.address.toLowerCase()) {
+    /*const currentImplementation = (await env.readByName(
+      "RigoblockPoolProxyFactory",
+      {
+        functionName: "implementation",
+      },
+    )) as string;
+    if (
+      currentImplementation.toLowerCase() !==
+      poolImplementation.address.toLowerCase()
+    ) {
       await env.executeByName("RigoblockPoolProxyFactory", {
         account: deployer,
         functionName: "setImplementation",
