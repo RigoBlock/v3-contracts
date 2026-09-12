@@ -56,7 +56,7 @@
     "lint": "yarn lint:sol && yarn lint:ts",
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:ts": "eslint --max-warnings 0 .",
-    "docgen": "echo 'TODO(HH3): solidity-docgen does not support Hardhat 3 yet' && exit 1",
+    "docgen": "forge doc --out docs/api-raw && node scripts/prepare-api-docs.js && rimraf docs/api-raw",
     "publish:docs": "./scripts/publish-docs.sh",
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "fmt:sol:protocol": "prettier 'contracts/protocol/**/*.sol' -w",
