@@ -1,4 +1,4 @@
-import type {HardhatUserConfig} from "hardhat/config";
+import type { HardhatUserConfig } from "hardhat/config";
 
 import HardhatMocha from "@nomicfoundation/hardhat-mocha";
 import HardhatEthers from "@nomicfoundation/hardhat-ethers";
@@ -7,15 +7,16 @@ import HardhatNetworkHelpers from "@nomicfoundation/hardhat-network-helpers";
 import HardhatVerify from "@nomicfoundation/hardhat-verify";
 import HardhatFoundry from "@nomicfoundation/hardhat-foundry";
 import HardhatDeploy from "hardhat-deploy";
+import HardhatMarkup from "@solarity/hardhat-markup";
 import dotenv from "dotenv";
 import yargs from "yargs";
-import {hideBin} from "yargs/helpers";
+import { hideBin } from "yargs/helpers";
 
-import {localVerifyTask} from "./src/tasks/local_verify.js";
-import {deployContractsTask} from "./src/tasks/deploy_contracts.js";
-import {codesizeTask, yulcodeTask} from "./src/tasks/show_codesize.js";
-import {hyperliquidBigBlocksTask} from "./src/tasks/hyperliquid.js";
-import {buildInfoFixTask} from "./src/tasks/build_info_fix.js";
+import { localVerifyTask } from "./src/tasks/local_verify.js";
+import { deployContractsTask } from "./src/tasks/deploy_contracts.js";
+import { codesizeTask, yulcodeTask } from "./src/tasks/show_codesize.js";
+import { hyperliquidBigBlocksTask } from "./src/tasks/hyperliquid.js";
+import { buildInfoFixTask } from "./src/tasks/build_info_fix.js";
 
 const argv = yargs(hideBin(process.argv))
   .option("network", {
@@ -28,8 +29,15 @@ const argv = yargs(hideBin(process.argv))
 
 // Load environment variables.
 dotenv.config();
-const {NODE_URL, INFURA_KEY, MNEMONIC, ETHERSCAN_API_KEY, PK, SOLIDITY_VERSION, SOLIDITY_SETTINGS} =
-  process.env;
+const {
+  NODE_URL,
+  INFURA_KEY,
+  MNEMONIC,
+  ETHERSCAN_API_KEY,
+  PK,
+  SOLIDITY_VERSION,
+  SOLIDITY_SETTINGS,
+} = process.env;
 
 const DEFAULT_MNEMONIC =
   "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat";
@@ -42,7 +50,9 @@ const isLiveNetwork = !LOCAL_NETWORKS.includes(argv.network);
 // at signing time. Hardhat 3's network config has no fields for EIP-1559 caps
 // (only gasPrice), so they cannot be declared here.
 
-const sharedNetworkConfig = {} as {accounts?: string[] | {mnemonic: string}};
+const sharedNetworkConfig = {} as {
+  accounts?: string[] | { mnemonic: string };
+};
 if (PK) {
   sharedNetworkConfig.accounts = [PK];
 } else if (MNEMONIC && MNEMONIC.trim() !== "") {
@@ -61,9 +71,16 @@ if (PK) {
 }
 
 if (
-  ["mainnet", "sepolia", "polygon", "base", "optimism", "arbitrum", "bsc", "unichain"].includes(
-    argv.network,
-  ) &&
+  [
+    "mainnet",
+    "sepolia",
+    "polygon",
+    "base",
+    "optimism",
+    "arbitrum",
+    "bsc",
+    "unichain",
+  ].includes(argv.network) &&
   INFURA_KEY === undefined
 ) {
   throw new Error(
@@ -81,10 +98,19 @@ const soliditySettings = !!SOLIDITY_SETTINGS
 
 const defaultProfile = {
   compilers: [
-    {version: primarySolidityVersion, settings: soliditySettings},
-    {version: "0.8.28", settings: {...soliditySettings, evmVersion: "cancun"}},
-    {version: "0.8.26", settings: {...soliditySettings, evmVersion: "berlin"}},
-    {version: "0.8.17", settings: {...soliditySettings, evmVersion: "london"}},
+    { version: primarySolidityVersion, settings: soliditySettings },
+    {
+      version: "0.8.28",
+      settings: { ...soliditySettings, evmVersion: "cancun" },
+    },
+    {
+      version: "0.8.26",
+      settings: { ...soliditySettings, evmVersion: "berlin" },
+    },
+    {
+      version: "0.8.17",
+      settings: { ...soliditySettings, evmVersion: "london" },
+    },
   ].map((compiler) => ({
     ...compiler,
     settings: {
@@ -95,7 +121,7 @@ const defaultProfile = {
   overrides: {
     "contracts/protocol/proxies/RigoblockPoolProxy.sol": {
       version: "0.8.17",
-      settings: {...soliditySettings, evmVersion: "london"},
+      settings: { ...soliditySettings, evmVersion: "london" },
     },
     "contracts/mocks/MockAcrossSpokePool.sol": {
       version: "0.8.28",
@@ -126,8 +152,20 @@ const userConfig: HardhatUserConfig = {
     HardhatVerify,
     HardhatFoundry,
     HardhatDeploy,
+    HardhatMarkup,
   ],
-  tasks: [buildInfoFixTask, localVerifyTask, deployContractsTask, codesizeTask, yulcodeTask, hyperliquidBigBlocksTask],
+  tasks: [
+    buildInfoFixTask,
+    localVerifyTask,
+    deployContractsTask,
+    codesizeTask,
+    yulcodeTask,
+    hyperliquidBigBlocksTask,
+  ],
+  markup: {
+    outdir: "docs/api-raw",
+    skipFiles: ["contracts/mocks", "contracts/test"],
+  },
   paths: {
     artifacts: "build/artifacts",
     cache: "build/cache",

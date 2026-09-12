@@ -30,5 +30,6 @@ contracts/.deps/
 # generated API docs (published to RigoBlock/v3-docs)
 docs/api/
 docs/api-raw/
+generated-markups/
 .rigo/
 .venv/
