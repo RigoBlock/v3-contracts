@@ -15,6 +15,7 @@ struct Extensions {
     address eCrosschain;
     address eNavView;
     address eGmxCallback;
+    address eErc20;
 }
 
 struct DeploymentParams {

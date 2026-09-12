@@ -157,6 +157,16 @@ export default deployScript(
           ).address
         : ethers.ZeroAddress;
 
+    const eErc20 = await env.deploy(
+      "EERC20",
+      {
+        account: deployer,
+        artifact: await readArtifact("EERC20"),
+        args: [],
+      },
+      { deterministic: true },
+    );
+
     const extensions = {
       eApps: eApps.address,
       eOracle: eOracle.address,
@@ -164,6 +174,7 @@ export default deployScript(
       eCrosschain: eCrosschain.address,
       eNavView: eNavView.address,
       eGmxCallback: eGmxCallback,
+      eErc20: eErc20.address,
     };
 
     await env.deploy(

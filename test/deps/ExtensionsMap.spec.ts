@@ -28,6 +28,7 @@ describe("ExtensionsMapDeployer", async () => {
         eCrosschain: user1.address,
         eNavView: user1.address,
         eGmxCallback: user1.address,
+        eErc20: user1.address,
       };
       const wrappedNative = user1.address;
       const params = {
@@ -59,6 +60,7 @@ describe("ExtensionsMapDeployer", async () => {
         eCrosschain: user1.address,
         eNavView: user1.address,
         eGmxCallback: user1.address,
+        eErc20: user1.address,
       };
       const wrappedNative = user1.address;
       const params = {

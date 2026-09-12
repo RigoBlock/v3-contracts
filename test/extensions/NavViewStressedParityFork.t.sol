@@ -12,6 +12,7 @@ import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
 import {AUniswapRouter} from "../../contracts/protocol/extensions/adapters/AUniswapRouter.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {EGmxCallback} from "../../contracts/protocol/extensions/EGmxCallback.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
@@ -196,7 +197,8 @@ contract NavViewStressedParityForkTest is Test {
                 eUpgrade: address(eUpgrade),
                 eNavView: address(eNavView),
                 eCrosschain: address(eCrosschain),
-                eGmxCallback: eGmxCallback
+                eGmxCallback: eGmxCallback,
+                eErc20: address(new EERC20())
             }),
             wrappedNative: ARB_WETH
         });

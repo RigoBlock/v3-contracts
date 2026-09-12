@@ -12,6 +12,7 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     address private transient _eUpgrade;
     address private transient _eCrosschain;
     address private transient _eGmxCallback;
+    address private transient _eErc20;
     address private transient _wrappedNative;
 
     /// @inheritdoc IExtensionsMapDeployer
@@ -25,6 +26,7 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
         _eUpgrade = params.extensions.eUpgrade;
         _eCrosschain = params.extensions.eCrosschain;
         _eGmxCallback = params.extensions.eGmxCallback;
+        _eErc20 = params.extensions.eErc20;
         _wrappedNative = params.wrappedNative;
 
         // Pre-compute the CREATE2 address
@@ -59,7 +61,8 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
                     eOracle: _eOracle,
                     eUpgrade: _eUpgrade,
                     eCrosschain: _eCrosschain,
-                    eGmxCallback: _eGmxCallback
+                    eGmxCallback: _eGmxCallback,
+                    eErc20: _eErc20
                 }),
                 wrappedNative: _wrappedNative
             });

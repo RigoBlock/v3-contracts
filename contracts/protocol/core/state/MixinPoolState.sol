@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {MixinPoolValue} from "../state/MixinPoolValue.sol";
-import {IERC20} from "../../interfaces/IERC20.sol";
 import {ISmartPoolState} from "../../interfaces/v4/pool/ISmartPoolState.sol";
 import {DelegationData, DelegationLib} from "../../libraries/DelegationLib.sol";
 import {Pool} from "../../libraries/EnumerableSet.sol";
@@ -12,7 +11,7 @@ abstract contract MixinPoolState is MixinPoolValue {
     /*
      * EXTERNAL VIEW METHODS
      */
-    /// @inheritdoc IERC20
+    /// @inheritdoc ISmartPoolState
     function balanceOf(address who) external view override returns (uint256) {
         return accounts().userAccounts[who].userBalance;
     }
@@ -66,7 +65,7 @@ abstract contract MixinPoolState is MixinPoolValue {
     /*
      * PUBLIC VIEW METHODS
      */
-    /// @inheritdoc IERC20
+    /// @inheritdoc ISmartPoolState
     function decimals() public view override returns (uint8) {
         return pool().decimals;
     }

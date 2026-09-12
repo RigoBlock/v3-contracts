@@ -24,6 +24,13 @@ interface ISmartPoolEvents {
     /// @param current Address of the new owner.
     event NewOwner(address indexed old, address indexed current);
 
+    /// @notice Emitted when pool tokens are minted or burned.
+    /// @dev Shares are non-transferable: this event is only emitted by mint/burn flows.
+    /// @param from Address sending to the pool or burning from.
+    /// @param to Address receiving from the pool or burning to.
+    /// @param value Number of pool token units.
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
     /// @notice Emitted when NAV storage is updated.
     /// @param sender Address of the wallet prompting an update.
     /// @param pool Address of the pool.

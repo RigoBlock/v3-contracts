@@ -21,6 +21,7 @@ pragma solidity 0.8.28;
 
 import {IEApps} from "../extensions/adapters/interfaces/IEApps.sol";
 import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
+import {IEERC20} from "../extensions/adapters/interfaces/IEERC20.sol";
 import {IEGmxCallback} from "../extensions/adapters/interfaces/IEGmxCallback.sol";
 import {IENavView} from "../extensions/adapters/interfaces/IENavView.sol";
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
@@ -47,6 +48,10 @@ contract ExtensionsMap is IExtensionsMap {
     bytes4 private constant _EUPGRADE_GET_BEACON_SELECTOR = IEUpgrade.getBeacon.selector;
     bytes4 private constant _ECROSSCHAIN_DONATE_SELECTOR = IECrosschain.donate.selector;
     bytes4 private constant _EGMX_CALLBACK_AFTER_ORDER_EXECUTION_SELECTOR = IEGmxCallback.afterOrderExecution.selector;
+    bytes4 private constant _EERC20_TRANSFER_SELECTOR = IEERC20.transfer.selector;
+    bytes4 private constant _EERC20_TRANSFER_FROM_SELECTOR = IEERC20.transferFrom.selector;
+    bytes4 private constant _EERC20_APPROVE_SELECTOR = IEERC20.approve.selector;
+    bytes4 private constant _EERC20_ALLOWANCE_SELECTOR = IEERC20.allowance.selector;
 
     /// @inheritdoc IExtensionsMap
     address public immutable override eApps;
@@ -67,6 +72,9 @@ contract ExtensionsMap is IExtensionsMap {
     address public immutable override eGmxCallback;
 
     /// @inheritdoc IExtensionsMap
+    address public immutable override eErc20;
+
+    /// @inheritdoc IExtensionsMap
     address public immutable override wrappedNative;
 
     /// @notice Assumes extensions have been correctly initialized.
@@ -79,6 +87,7 @@ contract ExtensionsMap is IExtensionsMap {
         eUpgrade = params.extensions.eUpgrade;
         eCrosschain = params.extensions.eCrosschain;
         eGmxCallback = params.extensions.eGmxCallback;
+        eErc20 = params.extensions.eErc20;
         wrappedNative = params.wrappedNative;
 
         // validate immutable constants. Assumes deps are correctly initialized
@@ -94,6 +103,13 @@ contract ExtensionsMap is IExtensionsMap {
         assert(_EUPGRADE_UPGRADE_SELECTOR ^ _EUPGRADE_GET_BEACON_SELECTOR == type(IEUpgrade).interfaceId);
         assert(_ECROSSCHAIN_DONATE_SELECTOR == type(IECrosschain).interfaceId);
         assert(_EGMX_CALLBACK_AFTER_ORDER_EXECUTION_SELECTOR == type(IEGmxCallback).interfaceId);
+        assert(
+            _EERC20_TRANSFER_SELECTOR ^
+                _EERC20_TRANSFER_FROM_SELECTOR ^
+                _EERC20_APPROVE_SELECTOR ^
+                _EERC20_ALLOWANCE_SELECTOR ==
+                type(IEERC20).interfaceId
+        );
     }
 
     /// @inheritdoc IExtensionsMap
@@ -125,6 +141,15 @@ contract ExtensionsMap is IExtensionsMap {
         } else if (selector == _EGMX_CALLBACK_AFTER_ORDER_EXECUTION_SELECTOR) {
             extension = eGmxCallback;
             shouldDelegatecall = true;
+        } else if (
+            selector == _EERC20_TRANSFER_SELECTOR ||
+            selector == _EERC20_TRANSFER_FROM_SELECTOR ||
+            selector == _EERC20_APPROVE_SELECTOR
+        ) {
+            extension = eErc20;
+            shouldDelegatecall = true;
+        } else if (selector == _EERC20_ALLOWANCE_SELECTOR) {
+            extension = eErc20;
         } else {
             return (address(0), false);
         }
