@@ -63,6 +63,30 @@ import "./src/tasks/deploy_contracts"
 import "./src/tasks/show_codesize"
 import "./src/tasks/hyperliquid"
 import { BigNumber } from "@ethersproject/bignumber";
+import { execSync } from "child_process";
+import { subtask } from "hardhat/config";
+import { TASK_COMPILE_GET_REMAPPINGS } from "hardhat/builtin-tasks/task-names";
+
+// Foundry v1.8's `forge remappings` emits context-prefixed remappings (e.g.
+// `lib/<nested>/:ds-test/=...`) for duplicated nested libs, which the hardhat-foundry
+// plugin's parser rejects ("remapping contexts are not allowed"), breaking compilation.
+// Override the plugin's remapping subtask with the same logic minus the context lines:
+// they only disambiguate imports inside the nested lib itself, which Hardhat never compiles.
+subtask(TASK_COMPILE_GET_REMAPPINGS).setAction(async () => {
+  const output = execSync("forge remappings", { encoding: "utf-8" });
+  const remappings: Record<string, string> = {};
+  for (const line of output.split(/\r\n|\r|\n/)) {
+    if (line.trim() === "" || line.includes(":")) {
+      continue;
+    }
+    const separatorIndex = line.indexOf("=");
+    const from = line.slice(0, separatorIndex);
+    if (remappings[from] === undefined) {
+      remappings[from] = line.slice(separatorIndex + 1);
+    }
+  }
+  return remappings;
+});
 
 const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28"
 const soliditySettings = !!SOLIDITY_SETTINGS ? {

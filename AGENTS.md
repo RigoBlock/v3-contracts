@@ -70,10 +70,17 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 - **When to bump**: Bump the salt whenever a new ExtensionsMap must be deployed. This happens in two cases:
   1. The ExtensionsMap contract code itself changes (new selectors, new routing logic).
-  2. Any extension is redeployed to a **new address** (because ExtensionsMap immutably stores extension addresses and CREATE2 cannot overwrite an existing contract).
-- **When NOT to bump**: If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+  2. The bytecode of **any contract stored in the ExtensionsMap** changes — which includes not only editing an extension's source, but also editing **any library or shared contract compiled into an extension** (libraries are compiled into the bytecode of every contract that imports them). Examples:
+     - `HyperliquidLib` change → `EApps`, `ENavView`, `EOracle` all change → new extension addresses → **bump salt**.
+     - `GmxLib` change → `EApps`, `EGmxCallback` change → **bump salt**.
+     - `NavView` change → `ENavView` changes → **bump salt**.
+     - `MixinConstants` / other implementation-only libraries → implementation only → no salt bump (see "When NOT to bump").
+     
+     **Decision rule when you change a library**: grep for every contract that imports it. If any importer is an extension (anything whose address is stored in the ExtensionsMap), the salt MUST be bumped. Never assume "I only touched a library" means extensions are unchanged.
+- **When NOT to bump**: If only the implementation changes and everything compiled into extensions is byte-identical, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+- **The unreleased-train exception**: If the salt was already bumped in a previous PR of the same release train and that ExtensionsMap was **never deployed** (nothing exists at the computed CREATE2 address on any chain), do NOT bump again — reuse the pending salt. The deploy script's `map.code.length == 0` check only works because the address is empty; once deployed, any further extension-bytecode change requires a fresh bump.
 - **Important**: The deploy script checks `if (map.code.length == 0)` and skips deployment if an ExtensionsMap already exists at the computed CREATE2 address. If the salt is not bumped when an extension address changed, the script will silently reuse the old ExtensionsMap that points to stale extension addresses.
-- **Automation limitation**: The current scripts require manual salt bumps. The salt lives in `src/utils/constants.ts` (`extensionsMapSalt`, e.g. `"extensionsMapSalt15"`): bump the numeric suffix in the same PR that changes an extension. Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
+- **Automation limitation**: The current scripts require manual salt bumps. The salt lives in `src/utils/constants.ts` (`extensionsMapSalt`, e.g. `"extensionsMapSalt15"`): bump the numeric suffix in the same PR that changes an extension (directly or via a compiled-in library). Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
 
 ### Version Bump
 
@@ -89,6 +96,7 @@ Version bumps are required for ANY change that requires redeploying the implemen
    - `_REQUIRED_VERSION` in any adapter that requires a minimum implementation version.
    - The `pool.VERSION()` assertion in `test/core/RigoblockPool.Basetoken.spec.ts`.
 4. **Do not bump multiple times within the same PR.** If the base branch already has a higher version, use that version without further bumping.
+5. **Unreleased-train rule.** If the base branch's version belongs to a previous PR of the same release train whose contracts were **never deployed** (no factory `setImplementation` with that version ever executed on any chain), keep that version — do not burn another number. The version identifies a deployed implementation; merging additional changes before the first deployment of the train does not create a new deployment identity. If the previous train WAS deployed, bump normally.
 
 The `pool.VERSION()` test is the guard that reminds future agents to bump the version when the implementation changes; it must stay in sync with `MixinConstants.sol`.
 

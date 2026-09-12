@@ -106,6 +106,15 @@ the asset-equality check with the caller's own deposit, but the subsequent posit
 virtual-supply write would lower NAV per share. The per-share invariant detects that
 manipulation without having to enumerate callers.
 
+**Hyperliquid settlement lock (issue #959):** on HyperEVM, `donate` routes both phases
+through `updateUnitaryValue()`, which is the single method exempt from the Hyperliquid
+settlement lock (`HyperliquidLib.assertNavUnlocked`, asserted in the `HYPERLIQUID` branch
+of `EApps`). Fills are therefore never blocked by the lock. Details and regression tests:
+[`docs/hyperliquid/INTEGRATION.md`](../hyperliquid/INTEGRATION.md) ("Cross-chain donate
+exemption"). Note that an interleaved Hyperliquid deposit between the two phases still
+reverts with `NavManipulationDetected` from the NAV-integrity check — see "Robustness of
+the cross-chain fill" in that document for why legitimate fills can never hit this path.
+
 ## Pre-existing Balance Handling in `donate()`
 
 When `donate()` activates a token that was not previously in the pool's active set,

@@ -22,6 +22,9 @@ library TransientStorage {
     bytes32 internal constant _TEMP_BALANCE_SLOT = bytes32(uint256(keccak256("eacross.temp.balance")) - 1);
     bytes32 internal constant _DONATION_LOCK_SLOT = bytes32(uint256(keccak256("eacross.donation.lock")) - 1);
 
+    // Transient flag: the single method explicitly allowed to bypass the Hyperliquid settlement lock
+    bytes32 internal constant _NAV_LOCK_EXEMPT_SLOT = bytes32(uint256(keccak256("pool.nav.lock.exempt")) - 1);
+
     // Helper functions for tstore operations
     /// @notice Stores a mapping of token addresses to int256 values
     function store(Int256 slot, address token, int256 value) internal {
@@ -56,6 +59,14 @@ library TransientStorage {
 
     function getDonationLock() internal view returns (bool) {
         return _DONATION_LOCK_SLOT.asBoolean().tload();
+    }
+
+    function setNavLockExempt(bool exempt) internal {
+        _NAV_LOCK_EXEMPT_SLOT.asBoolean().tstore(exempt);
+    }
+
+    function getNavLockExempt() internal view returns (bool) {
+        return _NAV_LOCK_EXEMPT_SLOT.asBoolean().tload();
     }
 
     function getTemporaryBalance(address token) internal view returns (uint256, bool) {
