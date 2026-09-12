@@ -20,7 +20,7 @@ const managedPrivateKey: SignerProtocolFunction = async (
 // (e.g. Authority at 0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472 on every chain,
 // formerly gated behind CUSTOM_DETERMINISTIC_DEPLOYMENT="true"). Local/dev chains
 // stay on rocketh's built-in default factory.
-const PRODUCTION_CHAIN_IDS = [1, 10, 56, 137, 8453, 42161, 130, 999, 11155111];
+export const PRODUCTION_CHAIN_IDS = [1, 10, 56, 137, 8453, 42161, 130, 999, 11155111];
 
 function safeSingletonFactoryDeployment(chainId: number): ChainUserConfig {
   const info = getSingletonFactoryInfo(chainId);
