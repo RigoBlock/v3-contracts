@@ -144,6 +144,7 @@ The `pool.VERSION()` test is the guard that reminds future agents to bump the ve
 - `EOracle.sol` - Price feeds and token conversions
 - `EUpgrade.sol` - Implementation upgrades
 - `ECrosschain.sol` - Across bridge destination handler
+- `EERC20.sol` - Disabled ERC20 methods (non-transferable shares; keeps SmartPool under the contract size limit)
 
 ### Adapters (Upgradeable Mapping)
 

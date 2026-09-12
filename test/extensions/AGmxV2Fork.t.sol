@@ -12,6 +12,7 @@ import {Constants} from "../../contracts/test/Constants.sol";
 import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {EGmxCallback} from "../../contracts/protocol/extensions/EGmxCallback.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
@@ -182,7 +183,8 @@ contract AGmxV2ForkTest is Test {
                 eUpgrade: address(eUpgrade),
                 eNavView: address(eNavView),
                 eCrosschain: address(eCrosschain),
-                eGmxCallback: address(eGmxCallback)
+                eGmxCallback: address(eGmxCallback),
+                eErc20: address(new EERC20())
             }),
             wrappedNative: ARB_WETH
         });

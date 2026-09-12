@@ -10,6 +10,7 @@ import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
@@ -91,12 +92,14 @@ contract UnitTestFixture is Test {
         extensions.eUpgrade = address(new EUpgrade(deployment.factory));
         extensions.eCrosschain = address(new ECrosschain());
         extensions.eNavView = address(new ENavView(EAppsParams({grgStakingProxy: stakingProxy, univ4Posm: mockUniv4Posm})));
+        extensions.eErc20 = address(new EERC20());
 
         console2.log("Deployed EApps:", extensions.eApps);
         console2.log("Deployed EOracle:", extensions.eOracle);
         console2.log("Deployed EUpgrade:", extensions.eUpgrade);
         console2.log("Deployed ECrosschain:", extensions.eCrosschain);
         console2.log("Deployed ENavView:", extensions.eNavView);
+        console2.log("Deployed EERC20:", extensions.eErc20);
 
         ExtensionsMapDeployer deployer = new ExtensionsMapDeployer();
 
@@ -106,7 +109,8 @@ contract UnitTestFixture is Test {
             eUpgrade: address(extensions.eUpgrade),
             eCrosschain: address(extensions.eCrosschain),
             eNavView: address(extensions.eNavView),
-            eGmxCallback: address(0)
+            eGmxCallback: address(0),
+            eErc20: address(extensions.eErc20)
         });
 
         DeploymentParams memory params = DeploymentParams({

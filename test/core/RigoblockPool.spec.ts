@@ -36,6 +36,8 @@ describe("Proxy", async () => {
     )[0];
     await factory.createPool("testpool", "TEST", ethersLib.ZeroAddress);
     const pool = await ethers.getContractAt("SmartPool", poolAddress);
+    // the disabled ERC20 methods are served by the EERC20 extension via fallback
+    const poolAsErc20 = await ethers.getContractAt("EERC20", poolAddress);
     const uniRouter = await ethers.deployContract("MockUniUniversalRouter", [
       uniswapV4PosmAddress,
     ]);
@@ -52,6 +54,7 @@ describe("Proxy", async () => {
       authority,
       factory,
       pool,
+      poolAsErc20,
       uniswapV3Npm,
       uniswapV4Posm: await ethers.getContractAt(
         "MockUniswapPosm",
@@ -113,37 +116,51 @@ describe("Proxy", async () => {
 
   describe("erc20", async () => {
     it("should revert on transfer", async () => {
-      const { pool, user1, user2 } = await setupTests();
+      const { pool, poolAsErc20, user1, user2 } = await setupTests();
       const etherAmount = parseEther("1");
       await pool.mint(user1.address, etherAmount, 0, { value: etherAmount });
       await expect(
-        pool.transfer(user2.address, await pool.balanceOf(user1.address)),
-      ).to.be.revertedWithCustomError(pool, "PoolTokenOperationNotAllowed");
+        poolAsErc20.transfer(
+          user2.address,
+          await pool.balanceOf(user1.address),
+        ),
+      ).to.be.revertedWithCustomError(
+        poolAsErc20,
+        "PoolTokenOperationNotAllowed",
+      );
     });
 
     it("should revert on transferFrom", async () => {
-      const { pool, user1, user2 } = await setupTests();
+      const { pool, poolAsErc20, user1, user2 } = await setupTests();
       const etherAmount = parseEther("1");
       await pool.mint(user1.address, etherAmount, 0, { value: etherAmount });
       await expect(
-        pool.transferFrom(
+        poolAsErc20.transferFrom(
           user1.address,
           user2.address,
           await pool.balanceOf(user1.address),
         ),
-      ).to.be.revertedWithCustomError(pool, "PoolTokenOperationNotAllowed");
+      ).to.be.revertedWithCustomError(
+        poolAsErc20,
+        "PoolTokenOperationNotAllowed",
+      );
     });
 
     it("should revert on approve", async () => {
-      const { pool, user2 } = await setupTests();
+      const { poolAsErc20, user2 } = await setupTests();
       await expect(
-        pool.approve(user2.address, parseEther("1")),
-      ).to.be.revertedWithCustomError(pool, "PoolTokenOperationNotAllowed");
+        poolAsErc20.approve(user2.address, parseEther("1")),
+      ).to.be.revertedWithCustomError(
+        poolAsErc20,
+        "PoolTokenOperationNotAllowed",
+      );
     });
 
     it("should return zero allowance", async () => {
-      const { pool, user1, user2 } = await setupTests();
-      expect(await pool.allowance(user1.address, user2.address)).to.be.eq(0n);
+      const { poolAsErc20, user1, user2 } = await setupTests();
+      expect(
+        await poolAsErc20.allowance(user1.address, user2.address),
+      ).to.be.eq(0n);
     });
   });
 

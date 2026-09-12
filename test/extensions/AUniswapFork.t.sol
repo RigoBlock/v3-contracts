@@ -8,6 +8,7 @@ import {Constants} from "../../contracts/test/Constants.sol";
 import {AUniswap} from "../../contracts/protocol/extensions/adapters/AUniswap.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
@@ -128,10 +129,14 @@ contract AUniswapForkTest is Test {
     // =========================================================================
 
     function _setupPool() private {
-        EApps eApps = new EApps(EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM}));
+        EApps eApps = new EApps(
+            EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM})
+        );
         EOracle eOracle = new EOracle(Constants.ORACLE, WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM}));
+        ENavView eNavView = new ENavView(
+            EAppsParams({grgStakingProxy: Constants.GRG_STAKING, univ4Posm: Constants.UNISWAP_V4_POSM})
+        );
         ECrosschain eCrosschain = new ECrosschain();
 
         ExtensionsMapDeployer mapDeployer = new ExtensionsMapDeployer();
@@ -142,7 +147,8 @@ contract AUniswapForkTest is Test {
                 eUpgrade: address(eUpgrade),
                 eNavView: address(eNavView),
                 eCrosschain: address(eCrosschain),
-                eGmxCallback: address(0)
+                eGmxCallback: address(0),
+                eErc20: address(new EERC20())
             }),
             wrappedNative: WETH
         });
@@ -158,7 +164,7 @@ contract AUniswapForkTest is Test {
 
         // Create pool with native ETH as base token (address(0)).
         vm.prank(poolOwner);
-        (pool,) = IRigoblockPoolProxyFactory(FACTORY).createPool("UniswapForkPool", "UNIFP", address(0));
+        (pool, ) = IRigoblockPoolProxyFactory(FACTORY).createPool("UniswapForkPool", "UNIFP", address(0));
 
         // Register AUniswap in Authority. Selectors may already be mapped to a
         // previously deployed AUniswap instance (mainnet fork), so remove them first.
@@ -176,7 +182,7 @@ contract AUniswapForkTest is Test {
         // Mint pool tokens so totalSupply > 0 (required for oracle-based operations).
         deal(poolOwner, 2 ether);
         vm.prank(poolOwner);
-        (bool ok,) = payable(pool).call{value: 1 ether}(
+        (bool ok, ) = payable(pool).call{value: 1 ether}(
             abi.encodeWithSignature("mint(address,uint256,uint256)", poolOwner, 1 ether, 0)
         );
         require(ok, "mint failed");

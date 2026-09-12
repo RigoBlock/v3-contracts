@@ -8,6 +8,7 @@ import {Constants} from "../../contracts/test/Constants.sol";
 import {AUniswapRouter} from "../../contracts/protocol/extensions/adapters/AUniswapRouter.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
@@ -66,7 +67,8 @@ contract AUniswapRouterForkTest is Test {
                 eUpgrade: address(eUpgrade),
                 eNavView: address(eNavView),
                 eCrosschain: address(eCrosschain),
-                eGmxCallback: address(0)
+                eGmxCallback: address(0),
+                eErc20: address(new EERC20())
             }),
             wrappedNative: WETH
         });

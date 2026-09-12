@@ -11,6 +11,7 @@ import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
@@ -130,7 +131,8 @@ contract ENavViewForkTest is Test {
             eOracle: 0xd223Ed82D7341aB535673340aDf2A1A39F9b9B91,
             eUpgrade: 0x6A17ca05b112485Bd5c73215F275Baff7F980ac6,
             eCrosschain: address(eCrosschain),
-            eGmxCallback: address(0)
+            eGmxCallback: address(0),
+            eErc20: address(new EERC20())
         });
 
         DeploymentParams memory params = DeploymentParams({extensions: extensions, wrappedNative: WETH});
