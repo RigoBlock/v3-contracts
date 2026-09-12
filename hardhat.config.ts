@@ -166,6 +166,19 @@ const userConfig: HardhatUserConfig = {
     outdir: "docs/api-raw",
     skipFiles: ["contracts/mocks", "contracts/test"],
   },
+  // Keep the Hardhat coverage scope aligned with the Foundry report
+  // (scripts/foundry-coverage.sh excludes mocks/test/tokens/utils and never
+  // reports third-party lib/ code); without this the merged Codecov total
+  // inflates and the percentage dilutes.
+  coverage: {
+    skipFiles: [
+      "lib/**",
+      "contracts/mocks/**",
+      "contracts/test/**",
+      "contracts/tokens/**",
+      "contracts/utils/**",
+    ],
+  },
   paths: {
     artifacts: "build/artifacts",
     cache: "build/cache",
