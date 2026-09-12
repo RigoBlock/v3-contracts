@@ -1,8 +1,11 @@
-import {ethers} from "ethers";
-import {task} from "hardhat/config";
-import {ArgumentType} from "hardhat/types/arguments";
-import type {NewTaskDefinition} from "hardhat/types/tasks";
-import {loadEnvironmentFromHardhat} from "../../rocketh/environment.js";
+import { ethers } from "ethers";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { task } from "hardhat/config";
+import { ArgumentType } from "hardhat/types/arguments";
+import type { NewTaskDefinition } from "hardhat/types/tasks";
+import { loadEnvironmentFromHardhat } from "../../rocketh/environment.js";
 import {
   checkEtherscanBatch,
   checkSourcifyBatch,
@@ -21,16 +24,24 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function decodeConstructorArgs(deployment: MinimalDeployment & {abi: any[]; argsData: string}): string[] {
+function decodeConstructorArgs(
+  deployment: MinimalDeployment & { abi: any[]; argsData: string },
+): unknown[] {
+  // ethers decodes tuple components as Result objects (Array subclasses). They
+  // must stay arrays: stringifying them flattens "0xaddr1,0xaddr2" and the
+  // verifier's ABI encoder rejects that with "invalid tuple value" (HHE80017).
+  const toPlainValue = (value: unknown): unknown => {
+    if (typeof value === "bigint") return value.toString();
+    if (Array.isArray(value)) return value.map(toPlainValue);
+    return value;
+  };
   try {
     const iface = new ethers.Interface(deployment.abi as any);
     const args = ethers.AbiCoder.defaultAbiCoder().decode(
       iface.deploy.inputs,
       deployment.argsData,
     );
-    return args.map((value: any) =>
-      typeof value === "bigint" ? value.toString() : String(value),
-    );
+    return args.map(toPlainValue);
   } catch (error) {
     console.warn(
       `Failed to decode constructor args for ${deployment.address}:`,
@@ -38,6 +49,18 @@ function decodeConstructorArgs(deployment: MinimalDeployment & {abi: any[]; args
     );
     return [];
   }
+}
+
+/**
+ * The verify task's `constructorArgs` variadic argument only accepts strings,
+ * which cannot express tuple params. `constructorArgsPath` loads an ESM module
+ * whose default export is passed through verbatim, preserving nested arrays.
+ */
+async function writeConstructorArgsModule(args: unknown[]): Promise<string> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rb-verify-args-"));
+  const file = path.join(dir, "constructor-args.mjs");
+  fs.writeFileSync(file, `export default ${JSON.stringify(args)};\n`);
+  return file;
 }
 
 export const deployContractsTask: NewTaskDefinition = task(
@@ -53,22 +76,28 @@ export const deployContractsTask: NewTaskDefinition = task(
   })
   .addFlag({
     name: "forceVerify",
-    description: "Re-check and re-verify all known deployments, ignoring cached status",
+    description:
+      "Re-check and re-verify all known deployments, ignoring cached status",
   })
-  .addFlag({name: "skipLocalVerify", description: "Skip hardhat-deploy local verification"})
-  .addFlag({name: "skipEtherscan", description: "Skip Etherscan verification"})
-  .addFlag({name: "skipSourcify", description: "Skip Sourcify verification"})
+  .addFlag({
+    name: "skipLocalVerify",
+    description: "Skip hardhat-deploy local verification",
+  })
+  .addFlag({
+    name: "skipEtherscan",
+    description: "Skip Etherscan verification",
+  })
+  .addFlag({ name: "skipSourcify", description: "Skip Sourcify verification" })
   .setInlineAction(async (taskArgs, hre) => {
     const connection = await hre.network.getOrCreate();
-    const loadEnv = () =>
-      loadEnvironmentFromHardhat({hre, connection});
+    const loadEnv = () => loadEnvironmentFromHardhat({ hre, connection });
 
     console.log("Deploying contracts...");
     const envBefore = await loadEnv();
-    const deploymentsBefore = {...envBefore.deployments};
-    await hre.tasks.getTask("deploy").run(
-      taskArgs.tags ? {tags: taskArgs.tags} : {},
-    );
+    const deploymentsBefore = { ...envBefore.deployments };
+    await hre.tasks
+      .getTask("deploy")
+      .run(taskArgs.tags ? { tags: taskArgs.tags } : {});
     const env = await loadEnv();
     const deployments = env.deployments;
     const deploymentNames = Object.keys(deployments);
@@ -81,7 +110,9 @@ export const deployContractsTask: NewTaskDefinition = task(
     const changedContracts = deploymentNames.filter((name) => {
       const before = deploymentsBefore[name];
       const after = deployments[name];
-      return !before || before.address.toLowerCase() !== after.address.toLowerCase();
+      return (
+        !before || before.address.toLowerCase() !== after.address.toLowerCase()
+      );
     });
 
     const networkName = connection.networkName;
@@ -141,7 +172,12 @@ export const deployContractsTask: NewTaskDefinition = task(
       if (
         !taskArgs.skipSourcify &&
         (taskArgs.forceVerify ||
-          !isVendorVerified(status, contractName, "sourcify", deployment.address))
+          !isVendorVerified(
+            status,
+            contractName,
+            "sourcify",
+            deployment.address,
+          ))
       ) {
         needsSourcify.push(contractName);
       }
@@ -149,7 +185,12 @@ export const deployContractsTask: NewTaskDefinition = task(
       if (
         !taskArgs.skipEtherscan &&
         (taskArgs.forceVerify ||
-          !isVendorVerified(status, contractName, "etherscan", deployment.address))
+          !isVendorVerified(
+            status,
+            contractName,
+            "etherscan",
+            deployment.address,
+          ))
       ) {
         needsEtherscan.push(contractName);
       }
@@ -171,7 +212,12 @@ export const deployContractsTask: NewTaskDefinition = task(
 
         if (sourcifyStatuses[address]) {
           console.log(`${contractName} is already verified on Sourcify.`);
-          markVendorVerified(status, contractName, "sourcify", deployment.address);
+          markVendorVerified(
+            status,
+            contractName,
+            "sourcify",
+            deployment.address,
+          );
           continue;
         }
 
@@ -180,7 +226,12 @@ export const deployContractsTask: NewTaskDefinition = task(
           console.warn(
             `Skipping Sourcify for ${contractName}: no metadata available.`,
           );
-          markVendorUnverified(status, contractName, "sourcify", deployment.address);
+          markVendorUnverified(
+            status,
+            contractName,
+            "sourcify",
+            deployment.address,
+          );
           continue;
         }
 
@@ -192,7 +243,12 @@ export const deployContractsTask: NewTaskDefinition = task(
             deployment.metadata,
           );
           if (verified) {
-            markVendorVerified(status, contractName, "sourcify", deployment.address);
+            markVendorVerified(
+              status,
+              contractName,
+              "sourcify",
+              deployment.address,
+            );
             console.log(`Sourcify verification completed for ${contractName}.`);
           } else {
             throw new Error("Sourcify returned non-match status");
@@ -202,7 +258,12 @@ export const deployContractsTask: NewTaskDefinition = task(
             `Sourcify verification failed for ${contractName}:`,
             getErrorMessage(error),
           );
-          markVendorUnverified(status, contractName, "sourcify", deployment.address);
+          markVendorUnverified(
+            status,
+            contractName,
+            "sourcify",
+            deployment.address,
+          );
         }
       }
     }
@@ -223,7 +284,12 @@ export const deployContractsTask: NewTaskDefinition = task(
 
         if (etherscanStatuses[address]) {
           console.log(`${contractName} is already verified on Etherscan.`);
-          markVendorVerified(status, contractName, "etherscan", deployment.address);
+          markVendorVerified(
+            status,
+            contractName,
+            "etherscan",
+            deployment.address,
+          );
           continue;
         }
 
@@ -233,7 +299,8 @@ export const deployContractsTask: NewTaskDefinition = task(
           if (deployment.metadata && typeof deployment.metadata === "string") {
             try {
               const parsedMetadata = JSON.parse(deployment.metadata);
-              const compilationTarget = parsedMetadata?.settings?.compilationTarget;
+              const compilationTarget =
+                parsedMetadata?.settings?.compilationTarget;
               const sourcePath =
                 compilationTarget &&
                 typeof compilationTarget === "object" &&
@@ -249,12 +316,26 @@ export const deployContractsTask: NewTaskDefinition = task(
             }
           }
 
+          const constructorArgs = decodeConstructorArgs(deployment as any);
+          // The task's variadic constructorArgs only accepts strings; tuple
+          // params go through a temp module instead (see writeConstructorArgsModule).
+          const viaModule = constructorArgs.some(
+            (arg) => typeof arg !== "string",
+          );
           await hre.tasks.getTask(["verify", "etherscan"]).run({
             address: deployment.address,
-            constructorArgs: decodeConstructorArgs(deployment as any),
+            constructorArgs: viaModule ? [] : constructorArgs,
+            constructorArgsPath: viaModule
+              ? await writeConstructorArgsModule(constructorArgs)
+              : undefined,
             contract: contractPath,
           });
-          markVendorVerified(status, contractName, "etherscan", deployment.address);
+          markVendorVerified(
+            status,
+            contractName,
+            "etherscan",
+            deployment.address,
+          );
           console.log(
             `Successfully verified ${contractName} on Etherscan at ${deployment.address}`,
           );
@@ -263,7 +344,12 @@ export const deployContractsTask: NewTaskDefinition = task(
             `Failed to verify ${contractName} on Etherscan at ${deployment.address}:`,
             getErrorMessage(error),
           );
-          markVendorUnverified(status, contractName, "etherscan", deployment.address);
+          markVendorUnverified(
+            status,
+            contractName,
+            "etherscan",
+            deployment.address,
+          );
         }
       }
     }
