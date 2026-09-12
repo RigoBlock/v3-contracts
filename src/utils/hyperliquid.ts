@@ -7,7 +7,7 @@ const HYPERLIQUID_DOMAIN = {
   name: "Exchange",
   version: "1",
   chainId: 1337,
-  verifyingContract: ethers.constants.AddressZero,
+  verifyingContract: ethers.ZeroAddress,
 };
 
 const AGENT_TYPES = {
@@ -54,7 +54,7 @@ function l1ConnectionId(actionBytes: Uint8Array, nonce: number): string {
   const nonceBuf = Buffer.allocUnsafe(8);
   nonceBuf.writeBigUInt64BE(BigInt(nonce), 0);
   const modeByte = Buffer.from([0x00]);
-  return ethers.utils.keccak256(
+  return ethers.keccak256(
     Buffer.concat([Buffer.from(actionBytes), nonceBuf, modeByte]),
   );
 }
@@ -81,21 +81,13 @@ export async function enableHyperEVMBigBlocks(
     connectionId,
   };
 
-  // Ethers v5 signers expose _signTypedData for EIP-712 signing.
-  const signerWithTypedData = signer as ethers.Signer & {
-    _signTypedData: (
-      domain: typeof HYPERLIQUID_DOMAIN,
-      types: typeof AGENT_TYPES,
-      message: typeof message,
-    ) => Promise<string>;
-  };
-
-  const signatureHex = await signerWithTypedData._signTypedData(
+  // Ethers v6 signers expose signTypedData for EIP-712 signing.
+  const signatureHex = await signer.signTypedData(
     HYPERLIQUID_DOMAIN,
     AGENT_TYPES,
     message,
   );
-  const sig = ethers.utils.splitSignature(signatureHex);
+  const sig = ethers.Signature.from(signatureHex);
 
   const url = isTestnet ? TESTNET_API_URL : MAINNET_API_URL;
   const body = {

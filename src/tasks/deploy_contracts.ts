@@ -1,6 +1,8 @@
-import "hardhat-deploy";
-import "@nomiclabs/hardhat-ethers";
-import { task, types } from "hardhat/config";
+import {ethers} from "ethers";
+import {task} from "hardhat/config";
+import {ArgumentType} from "hardhat/types/arguments";
+import type {NewTaskDefinition} from "hardhat/types/tasks";
+import {loadEnvironmentFromHardhat} from "../../rocketh/environment.js";
 import {
   checkEtherscanBatch,
   checkSourcifyBatch,
@@ -11,6 +13,7 @@ import {
   markVendorVerified,
   resetStatusForChangedContracts,
   saveVerificationStatus,
+  type MinimalDeployment,
 } from "../utils/verification";
 
 function getErrorMessage(error: unknown): string {
@@ -18,27 +21,56 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
-  .addOptionalParam(
-    "tags",
-    "Comma-separated list of hardhat-deploy tags to run (e.g., 'implementation,adapters')",
-    undefined,
-    types.string,
-  )
-  .addFlag(
-    "forceVerify",
-    "Re-check and re-verify all known deployments, ignoring cached status",
-  )
-  .addFlag("skipLocalVerify", "Skip hardhat-deploy local verification")
-  .addFlag("skipEtherscan", "Skip Etherscan verification")
-  .addFlag("skipSourcify", "Skip Sourcify verification")
-  .setAction(async (taskArgs, hre) => {
-    const deployOptions = taskArgs.tags ? { tags: taskArgs.tags } : {};
+function decodeConstructorArgs(deployment: MinimalDeployment & {abi: any[]; argsData: string}): string[] {
+  try {
+    const iface = new ethers.Interface(deployment.abi as any);
+    const args = ethers.AbiCoder.defaultAbiCoder().decode(
+      iface.deploy.inputs,
+      deployment.argsData,
+    );
+    return args.map((value: any) =>
+      typeof value === "bigint" ? value.toString() : String(value),
+    );
+  } catch (error) {
+    console.warn(
+      `Failed to decode constructor args for ${deployment.address}:`,
+      getErrorMessage(error),
+    );
+    return [];
+  }
+}
+
+export const deployContractsTask: NewTaskDefinition = task(
+  "deploy-contracts",
+  "Deploys and verifies Rigoblock contracts",
+)
+  .addOption({
+    name: "tags",
+    type: ArgumentType.STRING_WITHOUT_DEFAULT,
+    description:
+      "Comma-separated list of hardhat-deploy tags to run (e.g., 'implementation,adapters')",
+    defaultValue: undefined,
+  })
+  .addFlag({
+    name: "forceVerify",
+    description: "Re-check and re-verify all known deployments, ignoring cached status",
+  })
+  .addFlag({name: "skipLocalVerify", description: "Skip hardhat-deploy local verification"})
+  .addFlag({name: "skipEtherscan", description: "Skip Etherscan verification"})
+  .addFlag({name: "skipSourcify", description: "Skip Sourcify verification"})
+  .setInlineAction(async (taskArgs, hre) => {
+    const connection = await hre.network.getOrCreate();
+    const loadEnv = () =>
+      loadEnvironmentFromHardhat({hre, connection});
 
     console.log("Deploying contracts...");
-    const deploymentsBefore = await hre.deployments.all();
-    await hre.run("deploy", deployOptions);
-    const deployments = await hre.deployments.all();
+    const envBefore = await loadEnv();
+    const deploymentsBefore = {...envBefore.deployments};
+    await hre.tasks.getTask("deploy").run(
+      taskArgs.tags ? {tags: taskArgs.tags} : {},
+    );
+    const env = await loadEnv();
+    const deployments = env.deployments;
     const deploymentNames = Object.keys(deployments);
 
     if (deploymentNames.length === 0) {
@@ -52,7 +84,18 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
       return !before || before.address.toLowerCase() !== after.address.toLowerCase();
     });
 
-    const status = loadVerificationStatus(hre);
+    const networkName = connection.networkName;
+    const chainId =
+      connection.networkConfig.chainId ??
+      Number(
+        BigInt(
+          (await connection.provider.request({
+            method: "eth_chainId",
+          })) as string,
+        ),
+      );
+
+    const status = loadVerificationStatus(networkName, chainId);
     resetStatusForChangedContracts(status, deployments);
 
     const contractsToVerify = taskArgs.forceVerify
@@ -62,12 +105,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
           const isChanged = changedContracts.includes(name);
           const needsSourcify =
             !taskArgs.skipSourcify &&
-            !isVendorVerified(
-              status,
-              name,
-              "sourcify",
-              deployment.address,
-            );
+            !isVendorVerified(status, name, "sourcify", deployment.address);
           const needsEtherscan =
             !taskArgs.skipEtherscan &&
             !isVendorVerified(status, name, "etherscan", deployment.address);
@@ -86,7 +124,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
     if (!taskArgs.skipLocalVerify) {
       console.log("Running local verification...");
       try {
-        await hre.run("local-verify");
+        await hre.tasks.getTask("local-verify").run({});
       } catch (error) {
         console.error("Local verification failed:", getErrorMessage(error));
       }
@@ -123,7 +161,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
         `Checking Sourcify status for ${needsSourcify.length} contract(s)...`,
       );
       const sourcifyStatuses = await checkSourcifyBatch(
-        hre,
+        chainId,
         needsSourcify.map((name) => deployments[name].address),
       );
 
@@ -133,12 +171,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
 
         if (sourcifyStatuses[address]) {
           console.log(`${contractName} is already verified on Sourcify.`);
-          markVendorVerified(
-            status,
-            contractName,
-            "sourcify",
-            deployment.address,
-          );
+          markVendorVerified(status, contractName, "sourcify", deployment.address);
           continue;
         }
 
@@ -147,32 +180,20 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
           console.warn(
             `Skipping Sourcify for ${contractName}: no metadata available.`,
           );
-          markVendorUnverified(
-            status,
-            contractName,
-            "sourcify",
-            deployment.address,
-          );
+          markVendorUnverified(status, contractName, "sourcify", deployment.address);
           continue;
         }
 
         try {
           const verified = await verifySourcifyV2(
-            hre,
+            chainId,
             contractName,
             deployment.address,
             deployment.metadata,
           );
           if (verified) {
-            markVendorVerified(
-              status,
-              contractName,
-              "sourcify",
-              deployment.address,
-            );
-            console.log(
-              `Sourcify verification completed for ${contractName}.`,
-            );
+            markVendorVerified(status, contractName, "sourcify", deployment.address);
+            console.log(`Sourcify verification completed for ${contractName}.`);
           } else {
             throw new Error("Sourcify returned non-match status");
           }
@@ -181,12 +202,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
             `Sourcify verification failed for ${contractName}:`,
             getErrorMessage(error),
           );
-          markVendorUnverified(
-            status,
-            contractName,
-            "sourcify",
-            deployment.address,
-          );
+          markVendorUnverified(status, contractName, "sourcify", deployment.address);
         }
       }
     }
@@ -197,7 +213,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
         `Checking Etherscan status for ${needsEtherscan.length} contract(s)...`,
       );
       const etherscanStatuses = await checkEtherscanBatch(
-        hre,
+        chainId,
         needsEtherscan.map((name) => deployments[name].address),
       );
 
@@ -207,12 +223,7 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
 
         if (etherscanStatuses[address]) {
           console.log(`${contractName} is already verified on Etherscan.`);
-          markVendorVerified(
-            status,
-            contractName,
-            "etherscan",
-            deployment.address,
-          );
+          markVendorVerified(status, contractName, "etherscan", deployment.address);
           continue;
         }
 
@@ -238,17 +249,12 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
             }
           }
 
-          await hre.run("verify:verify", {
+          await hre.tasks.getTask(["verify", "etherscan"]).run({
             address: deployment.address,
-            constructorArguments: deployment.args || [],
+            constructorArgs: decodeConstructorArgs(deployment as any),
             contract: contractPath,
           });
-          markVendorVerified(
-            status,
-            contractName,
-            "etherscan",
-            deployment.address,
-          );
+          markVendorVerified(status, contractName, "etherscan", deployment.address);
           console.log(
             `Successfully verified ${contractName} on Etherscan at ${deployment.address}`,
           );
@@ -257,18 +263,12 @@ task("deploy-contracts", "Deploys and verifies Rigoblock contracts")
             `Failed to verify ${contractName} on Etherscan at ${deployment.address}:`,
             getErrorMessage(error),
           );
-          markVendorUnverified(
-            status,
-            contractName,
-            "etherscan",
-            deployment.address,
-          );
+          markVendorUnverified(status, contractName, "etherscan", deployment.address);
         }
       }
     }
 
-    saveVerificationStatus(hre, status);
+    saveVerificationStatus(networkName, status);
     console.log("Verification status saved.");
-  });
-
-export {};
+  })
+  .build();
