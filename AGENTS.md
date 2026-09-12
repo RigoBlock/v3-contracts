@@ -398,11 +398,23 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 - Pool proxies (if deployed with same params)
 - Core implementations
 - Staking suite, Governance core
+- **ExtensionsMap** — see below
+
+**ExtensionsMap has NO constructor parameters.** The deployment params (extension
+addresses, wrapped native) are written to the `ExtensionsMapDeployer`'s storage and
+read by the ExtensionsMap constructor at deploy time (`msg.sender` context). The map is
+always deployed via `ExtensionsMapDeployer.deployExtensionsMap(params, salt)`, and its
+CREATE2 address depends only on three chain-independent inputs: the deployer contract's
+address, the salt, and `type(ExtensionsMap).creationCode`. Same code + same salt ⇒ same
+address on every chain (mainnet's map is at `0x591cc27B8fc9D9BCd93375B0F4d3a2cd23F1a007`).
+Apparent mismatches on production chains (e.g. arbitrum/hyperliquid) are upgrade-timing
+artifacts — those chains received the map under an older deployer/salt generation — not a
+by-design per-chain address. A fresh chain with the current code and current salt always
+reproduces the canonical address.
 
 ### Different Address Per Chain
 
-- ExtensionsMap (extensions have chain-specific params)
-- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain)
+- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain) — chain-specific constructor params
 - Governance strategy
 
 ### NAV Integrity in Cross-Chain Transfers
