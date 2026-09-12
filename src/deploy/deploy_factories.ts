@@ -1,64 +1,34 @@
-import "hardhat-deploy";
-import "@nomiclabs/hardhat-ethers";
-import { DeployFunction } from "hardhat-deploy/types";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { enableManagedNonce } from "../utils/nonce";
+import {readArtifact} from "../../rocketh/artifacts.js";
+import {deployScript} from "../../rocketh/deploy.js";
+import type {Environment} from "../../rocketh/config.js";
+import {enableManagedNonce} from "../utils/nonce";
 
-const deploy: DeployFunction = async function (
-  hre: HardhatRuntimeEnvironment,
-) {
-  const { deployments, getNamedAccounts } = hre;
-  const { deployer } = await getNamedAccounts();
-  await enableManagedNonce(hre, deployer);
-  const { deploy } = deployments;
+export default deployScript(
+  async (env: Environment) => {
+    const deployer = env.namedAccounts.deployer;
+    await enableManagedNonce(env, deployer);
 
-  const authority = await deploy("Authority", {
-    from: deployer,
-    args: [deployer],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const authority = await env.deploy("Authority", {
+      account: deployer,
+      artifact: await readArtifact("Authority"),
+      args: [deployer]
+      }, {deterministic: true});
 
-  const registry = await deploy("PoolRegistry", {
-    from: deployer,
-    args: [
-      authority.address,
-      deployer  // Rigoblock Dao
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const registry = await env.deploy("PoolRegistry", {
+      account: deployer,
+      artifact: await readArtifact("PoolRegistry"),
+      args: [authority.address, deployer], // Rigoblock Dao
+      }, {deterministic: true});
 
-  const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  /*const proxyFactory =*/ await deploy("RigoblockPoolProxyFactory", {
-    from: deployer,
-    args: [
-      originalImplementationAddress,
-      registry.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const originalImplementationAddress =
+      "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516";
+    await env.deploy("RigoblockPoolProxyFactory", {
+      account: deployer,
+      artifact: await readArtifact("RigoblockPoolProxyFactory"),
+      args: [originalImplementationAddress, registry.address]
+      }, {deterministic: true});
 
-  // Notice: pool implementation requires deployed extensionsMap address (same on all chains)
-  /*const extensionsMap = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const weth = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const poolImplementation = await deploy("SmartPool", {
-    from: deployer,
-    args: [authority.address, extensionsMap, weth],
-    log: true,
-    deterministicDeployment: true,
-  });
-
-  const proxyFactoryInstance = await hre.ethers.getContractAt(
-    "RigoblockPoolProxyFactory",
-    proxyFactory.address
-  );
-  const currentImplementation = await proxyFactoryInstance.implementation()
-  if (currentImplementation !== poolImplementation.address) {
-    await proxyFactoryInstance.setImplementation(poolImplementation.address)
-  }*/
-};
-
-deploy.tags = ['factory', 'pool-deps', 'l2-suite', 'main-suite']
-export default deploy;
+    // Notice: pool implementation requires deployed extensionsMap address (same on all chains)
+  },
+  {tags: ["factory", "pool-deps", "l2-suite", "main-suite"]},
+);

@@ -1,142 +1,195 @@
-import "hardhat-deploy";
-import "@nomiclabs/hardhat-ethers";
-import { DeployFunction } from "hardhat-deploy/types";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { AddressZero } from "@ethersproject/constants"
+import {readArtifact} from "../../rocketh/artifacts.js";
+import { deployScript } from "../../rocketh/deploy.js";
+import { isLocalEnvironment, type Environment } from "../../rocketh/config.js";
 
-const deploy: DeployFunction = async function (
-  hre: HardhatRuntimeEnvironment,
-) {
-  if (!["hardhat", "localhost"].includes(hre.network.name)) {
-    console.log(`Skipping ${__filename} on ${hre.network.name}`);
-    return;
-  }
+export default deployScript(
+  async (env: Environment) => {
+    if (!isLocalEnvironment(env)) {
+      console.log(`Skipping governance tests setup on ${env.name}`);
+      return;
+    }
 
-  const { deployments, getNamedAccounts } = hre;
-  const { deployer } = await getNamedAccounts();
-  const { deploy } = deployments;
+    const deployer = env.namedAccounts.deployer;
 
-  const authority = await deploy("Authority", {
-    from: deployer,
-    args: [deployer], // owner
-    log: true,
-    deterministicDeployment: true,
-  });
+    await env.deploy(
+      "Authority",
+      {
+        account: deployer,
+        artifact: await readArtifact("Authority"),
+        args: [deployer], // owner
+      },
+      { deterministic: true },
+    );
 
-  const authorityInstance = await hre.ethers.getContractAt(
-    "Authority",
-    authority.address
-  );
-/*
-  await authorityInstance.setWhitelister(deployer, true);
-*/
-  const registry = await deploy("PoolRegistry", {
-    from: deployer,
-    args: [
-      authority.address,
-      deployer  // Rigoblock Dao
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    await env.deploy(
+      "PoolRegistry",
+      {
+        account: deployer,
+        artifact: await readArtifact("PoolRegistry"),
+        args: [env.get("Authority").address, deployer], // Rigoblock Dao
+      },
+      { deterministic: true },
+    );
 
-  // same on altchains but different from one deployed on Ethereum
-  const rigoToken = await deploy("RigoToken", {
-    from: deployer,
-    args: [
-      deployer, // address _setMinter
-      deployer, // address _setRigoblock
-      deployer // address _grgHolder
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    // same on altchains but different from one deployed on Ethereum
+    await env.deploy(
+      "RigoToken",
+      {
+        account: deployer,
+        artifact: await readArtifact("RigoToken"),
+        args: [
+          deployer, // address _setMinter
+          deployer, // address _setRigoblock
+          deployer, // address _grgHolder
+        ],
+      },
+      { deterministic: true },
+    );
 
-  const rigoTokenInstance = await hre.ethers.getContractAt(
-    "RigoToken",
-    rigoToken.address
-  );
+    const grgTransferProxy = await env.deploy(
+      "ERC20Proxy",
+      {
+        account: deployer,
+        artifact: await readArtifact("ERC20Proxy"),
+        args: [deployer], // Authorizable(_owner)
+      },
+      { deterministic: true },
+    );
 
-  const grgTransferProxy = await deploy("ERC20Proxy", {
-    from: deployer,
-    args: [deployer],  // Authorizable(_owner)
-    log: true,
-    deterministicDeployment: true,
-  });
-/*
-  const grgTransferProxyInstance = await hre.ethers.getContractAt(
-    "ERC20Proxy",
-    grgTransferProxy.address
-  );
-*/
-  // same on altchains but different from one deployed on Ethereum
-  const grgVault = await deploy("GrgVault", {
-    from: deployer,
-    args: [
-      grgTransferProxy.address,
-      rigoToken.address,
-      deployer  // Authorizable(_owner)
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
-/*
-  // TODO: test if following condition necessary
-  await grgTransferProxyInstance.addAuthorizedAddress(grgVault.address)
-*/
-  const grgVaultInstance = await hre.ethers.getContractAt(
-    "GrgVault",
-    grgVault.address
-  );
+    // same on altchains but different from one deployed on Ethereum
+    const grgVault = await env.deploy(
+      "GrgVault",
+      {
+        account: deployer,
+        artifact: await readArtifact("GrgVault"),
+        args: [
+          grgTransferProxy.address,
+          env.get("RigoToken").address,
+          deployer,
+        ], // Authorizable(_owner)
+      },
+      { deterministic: true },
+    );
 
-  // same on altchains but different from one deployed on Ethereum
-  const staking = await deploy("Staking", {
-    from: deployer,
-    args: [
-        grgVault.address,
-        registry.address,
-        rigoToken.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    // the vault must be able to move GRG via the transfer proxy; the check makes
+    // the script idempotent when another tag set (tests-setup) already authorized it
+    const erc20ProxyAuthorized = (await env.readByName("ERC20Proxy", {
+      functionName: "getAuthorizedAddresses",
+      args: [],
+    })) as string[];
+    if (!erc20ProxyAuthorized.includes(grgVault.address)) {
+      await env.executeByName("ERC20Proxy", {
+        account: deployer,
+        functionName: "addAuthorizedAddress",
+        args: [grgVault.address],
+      });
+    }
 
-  // same on altchains but different from one deployed on Ethereum
-  const stakingProxy = await deploy("StakingProxy", {
-    from: deployer,
-    args: [
-        staking.address,
-        deployer  // Authorizable(_owner)
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
-/*
-  await grgVaultInstance.addAuthorizedAddress(deployer)
-  await grgVaultInstance.setStakingProxy(stakingProxy.address)
-  await grgVaultInstance.removeAuthorizedAddress(deployer)
-*/
-  const governanceFactory = await deploy("RigoblockGovernanceFactory", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
+    // same on altchains but different from one deployed on Ethereum
+    const staking = await env.deploy(
+      "Staking",
+      {
+        account: deployer,
+        artifact: await readArtifact("Staking"),
+        args: [
+          grgVault.address,
+          env.get("PoolRegistry").address,
+          env.get("RigoToken").address,
+        ],
+      },
+      { deterministic: true },
+    );
 
-  const governanceImplementation = await deploy("RigoblockGovernance", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
+    // same on altchains but different from one deployed on Ethereum
+    const stakingProxy = await env.deploy(
+      "StakingProxy",
+      {
+        account: deployer,
+        artifact: await readArtifact("StakingProxy"),
+        args: [staking.address, deployer], // Authorizable(_owner)
+      },
+      { deterministic: true },
+    );
 
-  const governanceStrategy = await deploy("RigoblockGovernanceStrategy", {
-    from: deployer,
-    args: [stakingProxy.address],
-    log: true,
-    deterministicDeployment: true,
-  });
-};
+    // staking proxy must be authorized on the vault, otherwise stake() reverts
+    const currentStakingProxy = (await env.readByName("GrgVault", {
+      functionName: "stakingProxy",
+      args: [],
+    })) as string;
+    if (currentStakingProxy !== stakingProxy.address) {
+      await env.executeByName("GrgVault", {
+        account: deployer,
+        functionName: "addAuthorizedAddress",
+        args: [deployer],
+      });
+      await env.executeByName("GrgVault", {
+        account: deployer,
+        functionName: "setStakingProxy",
+        args: [stakingProxy.address],
+      });
+      await env.executeByName("GrgVault", {
+        account: deployer,
+        functionName: "removeAuthorizedAddress",
+        args: [deployer],
+      });
+    }
 
-deploy.tags = ['governance-tests', 'l2-suite', 'main-suite']
-export default deploy;
+    // staking's endEpoch calls mintInflation() on the GRG minter; it must be a contract
+    const inflation = await env.deploy(
+      "Inflation",
+      {
+        account: deployer,
+        artifact: await readArtifact("Inflation"),
+        args: [env.get("RigoToken").address, stakingProxy.address],
+      },
+      { deterministic: true },
+    );
+
+    const currentMinter = (await env.readByName("RigoToken", {
+      functionName: "minter",
+      args: [],
+    })) as string;
+    if (currentMinter !== inflation.address) {
+      await env.executeByName("RigoToken", {
+        account: deployer,
+        functionName: "changeMintingAddress",
+        args: [inflation.address],
+      });
+    }
+
+    await env.deploy(
+      "RigoblockGovernanceFactory",
+      {
+        account: deployer,
+        artifact: await readArtifact(
+          "RigoblockGovernanceFactory",
+        ),
+        args: [],
+      },
+      { deterministic: true },
+    );
+
+    await env.deploy(
+      "RigoblockGovernance",
+      {
+        account: deployer,
+        artifact: await readArtifact("RigoblockGovernance"),
+        args: [],
+      },
+      { deterministic: true },
+    );
+
+    await env.deploy(
+      "RigoblockGovernanceStrategy",
+      {
+        account: deployer,
+        artifact: await readArtifact(
+          "RigoblockGovernanceStrategy",
+        ),
+        args: [stakingProxy.address],
+      },
+      { deterministic: true },
+    );
+  },
+  { tags: ["governance-tests", "l2-suite", "main-suite"] },
+);
