@@ -1,3 +1,12 @@
+## [2.6.4](https://github.com/RigoBlock/v3-contracts/compare/v2.6.3...v2.6.4) (2026-09-12)
+
+
+### Bug Fixes
+
+* same block nav lock on hyperEvm ([db2816f](https://github.com/RigoBlock/v3-contracts/commit/db2816f0a9a987a352919dac32e0ef02fb66dfe9))
+
+
+
 ## [2.6.3](https://github.com/RigoBlock/v3-contracts/compare/v2.6.2...v2.6.3) (2026-09-10)
 
 
@@ -45,15 +54,6 @@
 * block nav-sensitive ops during hyperCore funds transfers ([81f7137](https://github.com/RigoBlock/v3-contracts/commit/81f71371a0d7423e1fe59ee33a90b48dfc74d747))
 * hyperliquid apps ([f8a73b6](https://github.com/RigoBlock/v3-contracts/commit/f8a73b6848aebb809ad8eb0bc85011f534304518))
 * narrow Hyperliquid settlement lock to deposits and withdrawals ([6d1efc6](https://github.com/RigoBlock/v3-contracts/commit/6d1efc69e0efa3e6779ce458d6b66c3bae23f3ec))
-
-
-
-## [2.5.2](https://github.com/RigoBlock/v3-contracts/compare/v2.5.1...v2.5.2) (2026-07-28)
-
-
-### Bug Fixes
-
-* **ci:** remove npm registry-url to enable OIDC trusted publishing ([fe422ec](https://github.com/RigoBlock/v3-contracts/commit/fe422ec33e191d353d4fc53f4e26349265f02ed3))
 
 
 
