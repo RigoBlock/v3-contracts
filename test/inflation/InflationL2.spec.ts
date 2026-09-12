@@ -47,10 +47,9 @@ describe("InflationL2", async () => {
   //  it must be changed in the staking implementation as well.
   describe("deployedAddress", async () => {
     it("should deploy expected deterministic deployment address", async () => {
-      if (
-        process.env.PROD == "true" &&
-        process.env.CUSTOM_DETERMINISTIC_DEPLOYMENT == "true"
-      ) {
+      // deterministic deployment via the Safe singleton factory is unconditional
+      // on production chains (rocketh/config.ts PRODUCTION_CHAIN_IDS)
+      if (process.env.PROD == "true") {
         const { inflation } = await setupTests();
         expect(await inflation.getAddress()).to.be.eq(
           "0xA889E90d4F1BA125Df1B4C1f55c7fff9F4377C03",
