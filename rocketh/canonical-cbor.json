@@ -1,34 +1,202 @@
 {
   "A0xRouter": {
-    "tail": "a2646970667358221220e5027be41daf08b7869a05a46b6f0a6d4f958deaa53b9861bcf5b1e60bb1a74b64736f6c634300081c0033",
-    "initCodeHash": "0xc8de27859705b5fc9690b0d13804c951514afcacf2157ae8d2e9adbd7d39afe4"
+    "initSkeletonHash": "0xc8de27859705b5fc9690b0d13804c951514afcacf2157ae8d2e9adbd7d39afe4",
+    "initGaps": [
+      {
+        "offset": 10454,
+        "blob": "a2646970667358221220e5027be41daf08b7869a05a46b6f0a6d4f958deaa53b9861bcf5b1e60bb1a74b64736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x8681efd7d70d7d69ff6f992c9e0c7773b68c55e19412d1c2a5cceb69a863c8ac",
+    "deployedGaps": [
+      {
+        "offset": 10032,
+        "blob": "a2646970667358221220e5027be41daf08b7869a05a46b6f0a6d4f958deaa53b9861bcf5b1e60bb1a74b64736f6c634300081c0033"
+      }
+    ]
+  },
+  "AIntents": {
+    "initSkeletonHash": "0x5aed90ba03bbc91f2ef365b67e16a1eeec93eda82ac711e917cb62ebf19d7cb3",
+    "initGaps": [
+      {
+        "offset": 22972,
+        "blob": "a2646970667358221220fa0f6038435223a23c39ffd46213eb2bf2678b2c8377bc61696601c096853c0164736f6c634300081c0033"
+      },
+      {
+        "offset": 23036,
+        "blob": "a2646970667358221220f847a966b95ce0b29f5cf0e5e67dbce338a349565c46a90e10f5c515b862ce9764736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x5315acd698987024f6ec2a522698cc11058033f2adaabb15dbba4e9cf9a882f7",
+    "deployedGaps": [
+      {
+        "offset": 22656,
+        "blob": "a2646970667358221220fa0f6038435223a23c39ffd46213eb2bf2678b2c8377bc61696601c096853c0164736f6c634300081c0033"
+      },
+      {
+        "offset": 22720,
+        "blob": "a2646970667358221220f847a966b95ce0b29f5cf0e5e67dbce338a349565c46a90e10f5c515b862ce9764736f6c634300081c0033"
+      }
+    ]
   },
   "AMulticall": {
-    "tail": "a2646970667358221220cc6a6ed81b65f12d08f7b90c3c9980ffa0d0b5fa174abca2f077b1d9cf1674a764736f6c634300081c0033",
-    "initCodeHash": "0xb149010030fa3c1fc6cf143d1b072ee88abf530e2af57476778b12b37839cdcf"
+    "initSkeletonHash": "0xb149010030fa3c1fc6cf143d1b072ee88abf530e2af57476778b12b37839cdcf",
+    "initGaps": [
+      {
+        "offset": 2286,
+        "blob": "a2646970667358221220cc6a6ed81b65f12d08f7b90c3c9980ffa0d0b5fa174abca2f077b1d9cf1674a764736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x3de500a88455b25d989e805e5cb80b05a9a7d1f3d340591503a44ec8c75e8182",
+    "deployedGaps": [
+      {
+        "offset": 2230,
+        "blob": "a2646970667358221220cc6a6ed81b65f12d08f7b90c3c9980ffa0d0b5fa174abca2f077b1d9cf1674a764736f6c634300081c0033"
+      }
+    ]
   },
   "AUniswap": {
-    "tail": "a26469706673582212204af5823a278c66043e5b3e67ba98a368058c8a61070720628cfe5684a0b2cbc564736f6c634300081c0033",
-    "initCodeHash": "0xbbe383b998f3407c6f1322a72372e6bf0c8e2c4c492f5bc28c38d9fd6d967cc0"
+    "initSkeletonHash": "0xbbe383b998f3407c6f1322a72372e6bf0c8e2c4c492f5bc28c38d9fd6d967cc0",
+    "initGaps": [
+      {
+        "offset": 2914,
+        "blob": "a26469706673582212204af5823a278c66043e5b3e67ba98a368058c8a61070720628cfe5684a0b2cbc564736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x2feed4221f9dfb4449bfa86d1dec0c0a2ed0290320f9d7f4fd80ef09dabac52d",
+    "deployedGaps": [
+      {
+        "offset": 2612,
+        "blob": "a26469706673582212204af5823a278c66043e5b3e67ba98a368058c8a61070720628cfe5684a0b2cbc564736f6c634300081c0033"
+      }
+    ]
   },
   "AUniswapRouter": {
-    "tail": "a2646970667358221220acaf507776cd8127ed968f9535018db26c940015bc1a7ffa9892d2498cf1a43664736f6c634300081c0033",
-    "initCodeHash": "0x298ee4ebeca20c45620a7b223c270f85839f4aa68982755f4c5c912aff9ac37b"
+    "initSkeletonHash": "0x298ee4ebeca20c45620a7b223c270f85839f4aa68982755f4c5c912aff9ac37b",
+    "initGaps": [
+      {
+        "offset": 26330,
+        "blob": "a2646970667358221220acaf507776cd8127ed968f9535018db26c940015bc1a7ffa9892d2498cf1a43664736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x44fa3695d59ad24f23a3955dc0e03a4222682d2f26951f74653b7525b03e7a10",
+    "deployedGaps": [
+      {
+        "offset": 25422,
+        "blob": "a2646970667358221220acaf507776cd8127ed968f9535018db26c940015bc1a7ffa9892d2498cf1a43664736f6c634300081c0033"
+      }
+    ]
   },
   "Authority": {
-    "tail": "a2646970667358221220e5feb7bf111e6413ccdaa9582f879ba37e6c55b72e9311b571712991290e911164736f6c63430008110033",
-    "initCodeHash": "0x242912a83e9bfc546f387101485f87ce61e8792c63334f2fa105eaed440d82b7"
+    "initSkeletonHash": "0x242912a83e9bfc546f387101485f87ce61e8792c63334f2fa105eaed440d82b7",
+    "initGaps": [
+      {
+        "offset": 7004,
+        "blob": "a2646970667358221220e5feb7bf111e6413ccdaa9582f879ba37e6c55b72e9311b571712991290e911164736f6c63430008110033"
+      }
+    ],
+    "deployedSkeletonHash": "0x36ff06951b99480548121e5180f21021b1778e3ee93d4a1e041d4756575f64b8",
+    "deployedGaps": [
+      {
+        "offset": 6710,
+        "blob": "a2646970667358221220e5feb7bf111e6413ccdaa9582f879ba37e6c55b72e9311b571712991290e911164736f6c63430008110033"
+      }
+    ]
   },
   "EUpgrade": {
-    "tail": "a2646970667358221220dcfdcee2e9cefb410065a1bbe0c8809a61009822d00619b933f85f9d1ac79b1964736f6c634300081c0033",
-    "initCodeHash": "0x72442352c77b5cb829fe629b263f14316fb5985e5a309f3736f3ed3fdaac1164"
+    "initSkeletonHash": "0x72442352c77b5cb829fe629b263f14316fb5985e5a309f3736f3ed3fdaac1164",
+    "initGaps": [
+      {
+        "offset": 1574,
+        "blob": "a2646970667358221220dcfdcee2e9cefb410065a1bbe0c8809a61009822d00619b933f85f9d1ac79b1964736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x06f5e2db13572a518458a595e077bf44918357d5ae0465b346c136c260f470d1",
+    "deployedGaps": [
+      {
+        "offset": 1288,
+        "blob": "a2646970667358221220dcfdcee2e9cefb410065a1bbe0c8809a61009822d00619b933f85f9d1ac79b1964736f6c634300081c0033"
+      }
+    ]
   },
   "ExtensionsMap": {
-    "tail": "a264697066735822122003df88e3b4a39cf9c7be58e1f38fe659724cb2a6e5ec9b77155545ff3360ac1d64736f6c634300081c0033",
-    "initCodeHash": "0xb39dd861e760fe5fd8b407060c4f8dc3cc25a424d2d119da4480fc55a02f5355"
+    "initSkeletonHash": "0xb39dd861e760fe5fd8b407060c4f8dc3cc25a424d2d119da4480fc55a02f5355",
+    "initGaps": [
+      {
+        "offset": 3682,
+        "blob": "a264697066735822122003df88e3b4a39cf9c7be58e1f38fe659724cb2a6e5ec9b77155545ff3360ac1d64736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x7f2044e12d68cf688080797d8e548bd43df8a7d10f3716195f03f7eea1300598",
+    "deployedGaps": [
+      {
+        "offset": 2416,
+        "blob": "a264697066735822122003df88e3b4a39cf9c7be58e1f38fe659724cb2a6e5ec9b77155545ff3360ac1d64736f6c634300081c0033"
+      }
+    ]
+  },
+  "ExtensionsMapDeployer": {
+    "initSkeletonHash": "0x2096f4cb183a179c2fac2e0865554b1995993be5959f7c133e46c4800bebc7b8",
+    "initGaps": [
+      {
+        "offset": 6546,
+        "blob": "a264697066735822122003df88e3b4a39cf9c7be58e1f38fe659724cb2a6e5ec9b77155545ff3360ac1d64736f6c634300081c0033"
+      },
+      {
+        "offset": 6546,
+        "blob": "a26469706673582212207fca1105f7da48676d96e8978419f7ab42f37991abbda95bb51bf955baf42d7664736f6c634300081c0033"
+      }
+    ],
+    "deployedSkeletonHash": "0x6e058e482d5ce4b308cfc4d854290ff8f7cdd568c156c2686b3e63ae415c4b68",
+    "deployedGaps": [
+      {
+        "offset": 6490,
+        "blob": "a264697066735822122003df88e3b4a39cf9c7be58e1f38fe659724cb2a6e5ec9b77155545ff3360ac1d64736f6c634300081c0033"
+      },
+      {
+        "offset": 6490,
+        "blob": "a26469706673582212207fca1105f7da48676d96e8978419f7ab42f37991abbda95bb51bf955baf42d7664736f6c634300081c0033"
+      }
+    ]
   },
   "PoolRegistry": {
-    "tail": "a264697066735822122073e75ac3b8c1adf691f488a40c982626b75f2de75e2da12a95537a887a930a1d64736f6c63430008110033",
-    "initCodeHash": "0x85cc49f20fb2d3d687771059bbbc5666bf31ddaab3b7c0e1186fd2b0075117db"
+    "initSkeletonHash": "0x85cc49f20fb2d3d687771059bbbc5666bf31ddaab3b7c0e1186fd2b0075117db",
+    "initGaps": [
+      {
+        "offset": 7936,
+        "blob": "a264697066735822122073e75ac3b8c1adf691f488a40c982626b75f2de75e2da12a95537a887a930a1d64736f6c63430008110033"
+      }
+    ],
+    "deployedSkeletonHash": "0xe9a8320f7280e41a2615ab3dfc11b5d1da917a7d1e15b4e4aebb6a2e45ae8bf5",
+    "deployedGaps": [
+      {
+        "offset": 7556,
+        "blob": "a264697066735822122073e75ac3b8c1adf691f488a40c982626b75f2de75e2da12a95537a887a930a1d64736f6c63430008110033"
+      }
+    ]
+  },
+  "RigoblockPoolProxyFactory": {
+    "initSkeletonHash": "0x4f0e2cbfdb89819d9b6e1740fcc337be319923afd4e65d4a16f0922ec1c5e07d",
+    "initGaps": [
+      {
+        "offset": 9696,
+        "blob": "a26469706673582212200f74c83651b80afff3529310debe8504f073a23e59eec106c535ef5765dd152e64736f6c63430008110033"
+      },
+      {
+        "offset": 9760,
+        "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
+      }
+    ],
+    "deployedSkeletonHash": "0x2792db09f8da3ffc3cb4c2165da8aaf37278ac191734a5b244191e66c41ad6a3",
+    "deployedGaps": [
+      {
+        "offset": 9316,
+        "blob": "a26469706673582212200f74c83651b80afff3529310debe8504f073a23e59eec106c535ef5765dd152e64736f6c63430008110033"
+      },
+      {
+        "offset": 9380,
+        "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
+      }
+    ]
   }
 }
