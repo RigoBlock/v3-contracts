@@ -1,63 +1,66 @@
 import { expect } from "chai";
-import hre, { deployments, waffle, ethers } from "hardhat";
-import "@nomiclabs/hardhat-ethers";
-import { AddressZero } from "@ethersproject/constants";
-import { parseEther } from "@ethersproject/units";
-import { BigNumber } from "ethers";
+import { network } from "hardhat";
+import { parseEther, ZeroAddress } from "ethers";
 import { DEADLINE, ZERO_ADDRESS } from "../shared/constants";
 import { CommandType, RoutePlanner } from "../shared/planner";
 import { timeTravel } from "../utils/utils";
+import { connect, getFixedGasSigners } from "../shared/helper";
+import { createFixture } from "../utils/fixtures";
 
 describe("MintWithToken", async () => {
-  const [user1, user2] = waffle.provider.getWallets();
   const MAX_TICK_SPACING = 32767;
 
-  const setupTests = deployments.createFixture(async ({ deployments }) => {
-    await deployments.fixture("tests-setup");
-    const AuthorityInstance = await deployments.get("Authority");
-    const Authority = await hre.ethers.getContractFactory("Authority");
-    const RigoblockPoolProxyFactory = await deployments.get(
+  const setupTests = createFixture(["tests-setup"], async ({ get }) => {
+    const [user1, user2] = await getFixedGasSigners();
+    const { ethers } = await network.getOrCreate();
+    const factory = await ethers.getContractAt(
       "RigoblockPoolProxyFactory",
+      (await get("RigoblockPoolProxyFactory")).address,
     );
-    const Factory = await hre.ethers.getContractFactory(
-      "RigoblockPoolProxyFactory",
+    const authority = await ethers.getContractAt(
+      "Authority",
+      (await get("Authority")).address,
     );
-    const factory = Factory.attach(RigoblockPoolProxyFactory.address);
-    const RigoTokenInstance = await deployments.get("RigoToken");
-    const RigoToken = await hre.ethers.getContractFactory("RigoToken");
-    const grgToken = RigoToken.attach(RigoTokenInstance.address);
-    const { newPoolAddress } = await factory.callStatic.createPool(
-      "testpool",
-      "TEST",
-      grgToken.address,
+    const grgToken = await ethers.getContractAt(
+      "RigoToken",
+      (await get("RigoToken")).address,
     );
-    await factory.createPool("testpool", "TEST", grgToken.address);
-    const pool = await hre.ethers.getContractAt("SmartPool", newPoolAddress);
-    const HookInstance = await deployments.get("MockOracle");
-    const Hook = await hre.ethers.getContractFactory("MockOracle");
-    const oracle = Hook.attach(HookInstance.address);
-    const authority = Authority.attach(AuthorityInstance.address);
-    const Weth = await hre.ethers.getContractFactory("WETH9");
-    const WethInstance = await deployments.get("WETH9");
-    const weth = Weth.attach(WethInstance.address);
-    const Univ4PosmInstance = await deployments.get("MockUniswapPosm");
-    const MockUniUniversalRouter = await ethers.getContractFactory(
-      "MockUniUniversalRouter",
+    const poolAddress = (
+      await factory.createPool.staticCall(
+        "testpool",
+        "TEST",
+        await grgToken.getAddress(),
+      )
+    )[0];
+    await factory.createPool("testpool", "TEST", await grgToken.getAddress());
+    const pool = await ethers.getContractAt("SmartPool", poolAddress);
+    const oracle = await ethers.getContractAt(
+      "MockOracle",
+      (await get("MockOracle")).address,
     );
-    const uniRouter = await MockUniUniversalRouter.deploy(
-      Univ4PosmInstance.address,
+    const weth = await ethers.getContractAt(
+      "WETH9",
+      (await get("WETH9")).address,
     );
-    const AUniswapRouter = await ethers.getContractFactory("AUniswapRouter");
-    const aUniswapRouter = await AUniswapRouter.deploy(
-      uniRouter.address,
-      Univ4PosmInstance.address,
-      weth.address,
+    const univ4Posm = await ethers.getContractAt(
+      "MockUniswapPosm",
+      (await get("MockUniswapPosm")).address,
     );
-    await authority.setAdapter(aUniswapRouter.address, true);
-    await authority.addMethod("0x3593564c", aUniswapRouter.address); // execute(bytes,bytes[],uint256)
-    const MockTokenJarInstance = await deployments.get("MockTokenJar");
-    const MockTokenJar = await hre.ethers.getContractFactory("MockTokenJar");
-    const tokenJar = MockTokenJar.attach(MockTokenJarInstance.address);
+    const uniRouter = await ethers.deployContract("MockUniUniversalRouter", [
+      await univ4Posm.getAddress(),
+    ]);
+    const aUniswapRouter = await ethers.deployContract("AUniswapRouter", [
+      await uniRouter.getAddress(),
+      await univ4Posm.getAddress(),
+      await weth.getAddress(),
+    ]);
+    await authority.setAdapter(await aUniswapRouter.getAddress(), true);
+    // "3593564c": "execute(bytes calldata, bytes[] calldata, uint256)"
+    await authority.addMethod("0x3593564c", await aUniswapRouter.getAddress());
+    const tokenJar = await ethers.getContractAt(
+      "MockTokenJar",
+      (await get("MockTokenJar")).address,
+    );
 
     return {
       factory,
@@ -66,255 +69,303 @@ describe("MintWithToken", async () => {
       grgToken,
       weth,
       tokenJar,
+      user1,
+      user2,
     };
   });
 
   describe("mintWithToken", async () => {
     it("should revert if token not active", async () => {
-      const { pool, weth, grgToken } = await setupTests();
+      const { pool, weth, grgToken, user1 } = await setupTests();
       const tokenAmount = parseEther("10");
-      await grgToken.approve(pool.address, tokenAmount);
+      await grgToken.approve(await pool.getAddress(), tokenAmount);
 
       // weth is not in the active tokens set
       await expect(
-        pool.mintWithToken(user1.address, tokenAmount, 0, weth.address),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+        pool.mintWithToken(
+          user1.address,
+          tokenAmount,
+          0,
+          await weth.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
     });
 
     it("should revert it token is the same as pool base token", async () => {
-      const { pool, oracle, grgToken } = await setupTests();
+      const { pool, oracle, grgToken, user1 } = await setupTests();
       const tokenAmount = parseEther("100");
-      await grgToken.approve(pool.address, tokenAmount);
+      await grgToken.approve(await pool.getAddress(), tokenAmount);
 
       // grgToken is the same as pool base token
       await expect(
-        pool.mintWithToken(user1.address, tokenAmount, 0, grgToken.address),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+        pool.mintWithToken(
+          user1.address,
+          tokenAmount,
+          0,
+          await grgToken.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
 
       // check that base token is not activated
       const poolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
       await expect(
-        pool.mintWithToken(user1.address, tokenAmount, 0, grgToken.address),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+        pool.mintWithToken(
+          user1.address,
+          tokenAmount,
+          0,
+          await grgToken.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
     });
 
     it("should mint with alternative ERC20 token", async () => {
-      const { pool, oracle, tokenJar, weth, grgToken } = await setupTests();
+      const { pool, oracle, tokenJar, weth, grgToken, user1 } =
+        await setupTests();
+      const { ethers } = await network.getOrCreate();
       const tokenAmount = parseEther("100");
       await weth.deposit({ value: tokenAmount });
-      await weth.approve(pool.address, tokenAmount);
+      await weth.approve(await pool.getAddress(), tokenAmount);
 
       // grgToken is the same as pool base token
       await expect(
-        pool.mintWithToken(user1.address, tokenAmount, 0, weth.address),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+        pool.mintWithToken(
+          user1.address,
+          tokenAmount,
+          0,
+          await weth.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
 
       // check that base token is not activated
       const poolKey = {
-        currency0: AddressZero,
-        currency1: weth.address,
+        currency0: ZeroAddress,
+        currency1: await weth.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
       await expect(
-        pool.mintWithToken(user1.address, tokenAmount, 0, weth.address),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+        pool.mintWithToken(
+          user1.address,
+          tokenAmount,
+          0,
+          await weth.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
 
       // make sure pool has some eth balance
       await user1.sendTransaction({
-        to: pool.address,
+        to: await pool.getAddress(),
         value: 1000,
       });
 
       // activate the token by wrapping some eth in the pool via AUniswapRouter call
       const planner: RoutePlanner = new RoutePlanner();
-      planner.addCommand(CommandType.WRAP_ETH, [pool.address, 1000]);
+      planner.addCommand(CommandType.WRAP_ETH, [await pool.getAddress(), 1000]);
       const { commands, inputs } = planner;
-      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter");
-      const extPool = ExtPool.attach(pool.address);
+      const extPool = await ethers.getContractAt(
+        "AUniswapRouter",
+        await pool.getAddress(),
+      );
       const encodedWrapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
         [commands, inputs, DEADLINE],
       );
-      try {
-        await user1.sendTransaction({
-          to: extPool.address,
-          value: 0,
-          data: encodedWrapData,
-        });
-      } catch (error: any) {
-        const customError =
-          error.error?.reason || error.reason || error.message;
-        throw new Error(`${customError}`);
-      }
+      await user1.sendTransaction({
+        to: await extPool.getAddress(),
+        value: 0,
+        data: encodedWrapData,
+      });
 
       await expect(
-        pool.mintWithToken(user1.address, tokenAmount, 0, weth.address),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
-      await pool.setAcceptableMintToken(weth.address, true);
+        pool.mintWithToken(
+          user1.address,
+          tokenAmount,
+          0,
+          await weth.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
+      await pool.setAcceptableMintToken(await weth.getAddress(), true);
 
       // the token is active, but the base token price feed does not exist, so it should revert (we wouldn't be able to price the token otherwise)
       await expect(
-        pool.mintWithToken(user1.address, tokenAmount, 0, weth.address),
-      ).to.be.revertedWith("BaseTokenPriceFeedError");
+        pool.mintWithToken(
+          user1.address,
+          tokenAmount,
+          0,
+          await weth.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "BaseTokenPriceFeedError");
 
       const grgPoolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(grgPoolKey);
 
       const { spread } = await pool.getPoolParams();
-      const spreadAmount = tokenAmount.mul(spread).div(10000);
-      const tokenJarBalanceBefore = await weth.balanceOf(tokenJar.address);
+      const spreadAmount = (tokenAmount * spread) / 10000n;
+      const tokenJarBalanceBefore = await weth.balanceOf(
+        await tokenJar.getAddress(),
+      );
 
       // travel time to avoid issues with oracle observations
       await timeTravel({ seconds: 600, mine: true }); // to ensure price feeds have enough data, so that twap does not change from simulation to actual tx
 
-      const mintedAmount = await pool.callStatic.mintWithToken(
+      const mintedAmount = await pool.mintWithToken.staticCall(
         user1.address,
         tokenAmount,
         0,
-        weth.address,
+        await weth.getAddress(),
       );
 
       const tx = await pool.mintWithToken(
         user1.address,
         tokenAmount,
         0,
-        weth.address,
+        await weth.getAddress(),
       );
 
       await expect(tx)
         .to.emit(pool, "Transfer")
         .withArgs(
-          AddressZero,
+          ZeroAddress,
           user1.address,
           parseEther("101.918011957404020383"),
         );
       await expect(tx)
         .to.emit(weth, "Transfer")
-        .withArgs(user1.address, pool.address, tokenAmount);
+        .withArgs(user1.address, await pool.getAddress(), tokenAmount);
       await expect(tx)
         .to.emit(weth, "Transfer")
-        .withArgs(pool.address, tokenJar.address, spreadAmount);
+        .withArgs(
+          await pool.getAddress(),
+          await tokenJar.getAddress(),
+          spreadAmount,
+        );
       await expect(tx)
         .to.emit(pool, "NewNav")
-        .withArgs(user1.address, pool.address, parseEther("1"));
+        .withArgs(user1.address, await pool.getAddress(), parseEther("1"));
       expect(await pool.balanceOf(user1.address)).to.be.eq(
         parseEther("101.918011957404020383"),
       );
-      //expect(mintedAmount).to.be.closeTo(parseEther("101.918011957404020383"), parseEther("0.0000001"))
       expect(mintedAmount).to.be.eq(parseEther("101.918011957404020383"));
 
-      const tokenJarBalanceAfter = await weth.balanceOf(tokenJar.address);
-      expect(tokenJarBalanceAfter.sub(tokenJarBalanceBefore)).to.be.eq(
+      const tokenJarBalanceAfter = await weth.balanceOf(
+        await tokenJar.getAddress(),
+      );
+      expect(tokenJarBalanceAfter - tokenJarBalanceBefore).to.be.eq(
         spreadAmount,
       );
       // the user balance cannot be exactly tokenAmount - spreadAmount because the amountIn is not in base token
       expect(await pool.balanceOf(user1.address)).to.be.not.eq(
-        tokenAmount.sub(spreadAmount),
+        tokenAmount - spreadAmount,
       );
     });
 
     it("should revert if token is not active", async () => {
-      const { pool, oracle, grgToken, weth } = await setupTests();
+      const { pool, oracle, grgToken, weth, user1 } = await setupTests();
 
       // Initialize price feeds for both tokens
       const grgPoolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(grgPoolKey);
 
       const wethPoolKey = {
-        currency0: AddressZero,
-        currency1: weth.address,
+        currency0: ZeroAddress,
+        currency1: await weth.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(wethPoolKey);
 
       // Add weth to active tokens by minting some weth to the pool
       await weth.deposit({ value: parseEther("1") });
-      await weth.transfer(pool.address, parseEther("0.1"));
+      await weth.transfer(await pool.getAddress(), parseEther("0.1"));
 
       const wethAmount = parseEther("10");
       await weth.deposit({ value: wethAmount });
-      await weth.approve(pool.address, wethAmount);
+      await weth.approve(await pool.getAddress(), wethAmount);
 
       await expect(
-        pool.mintWithToken(user1.address, wethAmount, 0, weth.address),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+        pool.mintWithToken(
+          user1.address,
+          wethAmount,
+          0,
+          await weth.getAddress(),
+        ),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
     });
 
     it("should apply spread and transfer to token jar contract", async () => {
-      const { pool, oracle, grgToken, tokenJar, weth } = await setupTests();
+      const { pool, oracle, grgToken, tokenJar, weth, user1 } =
+        await setupTests();
+      const { ethers } = await network.getOrCreate();
       const poolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
       await weth.deposit({ value: parseEther("1") });
-      await weth.transfer(pool.address, parseEther("0.1"));
+      await weth.transfer(await pool.getAddress(), parseEther("0.1"));
 
       // activate the native token by unwrapping some weth in the pool via AUniswapRouter call
       const planner: RoutePlanner = new RoutePlanner();
-      planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 1000]);
+      planner.addCommand(CommandType.UNWRAP_WETH, [
+        await pool.getAddress(),
+        1000,
+      ]);
       const { commands, inputs } = planner;
-      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter");
-      const extPool = ExtPool.attach(pool.address);
+      const extPool = await ethers.getContractAt(
+        "AUniswapRouter",
+        await pool.getAddress(),
+      );
       const encodedUnwrapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
         [commands, inputs, DEADLINE],
       );
-      try {
-        await user1.sendTransaction({
-          to: extPool.address,
-          value: 0,
-          data: encodedUnwrapData,
-        });
-      } catch (error: any) {
-        const customError =
-          error.error?.reason || error.reason || error.message;
-        throw new Error(`${customError}`);
-      }
+      await user1.sendTransaction({
+        to: await extPool.getAddress(),
+        value: 0,
+        data: encodedUnwrapData,
+      });
 
       const tokenAmount = parseEther("100");
 
       const { spread } = await pool.getPoolParams();
-      const expectedSpread = tokenAmount.mul(spread).div(10000);
+      const expectedSpread = (tokenAmount * spread) / 10000n;
 
       const tokenJarBalanceBefore = await ethers.provider.getBalance(
-        tokenJar.address,
+        await tokenJar.getAddress(),
       );
 
       await expect(
         pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, {
           value: tokenAmount,
         }),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
       await pool.setAcceptableMintToken(ZERO_ADDRESS, true);
 
       await pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, {
@@ -322,48 +373,48 @@ describe("MintWithToken", async () => {
       });
 
       const tokenJarBalanceAfter = await ethers.provider.getBalance(
-        tokenJar.address,
+        await tokenJar.getAddress(),
       );
-      expect(tokenJarBalanceAfter.sub(tokenJarBalanceBefore)).to.be.eq(
+      expect(tokenJarBalanceAfter - tokenJarBalanceBefore).to.be.eq(
         expectedSpread,
       );
     });
 
     it("should respect minimum output amount", async () => {
-      const { pool, oracle, grgToken, weth } = await setupTests();
+      const { pool, oracle, grgToken, weth, user1 } = await setupTests();
+      const { ethers } = await network.getOrCreate();
       const poolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
       await weth.deposit({ value: parseEther("1") });
-      await weth.transfer(pool.address, parseEther("0.1"));
+      await weth.transfer(await pool.getAddress(), parseEther("0.1"));
 
       // activate the native token by unwrapping some weth in the pool via AUniswapRouter call
       const planner: RoutePlanner = new RoutePlanner();
-      planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 1000]);
+      planner.addCommand(CommandType.UNWRAP_WETH, [
+        await pool.getAddress(),
+        1000,
+      ]);
       const { commands, inputs } = planner;
-      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter");
-      const extPool = ExtPool.attach(pool.address);
+      const extPool = await ethers.getContractAt(
+        "AUniswapRouter",
+        await pool.getAddress(),
+      );
       const encodedUnwrapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
         [commands, inputs, DEADLINE],
       );
-      try {
-        await user1.sendTransaction({
-          to: extPool.address,
-          value: 0,
-          data: encodedUnwrapData,
-        });
-      } catch (error: any) {
-        const customError =
-          error.error?.reason || error.reason || error.message;
-        throw new Error(`${customError}`);
-      }
+      await user1.sendTransaction({
+        to: await extPool.getAddress(),
+        value: 0,
+        data: encodedUnwrapData,
+      });
 
       const tokenAmount = parseEther("100");
 
@@ -372,7 +423,7 @@ describe("MintWithToken", async () => {
 
       await pool.setAcceptableMintToken(ZERO_ADDRESS, true);
 
-      const expectedMintedAmount = await pool.callStatic.mintWithToken(
+      const expectedMintedAmount = await pool.mintWithToken.staticCall(
         user1.address,
         tokenAmount,
         0,
@@ -385,56 +436,58 @@ describe("MintWithToken", async () => {
         pool.mintWithToken(
           user1.address,
           tokenAmount,
-          expectedMintedAmount.add(1),
+          expectedMintedAmount + 1n,
           ZERO_ADDRESS,
           { value: tokenAmount },
         ),
-      ).to.be.revertedWith("PoolMintOutputAmount");
+      ).to.be.revertedWithCustomError(pool, "PoolMintOutputAmount");
     });
 
     it("should work with user operator (different from pool operator)", async () => {
-      const { pool, oracle, grgToken } = await setupTests();
+      const { pool, oracle, grgToken, user1, user2 } = await setupTests();
+      const { ethers } = await network.getOrCreate();
       const poolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
       // activate the native token by unwrapping some weth in the pool via AUniswapRouter call
       const planner: RoutePlanner = new RoutePlanner();
-      planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 1000]);
+      planner.addCommand(CommandType.UNWRAP_WETH, [
+        await pool.getAddress(),
+        1000,
+      ]);
       const { commands, inputs } = planner;
-      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter");
-      const extPool = ExtPool.attach(pool.address);
+      const extPool = await ethers.getContractAt(
+        "AUniswapRouter",
+        await pool.getAddress(),
+      );
       const encodedUnwrapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
         [commands, inputs, DEADLINE],
       );
-      try {
-        await user1.sendTransaction({
-          to: extPool.address,
-          value: 0,
-          data: encodedUnwrapData,
-        });
-      } catch (error: any) {
-        const customError =
-          error.error?.reason || error.reason || error.message;
-        throw new Error(`${customError}`);
-      }
+      await user1.sendTransaction({
+        to: await extPool.getAddress(),
+        value: 0,
+        data: encodedUnwrapData,
+      });
 
       await grgToken.transfer(user2.address, parseEther("100"));
 
       const tokenAmount = parseEther("50");
-      await grgToken.connect(user2).approve(pool.address, tokenAmount);
-
+      await connect(grgToken, user2).approve(
+        await pool.getAddress(),
+        tokenAmount,
+      );
       await expect(
         pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, {
           value: tokenAmount,
         }),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
       await pool.setAcceptableMintToken(ZERO_ADDRESS, true);
 
       // Should fail without operator approval
@@ -442,57 +495,57 @@ describe("MintWithToken", async () => {
         pool.mintWithToken(user2.address, tokenAmount, 0, ZERO_ADDRESS, {
           value: tokenAmount,
         }),
-      ).to.be.revertedWith("InvalidOperator");
+      ).to.be.revertedWithCustomError(pool, "InvalidOperator");
 
       // Set operator
-      await pool.connect(user2).setOperator(user1.address, true);
+      await connect(pool, user2).setOperator(user1.address, true);
 
       // Should work now
       await expect(
         pool.mintWithToken(user2.address, tokenAmount, 0, ZERO_ADDRESS, {
           value: tokenAmount,
         }),
-      ).to.not.be.reverted;
+      ).to.not.revert(ethers);
 
-      expect(await pool.balanceOf(user2.address)).to.be.gt(0);
+      expect(await pool.balanceOf(user2.address)).to.be.gt(0n);
     });
 
     it("should enforce KYC if provider is set", async () => {
-      const { pool, factory, oracle, grgToken } = await setupTests();
+      const { pool, factory, oracle, grgToken, user1 } = await setupTests();
+      const { ethers } = await network.getOrCreate();
 
       // Set a KYC provider (any valid contract address will enforce the check)
-      await pool.setKycProvider(factory.address);
+      await pool.setKycProvider(await factory.getAddress());
 
       const poolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
       // activate the native token by unwrapping some weth in the pool via AUniswapRouter call
       const planner: RoutePlanner = new RoutePlanner();
-      planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 1000]);
+      planner.addCommand(CommandType.UNWRAP_WETH, [
+        await pool.getAddress(),
+        1000,
+      ]);
       const { commands, inputs } = planner;
-      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter");
-      const extPool = ExtPool.attach(pool.address);
+      const extPool = await ethers.getContractAt(
+        "AUniswapRouter",
+        await pool.getAddress(),
+      );
       const encodedUnwrapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
         [commands, inputs, DEADLINE],
       );
-      try {
-        await user1.sendTransaction({
-          to: extPool.address,
-          value: 0,
-          data: encodedUnwrapData,
-        });
-      } catch (error: any) {
-        const customError =
-          error.error?.reason || error.reason || error.message;
-        throw new Error(`${customError}`);
-      }
+      await user1.sendTransaction({
+        to: await extPool.getAddress(),
+        value: 0,
+        data: encodedUnwrapData,
+      });
 
       const tokenAmount = parseEther("10");
 
@@ -500,64 +553,60 @@ describe("MintWithToken", async () => {
         pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, {
           value: tokenAmount,
         }),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
       await pool.setAcceptableMintToken(ZERO_ADDRESS, true);
 
       // Should fail, but not with PoolCallerNotWhitelisted() error, because factory does not implement the expected interface
+      // (in hardhat 3 the call reverts with empty return data instead of the old
+      // "function selector was not recognized and there's no fallback function" reason)
       await expect(
         pool.mintWithToken(user1.address, tokenAmount, 0, ZERO_ADDRESS, {
           value: tokenAmount,
         }),
-      ).to.be.revertedWith(
-        "function selector was not recognized and there's no fallback function",
-      );
+      ).to.be.revertedWithoutReason(ethers);
     });
 
     it("should enforce minimum amount", async () => {
-      const { pool, oracle, grgToken } = await setupTests();
+      const { pool, oracle, grgToken, user1 } = await setupTests();
+      const { ethers } = await network.getOrCreate();
       const poolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
       // activate the native token by unwrapping some weth in the pool via AUniswapRouter call
       const planner: RoutePlanner = new RoutePlanner();
-      planner.addCommand(CommandType.UNWRAP_WETH, [pool.address, 1000]);
+      planner.addCommand(CommandType.UNWRAP_WETH, [
+        await pool.getAddress(),
+        1000,
+      ]);
       const { commands, inputs } = planner;
-      const ExtPool = await hre.ethers.getContractFactory("AUniswapRouter");
-      const extPool = ExtPool.attach(pool.address);
+      const extPool = await ethers.getContractAt(
+        "AUniswapRouter",
+        await pool.getAddress(),
+      );
       const encodedUnwrapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
         [commands, inputs, DEADLINE],
       );
-      try {
-        await user1.sendTransaction({
-          to: extPool.address,
-          value: 0,
-          data: encodedUnwrapData,
-        });
-      } catch (error: any) {
-        const customError =
-          error.error?.reason || error.reason || error.message;
-        throw new Error(`${customError}`);
-      }
+      await user1.sendTransaction({
+        to: await extPool.getAddress(),
+        value: 0,
+        data: encodedUnwrapData,
+      });
 
       const decimals = await pool.decimals();
-      const minimumAmount = BigNumber.from(10).pow(decimals).div(1000); // 0.001 pool tokens
+      const minimumAmount = 10n ** BigInt(decimals) / 1000n; // 0.001 pool tokens
 
       await expect(
-        pool.mintWithToken(
-          user1.address,
-          minimumAmount.sub(1),
-          0,
-          ZERO_ADDRESS,
-          { value: minimumAmount.sub(1) },
-        ),
-      ).to.be.revertedWith("PoolMintTokenNotActive");
+        pool.mintWithToken(user1.address, minimumAmount - 1n, 0, ZERO_ADDRESS, {
+          value: minimumAmount - 1n,
+        }),
+      ).to.be.revertedWithCustomError(pool, "PoolMintTokenNotActive");
 
       await pool.setAcceptableMintToken(ZERO_ADDRESS, true);
 
@@ -567,61 +616,67 @@ describe("MintWithToken", async () => {
       await expect(
         pool.mintWithToken(
           user1.address,
-          minimumAmount.div(1000),
+          minimumAmount / 1000n,
           0,
           ZERO_ADDRESS,
-          { value: minimumAmount.div(1000) },
+          {
+            value: minimumAmount / 1000n,
+          },
         ),
       )
-        .to.be.revertedWith("PoolAmountSmallerThanMinimum")
-        .withArgs(1000);
+        .to.be.revertedWithCustomError(pool, "PoolAmountSmallerThanMinimum")
+        .withArgs(1000n);
     });
   });
 
   describe("setAcceptableMintToken", async () => {
     it("should set acceptable mint token", async () => {
       const { pool, weth } = await setupTests();
+      const wethAddress = await weth.getAddress();
 
       let acceptedTokensBefore = await pool.getAcceptedMintTokens();
-      expect(acceptedTokensBefore).to.not.include(weth.address);
+      expect(acceptedTokensBefore).to.not.include(wethAddress);
 
-      await pool.setAcceptableMintToken(weth.address, true);
-
-      acceptedTokensBefore = await pool.getAcceptedMintTokens();
-      expect(acceptedTokensBefore).to.include(weth.address);
-
-      await pool.setAcceptableMintToken(weth.address, false);
+      await pool.setAcceptableMintToken(wethAddress, true);
 
       acceptedTokensBefore = await pool.getAcceptedMintTokens();
-      expect(acceptedTokensBefore).to.not.include(weth.address);
+      expect(acceptedTokensBefore).to.include(wethAddress);
+
+      await pool.setAcceptableMintToken(wethAddress, false);
+
+      acceptedTokensBefore = await pool.getAcceptedMintTokens();
+      expect(acceptedTokensBefore).to.not.include(wethAddress);
     });
   });
 
   it("should be owner restricted", async () => {
-    const { pool, weth } = await setupTests();
+    const { pool, weth, user2 } = await setupTests();
 
     await expect(
-      pool.connect(user2).setAcceptableMintToken(weth.address, true),
-    ).to.be.revertedWith("PoolCallerIsNotOwner");
+      connect(pool, user2).setAcceptableMintToken(
+        await weth.getAddress(),
+        true,
+      ),
+    ).to.be.revertedWithCustomError(pool, "PoolCallerIsNotOwner");
   });
 
   describe("Security: Purge Attack Prevention", async () => {
     it("should prevent NAV manipulation via purge attack", async () => {
-      const { pool, oracle, weth, grgToken } = await setupTests();
+      const { pool, oracle, weth, grgToken, user1 } = await setupTests();
 
       // Setup oracle observations for base token (grgToken) first
       const grgPoolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(grgPoolKey);
 
       // Setup: Initialize pool with base token (grgToken) so NAV is established
       const initialMint = parseEther("100");
-      await grgToken.approve(pool.address, initialMint);
+      await grgToken.approve(await pool.getAddress(), initialMint);
       await pool.mint(user1.address, initialMint, 0);
 
       // Get initial NAV
@@ -632,23 +687,23 @@ describe("MintWithToken", async () => {
       // ATTACK SCENARIO:
       // 1. Pool operator sets WETH as acceptable mint token
       const poolKey = {
-        currency0: AddressZero,
-        currency1: weth.address,
+        currency0: ZeroAddress,
+        currency1: await weth.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
-      await pool.setAcceptableMintToken(weth.address, true);
+      await pool.setAcceptableMintToken(await weth.getAddress(), true);
 
       // Verify WETH is in accepted tokens
       const acceptedTokens = await pool.getAcceptedMintTokens();
-      expect(acceptedTokens).to.include(weth.address);
+      expect(acceptedTokens).to.include(await weth.getAddress());
 
       // 2. No mintWithToken is executed (pool has 0 WETH balance)
-      const wethBalance = await weth.balanceOf(pool.address);
-      expect(wethBalance).to.equal(0);
+      const wethBalance = await weth.balanceOf(await pool.getAddress());
+      expect(wethBalance).to.equal(0n);
 
       // 3. Anyone calls purgeInactiveTokensAndApps (removes WETH from activeTokensSet because balance is 0)
       await pool.purgeInactiveTokensAndApps();
@@ -659,7 +714,7 @@ describe("MintWithToken", async () => {
       // 5. User tries to mintWithToken with WETH
       const wethAmount = parseEther("10");
       await weth.deposit({ value: wethAmount });
-      await weth.approve(pool.address, wethAmount);
+      await weth.approve(await pool.getAddress(), wethAmount);
 
       // Travel time for oracle observations
       await timeTravel({ seconds: 600, mine: true });
@@ -668,10 +723,15 @@ describe("MintWithToken", async () => {
       // AFTER FIX: Token is added to activeTokensSet during _mint, NAV remains correct
 
       await expect(
-        pool.mintWithToken(user1.address, wethAmount, 0, weth.address),
+        pool.mintWithToken(
+          user1.address,
+          wethAmount,
+          0,
+          await weth.getAddress(),
+        ),
       )
         .to.emit(pool, "TokenStatusChanged")
-        .withArgs(weth.address, true);
+        .withArgs(await weth.getAddress(), true);
 
       // Verify NAV is still correct (should be ~1.0, allowing for small precision changes)
       await pool.updateUnitaryValue();
@@ -679,69 +739,80 @@ describe("MintWithToken", async () => {
 
       // NAV should not have dropped significantly
       // Allow small tolerance for rounding (0.1%)
-      const tolerance = navBefore.mul(1).div(1000); // 0.1%
-      expect(navAfter).to.be.gte(navBefore.sub(tolerance));
+      const tolerance = navBefore / 1000n; // 0.1%
+      expect(navAfter).to.be.gte(navBefore - tolerance);
 
       // Verify WETH is now in activeTokensSet (added during mint)
       const activeTokensResult = await pool.getActiveTokens();
-      expect(activeTokensResult.activeTokens).to.include(weth.address);
+      expect(activeTokensResult.activeTokens).to.include(
+        await weth.getAddress(),
+      );
     });
 
     it("should handle purge correctly after successful mint", async () => {
-      const { pool, oracle, weth, grgToken } = await setupTests();
+      const { pool, oracle, weth, grgToken, user1 } = await setupTests();
 
       // Setup oracle for base token first
       const grgPoolKey = {
-        currency0: AddressZero,
-        currency1: grgToken.address,
+        currency0: ZeroAddress,
+        currency1: await grgToken.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(grgPoolKey);
 
       // Setup: Initialize pool with base token
       const initialMint = parseEther("100");
-      await grgToken.approve(pool.address, initialMint);
+      await grgToken.approve(await pool.getAddress(), initialMint);
       await pool.mint(user1.address, initialMint, 0);
 
       // Setup oracle for WETH
       const poolKey = {
-        currency0: AddressZero,
-        currency1: weth.address,
+        currency0: ZeroAddress,
+        currency1: await weth.getAddress(),
         fee: 0,
         tickSpacing: MAX_TICK_SPACING,
-        hooks: oracle.address,
+        hooks: await oracle.getAddress(),
       };
       await oracle.initializeObservations(poolKey);
 
       // 1. Set WETH as acceptable and mint with it
-      await pool.setAcceptableMintToken(weth.address, true);
+      await pool.setAcceptableMintToken(await weth.getAddress(), true);
 
       const wethAmount = parseEther("10");
       await weth.deposit({ value: wethAmount });
-      await weth.approve(pool.address, wethAmount);
+      await weth.approve(await pool.getAddress(), wethAmount);
 
       // Travel time for oracle
       await timeTravel({ seconds: 600, mine: true });
 
       await expect(
-        pool.mintWithToken(user1.address, wethAmount, 0, weth.address),
+        pool.mintWithToken(
+          user1.address,
+          wethAmount,
+          0,
+          await weth.getAddress(),
+        ),
       )
         .to.emit(pool, "TokenStatusChanged")
-        .withArgs(weth.address, true);
+        .withArgs(await weth.getAddress(), true);
 
       // Verify WETH is in activeTokensSet
       let activeTokensResult = await pool.getActiveTokens();
-      expect(activeTokensResult.activeTokens).to.include(weth.address);
-      await pool.setAcceptableMintToken(weth.address, false); // Make it not acceptable so we can simulate drain
+      expect(activeTokensResult.activeTokens).to.include(
+        await weth.getAddress(),
+      );
+      await pool.setAcceptableMintToken(await weth.getAddress(), false); // Make it not acceptable so we can simulate drain
 
       // 3. Purge should NOT remove WETH from activeTokensSet (balance > 1)
       await pool.purgeInactiveTokensAndApps();
 
       // Verify WETH is still in activeTokensSet (has balance)
       activeTokensResult = await pool.getActiveTokens();
-      expect(activeTokensResult.activeTokens).to.include(weth.address);
+      expect(activeTokensResult.activeTokens).to.include(
+        await weth.getAddress(),
+      );
 
       // This demonstrates that after our fix:
       // - Token is added to activeTokensSet during mint

@@ -6,8 +6,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["mocha", "chai", "node"],
-    "lib": ["ES2017", "DOM"]
+    "lib": ["ES2020", "DOM"]
   },
-  "include": ["../test/**/*.ts", "../src/**/*.ts", "../types/**/*.ts"],
+  "include": ["../test/**/*.ts", "../src/**/*.ts", "../types/**/*.ts", "../hardhat.config.ts", "../rocketh/**/*.ts"],
   "exclude": ["../dist", "../node_modules"]
 }

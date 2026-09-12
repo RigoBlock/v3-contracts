@@ -42,12 +42,12 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22.12.0
+          node-version: 24.21.0
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: "v1.7.1"
+          version: "v1.8.1"
 
       - name: Verify Foundry version
         run: forge --version

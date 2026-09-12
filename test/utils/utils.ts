@@ -1,9 +1,9 @@
-import hre, {network, ethers} from "hardhat"
-import { BigNumber, Wallet, Contract } from "ethers"
-import solc from "solc"
+import {network} from "hardhat";
+import {Contract, type Wallet} from "ethers";
+import solc from "solc";
 
 export interface StakeOpts {
-    amount?: BigNumber;
+    amount?: bigint;
     grgToken?: any;
     grgTransferProxyAddress?: string;
     staking?: any;
@@ -47,11 +47,14 @@ export async function timeTravel(opts: TimeTravelOpts) {
     }
 
     // evm_increaseTime is flaky since time passed in tests affects it.
+    const {ethers, networkHelpers} = await network.getOrCreate();
     const referenceBlock = await ethers.provider.getBlock(fromBlock);
-    await network.provider.send("evm_setNextBlockTimestamp", [referenceBlock.timestamp + seconds]);
+    await networkHelpers.time.setNextBlockTimestamp(
+      BigInt(referenceBlock!.timestamp) + BigInt(seconds),
+    );
 
     if (opts.mine) {
-        await network.provider.send("evm_mine");
+        await networkHelpers.mine();
     }
 }
 
@@ -91,7 +94,7 @@ export const deployContract = async (deployer: Wallet, source: string): Promise<
     const output = await compile(source)
     const transaction = await deployer.sendTransaction({ data: output.data, gasLimit: 6000000 })
     const receipt = await transaction.wait()
-    return new Contract(receipt.contractAddress, output.interface, deployer)
+    return new Contract(receipt!.contractAddress!, output.interface, deployer)
 }
 
 export enum TimeType {
@@ -100,7 +103,7 @@ export enum TimeType {
 }
 
 export class ProposedAction {
-    constructor(public target: any, public data: String, public value: BigNumber) {}
+    constructor(public target: any, public data: String, public value: bigint) {}
 }
 
 export enum StakeStatus {

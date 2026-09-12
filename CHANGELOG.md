@@ -1,3 +1,30 @@
+## [2.6.4](https://github.com/RigoBlock/v3-contracts/compare/v2.6.3...v2.6.4) (2026-09-12)
+
+
+### Bug Fixes
+
+* same block nav lock on hyperEvm ([db2816f](https://github.com/RigoBlock/v3-contracts/commit/db2816f0a9a987a352919dac32e0ef02fb66dfe9))
+
+
+
+## [2.6.3](https://github.com/RigoBlock/v3-contracts/compare/v2.6.2...v2.6.3) (2026-09-10)
+
+
+### Bug Fixes
+
+* 1wei donate rounding error ([5d79afd](https://github.com/RigoBlock/v3-contracts/commit/5d79afd46f748db2e3e1a7f9e9dd4727da5cebe0))
+
+
+
+## [2.6.2](https://github.com/RigoBlock/v3-contracts/compare/v2.6.1...v2.6.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* document gmx fallback heartbeat, zero-price nav semantics and oracle twap window arithmetic ([029fccf](https://github.com/RigoBlock/v3-contracts/commit/029fccf8cd2d83757b7d96c02525a0e0d0a17e52))
+
+
+
 ## [2.6.1](https://github.com/RigoBlock/v3-contracts/compare/v2.6.0...v2.6.1) (2026-09-04)
 
 
@@ -27,43 +54,6 @@
 * block nav-sensitive ops during hyperCore funds transfers ([81f7137](https://github.com/RigoBlock/v3-contracts/commit/81f71371a0d7423e1fe59ee33a90b48dfc74d747))
 * hyperliquid apps ([f8a73b6](https://github.com/RigoBlock/v3-contracts/commit/f8a73b6848aebb809ad8eb0bc85011f534304518))
 * narrow Hyperliquid settlement lock to deposits and withdrawals ([6d1efc6](https://github.com/RigoBlock/v3-contracts/commit/6d1efc69e0efa3e6779ce458d6b66c3bae23f3ec))
-
-
-
-## [2.5.2](https://github.com/RigoBlock/v3-contracts/compare/v2.5.1...v2.5.2) (2026-07-28)
-
-
-### Bug Fixes
-
-* **ci:** remove npm registry-url to enable OIDC trusted publishing ([fe422ec](https://github.com/RigoBlock/v3-contracts/commit/fe422ec33e191d353d4fc53f4e26349265f02ed3))
-
-
-
-## [2.5.1](https://github.com/RigoBlock/v3-contracts/compare/v2.5.0...v2.5.1) (2026-07-28)
-
-
-### Bug Fixes
-
-* phantom virtual supply on donate ([856e143](https://github.com/RigoBlock/v3-contracts/commit/856e143f7ae68ac3169ec39929e3b60cd21058b2))
-
-
-
-# [2.5.0](https://github.com/RigoBlock/v3-contracts/compare/v2.4.2...v2.5.0) (2026-07-13)
-
-
-### Bug Fixes
-
-* assert long token price feed ([7188128](https://github.com/RigoBlock/v3-contracts/commit/7188128ea55bd4affb5e8f3f8f49e7665e4800a3))
-* conform erc20 methods to standard ([c1177da](https://github.com/RigoBlock/v3-contracts/commit/c1177da5e6e6e22f77cedab01f23445f03a18ec8))
-* emit log when updating uni token ids ([dffcd96](https://github.com/RigoBlock/v3-contracts/commit/dffcd966a6798ba436ecd373eb1fd0fb015b24be))
-* gmx adapter gas optimization ([d43dcab](https://github.com/RigoBlock/v3-contracts/commit/d43dcab61d51c368d350e4becc2e29e7edf0a824))
-* nav gap with gmx closed positions ([2bc7cab](https://github.com/RigoBlock/v3-contracts/commit/2bc7cab18a7e22f193e92fd54b138a75f3fc92d8))
-* update multicall adapter ([43986df](https://github.com/RigoBlock/v3-contracts/commit/43986df64264c65f70045af02ea69397397bda6f))
-
-
-### Features
-
-* support CHECK_SLIPPAGE action to allow exact output swaps ([9e1a600](https://github.com/RigoBlock/v3-contracts/commit/9e1a6003a85ffe452a6631bceb4b32e5f1aba5e9))
 
 
 

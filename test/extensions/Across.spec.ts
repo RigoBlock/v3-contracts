@@ -1,57 +1,70 @@
 import { expect } from "chai";
-import hre, { ethers } from "hardhat";
+import { network } from "hardhat";
+import { AbiCoder, ZeroAddress, id, parseEther, parseUnits } from "ethers";
+import { connect, getFixedGasSigners } from "../shared/helper";
+import { createFixture } from "../utils/fixtures";
 
 /**
  * Comprehensive tests for ECrosschain and AIntents contracts
  * Tests cover: deployment, access control, message encoding/decoding, NAV calculations, storage slots
  */
 describe("Across Integration", () => {
-  let eCrosschain: any;
-  let aIntents: any;
-  let acrossSpokePool: any;
-  let wethContract: any;
-  let mockUSDC: any;
-  let owner: any;
-  let user: any;
-  let ownerAddress: string;
-
   const OpType = {
-    Transfer: 0,
-    Sync: 1,
+    Transfer: 0n,
+    Sync: 1n,
   };
 
-  before(async () => {
-    const accounts = await ethers.getSigners();
-    owner = accounts[0];
-    user = accounts[1];
-    ownerAddress = await owner.getAddress();
-
-    // Get deployed contracts from setup
-    const WETH9Instance = await hre.deployments.get("WETH9");
-    const WETH9 = await hre.ethers.getContractFactory("WETH9");
-    wethContract = await WETH9.attach(WETH9Instance.address);
-
-    const MockAcrossSpokePoolInstance = await hre.deployments.get("MockAcrossSpokePool");
-    const MockAcrossSpokePool = await hre.ethers.getContractFactory("MockAcrossSpokePool");
-    acrossSpokePool = await MockAcrossSpokePool.attach(MockAcrossSpokePoolInstance.address);
-
-    const ECrosschainInstance = await hre.deployments.get("ECrosschain");
-    const ECrosschain = await hre.ethers.getContractFactory("ECrosschain");
-    eCrosschain = await ECrosschain.attach(ECrosschainInstance.address);
-
-    const AIntentsInstance = await hre.deployments.get("AIntents");
-    const AIntents = await hre.ethers.getContractFactory("AIntents");
-    aIntents = await AIntents.attach(AIntentsInstance.address);
-
+  const setupTests = createFixture(["tests-setup"], async ({ get }) => {
+    const { ethers } = await network.getOrCreate();
+    const [owner, user] = await getFixedGasSigners();
+    const wethContract = await ethers.getContractAt(
+      "WETH9",
+      (await get("WETH9")).address,
+    );
+    const acrossSpokePool = await ethers.getContractAt(
+      "MockAcrossSpokePool",
+      (await get("MockAcrossSpokePool")).address,
+    );
+    const eCrosschain = await ethers.getContractAt(
+      "ECrosschain",
+      (await get("ECrosschain")).address,
+    );
+    const aIntents = await ethers.getContractAt(
+      "AIntents",
+      (await get("AIntents")).address,
+    );
     // Deploy mock token for testing
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    mockUSDC = await MockERC20.deploy("USD Coin", "USDC", 6);
+    const mockUSDC = await ethers.deployContract(
+      "contracts/mocks/MockERC20.sol:MockERC20",
+      ["USD Coin", "USDC", 6],
+    );
+    return {
+      owner,
+      user,
+      wethContract,
+      acrossSpokePool,
+      eCrosschain,
+      aIntents,
+      mockUSDC,
+    };
+  });
+
+  // The original spec used a mocha `before` hook with persistent state: some
+  // tests rely on balances minted by earlier tests, so the fixture runs once
+  // and is not restored between tests.
+  let ctx: Awaited<ReturnType<typeof setupTests>>;
+
+  before(async () => {
+    ctx = await setupTests();
   });
 
   describe("ECrosschain", () => {
     describe("Constructor and Deployment", () => {
       it("should deploy with non-zero bytecode", async () => {
-        const code = await ethers.provider.getCode(eCrosschain.address);
+        const { ethers } = await network.getOrCreate();
+        const code = await ethers.provider.getCode(
+          await ctx.eCrosschain.getAddress(),
+        );
         expect(code).to.not.equal("0x");
         expect(code.length).to.be.greaterThan(2);
       });
@@ -59,230 +72,261 @@ describe("Across Integration", () => {
 
     describe("Access Control", () => {
       it("should reject calls from non-SpokePool addresses", async () => {
+        const { eCrosschain, mockUSDC } = ctx;
         const destMessageParams = {
           opType: OpType.Transfer,
-          shouldUnwrapNative: false
+          shouldUnwrapNative: false,
         };
 
         await expect(
-          eCrosschain.donate(mockUSDC.address, 1000000, destMessageParams)
-        ).to.be.revertedWith("DonationLock").withArgs(false);
+          eCrosschain.donate(
+            await mockUSDC.getAddress(),
+            1000000,
+            destMessageParams,
+          ),
+        )
+          .to.be.revertedWithCustomError(eCrosschain, "DonationLock")
+          .withArgs(false);
       });
 
       it("should reject calls from deployer", async () => {
+        const { owner, eCrosschain, mockUSDC } = ctx;
         const destMessageParams = {
           opType: OpType.Transfer,
-          shouldUnwrapNative: false
+          shouldUnwrapNative: false,
         };
 
         await expect(
-          eCrosschain.connect(owner).donate(mockUSDC.address, 1000000, destMessageParams)
-        ).to.be.revertedWith("DonationLock").withArgs(false);
+          connect(eCrosschain, owner).donate(
+            await mockUSDC.getAddress(),
+            1000000,
+            destMessageParams,
+          ),
+        )
+          .to.be.revertedWithCustomError(eCrosschain, "DonationLock")
+          .withArgs(false);
       });
 
       it("should reject calls from arbitrary user", async () => {
+        const { eCrosschain, mockUSDC, user } = ctx;
         const destMessageParams = {
           opType: OpType.Transfer,
-          shouldUnwrapNative: false
+          shouldUnwrapNative: false,
         };
 
         await expect(
-          eCrosschain.connect(user).donate(mockUSDC.address, 1000000, destMessageParams)
-        ).to.be.revertedWith("DonationLock").withArgs(false);
+          connect(eCrosschain, user).donate(
+            await mockUSDC.getAddress(),
+            1000000,
+            destMessageParams,
+          ),
+        )
+          .to.be.revertedWithCustomError(eCrosschain, "DonationLock")
+          .withArgs(false);
       });
     });
 
     describe("Message Encoding/Decoding", () => {
-      it("should encode/decode transfer mode message with minimal values", async () => {
+      it("should encode/decode transfer mode message with minimal values", () => {
         const transferMsg = {
           opType: OpType.Transfer,
-          sourceChainId: 1,
-          sourceNav: 0,
+          sourceChainId: 1n,
+          sourceNav: 0n,
           sourceDecimals: 18,
-          navTolerance: 0,
+          navTolerance: 0n,
           shouldUnwrap: false,
         };
 
-        const encoded = ethers.utils.defaultAbiCoder.encode(
+        const encoded = AbiCoder.defaultAbiCoder().encode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[
-            transferMsg.opType,
-            transferMsg.sourceChainId,
-            transferMsg.sourceNav,
-            transferMsg.sourceDecimals,
-            transferMsg.navTolerance,
-            transferMsg.shouldUnwrap,
-            1000000 // sourceAmount
-          ]]
+          [
+            [
+              transferMsg.opType,
+              transferMsg.sourceChainId,
+              transferMsg.sourceNav,
+              transferMsg.sourceDecimals,
+              transferMsg.navTolerance,
+              transferMsg.shouldUnwrap,
+              1000000n, // sourceAmount
+            ],
+          ],
         );
 
-        const decoded = ethers.utils.defaultAbiCoder.decode(
+        const decoded = AbiCoder.defaultAbiCoder().decode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          encoded
+          encoded,
         )[0];
 
         expect(decoded[0]).to.equal(transferMsg.opType);
         expect(decoded[1]).to.equal(transferMsg.sourceChainId);
         expect(decoded[2]).to.equal(transferMsg.sourceNav);
-        expect(decoded[3]).to.equal(transferMsg.sourceDecimals);
+        expect(decoded[3]).to.equal(BigInt(transferMsg.sourceDecimals));
         expect(decoded[4]).to.equal(transferMsg.navTolerance);
         expect(decoded[5]).to.equal(transferMsg.shouldUnwrap);
-        expect(decoded[6]).to.equal(1000000); // sourceAmount
+        expect(decoded[6]).to.equal(1000000n); // sourceAmount
       });
 
-      it("should encode/decode transfer mode message with max values", async () => {
+      it("should encode/decode transfer mode message with max values", () => {
         const transferMsg = {
           opType: OpType.Transfer,
-          sourceChainId: 42161,
-          sourceNav: ethers.utils.parseEther("1000000"),
+          sourceChainId: 42161n,
+          sourceNav: parseEther("1000000"),
           sourceDecimals: 18,
-          navTolerance: 1000, // 10%
+          navTolerance: 1000n, // 10%
           shouldUnwrap: true,
         };
 
-        const encoded = ethers.utils.defaultAbiCoder.encode(
+        const encoded = AbiCoder.defaultAbiCoder().encode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[
-            transferMsg.opType,
-            transferMsg.sourceChainId,
-            transferMsg.sourceNav,
-            transferMsg.sourceDecimals,
-            transferMsg.navTolerance,
-            transferMsg.shouldUnwrap,
-            ethers.utils.parseEther("1000000") // sourceAmount
-          ]]
+          [
+            [
+              transferMsg.opType,
+              transferMsg.sourceChainId,
+              transferMsg.sourceNav,
+              transferMsg.sourceDecimals,
+              transferMsg.navTolerance,
+              transferMsg.shouldUnwrap,
+              parseEther("1000000"), // sourceAmount
+            ],
+          ],
         );
 
-        const decoded = ethers.utils.defaultAbiCoder.decode(
+        const decoded = AbiCoder.defaultAbiCoder().decode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          encoded
+          encoded,
         )[0];
 
         expect(decoded[0]).to.equal(transferMsg.opType);
         expect(decoded[2]).to.equal(transferMsg.sourceNav);
         expect(decoded[5]).to.equal(transferMsg.shouldUnwrap);
-        expect(decoded[6]).to.equal(ethers.utils.parseEther("1000000")); // sourceAmount
+        expect(decoded[6]).to.equal(parseEther("1000000")); // sourceAmount
       });
 
-      it("should encode/decode rebalance mode message", async () => {
+      it("should encode/decode rebalance mode message", () => {
         const rebalanceMsg = {
           opType: OpType.Sync,
-          sourceChainId: 10,
-          sourceNav: ethers.utils.parseEther("1.05"),
+          sourceChainId: 10n,
+          sourceNav: parseEther("1.05"),
           sourceDecimals: 18,
-          navTolerance: 100, // 1%
+          navTolerance: 100n, // 1%
           shouldUnwrap: false,
         };
 
-        const encoded = ethers.utils.defaultAbiCoder.encode(
+        const encoded = AbiCoder.defaultAbiCoder().encode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[
-            rebalanceMsg.opType,
-            rebalanceMsg.sourceChainId,
-            rebalanceMsg.sourceNav,
-            rebalanceMsg.sourceDecimals,
-            rebalanceMsg.navTolerance,
-            rebalanceMsg.shouldUnwrap,
-            ethers.utils.parseEther("1.05") // sourceAmount
-          ]]
+          [
+            [
+              rebalanceMsg.opType,
+              rebalanceMsg.sourceChainId,
+              rebalanceMsg.sourceNav,
+              rebalanceMsg.sourceDecimals,
+              rebalanceMsg.navTolerance,
+              rebalanceMsg.shouldUnwrap,
+              parseEther("1.05"), // sourceAmount
+            ],
+          ],
         );
 
-        const decoded = ethers.utils.defaultAbiCoder.decode(
+        const decoded = AbiCoder.defaultAbiCoder().decode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          encoded
+          encoded,
         )[0];
 
         expect(decoded[0]).to.equal(OpType.Sync);
         expect(decoded[2]).to.equal(rebalanceMsg.sourceNav);
         expect(decoded[4]).to.equal(rebalanceMsg.navTolerance);
-        expect(decoded[6]).to.equal(ethers.utils.parseEther("1.05")); // sourceAmount
+        expect(decoded[6]).to.equal(parseEther("1.05")); // sourceAmount
       });
 
-      it("should encode/decode sync mode message", async () => {
+      it("should encode/decode sync mode message", () => {
         const syncMsg = {
           opType: OpType.Sync,
-          sourceChainId: 8453,
-          sourceNav: ethers.utils.parseEther("0.98"),
+          sourceChainId: 8453n,
+          sourceNav: parseEther("0.98"),
           sourceDecimals: 18,
-          navTolerance: 200, // 2%
+          navTolerance: 200n, // 2%
           shouldUnwrap: true,
         };
 
-        const encoded = ethers.utils.defaultAbiCoder.encode(
+        const encoded = AbiCoder.defaultAbiCoder().encode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          [[
-            syncMsg.opType,
-            syncMsg.sourceChainId,
-            syncMsg.sourceNav,
-            syncMsg.sourceDecimals,
-            syncMsg.navTolerance,
-            syncMsg.shouldUnwrap,
-            ethers.utils.parseEther("0.98") // sourceAmount
-          ]]
+          [
+            [
+              syncMsg.opType,
+              syncMsg.sourceChainId,
+              syncMsg.sourceNav,
+              syncMsg.sourceDecimals,
+              syncMsg.navTolerance,
+              syncMsg.shouldUnwrap,
+              parseEther("0.98"), // sourceAmount
+            ],
+          ],
         );
 
-        const decoded = ethers.utils.defaultAbiCoder.decode(
+        const decoded = AbiCoder.defaultAbiCoder().decode(
           ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-          encoded
+          encoded,
         )[0];
 
         expect(decoded[0]).to.equal(OpType.Sync);
         expect(decoded[5]).to.equal(syncMsg.shouldUnwrap);
-        expect(decoded[6]).to.equal(ethers.utils.parseEther("0.98")); // sourceAmount
+        expect(decoded[6]).to.equal(parseEther("0.98")); // sourceAmount
       });
 
-      it("should handle different token decimals", async () => {
+      it("should handle different token decimals", () => {
         const decimalsTests = [6, 8, 18];
 
         for (const decimals of decimalsTests) {
           const message = {
             opType: OpType.Transfer,
-            sourceChainId: 1,
-            sourceNav: ethers.utils.parseUnits("1", decimals),
+            sourceChainId: 1n,
+            sourceNav: parseUnits("1", decimals),
             sourceDecimals: decimals,
-            navTolerance: 100,
+            navTolerance: 100n,
             shouldUnwrap: false,
           };
 
-          const encoded = ethers.utils.defaultAbiCoder.encode(
+          const encoded = AbiCoder.defaultAbiCoder().encode(
             ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-            [[
-              message.opType,
-              message.sourceChainId,
-              message.sourceNav,
-              message.sourceDecimals,
-              message.navTolerance,
-              message.shouldUnwrap,
-              ethers.utils.parseUnits("1", decimals) // sourceAmount
-            ]]
+            [
+              [
+                message.opType,
+                message.sourceChainId,
+                message.sourceNav,
+                message.sourceDecimals,
+                message.navTolerance,
+                message.shouldUnwrap,
+                parseUnits("1", decimals), // sourceAmount
+              ],
+            ],
           );
 
-          const decoded = ethers.utils.defaultAbiCoder.decode(
+          const decoded = AbiCoder.defaultAbiCoder().decode(
             ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-            encoded
+            encoded,
           )[0];
 
-          expect(decoded[3]).to.equal(decimals);
-          expect(decoded[6]).to.equal(ethers.utils.parseUnits("1", decimals)); // sourceAmount
+          expect(decoded[3]).to.equal(BigInt(decimals));
+          expect(decoded[6]).to.equal(parseUnits("1", decimals)); // sourceAmount
         }
       });
 
-      it("should handle different OpTypes in message", async () => {
+      it("should handle different OpTypes in message", () => {
         const opTypes = [OpType.Transfer, OpType.Sync];
 
         for (const opType of opTypes) {
-          const message = ethers.utils.defaultAbiCoder.encode(
+          const message = AbiCoder.defaultAbiCoder().encode(
             ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-            [[opType, 1, ethers.utils.parseEther("1"), 18, 100, false, ethers.utils.parseEther("1")]]
+            [[opType, 1n, parseEther("1"), 18, 100n, false, parseEther("1")]],
           );
 
-          const decoded = ethers.utils.defaultAbiCoder.decode(
+          const decoded = AbiCoder.defaultAbiCoder().decode(
             ["tuple(uint8,uint256,uint256,uint8,uint256,bool,uint256)"],
-            message
+            message,
           )[0];
 
           expect(decoded[0]).to.equal(opType);
-          expect(decoded[6]).to.equal(ethers.utils.parseEther("1")); // sourceAmount
+          expect(decoded[6]).to.equal(parseEther("1")); // sourceAmount
         }
       });
     });
@@ -291,12 +335,15 @@ describe("Across Integration", () => {
   describe("AIntents", () => {
     describe("Constructor and Immutables", () => {
       it("should return correct required version", async () => {
-        const version = await aIntents.requiredVersion();
+        const version = await ctx.aIntents.requiredVersion();
         expect(version).to.equal("4.1.0");
       });
 
       it("should have non-zero bytecode", async () => {
-        const code = await ethers.provider.getCode(aIntents.address);
+        const { ethers } = await network.getOrCreate();
+        const code = await ethers.provider.getCode(
+          await ctx.aIntents.getAddress(),
+        );
         expect(code).to.not.equal("0x");
         expect(code.length).to.be.greaterThan(2);
       });
@@ -304,43 +351,54 @@ describe("Across Integration", () => {
 
     describe("Direct Call Protection", () => {
       it("should revert when called directly (not via delegatecall)", async () => {
+        const { owner, aIntents, mockUSDC } = ctx;
         const params = {
-          inputToken: mockUSDC.address,
-          outputToken: mockUSDC.address,
+          depositor: owner.address,
+          recipient: owner.address,
+          inputToken: await mockUSDC.getAddress(),
+          outputToken: await mockUSDC.getAddress(),
           inputAmount: 1000000,
           outputAmount: 990000,
           destinationChainId: 10,
-          exclusiveRelayer: ethers.constants.AddressZero,
+          exclusiveRelayer: ZeroAddress,
           quoteTimestamp: Math.floor(Date.now() / 1000),
           fillDeadline: Math.floor(Date.now() / 1000) + 3600,
           exclusivityDeadline: 0,
-          message: ethers.utils.defaultAbiCoder.encode(
+          message: AbiCoder.defaultAbiCoder().encode(
             ["tuple(uint8,uint256,bool,uint256)"],
-            [[OpType.Transfer, 100, false, 0]]
+            [[OpType.Transfer, 100n, false, 0n]],
           ),
         };
 
-        await expect(aIntents.depositV3(params)).to.be.reverted;
+        await expect(aIntents.depositV3(params)).to.be.revertedWithCustomError(
+          aIntents,
+          "DirectCallNotAllowed",
+        );
       });
 
       it("should reject direct calls from any account", async () => {
+        const { owner, aIntents, mockUSDC, user } = ctx;
         const params = {
-          inputToken: mockUSDC.address,
-          outputToken: mockUSDC.address,
+          depositor: owner.address,
+          recipient: owner.address,
+          inputToken: await mockUSDC.getAddress(),
+          outputToken: await mockUSDC.getAddress(),
           inputAmount: 1000000,
           outputAmount: 990000,
           destinationChainId: 10,
-          exclusiveRelayer: ethers.constants.AddressZero,
+          exclusiveRelayer: ZeroAddress,
           quoteTimestamp: Math.floor(Date.now() / 1000),
           fillDeadline: Math.floor(Date.now() / 1000) + 3600,
           exclusivityDeadline: 0,
-          message: ethers.utils.defaultAbiCoder.encode(
+          message: AbiCoder.defaultAbiCoder().encode(
             ["tuple(uint8,uint256,bool,uint256)"],
-            [[OpType.Transfer, 100, false, 0]]
+            [[OpType.Transfer, 100n, false, 0n]],
           ),
         };
 
-        await expect(aIntents.connect(user).depositV3(params)).to.be.reverted;
+        await expect(
+          connect(aIntents, user).depositV3(params),
+        ).to.be.revertedWithCustomError(aIntents, "DirectCallNotAllowed");
       });
     });
 
@@ -348,24 +406,26 @@ describe("Across Integration", () => {
       it("should encode transfer mode source message", () => {
         const message = {
           opType: OpType.Transfer,
-          navTolerance: 100,
+          navTolerance: 100n,
           shouldUnwrapOnDestination: false,
-          sourceNativeAmount: 0,
+          sourceNativeAmount: 0n,
         };
 
-        const encoded = ethers.utils.defaultAbiCoder.encode(
+        const encoded = AbiCoder.defaultAbiCoder().encode(
           ["tuple(uint8,uint256,bool,uint256)"],
-          [[
-            message.opType,
-            message.navTolerance,
-            message.shouldUnwrapOnDestination,
-            message.sourceNativeAmount,
-          ]]
+          [
+            [
+              message.opType,
+              message.navTolerance,
+              message.shouldUnwrapOnDestination,
+              message.sourceNativeAmount,
+            ],
+          ],
         );
 
-        const decoded = ethers.utils.defaultAbiCoder.decode(
+        const decoded = AbiCoder.defaultAbiCoder().decode(
           ["tuple(uint8,uint256,bool,uint256)"],
-          encoded
+          encoded,
         )[0];
 
         expect(decoded[0]).to.equal(message.opType);
@@ -377,24 +437,26 @@ describe("Across Integration", () => {
       it("should encode sync mode with different tolerance", () => {
         const message = {
           opType: OpType.Sync,
-          navTolerance: 200,
+          navTolerance: 200n,
           shouldUnwrapOnDestination: true,
-          sourceNativeAmount: ethers.utils.parseEther("1"),
+          sourceNativeAmount: parseEther("1"),
         };
 
-        const encoded = ethers.utils.defaultAbiCoder.encode(
+        const encoded = AbiCoder.defaultAbiCoder().encode(
           ["tuple(uint8,uint256,bool,uint256)"],
-          [[
-            message.opType,
-            message.navTolerance,
-            message.shouldUnwrapOnDestination,
-            message.sourceNativeAmount,
-          ]]
+          [
+            [
+              message.opType,
+              message.navTolerance,
+              message.shouldUnwrapOnDestination,
+              message.sourceNativeAmount,
+            ],
+          ],
         );
 
-        const decoded = ethers.utils.defaultAbiCoder.decode(
+        const decoded = AbiCoder.defaultAbiCoder().decode(
           ["tuple(uint8,uint256,bool,uint256)"],
-          encoded
+          encoded,
         )[0];
 
         expect(decoded[0]).to.equal(OpType.Sync);
@@ -404,62 +466,64 @@ describe("Across Integration", () => {
       it("should encode sync mode source message", () => {
         const message = {
           opType: OpType.Sync,
-          navTolerance: 0,
+          navTolerance: 0n,
           shouldUnwrapOnDestination: false,
-          sourceNativeAmount: 0,
+          sourceNativeAmount: 0n,
         };
 
-        const encoded = ethers.utils.defaultAbiCoder.encode(
+        const encoded = AbiCoder.defaultAbiCoder().encode(
           ["tuple(uint8,uint256,bool,uint256)"],
-          [[
-            message.opType,
-            message.navTolerance,
-            message.shouldUnwrapOnDestination,
-            message.sourceNativeAmount,
-          ]]
+          [
+            [
+              message.opType,
+              message.navTolerance,
+              message.shouldUnwrapOnDestination,
+              message.sourceNativeAmount,
+            ],
+          ],
         );
 
-        const decoded = ethers.utils.defaultAbiCoder.decode(
+        const decoded = AbiCoder.defaultAbiCoder().decode(
           ["tuple(uint8,uint256,bool,uint256)"],
-          encoded
+          encoded,
         )[0];
 
         expect(decoded[0]).to.equal(OpType.Sync);
       });
 
       it("should handle different tolerance values", () => {
-        const tolerances = [0, 50, 100, 200, 500];
+        const tolerances = [0n, 50n, 100n, 200n, 500n];
 
         for (const tolerance of tolerances) {
-          const encoded = ethers.utils.defaultAbiCoder.encode(
+          const encoded = AbiCoder.defaultAbiCoder().encode(
             ["tuple(uint8,uint256,bool,uint256)"],
-            [[OpType.Transfer, tolerance, false, 0]]
+            [[OpType.Transfer, tolerance, false, 0n]],
           );
 
-          const decoded = ethers.utils.defaultAbiCoder.decode(
+          const decoded = AbiCoder.defaultAbiCoder().decode(
             ["tuple(uint8,uint256,bool,uint256)"],
-            encoded
+            encoded,
           )[0];
 
           expect(decoded[1]).to.equal(tolerance);
         }
       });
 
-      it("should handle different source message types", async () => {
+      it("should handle different source message types", () => {
         const messageTypes = [
-          { opType: OpType.Transfer, tolerance: 100 },
-          { opType: OpType.Sync, tolerance: 0 },
+          { opType: OpType.Transfer, tolerance: 100n },
+          { opType: OpType.Sync, tolerance: 0n },
         ];
 
         for (const msgType of messageTypes) {
-          const encoded = ethers.utils.defaultAbiCoder.encode(
+          const encoded = AbiCoder.defaultAbiCoder().encode(
             ["tuple(uint8,uint256,bool,uint256)"],
-            [[msgType.opType, msgType.tolerance, false, 0]]
+            [[msgType.opType, msgType.tolerance, false, 0n]],
           );
 
-          const decoded = ethers.utils.defaultAbiCoder.decode(
+          const decoded = AbiCoder.defaultAbiCoder().decode(
             ["tuple(uint8,uint256,bool,uint256)"],
-            encoded
+            encoded,
           )[0];
 
           expect(decoded[0]).to.equal(msgType.opType);
@@ -471,20 +535,17 @@ describe("Across Integration", () => {
 
   describe("Storage Slots", () => {
     it("should have correct virtual supply slot", () => {
-      const expectedSlot = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes("pool.proxy.virtual.supply")
-      );
-      const adjustedSlot = ethers.BigNumber.from(expectedSlot).sub(1);
-      
+      const expectedSlot = id("pool.proxy.virtual.supply");
+      const adjustedSlot = BigInt(expectedSlot) - 1n;
+
       // Verify the slot calculation matches ERC-7201 pattern
-      expect(adjustedSlot).to.not.equal(0);
+      expect(adjustedSlot).to.not.equal(0n);
     });
 
     it("should calculate virtual supply slot correctly", () => {
-      const slot = ethers.utils.keccak256(
-        ethers.utils.toUtf8Bytes("pool.proxy.virtual.supply")
-      );
-      const expected = "0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee34114510";
+      const slot = id("pool.proxy.virtual.supply");
+      const expected =
+        "0xc1634c3ed93b1f7aa4d725c710ac3b239c1d30894404e630b60009ee34114510";
       expect(slot).to.equal(expected);
     });
 
@@ -498,8 +559,8 @@ describe("Across Integration", () => {
 
   describe("OpType Enum Values", () => {
     it("should have correct OpType values", () => {
-      expect(OpType.Transfer).to.equal(0);
-      expect(OpType.Sync).to.equal(1);
+      expect(OpType.Transfer).to.equal(0n);
+      expect(OpType.Sync).to.equal(1n);
     });
 
     it("should have correct enum ordering", () => {
@@ -515,108 +576,104 @@ describe("Across Integration", () => {
 
   describe("NAV Normalization", () => {
     it("should correctly downscale NAV", () => {
-      const nav = ethers.utils.parseEther("1"); // 18 decimals
+      const nav = parseEther("1"); // 18 decimals
       const sourceDecimals = 18;
       const destDecimals = 6;
 
-      const expected = ethers.utils.parseUnits("1", 6); // 1e6
-      const downscaled = nav.div(ethers.BigNumber.from(10).pow(sourceDecimals - destDecimals));
+      const expected = parseUnits("1", 6); // 1e6
+      const downscaled = nav / 10n ** BigInt(sourceDecimals - destDecimals);
 
       expect(downscaled).to.equal(expected);
     });
 
     it("should correctly upscale NAV", () => {
-      const nav = ethers.utils.parseUnits("1", 6); // 6 decimals
+      const nav = parseUnits("1", 6); // 6 decimals
       const sourceDecimals = 6;
       const destDecimals = 18;
 
-      const expected = ethers.utils.parseEther("1"); // 1e18
-      const upscaled = nav.mul(ethers.BigNumber.from(10).pow(destDecimals - sourceDecimals));
+      const expected = parseEther("1"); // 1e18
+      const upscaled = nav * 10n ** BigInt(destDecimals - sourceDecimals);
 
       expect(upscaled).to.equal(expected);
     });
 
     it("should handle precision loss in downscaling", () => {
-      const nav = ethers.utils.parseEther("1.123456789123456789"); // 18 decimals
+      const nav = parseEther("1.123456789123456789"); // 18 decimals
       const sourceDecimals = 18;
       const destDecimals = 6;
 
-      const downscaled = nav.div(ethers.BigNumber.from(10).pow(sourceDecimals - destDecimals));
-      
+      const downscaled = nav / 10n ** BigInt(sourceDecimals - destDecimals);
+
       // After downscaling to 6 decimals, we lose precision
-      expect(downscaled).to.equal(ethers.utils.parseUnits("1.123456", 6));
+      expect(downscaled).to.equal(parseUnits("1.123456", 6));
     });
   });
 
   describe("Tolerance Calculation", () => {
     it("should calculate 1% tolerance correctly", () => {
-      const nav = ethers.utils.parseEther("1");
-      const toleranceBps = 100; // 1%
+      const nav = parseEther("1");
+      const toleranceBps = 100n; // 1%
 
-      const toleranceAmount = nav.mul(toleranceBps).div(10000);
+      const toleranceAmount = (nav * toleranceBps) / 10000n;
 
-      expect(toleranceAmount).to.equal(ethers.utils.parseEther("0.01"));
+      expect(toleranceAmount).to.equal(parseEther("0.01"));
     });
 
     it("should calculate 2% tolerance correctly", () => {
-      const nav = ethers.utils.parseEther("1");
-      const toleranceBps = 200; // 2%
+      const nav = parseEther("1");
+      const toleranceBps = 200n; // 2%
 
-      const toleranceAmount = nav.mul(toleranceBps).div(10000);
+      const toleranceAmount = (nav * toleranceBps) / 10000n;
 
-      expect(toleranceAmount).to.equal(ethers.utils.parseEther("0.02"));
+      expect(toleranceAmount).to.equal(parseEther("0.02"));
     });
 
     it("should calculate 5% tolerance", () => {
-      const nav = ethers.utils.parseEther("100");
-      const toleranceBps = 500; // 5%
+      const nav = parseEther("100");
+      const toleranceBps = 500n; // 5%
 
-      const toleranceAmount = nav.mul(toleranceBps).div(10000);
+      const toleranceAmount = (nav * toleranceBps) / 10000n;
 
-      expect(toleranceAmount).to.equal(ethers.utils.parseEther("5"));
+      expect(toleranceAmount).to.equal(parseEther("5"));
     });
 
     it("should calculate 10% tolerance", () => {
-      const nav = ethers.utils.parseEther("100");
-      const toleranceBps = 1000; // 10%
+      const nav = parseEther("100");
+      const toleranceBps = 1000n; // 10%
 
-      const toleranceAmount = nav.mul(toleranceBps).div(10000);
+      const toleranceAmount = (nav * toleranceBps) / 10000n;
 
-      expect(toleranceAmount).to.equal(ethers.utils.parseEther("10"));
+      expect(toleranceAmount).to.equal(parseEther("10"));
     });
 
     it("should calculate 0.01% tolerance", () => {
-      const nav = ethers.utils.parseEther("10000");
-      const toleranceBps = 1; // 0.01%
+      const nav = parseEther("10000");
+      const toleranceBps = 1n; // 0.01%
 
-      const toleranceAmount = nav.mul(toleranceBps).div(10000);
+      const toleranceAmount = (nav * toleranceBps) / 10000n;
 
-      expect(toleranceAmount).to.equal(ethers.utils.parseEther("1"));
+      expect(toleranceAmount).to.equal(parseEther("1"));
     });
 
     it("should calculate tolerance range correctly", () => {
-      const nav = ethers.utils.parseEther("1");
-      const toleranceBps = 100; // 1%
+      const nav = parseEther("1");
+      const toleranceBps = 100n; // 1%
 
-      const toleranceAmount = nav.mul(toleranceBps).div(10000);
-      const minNav = nav.sub(toleranceAmount);
-      const maxNav = nav.add(toleranceAmount);
+      const toleranceAmount = (nav * toleranceBps) / 10000n;
+      const minNav = nav - toleranceAmount;
+      const maxNav = nav + toleranceAmount;
 
-      expect(minNav).to.equal(ethers.utils.parseEther("0.99"));
-      expect(maxNav).to.equal(ethers.utils.parseEther("1.01"));
+      expect(minNav).to.equal(parseEther("0.99"));
+      expect(maxNav).to.equal(parseEther("1.01"));
     });
 
     it("should handle tolerance with different NAV values", () => {
-      const navs = [
-        ethers.utils.parseEther("1"),
-        ethers.utils.parseEther("100"),
-        ethers.utils.parseEther("0.01"),
-      ];
-      const toleranceBps = 100; // 1%
+      const navs = [parseEther("1"), parseEther("100"), parseEther("0.01")];
+      const toleranceBps = 100n; // 1%
 
       for (const nav of navs) {
-        const toleranceAmount = nav.mul(toleranceBps).div(10000);
-        const expectedTolerance = nav.div(100); // 1%
+        const toleranceAmount = (nav * toleranceBps) / 10000n;
+        const expectedTolerance = nav / 100n; // 1%
         expect(toleranceAmount).to.equal(expectedTolerance);
       }
     });
@@ -624,87 +681,97 @@ describe("Across Integration", () => {
 
   describe("Mock SpokePool Functionality", () => {
     it("should have correct wrappedNativeToken", async () => {
-      const weth = await acrossSpokePool.wrappedNativeToken();
-      expect(weth).to.equal(wethContract.address);
+      const weth = await ctx.acrossSpokePool.wrappedNativeToken();
+      expect(weth).to.equal(await ctx.wethContract.getAddress());
     });
 
     it("should have fillDeadlineBuffer set", async () => {
-      const buffer = await acrossSpokePool.fillDeadlineBuffer();
-      expect(buffer).to.be.gt(0);
+      const buffer = await ctx.acrossSpokePool.fillDeadlineBuffer();
+      expect(buffer).to.be.gt(0n);
     });
 
     it("should accept depositV3 calls", async () => {
-      await mockUSDC.mint(ownerAddress, ethers.utils.parseUnits("1000", 6));
-      await mockUSDC.approve(acrossSpokePool.address, ethers.utils.parseUnits("100", 6));
+      const { owner, acrossSpokePool, mockUSDC } = ctx;
+      await mockUSDC.mint(owner.address, parseUnits("1000", 6));
+      await mockUSDC.approve(
+        await acrossSpokePool.getAddress(),
+        parseUnits("100", 6),
+      );
 
       const tx = await acrossSpokePool.depositV3(
-        ownerAddress,
-        ownerAddress,
-        mockUSDC.address,
-        mockUSDC.address,
-        ethers.utils.parseUnits("100", 6),
-        ethers.utils.parseUnits("99", 6),
+        owner.address,
+        owner.address,
+        await mockUSDC.getAddress(),
+        await mockUSDC.getAddress(),
+        parseUnits("100", 6),
+        parseUnits("99", 6),
         10,
-        ethers.constants.AddressZero,
+        ZeroAddress,
         Math.floor(Date.now() / 1000),
         Math.floor(Date.now() / 1000) + 3600,
         0,
-        "0x"
+        "0x",
       );
 
       await expect(tx).to.emit(acrossSpokePool, "V3FundsDeposited");
     });
 
     it("should transfer tokens on depositV3", async () => {
-      const initialBalance = await mockUSDC.balanceOf(ownerAddress);
-      const depositAmount = ethers.utils.parseUnits("50", 6);
+      const { owner, acrossSpokePool, mockUSDC } = ctx;
+      const initialBalance = await mockUSDC.balanceOf(owner.address);
+      const depositAmount = parseUnits("50", 6);
 
-      await mockUSDC.approve(acrossSpokePool.address, depositAmount);
+      await mockUSDC.approve(await acrossSpokePool.getAddress(), depositAmount);
 
       await acrossSpokePool.depositV3(
-        ownerAddress,
-        ownerAddress,
-        mockUSDC.address,
-        mockUSDC.address,
+        owner.address,
+        owner.address,
+        await mockUSDC.getAddress(),
+        await mockUSDC.getAddress(),
         depositAmount,
-        ethers.utils.parseUnits("49", 6),
+        parseUnits("49", 6),
         10,
-        ethers.constants.AddressZero,
+        ZeroAddress,
         Math.floor(Date.now() / 1000),
         Math.floor(Date.now() / 1000) + 3600,
         0,
-        "0x"
+        "0x",
       );
 
-      const finalBalance = await mockUSDC.balanceOf(ownerAddress);
-      expect(initialBalance.sub(finalBalance)).to.equal(depositAmount);
+      const finalBalance = await mockUSDC.balanceOf(owner.address);
+      expect(initialBalance - finalBalance).to.equal(depositAmount);
     });
   });
 
   describe("Token Functionality", () => {
     it("should mint tokens correctly", async () => {
-      const mintAmount = ethers.utils.parseUnits("100", 6);
-      await mockUSDC.mint(ownerAddress, mintAmount);
+      const { owner, mockUSDC } = ctx;
+      const mintAmount = parseUnits("100", 6);
+      await mockUSDC.mint(owner.address, mintAmount);
 
-      const balance = await mockUSDC.balanceOf(ownerAddress);
+      const balance = await mockUSDC.balanceOf(owner.address);
       expect(balance).to.be.gte(mintAmount);
     });
 
     it("should handle transfers", async () => {
-      const transferAmount = ethers.utils.parseUnits("10", 6);
-      const userAddress = await user.getAddress();
+      const { user, mockUSDC } = ctx;
+      const transferAmount = parseUnits("10", 6);
 
-      await mockUSDC.transfer(userAddress, transferAmount);
+      await mockUSDC.transfer(user.address, transferAmount);
 
-      const userBalance = await mockUSDC.balanceOf(userAddress);
+      const userBalance = await mockUSDC.balanceOf(user.address);
       expect(userBalance).to.equal(transferAmount);
     });
 
     it("should handle approvals", async () => {
-      const approveAmount = ethers.utils.parseUnits("50", 6);
-      await mockUSDC.approve(aIntents.address, approveAmount);
+      const { owner, aIntents, mockUSDC } = ctx;
+      const approveAmount = parseUnits("50", 6);
+      await mockUSDC.approve(await aIntents.getAddress(), approveAmount);
 
-      const allowance = await mockUSDC.allowance(ownerAddress, aIntents.address);
+      const allowance = await mockUSDC.allowance(
+        owner.address,
+        await aIntents.getAddress(),
+      );
       expect(allowance).to.equal(approveAmount);
     });
   });

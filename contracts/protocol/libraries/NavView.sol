@@ -71,7 +71,7 @@ library NavView {
             } else if (Applications(i) == Applications.GMX_V2_POSITIONS) {
                 appBalances[activeAppIndex] = GmxLib.getGmxPositionBalances(pool);
             } else if (Applications(i) == Applications.HYPERLIQUID) {
-                appBalances[activeAppIndex] = HyperliquidLib.getHyperliquidBalancesUnsafe(pool);
+                appBalances[activeAppIndex] = HyperliquidLib.getHyperliquidBalances(pool);
             } else {
                 continue;
             }

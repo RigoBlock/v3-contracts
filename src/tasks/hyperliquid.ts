@@ -1,14 +1,20 @@
-import { task } from "hardhat/config";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { enableHyperEVMBigBlocks } from "../utils/hyperliquid";
+import {task} from "hardhat/config";
+import type {NewTaskDefinition} from "hardhat/types/tasks";
+import {enableHyperEVMBigBlocks} from "../utils/hyperliquid";
+import {loadEnvironmentFromHardhat} from "../../rocketh/environment.js";
 
-task(
+export const hyperliquidBigBlocksTask: NewTaskDefinition = task(
   "hyperliquid:enable-big-blocks",
   "Enable HyperEVM big blocks for the deployer address via a HyperCore action",
 )
-  .addFlag("testnet", "Use the Hyperliquid testnet API")
-  .setAction(async (args: { testnet: boolean }, hre: HardhatRuntimeEnvironment) => {
-    const { deployer } = await hre.getNamedAccounts();
-    const signer = await hre.ethers.getSigner(deployer);
+  .addFlag({name: "testnet", description: "Use the Hyperliquid testnet API"})
+  .setInlineAction(async (args: {testnet: boolean}, hre) => {
+    const env = await loadEnvironmentFromHardhat({
+      hre,
+      connection: await hre.network.getOrCreate(),
+    });
+    const {ethers} = await hre.network.getOrCreate();
+    const signer = await ethers.getSigner(env.namedAccounts.deployer);
     await enableHyperEVMBigBlocks(signer, args.testnet);
-  });
+  })
+  .build();

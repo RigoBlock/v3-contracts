@@ -70,14 +70,21 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 - **When to bump**: Bump the salt whenever a new ExtensionsMap must be deployed. This happens in two cases:
   1. The ExtensionsMap contract code itself changes (new selectors, new routing logic).
-  2. Any extension is redeployed to a **new address** (because ExtensionsMap immutably stores extension addresses and CREATE2 cannot overwrite an existing contract).
-- **When NOT to bump**: If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+  2. The bytecode of **any contract stored in the ExtensionsMap** changes — which includes not only editing an extension's source, but also editing **any library or shared contract compiled into an extension** (libraries are compiled into the bytecode of every contract that imports them). Examples:
+     - `HyperliquidLib` change → `EApps`, `ENavView`, `EOracle` all change → new extension addresses → **bump salt**.
+     - `GmxLib` change → `EApps`, `EGmxCallback` change → **bump salt**.
+     - `NavView` change → `ENavView` changes → **bump salt**.
+     - `MixinConstants` / other implementation-only libraries → implementation only → no salt bump (see "When NOT to bump").
+     
+     **Decision rule when you change a library**: grep for every contract that imports it. If any importer is an extension (anything whose address is stored in the ExtensionsMap), the salt MUST be bumped. Never assume "I only touched a library" means extensions are unchanged.
+- **When NOT to bump**: If only the implementation changes and everything compiled into extensions is byte-identical, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+- **The unreleased-train exception**: If the salt was already bumped in a previous PR of the same release train and that ExtensionsMap was **never deployed** (nothing exists at the computed CREATE2 address on any chain), do NOT bump again — reuse the pending salt. The deploy script's `map.code.length == 0` check only works because the address is empty; once deployed, any further extension-bytecode change requires a fresh bump.
 - **Important**: The deploy script checks `if (map.code.length == 0)` and skips deployment if an ExtensionsMap already exists at the computed CREATE2 address. If the salt is not bumped when an extension address changed, the script will silently reuse the old ExtensionsMap that points to stale extension addresses.
-- **Automation limitation**: The current scripts require manual salt bumps. Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
+- **Automation limitation**: The current scripts require manual salt bumps. The salt lives in `src/utils/constants.ts` (`extensionsMapSalt`, e.g. `"extensionsMapSalt15"`): bump the numeric suffix in the same PR that changes an extension (directly or via a compiled-in library). Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
 
 ### Version Bump
 
-Version bumps are required for ANY change compiled into the implementation (Mixin contracts, libraries, or constructor parameters).
+Version bumps are required for ANY change that requires redeploying the implementation. That includes: changes compiled into the implementation itself (Mixin contracts, libraries, or constructor parameters) **and extension changes**: an extension redeploy (e.g. `ECrosschain`) requires a new ExtensionsMap (immutable constructor parameter of the implementation), so a new implementation is compiled with a new `VERSION` even though the implementation source is unchanged. The salt bump (`extensionsMapSalt`) and the `VERSION` bump are independent and both are required for an extension change. Note: commit 4b1d66c4 skipped the `VERSION` bump for an `ECrosschain` change — that was incorrect, do not treat it as precedent.
 
 1. **Read the base branch version first.** Open `contracts/protocol/core/immutable/MixinConstants.sol` on the PR's base branch and note the current `VERSION` value. This is the starting point.
 2. **Choose the next version exactly once per PR**, based on the scope of the change:
@@ -89,8 +96,16 @@ Version bumps are required for ANY change compiled into the implementation (Mixi
    - `_REQUIRED_VERSION` in any adapter that requires a minimum implementation version.
    - The `pool.VERSION()` assertion in `test/core/RigoblockPool.Basetoken.spec.ts`.
 4. **Do not bump multiple times within the same PR.** If the base branch already has a higher version, use that version without further bumping.
+5. **Unreleased-train rule.** If the base branch's version belongs to a previous PR of the same release train whose contracts were **never deployed** (no factory `setImplementation` with that version ever executed on any chain), keep that version — do not burn another number. The version identifies a deployed implementation; merging additional changes before the first deployment of the train does not create a new deployment identity. If the previous train WAS deployed, bump normally.
 
 The `pool.VERSION()` test is the guard that reminds future agents to bump the version when the implementation changes; it must stay in sync with `MixinConstants.sol`.
+
+### Deterministic deployment & cross-chain address parity (HARD REQUIREMENT)
+
+- **Same address on every chain is a spec, not a nicety.** Authority is at `0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472` on all chains, produced by `create2(Safe singleton factory 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7, salt 0, init code)`.
+- All production chain ids are declared in `PRODUCTION_CHAIN_IDS` in `rocketh/config.ts` with Safe's singleton factory as `deterministicDeployment`. The `deployScript` wrapper in `rocketh/deploy.ts` **throws** on any live chain not in that list — never let a deploy fall back to rocketh's default CREATE2 factory. When adding a chain: add its id + Safe factory entry to `rocketh/config.ts` (the factory address/signed tx are chain-independent; `@safe-global/safe-singleton-factory` has them).
+- **Hardhat 3 changes the CBOR metadata tail** (`project/` source namespacing — a build-info format contract, not configurable), which changes CREATE2 addresses even though the executable bytecode is identical. `readArtifact` (`rocketh/artifacts.ts`) restores the authoritative tail from `rocketh/canonical-cbor.json` for every contract whose executable code is unchanged, so fresh chains reproduce the established addresses. Only the metadata stamp is canonicalized — the deployed executable code is always what the current toolchain compiled from current sources.
+- **After deploying an upgrade to the authoritative chain (mainnet), regenerate the tails**: `npx hardhat run scripts/generate-canonical-cbor.ts --network hardhat`. Contracts whose code legitimately changed keep the current build's tail; since metadata depends only on source + settings (never on the chain), all chains still compute identical addresses for them.
 
 ### Shared nonce management
 
@@ -383,11 +398,23 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 - Pool proxies (if deployed with same params)
 - Core implementations
 - Staking suite, Governance core
+- **ExtensionsMap** — see below
+
+**ExtensionsMap has NO constructor parameters.** The deployment params (extension
+addresses, wrapped native) are written to the `ExtensionsMapDeployer`'s storage and
+read by the ExtensionsMap constructor at deploy time (`msg.sender` context). The map is
+always deployed via `ExtensionsMapDeployer.deployExtensionsMap(params, salt)`, and its
+CREATE2 address depends only on three chain-independent inputs: the deployer contract's
+address, the salt, and `type(ExtensionsMap).creationCode`. Same code + same salt ⇒ same
+address on every chain (mainnet's map is at `0x591cc27B8fc9D9BCd93375B0F4d3a2cd23F1a007`).
+Apparent mismatches on production chains (e.g. arbitrum/hyperliquid) are upgrade-timing
+artifacts — those chains received the map under an older deployer/salt generation — not a
+by-design per-chain address. A fresh chain with the current code and current salt always
+reproduces the canonical address.
 
 ### Different Address Per Chain
 
-- ExtensionsMap (extensions have chain-specific params)
-- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain)
+- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain) — chain-specific constructor params
 - Governance strategy
 
 ### NAV Integrity in Cross-Chain Transfers
@@ -449,7 +476,7 @@ When modifying code:
 
 - NatSpec all public/external functions
 - Use `@inheritdoc` for interface implementations
-- Document known limitations clearly (see docs/across/KNOWN_ISSUES_AND_EDGE_CASES.md)
+- Document known limitations clearly (see docs/across/IMPLEMENTATION_GUIDE.md)
 - **Keep inline code comments strictly minimal**: only what is needed to understand core functionality. Readers should infer "what" from code; comments should only explain non-obvious "why".
 - **Design rationale, audit responses, and known limitations belong in `/docs/`**, not in source code. A one-line comment may reference the relevant doc section if needed.
 - **Do NOT add verbose NatSpec justifying design decisions or mentioning future features** in contract source. Example: the reason `receive()` is `payable` (while `fallback()` is non-payable) is documented in `docs/staking/CANTINA_FINDINGS_STATUS.md`, not in the contract.
@@ -558,6 +585,7 @@ When making changes:
 - [ ] Preserve storage layout (never reorder/remove storage)
 - [ ] Use existing patterns (extensions, adapters, storage access)
 - [ ] Add storage slot assertions if adding new storage (dot notation in names)
+- [ ] **Extension changed → bump `extensionsMapSalt`** in `src/utils/constants.ts` in the same PR (new extension address ⇒ new ExtensionsMap ⇒ new implementation) **and bump `VERSION`** in `MixinConstants.sol` (the new implementation carries a new constructor parameter, so it is a new implementation deployment even though no implementation source changed)
 - [ ] Verify security (delegatecall context, access control)
 - [ ] **Add `override` keyword** to interface implementations
 - [ ] **Fix all compilation warnings** in new code (not required for legacy code)
