@@ -111,7 +111,7 @@
     "solidity-coverage": "^0.8.2",
     "solidity-docgen": "^0.6.0-beta.36",
     "ts-node": "^10.8.1",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "yargs": "^18.0.0"
   },
   "peerDependencies": {
