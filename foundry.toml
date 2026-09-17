@@ -7,7 +7,7 @@ cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
 gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNavImpactPool", "TestSafeTransferLib", "ExtensionsMap", "RigoblockPoolProxy.0.8.17"]
-fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
+fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }, { access = "read", path = "lib/gmx-synthetics/deployments" }]
 ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 
 # Isolate mode is the default since Foundry v1.8.0. It must stay disabled here: the ECrosschain

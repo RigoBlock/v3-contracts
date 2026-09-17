@@ -76,7 +76,6 @@ contract NavViewStressedParityForkTest is Test {
     address private constant GMX_REFERRAL_STORAGE = Constants.ARB_GMX_REFERRAL_STORAGE;
     address private constant GMX_ETH_USD_MARKET = Constants.ARB_GMX_ETH_USD_MARKET;
     address private constant GMX_ROLE_STORE = Constants.ARB_GMX_ROLE_STORE;
-    address private constant GMX_ORACLE_ADDRESS = 0x7F01614cA5198Ec979B1aAd1DAF0DE7e0a215BDF;
 
     // Arbitrum chain-specific addresses
     address private constant ARB_WETH = Constants.ARB_WETH;
@@ -285,7 +284,9 @@ contract NavViewStressedParityForkTest is Test {
                     min: (realPrice.min * 110) / 100,
                     max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
-                    blockNumber: realPrice.blockNumber
+                    rawMin: realPrice.min,
+                    rawMax: realPrice.max,
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 })
             )
         );
@@ -448,6 +449,13 @@ contract NavViewStressedParityForkTest is Test {
         return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("CONTROLLER")), 0, 1)[0];
     }
 
+    /// @dev Returns the Oracle module of the current GMX OrderHandler, resolved dynamically
+    ///  because oracle provider registrations are keyed by the oracle address and GMX
+    ///  rotations (e.g. v2.2c, ~Sep 2026) deploy a new Oracle alongside new handlers.
+    function _gmxOracle() private view returns (address) {
+        return IGmxOrderHandler(GMX_ROUTER.orderHandler()).oracle();
+    }
+
     function _oracleProviderKey(address oracleContract, address token) private pure returns (bytes32) {
         bytes32 prefix = keccak256(abi.encode("ORACLE_PROVIDER_FOR_TOKEN"));
         return keccak256(abi.encode(prefix, oracleContract, token));
@@ -486,7 +494,7 @@ contract NavViewStressedParityForkTest is Test {
             }
             if (dup) continue;
 
-            bytes32 key = _oracleProviderKey(GMX_ORACLE_ADDRESS, rawTokens[i]);
+            bytes32 key = _oracleProviderKey(_gmxOracle(), rawTokens[i]);
             entries[k] = OracleProviderEntry({
                 token: rawTokens[i],
                 key: key,

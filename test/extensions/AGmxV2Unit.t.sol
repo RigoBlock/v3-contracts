@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE} from "../../contracts/protocol/types/GmxConstants.sol";
+import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
-import {IGmxDataStore, IGmxReader, IGmxExchangeRouter, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {IGmxDataStore, IGmxReader, IGmxRoleStore, IGmxExchangeRouter, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
 import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
@@ -15,6 +15,7 @@ import {IWETH9} from "../../contracts/protocol/interfaces/IWETH9.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
+import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
 import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
 import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
 import {IEGmxCallback} from "../../contracts/protocol/extensions/adapters/interfaces/IEGmxCallback.sol";
@@ -53,7 +54,7 @@ contract AGmxV2UnitTest is Test {
     address internal market;
     address internal token;
 
-    address internal constant GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
+    address internal constant GMX_CHAINLINK_PRICE_FEED = 0x90218fbb064b1475E4382b041Cc7ccF08AF718B0;
 
     function setUp() public {
         vm.chainId(ARBITRUM_CHAIN_ID);
@@ -208,6 +209,25 @@ contract AGmxV2UnitTest is Test {
             });
     }
 
+    /// @notice Order writes revert early when the ExchangeRouter no longer holds the
+    ///  CONTROLLER role (e.g. after a GMX contract rotation).
+    function test_CreateIncreaseOrder_RouterNotController_Reverts() public {
+        vm.mockCall(
+            _GMX_ROLE_STORE,
+            abi.encodeWithSelector(
+                IGmxRoleStore.hasRole.selector,
+                address(GMX_ROUTER),
+                keccak256(abi.encode("CONTROLLER"))
+            ),
+            abi.encode(false)
+        );
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
+
+        vm.expectRevert(GmxAdapterLib.GmxRouterNotAuthorized.selector);
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
     function test_CreateIncreaseOrder_UnmappedIndexToken_Reverts() public {
         address indexToken = makeAddr("unmappedIndexToken");
         vm.deal(address(proxy), 1 ether);
@@ -247,7 +267,7 @@ contract AGmxV2UnitTest is Test {
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
             abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
-            abi.encode(GmxValidatedPrice(indexToken, 1e30, 1e30, block.timestamp, block.number))
+            abi.encode(GmxValidatedPrice(indexToken, 1e30, 1e30, 1e30, 1e30, block.timestamp, GMX_CHAINLINK_PRICE_FEED))
         );
 
         IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
@@ -325,6 +345,16 @@ contract AGmxV2UnitTest is Test {
         address orderHandler = makeAddr("orderHandler");
         address orderVault = makeAddr("orderVault");
 
+        // The ExchangeRouter holds the CONTROLLER role.
+        vm.mockCall(
+            _GMX_ROLE_STORE,
+            abi.encodeWithSelector(
+                IGmxRoleStore.hasRole.selector,
+                address(GMX_ROUTER),
+                keccak256(abi.encode("CONTROLLER"))
+            ),
+            abi.encode(true)
+        );
         // Execution fee reads return zero so the fee is small.
         vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
         // No existing positions.

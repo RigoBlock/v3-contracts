@@ -9,13 +9,13 @@ import {IGmxExchangeRouter} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 uint256 constant ARBITRUM_CHAIN_ID = 42161;
 address constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
 
-IGmxExchangeRouter constant GMX_ROUTER = IGmxExchangeRouter(0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41);
+IGmxExchangeRouter constant GMX_ROUTER = IGmxExchangeRouter(0x7dE39FF2e232A2203196788d37e234cF8F1b83f1);
 
-address constant _GMX_READER = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
+address constant _GMX_READER = 0xfA26cBb46e2614609406de08CA1Dc7f70a684184;
 address constant _GMX_DATA_STORE = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
 address constant _GMX_ROLE_STORE = 0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72;
 address constant _GMX_REFERRAL_STORAGE = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d;
-address constant _GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
+address constant _GMX_CHAINLINK_PRICE_FEED = 0x90218fbb064b1475E4382b041Cc7ccF08AF718B0;
 uint256 constant _MAX_GMX_POSITIONS = 32;
 
 bytes32 constant _KEY_FEE_BASE = keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));

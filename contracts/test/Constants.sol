@@ -166,17 +166,17 @@ library Constants {
     /// @notice Uniswap Universal Router is not deployed on HyperEVM. This sentinel is checked by the Hyperliquid fixture.
     address internal constant HYPER_UNIVERSAL_ROUTER = address(0);
 
-    /// @notice GMX v2 ExchangeRouter on Arbitrum.
-    address internal constant ARB_GMX_EXCHANGE_ROUTER = 0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41;
+    /// @notice GMX v2 ExchangeRouter on Arbitrum (v2.2c rotation, ~Sep 15-16 2026).
+    address internal constant ARB_GMX_EXCHANGE_ROUTER = 0x7dE39FF2e232A2203196788d37e234cF8F1b83f1;
 
     /// @notice GMX v2 DataStore on Arbitrum.
     address internal constant ARB_GMX_DATA_STORE = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
 
-    /// @notice GMX v2 Reader on Arbitrum.
-    address internal constant ARB_GMX_READER = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
+    /// @notice GMX v2 Reader on Arbitrum (v2.2c rotation, ~Sep 15-16 2026).
+    address internal constant ARB_GMX_READER = 0xfA26cBb46e2614609406de08CA1Dc7f70a684184;
 
-    /// @notice GMX v2 Chainlink price feed provider on Arbitrum.
-    address internal constant ARB_GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
+    /// @notice GMX v2 Chainlink price feed provider on Arbitrum (v2.2c rotation, ~Sep 15-16 2026).
+    address internal constant ARB_GMX_CHAINLINK_PRICE_FEED = 0x90218fbb064b1475E4382b041Cc7ccF08AF718B0;
 
     /// @notice GMX v2 referral storage on Arbitrum (gmx-contracts ReferralStorage).
     address internal constant ARB_GMX_REFERRAL_STORAGE = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d;
@@ -186,6 +186,16 @@ library Constants {
 
     /// @notice GMX v2 ETH/USD market token (GM:ETH-USDC) on Arbitrum.
     address internal constant ARB_GMX_ETH_USD_MARKET = 0x70d95587d40A2caf56bd97485aB3Eec10Bee6336;
+
+    /// @notice GMX v2 LIT/USD market token on Arbitrum (index token has no GMX on-chain
+    ///  price feed — priced through the hardcoded fallback feed in GmxFallback.sol).
+    address internal constant ARB_GMX_LIT_USD_MARKET = 0x044dFE01863CE85f9ECd5639eE5485c90AC320FC;
+
+    /// @notice LIT index token on Arbitrum.
+    address internal constant ARB_LIT_TOKEN = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db;
+
+    /// @notice Chainlink LIT/USD fallback feed on Arbitrum (hardcoded in GmxFallback.sol).
+    address internal constant ARB_LIT_FALLBACK_FEED = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
 
     // Optimism - use shared constants
     address internal constant OPT_USDC = CrosschainTokens.OPT_USDC;

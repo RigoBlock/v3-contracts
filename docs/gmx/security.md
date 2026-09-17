@@ -184,7 +184,7 @@ The adapter does not add extra delay; it passes the call through directly. Front
 
 ### 2. claimCollateral Reverts on Zero Claimable
 
-The deployed GMX `ExchangeRouter` (at `0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41`) has an arithmetic underflow panic when `claimableAmount = 0`. Callers must verify collateral is available before calling `claimCollateral`. The adapter does not add a pre-flight check because:
+The deployed GMX `ExchangeRouter` (at `0x7dE39FF2e232A2203196788d37e234cF8F1b83f1` since the v2.2c rotation of ~Sep 15-16 2026) has an arithmetic underflow panic when `claimableAmount = 0`. Callers must verify collateral is available before calling `claimCollateral`. The adapter does not add a pre-flight check because:
 
 - On-chain read cost would be wasted if claimable > 0 (the common path)
 - The revert from ExchangeRouter is sufficient to surface the condition

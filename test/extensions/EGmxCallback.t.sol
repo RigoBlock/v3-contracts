@@ -153,6 +153,7 @@ contract EGmxCallbackTest is Test {
                 executionFee: 5,
                 callbackGasLimit: 6,
                 minOutputAmount: 7,
+                uiFeeFactor: 0,
                 updatedAtTime: 8,
                 validFromTime: 9,
                 srcChainId: 0

@@ -90,7 +90,7 @@ describe("BaseTokenProxy", async () => {
       expect(await pool.authority()).to.be.eq(authorityAddress);
       // This assertion must stay in sync with VERSION in MixinConstants.sol.
       // See AGENTS.md "Version Bump" for when and how to update it.
-      expect(await pool.VERSION()).to.be.eq("4.4.4");
+      expect(await pool.VERSION()).to.be.eq("4.4.5");
     });
   });
 
