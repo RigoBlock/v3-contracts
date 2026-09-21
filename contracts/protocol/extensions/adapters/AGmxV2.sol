@@ -245,6 +245,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         address[] calldata tokens,
         address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
+        GmxAdapterLib.assertRouterAuthorized();
+
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }
@@ -271,6 +273,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256[] calldata timeKeys,
         address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
+        GmxAdapterLib.assertRouterAuthorized();
+
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }

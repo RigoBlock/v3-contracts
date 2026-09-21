@@ -25,7 +25,7 @@ import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 import {IGmxReader, IGmxRoleStore, IGmxOrderHandler, IGmxExchangeRouter, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
-import {GMX_ROUTER} from "../../contracts/protocol/types/GmxConstants.sol";
+import {GMX_ROUTER, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
@@ -289,7 +289,7 @@ contract GmxLitPoolFork is Test {
     /// @dev Returns a GMX CONTROLLER address from the RoleStore. GMX uses
     ///  `keccak256(abi.encode("KEY"))` for role keys, not bare `keccak256("KEY")`.
     function _getController() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("CONTROLLER")), 0, 1)[0];
+        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
     }
 
     /// @dev Returns a registered ORDER_KEEPER address from the RoleStore.

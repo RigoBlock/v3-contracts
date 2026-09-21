@@ -22,6 +22,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 9. **Compilation**: Fix all warnings in new code (legacy warnings acceptable)
 10. **Named Mapping Variables**: All new mappings must use named key/value parameters — `mapping(KeyType name => ValueType name)` — as required by Solidity ≥0.8.18 style.
 11. **ALWAYS RUN TESTS**: After ANY modification to .sol files or test files, IMMEDIATELY run tests to verify they pass
+12. **CODE SIZE**: After ANY change that can alter deployed bytecode (including library edits — libraries compile into every importer), measure the affected contracts' deployed size with the production settings (optimizer 200 runs, no viaIR) via `npx hardhat codesize --skipcompile true`, and update the table in `docs/CODE_SIZE.md` in the same PR. Never merge a contract at or above the 24576-byte limit. `SmartPool` and `ENavView` have <300 bytes of headroom — flag any PR that shrinks it further.
 
 ## AI Agent Limitations (CRITICAL)
 
@@ -592,6 +593,7 @@ When making changes:
 - [ ] **Fix all compilation warnings** in new code (not required for legacy code)
 - [ ] **Write or update tests** (unit tests, integration tests, fork tests)
 - [ ] **IMMEDIATELY RUN TESTS after ANY code change** (`forge test` for Foundry, `yarn test` for Hardhat)
+- [ ] **Check deployed code size** after any bytecode-affecting change (production settings: optimizer 200 runs, no viaIR) and **update the table in `docs/CODE_SIZE.md`** in the same PR — see `docs/CODE_SIZE.md` for the command and current sizes
 - [ ] **Run tests to ensure they pass** (`forge test` for Foundry, `npm test` for Hardhat)
 - [ ] Test with forks if cross-chain or integration work
 - [ ] Update interfaces and use `@inheritdoc`
@@ -652,6 +654,8 @@ When making changes:
 23. **AUDIT FINDINGS REQUIRE INDEPENDENT VERIFICATION BEFORE APPLYING** — Never apply an audit finding without: (1) running the full test suite to detect regressions, (2) verifying through protocol documentation that the fix cannot block any legitimate protocol path, (3) documenting the decision in `/docs/` if preserving production code over the auditor's recommendation. A finding that looks safe in isolation may close off a critical path when the full system is considered. Defend each "not fixed" or "by-design" disposition clearly in the audit status document.
 
 24. **NAMED MAPPING VARIABLES** — All new or modified mappings must use named key and value parameters (Solidity ≥0.8.18 feature). Write `mapping(bytes4 selector => address[] addresses)` not `mapping(bytes4 => address[])`. Both key and value must be named; for nested mappings name all levels: `mapping(address owner => mapping(bytes4 selector => uint256 position))`. This applies to struct fields, state variables, and library-internal structs. Do NOT retrofit old legacy contracts not being modified in the current PR.
+
+25. **DEPLOYED CODE SIZE MUST BE TRACKED IN EVERY PR** — The EVM limit is 24576 bytes per contract, and `SmartPool` (24321) and `ENavView` (24299) have under 300 bytes of headroom with production settings. After any change that can alter deployed bytecode — including library edits, since libraries compile into every importer's bytecode — measure with the production profile (`SOLIDITY_SETTINGS='{"optimizer":{"enabled":true,"runs":200}}' npx hardhat compile && npx hardhat codesize --skipcompile true`) and update the table in `docs/CODE_SIZE.md` in the same PR. Never trust Foundry's size output (it uses `optimizer_runs = 1_000_000` and produces different bytecode). Never merge a contract at or above the limit.
 
 ## GMX v2 Integration
 

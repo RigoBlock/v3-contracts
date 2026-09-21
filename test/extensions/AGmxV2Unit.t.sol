@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE} from "../../contracts/protocol/types/GmxConstants.sol";
+import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {IGmxDataStore, IGmxReader, IGmxRoleStore, IGmxExchangeRouter, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
@@ -70,6 +70,7 @@ contract AGmxV2UnitTest is Test {
     /// @notice claimFundingFees removes a tracked market with no open position and no fees.
     function test_ClaimFundingFees_RemovesUnusedTrackedMarket() public {
         _setTrackedMarket(market);
+        _mockRouterAuthorized();
 
         // No open positions.
         vm.mockCall(
@@ -106,6 +107,7 @@ contract AGmxV2UnitTest is Test {
     /// @notice claimCollateral removes a fully-claimed collateral key.
     function test_ClaimCollateral_RemovesFullyClaimedKey() public {
         uint256 timeKey = 1;
+        _mockRouterAuthorized();
         bytes32 amountKey = keccak256(
             abi.encode(GmxCallbackLib.CLAIMABLE_COLLATERAL_AMOUNT_KEY, market, token, timeKey, address(proxy))
         );
@@ -212,20 +214,77 @@ contract AGmxV2UnitTest is Test {
     /// @notice Order writes revert early when the ExchangeRouter no longer holds the
     ///  CONTROLLER role (e.g. after a GMX contract rotation).
     function test_CreateIncreaseOrder_RouterNotController_Reverts() public {
-        vm.mockCall(
-            _GMX_ROLE_STORE,
-            abi.encodeWithSelector(
-                IGmxRoleStore.hasRole.selector,
-                address(GMX_ROUTER),
-                keccak256(abi.encode("CONTROLLER"))
-            ),
-            abi.encode(false)
-        );
+        _mockRouterUnauthorized();
 
         IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
 
         vm.expectRevert(GmxAdapterLib.GmxRouterNotAuthorized.selector);
         proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    /// @notice Decrease orders revert with the same guard before any state change.
+    function test_CreateDecreaseOrder_RouterNotController_Reverts() public {
+        _mockRouterUnauthorized();
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, false);
+
+        vm.expectRevert(GmxAdapterLib.GmxRouterNotAuthorized.selector);
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createDecreaseOrder.selector, params));
+    }
+
+    /// @notice Order updates revert with the same guard before any state change.
+    function test_UpdateOrder_RouterNotController_Reverts() public {
+        _mockRouterUnauthorized();
+
+        vm.expectRevert(GmxAdapterLib.GmxRouterNotAuthorized.selector);
+        proxy.exec(
+            abi.encodeWithSelector(
+                IAGmxV2.updateOrder.selector,
+                bytes32(uint256(1)),
+                uint256(1e30),
+                uint256(0),
+                uint256(0),
+                uint256(0),
+                uint256(0),
+                false
+            )
+        );
+    }
+
+    /// @notice Order cancellations revert with the same guard before any state change.
+    function test_CancelOrder_RouterNotController_Reverts() public {
+        _mockRouterUnauthorized();
+
+        vm.expectRevert(GmxAdapterLib.GmxRouterNotAuthorized.selector);
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.cancelOrder.selector, bytes32(uint256(1))));
+    }
+
+    /// @notice Funding-fee claims revert with the same guard: the claim would fail
+    ///  downstream anyway once the router lost the CONTROLLER role.
+    function test_ClaimFundingFees_RouterNotController_Reverts() public {
+        _mockRouterUnauthorized();
+
+        address[] memory markets = new address[](1);
+        markets[0] = market;
+        address[] memory tokens = new address[](1);
+        tokens[0] = token;
+
+        vm.expectRevert(GmxAdapterLib.GmxRouterNotAuthorized.selector);
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.claimFundingFees.selector, markets, tokens, address(this)));
+    }
+
+    /// @notice Collateral claims revert with the same guard.
+    function test_ClaimCollateral_RouterNotController_Reverts() public {
+        _mockRouterUnauthorized();
+
+        address[] memory markets = new address[](1);
+        markets[0] = market;
+        address[] memory tokens = new address[](1);
+        tokens[0] = token;
+        uint256[] memory timeKeys = new uint256[](1);
+
+        vm.expectRevert(GmxAdapterLib.GmxRouterNotAuthorized.selector);
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.claimCollateral.selector, markets, tokens, timeKeys, address(this)));
     }
 
     function test_CreateIncreaseOrder_UnmappedIndexToken_Reverts() public {
@@ -339,6 +398,23 @@ contract AGmxV2UnitTest is Test {
         proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
     }
 
+    /// @dev Mocks the RoleStore check used by GmxAdapterLib.assertRouterAuthorized.
+    function _mockRouterAuthorized() internal {
+        vm.mockCall(
+            _GMX_ROLE_STORE,
+            abi.encodeWithSelector(IGmxRoleStore.hasRole.selector, address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
+            abi.encode(true)
+        );
+    }
+
+    function _mockRouterUnauthorized() internal {
+        vm.mockCall(
+            _GMX_ROLE_STORE,
+            abi.encodeWithSelector(IGmxRoleStore.hasRole.selector, address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
+            abi.encode(false)
+        );
+    }
+
     /// @dev Mocks the GMX DataStore, Reader, Router, OrderHandler and OrderVault calls
     ///  that createIncreaseOrder needs regardless of the market being tested.
     function _mockCreateOrderInfrastructure() internal {
@@ -346,15 +422,7 @@ contract AGmxV2UnitTest is Test {
         address orderVault = makeAddr("orderVault");
 
         // The ExchangeRouter holds the CONTROLLER role.
-        vm.mockCall(
-            _GMX_ROLE_STORE,
-            abi.encodeWithSelector(
-                IGmxRoleStore.hasRole.selector,
-                address(GMX_ROUTER),
-                keccak256(abi.encode("CONTROLLER"))
-            ),
-            abi.encode(true)
-        );
+        _mockRouterAuthorized();
         // Execution fee reads return zero so the fee is small.
         vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
         // No existing positions.

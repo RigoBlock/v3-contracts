@@ -18,6 +18,10 @@ address constant _GMX_REFERRAL_STORAGE = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e
 address constant _GMX_CHAINLINK_PRICE_FEED = 0x90218fbb064b1475E4382b041Cc7ccF08AF718B0;
 uint256 constant _MAX_GMX_POSITIONS = 32;
 
+// Role required by GMX contracts to mutate DataStore state. The ExchangeRouter
+// must hold it for order writes and claims to succeed.
+bytes32 constant _GMX_CONTROLLER_ROLE = keccak256(abi.encode("CONTROLLER"));
+
 bytes32 constant _KEY_FEE_BASE = keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));
 bytes32 constant _KEY_FEE_PER_ORACLE = keccak256(abi.encode("ESTIMATED_GAS_FEE_PER_ORACLE_PRICE"));
 bytes32 constant _POSITION_SIZE_IN_USD_KEY = keccak256(abi.encode("SIZE_IN_USD"));

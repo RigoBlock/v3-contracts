@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE} from "../types/GmxConstants.sol";
+import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CONTROLLER_ROLE} from "../types/GmxConstants.sol";
 
 import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
@@ -19,8 +19,6 @@ import {IEGmxCallback} from "./adapters/interfaces/IEGmxCallback.sol";
 contract EGmxCallback is IEGmxCallback {
     using EnumerableSet for Bytes32Set;
 
-    bytes32 private constant _CONTROLLER_ROLE_STORE_KEY = keccak256(abi.encode("CONTROLLER"));
-
     error NotGmxController();
     error InvalidCallbackAccount();
     error NotArbitrum();
@@ -30,7 +28,7 @@ contract EGmxCallback is IEGmxCallback {
     }
 
     modifier onlyGmxController() {
-        require(IGmxRoleStore(_GMX_ROLE_STORE).hasRole(msg.sender, _CONTROLLER_ROLE_STORE_KEY), NotGmxController());
+        require(IGmxRoleStore(_GMX_ROLE_STORE).hasRole(msg.sender, _GMX_CONTROLLER_ROLE), NotGmxController());
         _;
     }
 

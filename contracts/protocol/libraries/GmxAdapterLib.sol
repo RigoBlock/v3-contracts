@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
-import {GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CHAINLINK_PRICE_FEED, _MAX_GMX_POSITIONS, _KEY_FEE_BASE, _KEY_FEE_PER_ORACLE, _POSITION_SIZE_IN_USD_KEY, _KEY_FEE_MULTIPLIER, _KEY_INCREASE_ORDER_GAS, _KEY_DECREASE_ORDER_GAS, _FLOAT_PRECISION, _ORDER_ORACLE_PRICE_COUNT} from "../types/GmxConstants.sol";
+import {GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CHAINLINK_PRICE_FEED, _MAX_GMX_POSITIONS, _GMX_CONTROLLER_ROLE, _KEY_FEE_BASE, _KEY_FEE_PER_ORACLE, _POSITION_SIZE_IN_USD_KEY, _KEY_FEE_MULTIPLIER, _KEY_INCREASE_ORDER_GAS, _KEY_DECREASE_ORDER_GAS, _FLOAT_PRECISION, _ORDER_ORACLE_PRICE_COUNT} from "../types/GmxConstants.sol";
 
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
@@ -14,14 +14,11 @@ library GmxAdapterLib {
     error MaxGmxPositionsReached();
     error GmxRouterNotAuthorized();
 
-    // Mirror of EGmxCallback's private constant, which cannot be imported.
-    bytes32 private constant _CONTROLLER_ROLE_KEY = keccak256(abi.encode("CONTROLLER"));
-
     /// @dev Reverts if the GMX ExchangeRouter lost the CONTROLLER role (e.g. after a GMX
-    ///  contract rotation), which would make order writes revert downstream.
+    ///  contract rotation), which would make order writes and claims revert downstream.
     function assertRouterAuthorized() internal view {
         require(
-            IGmxRoleStore(_GMX_ROLE_STORE).hasRole(address(GMX_ROUTER), _CONTROLLER_ROLE_KEY),
+            IGmxRoleStore(_GMX_ROLE_STORE).hasRole(address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
             GmxRouterNotAuthorized()
         );
     }

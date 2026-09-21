@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {GMX_ROUTER} from "../../contracts/protocol/types/GmxConstants.sol";
+import {GMX_ROUTER, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
@@ -446,7 +446,7 @@ contract NavViewStressedParityForkTest is Test {
     }
 
     function _getController() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("CONTROLLER")), 0, 1)[0];
+        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
     }
 
     /// @dev Returns the Oracle module of the current GMX OrderHandler, resolved dynamically

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {GMX_ROUTER, _MAX_GMX_POSITIONS, _GMX_DATA_STORE, _FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";
+import {GMX_ROUTER, _MAX_GMX_POSITIONS, _GMX_DATA_STORE, _FLOAT_PRECISION, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -1484,7 +1484,7 @@ contract AGmxV2ForkTest is Test {
     ///  GMX uses `keccak256(abi.encode("KEY"))` for all role keys (see GMX Keys.sol), not
     ///  bare `keccak256("KEY")`.  Using the wrong format returns an empty array and panics.
     function _getController() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("CONTROLLER")), 0, 1)[0];
+        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
     }
 
     /// @dev Returns a registered ORDER_KEEPER address from the RoleStore.
@@ -2573,8 +2573,7 @@ contract AGmxV2ForkTest is Test {
     ///  collateral keys, and that GmxLib includes both claimable funding fees and unclaimed
     ///  collateral rebates in the returned balances.
     function test_EGmxCallback_RecordsClaimableBalances() public {
-        bytes32 controllerRole = keccak256(abi.encode("CONTROLLER"));
-        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(controllerRole, 0, 1)[0];
+        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
         address market = GMX_ETH_USD_MARKET;
         Market.Props memory mkt = IGmxReader(GMX_READER).getMarket(GMX_DATA_STORE, market);
 
@@ -2660,8 +2659,7 @@ contract AGmxV2ForkTest is Test {
     /// @notice Worst-case callback benchmark: market with different long/short tokens and
     ///  claimable collateral for both.
     function test_EGmxCallback_RecordsClaimableBalances_TwoTokens() public {
-        bytes32 controllerRole = keccak256(abi.encode("CONTROLLER"));
-        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(controllerRole, 0, 1)[0];
+        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
         address market = GMX_ETH_USD_MARKET;
         address longToken = ARB_WETH;
         address shortToken = ARB_USDC;
@@ -2758,8 +2756,7 @@ contract AGmxV2ForkTest is Test {
 
     /// @dev Simulates a GMX keeper `afterOrderExecution` callback for `market`.
     function _simulateGmxCallback(address market) private {
-        bytes32 controllerRole = keccak256(abi.encode("CONTROLLER"));
-        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(controllerRole, 0, 1)[0];
+        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
 
         EventUtils.AddressKeyValue[] memory addrItems = new EventUtils.AddressKeyValue[](6);
         addrItems[0] = EventUtils.AddressKeyValue({key: "account", value: pool});
