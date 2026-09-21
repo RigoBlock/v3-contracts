@@ -12,26 +12,28 @@
 (library / non-fork / fork + lcov merge) that needed per-file include/exclude lists and
 a "contract name must contain Fork" convention — both rotted with every new test file.
 
-Measured on forge 1.8.1, the single invocation covers a **superset** of the lines the
-split covered (2 extra lines, none lost). Known Foundry coverage quirks, with public
-refs:
-
-- **Library hit-count attribution** ([foundry#7054](https://github.com/foundry-rs/foundry/issues/7054), [foundry#2826](https://github.com/foundry-rs/foundry/issues/2826)):
-  when a library is inlined into a contract deployed by several suites, per-line HIT
-  COUNTS can undercount (e.g. `GmxAdapterLib` recorded 69 hits where 81 executions
-  happened). Only the count is affected — executed lines are never marked uncovered,
-  which is all Codecov's line view needs.
-- **Invariant tests under coverage** ([foundry#4952](https://github.com/foundry-rs/foundry/issues/4952)):
-  pathologically slow, so `DelegationLibFuzz` and `ECrosschainFuzzTest` are excluded
-  from the coverage run (they still run in `yarn test:fuzz`).
-- **Fork + coverage flakiness** ([foundry#6442](https://github.com/foundry-rs/foundry/issues/6442)):
-  intermittent; handled by the failure-detection guard below.
+Measured on forge 1.8.1 (the version CI pins), the single invocation covers a **superset**
+of the lines the split covered (2 extra lines, none lost). Forge's coverage quirks in
+this area have a long public history — the canonical reports are all **closed** now
+(coverage was reworked several times since), but they document the problem class:
+[foundry#7054](https://github.com/foundry-rs/foundry/issues/7054) and
+[foundry#2826](https://github.com/foundry-rs/foundry/issues/2826) (library coverage
+attribution — per-line HIT COUNTS can still undercount when a library is inlined into
+a contract deployed by several suites; verified on 1.8.1: `GmxAdapterLib` recorded 69
+hits where 81 executions happened. Only the count is affected — executed lines are
+never marked uncovered, which is all Codecov's line view needs),
+[foundry#4952](https://github.com/foundry-rs/foundry/issues/4952) (invariant tests
+pathologically slow under coverage, hence the two fuzz exclusions), and
+[foundry#6442](https://github.com/foundry-rs/foundry/issues/6442) (fork + coverage
+flakiness). Behavior on the pinned version is what matters; re-measure before
+changing this setup.
 
 The only exclusions are stable ones, documented in the script header: the
 `test/debug/**` folder, the two local-only-network fork files (`PolygonFork`,
 `A0xRouterUnichainFork`), and the two fuzz contracts. **Do not add per-file
-exclusions** when adding tests — if coverage looks wrong, read the next section
-first: the usual cause is fork tests failing silently, not a filtering problem.
+exclusions** when adding tests — if coverage looks wrong, the cause is almost always
+upstream of filtering: a failed/blocked CI run whose Codecov page still shows an older
+commit's data, or fork tests failing under RPC pressure (see below).
 
 ## Inconsistent Coverage in CI
 
@@ -79,12 +81,13 @@ When you see this low percentage, fork tests have failed, causing files like:
 
 ### Solutions Implemented
 
-#### 1. **Explicit Failure Detection + Proper Error Propagation** ([scripts/foundry-coverage.sh](../scripts/foundry-coverage.sh)) - **THE REAL FIX**
+#### 1. **Explicit Failure Detection + Proper Error Propagation** ([scripts/foundry-coverage.sh](../scripts/foundry-coverage.sh)) - **THE REAL FIX (2024-era forge)**
 
-`forge coverage` exits 0 even when tests fail, so failing fork tests used to produce an
-all-zero-line coverage report that was uploaded to Codecov silently (lines covered only
-by fork tests showed as uncovered). The coverage script pipes forge's output through a
-guard that fails the step when any test failed:
+Older forge releases (0.2.0 era, when this incident happened) **exited 0 even when
+tests failed**, so failing fork tests produced an all-zero-line coverage report that
+was uploaded to Codecov silently (lines covered only by fork tests showed as
+uncovered). The coverage script pipes forge's output through a guard that fails the
+step when any test failed:
 
 ```bash
 forge coverage ... 2>&1 | tee "$LOG"
@@ -94,25 +97,47 @@ if grep -Eq "([1-9][0-9]* failed|Failing tests)" "$LOG"; then
 fi
 ```
 
-**Result:** fork tests fail (usually RPC rate limits) → CI step fails → nothing is
-uploaded → retry the job. Bad coverage can no longer reach Codecov silently.
-
+> Verified 2026-09 on forge 1.8.1 (the version CI pins): `forge coverage` now exits 1
+> when a test fails, so the grep guard is defense-in-depth rather than load-bearing.
+> Keep it anyway — it costs nothing and protects against regressions in future forge
+> versions.
+>
 > History note: this detection existed in the `coverage:foundry` package.json
 > one-liner but was lost in commit `2bee2d53` ("ci: fix coverage caching") when
 > coverage moved to the split script, while this doc still described it as
 > implemented. It is now restored in `scripts/foundry-coverage.sh`. When changing
 > the coverage setup, keep a failure-detection guard in whichever command CI runs.
 
-#### 2. **Cache Invalidation on Fork Block Changes** ([.github/workflows/ci.yml](../.github/workflows/ci.yml))
+**Result:** fork tests fail (usually RPC rate limits) → CI step fails → nothing is
+uploaded → retry the job. Bad coverage can no longer reach Codecov silently. If
+Codecov shows unexpectedly uncovered lines, first check the CI run for that commit:
+a failed or still-running coverage step means the page is showing an older commit's
+data (`carryforward: false` in `.codecov.yml` means nothing is carried over, so a
+missing upload leaves the previous state visible).
+
+#### 2. **Fork Data Cache** ([.github/workflows/ci.yml](../.github/workflows/ci.yml))
+
+Fork state at the pinned blocks in [ForkBlocks.sol](../contracts/test/ForkBlocks.sol)
+is immutable, so CI caches `~/.foundry/cache/rpc` and reuses it across runs:
 
 ```yaml
-# Include ForkBlocks.sol (not full Constants.sol) in cache key
-# Cache only invalidates when fork block numbers actually change
-# Other constant changes don't trigger re-sync
-key: ${{ runner.os }}-foundry-forks-${{ github.head_ref || github.ref_name }}-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
+- name: Cache Foundry fork data
+  uses: actions/cache@v6
+  with:
+    path: ~/.foundry/cache/rpc
+    key: ${{ runner.os }}-foundry-rpc-v3-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
 ```
 
-Fork block numbers are isolated in [ForkBlocks.sol](../contracts/test/ForkBlocks.sol) and re-exported from Constants.sol for backward compatibility. This prevents cache invalidation when other constants change.
+History: this cache existed from early 2025 but was commented out on 2026-01-15
+(commit `ea67665d`, "temporary not cache fork data") as an isolation step while
+debugging the coverage inconsistencies, and the coverage step was switched to
+`yarn coverage:clean` in the same commit. The debugging concluded but the
+"temporary" setup was never reverted — for ~8 months every CI run wiped the fork
+cache mid-job (`coverage:clean` deletes `~/.foundry/cache/rpc`) and re-fetched all
+fork state from RPC in one cold burst, which is the main source of RPC pressure and
+intermittent fork-test failures. Both are restored now: the coverage step runs
+`yarn coverage:all` again, and the persistent cache is re-enabled (key bumped
+v2 → v3 after the long disable).
 
 #### 3. **Codecov Merge Configuration** ([.codecov.yml](../.codecov.yml))
 
