@@ -62,6 +62,18 @@ jobs:
             **/node_modules
           key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
 
+      # Persistent Foundry fork-data cache. Fork state at the pinned blocks in
+      # ForkBlocks.sol is immutable, so it is fetched from RPC once and reused
+      # across runs; the key only changes when a pinned block changes. This was
+      # disabled as a temporary debugging isolation step in Jan 2026
+      # ("temporary not cache fork data") and never re-enabled — restore it now
+      # that the coverage pipeline is a single deterministic invocation.
+      - name: Cache Foundry fork data
+        uses: actions/cache@v6
+        with:
+          path: ~/.foundry/cache/rpc
+          key: ${{ runner.os }}-foundry-rpc-v3-${{ hashFiles('contracts/test/ForkBlocks.sol') }}
+
       - run: yarn --frozen-lockfile
 
       - run: yarn build
@@ -81,9 +93,14 @@ jobs:
           rm -f lcov.info
           rm -f foundry_lcov.info
 
+      # Use coverage:all (NOT coverage:clean): coverage:clean deletes
+      # ~/.foundry/cache/rpc, forcing the coverage run to re-fetch every fork state
+      # from RPC in one cold burst on shared runner IPs — the main cause of
+      # intermittent fork-test failures under RPC rate limits. The cache populated
+      # by the test:foundry step above is still valid here.
       - name: Generate coverage reports
         if: github.actor != 'dependabot[bot]'
-        run: yarn coverage:clean
+        run: yarn coverage:all
 
       - name: Upload Foundry coverage to Codecov
         if: github.actor != 'dependabot[bot]'

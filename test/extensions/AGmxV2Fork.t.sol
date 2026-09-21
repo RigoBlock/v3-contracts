@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {GMX_ROUTER, _MAX_GMX_POSITIONS, _GMX_DATA_STORE, _FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";
+import {GMX_ROUTER, _MAX_GMX_POSITIONS, _GMX_DATA_STORE, _FLOAT_PRECISION, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -96,7 +96,6 @@ contract AGmxV2ForkTest is Test {
     uint256 private constant CALLBACK_GAS_LIMIT = 500_000;
 
     address private constant GMX_ROLE_STORE = Constants.ARB_GMX_ROLE_STORE;
-    address private constant GMX_ORACLE_ADDRESS = 0x7F01614cA5198Ec979B1aAd1DAF0DE7e0a215BDF;
 
     /// @dev Collateral size for a test increase order: 1 WETH.
     uint256 private constant COLLATERAL_AMOUNT = 1 ether;
@@ -105,9 +104,9 @@ contract AGmxV2ForkTest is Test {
     uint256 private constant SIZE_DELTA_USD = 4_000 * GMX_USD;
 
     /// @dev LIT/USD synthetic-index market on Arbitrum (index token has no GMX on-chain priceFeed).
-    address private constant LIT_USD_MARKET = 0x044dFE01863CE85f9ECd5639eE5485c90AC320FC;
-    address private constant LIT_INDEX_TOKEN = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db;
-    address private constant LIT_FALLBACK_FEED = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
+    address private constant LIT_USD_MARKET = Constants.ARB_GMX_LIT_USD_MARKET;
+    address private constant LIT_INDEX_TOKEN = Constants.ARB_LIT_TOKEN;
+    address private constant LIT_FALLBACK_FEED = Constants.ARB_LIT_FALLBACK_FEED;
 
     /// @dev LIT position collateral: WETH for long, USDC for short (~2× leverage).
     uint256 private constant LIT_COLLATERAL_AMOUNT_WETH = 1 ether;
@@ -1034,7 +1033,9 @@ contract AGmxV2ForkTest is Test {
                     min: (realPrice.min * 110) / 100,
                     max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
-                    blockNumber: realPrice.blockNumber
+                    rawMin: realPrice.min,
+                    rawMax: realPrice.max,
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 })
             )
         );
@@ -1060,7 +1061,9 @@ contract AGmxV2ForkTest is Test {
                     min: (realPrice.min * 90) / 100,
                     max: (realPrice.max * 90) / 100,
                     timestamp: realPrice.timestamp,
-                    blockNumber: realPrice.blockNumber
+                    rawMin: realPrice.min,
+                    rawMax: realPrice.max,
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 })
             )
         );
@@ -1261,7 +1264,7 @@ contract AGmxV2ForkTest is Test {
         _restoreOracleProviders(entries);
         vm.clearMockedCalls();
 
-        bytes32 litProviderKey = _oracleProviderKey(GMX_ORACLE_ADDRESS, LIT_INDEX_TOKEN);
+        bytes32 litProviderKey = _oracleProviderKey(_gmxOracle(), LIT_INDEX_TOKEN);
         vm.prank(_getController());
         IDataStore(GMX_DATA_STORE).setAddress(litProviderKey, GMX_CHAINLINK_PRICE_FEED);
 
@@ -1278,8 +1281,10 @@ contract AGmxV2ForkTest is Test {
                     token: token,
                     min: 3_496_579_750_000, // ~$3.496 / LIT atom in 1e30 units
                     max: 3_496_579_750_000,
+                    rawMin: 3_496_579_750_000,
+                    rawMax: 3_496_579_750_000,
                     timestamp: block.timestamp,
-                    blockNumber: block.number
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 });
         }
         if (token == ARB_WETH) {
@@ -1288,8 +1293,10 @@ contract AGmxV2ForkTest is Test {
                     token: token,
                     min: 2_450_000_000_000_000, // ~$2,450 / WETH atom in 1e30 units
                     max: 2_450_000_000_000_000,
+                    rawMin: 2_450_000_000_000_000,
+                    rawMax: 2_450_000_000_000_000,
                     timestamp: block.timestamp,
-                    blockNumber: block.number
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 });
         }
         if (token == ARB_USDC) {
@@ -1298,8 +1305,10 @@ contract AGmxV2ForkTest is Test {
                     token: token,
                     min: 1_000_000_000_000_000_000_000_000_000, // ~$1.00 / USDC atom in 1e30 units
                     max: 1_000_000_000_000_000_000_000_000_000,
+                    rawMin: 1_000_000_000_000_000_000_000_000_000,
+                    rawMax: 1_000_000_000_000_000_000_000_000_000,
                     timestamp: block.timestamp,
-                    blockNumber: block.number
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 });
         }
         revert("unknown token for execution price");
@@ -1464,11 +1473,18 @@ contract AGmxV2ForkTest is Test {
     // Keeper execution helpers
     // =========================================================================
 
+    /// @dev Returns the Oracle module of the current GMX OrderHandler, resolved dynamically
+    ///  because oracle provider registrations are keyed by the oracle address and GMX
+    ///  rotations (e.g. v2.2c, ~Sep 2026) deploy a new Oracle alongside new handlers.
+    function _gmxOracle() private view returns (address) {
+        return IGmxOrderHandler(GMX_ROUTER.orderHandler()).oracle();
+    }
+
     /// @dev Returns a GMX CONTROLLER address from the RoleStore.
     ///  GMX uses `keccak256(abi.encode("KEY"))` for all role keys (see GMX Keys.sol), not
     ///  bare `keccak256("KEY")`.  Using the wrong format returns an empty array and panics.
     function _getController() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("CONTROLLER")), 0, 1)[0];
+        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
     }
 
     /// @dev Returns a registered ORDER_KEEPER address from the RoleStore.
@@ -1537,7 +1553,7 @@ contract AGmxV2ForkTest is Test {
             }
             if (dup) continue;
 
-            bytes32 key = _oracleProviderKey(GMX_ORACLE_ADDRESS, rawTokens[i]);
+            bytes32 key = _oracleProviderKey(_gmxOracle(), rawTokens[i]);
             entries[k] = OracleProviderEntry({
                 token: rawTokens[i],
                 key: key,
@@ -1599,8 +1615,10 @@ contract AGmxV2ForkTest is Test {
                         token: entries[i].token,
                         min: prices[i].min,
                         max: prices[i].max,
+                        rawMin: prices[i].min,
+                        rawMax: prices[i].max,
                         timestamp: block.timestamp,
-                        blockNumber: block.number
+                        provider: GMX_CHAINLINK_PRICE_FEED
                     })
                 )
             );
@@ -1975,7 +1993,9 @@ contract AGmxV2ForkTest is Test {
                     min: (realPrice.min * 110) / 100,
                     max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
-                    blockNumber: realPrice.blockNumber
+                    rawMin: realPrice.min,
+                    rawMax: realPrice.max,
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 })
             )
         );
@@ -1996,7 +2016,9 @@ contract AGmxV2ForkTest is Test {
                     min: (realPrice.min * 90) / 100,
                     max: (realPrice.max * 90) / 100,
                     timestamp: realPrice.timestamp,
-                    blockNumber: realPrice.blockNumber
+                    rawMin: realPrice.min,
+                    rawMax: realPrice.max,
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 })
             )
         );
@@ -2098,7 +2120,9 @@ contract AGmxV2ForkTest is Test {
                     min: (realPrice.min * 110) / 100,
                     max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
-                    blockNumber: realPrice.blockNumber
+                    rawMin: realPrice.min,
+                    rawMax: realPrice.max,
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 })
             )
         );
@@ -2549,8 +2573,7 @@ contract AGmxV2ForkTest is Test {
     ///  collateral keys, and that GmxLib includes both claimable funding fees and unclaimed
     ///  collateral rebates in the returned balances.
     function test_EGmxCallback_RecordsClaimableBalances() public {
-        bytes32 controllerRole = keccak256(abi.encode("CONTROLLER"));
-        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(controllerRole, 0, 1)[0];
+        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
         address market = GMX_ETH_USD_MARKET;
         Market.Props memory mkt = IGmxReader(GMX_READER).getMarket(GMX_DATA_STORE, market);
 
@@ -2636,8 +2659,7 @@ contract AGmxV2ForkTest is Test {
     /// @notice Worst-case callback benchmark: market with different long/short tokens and
     ///  claimable collateral for both.
     function test_EGmxCallback_RecordsClaimableBalances_TwoTokens() public {
-        bytes32 controllerRole = keccak256(abi.encode("CONTROLLER"));
-        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(controllerRole, 0, 1)[0];
+        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
         address market = GMX_ETH_USD_MARKET;
         address longToken = ARB_WETH;
         address shortToken = ARB_USDC;
@@ -2734,8 +2756,7 @@ contract AGmxV2ForkTest is Test {
 
     /// @dev Simulates a GMX keeper `afterOrderExecution` callback for `market`.
     function _simulateGmxCallback(address market) private {
-        bytes32 controllerRole = keccak256(abi.encode("CONTROLLER"));
-        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(controllerRole, 0, 1)[0];
+        address controller = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
 
         EventUtils.AddressKeyValue[] memory addrItems = new EventUtils.AddressKeyValue[](6);
         addrItems[0] = EventUtils.AddressKeyValue({key: "account", value: pool});

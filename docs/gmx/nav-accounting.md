@@ -58,7 +58,7 @@ Each position references a `market` address. The `getAccountPositionInfoList` ca
 
 ```solidity
 // GmxFallback uses the hardcoded Chainlink provider constant (Arbitrum One):
-// address private constant _GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61...;
+// address private constant _GMX_CHAINLINK_PRICE_FEED = 0x90218fbb...;
 GmxValidatedPrice memory validated =
     IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "");
 Price.Props memory price = Price.Props({ min: validated.min, max: validated.max });
@@ -157,14 +157,16 @@ if (net > 0) tmp[count++] = AppTokenBalance({token: colToken, amount: net});
 
 ## Address Constants (Arbitrum One)
 
-All canonical GMX addresses live in `GmxConstants.sol`:
+All canonical GMX addresses live in `GmxConstants.sol` (updated for the GMX v2.2c
+address rotation of ~Sep 15-16 2026 — cross-check live addresses against GMX's
+`updates` branch `docs/contracts.json`, not `main`):
 
 ```solidity
 uint256 internal constant ARBITRUM_CHAIN_ID          = 42161;
-address internal constant _GMX_READER                = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
+address internal constant _GMX_READER                = 0xfA26cBb46e2614609406de08CA1Dc7f70a684184;
 address internal constant _GMX_DATA_STORE            = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
 address internal constant _GMX_REFERRAL_STORAGE      = 0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d;
-address internal constant _GMX_CHAINLINK_PRICE_FEED  = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
+address internal constant _GMX_CHAINLINK_PRICE_FEED  = 0x90218fbb064b1475E4382b041Cc7ccF08AF718B0;
 address internal constant WRAPPED_NATIVE             = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1; // WETH
 ```
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE} from "../../contracts/protocol/types/GmxConstants.sol";
+import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
@@ -34,7 +34,7 @@ contract EGmxCallbackTest is Test {
         // Mock controller role check.
         vm.mockCall(
             _GMX_ROLE_STORE,
-            abi.encodeWithSelector(IGmxRoleStore.hasRole.selector, address(this), keccak256(abi.encode("CONTROLLER"))),
+            abi.encodeWithSelector(IGmxRoleStore.hasRole.selector, address(this), _GMX_CONTROLLER_ROLE),
             abi.encode(true)
         );
 
@@ -153,6 +153,7 @@ contract EGmxCallbackTest is Test {
                 executionFee: 5,
                 callbackGasLimit: 6,
                 minOutputAmount: 7,
+                uiFeeFactor: 0,
                 updatedAtTime: 8,
                 validFromTime: 9,
                 srcChainId: 0

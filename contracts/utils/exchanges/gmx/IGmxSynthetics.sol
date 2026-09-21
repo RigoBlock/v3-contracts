@@ -15,13 +15,16 @@ pragma solidity >=0.8.0 <0.9.0;
 //
 // Order.sol and IBaseOrderUtils are imported directly from the gmx-synthetics
 // submodule — their import chain is clean (Order → Chain → ArbSys/ArbGasInfo,
-// both pure interfaces with zero external dependencies).
+// both pure interfaces with zero external dependencies). The submodule is
+// pinned to the GMX v2.2c commit, so Order.Props matches the deployed Reader's
+// ABI (including the v2.2c uiFeeFactor field).
 //
-// Canonical Arbitrum addresses (source: gmx-io/gmx-synthetics deployments/arbitrum/):
-//   ExchangeRouter              0x1C3fa76e6E1088bCE750f23a5BFcffa1efEF6A41
+// Canonical Arbitrum addresses (source: gmx-io/gmx-synthetics updates branch docs/contracts.json,
+//   GMX v2.2c rotation ~Sep 15-16 2026):
+//   ExchangeRouter              0x7dE39FF2e232A2203196788d37e234cF8F1b83f1
 //   DataStore                   0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8
-//   Reader                      0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789
-//   ChainlinkPriceFeedProvider  0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B
+//   Reader                      0xfA26cBb46e2614609406de08CA1Dc7f70a684184
+//   ChainlinkPriceFeedProvider  0x90218fbb064b1475E4382b041Cc7ccF08AF718B0
 //   ReferralStorage             0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d
 //   RoleStore                   0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72
 // =============================================================================
@@ -152,9 +155,10 @@ struct GmxMarketPrices {
     Price.Props shortTokenPrice;
 }
 
-// ---- Order.Props (for Reader.getAccountOrders) -----------------------------
-// Order.Addresses, Order.Numbers, Order.Flags, Order.Props, Order.OrderType,
-// and Order.DecreasePositionSwapType are imported directly from Order.sol above.
+// ---- ReaderUtils.OrderInfo (for Reader.getAccountOrders) -------------------
+// Uses Order.Props imported above — field-for-field identical to the deployed
+// Reader's ABI. Order.OrderType and Order.DecreasePositionSwapType come from
+// Order.sol as well.
 
 /// @dev ReaderUtils.OrderInfo — element type returned by Reader.getAccountOrders.
 ///  The outer wrapper adds an order key (the first field) before the nested Order.Props.
@@ -169,12 +173,15 @@ struct GmxOrderInfo {
 
 /// @dev Validated price returned by the GMX Chainlink price feed provider.
 ///  Not part of PositionInfo ABI — standalone return type only.
+///  GMX v2.2c added the rawMin/rawMax and provider fields.
 struct GmxValidatedPrice {
     address token;
     uint256 min;
     uint256 max;
+    uint256 rawMin;
+    uint256 rawMax;
     uint256 timestamp;
-    uint256 blockNumber;
+    address provider;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +238,11 @@ interface IGmxOrderHandler {
     }
 
     function orderVault() external view returns (address);
+
+    /// @dev Returns the Oracle module used by this handler. Resolving it dynamically
+    ///  keeps fork tests working across GMX rotations (v2.2c deployed a new Oracle
+    ///  alongside the new handlers; oracle provider registrations are keyed by it).
+    function oracle() external view returns (address);
 
     /// @dev Executes an order.  Called by keeper; oracle providers must already
     ///  be set in DataStore.  In fork tests, swap the oracle provider to
@@ -298,7 +310,7 @@ interface IGmxRoleStore {
 // ---------------------------------------------------------------------------
 
 /// @dev Queries on-chain Chainlink price feeds in GMX price format.
-///  Deployed on Arbitrum at 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B.
+///  Deployed on Arbitrum at 0x90218fbb064b1475E4382b041Cc7ccF08AF718B0 (GMX v2.2c).
 interface IGmxChainlinkPriceFeedProvider {
     /// @dev Returns the latest validated price for `token`.  Pass `data = ""`.
     function getOraclePrice(address token, bytes memory data) external view returns (GmxValidatedPrice memory);
@@ -316,6 +328,3 @@ interface IGmxDataStore {
     /// @dev Sets the uint256 value at `key`. Caller must hold the CONTROLLER role.
     function setUint(bytes32 key, uint256 value) external returns (uint256);
 }
-
-
-

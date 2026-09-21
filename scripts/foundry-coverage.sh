@@ -1,135 +1,60 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# Foundry coverage with fork/non-fork split and merge
+# Foundry coverage — single invocation over ALL tests (unit + fork together).
 #
-# Problem: Foundry's lcov reporter does not reliably merge line hits (DA records)
-# when fork and non-fork tests run in the same invocation. Running them separately
-# and merging with lcov solves that.
+# Why one invocation: measured on forge 1.8.1, a single run covers a SUPERSET of
+# the lines the previous 3-run split (library / non-fork / fork + lcov merge)
+# covered, and the split required per-file include/exclude lists and contract-name
+# conventions that rotted with every new test file. Forge coverage has known
+# hit-count attribution quirks for libraries inlined into contracts deployed by
+# several suites (e.g. GmxAdapterLib recorded 69 hits instead of 81): only the
+# COUNT is affected, never whether the line counts as covered — and Codecov's
+# line view only needs hit > 0. Refs:
+#   - foundry-rs/foundry#7054 / #2826 (library coverage attribution)
+#   - foundry-rs/foundry#4952 (invariant tests pathologically slow under coverage)
+#   - foundry-rs/foundry#6442 (fork + coverage flakiness)
 #
-# Workaround for Foundry coverage bug: if ~/.foundry/cache/rpc has just been
-# cleared, the very first `forge coverage` run corrupts line-level coverage for
-# internal libraries inlined into non-fork test contracts (e.g. HyperliquidLib),
-# recording DA:0 even though the code is executed. Running one fast test before
-# the split coverage steps warms up Foundry's instrumentation and avoids the bug.
+# forge coverage EXITS 0 EVEN WHEN TESTS FAIL (RPC rate limits, archive timeouts).
+# Without detection, an all-zero fork coverage report gets uploaded to Codecov
+# and lines that fork tests cover show as uncovered (see
+# docs/COVERAGE_TROUBLESHOOTING.md). The grep below turns silent data corruption
+# into a loud CI failure instead.
 #
-# IMPORTANT: this script is intended to run with a warm RPC cache. If you must
-# clear the cache, do it before this script and let the warm-up step below run.
-
-COVERAGE_FILTER='--no-match-coverage "mocks/|examples/|test/|tokens/|utils/"'
-
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-echo "          FOUNDRY COVERAGE (split fork/non-fork)"
-echo "════════════════════════════════════════════════════════════════"
-echo ""
+# Stable exclusions only — no per-file or per-contract lists to maintain:
+#   --no-match-coverage   report scope: mocks/test/tokens/utils sources are never
+#                         reported (unchanged since the first coverage setup)
+#   test/debug/**         manual debug scripts, not coverage targets
+#   PolygonFork / A0xRouterUnichainFork  local-only networks, not covered in CI
+#                         (matching test:foundry, which also skips them)
+#   DelegationLibFuzz / ECrosschainFuzzTest  invariant suites are excluded for CI
+#                         time (#4952); DelegationLibFuzz shares its file with
+#                         DelegationLib unit tests so it cannot be excluded by path
 
 mkdir -p coverage
-
-# ─── Step 0: Full build once ──────────────────────────────────────────
-# Foundry's coverage instrumentation reuses the incremental build cache. When
-# multiple `forge coverage` invocations run back-to-back, a cold or partial
-# cache can drop coverage probes for library files that are inlined into many
-# contracts (e.g. HyperliquidLib, GmxLib). Running a full `forge build` first
-# warms the cache and guarantees every artifact exists, so the subsequent
-# coverage runs do not need partial rebuilds that corrupt instrumentation.
-# This is the generic replacement for per-contract isolated runs.
-echo "⚡ Step 0/4: Building all contracts once..."
-
-forge build
-
-echo "   ✅ Full build complete"
-
-# ─── Step 0b: Warm-up run to work around Foundry instrumentation bug ──
-# After a cold RPC cache, Foundry's first coverage run produces DA:0 for some
-# inlined internal libraries. Running a single fast non-fork test first warms up
-# the coverage instrumentation so the subsequent split steps record real line hits.
-echo "⚡ Step 0b/4: Warming up coverage instrumentation..."
-
-forge test --match-contract AHyperliquidUnit --match-test testDeployRevertsOnNonHyperEVM >/dev/null 2>&1 || true
-
-echo "   ✅ Warm-up complete"
-
-# ─── Step 1: Library unit tests (isolated run) ────────────────────────
-# Internal libraries are inlined into production contracts. When all non-fork
-# tests run together, forge's coverage probe system records the last-written hit
-# count per source line, and production-contract deployments that don't exercise
-# every library path overwrite hits from the library harness tests with zeros.
-# Running the library tests in isolation guarantees their hits are captured and
-# then added during the merge step.
-echo "⚡ Step 1/4: Running library unit test coverage (isolated)..."
-
 rm -f lcov.info
+
+LOG=/tmp/forge_coverage.log
+
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --match-path 'test/{libraries/*.t.sol,extensions/AHyperliquidUnit.t.sol}' \
-  --no-match-contract "Fork|DelegationLibFuzz" \
-  --report lcov
+  --no-match-path 'test/{debug/**,extensions/PolygonFork.t.sol,extensions/A0xRouterUnichainFork.t.sol}' \
+  --no-match-contract 'DelegationLibFuzz|ECrosschainFuzzTest' \
+  --report lcov 2>&1 | tee "$LOG"
 
-mv lcov.info /tmp/foundry_library_lcov.info
-echo "   ✅ Library unit test coverage generated"
+# forge coverage exits 0 even with failing tests — refuse to upload bad coverage.
+if grep -Eq "([1-9][0-9]* failed|Failing tests)" "$LOG"; then
+  echo "" >&2
+  echo "❌ ERROR: forge coverage had failing tests (usually RPC/fork issues)." >&2
+  echo "   Refusing to write a bad coverage report. Retry the CI job." >&2
+  echo "   See docs/COVERAGE_TROUBLESHOOTING.md" >&2
+  exit 1
+fi
 
-# ─── Step 2: Non-fork tests ─────────────────────────────────────────
-# Fork tests are recognized by the "Fork" contract-name convention — any new
-# fork test is picked up automatically by Step 3, no edits to this script needed.
-# Only intentionally non-conforming names are listed explicitly below.
-echo "⚡ Step 2/4: Running non-fork test coverage..."
+mv lcov.info coverage/foundry_lcov.info
 
-rm -f lcov.info
-forge coverage \
-  --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --no-match-contract 'Fork|BscPoolUpgradeDebugTest|DelegationLibFuzz|ECrosschainFuzzTest' \
-  --report lcov
-
-mv lcov.info /tmp/foundry_nofork_lcov.info
-echo "   ✅ Non-fork coverage generated"
-
-# ─── Step 3: Fork tests ─────────────────────────────────────────────
-# Convention: every fork test contract name must contain "Fork".
-# PolygonForkTest and A0xRouterUnichainForkTest are excluded from CI coverage
-# (see foundry.toml: local-only / optional networks).
-echo "⚡ Step 3/4: Running fork test coverage..."
-
-rm -f lcov.info
-forge coverage \
-  --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --match-contract 'Fork' \
-  --no-match-contract 'PolygonForkTest|A0xRouterUnichainForkTest|DelegationLibFuzz|ECrosschainFuzzTest' \
-  --report lcov
-
-mv lcov.info /tmp/foundry_fork_lcov.info
-echo "   ✅ Fork coverage generated"
-
-# ─── Step 4: Merge ──────────────────────────────────────────────────
-echo "⚡ Step 4/4: Merging coverage reports..."
-
-lcov \
-  --add-tracefile /tmp/foundry_nofork_lcov.info \
-  --add-tracefile /tmp/foundry_fork_lcov.info \
-  --add-tracefile /tmp/foundry_library_lcov.info \
-  --output-file coverage/foundry_lcov.info \
-  --rc branch_coverage=1
-
-# Show summary
-library_lines=$(grep -c "^DA:" /tmp/foundry_library_lcov.info || echo "0")
-library_hit=$(grep "^DA:" /tmp/foundry_library_lcov.info | grep -v ",0$" | wc -l || echo "0")
-nofork_lines=$(grep -c "^DA:" /tmp/foundry_nofork_lcov.info || echo "0")
-nofork_hit=$(grep "^DA:" /tmp/foundry_nofork_lcov.info | grep -v ",0$" | wc -l || echo "0")
-fork_lines=$(grep -c "^DA:" /tmp/foundry_fork_lcov.info || echo "0")
-fork_hit=$(grep "^DA:" /tmp/foundry_fork_lcov.info | grep -v ",0$" | wc -l || echo "0")
-merged_lines=$(grep -c "^DA:" coverage/foundry_lcov.info || echo "0")
-merged_hit=$(grep "^DA:" coverage/foundry_lcov.info | grep -v ",0$" | wc -l || echo "0")
-
+total=$(grep -c "^DA:" coverage/foundry_lcov.info || echo 0)
+hit=$(grep "^DA:" coverage/foundry_lcov.info | grep -v ",0$" | wc -l || echo 0)
 echo ""
-echo "   📊 Coverage summary:"
-echo "   Library:    $library_hit/$library_lines lines"
-echo "   Non-fork:   $nofork_hit/$nofork_lines lines"
-echo "   Fork:       $fork_hit/$fork_lines lines"
-echo "   Merged:     $merged_hit/$merged_lines lines"
-
-# Cleanup (keep intermediate tracefiles for debugging)
-# rm -f /tmp/foundry_library_lcov.info /tmp/foundry_nofork_lcov.info /tmp/foundry_fork_lcov.info
-
-echo ""
-echo "   ✅ Merged foundry coverage written to coverage/foundry_lcov.info"
-echo ""
+echo "📊 Foundry coverage: $hit/$total lines covered"
+echo "   ✅ coverage/foundry_lcov.info written"

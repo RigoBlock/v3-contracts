@@ -10,7 +10,7 @@ echo ""
 # Check if coverage files exist
 hardhat_lcov_available=true
 if [ ! -f "coverage/lcov.info" ]; then
-    echo "⚠️  Hardhat coverage file not found (solidity-coverage does not support Hardhat 3 yet) — analyzing Foundry coverage only"
+    echo "⚠️  Hardhat coverage file not found (expected from Hardhat 3's built-in coverage) — analyzing Foundry coverage only"
     hardhat_lcov_available=false
 fi
 
@@ -146,7 +146,7 @@ END {
 rm -f "$temp_hardhat" "$temp_foundry" "$temp_common"
 
 echo ""
-echo "📤 Uploading coverage files to Codecov (Foundry only until solidity-coverage supports Hardhat 3)"
+echo "📤 Uploading coverage files to Codecov (both Hardhat and Foundry reports)"
 echo "   Codecov will intelligently merge them for final reporting"
 echo ""
 echo "════════════════════════════════════════════════════════════════"

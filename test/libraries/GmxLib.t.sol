@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {WRAPPED_NATIVE, _POSITION_SIZE_IN_USD_KEY, _FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {Price} from "gmx-synthetics/price/Price.sol";
@@ -59,10 +60,11 @@ contract GmxLibTest is Test {
     // =========================================================================
     // GMX hardcoded addresses (private in GmxLib; reproduced here for mocking)
     // =========================================================================
-    address internal constant GMX_READER = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
-    address internal constant GMX_DATA_STORE = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
-    address internal constant GMX_CHAINLINK_PRICE_FEED = 0x38B8dB61b724b51e42A88Cb8eC564CD685a0f53B;
-    address internal constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+    // GMX hardcoded addresses (private in GmxLib; aliases of the authoritative
+    // test constants, reproduced here under short names for mocking)
+    address internal constant GMX_READER = Constants.ARB_GMX_READER;
+    address internal constant GMX_DATA_STORE = Constants.ARB_GMX_DATA_STORE;
+    address internal constant GMX_CHAINLINK_PRICE_FEED = Constants.ARB_GMX_CHAINLINK_PRICE_FEED;
 
     // Key hashes from GmxLib (reproduced for mock calldata construction)
     bytes32 internal constant KEY_FEE_BASE = keccak256(abi.encode("ESTIMATED_GAS_FEE_BASE_AMOUNT_V2_1"));
@@ -85,8 +87,8 @@ contract GmxLibTest is Test {
     address internal constant SHORT_TOKEN = address(0x6000);
 
     // LIT / USD fallback (tokenDecimals = 18, feedDecimals = 8, multiplier = 1e34).
-    address internal constant LIT_TOKEN = 0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db;
-    address internal constant LIT_FEED = 0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b;
+    address internal constant LIT_TOKEN = Constants.ARB_LIT_TOKEN;
+    address internal constant LIT_FEED = Constants.ARB_LIT_FALLBACK_FEED;
     uint256 internal constant LIT_MULTIPLIER = 10000000000000000000000000000000000;
 
     // =========================================================================
@@ -513,7 +515,7 @@ contract GmxLibTest is Test {
             false,
             collateralAmount,
             int256(100e30),
-            GmxValidatedPrice(address(0), 0, 0, 0, 0)
+            GmxValidatedPrice(address(0), 0, 0, 0, 0, 0, address(0))
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
@@ -534,7 +536,7 @@ contract GmxLibTest is Test {
             true,
             collateralAmount,
             -int256(100e30),
-            GmxValidatedPrice(address(0), 0, 0, 0, 0)
+            GmxValidatedPrice(address(0), 0, 0, 0, 0, 0, address(0))
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
@@ -581,7 +583,7 @@ contract GmxLibTest is Test {
             false,
             collateralAmount,
             int256(100e30),
-            GmxValidatedPrice(address(0), 1e24, 0, 0, 0)
+            GmxValidatedPrice(address(0), 1e24, 0, 0, 0, 0, address(0))
         );
 
         GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
@@ -1458,7 +1460,7 @@ contract GmxLibTest is Test {
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
             abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
-            abi.encode(GmxValidatedPrice(token, 2e30, 3e30, block.timestamp, block.number))
+            abi.encode(GmxValidatedPrice(token, 2e30, 3e30, 2e30, 3e30, block.timestamp, GMX_CHAINLINK_PRICE_FEED))
         );
 
         Price.Props memory price = gmxHarness.safeGetGmxPrice(token);
@@ -1485,7 +1487,7 @@ contract GmxLibTest is Test {
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
             abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, token, ""),
-            abi.encode(GmxValidatedPrice(token, 1e30, 1e30, block.timestamp, block.number))
+            abi.encode(GmxValidatedPrice(token, 1e30, 1e30, 1e30, 1e30, block.timestamp, GMX_CHAINLINK_PRICE_FEED))
         );
 
         assertTrue(gmxHarness.isIndexTokenPriced(token));
@@ -1535,7 +1537,7 @@ contract GmxLibTest is Test {
         assertFalse(gmxHarness.isIndexTokenPriced(token));
     }
 
-    function test_IsIndexTokenPriced_ZeroAddress() public {
+    function test_IsIndexTokenPriced_ZeroAddress() public view {
         assertFalse(gmxHarness.isIndexTokenPriced(address(0)));
     }
 
