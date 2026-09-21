@@ -30,9 +30,12 @@ isolate = false
 #   flags that also require --fork-url to be present (Foundry rejects the combination
 #   without it), so they are intentionally omitted — see the createSelectFork note above.
 # - All chains (mainnet, base, arbitrum, unichain, polygon) have RPC URL secrets in CI.
-#   The coverage script (scripts/foundry-coverage.sh) excludes PolygonForkTest from CI
-#   (local-only) and A0xRouterUnichainForkTest (optional, can be re-enabled). All other
-#   fork tests run in CI Step 2 using their vm.createSelectFork() calls.
+#   Coverage (scripts/foundry-coverage.sh) runs fork and non-fork tests in a single
+#   invocation; only the local-only networks are excluded (PolygonFork,
+#   A0xRouterUnichainFork) plus test/debug/** and the two invariant (fuzz) suites.
+#   Do NOT add per-file exclusions there: if a new fork test needs excluding, it is
+#   either a local-only network (add its FILE to the exclusion brace list) or a fuzz
+#   suite (add the CONTRACT name). Everything else must just run.
 
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
