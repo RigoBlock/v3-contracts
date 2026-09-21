@@ -57,12 +57,15 @@ echo "   ✅ Warm-up complete"
 # every library path overwrite hits from the library harness tests with zeros.
 # Running the library tests in isolation guarantees their hits are captured and
 # then added during the merge step.
+# AGmxV2Unit.t.sol is isolated for the same reason: GmxAdapterLib is inlined into
+# the AGmxV2 production contract, and its hits were observed being dropped (codecov
+# reported the assertRouterAuthorized lines as uncovered despite the tests passing).
 echo "⚡ Step 1/4: Running library unit test coverage (isolated)..."
 
 rm -f lcov.info
 forge coverage \
   --no-match-coverage "mocks/|examples/|test/|tokens/|utils/" \
-  --match-path 'test/{libraries/*.t.sol,extensions/AHyperliquidUnit.t.sol}' \
+  --match-path 'test/{libraries/*.t.sol,extensions/AHyperliquidUnit.t.sol,extensions/AGmxV2Unit.t.sol}' \
   --no-match-contract "Fork|DelegationLibFuzz" \
   --report lcov
 
