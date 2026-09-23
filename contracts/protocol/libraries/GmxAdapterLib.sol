@@ -21,7 +21,10 @@ library GmxAdapterLib {
     /// @dev Reverts if the GMX ExchangeRouter lost the CONTROLLER role (e.g. after a GMX
     ///  contract rotation), which would make order writes and claims revert downstream.
     function assertRouterAuthorized() internal view {
-        require(RoleStore(_GMX_ROLE_STORE).hasRole(GMX_ROUTER, _GMX_CONTROLLER_ROLE), GmxRouterNotAuthorized());
+        require(
+            RoleStore(_GMX_ROLE_STORE).hasRole(address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
+            GmxRouterNotAuthorized()
+        );
     }
 
     function computeExecutionFee(bool isIncrease, uint256 callbackGasLimit) internal view returns (uint256) {

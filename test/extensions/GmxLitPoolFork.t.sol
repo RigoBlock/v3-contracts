@@ -27,7 +27,6 @@ import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protoco
 import {Reader} from "gmx-synthetics/reader/Reader.sol";
 import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
 import {OrderHandler} from "gmx-synthetics/exchange/OrderHandler.sol";
-import {ExchangeRouter} from "gmx-synthetics/router/ExchangeRouter.sol";
 import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
 import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
 import {DataStore} from "gmx-synthetics/data/DataStore.sol";
@@ -289,7 +288,7 @@ contract GmxLitPoolFork is Test {
     ///  because oracle provider registrations are keyed by the oracle address and GMX
     ///  rotations (e.g. v2.2c, ~Sep 2026) deploy a new Oracle alongside new handlers.
     function _gmxOracle() private view returns (address) {
-        return address(OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler()))).oracle());
+        return address(OrderHandler(payable(address(GMX_ROUTER.orderHandler()))).oracle());
     }
 
     /// @dev Returns a GMX CONTROLLER address from the RoleStore. GMX uses
@@ -407,7 +406,7 @@ contract GmxLitPoolFork is Test {
             data[i] = "";
         }
 
-        OrderHandler handler = OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler())));
+        OrderHandler handler = OrderHandler(payable(address(GMX_ROUTER.orderHandler())));
         vm.prank(_getOrderKeeper());
         handler.executeOrder(orderKey, OracleUtils.SetPricesParams({tokens: tokens, providers: providers, data: data}));
 

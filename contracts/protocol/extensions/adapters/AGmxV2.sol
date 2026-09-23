@@ -17,8 +17,8 @@ import {IEGmxCallback} from "./interfaces/IEGmxCallback.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
-import {ExchangeRouter} from "gmx-synthetics/router/ExchangeRouter.sol";
-import {OrderHandler} from "gmx-synthetics/exchange/OrderHandler.sol";
+// BaseOrderHandler (not the IOrderHandler interface) exposes the orderVault getter.
+import {BaseOrderHandler} from "gmx-synthetics/exchange/BaseOrderHandler.sol";
 import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
 import {GmxAdapterLib} from "../../libraries/GmxAdapterLib.sol";
 
@@ -83,9 +83,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         address indexToken = GmxAdapterLib.getMarketIndexToken(params.addresses.market);
         require(GmxAdapterLib.isIndexTokenPriced(indexToken), UnpricedIndexToken(indexToken));
 
-        address orderVault = address(
-            OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler()))).orderVault()
-        );
+        address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
 
         bool collateralIsWrappedNative = params.addresses.initialCollateralToken == WRAPPED_NATIVE;
 
@@ -103,7 +101,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
             WRAPPED_NATIVE.safeTransfer(orderVault, executionFee);
         }
 
-        orderKey = ExchangeRouter(GMX_ROUTER).createOrder(
+        orderKey = GMX_ROUTER.createOrder(
             IBaseOrderUtils.CreateOrderParams({
                 addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
                     receiver: address(this),
@@ -135,7 +133,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         );
 
         // Register pool as the saved callback so liquidations/ADLs reach the extension.
-        ExchangeRouter(GMX_ROUTER).setSavedCallbackContract(params.addresses.market, address(this));
+        GMX_ROUTER.setSavedCallbackContract(params.addresses.market, address(this));
 
         // Track the market now (not only in the decrease callback) so funding fees are still
         // queryable even if a future callback fails.
@@ -154,9 +152,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256 executionFee = GmxAdapterLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(executionFee <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
 
-        address orderVault = address(
-            OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler()))).orderVault()
-        );
+        address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
         require(
             params.orderType == Order.OrderType.MarketDecrease ||
                 params.orderType == Order.OrderType.LimitDecrease ||
@@ -166,7 +162,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         _ensureWeth(executionFee);
         WRAPPED_NATIVE.safeTransfer(orderVault, executionFee);
 
-        orderKey = ExchangeRouter(GMX_ROUTER).createOrder(
+        orderKey = GMX_ROUTER.createOrder(
             IBaseOrderUtils.CreateOrderParams({
                 addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
                     receiver: address(this),
@@ -200,7 +196,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         );
 
         // Re-register saved callback in case this market was opened through a prior adapter.
-        ExchangeRouter(GMX_ROUTER).setSavedCallbackContract(params.addresses.market, address(this));
+        GMX_ROUTER.setSavedCallbackContract(params.addresses.market, address(this));
     }
 
     /// @inheritdoc IAGmxV2
@@ -220,14 +216,12 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256 feeTopUp = GmxAdapterLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(feeTopUp <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
         if (feeTopUp > 0) {
-            address orderVault = address(
-                OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler()))).orderVault()
-            );
+            address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
             _ensureWeth(feeTopUp);
             WRAPPED_NATIVE.safeTransfer(orderVault, feeTopUp);
         }
 
-        ExchangeRouter(GMX_ROUTER).updateOrder(
+        GMX_ROUTER.updateOrder(
             key,
             sizeDeltaUsd,
             acceptablePrice,
@@ -243,7 +237,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         GmxAdapterLib.assertRouterAuthorized();
 
         // GMX refunds to cancellationReceiver (the pool).
-        ExchangeRouter(GMX_ROUTER).cancelOrder(key);
+        GMX_ROUTER.cancelOrder(key);
     }
 
     /// @inheritdoc IAGmxV2
@@ -257,7 +251,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }
-        ExchangeRouter(GMX_ROUTER).claimFundingFees(markets, tokens, address(this));
+        GMX_ROUTER.claimFundingFees(markets, tokens, address(this));
 
         // Prune tracked markets that no longer have open positions or outstanding
         // claimable funding fees. Keeps the NAV iteration set minimal.
@@ -285,7 +279,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }
-        ExchangeRouter(GMX_ROUTER).claimCollateral(markets, tokens, timeKeys, address(this));
+        GMX_ROUTER.claimCollateral(markets, tokens, timeKeys, address(this));
 
         // Discard fully-claimed collateral keys so the NAV loop stops reading them.
         GmxCallbackLib.GmxCallbackSlot storage callbackData = GmxCallbackLib.gmxCallbackData();
