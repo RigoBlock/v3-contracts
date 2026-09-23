@@ -17,7 +17,6 @@ import {IEGmxCallback} from "./interfaces/IEGmxCallback.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
-// BaseOrderHandler (not the IOrderHandler interface) exposes the orderVault getter.
 import {BaseOrderHandler} from "gmx-synthetics/exchange/BaseOrderHandler.sol";
 import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
 import {GmxAdapterLib} from "../../libraries/GmxAdapterLib.sol";
