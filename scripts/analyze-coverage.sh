@@ -49,6 +49,74 @@ else
 fi
 echo "   Lines: $foundry_hit_lines/$foundry_total_lines ($foundry_pct%)"
 
+# ─── Codecov upload preparation ──────────────────────────────────────────────
+#
+# The Hardhat report contains SF blocks with zero hits for files that are ONLY
+# ever executed by Foundry fork tests (Hardhat compiles every contract under
+# contracts/ but never executes GMX/Across/Hyperliquid code). Uploading those
+# zero blocks alongside the Foundry report means two flags claim the same file
+# with contradictory data, and any Foundry upload hiccup leaves the zeros as
+# the only data — fork-covered lines then show as "missed" on the PR view.
+#
+# Fix: upload a filtered Hardhat report from which zero-hit files are removed.
+# A file absent from a report carries no data (Codecov union-merges per line);
+# after filtering, each file is owned by exactly the suite that executes it.
+if [ "$hardhat_lcov_available" = true ]; then
+    awk '
+    function emitblock() {
+        if (inblock && lh > 0) printf "%s", buf
+        inblock = 0; buf = ""; lh = 0
+    }
+    /^SF:/          { emitblock(); inblock = 1; buf = $0 ORS; next }
+    inblock         { buf = buf $0 ORS }
+    inblock && /^LH:/ { lh = substr($0, 4) + 0 }
+    inblock && /^end_of_record/ { emitblock() }
+    END             { emitblock() }
+    ' coverage/lcov.info > coverage/lcov-upload.info
+
+    raw_files=$(grep -c "^SF:" coverage/lcov.info || echo "0")
+    kept_files=$(grep -c "^SF:" coverage/lcov-upload.info || echo "0")
+    echo ""
+    echo "📤 CODECOV UPLOAD PREPARATION:"
+    echo "   Hardhat report: $raw_files files → $kept_files files after removing zero-hit blocks"
+    echo "   (zero-hit files are covered exclusively by Foundry; uploaded as Foundry-owned)"
+fi
+
+# ─── Fork-suite sentinel assertion ───────────────────────────────────────────
+#
+# Proves the Foundry report actually contains fork-test coverage: these files
+# are executed ONLY by Foundry fork suites, so a report without hits for them
+# means fork coverage silently did not make it into the upload. Fail loudly
+# instead of letting Codecov publish a hardhat-zeros-only view of these files.
+SENTINEL_FILES="contracts/protocol/libraries/GmxLib.sol
+contracts/protocol/libraries/GmxAdapterLib.sol
+contracts/protocol/extensions/EGmxCallback.sol
+contracts/protocol/libraries/GmxCallbackLib.sol
+contracts/protocol/libraries/CrosschainLib.sol
+contracts/protocol/libraries/HyperliquidLib.sol"
+
+sentinel_failed=0
+for f in $SENTINEL_FILES; do
+    hits=$(awk -v target="$f" '
+        $0 == "SF:" target { inblock = 1; next }
+        inblock && /^end_of_record/ { inblock = 0 }
+        inblock && /^DA:/ { split($0, p, ","); total += p[2] }
+        END { print total + 0 }
+    ' coverage/foundry_lcov.info)
+    if [ "$hits" -eq 0 ]; then
+        echo "❌ SENTINEL: $f has 0 Foundry hits — fork suites did not cover it" >&2
+        sentinel_failed=1
+    else
+        echo "   ✅ sentinel: $f ($hits foundry hits)"
+    fi
+done
+if [ "$sentinel_failed" -ne 0 ]; then
+    echo "" >&2
+    echo "❌ Refusing to upload coverage: Foundry report is missing fork coverage." >&2
+    echo "   Retry the CI job (RPC pressure) — see docs/COVERAGE_TROUBLESHOOTING.md" >&2
+    exit 1
+fi
+
 echo ""
 echo "📋 FILES WITH MISSING COVERAGE (uncovered by BOTH Hardhat and Foundry):"
 echo ""
@@ -146,8 +214,14 @@ END {
 rm -f "$temp_hardhat" "$temp_foundry" "$temp_common"
 
 echo ""
-echo "📤 Uploading coverage files to Codecov (both Hardhat and Foundry reports)"
-echo "   Codecov will intelligently merge them for final reporting"
+echo "📤 Uploading coverage files to Codecov:"
+if [ "$hardhat_lcov_available" = true ]; then
+    echo "   - Hardhat: ./coverage/lcov-upload.info (zero-hit files removed)"
+else
+    echo "   - Hardhat: (not available)"
+fi
+echo "   - Foundry: ./coverage/foundry_lcov.info"
+echo "   Codecov union-merges per line; each file is owned by one suite only"
 echo ""
 echo "════════════════════════════════════════════════════════════════"
 echo ""

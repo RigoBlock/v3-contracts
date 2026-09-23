@@ -152,6 +152,48 @@ flag_management:
       carryforward: false
 ```
 
+#### 4. **Single-Suite File Ownership** ([scripts/analyze-coverage.sh](../scripts/analyze-coverage.sh))
+
+Codecov union-merges the two uploads line-by-line, which is correct only when both
+uploads agree on which lines exist. They don't, by construction: the Hardhat report
+contains **zero-hit blocks for every file Hardhat never executes** — all GMX
+contracts (`GmxLib`, `GmxAdapterLib`, `EGmxCallback`, `GmxCallbackLib`,
+`GmxClaimableHelpers`), `CrosschainLib`, `Escrow`, `HyperliquidLib` — because
+Hardhat compiles every contract under `contracts/` but only its own tests run. Those
+files are covered exclusively by Foundry fork tests. Consequences before filtering:
+
+- The same file appeared in both flags with contradictory data (0 hits vs N hits).
+- Any Foundry upload hiccup left the Hardhat zeros as the only data, and fork-covered
+  lines showed as "missed" on the PR view even though the tests covered them
+  (observed on PR #964: every instrumented changed line was covered in a CI-identical
+  local run, while Codecov showed misses).
+- Viewing a file "by flag" on Codecov showed the Hardhat view: 0% on all GMX files.
+
+The fix runs in `analyze-coverage.sh` before upload:
+
+1. **Zero-hit filtering** — SF blocks with `LH:0` are removed from the Hardhat report
+   (`coverage/lcov-upload.info`, which CI uploads instead of the raw file). A file
+   absent from a report carries no data; after filtering, each file is owned by
+   exactly the suite that executes it. Foundry-only files are now reported by the
+   `foundry` flag alone.
+2. **Fork sentinels** — six Foundry-only files (GmxLib, GmxAdapterLib, EGmxCallback,
+   GmxCallbackLib, CrosschainLib, HyperliquidLib) must each have >0 DA hits in the
+   Foundry report, proving fork coverage made it into the upload. If any sentinel
+   has zero hits, the script exits 1 and nothing is uploaded — extending the
+   fail-loud philosophy of the failure grep to "fork suites contributed nothing".
+
+Note the raw `coverage/lcov.info` (with zeros) is kept for the local
+intersection analysis below; only the upload is filtered.
+
+**How to verify a Codecov report is complete:** the analyze step prints the
+filtering result (`N files → M files`) and one line per sentinel with its hit
+count (normal: GmxLib alone has several thousand hits). On the Codecov side, the
+commit totals should show `sessions: 2` (both uploads received; query
+`https://api.codecov.io/api/v2/gh/RigoBlock/repos/v3-contracts/commits/<sha>/`).
+If a file still looks wrongly uncovered with both sessions present, re-run the
+CI job before suspecting the tests — fork-branch coverage of a few lines can
+legitimately flip between runs (time- and price-dependent branches).
+
 ### What This Fixes
 
 Now when RPC issues occur:
