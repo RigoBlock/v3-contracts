@@ -28,6 +28,13 @@ contract EGmxCallbackTest is Test {
         market = makeAddr("market");
     }
 
+    /// @notice Deployment reverts on any chain other than Arbitrum.
+    function test_Constructor_RevertsOnNonArbitrumChain() public {
+        vm.chainId(1);
+        vm.expectRevert(EGmxCallback.NotArbitrum.selector);
+        new EGmxCallback();
+    }
+
     /// @notice A valid controller call records the market in callback storage.
     function test_AfterOrderExecution_ControllerCall_RecordsMarket() public {
         address longToken = makeAddr("longToken");

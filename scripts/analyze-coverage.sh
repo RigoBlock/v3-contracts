@@ -51,71 +51,87 @@ echo "   Lines: $foundry_hit_lines/$foundry_total_lines ($foundry_pct%)"
 
 # ─── Codecov upload preparation ──────────────────────────────────────────────
 #
-# The Hardhat report contains SF blocks with zero hits for files that are ONLY
-# ever executed by Foundry fork tests (Hardhat compiles every contract under
-# contracts/ but never executes GMX/Across/Hyperliquid code). Uploading those
-# zero blocks alongside the Foundry report means two flags claim the same file
-# with contradictory data, and any Foundry upload hiccup leaves the zeros as
-# the only data — fork-covered lines then show as "missed" on the PR view.
+# The Hardhat report contains zero-hit entries for every file Hardhat never
+# executes (Hardhat compiles every contract under contracts/ and reports all
+# compiled sources — GmxLib, GmxAdapterLib, EGmxCallback, GmxCallbackLib,
+# GmxClaimableHelpers, CrosschainLib, Escrow, HyperliquidLib) AND zero-hit
+# lines inside files it does execute, on continuation lines of multi-line
+# statements that Foundry instruments only at the statement anchor. Example
+# (AGmxV2.sol): Foundry reports hits on L84/86/90 and nothing on L85/87/89;
+# Hardhat reports 0 on L85/87/89. Those zeros are instrumentation artifacts
+# of executed statements, but Codecov counts them as patch misses (observed
+# on PR #964: 6 false misses on changed GMX lines).
 #
-# Fix: upload a filtered Hardhat report from which zero-hit files are removed.
-# A file absent from a report carries no data (Codecov union-merges per line);
-# after filtering, each file is owned by exactly the suite that executes it.
+# Codecov union-merges uploads per line and "does not override report data"
+# (docs.codecov.com/docs/merging-reports), so filtering cannot hide Foundry
+# hits in the merged view. The filter drops, from the Hardhat upload:
+#   1. SF blocks whose total hits are 0 (Foundry-only files — keeps per-flag
+#      views consistent: each file is owned by the suite that executes it).
+#   2. Individual DA:line,0 entries for files Foundry covers, when Foundry
+#      does not instrument that line at all. A line Foundry considers
+#      non-executable cannot be a genuine miss of executable code; if it
+#      were genuinely uncovered, Foundry would list it with 0 hits and the
+#      union would still report 0.
 if [ "$hardhat_lcov_available" = true ]; then
     awk '
-    function emitblock() {
-        if (inblock && lh > 0) printf "%s", buf
-        inblock = 0; buf = ""; lh = 0
+    NR == FNR {
+        # Pass 1: index the Foundry report — covered files and instrumented lines.
+        if ($0 ~ /^SF:/) {
+            sf = substr($0, 4)
+            gsub(/.*\/contracts\//, "contracts/", sf)
+        } else if ($0 ~ /^DA:/) {
+            split($0, p, ",")
+            sub(/^DA:/, "", p[1])
+            fline[sf ":" p[1]] = 1
+            if (p[2] + 0 > 0) fhitfile[sf] = 1
+        }
+        next
     }
-    /^SF:/          { emitblock(); inblock = 1; buf = $0 ORS; next }
-    inblock         { buf = buf $0 ORS }
-    inblock && /^LH:/ { lh = substr($0, 4) + 0 }
-    inblock && /^end_of_record/ { emitblock() }
-    END             { emitblock() }
-    ' coverage/lcov.info > coverage/lcov-upload.info
+    function emitblock() {
+        if (inblock && lh > 0) printf "%s%sLF:%d\nLH:%d\nend_of_record\n", buf, das, lf, lh
+        inblock = 0; buf = ""; das = ""; lf = 0; lh = 0
+    }
+    /^SF:/              { emitblock(); inblock = 1
+                          sf = substr($0, 4); gsub(/.*\/contracts\//, "contracts/", sf)
+                          buf = $0 ORS; next }
+    inblock && /^DA:/   {
+        split($0, p, ","); sub(/^DA:/, "", p[1])
+        if (fhitfile[sf] && p[2] + 0 == 0 && !((sf ":" p[1]) in fline)) next
+        das = das $0 ORS; lf++
+        if (p[2] + 0 > 0) lh++
+        next
+    }
+    inblock && /^LF:/   { next }  # recomputed from the filtered DA set
+    inblock && /^LH:/   { next }
+    inblock             { buf = buf $0 ORS }
+    inblock && /^end_of_record/ { emitblock(); next }
+    END                 { emitblock() }
+    ' coverage/foundry_lcov.info coverage/lcov.info > coverage/lcov-upload.info
 
     raw_files=$(grep -c "^SF:" coverage/lcov.info || echo "0")
     kept_files=$(grep -c "^SF:" coverage/lcov-upload.info || echo "0")
     echo ""
     echo "📤 CODECOV UPLOAD PREPARATION:"
     echo "   Hardhat report: $raw_files files → $kept_files files after removing zero-hit blocks"
-    echo "   (zero-hit files are covered exclusively by Foundry; uploaded as Foundry-owned)"
+    echo "   (removed files are covered exclusively by Foundry; uploaded as Foundry-owned)"
 fi
 
-# ─── Fork-suite sentinel assertion ───────────────────────────────────────────
+# ─── Foundry fork-coverage floor ─────────────────────────────────────────────
 #
-# Proves the Foundry report actually contains fork-test coverage: these files
-# are executed ONLY by Foundry fork suites, so a report without hits for them
-# means fork coverage silently did not make it into the upload. Fail loudly
-# instead of letting Codecov publish a hardhat-zeros-only view of these files.
-SENTINEL_FILES="contracts/protocol/libraries/GmxLib.sol
-contracts/protocol/libraries/GmxAdapterLib.sol
-contracts/protocol/extensions/EGmxCallback.sol
-contracts/protocol/libraries/GmxCallbackLib.sol
-contracts/protocol/libraries/CrosschainLib.sol
-contracts/protocol/libraries/HyperliquidLib.sol"
-
-sentinel_failed=0
-for f in $SENTINEL_FILES; do
-    hits=$(awk -v target="$f" '
-        $0 == "SF:" target { inblock = 1; next }
-        inblock && /^end_of_record/ { inblock = 0 }
-        inblock && /^DA:/ { split($0, p, ","); total += p[2] }
-        END { print total + 0 }
-    ' coverage/foundry_lcov.info)
-    if [ "$hits" -eq 0 ]; then
-        echo "❌ SENTINEL: $f has 0 Foundry hits — fork suites did not cover it" >&2
-        sentinel_failed=1
-    else
-        echo "   ✅ sentinel: $f ($hits foundry hits)"
-    fi
-done
-if [ "$sentinel_failed" -ne 0 ]; then
+# The failure grep in foundry-coverage.sh already rejects reports with failed
+# tests. This floor catches the other silent-degradation mode: fork suites
+# dropping out via a future exclusion/path change with every remaining test
+# still "passing" — e.g. AGmxV2Fork excluded would zero out all GMX files yet
+# produce a clean-looking report. Historical bad run (RPC outage era): 462 hit
+# lines (16.9% of the report); a normal full run is ~1800+.
+if [ "$foundry_hit_lines" -lt 1000 ]; then
     echo "" >&2
-    echo "❌ Refusing to upload coverage: Foundry report is missing fork coverage." >&2
-    echo "   Retry the CI job (RPC pressure) — see docs/COVERAGE_TROUBLESHOOTING.md" >&2
+    echo "❌ Foundry report has only $foundry_hit_lines hit lines — fork suites did not contribute." >&2
+    echo "   Refusing to upload coverage. Check exclusions in scripts/foundry-coverage.sh" >&2
+    echo "   and retry the CI job. See docs/COVERAGE_TROUBLESHOOTING.md" >&2
     exit 1
 fi
+echo "   ✅ foundry fork-coverage floor: $foundry_hit_lines hit lines (floor 1000)"
 
 echo ""
 echo "📋 FILES WITH MISSING COVERAGE (uncovered by BOTH Hardhat and Foundry):"

@@ -1,9 +1,15 @@
 # Coverage Troubleshooting Guide
 
 > **Hardhat 3 migration note**: `yarn coverage:hardhat` now uses Hardhat 3's built-in
-> coverage (`hardhat test --coverage`), which writes `coverage/lcov.info` (plus an HTML
+> coverage (`hardhat test mocha --coverage` — mocha specs only; Foundry owns all
+> Solidity tests), which writes `coverage/lcov.info` (plus an HTML
 > report) that CI uploads to Codecov alongside the Foundry report. The old
 > `solidity-coverage` plugin is no longer needed and was removed.
+>
+> Note: `hardhat test mocha --coverage` still reports zero-hit entries for every
+> compiled contract (Hardhat instruments all of `contracts/` regardless of which
+> tests run), so the upload filtering in section 4 is required even though only
+> mocha specs execute.
 
 ## Coverage Architecture (Foundry)
 
@@ -154,41 +160,50 @@ flag_management:
 
 #### 4. **Single-Suite File Ownership** ([scripts/analyze-coverage.sh](../scripts/analyze-coverage.sh))
 
-Codecov union-merges the two uploads line-by-line, which is correct only when both
-uploads agree on which lines exist. They don't, by construction: the Hardhat report
-contains **zero-hit blocks for every file Hardhat never executes** — all GMX
-contracts (`GmxLib`, `GmxAdapterLib`, `EGmxCallback`, `GmxCallbackLib`,
-`GmxClaimableHelpers`), `CrosschainLib`, `Escrow`, `HyperliquidLib` — because
-Hardhat compiles every contract under `contracts/` but only its own tests run. Those
-files are covered exclusively by Foundry fork tests. Consequences before filtering:
+Codecov union-merges uploads line-by-line and "does not override report data for
+multiple uploads" (docs.codecov.com/docs/merging-reports), so the pipeline relies on
+two separate uploads (`hardhat` and `foundry` flags) and no manual merging. The one
+remaining wrinkle is that the Hardhat report contains **zero-hit blocks for every file
+Hardhat never executes** — all GMX contracts (`GmxLib`, `GmxAdapterLib`,
+`EGmxCallback`, `GmxCallbackLib`, `GmxClaimableHelpers`), `CrosschainLib`, `Escrow`,
+`HyperliquidLib` — because Hardhat compiles every contract under `contracts/` but
+only its own tests run. Those files are covered exclusively by Foundry fork tests.
+Consequences before filtering:
 
-- The same file appeared in both flags with contradictory data (0 hits vs N hits).
-- Any Foundry upload hiccup left the Hardhat zeros as the only data, and fork-covered
-  lines showed as "missed" on the PR view even though the tests covered them
-  (observed on PR #964: every instrumented changed line was covered in a CI-identical
-  local run, while Codecov showed misses).
-- Viewing a file "by flag" on Codecov showed the Hardhat view: 0% on all GMX files.
+- The same file appeared in both flags with contradictory data (0 hits vs N hits), so
+  viewing a file "by flag" on Codecov showed the Hardhat view: 0% on all GMX files
+  (observed on PR #964).
+- Hardhat's instrumentation maps some lines as executable that Foundry's does not,
+  inflating the merged denominator with neither-covered lines.
 
 The fix runs in `analyze-coverage.sh` before upload:
 
-1. **Zero-hit filtering** — SF blocks with `LH:0` are removed from the Hardhat report
-   (`coverage/lcov-upload.info`, which CI uploads instead of the raw file). A file
-   absent from a report carries no data; after filtering, each file is owned by
-   exactly the suite that executes it. Foundry-only files are now reported by the
-   `foundry` flag alone.
-2. **Fork sentinels** — six Foundry-only files (GmxLib, GmxAdapterLib, EGmxCallback,
-   GmxCallbackLib, CrosschainLib, HyperliquidLib) must each have >0 DA hits in the
-   Foundry report, proving fork coverage made it into the upload. If any sentinel
-   has zero hits, the script exits 1 and nothing is uploaded — extending the
-   fail-loud philosophy of the failure grep to "fork suites contributed nothing".
+1. **Zero-hit filtering, per file and per line** — SF blocks with `LH:0` are
+   removed from the Hardhat report (`coverage/lcov-upload.info`, which CI uploads
+   instead of the raw file), and inside remaining blocks, individual `DA:line,0`
+   entries are dropped when Foundry covers the file but does not instrument that
+   line at all. Hardhat instruments continuation lines of multi-line statements
+   that Foundry only maps at the statement anchor (e.g. `AGmxV2.sol`: Foundry
+   hits L84/86/90, Hardhat reports 0 on L85/87/89 — the same executed
+   statement). Codecov counted those artifact zeros as patch misses (6 false
+   misses on PR #964). A line Foundry considers non-executable cannot be a
+   genuine miss; a genuinely uncovered executable line is listed by Foundry
+   with 0 hits, and the union still reports 0. After filtering, each file is
+   owned by exactly the suite that executes it, and per-flag views agree with
+   the merged view.
+2. **Fork-coverage floor** — the Foundry report must contain at least 1000 DA hit
+   lines (a normal full run is ~1800+; the historical bad run with fork suites
+   silently absent produced 462). If the Foundry report falls below the floor, the
+   script exits 1 and nothing is uploaded — extending the fail-loud philosophy of the
+   failure grep to "fork suites contributed nothing".
 
 Note the raw `coverage/lcov.info` (with zeros) is kept for the local
 intersection analysis below; only the upload is filtered.
 
 **How to verify a Codecov report is complete:** the analyze step prints the
-filtering result (`N files → M files`) and one line per sentinel with its hit
-count (normal: GmxLib alone has several thousand hits). On the Codecov side, the
-commit totals should show `sessions: 2` (both uploads received; query
+filtering result (`N files → M files`) and the Foundry hit-line count vs the floor.
+On the Codecov side, the commit totals should show `sessions: 2` (both uploads
+received; query
 `https://api.codecov.io/api/v2/gh/RigoBlock/repos/v3-contracts/commits/<sha>/`).
 If a file still looks wrongly uncovered with both sessions present, re-run the
 CI job before suspecting the tests — fork-branch coverage of a few lines can
