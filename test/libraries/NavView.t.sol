@@ -3,7 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
-import {IGmxReader, GmxOrderInfo} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {ReaderUtils} from "gmx-synthetics/reader/ReaderUtils.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
@@ -135,9 +136,9 @@ contract NavViewTest is Test {
 
     function _mockGmxEmpty() internal {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountPositions.selector), abi.encode(emptyPos));
-        GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(GMX_READER, abi.encodeWithSelector(IGmxReader.getAccountOrders.selector), abi.encode(emptyOrders));
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(Reader.getAccountPositions.selector), abi.encode(emptyPos));
+        ReaderUtils.OrderInfo[] memory emptyOrders = new ReaderUtils.OrderInfo[](0);
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(Reader.getAccountOrders.selector), abi.encode(emptyOrders));
     }
 
     // =========================================================================

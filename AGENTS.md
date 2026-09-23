@@ -76,7 +76,7 @@ User → Pool Proxy (delegatecall)→ Implementation
      - `GmxLib` change → `EApps`, `EGmxCallback` change → **bump salt**.
      - `NavView` change → `ENavView` changes → **bump salt**.
      - `MixinConstants` / other implementation-only libraries → implementation only → no salt bump (see "When NOT to bump").
-     
+
      **Decision rule when you change a library**: grep for every contract that imports it. If any importer is an extension (anything whose address is stored in the ExtensionsMap), the salt MUST be bumped. Never assume "I only touched a library" means extensions are unchanged.
 - **When NOT to bump**: If only the implementation changes and everything compiled into extensions is byte-identical, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
 - **The unreleased-train exception**: If the salt was already bumped in a previous PR of the same release train and that ExtensionsMap was **never deployed** (nothing exists at the computed CREATE2 address on any chain), do NOT bump again — reuse the pending salt. The deploy script's `map.code.length == 0` check only works because the address is empty; once deployed, any further extension-bytecode change requires a fresh bump.
@@ -656,6 +656,8 @@ When making changes:
 24. **NAMED MAPPING VARIABLES** — All new or modified mappings must use named key and value parameters (Solidity ≥0.8.18 feature). Write `mapping(bytes4 selector => address[] addresses)` not `mapping(bytes4 => address[])`. Both key and value must be named; for nested mappings name all levels: `mapping(address owner => mapping(bytes4 selector => uint256 position))`. This applies to struct fields, state variables, and library-internal structs. Do NOT retrofit old legacy contracts not being modified in the current PR.
 
 25. **DEPLOYED CODE SIZE MUST BE TRACKED IN EVERY PR** — The EVM limit is 24576 bytes per contract, and `SmartPool` (24321) and `ENavView` (24299) have under 300 bytes of headroom with production settings. After any change that can alter deployed bytecode — including library edits, since libraries compile into every importer's bytecode — measure with the production profile (`SOLIDITY_SETTINGS='{"optimizer":{"enabled":true,"runs":200}}' npx hardhat compile && npx hardhat codesize --skipcompile true`) and update the table in `docs/CODE_SIZE.md` in the same PR. Never trust Foundry's size output (it uses `optimizer_runs = 1_000_000` and produces different bytecode). Never merge a contract at or above the limit.
+
+26. **SKIPPING `forge clean` AFTER BRANCH OR SUBMODULE SWITCHES** — Foundry's incremental cache can serve artifacts with mismatched CBOR metadata tails across compilation units, causing spurious test failures (observed: AIntentsRealFork escrow CREATE2 assertion failing with an unchanged Escrow.sol — executable bytecode identical, only the metadata tail differed). Always run `forge clean` before `forge build`/`forge test` after switching branches or updating git submodules. CI is unaffected (clean runners).
 
 ## GMX v2 Integration
 

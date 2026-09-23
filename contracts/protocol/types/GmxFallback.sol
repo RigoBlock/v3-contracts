@@ -5,7 +5,8 @@ import {_FLOAT_PRECISION} from "./GmxConstants.sol";
 
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
-import {IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
+import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
 
 type Feed is uint168;
 

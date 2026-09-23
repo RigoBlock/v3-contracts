@@ -3,13 +3,13 @@ pragma solidity ^0.8.28;
 
 import {_GMX_DATA_STORE, _FLOAT_PRECISION} from "./GmxConstants.sol";
 
-import {IGmxDataStore} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
 import {GmxCallbackLib} from "../libraries/GmxCallbackLib.sol";
 
 library GmxClaimableHelpers {
     function getClaimableFundingAmount(address market, address token, address account) internal view returns (uint256) {
         return
-            IGmxDataStore(_GMX_DATA_STORE).getUint(
+            DataStore(_GMX_DATA_STORE).getUint(
                 keccak256(abi.encode(GmxCallbackLib.CLAIMABLE_FUNDING_AMOUNT_KEY, market, token, account))
             );
     }
@@ -19,7 +19,7 @@ library GmxClaimableHelpers {
         GmxCallbackLib.ClaimableCollateralInfo memory info,
         address account
     ) internal view returns (uint256 claimableAmount_) {
-        IGmxDataStore ds = IGmxDataStore(_GMX_DATA_STORE);
+        DataStore ds = DataStore(_GMX_DATA_STORE);
         uint256 amount = ds.getUint(amountKey);
         if (amount == 0) return 0;
 

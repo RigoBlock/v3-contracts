@@ -45,7 +45,13 @@ import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
 
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
-import {IGmxReader, IGmxDataStore, IGmxRoleStore, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
+import {OrderHandler} from "gmx-synthetics/exchange/OrderHandler.sol";
+import {ExchangeRouter} from "gmx-synthetics/router/ExchangeRouter.sol";
+import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
+import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
@@ -270,16 +276,14 @@ contract NavViewStressedParityForkTest is Test {
         IAStaking(pool).stake(STAKE_AMOUNT);
 
         // ── Positive PnL: mock GMX Chainlink oracle +10% on WETH ─────────────
-        GmxValidatedPrice memory realPrice = IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(
-            ARB_WETH,
-            ""
-        );
+        OracleUtils.ValidatedPrice memory realPrice = ChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED)
+            .getOraclePrice(ARB_WETH, "");
 
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeCall(IGmxChainlinkPriceFeedProvider.getOraclePrice, (ARB_WETH, "")),
+            abi.encodeCall(ChainlinkPriceFeedProvider.getOraclePrice, (ARB_WETH, "")),
             abi.encode(
-                GmxValidatedPrice({
+                OracleUtils.ValidatedPrice({
                     token: ARB_WETH,
                     min: (realPrice.min * 110) / 100,
                     max: (realPrice.max * 110) / 100,
@@ -446,14 +450,14 @@ contract NavViewStressedParityForkTest is Test {
     }
 
     function _getController() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
+        return RoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
     }
 
     /// @dev Returns the Oracle module of the current GMX OrderHandler, resolved dynamically
     ///  because oracle provider registrations are keyed by the oracle address and GMX
     ///  rotations (e.g. v2.2c, ~Sep 2026) deploy a new Oracle alongside new handlers.
     function _gmxOracle() private view returns (address) {
-        return IGmxOrderHandler(GMX_ROUTER.orderHandler()).oracle();
+        return address(OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler()))).oracle());
     }
 
     function _oracleProviderKey(address oracleContract, address token) private pure returns (bytes32) {
@@ -462,7 +466,7 @@ contract NavViewStressedParityForkTest is Test {
     }
 
     function _prepareOracleProviders(address market) private returns (OracleProviderEntry[] memory entries) {
-        Market.Props memory mkt = IGmxReader(GMX_READER).getMarket(GMX_DATA_STORE, market);
+        Market.Props memory mkt = Reader(GMX_READER).getMarket(DataStore(GMX_DATA_STORE), market);
         address controller = _getController();
 
         address[3] memory rawTokens = [mkt.indexToken, mkt.longToken, mkt.shortToken];
@@ -517,7 +521,7 @@ contract NavViewStressedParityForkTest is Test {
         }
 
         bytes32 keeperKey = keccak256(abi.encode("ORDER_KEEPER"));
-        address[] memory members = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keeperKey, 0, 10);
+        address[] memory members = RoleStore(GMX_ROLE_STORE).getRoleMembers(keeperKey, 0, 10);
         address keeper = members.length > 0 ? members[0] : _getController();
 
         if (members.length == 0) {
@@ -528,12 +532,9 @@ contract NavViewStressedParityForkTest is Test {
             );
         }
 
-        IGmxOrderHandler handler = GMX_ROUTER.orderHandler();
+        OrderHandler handler = OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler())));
         vm.prank(keeper);
-        handler.executeOrder(
-            orderKey,
-            IGmxOrderHandler.SetPricesParams({tokens: tokens, providers: providers, data: data})
-        );
+        handler.executeOrder(orderKey, OracleUtils.SetPricesParams({tokens: tokens, providers: providers, data: data}));
     }
 
     function _executeOrder(bytes32 orderKey, address market) private {
