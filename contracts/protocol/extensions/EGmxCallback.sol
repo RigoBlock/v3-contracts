@@ -5,7 +5,9 @@ import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_C
 
 import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
-import {IGmxDataStore, IGmxReader, IGmxRoleStore} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
 import {Bytes32Set, EnumerableSet} from "../libraries/EnumerableSet.sol";
 import {GmxCallbackLib} from "../libraries/GmxCallbackLib.sol";
 import {IEGmxCallback} from "./adapters/interfaces/IEGmxCallback.sol";
@@ -28,7 +30,7 @@ contract EGmxCallback is IEGmxCallback {
     }
 
     modifier onlyGmxController() {
-        require(IGmxRoleStore(_GMX_ROLE_STORE).hasRole(msg.sender, _GMX_CONTROLLER_ROLE), NotGmxController());
+        require(RoleStore(_GMX_ROLE_STORE).hasRole(msg.sender, _GMX_CONTROLLER_ROLE), NotGmxController());
         _;
     }
 
@@ -57,8 +59,8 @@ contract EGmxCallback is IEGmxCallback {
         // Record claimable collateral keys for both market tokens. Price-impact rebates
         // are time-locked, so we only store the key for later NAV/claiming.
         uint256 timeKey = block.timestamp /
-            IGmxDataStore(_GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
-        Market.Props memory marketInfo = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
+            DataStore(_GMX_DATA_STORE).getUint(GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY);
+        Market.Props memory marketInfo = Reader(_GMX_READER).getMarket(DataStore(_GMX_DATA_STORE), market);
 
         _recordClaimableCollateral(callbackData, market, marketInfo.longToken, timeKey);
         if (marketInfo.longToken != marketInfo.shortToken) {
@@ -79,7 +81,7 @@ contract EGmxCallback is IEGmxCallback {
 
         // Only store keys that actually have claimable collateral and are not already tracked.
         if (
-            IGmxDataStore(_GMX_DATA_STORE).getUint(amountKey) != 0 &&
+            DataStore(_GMX_DATA_STORE).getUint(amountKey) != 0 &&
             !callbackData.claimableCollateralKeys.contains(amountKey)
         ) {
             callbackData.claimableCollateralKeys.add(amountKey);

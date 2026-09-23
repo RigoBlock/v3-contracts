@@ -4,7 +4,13 @@ pragma solidity 0.8.28;
 import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
-import {IGmxDataStore, IGmxReader, IGmxRoleStore, IGmxExchangeRouter, IGmxOrderHandler, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
+import {OrderHandler} from "gmx-synthetics/exchange/OrderHandler.sol";
+import {ExchangeRouter} from "gmx-synthetics/router/ExchangeRouter.sol";
+import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
+import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
 import {IPriceFeed} from "gmx-synthetics/oracle/IPriceFeed.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
@@ -19,6 +25,18 @@ import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.so
 import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
 import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
 import {IEGmxCallback} from "../../contracts/protocol/extensions/adapters/interfaces/IEGmxCallback.sol";
+
+/// @dev Selector-only view of the GMX ExchangeRouter getter. The concrete ExchangeRouter's
+///  `orderHandler` is a public immutable, which cannot be referenced via Type.member.selector.
+interface IRouterOrderHandler {
+    function orderHandler() external view returns (address);
+}
+
+/// @dev Selector-only view of the GMX OrderHandler getter (public immutable, same
+///  Type.member.selector limitation as above).
+interface IHandlerOrderVault {
+    function orderVault() external view returns (address);
+}
 
 /// @dev Proxy that delegatecalls an AGmxV2 adapter. Implements hasPriceFeed so
 ///  `_trackToken` can skip the oracle check when the token is the base token.
@@ -75,17 +93,17 @@ contract AGmxV2UnitTest is Test {
         // No open positions.
         vm.mockCall(
             _GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encodeWithSelector(Reader.getAccountPositions.selector),
             abi.encode(new Position.Props[](0))
         );
 
         // No claimable funding fees.
         vm.mockCall(
             _GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: token, longToken: token, shortToken: token}))
         );
-        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(DataStore.getUint.selector), abi.encode(uint256(0)));
 
         // Mock router call.
         address[] memory markets = new address[](1);
@@ -94,7 +112,7 @@ contract AGmxV2UnitTest is Test {
         tokens[0] = token;
         vm.mockCall(
             address(GMX_ROUTER),
-            abi.encodeWithSelector(IGmxExchangeRouter.claimFundingFees.selector, markets, tokens, address(proxy)),
+            abi.encodeWithSelector(ExchangeRouter.claimFundingFees.selector, markets, tokens, address(proxy)),
             abi.encode(new uint256[](1))
         );
 
@@ -114,7 +132,7 @@ contract AGmxV2UnitTest is Test {
         _setClaimableCollateralKey(amountKey);
 
         // claimCollateral amount is zero.
-        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(DataStore.getUint.selector), abi.encode(uint256(0)));
 
         address[] memory markets = new address[](1);
         markets[0] = market;
@@ -125,13 +143,7 @@ contract AGmxV2UnitTest is Test {
 
         vm.mockCall(
             address(GMX_ROUTER),
-            abi.encodeWithSelector(
-                IGmxExchangeRouter.claimCollateral.selector,
-                markets,
-                tokens,
-                timeKeys,
-                address(proxy)
-            ),
+            abi.encodeWithSelector(ExchangeRouter.claimCollateral.selector, markets, tokens, timeKeys, address(proxy)),
             abi.encode(new uint256[](1))
         );
 
@@ -296,13 +308,13 @@ contract AGmxV2UnitTest is Test {
         // Market props: indexToken is unmapped.
         vm.mockCall(
             _GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
         );
         // GMX provider has no feed for the unmapped token.
         vm.mockCallRevert(
             GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encodeWithSelector(ChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
             abi.encode("no price feed")
         );
 
@@ -320,13 +332,23 @@ contract AGmxV2UnitTest is Test {
 
         vm.mockCall(
             _GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
         );
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
-            abi.encode(GmxValidatedPrice(indexToken, 1e30, 1e30, 1e30, 1e30, block.timestamp, GMX_CHAINLINK_PRICE_FEED))
+            abi.encodeWithSelector(ChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encode(
+                OracleUtils.ValidatedPrice(
+                    indexToken,
+                    1e30,
+                    1e30,
+                    1e30,
+                    1e30,
+                    block.timestamp,
+                    GMX_CHAINLINK_PRICE_FEED
+                )
+            )
         );
 
         IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
@@ -347,12 +369,12 @@ contract AGmxV2UnitTest is Test {
 
         vm.mockCall(
             _GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
         );
         vm.mockCallRevert(
             GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encodeWithSelector(ChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
             abi.encode("no price feed")
         );
         vm.mockCall(
@@ -379,12 +401,12 @@ contract AGmxV2UnitTest is Test {
 
         vm.mockCall(
             _GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(Market.Props({marketToken: market, indexToken: indexToken, longToken: token, shortToken: token}))
         );
         vm.mockCallRevert(
             GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeWithSelector(IGmxChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
+            abi.encodeWithSelector(ChainlinkPriceFeedProvider.getOraclePrice.selector, indexToken, ""),
             abi.encode("no price feed")
         );
         vm.mockCall(
@@ -402,7 +424,7 @@ contract AGmxV2UnitTest is Test {
     function _mockRouterAuthorized() internal {
         vm.mockCall(
             _GMX_ROLE_STORE,
-            abi.encodeWithSelector(IGmxRoleStore.hasRole.selector, address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
+            abi.encodeWithSelector(RoleStore.hasRole.selector, address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
             abi.encode(true)
         );
     }
@@ -410,7 +432,7 @@ contract AGmxV2UnitTest is Test {
     function _mockRouterUnauthorized() internal {
         vm.mockCall(
             _GMX_ROLE_STORE,
-            abi.encodeWithSelector(IGmxRoleStore.hasRole.selector, address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
+            abi.encodeWithSelector(RoleStore.hasRole.selector, address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
             abi.encode(false)
         );
     }
@@ -424,11 +446,11 @@ contract AGmxV2UnitTest is Test {
         // The ExchangeRouter holds the CONTROLLER role.
         _mockRouterAuthorized();
         // Execution fee reads return zero so the fee is small.
-        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(IGmxDataStore.getUint.selector), abi.encode(uint256(0)));
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(DataStore.getUint.selector), abi.encode(uint256(0)));
         // No existing positions.
         vm.mockCall(
             _GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
+            abi.encodeWithSelector(Reader.getAccountPositions.selector),
             abi.encode(new Position.Props[](0))
         );
         // Pretend the pool already holds enough WETH so the adapter does not need to call deposit().
@@ -440,19 +462,23 @@ contract AGmxV2UnitTest is Test {
         // Router -> handler -> vault.
         vm.mockCall(
             address(GMX_ROUTER),
-            abi.encodeWithSelector(IGmxExchangeRouter.orderHandler.selector),
+            abi.encodeWithSelector(IRouterOrderHandler.orderHandler.selector),
             abi.encode(orderHandler)
         );
-        vm.mockCall(orderHandler, abi.encodeWithSelector(IGmxOrderHandler.orderVault.selector), abi.encode(orderVault));
+        vm.mockCall(
+            orderHandler,
+            abi.encodeWithSelector(IHandlerOrderVault.orderVault.selector),
+            abi.encode(orderVault)
+        );
         // createOrder succeeds and the adapter registers a saved callback.
         vm.mockCall(
             address(GMX_ROUTER),
-            abi.encodeWithSelector(IGmxExchangeRouter.createOrder.selector),
+            abi.encodeWithSelector(ExchangeRouter.createOrder.selector),
             abi.encode(bytes32(uint256(1)))
         );
         vm.mockCall(
             address(GMX_ROUTER),
-            abi.encodeWithSelector(IGmxExchangeRouter.setSavedCallbackContract.selector),
+            abi.encodeWithSelector(ExchangeRouter.setSavedCallbackContract.selector),
             abi.encode()
         );
     }

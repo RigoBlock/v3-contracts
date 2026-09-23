@@ -5,7 +5,11 @@ import {GMX_ROUTER, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CHAINLIN
 
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
-import {IGmxReader, IGmxRoleStore, IGmxChainlinkPriceFeedProvider, IGmxDataStore, GmxValidatedPrice} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
+import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
+import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
 import {GmxCallbackLib} from "./GmxCallbackLib.sol";
 import {GmxClaimableHelpers} from "../types/GmxClaimableHelpers.sol";
 import {GmxFallback} from "../types/GmxFallback.sol";
@@ -18,13 +22,13 @@ library GmxAdapterLib {
     ///  contract rotation), which would make order writes and claims revert downstream.
     function assertRouterAuthorized() internal view {
         require(
-            IGmxRoleStore(_GMX_ROLE_STORE).hasRole(address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
+            RoleStore(_GMX_ROLE_STORE).hasRole(address(GMX_ROUTER), _GMX_CONTROLLER_ROLE),
             GmxRouterNotAuthorized()
         );
     }
 
     function computeExecutionFee(bool isIncrease, uint256 callbackGasLimit) internal view returns (uint256) {
-        IGmxDataStore ds = IGmxDataStore(_GMX_DATA_STORE);
+        DataStore ds = DataStore(_GMX_DATA_STORE);
         uint256 orderGasLimit = ds.getUint(isIncrease ? _KEY_INCREASE_ORDER_GAS : _KEY_DECREASE_ORDER_GAS);
         uint256 baseGasLimit = ds.getUint(_KEY_FEE_BASE) + _ORDER_ORACLE_PRICE_COUNT * ds.getUint(_KEY_FEE_PER_ORACLE);
         uint256 multiplierFactor = ds.getUint(_KEY_FEE_MULTIPLIER);
@@ -35,18 +39,18 @@ library GmxAdapterLib {
     }
 
     function getPnlToken(address market, bool isLong) internal view returns (address) {
-        Market.Props memory mkt = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
+        Market.Props memory mkt = Reader(_GMX_READER).getMarket(DataStore(_GMX_DATA_STORE), market);
         return isLong ? mkt.longToken : mkt.shortToken;
     }
 
     function getMarketIndexToken(address market) internal view returns (address) {
-        return IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market).indexToken;
+        return Reader(_GMX_READER).getMarket(DataStore(_GMX_DATA_STORE), market).indexToken;
     }
 
     function isIndexTokenPriced(address token) internal view returns (bool) {
         if (token == address(0)) return false;
-        try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
-            GmxValidatedPrice memory
+        try ChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
+            OracleUtils.ValidatedPrice memory
         ) {
             return true;
         } catch {
@@ -61,20 +65,20 @@ library GmxAdapterLib {
         bool isLong
     ) internal view {
         bytes32 positionKey = keccak256(abi.encode(account, market, collateralToken, isLong));
-        if (IGmxDataStore(_GMX_DATA_STORE).getUint(keccak256(abi.encode(positionKey, _POSITION_SIZE_IN_USD_KEY))) > 0) {
+        if (DataStore(_GMX_DATA_STORE).getUint(keccak256(abi.encode(positionKey, _POSITION_SIZE_IN_USD_KEY))) > 0) {
             return;
         }
 
         require(
-            IGmxReader(_GMX_READER).getAccountPositions(_GMX_DATA_STORE, account, 0, _MAX_GMX_POSITIONS).length <
+            Reader(_GMX_READER).getAccountPositions(DataStore(_GMX_DATA_STORE), account, 0, _MAX_GMX_POSITIONS).length <
                 _MAX_GMX_POSITIONS,
             MaxGmxPositionsReached()
         );
     }
 
     function isMarketActive(address account, address market) internal view returns (bool) {
-        Position.Props[] memory positions = IGmxReader(_GMX_READER).getAccountPositions(
-            _GMX_DATA_STORE,
+        Position.Props[] memory positions = Reader(_GMX_READER).getAccountPositions(
+            DataStore(_GMX_DATA_STORE),
             account,
             0,
             type(uint256).max
@@ -86,7 +90,7 @@ library GmxAdapterLib {
     }
 
     function hasClaimableFundingFees(address account, address market) internal view returns (bool) {
-        Market.Props memory mkt = IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market);
+        Market.Props memory mkt = Reader(_GMX_READER).getMarket(DataStore(_GMX_DATA_STORE), market);
         if (GmxClaimableHelpers.getClaimableFundingAmount(market, mkt.longToken, account) > 0) return true;
         if (
             mkt.shortToken != mkt.longToken &&

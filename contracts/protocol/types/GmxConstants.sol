@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.28;
 
-import {IGmxExchangeRouter} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {ExchangeRouter} from "gmx-synthetics/router/ExchangeRouter.sol";
 
 // Chain-specific GMX v2 constants shared across the protocol.
 // Constants are declared at file level so consumers can import only the
@@ -9,7 +9,10 @@ import {IGmxExchangeRouter} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
 uint256 constant ARBITRUM_CHAIN_ID = 42161;
 address constant WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
 
-IGmxExchangeRouter constant GMX_ROUTER = IGmxExchangeRouter(0x7dE39FF2e232A2203196788d37e234cF8F1b83f1);
+// The contract addresses below MUST match the pinned lib/gmx-synthetics submodule commit:
+// the ABI decoder imports its types from that submodule, so bumping one without the
+// other reintroduces decode drift (see docs/gmx/security.md finding 5).
+ExchangeRouter constant GMX_ROUTER = ExchangeRouter(0x7dE39FF2e232A2203196788d37e234cF8F1b83f1);
 
 address constant _GMX_READER = 0xfA26cBb46e2614609406de08CA1Dc7f70a684184;
 address constant _GMX_DATA_STORE = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;

@@ -45,7 +45,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-09-21 (branch `fix/gmx-v2-2c-addresses`).
+Limit: 24576 bytes per contract. Last measured: 2026-09-23 (branch `fix/gmx-import-submodule-abi`).
 
 ### Implementation and factory
 
@@ -58,8 +58,8 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-21 (branch `fix/gmx-v2-2
 
 | Contract     | Size (bytes) | Headroom | % of limit |
 | ------------ | -----------: | -------: | ---------: |
-| ENavView     |        24299 |      277 |     98.87% |
-| EApps        |        22647 |     1929 |     92.15% |
+| ENavView     |        24320 |      256 |     98.96% |
+| EApps        |        22668 |     1908 |     92.24% |
 | EGmxCallback |         6227 |    18349 |     25.34% |
 | ECrosschain  |         5175 |    19401 |     21.06% |
 | EOracle      |         4609 |    19967 |     18.75% |

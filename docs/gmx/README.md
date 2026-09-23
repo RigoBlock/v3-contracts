@@ -31,7 +31,7 @@ Pool Owner → SmartPool.fallback()
 | `EApps`          | `contracts/protocol/extensions/EApps.sol`                       | Extension: per-call position valuation |
 | `ENavView`       | `contracts/protocol/extensions/ENavView.sol`                    | Extension: view-only NAV computation   |
 | `NavView`        | `contracts/protocol/libraries/NavView.sol`                      | Library: NAV calculation helpers       |
-| `IGmxSynthetics` | `contracts/utils/exchanges/gmx/IGmxSynthetics.sol`              | GMX interface definitions              |
+| `gmx-synthetics` | `lib/gmx-synthetics/` (pinned submodule)                        | All GMX types and contract interfaces  |
 
 ## Deployed Addresses (Arbitrum One)
 
@@ -51,7 +51,12 @@ Pool Owner → SmartPool.fallback()
 
 ## GMX Interface Source
 
-Interfaces are defined in `contracts/utils/exchanges/gmx/IGmxSynthetics.sol`. The `lib/gmx-synthetics` git submodule (at `lib/gmx-synthetics/`) provides the canonical structs (`Position.Props`, `Market.Props`) imported directly to avoid duplication.
+All GMX types and methods are imported directly from the pinned `lib/gmx-synthetics`
+git submodule (e.g. `ReaderPositionUtils.PositionInfo`, `MarketUtils.MarketPrices`,
+`ReaderUtils.OrderInfo`, `OracleUtils.ValidatedPrice`, and the concrete `Reader`,
+`DataStore`, `RoleStore`, `ExchangeRouter`, `OrderHandler`, `ChainlinkPriceFeedProvider`
+contracts cast at the canonical addresses in `GmxConstants.sol`). This guarantees the
+ABI decoder can never drift from the deployed GMX contracts.
 
 ---
 

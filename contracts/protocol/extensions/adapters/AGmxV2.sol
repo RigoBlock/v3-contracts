@@ -17,7 +17,7 @@ import {IEGmxCallback} from "./interfaces/IEGmxCallback.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
-import {IGmxOrderHandler} from "../../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {BaseOrderHandler} from "gmx-synthetics/exchange/BaseOrderHandler.sol";
 import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
 import {GmxAdapterLib} from "../../libraries/GmxAdapterLib.sol";
 
@@ -82,7 +82,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         address indexToken = GmxAdapterLib.getMarketIndexToken(params.addresses.market);
         require(GmxAdapterLib.isIndexTokenPriced(indexToken), UnpricedIndexToken(indexToken));
 
-        address orderVault = GMX_ROUTER.orderHandler().orderVault();
+        address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
 
         bool collateralIsWrappedNative = params.addresses.initialCollateralToken == WRAPPED_NATIVE;
 
@@ -151,7 +151,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256 executionFee = GmxAdapterLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(executionFee <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
 
-        address orderVault = GMX_ROUTER.orderHandler().orderVault();
+        address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
         require(
             params.orderType == Order.OrderType.MarketDecrease ||
                 params.orderType == Order.OrderType.LimitDecrease ||
@@ -215,7 +215,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256 feeTopUp = GmxAdapterLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(feeTopUp <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
         if (feeTopUp > 0) {
-            address orderVault = GMX_ROUTER.orderHandler().orderVault();
+            address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
             _ensureWeth(feeTopUp);
             WRAPPED_NATIVE.safeTransfer(orderVault, feeTopUp);
         }

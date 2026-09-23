@@ -24,7 +24,12 @@ import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISm
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
-import {IGmxReader, IGmxRoleStore, IGmxOrderHandler, IGmxExchangeRouter, IGmxChainlinkPriceFeedProvider, GmxValidatedPrice} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
+import {OrderHandler} from "gmx-synthetics/exchange/OrderHandler.sol";
+import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
+import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
 import {GMX_ROUTER, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
@@ -49,8 +54,8 @@ contract GmxLitPoolForkHarness {
 
     function getGmxPositionCount(address account) external view returns (uint256) {
         return
-            IGmxReader(Constants.ARB_GMX_READER)
-                .getAccountPositions(Constants.ARB_GMX_DATA_STORE, account, 0, type(uint256).max)
+            Reader(Constants.ARB_GMX_READER)
+                .getAccountPositions(DataStore(Constants.ARB_GMX_DATA_STORE), account, 0, type(uint256).max)
                 .length;
     }
 }
@@ -283,18 +288,18 @@ contract GmxLitPoolFork is Test {
     ///  because oracle provider registrations are keyed by the oracle address and GMX
     ///  rotations (e.g. v2.2c, ~Sep 2026) deploy a new Oracle alongside new handlers.
     function _gmxOracle() private view returns (address) {
-        return IGmxOrderHandler(GMX_ROUTER.orderHandler()).oracle();
+        return address(OrderHandler(payable(address(GMX_ROUTER.orderHandler()))).oracle());
     }
 
     /// @dev Returns a GMX CONTROLLER address from the RoleStore. GMX uses
     ///  `keccak256(abi.encode("KEY"))` for role keys, not bare `keccak256("KEY")`.
     function _getController() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
+        return RoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
     }
 
     /// @dev Returns a registered ORDER_KEEPER address from the RoleStore.
     function _getOrderKeeper() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("ORDER_KEEPER")), 0, 1)[0];
+        return RoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("ORDER_KEEPER")), 0, 1)[0];
     }
 
     struct OracleProviderEntry {
@@ -313,7 +318,7 @@ contract GmxLitPoolFork is Test {
     /// @dev Redirects each unique market token's oracle provider to the Chainlink provider
     ///  (as CONTROLLER) so keeper execution can price them; returns entries for restore.
     function _prepareOracleProviders(address market) private returns (OracleProviderEntry[] memory entries) {
-        Market.Props memory mkt = IGmxReader(GMX_READER).getMarket(GMX_DATA_STORE, market);
+        Market.Props memory mkt = Reader(GMX_READER).getMarket(DataStore(GMX_DATA_STORE), market);
         address controller = _getController();
 
         address[3] memory rawTokens = [mkt.indexToken, mkt.longToken, mkt.shortToken];
@@ -378,9 +383,9 @@ contract GmxLitPoolFork is Test {
         uint256 litPrice = 3_496_579_750_000;
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeCall(IGmxChainlinkPriceFeedProvider.getOraclePrice, (LIT_INDEX_TOKEN, bytes(""))),
+            abi.encodeCall(ChainlinkPriceFeedProvider.getOraclePrice, (LIT_INDEX_TOKEN, bytes(""))),
             abi.encode(
-                GmxValidatedPrice({
+                OracleUtils.ValidatedPrice({
                     token: LIT_INDEX_TOKEN,
                     min: litPrice,
                     max: litPrice,
@@ -401,12 +406,9 @@ contract GmxLitPoolFork is Test {
             data[i] = "";
         }
 
-        IGmxOrderHandler handler = IGmxOrderHandler(GMX_ROUTER.orderHandler());
+        OrderHandler handler = OrderHandler(payable(address(GMX_ROUTER.orderHandler())));
         vm.prank(_getOrderKeeper());
-        handler.executeOrder(
-            orderKey,
-            IGmxOrderHandler.SetPricesParams({tokens: tokens, providers: providers, data: data})
-        );
+        handler.executeOrder(orderKey, OracleUtils.SetPricesParams({tokens: tokens, providers: providers, data: data}));
 
         _restoreOracleProviders(entries);
         vm.clearMockedCalls();

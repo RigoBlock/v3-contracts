@@ -119,7 +119,7 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
+          files: ./coverage/lcov-upload.info
           flags: hardhat
           name: hardhat-coverage
           fail_ci_if_error: true

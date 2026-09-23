@@ -7,7 +7,14 @@ import {Price} from "gmx-synthetics/price/Price.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
-import {IGmxReader, IGmxChainlinkPriceFeedProvider, IGmxExchangeRouter, GmxPositionInfo, GmxMarketPrices, GmxOrderInfo, GmxValidatedPrice} from "../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {ReaderUtils} from "gmx-synthetics/reader/ReaderUtils.sol";
+import {ReaderPositionUtils} from "gmx-synthetics/reader/ReaderPositionUtils.sol";
+import {MarketUtils} from "gmx-synthetics/market/MarketUtils.sol";
+import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
+import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
+import {IReferralStorage} from "gmx-synthetics/referral/IReferralStorage.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {GmxClaimableHelpers} from "../types/GmxClaimableHelpers.sol";
 import {GmxFallback} from "../types/GmxFallback.sol";
@@ -43,8 +50,8 @@ library GmxLib {
     /// @dev Tries the GMX Chainlink price provider first, falls back to a hardcoded Chainlink aggregator.
     ///  Returns a zero Price.Props when the token cannot be priced or the fallback is stale/invalid.
     function getGmxPrice(address token) internal view returns (Price.Props memory price) {
-        try IGmxChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
-            GmxValidatedPrice memory validated
+        try ChainlinkPriceFeedProvider(_GMX_CHAINLINK_PRICE_FEED).getOraclePrice(token, "") returns (
+            OracleUtils.ValidatedPrice memory validated
         ) {
             price = Price.Props({min: validated.min, max: validated.max});
         } catch {
@@ -53,8 +60,8 @@ library GmxLib {
     }
 
     function _getExecutedPositionBalances(address account) private view returns (AppTokenBalance[] memory balances) {
-        Position.Props[] memory positions = IGmxReader(_GMX_READER).getAccountPositions(
-            _GMX_DATA_STORE,
+        Position.Props[] memory positions = Reader(_GMX_READER).getAccountPositions(
+            DataStore(_GMX_DATA_STORE),
             account,
             0,
             type(uint256).max
@@ -62,9 +69,9 @@ library GmxLib {
         if (positions.length == 0) return balances;
 
         (
-            GmxPositionInfo[] memory posInfos,
+            ReaderPositionUtils.PositionInfo[] memory posInfos,
             Market.Props[] memory marketStructs,
-            GmxMarketPrices[] memory marketPrices
+            MarketUtils.MarketPrices[] memory marketPrices
         ) = _fetchPositionInfos(positions, account);
 
         if (posInfos.length == 0) return _collateralOnlyBalances(positions);
@@ -73,9 +80,9 @@ library GmxLib {
     }
 
     function _buildPositionBalances(
-        GmxPositionInfo[] memory posInfos,
+        ReaderPositionUtils.PositionInfo[] memory posInfos,
         Market.Props[] memory marketStructs,
-        GmxMarketPrices[] memory marketPrices
+        MarketUtils.MarketPrices[] memory marketPrices
     ) private pure returns (AppTokenBalance[] memory balances) {
         AppTokenBalance[] memory tmp = new AppTokenBalance[](posInfos.length * 3);
         uint256 count;
@@ -95,15 +102,15 @@ library GmxLib {
         private
         view
         returns (
-            GmxPositionInfo[] memory posInfos,
+            ReaderPositionUtils.PositionInfo[] memory posInfos,
             Market.Props[] memory marketStructs,
-            GmxMarketPrices[] memory marketPrices
+            MarketUtils.MarketPrices[] memory marketPrices
         )
     {
         uint256 n = positions.length;
         address[] memory markets = new address[](n);
         marketStructs = new Market.Props[](n);
-        marketPrices = new GmxMarketPrices[](n);
+        marketPrices = new MarketUtils.MarketPrices[](n);
 
         TokenPrice[] memory tokenCache = new TokenPrice[](n * 3);
         uint256 tokenCacheCount;
@@ -114,7 +121,7 @@ library GmxLib {
 
             uint256 seenAt = _findAddress(markets, i, mktAddr);
             marketStructs[i] = seenAt == i
-                ? IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, mktAddr)
+                ? Reader(_GMX_READER).getMarket(DataStore(_GMX_DATA_STORE), mktAddr)
                 : marketStructs[seenAt];
 
             Price.Props memory price;
@@ -127,9 +134,9 @@ library GmxLib {
         }
 
         try
-            IGmxReader(_GMX_READER).getAccountPositionInfoList(
-                _GMX_DATA_STORE,
-                _GMX_REFERRAL_STORAGE,
+            Reader(_GMX_READER).getAccountPositionInfoList(
+                DataStore(_GMX_DATA_STORE),
+                IReferralStorage(_GMX_REFERRAL_STORAGE),
                 account,
                 markets,
                 marketPrices,
@@ -137,7 +144,7 @@ library GmxLib {
                 0,
                 type(uint256).max
             )
-        returns (GmxPositionInfo[] memory result) {
+        returns (ReaderPositionUtils.PositionInfo[] memory result) {
             posInfos = result;
         } catch {}
     }
@@ -176,7 +183,7 @@ library GmxLib {
         for (uint256 i; i < marketCount; ++i) {
             address market = GmxCallbackLib.trackedMarketAt(i);
             Market.Props memory mkt;
-            try IGmxReader(_GMX_READER).getMarket(_GMX_DATA_STORE, market) returns (Market.Props memory result) {
+            try Reader(_GMX_READER).getMarket(DataStore(_GMX_DATA_STORE), market) returns (Market.Props memory result) {
                 mkt = result;
             } catch {
                 continue;
@@ -211,9 +218,9 @@ library GmxLib {
     }
 
     function _getPendingOrderBalances(address account) private view returns (AppTokenBalance[] memory balances) {
-        GmxOrderInfo[] memory orders;
-        try IGmxReader(_GMX_READER).getAccountOrders(_GMX_DATA_STORE, account, 0, type(uint256).max) returns (
-            GmxOrderInfo[] memory result
+        ReaderUtils.OrderInfo[] memory orders;
+        try Reader(_GMX_READER).getAccountOrders(DataStore(_GMX_DATA_STORE), account, 0, type(uint256).max) returns (
+            ReaderUtils.OrderInfo[] memory result
         ) {
             orders = result;
         } catch {
@@ -252,9 +259,9 @@ library GmxLib {
     function _appendGmxPosBalances(
         AppTokenBalance[] memory tmp,
         uint256 count,
-        GmxPositionInfo memory posInfo,
+        ReaderPositionUtils.PositionInfo memory posInfo,
         Market.Props memory mkt,
-        GmxMarketPrices memory mktPrices
+        MarketUtils.MarketPrices memory mktPrices
     ) private pure returns (uint256) {
         address colToken = posInfo.position.addresses.collateralToken;
         int256 net = _computeGmxNetCollateral(posInfo, mktPrices.indexTokenPrice);
@@ -277,7 +284,7 @@ library GmxLib {
     }
 
     function _computeGmxNetCollateral(
-        GmxPositionInfo memory posInfo,
+        ReaderPositionUtils.PositionInfo memory posInfo,
         Price.Props memory indexPrice
     ) private pure returns (int256 netCollateral) {
         Price.Props memory colPrice = posInfo.fees.collateralTokenPrice;
@@ -299,7 +306,7 @@ library GmxLib {
 
     /// @notice Converts both PnL components of a position from USD to collateral units.
     function _getPnlCollaterals(
-        GmxPositionInfo memory posInfo,
+        ReaderPositionUtils.PositionInfo memory posInfo,
         Price.Props memory price
     ) private pure returns (int256 basePnlCollateral, int256 impactCollateral) {
         basePnlCollateral = _usdToCollateral(posInfo.basePnlUsd, price);

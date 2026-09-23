@@ -234,7 +234,7 @@ Bounded by `maxExecutionFee`. Excess fees above what GMX uses are refunded by th
 
 **Design decision — accept stale prices:**
 
-Returning stale Chainlink prices is intentionally accepted rather than triggering a fallback to `_collateralOnlyBalances`. The reason: stale prices are far more accurate than zero PnL.
+Returning stale Chainlink prices is intentionally accepted rather than zeroing PnL. The reason: stale prices are far more accurate than zero PnL.
 
 - A position with large unrealized PnL (positive or negative) or accumulated funding fees would produce dramatic NAV distortion if PnL were set to zero.
 - Sequencer outages on Arbitrum are rare (minutes to hours) and occur at the L2 sequencer level, not at the L1 Chainlink oracle level — the last price pushed to L1 before the outage is recent and reasonable.
@@ -249,7 +249,7 @@ Returning stale Chainlink prices is intentionally accepted rather than triggerin
 
 The `EGmxCallback` extension automatically tracks price-impact rebate collateral and accrued funding fees on fully-closed markets, so both value classes are reflected in NAV as soon as the relevant GMX execution events occur. The pool owner still calls `claimCollateral` / `claimFundingFees` to recover the assets, but NAV accounting no longer depends on those manual claims.
 
-**Reader/oracle failures** are handled with graceful fallbacks (`try/catch` on Reader calls; zero-price guard in `_computeGmxNetCollateral`; collateral-only fallback if `getAccountPositionInfoList` reverts). Reverting every NAV-sensitive operation during a dependency outage would be a worse outcome, so the design accepts temporarily less accurate pricing rather than a full protocol halt.
+**Reader/oracle failures** are handled with graceful fallbacks (`try/catch` on Reader calls; zero-price guard in `_computeGmxNetCollateral`; collateral-only fallback if `getAccountPositionInfoList` reverts). Reverting every NAV-sensitive operation during a dependency outage would be a worse outcome, so the design accepts temporarily less accurate pricing rather than a full protocol halt. All GMX ABI types are imported from the pinned `lib/gmx-synthetics` submodule, so the decoder cannot silently drift from the deployed contracts as long as the address constants in `GmxConstants.sol` are bumped in lockstep with the submodule pin.
 
 ---
 
@@ -312,7 +312,7 @@ The following findings were raised by an audit-agent review of `GmxLib.sol`.
 - **Contracts:** `contracts/protocol/libraries/GmxLib.sol`, `contracts/protocol/types/GmxFallback.sol`
 - **Description:** If `getAccountPositionInfoList` reverts or the collateral token price is zero, `_computeGmxNetCollateral` and `_fetchPositionInfos` fall back to the raw `collateralAmount`, ignoring negative PnL, price impact, and fees.
 - **Status:** Acknowledged / by design.
-- **Rationale:** This fallback is intentionally conservative: it reports the highest plausible on-chain collateral rather than zero or a reverted NAV. Reverting all NAV-dependent operations (deposits, withdrawals, NAV updates) during a transient oracle or Reader outage would be a worse outcome than a temporary, bounded overstatement. The fallback is documented in `docs/gmx/nav-accounting.md`.
+- **Rationale:** This fallback is intentionally conservative: it reports the highest plausible on-chain collateral rather than zero or a reverted NAV. Reverting all NAV-dependent operations (deposits, withdrawals, NAV updates) during a transient oracle or Reader outage would be a worse outcome than a temporary, bounded overstatement. The fallback is documented in `docs/gmx/nav-accounting.md`. The silent-misfire vector that motivated this patch — hand-copied ABI drift between the decoder and the deployed contracts — is eliminated because all GMX ABI types are now imported directly from the pinned `lib/gmx-synthetics` submodule; the constants in `GmxConstants.sol` must be bumped in lockstep with the submodule pin.
 
 ## Audit Notes
 
