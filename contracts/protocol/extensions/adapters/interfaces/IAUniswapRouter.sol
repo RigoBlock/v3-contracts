@@ -4,6 +4,9 @@ pragma solidity >=0.8.0 <0.9.0;
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 
 interface IAUniswapRouter {
+    /// @notice Thrown when a command recipient is neither the pool nor the router.
+    error RecipientNotSmartPoolOrRouter();
+
     /// @notice Emitted when a Uniswap V4 liquidity position token ID is tracked by the pool.
     /// @param tokenId The ERC-721 token ID of the newly minted V4 position.
     event UniV4PositionAdded(uint256 indexed tokenId);

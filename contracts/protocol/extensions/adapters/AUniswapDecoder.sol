@@ -63,7 +63,7 @@ abstract contract AUniswapDecoder {
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
-                        // slice last 20 bytes from path to find tokenIn address
+                        // slice last 20 bytes from path to find tokenOut address
                         bytes calldata lastTokenBytes = path[path.length - 20:];
                         params.tokensOut = _addUnique(params.tokensOut, lastTokenBytes.toAddress());
                         return params;
@@ -211,6 +211,8 @@ abstract contract AUniswapDecoder {
                                     ? swapParams.amountInMaximum
                                     : 0;
                                 continue;
+                            } else {
+                                revert UnsupportedAction(action);
                             }
                         } else {
                             if (action == Actions.SETTLE_ALL) {

@@ -23,12 +23,22 @@ import {IAUniswapRouter} from "../../contracts/protocol/extensions/adapters/inte
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
+import {AUniswapDecoder} from "../../contracts/protocol/extensions/adapters/AUniswapDecoder.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
+
+/// @dev Single-signature interfaces to obtain the overloaded execute selectors without ambiguity.
+interface IExecuteDeadlineSig {
+    function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external;
+}
+
+interface IExecutePlainSig {
+    function execute(bytes calldata commands, bytes[] calldata inputs) external;
+}
 
 /// @title AUniswapRouterForkTest
 /// @notice Fork tests asserting Uni V4 position tracking events emitted by the pool proxy.
@@ -97,6 +107,8 @@ contract AUniswapRouterForkTest is Test {
             IAuthority(AUTHORITY).setWhitelister(authorityOwner, true);
         }
         _addOrReplaceMethod(IAUniswapRouter.modifyLiquidities.selector, aUniswapRouter);
+        _addOrReplaceMethod(IExecuteDeadlineSig.execute.selector, aUniswapRouter);
+        _addOrReplaceMethod(IExecutePlainSig.execute.selector, aUniswapRouter);
         vm.stopPrank();
 
         deal(WETH, poolOwner, 1 ether);
@@ -131,6 +143,82 @@ contract AUniswapRouterForkTest is Test {
 
         uint256[] memory tokenIds = IEApps(pool).getUniV4TokenIds();
         assertEq(tokenIds.length, 0, "pool must track no positions after burn");
+    }
+
+    /// @notice The Across V4 deposit command (0x40, reserved in UR 2.1.2) is intentionally
+    ///         unsupported: Across can move tokens and Permit2 is approved to the router, so
+    ///         forwarding an undecoded 0x40 would be a fund-exfiltration path. Documented in
+    ///         docs/uniswap/KNOWN_ISSUES.md.
+    function test_Execute_AcrossV4DepositV3Command_Reverts() public {
+        bytes memory commands = hex"40";
+        bytes[] memory inputs = new bytes[](1);
+        inputs[0] = hex"";
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.InvalidCommandType.selector, uint256(0x40)));
+        IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
+    }
+
+    /// @notice Same fail-closed guarantee for 0x40 with the allow-revert flag set (0xc0):
+    ///         the mask strips the flag and the command still reverts at decode time.
+    function test_Execute_AcrossV4DepositV3Command_AllowRevertFlag_Reverts() public {
+        bytes memory commands = hex"c0";
+        bytes[] memory inputs = new bytes[](1);
+        inputs[0] = hex"";
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.InvalidCommandType.selector, uint256(0x40)));
+        IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
+    }
+
+    /// @notice V4_SWAP actions below SETTLE that are not one of the four swap types revert
+    ///         UnsupportedAction at decode time instead of being silently skipped.
+    function test_Execute_V4Swap_UnknownActionBelowSettle_Reverts() public {
+        bytes memory commands = hex"10"; // V4_SWAP
+        bytes[] memory encodedParams = new bytes[](1);
+        encodedParams[0] = hex"";
+        bytes[] memory inputs = new bytes[](1);
+        inputs[0] = abi.encode(hex"02", encodedParams); // action 0x02 < SETTLE, not a swap type
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.UnsupportedAction.selector, uint256(0x02)));
+        IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
+    }
+
+    /// @notice PAY_PORTION_FULL_PRECISION (0x07, UR 2.1.2) to the pool: a V3 swap whose output
+    ///         stays on the router, a 50% portion payment back to the pool, then a trailing
+    ///         SWEEP that clears the router. Positive path against the live 2.1.2 router.
+    function test_Execute_PayPortionFullPrecision_ToPool_Succeeds() public {
+        uint256 poolUsdcBefore = IERC20(USDC).balanceOf(pool);
+
+        bytes memory path = abi.encodePacked(WETH, uint24(500), USDC);
+        bytes memory commands = hex"000704"; // V3_SWAP_EXACT_IN, PAY_PORTION_FULL_PRECISION, SWEEP
+        bytes[] memory inputs = new bytes[](3);
+        inputs[0] = abi.encode(
+            address(0x0000000000000000000000000000000000000002), // ADDRESS_THIS: swap output stays on the router
+            0.1 ether,
+            0,
+            path,
+            true, // payerIsUser: router pulls WETH from the pool via Permit2
+            new uint256[](0) // minHopPriceX36 (UR 2.1.2 field, empty = no per-hop bound)
+        );
+        inputs[1] = abi.encode(USDC, pool, 0.5e18); // 50% of router USDC balance to the pool
+        inputs[2] = abi.encode(USDC, pool, uint160(1)); // sweep the remainder to the pool
+
+        vm.prank(poolOwner);
+        IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
+
+        assertGt(IERC20(USDC).balanceOf(pool), poolUsdcBefore, "pool must receive the USDC portion");
+        assertEq(IERC20(USDC).balanceOf(UNIVERSAL_ROUTER), 0, "trailing SWEEP must clear the router");
+    }
+
+    /// @notice PAY_PORTION_FULL_PRECISION to a third-party recipient reverts at decode time,
+    ///         before the Universal Router is called.
+    function test_Execute_PayPortionFullPrecision_ToRandomRecipient_Reverts() public {
+        address attacker = makeAddr("attacker");
+        bytes memory commands = hex"07";
+        bytes[] memory inputs = new bytes[](1);
+        inputs[0] = abi.encode(USDC, attacker, 1e18);
+        vm.prank(poolOwner);
+        vm.expectRevert(IAUniswapRouter.RecipientNotSmartPoolOrRouter.selector);
+        IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
     }
 
     /// @notice Minting multiple positions in a single call emits one event per added tokenId.

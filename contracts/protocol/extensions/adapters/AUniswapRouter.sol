@@ -43,9 +43,6 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     /// @notice Thrown when the pool is not the position owner
     error PositionOwner();
 
-    /// @notice Thrown when the pool is not the recipient
-    error RecipientNotSmartPoolOrRouter();
-
     /// @notice Thrown when the pool reached maximum number of liquidity positions
     error UniV4PositionsLimitExceeded();
 
