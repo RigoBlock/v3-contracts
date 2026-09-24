@@ -183,10 +183,6 @@ const userConfig: HardhatUserConfig = {
     artifacts: "build/artifacts",
     cache: "build/cache",
     sources: "contracts",
-    // Solidity tests are run by Foundry (`forge test`), not Hardhat. Point
-    // HH3's built-in solidity-test runner at a nonexistent dir so `hardhat test`
-    // only runs the mocha specs under `test/`.
-    tests: { mocha: "test", solidity: "test-solidity-none" },
   },
   solidity: {
     profiles: {
@@ -284,6 +280,8 @@ const userConfig: HardhatUserConfig = {
     },
   },
   test: {
+    // Always invoke the mocha subtask (`hardhat test mocha`, see `yarn test`): Foundry
+    // owns all .sol tests, HH3's built-in solidity test runner must stay unused.
     mocha: {
       timeout: 2000000,
     },

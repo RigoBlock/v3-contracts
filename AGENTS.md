@@ -373,6 +373,12 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 yarn test
 ```
 
+`yarn test` runs `hardhat test mocha` — Hardhat 3's mocha subtask, i.e. **only the .ts
+specs**. Foundry owns ALL .sol tests; HH3's built-in solidity test runner must stay
+unused (do NOT re-add `paths.tests` redirects in `hardhat.config.ts` to work around it,
+and never run bare `hardhat test` — it would feed Foundry test files to the solidity
+runner). Coverage likewise uses `hardhat test mocha --coverage`.
+
 ### Integration Tests (Foundry)
 
 ```bash

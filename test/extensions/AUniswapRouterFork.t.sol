@@ -31,13 +31,17 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
-/// @dev Single-signature interfaces to obtain the overloaded execute selectors without ambiguity.
-interface IExecuteDeadlineSig {
-    function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external;
+/// @dev Selector-only views of the two overloaded `execute` methods declared on the
+/// canonical `IUniversalRouter` (vendored in lib/universal-router, mirrored in node_modules).
+/// Solidity cannot apply `.selector` to an overloaded member (`abi.encodeCall` cannot
+/// disambiguate interface members either), so each overload needs a single-function view;
+/// the adapter resolves its own selectors the same way (local view in AUniswapRouter.sol).
+interface IUniversalRouterExecuteDeadline {
+    function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external payable;
 }
 
-interface IExecutePlainSig {
-    function execute(bytes calldata commands, bytes[] calldata inputs) external;
+interface IUniversalRouterExecutePlain {
+    function execute(bytes calldata commands, bytes[] calldata inputs) external payable;
 }
 
 /// @title AUniswapRouterForkTest
@@ -106,9 +110,12 @@ contract AUniswapRouterForkTest is Test {
         if (!IAuthority(AUTHORITY).isWhitelister(authorityOwner)) {
             IAuthority(AUTHORITY).setWhitelister(authorityOwner, true);
         }
-        _addOrReplaceMethod(IAUniswapRouter.modifyLiquidities.selector, aUniswapRouter);
-        _addOrReplaceMethod(IExecuteDeadlineSig.execute.selector, aUniswapRouter);
-        _addOrReplaceMethod(IExecutePlainSig.execute.selector, aUniswapRouter);
+        // The production Authority maps these selectors to the previously deployed adapter;
+        // repoint them at the adapter under test, otherwise pool calls would delegatecall
+        // stale production code.
+        _repointMethod(IAUniswapRouter.modifyLiquidities.selector, aUniswapRouter);
+        _repointMethod(IUniversalRouterExecuteDeadline.execute.selector, aUniswapRouter);
+        _repointMethod(IUniversalRouterExecutePlain.execute.selector, aUniswapRouter);
         vm.stopPrank();
 
         deal(WETH, poolOwner, 1 ether);
@@ -312,7 +319,7 @@ contract AUniswapRouterForkTest is Test {
             });
     }
 
-    function _addOrReplaceMethod(bytes4 selector, address adapter) private {
+    function _repointMethod(bytes4 selector, address adapter) private {
         IAuthority authority = IAuthority(AUTHORITY);
         address current = authority.getApplicationAdapter(selector);
         if (current != address(0)) {
