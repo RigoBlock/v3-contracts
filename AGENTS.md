@@ -424,6 +424,15 @@ live pool code always lags the factory upgrade — fork tests must assert the st
 actually live at the pinned block, not the state the factory points to after the upgrade
 transaction.
 
+**Arbitrum `block.number` returns the L1 block number, not the L2 height.** An Arbitrum
+fork pinned at `Constants.ARB_BLOCK` (an L2 height, e.g. 508_400_000) is correctly pinned —
+the L2 state at that height is what the EVM runs against — but `block.number` inside the
+test reports the block's `l1BlockNumber` field (~26M), exactly as the NUMBER opcode behaves
+for contracts on Arbitrum mainnet. Never assert `block.number` against an L2 pin and never
+"treat as latest"; use `block.timestamp` for deadlines and `vm.roll`/`vm.warp` with L1-height
+semantics in mind. If a diagnostic shows a ~26M number on an Arbitrum fork, the fork is NOT
+poisoned — verify the actual L2 pin via `eth_getBlockByNumber` on the block hash instead.
+
 ```solidity
 // Create forks
 uint256 ethFork = vm.createSelectFork("ethereum", Constants.MAINNET_BLOCK);
