@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 
 import {Constants} from "../../contracts/test/Constants.sol";
 
-import {AUniswapRouter} from "../../contracts/protocol/extensions/adapters/AUniswapRouter.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
@@ -51,7 +50,13 @@ contract AUniswapRouterForkTest is Test {
 
         poolOwner = makeAddr("poolOwner");
 
-        address aUniswapRouter = address(new AUniswapRouter(UNIVERSAL_ROUTER, POSM, WETH));
+        // AUniswapRouter is pinned to solc 0.8.37 while fork tests stay on 0.8.28; forge
+        // compiles it in its own job and we deploy the artifact (deployCode), keeping the
+        // test's compilation job free of the router source. Same pattern as AStaking below.
+        address aUniswapRouter = deployCode(
+            "out/AUniswapRouter.sol/AUniswapRouter.json",
+            abi.encode(UNIVERSAL_ROUTER, POSM, WETH)
+        );
 
         EApps eApps = new EApps(EAppsParams({grgStakingProxy: Constants.ARB_GRG_STAKING, univ4Posm: POSM}));
         EOracle eOracle = new EOracle(ORACLE, WETH);

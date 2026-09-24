@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";

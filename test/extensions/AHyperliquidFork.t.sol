@@ -28,7 +28,6 @@ import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {AUniswap} from "../../contracts/protocol/extensions/adapters/AUniswap.sol";
-import {AUniswapRouter} from "../../contracts/protocol/extensions/adapters/AUniswapRouter.sol";
 import {A0xRouter} from "../../contracts/protocol/extensions/adapters/A0xRouter.sol";
 import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
 import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
@@ -901,7 +900,8 @@ contract AHyperliquidForkTest is Test {
     function testFork_AUniswapRouter_DeploymentRevertsWithZeroPosm() public {
         address whype = fixture.HYPER_WHYPE();
         vm.expectRevert();
-        new AUniswapRouter(address(0), address(0), whype);
+        // Deploy via artifact: AUniswapRouter is pinned to solc 0.8.37 (see AUniswapRouterFork).
+        deployCode("out/AUniswapRouter.sol/AUniswapRouter.json", abi.encode(address(0), address(0), whype));
     }
 
     /// @notice A0xRouter rejects a non-USDC buy token in our adapter before reaching the Settler.
