@@ -64,12 +64,7 @@ abstract contract AUniswapDecoder {
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
                         // slice last 20 bytes from path to find tokenIn address
-                        bytes calldata lastTokenBytes;
-                        assembly ("memory-safe") {
-                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
-                            lastTokenBytes.length := 20
-                            lastTokenBytes.offset := lastTokenOffset
-                        }
+                        bytes calldata lastTokenBytes = path[path.length - 20:];
                         params.tokensOut = _addUnique(params.tokensOut, lastTokenBytes.toAddress());
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
@@ -79,12 +74,7 @@ abstract contract AUniswapDecoder {
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, path.toAddress());
                         // slice last 20 bytes from path to find tokenIn address
-                        bytes calldata lastTokenBytes;
-                        assembly ("memory-safe") {
-                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
-                            lastTokenBytes.length := 20
-                            lastTokenBytes.offset := lastTokenOffset
-                        }
+                        bytes calldata lastTokenBytes = path[path.length - 20:];
                         params.tokensIn = _addUnique(params.tokensIn, lastTokenBytes.toAddress());
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
