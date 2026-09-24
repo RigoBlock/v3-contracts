@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-// solhint-disable-next-line
 pragma solidity 0.8.28;
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -7,18 +6,15 @@ import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstan
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
-import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
-import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
+import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
-import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
-import {TransientSlot} from "../../libraries/TransientSlot.sol";
 import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
-import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
+import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";

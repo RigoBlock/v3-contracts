@@ -37,15 +37,15 @@ and, for Arbitrum fork tests, `contracts/test/Constants.sol` (`ARB_UNIVERSAL_ROU
 authoritative list is the Uniswap
 [supported chains](https://developers.uniswap.org/docs/trading/swapping-api/supported-chains) page.
 
-**Fork-test note:** the pinned `ForkBlocks.ARB_BLOCK` (503_353_273) predates the Arbitrum 2.1.2
-deployment (block 506_233_838, 2026-09-17). Current adapter fork tests only exercise
-`modifyLiquidities` (PositionManager), so the router code is not needed at that block. Bumping
-`ARB_BLOCK` past the deployment was attempted and reverted: `NavViewStressedParityFork` then
-fails by 1 wei on the view-NAV vs write-NAV equality under the mocked +10% WETH price. The
-divergence is a pre-existing block-state sensitivity in NAV parity code untouched by this
-upgrade (all NAV-related contract bytecodes are identical to development), not a regression
-from the router 2.1.2 support. It should be investigated separately before any global block
-bump.
+**Fork-test note:** `ForkBlocks.ARB_BLOCK` (508_400_000) is pinned past the Arbitrum 2.1.2
+deployment (block 506_233_838, 2026-09-17) so adapter fork tests execute against the live 2.1.2
+router. Bumping the block past the deployment originally surfaced a 1-wei failure in
+`NavViewStressedParityFork` (view NAV vs write NAV under a mocked +10% WETH price). Root cause:
+`NavView._getTokensAndBalances` converted duplicated tokens (e.g. GMX collateral USDC plus
+wallet USDC) in separate entries, so each entry floor-rounded independently and drifted by up
+to 1 wei per duplicate from the write path, which aggregates per token before converting.
+Fixed by aggregating wallet balances into existing app entries per token in
+`_getTokensAndBalances`; the parity test passes at the bumped block.
 
 ---
 

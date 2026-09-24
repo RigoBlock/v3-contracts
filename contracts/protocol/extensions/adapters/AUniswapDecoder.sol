@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache 2.0
-// solhint-disable-next-line
 pragma solidity 0.8.28;
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";

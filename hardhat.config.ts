@@ -88,7 +88,7 @@ if (
   );
 }
 
-const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28";
+const primarySolidityVersion = SOLIDITY_VERSION || "0.8.37";
 const soliditySettings = !!SOLIDITY_SETTINGS
   ? {
       ...JSON.parse(SOLIDITY_SETTINGS),

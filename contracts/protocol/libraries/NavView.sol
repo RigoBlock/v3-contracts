@@ -202,25 +202,28 @@ library NavView {
         address grgStakingProxy,
         address uniV4Posm
     ) private view returns (AppTokenBalance[] memory) {
-        // Get active tokens and application balances
+        // Get active tokens and application balances (already unique per token)
         ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(pool).getActiveTokens();
         AppTokenBalance[] memory appBalances = getAppTokenBalances(pool, grgStakingProxy, uniV4Posm);
 
         // define new array of max length (active tokens + base token + app tokens)
         uint256 portfolioTokensLength = tokens.activeTokens.length + 1;
         uint256 maxLength = portfolioTokensLength + appBalances.length;
-        AppTokenBalance[] memory aggregatedBalances = new AppTokenBalance[](maxLength);
+        AppTokenBalance[] memory combinedBalances = new AppTokenBalance[](maxLength);
         uint256 index;
 
         // store the app balances
         for (uint256 i = 0; i < appBalances.length; i++) {
-            aggregatedBalances[i] = appBalances[i];
+            combinedBalances[i] = appBalances[i];
         }
 
         // update position to store next token balances
         index = appBalances.length;
         address token;
 
+        // Wallet balances aggregate into an existing entry when the token matches (e.g. GMX
+        // collateral USDC plus wallet USDC), so each token converts once — mirroring the write
+        // path (_computeTotalPoolValue) and avoiding 1-wei floor-rounding drift per duplicate.
         for (uint256 k = 0; k < portfolioTokensLength; k++) {
             if (k == portfolioTokensLength - 1) {
                 token = tokens.baseToken;
@@ -235,10 +238,26 @@ library NavView {
                 bal = int256(IERC20(token).balanceOf(pool));
             }
 
-            aggregatedBalances[index++] = AppTokenBalance({token: token, amount: bal});
+            bool found;
+            for (uint256 j = 0; j < index; j++) {
+                if (combinedBalances[j].token == token) {
+                    combinedBalances[j].amount += bal;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                combinedBalances[index++] = AppTokenBalance({token: token, amount: bal});
+            }
         }
 
-        return aggregatedBalances;
+        // Resize array to actual unique token count
+        assembly {
+            mstore(combinedBalances, index)
+        }
+
+        return combinedBalances;
     }
 
     function _getGrgStakingProxyBalances(

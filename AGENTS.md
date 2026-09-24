@@ -351,6 +351,19 @@ forge test
 
 ### Fork Testing Pattern
 
+**Fork-block hygiene (REQUIRED at branch creation):** every new branch MUST bump all fork
+blocks in `contracts/test/ForkBlocks.sol` to recent values as the first task of the branch,
+and fix whatever surfaces. Stale pins hide fork-state-dependent regressions (oracle drift,
+accrued fees, new deployments, rounding edges) that then explode in unrelated later work —
+investigating them alongside an unrelated feature wastes time and erodes trust in the suite.
+Bumping blocks can legitimately make tests fail; per "test failures are signals", each failure
+must be root-caused (is the test asserting stale third-party state, or is the protocol wrong?)
+and fixed or documented in the same branch. Pick blocks a few hours/days below "latest" for
+RPC/archive stability, keep any documented ordering constraints (e.g. MAINNET_BLOCK must stay
+after the TEST_POOL donate() routing upgrade), and update the per-block comments with the new
+values and dates. `ForkBlocks.sol` is hashed into the CI cache key, so the bump also keeps
+fork caches fresh.
+
 ```solidity
 // Create forks
 uint256 ethFork = vm.createSelectFork("ethereum", Constants.MAINNET_BLOCK);

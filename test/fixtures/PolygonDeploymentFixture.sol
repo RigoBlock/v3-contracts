@@ -46,17 +46,17 @@ contract PolygonDeploymentFixture is Test {
         address baseToken;
         address spokePool;
     }
-    
+
     // Polygon deployment
     PolygonChainDeployment public polygon;
-    
+
     // Test accounts
     address public poolOwner;
     address public user;
-    
+
     // Fork ID
     uint256 public polygonForkId;
-    
+
     struct ChainConfig {
         address spokePool;
         address multicallHandler;
@@ -66,7 +66,7 @@ contract PolygonDeploymentFixture is Test {
         address uniV4Posm;
         address grgStakingProxy;
     }
-    
+
     /// @notice Deploy fixture on Polygon chain
     /// @param baseTokenAddress Address to use as base token (address(0) for POL native)
     function deployFixture(address baseTokenAddress) public {
@@ -74,14 +74,14 @@ contract PolygonDeploymentFixture is Test {
         user = makeAddr("polygonUser");
 
         console2.log("Authority:", AUTHORITY);
-        
+
         console2.log("=== Deploying Polygon Deployment Fixture ===");
 
         // Create Polygon fork
         polygonForkId = vm.createSelectFork("polygon", Constants.POLYGON_BLOCK);
         polygon = _setupPolygon(baseTokenAddress);
         console2.log("Polygon deployment completed");
-        
+
         console2.log("=== Fixture Deployment Complete ===");
     }
 
@@ -91,25 +91,33 @@ contract PolygonDeploymentFixture is Test {
         // Give user balance for testing
         // POL as native (need ETH balance for gas + value)
         deal(user, 1000 ether); // Native POL
-        
+
         // Also give some USDC for alternative tests
         deal(Constants.POLY_USDC, user, 1000000e6);
-        
+
         deployment = _deployExtensions(config);
         deployment.implementation = _deployNewImplementation(deployment.extensionsMap);
-        deployment.pool = _updateFactoryAndCreatePool(baseTokenAddress, deployment.implementation, deployment.aIntentsAdapter);
+        deployment.pool = _updateFactoryAndCreatePool(
+            baseTokenAddress,
+            deployment.implementation,
+            deployment.aIntentsAdapter
+        );
         deployment.baseToken = baseTokenAddress;
         deployment.spokePool = config.spokePool;
-        
+
         return deployment;
     }
-    
+
     function _deployExtensions(ChainConfig memory config) public returns (PolygonChainDeployment memory deployment) {
         // 1. Deploy extensions
-        deployment.eApps = new EApps(EAppsParams({grgStakingProxy: config.grgStakingProxy, univ4Posm: config.uniV4Posm}));
+        deployment.eApps = new EApps(
+            EAppsParams({grgStakingProxy: config.grgStakingProxy, univ4Posm: config.uniV4Posm})
+        );
         deployment.eOracle = new EOracle(config.oracle, config.wrappedNative);
         deployment.eUpgrade = new EUpgrade(Constants.FACTORY);
-        deployment.eNavView = new ENavView(EAppsParams({grgStakingProxy: config.grgStakingProxy, univ4Posm: config.uniV4Posm}));
+        deployment.eNavView = new ENavView(
+            EAppsParams({grgStakingProxy: config.grgStakingProxy, univ4Posm: config.uniV4Posm})
+        );
         deployment.eCrosschain = new ECrosschain();
         EERC20 eErc20 = new EERC20();
         console2.log("Deployed extensions successfully");
@@ -127,12 +135,12 @@ contract PolygonDeploymentFixture is Test {
         // 2. Deploy ExtensionsMapDeployer
         deployment.extensionsMapDeployer = new ExtensionsMapDeployer();
         console2.log("Deployed ExtensionsMapDeployer:", address(deployment.extensionsMapDeployer));
-        
+
         DeploymentParams memory params = DeploymentParams({
             extensions: extensions,
             wrappedNative: config.wrappedNative
         });
-        
+
         // 3. Deploy new ExtensionsMap with different salt to avoid collision
         bytes32 newSalt = keccak256(abi.encodePacked("TEST_POLYGON_EXTENSIONS_MAP_V1_", block.chainid));
         address extensionsMapAddr = deployment.extensionsMapDeployer.deployExtensionsMap(params, newSalt);
@@ -142,31 +150,31 @@ contract PolygonDeploymentFixture is Test {
         // 4. Deploy new AIntents
         deployment.aIntentsAdapter = new AIntents(config.spokePool);
         console2.log("Deployed AIntents:", address(deployment.aIntentsAdapter));
-        
+
         return deployment;
     }
-    
-    function _deployNewImplementation(ExtensionsMap extensionsMapParam) public returns (SmartPool) {        
+
+    function _deployNewImplementation(ExtensionsMap extensionsMapParam) public returns (SmartPool) {
         // Deploy new SmartPool implementation
-        SmartPool impl = new SmartPool(
-            AUTHORITY,
-            address(extensionsMapParam),
-            Constants.TOKEN_JAR
-        );
+        SmartPool impl = new SmartPool(AUTHORITY, address(extensionsMapParam), Constants.TOKEN_JAR);
         console2.log("Deployed SmartPool implementation:", address(impl));
         return impl;
     }
-    
-    function _updateFactoryAndCreatePool(address baseTokenAddress, SmartPool impl, AIntents adapter) public returns (address) {
+
+    function _updateFactoryAndCreatePool(
+        address baseTokenAddress,
+        SmartPool impl,
+        AIntents adapter
+    ) public returns (address) {
         // Update factory to use new implementation
         address registry = IRigoblockPoolProxyFactory(Constants.FACTORY).getRegistry();
         address rigoblockDao = IPoolRegistry(registry).rigoblockDao();
         console2.log("RigoblockDao:", rigoblockDao);
-        
+
         vm.prank(rigoblockDao);
         IRigoblockPoolProxyFactory(Constants.FACTORY).setImplementation(address(impl));
         console2.log("Updated factory implementation");
-        
+
         // Deploy a new pool from factory
         vm.prank(poolOwner);
         (address poolAddr, ) = IRigoblockPoolProxyFactory(Constants.FACTORY).createPool(
@@ -177,31 +185,41 @@ contract PolygonDeploymentFixture is Test {
         console2.log("Created pool:", poolAddr);
         console2.log("Base token:", baseTokenAddress);
         console2.log("Chain:", block.chainid);
-        
+
         // Add adapter selectors to authority
         address authorityOwner = IOwnedUninitialized(AUTHORITY).owner();
         console2.log("Using authority owner for authority:", authorityOwner);
 
         vm.startPrank(authorityOwner);
-        
-        // Whitelist the adapter 
+
+        // Whitelist the adapter
         IAuthority(AUTHORITY).setAdapter(address(adapter), true);
         console2.log("Set intents adapter as whitelisted");
-        
+
         // Check if RigoblockDao is already a whitelister
         bool isWhitelister = IAuthority(AUTHORITY).isWhitelister(authorityOwner);
 
         if (!isWhitelister) {
             IAuthority(AUTHORITY).setWhitelister(authorityOwner, true);
         }
-        
+
         IAuthority authorityInstance = IAuthority(AUTHORITY);
-        authorityInstance.addMethod(IAIntents.depositV3.selector, address(adapter));
-        assertEq(authorityInstance.getApplicationAdapter(IAIntents.depositV3.selector), address(adapter), "depositV3 selector should be mapped");
+        // Force-update pattern: the production authority may already map this selector
+        bytes4 selector = IAIntents.depositV3.selector;
+        address existing = authorityInstance.getApplicationAdapter(selector);
+        if (existing != address(0)) {
+            authorityInstance.removeMethod(selector, existing);
+        }
+        authorityInstance.addMethod(selector, address(adapter));
+        assertEq(
+            authorityInstance.getApplicationAdapter(selector),
+            address(adapter),
+            "depositV3 selector should be mapped"
+        );
         console2.log("Mapped depositV3 selector in authority");
-        
+
         vm.stopPrank();
-        
+
         // Fund the pool for testing
         vm.startPrank(user);
 
@@ -215,30 +233,31 @@ contract PolygonDeploymentFixture is Test {
             uint256 mintAmount = ISmartPool(payable(poolAddr)).mint(user, 100000e6, 0);
             console2.log("Minted pool with base token:", mintAmount);
         }
-        
+
         vm.stopPrank();
-        
+
         return poolAddr;
     }
-    
+
     /// @notice Helper to get chain config for Polygon
     function getPolygonConfig() public pure returns (ChainConfig memory) {
-        return ChainConfig({
-            spokePool: address(0), // Polygon doesn't have Across SpokePool yet
-            multicallHandler: Constants.POLY_MULTICALL_HANDLER,
-            wrappedNative: Constants.POLY_WPOL,
-            chainId: Constants.POLYGON_CHAIN_ID,
-            grgStakingProxy: Constants.POLYGON_GRG_STAKING,
-            uniV4Posm: Constants.POLYGON_UNISWAP_V4_POSM,
-            oracle: Constants.POLYGON_ORACLE
-        });
+        return
+            ChainConfig({
+                spokePool: address(0), // Polygon doesn't have Across SpokePool yet
+                multicallHandler: Constants.POLY_MULTICALL_HANDLER,
+                wrappedNative: Constants.POLY_WPOL,
+                chainId: Constants.POLYGON_CHAIN_ID,
+                grgStakingProxy: Constants.POLYGON_GRG_STAKING,
+                uniV4Posm: Constants.POLYGON_UNISWAP_V4_POSM,
+                oracle: Constants.POLYGON_ORACLE
+            });
     }
-    
+
     /// @notice Convenience accessor for pool
     function pool() public view returns (address) {
         return polygon.pool;
     }
-    
+
     /// @notice Convenience accessor for base token
     function baseToken() public view returns (address) {
         return polygon.baseToken;
