@@ -31,19 +31,6 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
-/// @dev Selector-only views of the two overloaded `execute` methods declared on the
-/// canonical `IUniversalRouter` (vendored in lib/universal-router, mirrored in node_modules).
-/// Solidity cannot apply `.selector` to an overloaded member (`abi.encodeCall` cannot
-/// disambiguate interface members either), so each overload needs a single-function view;
-/// the adapter resolves its own selectors the same way (local view in AUniswapRouter.sol).
-interface IUniversalRouterExecuteDeadline {
-    function execute(bytes calldata commands, bytes[] calldata inputs, uint256 deadline) external payable;
-}
-
-interface IUniversalRouterExecutePlain {
-    function execute(bytes calldata commands, bytes[] calldata inputs) external payable;
-}
-
 /// @title AUniswapRouterForkTest
 /// @notice Fork tests asserting Uni V4 position tracking events emitted by the pool proxy.
 contract AUniswapRouterForkTest is Test {
@@ -112,10 +99,12 @@ contract AUniswapRouterForkTest is Test {
         }
         // The production Authority maps these selectors to the previously deployed adapter;
         // repoint them at the adapter under test, otherwise pool calls would delegatecall
-        // stale production code.
+        // stale production code. `execute` is overloaded on IAUniswapRouter, so its selectors
+        // are encoded manually (expected values per AUniswapRouter.spec.ts) — same pattern
+        // as the overloaded unwrapWETH9 selectors in AUniswapFork.t.sol.
         _repointMethod(IAUniswapRouter.modifyLiquidities.selector, aUniswapRouter);
-        _repointMethod(IUniversalRouterExecuteDeadline.execute.selector, aUniswapRouter);
-        _repointMethod(IUniversalRouterExecutePlain.execute.selector, aUniswapRouter);
+        _repointMethod(bytes4(keccak256("execute(bytes,bytes[],uint256)")), aUniswapRouter); // 0x3593564c
+        _repointMethod(bytes4(keccak256("execute(bytes,bytes[])")), aUniswapRouter); // 0x24856bc3
         vm.stopPrank();
 
         deal(WETH, poolOwner, 1 ether);
