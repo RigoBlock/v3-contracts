@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
