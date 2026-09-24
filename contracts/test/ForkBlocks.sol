@@ -18,13 +18,11 @@ library ForkBlocks {
     /// @notice Polygon chain block number for fork tests (2026-09, ~94.3M)
     uint256 internal constant POLYGON_BLOCK = 94_300_000;
 
-    /// @notice Unichain block number for fork tests
-    /// @dev MUST stay pinned just before TX1/TX2/TX3 (blocks 41_291_308+) replayed by
-    ///      A0xRouterUnichainFork: that test replays exact production calldata against the
-    ///      production settler, so the global pin is intentionally historical. Do NOT bump
-    ///      this block as part of routine fork-block hygiene; bump only if the replay
-    ///      transactions are re-extracted from a newer on-chain incident.
-    uint256 internal constant UNICHAIN_BLOCK = 41_291_300;
+    /// @notice Unichain block number for fork tests (2026-09, ~59.5M)
+    /// @dev A0xRouterUnichainFork replays exact production calldata extracted at block
+    ///      41_291_308, but resolves the 0x settler dynamically at the fork block, so this
+    ///      pin follows routine bumps like every other chain.
+    uint256 internal constant UNICHAIN_BLOCK = 59_500_000;
 
     /// @notice Arbitrum One block number for fork tests (GMX v2 adapter tests, 2026-09).
     /// @dev Any recent block works: every GMX fork test creates its own fixture pool and

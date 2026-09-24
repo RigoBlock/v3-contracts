@@ -209,12 +209,12 @@ library NavView {
         // define new array of max length (active tokens + base token + app tokens)
         uint256 portfolioTokensLength = tokens.activeTokens.length + 1;
         uint256 maxLength = portfolioTokensLength + appBalances.length;
-        AppTokenBalance[] memory combinedBalances = new AppTokenBalance[](maxLength);
+        AppTokenBalance[] memory aggregatedBalances = new AppTokenBalance[](maxLength);
         uint256 index;
 
         // store the app balances
         for (uint256 i = 0; i < appBalances.length; i++) {
-            combinedBalances[i] = appBalances[i];
+            aggregatedBalances[i] = appBalances[i];
         }
 
         // update position to store next token balances
@@ -240,24 +240,24 @@ library NavView {
 
             bool found;
             for (uint256 j = 0; j < index; j++) {
-                if (combinedBalances[j].token == token) {
-                    combinedBalances[j].amount += bal;
+                if (aggregatedBalances[j].token == token) {
+                    aggregatedBalances[j].amount += bal;
                     found = true;
                     break;
                 }
             }
 
             if (!found) {
-                combinedBalances[index++] = AppTokenBalance({token: token, amount: bal});
+                aggregatedBalances[index++] = AppTokenBalance({token: token, amount: bal});
             }
         }
 
         // Resize array to actual unique token count
         assembly {
-            mstore(combinedBalances, index)
+            mstore(aggregatedBalances, index)
         }
 
-        return combinedBalances;
+        return aggregatedBalances;
     }
 
     function _getGrgStakingProxyBalances(

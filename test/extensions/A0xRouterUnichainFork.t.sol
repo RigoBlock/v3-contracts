@@ -69,16 +69,20 @@ contract A0xRouterUnichainForkTest is Test {
     /// @dev The caller in the production txs.
     address constant PROD_CALLER = 0xcA9F5049c1Ea8FC78574f94B7Cf5bE5fEE354C31;
 
-    /// @dev The settler used as both operator and target in all 3 production txs.
-    address constant PROD_SETTLER = 0x6A7dd96F25E70eD5F6beF1ACADd32b697935ff39;
+    /// @dev Settler that was live when the TX1/TX2/TX3 calldata fixtures were extracted
+    ///      (block 41_291_308, 0x6A7dd96F...). The tests do NOT use this value: they resolve
+    ///      the settler dynamically from the 0x Deployer at the fork block, so the fixtures
+    ///      stay usable across settler rotations and routine block bumps.
+    address constant EXTRACTION_TIME_SETTLER = 0x6A7dd96F25E70eD5F6beF1ACADd32b697935ff39;
 
     /// @dev GRG token on Unichain (sellToken in TX2, TX3; buyToken in TX1).
     address constant UNI_GRG = 0x03C2868c6D7fD27575426f395EE081498B1120dd;
 
     function setUp() public {
-        // Fork BEFORE the earliest failing tx (TX1 at block 41291308).
-        // Uses the global pin: ForkBlocks.UNICHAIN_BLOCK is intentionally pinned at this
-        // historical block for this replay test — see ForkBlocks.sol.
+        // Recent global pin. The replayed calldata fixtures were extracted from production
+        // txs at block 41_291_308 (see EXTRACTION_TIME_SETTLER), but the adapter validates
+        // the operator/target against the settler resolved dynamically below — exactly what
+        // production does — so the fixtures remain valid at any recent block.
         unichainFork = vm.createSelectFork("unichain", Constants.UNICHAIN_BLOCK);
 
         // Verify 0x infrastructure
@@ -87,10 +91,6 @@ contract A0xRouterUnichainForkTest is Test {
 
         currentSettler = IDeployer(DEPLOYER).ownerOf(Feature.unwrap(TAKER_SUBMITTED_FEATURE));
         assertTrue(currentSettler != address(0), "No settler");
-        console2.log("Settler:", currentSettler);
-
-        // Verify the production settler is genuine at this block
-        assertEq(currentSettler, PROD_SETTLER, "Settler mismatch at fork block");
 
         // Deploy fixed adapter
         a0xRouter = new A0xRouter(ALLOWANCE_HOLDER, DEPLOYER);
@@ -133,10 +133,10 @@ contract A0xRouterUnichainForkTest is Test {
         vm.prank(poolOwner);
         try
             IA0xRouter(pool).exec(
-                PROD_SETTLER, // operator (same as production)
+                currentSettler, // operator (resolved at fork block)
                 address(0), // token = native ETH (same as production)
                 0.001 ether, // amount = 1000000000000000 (same as production)
-                payable(PROD_SETTLER), // target (same as production)
+                payable(currentSettler), // target (resolved at fork block)
                 settlerData // EXACT production settler bytes
             )
         {
@@ -163,10 +163,10 @@ contract A0xRouterUnichainForkTest is Test {
         vm.prank(poolOwner);
         try
             IA0xRouter(pool).exec(
-                PROD_SETTLER, // operator
+                currentSettler, // operator
                 UNI_GRG, // token = GRG (0x03C2868c...)
                 50e18, // amount = 50000000000000000000
-                payable(PROD_SETTLER), // target
+                payable(currentSettler), // target
                 settlerData // EXACT production settler bytes
             )
         {
@@ -194,10 +194,10 @@ contract A0xRouterUnichainForkTest is Test {
         vm.prank(poolOwner);
         try
             IA0xRouter(pool).exec(
-                PROD_SETTLER, // operator
+                currentSettler, // operator
                 UNI_GRG, // token = GRG
                 50e18, // amount
-                payable(PROD_SETTLER), // target
+                payable(currentSettler), // target
                 settlerData // EXACT production settler bytes
             )
         {

@@ -13,6 +13,7 @@ import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IR
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
+import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
@@ -77,7 +78,7 @@ contract NavViewNavParityTest is UnitTestFixture {
 
     function _createGrgPool() internal {
         vm.prank(poolOwner);
-        (pool,) = IRigoblockPoolProxyFactory(deployment.factory).createPool("ParityPool", "PPTY", address(grg));
+        (pool, ) = IRigoblockPoolProxyFactory(deployment.factory).createPool("ParityPool", "PPTY", address(grg));
     }
 
     function _mintShares(address to, uint256 amount) internal {
@@ -381,8 +382,122 @@ contract NavViewNavParityTest is UnitTestFixture {
     }
 
     // =========================================================================
+    // Test 12: REGRESSION — duplicated non-base token at an inexact oracle rate
+    //
+    // WHY THIS TEST EXISTS (the "1-wei NAV parity bug"):
+    // When a token appears BOTH in application balances and in the pool wallet
+    // (here: GRG staked via the staking app + unstaked GRG left in the wallet),
+    // the view path must aggregate the two balances into a single entry BEFORE
+    // oracle conversion, exactly like the write path (_computeTotalPoolValue).
+    // Converting the entries separately makes each entry floor-round on its own:
+    //     floor(a * r) + floor(b * r)  !=  floor((a + b) * r)   (by up to 1 wei)
+    // so view-NAV drifts below write-NAV by 1 wei per duplicated token whenever
+    // the oracle rate r is not exact. This was found in NavViewStressedParityFork
+    // after a fork-block bump changed oracle state; that test caught it only
+    // accidentally — this test flags the regression deterministically.
+    //
+    // The seeded tick (-2303 ≈ 0.7943) makes the GRG conversion rate inexact.
+    // With the old per-entry conversion this test FAILS by exactly 1 wei;
+    // with the aggregation fix it passes.
+    // =========================================================================
+
+    function test_NavParity_DuplicatedToken_InexactRate_EqualUnitaryValue() public {
+        _configureVaultForTest();
+        _deployAndRegisterAStaking();
+
+        // Base token is a mock ERC20, so GRG is a NON-base token converted via the oracle
+        MockERC20 base = new MockERC20("MockUSD", "MUSD", 18);
+        _seedOracleForToken(address(base));
+
+        // Inexact GRG rate: tick != 0, so amount * rate floor-rounds on conversion
+        _seedOracleForTokenWithTick(address(grg), -2303);
+
+        // Advance time so MockOracle.observe(secondsAgos=[2,0]) doesn't underflow
+        vm.warp(100);
+
+        vm.prank(poolOwner);
+        (pool, ) = IRigoblockPoolProxyFactory(deployment.factory).createPool("DupPool", "DUP", address(base));
+
+        // Mint shares paying with GRG: GRG becomes an active token and the pool wallet
+        // holds the full GRG amount
+        vm.prank(poolOwner);
+        ISmartPoolOwnerActions(pool).setAcceptableMintToken(address(grg), true);
+        deal(address(grg), poolOwner, 1_000e18);
+        vm.startPrank(poolOwner);
+        grg.approve(pool, 1_000e18);
+        ISmartPoolActions(pool).mintWithToken(poolOwner, 1_000e18, 0, address(grg));
+        vm.stopPrank();
+
+        // ── Find a wallet/stake split where per-entry floor rounding provably bites ──
+        // For a non-integer rate r, floor((T-w)r) + floor(wr) < floor(Tr) holds for some
+        // wallet remainder w (the floor dust aligns pseudo-randomly in the Q96 low bits).
+        // Search w empirically so the test does not depend on the seeded tick's exact bits.
+        uint256 totalGrg = grg.balanceOf(pool);
+        uint256 walletWei;
+        {
+            address[] memory toks2 = new address[](2);
+            toks2[0] = address(grg);
+            toks2[1] = address(grg);
+            int256[] memory amts2 = new int256[](2);
+            address[] memory tok1 = new address[](1);
+            tok1[0] = address(grg);
+            int256[] memory amt1 = new int256[](1);
+            amt1[0] = int256(totalGrg);
+            int256 agg = IEOracle(pool).convertBatchTokenAmounts(tok1, amt1, address(base));
+            for (uint256 w = 1; w <= 64; w++) {
+                amts2[0] = int256(totalGrg - w);
+                amts2[1] = int256(w);
+                if (IEOracle(pool).convertBatchTokenAmounts(toks2, amts2, address(base)) < agg) {
+                    walletWei = w;
+                    break;
+                }
+            }
+            require(walletWei != 0, "no drifting split found in w=1..64 - check seeded tick");
+        }
+
+        // Stake so the wallet keeps exactly `walletWei`: GRG now appears in BOTH app
+        // balances (staking) and the wallet (unstaked remainder) — duplicated token.
+        vm.startPrank(poolOwner);
+        grg.approve(pool, totalGrg - walletWei);
+        IAStaking(pool).stake(totalGrg - walletWei);
+        vm.stopPrank();
+
+        // Epoch boundary: delegation becomes active next epoch
+        uint256 epochEnd = IStaking(stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+        vm.warp(epochEnd);
+        IStaking(stakingProxy).endEpoch();
+
+        // Re-seed both feeds to refresh observation timestamps: the mock extrapolates
+        // tick cumulatives in int32, which overflows for large |tick| across a long epoch
+        // warp. Same ticks as before — the TWAP rate is unchanged.
+        _seedOracleForToken(address(base));
+        _seedOracleForTokenWithTick(address(grg), -2303);
+
+        // Move past the seeded observations (EOracle reads a 1-second TWAP window); at the
+        // seeding block itself the "current" cumulative is still 0, which would rate GRG ~1.0
+        vm.warp(block.timestamp + 2);
+
+        // Exact parity: with per-entry conversion of the duplicated GRG (the bug), the view
+        // total lands `walletWei`-search-drift below the write total and this assertion fails.
+        _assertNavParity();
+    }
+
+    // =========================================================================
     // Private helpers — oracle
     // =========================================================================
+
+    /// @dev Same as _seedOracleForToken but seeds a custom constant tick, producing an
+    ///      inexact TWAP rate so oracle conversions floor-round (duplicated-token test).
+    function _seedOracleForTokenWithTick(address token, int24 tick) private {
+        PoolKey memory key = PoolKey({
+            currency0: Currency.wrap(address(0)),
+            currency1: Currency.wrap(token),
+            fee: 0,
+            tickSpacing: TickMath.MAX_TICK_SPACING,
+            hooks: IHooks(address(deployment.mockOracle))
+        });
+        deployment.mockOracle.initializeObservationsWithTick(key, tick);
+    }
 
     /// @dev Registers a price feed for `token` vs native ETH in the MockOracle.
     ///      updateUnitaryValue() requires hasPriceFeed(baseToken) to be true.
@@ -409,11 +524,13 @@ contract NavViewNavParityTest is UnitTestFixture {
     }
 
     function _deployAndRegisterAStaking() private returns (address aStaking) {
-        address grgTransferProxy =
-            IGrgVaultWithAssetProxy(address(IStaking(stakingProxy).getGrgVault())).grgAssetProxy();
+        address grgTransferProxy = IGrgVaultWithAssetProxy(address(IStaking(stakingProxy).getGrgVault()))
+            .grgAssetProxy();
 
-        aStaking =
-            deployCode("out/AStaking.sol/AStaking.json", abi.encode(stakingProxy, address(grg), grgTransferProxy));
+        aStaking = deployCode(
+            "out/AStaking.sol/AStaking.json",
+            abi.encode(stakingProxy, address(grg), grgTransferProxy)
+        );
 
         IAuthority(deployment.authority).setAdapter(aStaking, true);
         IAuthority(deployment.authority).addMethod(IAStaking.stake.selector, aStaking);

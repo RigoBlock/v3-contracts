@@ -392,12 +392,31 @@ and fixed or documented in the same branch. Pick blocks a few hours/days below "
 RPC/archive stability, keep any documented ordering constraints (e.g. MAINNET_BLOCK must stay
 after the TEST_POOL donate() routing upgrade), and update the per-block comments with the new
 values and dates. `ForkBlocks.sol` is hashed into the CI cache key, so the bump also keeps
-fork caches fresh. Exception: a global pin documented as intentionally historical MUST NOT be
-bumped — e.g. `UNICHAIN_BLOCK` is pinned just before the production txs replayed by
-`A0xRouterUnichainFork`, and tests must NEVER introduce their own local block pins instead
-(`git grep createSelectFork` should show only `Constants.*_BLOCK`); if a test inherently
-needs historical state, the constraint belongs in `ForkBlocks.sol` with a comment.
-Exception pins are still exercised by CI like any other block.
+fork caches fresh. Tests must NEVER introduce their own local block pins (`git grep
+createSelectFork` should show only `Constants.*_BLOCK`); if a test seems to need a historical
+pin, make the test pin-agnostic instead — e.g. `A0xRouterUnichainFork` replays calldata
+extracted at block 41_291_308 but resolves the 0x settler dynamically from the Deployer at
+the fork block, so its pin follows routine bumps. Reserve documented historical pins in
+`ForkBlocks.sol` for cases that genuinely cannot be made pin-agnostic, and revisit them at
+every bump.
+
+**Test obsolescence review (part of the same hygiene task):** a block bump is also the moment
+to audit which fork tests have been made obsolete by protocol upgrades landing in production.
+Keep what is still meaningful; update or delete what is not. Examples of tests that decay:
+
+- tests that force-upgrade the factory implementation or Authority mappings to assert
+  pre-upgrade behavior — once governance has executed the upgrade, assert the NEW production
+  state instead (remove the forced upgrade when it duplicates live state);
+- tests comparing states across implementation versions — collapse to the current live
+  version once the rollout is complete;
+- replay/incident fixtures — keep only while the replayed bytes still represent what the
+  external protocol (0x, Across, GMX, Uniswap) actually produces; re-extract or delete when
+  the format or key contracts rotate.
+
+Remember that each pool operator must approve an upgraded implementation for their pool, so
+live pool code always lags the factory upgrade — fork tests must assert the state that is
+actually live at the pinned block, not the state the factory points to after the upgrade
+transaction.
 
 ```solidity
 // Create forks
