@@ -1293,6 +1293,7 @@ describe("AUniswapRouter", async () => {
           zeroForOne: true,
           amountIn: parseEther("12"),
           amountOutMinimum: parseEther("22"),
+          minHopPriceX36: 0,
           hookData: "0x",
         },
       ]);
@@ -1355,6 +1356,7 @@ describe("AUniswapRouter", async () => {
           zeroForOne: true,
           amountIn: parseEther("12"),
           amountOutMinimum: parseEther("22"),
+          minHopPriceX36: 0,
           hookData: "0x",
         },
       ]);
@@ -1403,6 +1405,7 @@ describe("AUniswapRouter", async () => {
           zeroForOne: true,
           amountIn: parseEther("12"),
           amountOutMinimum: parseEther("22"),
+          minHopPriceX36: 0,
           hookData: "0x",
         },
       ]);
@@ -1469,6 +1472,7 @@ describe("AUniswapRouter", async () => {
           zeroForOne: true,
           amountIn: parseEther("12"),
           amountOutMinimum: parseEther("22"),
+          minHopPriceX36: 0,
           hookData: "0x",
         },
       ]);
@@ -1537,6 +1541,7 @@ describe("AUniswapRouter", async () => {
         {
           currencyIn,
           path: encodeMultihopExactInPath([PAIR.poolKey], currencyIn),
+          minHopPriceX36: [],
           amountIn: amountInNative,
           amountOutMinimum: minAmountOutToken,
         },
@@ -1604,6 +1609,7 @@ describe("AUniswapRouter", async () => {
         {
           currencyIn,
           path: encodeMultihopExactInPath([PAIR.poolKey], currencyIn),
+          minHopPriceX36: [],
           amountIn: amountInNative,
           amountOutMinimum: minAmountOutToken,
         },
@@ -1657,6 +1663,7 @@ describe("AUniswapRouter", async () => {
           zeroForOne: true,
           amountOut: parseEther("12"),
           amountInMaximum: parseEther("22"),
+          minHopPriceX36: 0,
           hookData: "0x",
         },
       ]);
@@ -1725,6 +1732,7 @@ describe("AUniswapRouter", async () => {
           zeroForOne: false,
           amountOut: parseEther("12"),
           amountInMaximum: parseEther("22"),
+          minHopPriceX36: 0,
           hookData: "0x",
         },
       ]);
@@ -1777,6 +1785,7 @@ describe("AUniswapRouter", async () => {
         {
           currencyOut,
           path: encodeMultihopExactOutPath([PAIR.poolKey], currencyOut),
+          minHopPriceX36: [],
           amountOut: amountOutToken,
           amountInMaximum: maxAmountInNative,
         },
@@ -1845,6 +1854,7 @@ describe("AUniswapRouter", async () => {
         {
           currencyOut,
           path: encodeMultihopExactOutPath([PAIR.poolKey], currencyOut),
+          minHopPriceX36: [],
           amountOut: amountOutNative,
           amountInMaximum: maxAmountInToken,
         },
@@ -2405,6 +2415,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       const extPool = await getExtPool(newPoolAddress);
       const encodedSwapData = extPool.interface.encodeFunctionData(
@@ -2456,6 +2467,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       const extPool = await getExtPool(newPoolAddress);
       const encodedSwapData = extPool.interface.encodeFunctionData(
@@ -2492,6 +2504,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       planner.addCommand(CommandType.UNWRAP_WETH, [newPoolAddress, 100]);
       const extPool = await getExtPool(newPoolAddress);
@@ -2537,6 +2550,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       const extPool = await getExtPool(newPoolAddress);
       const encodedSwapData = extPool.interface.encodeFunctionData(
@@ -2593,6 +2607,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       planner.addCommand(CommandType.V2_SWAP_EXACT_OUT, [
         newPoolAddress,
@@ -2600,6 +2615,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       const extPool = await getExtPool(newPoolAddress);
       let encodedSwapData = extPool.interface.encodeFunctionData(
@@ -2624,6 +2640,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       encodedSwapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
@@ -2656,6 +2673,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       encodedSwapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
@@ -2690,6 +2708,7 @@ describe("AUniswapRouter", async () => {
         1,
         path,
         true,
+        [],
       ]);
       const extPool = await getExtPool(newPoolAddress);
       const encodedSwapData = extPool.interface.encodeFunctionData(
@@ -2741,6 +2760,11 @@ describe("AUniswapRouter", async () => {
         1,
       ]);
       planner.addCommand(CommandType.PAY_PORTION, [
+        grgTokenAddress,
+        newPoolAddress,
+        1,
+      ]);
+      planner.addCommand(CommandType.PAY_PORTION_FULL_PRECISION, [
         grgTokenAddress,
         newPoolAddress,
         1,
@@ -2928,7 +2952,7 @@ describe("AUniswapRouter", async () => {
       )
         .to.be.revertedWithCustomError(extPool, "InvalidCommandType")
         .withArgs(BigInt(rogueCommand));
-      rogueCommand = CommandType.V2_SWAP_EXACT_IN - 1;
+      rogueCommand = CommandType.V4_POSITION_MANAGER_CALL + 1;
       encodedSwapData = extPool.interface.encodeFunctionData(
         "execute(bytes,bytes[],uint256)",
         [toBeHex(rogueCommand), [toBeHex(0)], DEADLINE],

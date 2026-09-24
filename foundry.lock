@@ -1,0 +1,26 @@
+{
+  "lib/0x-settler": {
+    "rev": "daf00f1a752b52f8a9197f9ef6ed1a9d85bb21f6"
+  },
+  "lib/forge-std": {
+    "rev": "3b20d60d14b343ee4f908cb8079495c07f5e8981"
+  },
+  "lib/gmx-synthetics": {
+    "rev": "bf30ebb4cff17b7f92f8c738f145e75b871a1576"
+  },
+  "lib/hyper-evm-lib": {
+    "rev": "4eb7ab044d0a368e0c01ec5b38d5ea48a3e3b427"
+  },
+  "lib/permit2": {
+    "rev": "cc56ad0f3439c502c246fc5cfcc3db92bb8b7219"
+  },
+  "lib/prb-math": {
+    "rev": "8cb5b772eadc31ab48fa0d07f4dc16b99cfbcc1f"
+  },
+  "lib/solmate": {
+    "rev": "c93f7716c9909175d45f6ef80a34a650e2d24e56"
+  },
+  "lib/universal-router": {
+    "rev": "802fe4c18f47300e0f183e2a42e9146ec2ea9fc3"
+  }
+}

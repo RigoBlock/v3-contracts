@@ -26,6 +26,13 @@ library ForkBlocks {
     ///      Update freely when the cached fork state needs to change; the fallback fork tests
     ///      in AGmxV2ForkTest fail loudly with a "bump ForkBlocks.ARB_BLOCK" hint when a GMX
     ///      synthetic token listed after this block is added to the fallback table.
+    /// @dev Note: Universal Router 2.1.2 was deployed on Arbitrum at block 506_233_838
+    ///      (2026-09-17), i.e. AFTER this block. The adapter fork tests construct AUniswapRouter
+    ///      with the 2.1.2 address but only exercise modifyLiquidities (Posm), not execute(),
+    ///      so the missing router code at this block is inert. Fork tests that execute swap
+    ///      commands through the real 2.1.2 router must fork at >= 506_233_838; be aware that
+    ///      bumping this global block exposes a 1-wei view/write NAV parity edge in
+    ///      NavViewStressedParityFork (see docs/uniswap/UNISWAP_TRANSACTION_FLOW.md).
     uint256 internal constant ARB_BLOCK = 503_353_273;
 
     /// @notice HyperEVM block number for fork tests.
