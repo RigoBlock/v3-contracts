@@ -45,7 +45,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-09-24 (branch `fix/uniswap-router-adapter`).
+Limit: 24576 bytes per contract. Last measured: 2026-09-23 (branch `fix/gmx-import-submodule-abi`).
 
 ### Implementation and factory
 
@@ -78,7 +78,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-24 (branch `fix/uniswap-
 | Contract        | Size (bytes) | Headroom | % of limit |
 | --------------- | -----------: | -------: | ---------: |
 | AGmxV2          |        17580 |     6996 |     71.53% |
-| AUniswapRouter  |        12772 |    11804 |     51.97% |
+| AUniswapRouter  |        12764 |    11812 |     51.94% |
 | AIntents        |        11466 |    13110 |     46.66% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         5069 |    19507 |     20.63% |
