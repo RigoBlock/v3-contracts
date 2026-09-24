@@ -39,13 +39,19 @@ authoritative list is the Uniswap
 
 **Fork-test note:** `ForkBlocks.ARB_BLOCK` (508_400_000) is pinned past the Arbitrum 2.1.2
 deployment (block 506_233_838, 2026-09-17) so adapter fork tests execute against the live 2.1.2
-router. Bumping the block past the deployment originally surfaced a 1-wei failure in
-`NavViewStressedParityFork` (view NAV vs write NAV under a mocked +10% WETH price). Root cause:
-`NavView._getTokensAndBalances` converted duplicated tokens (e.g. GMX collateral USDC plus
-wallet USDC) in separate entries, so each entry floor-rounded independently and drifted by up
-to 1 wei per duplicate from the write path, which aggregates per token before converting.
-Fixed by aggregating wallet balances into existing app entries per token in
-`_getTokensAndBalances`; the parity test passes at the bumped block.
+router. Bumping the block past the deployment surfaced a 1-wei failure in
+`NavViewStressedParityFork` (view NAV vs write NAV under a mocked +10% WETH price). Root
+cause: the private `NavView._getTokensAndBalances` helper converted a token appearing in both
+application balances and wallet balances (GMX collateral USDC plus wallet USDC) in separate
+entries, so each entry floor-rounded independently and drifted by up to 1 wei per duplicate
+from the write path, which aggregates per token before converting. The old block masked this
+because oracle rates happened to convert exactly; the drift is structural, not block-state.
+Fix: wallet balances are aggregated into the matching app entry per token inside
+`_getTokensAndBalances` only — no public interface or `AppTokenBalance` semantics changed
+(`getAppTokensAndBalancesView` still returns pure app balances; `getNavDataView` returns the
+same `NavData` shape, now exactly equal to the write path). Note this test deploys fresh
+extensions + implementation on the fork, so live Rigoblock code version at the pin is not a
+factor; live third-party state (GMX, oracle) is.
 
 ---
 

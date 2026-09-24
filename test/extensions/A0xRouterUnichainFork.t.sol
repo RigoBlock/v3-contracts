@@ -75,15 +75,11 @@ contract A0xRouterUnichainForkTest is Test {
     /// @dev GRG token on Unichain (sellToken in TX2, TX3; buyToken in TX1).
     address constant UNI_GRG = 0x03C2868c6D7fD27575426f395EE081498B1120dd;
 
-    /// @dev Local fork pin, intentionally NOT the global ForkBlocks.UNICHAIN_BLOCK:
-    ///      this test replays exact production txs from block 41_291_308 and asserts
-    ///      the production settler/state at that historical point, so it must fork
-    ///      just before them. Bumping the global pin must not move this test.
-    uint256 constant REPLAY_BLOCK = 41_291_300;
-
     function setUp() public {
-        // Fork BEFORE the earliest failing tx (TX1 at block 41291308)
-        unichainFork = vm.createSelectFork("unichain", REPLAY_BLOCK);
+        // Fork BEFORE the earliest failing tx (TX1 at block 41291308).
+        // Uses the global pin: ForkBlocks.UNICHAIN_BLOCK is intentionally pinned at this
+        // historical block for this replay test — see ForkBlocks.sol.
+        unichainFork = vm.createSelectFork("unichain", Constants.UNICHAIN_BLOCK);
 
         // Verify 0x infrastructure
         assertTrue(ALLOWANCE_HOLDER.code.length > 0, "AllowanceHolder not deployed");

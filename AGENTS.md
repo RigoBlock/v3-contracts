@@ -23,6 +23,36 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 10. **Named Mapping Variables**: All new mappings must use named key/value parameters — `mapping(KeyType name => ValueType name)` — as required by Solidity ≥0.8.18 style.
 11. **ALWAYS RUN TESTS**: After ANY modification to .sol files or test files, IMMEDIATELY run tests to verify they pass
 12. **CODE SIZE**: After ANY change that can alter deployed bytecode (including library edits — libraries compile into every importer), measure the affected contracts' deployed size with the production settings (optimizer 200 runs, no viaIR) via `npx hardhat codesize --skipcompile true`, and update the table in `docs/CODE_SIZE.md` in the same PR. Never merge a contract at or above the 24576-byte limit. `SmartPool` and `ENavView` have <300 bytes of headroom — flag any PR that shrinks it further.
+13. **NEVER push directly to `development` (or any default branch).** Commits reach `development` ONLY via a pull request, so CI (tests, security checks, coverage) always runs. This has accidentally happened twice — see "Branch creation and push safety" below.
+
+## Branch creation and push safety (CRITICAL)
+
+A new branch MUST track its own same-named remote branch — never `origin/development`.
+`git checkout -b feat/x origin/development` silently sets the upstream to
+`origin/development`, and a later plain `git push` then **pushes your commits straight onto
+the default branch**, bypassing CI entirely.
+
+Required workflow for every new branch:
+
+```bash
+# 1. Create WITHOUT tracking the source branch
+git fetch origin
+git checkout -b feat/my-branch origin/development --no-track
+
+# 2. Do the work, commit...
+
+# 3. Push ONLY with an explicit refspec naming the same branch
+git push -u origin feat/my-branch:feat/my-branch
+
+# 4. VERIFY the upstream before every push — upstream must be origin/<same-name>, never development
+git rev-parse --abbrev-ref --symbolic-full-name @{u}
+git branch -vv | grep '^\*'
+```
+
+If `git branch -vv` ever shows `[origin/development]` (or any upstream that is not
+`origin/<same-name>`) on a feature branch: `git branch --unset-upstream` immediately, then
+re-push with the explicit refspec from step 3. Never use `git push` without a refspec on a
+branch you did not just verify.
 
 ## AI Agent Limitations (CRITICAL)
 
@@ -362,7 +392,12 @@ and fixed or documented in the same branch. Pick blocks a few hours/days below "
 RPC/archive stability, keep any documented ordering constraints (e.g. MAINNET_BLOCK must stay
 after the TEST_POOL donate() routing upgrade), and update the per-block comments with the new
 values and dates. `ForkBlocks.sol` is hashed into the CI cache key, so the bump also keeps
-fork caches fresh.
+fork caches fresh. Exception: a global pin documented as intentionally historical MUST NOT be
+bumped — e.g. `UNICHAIN_BLOCK` is pinned just before the production txs replayed by
+`A0xRouterUnichainFork`, and tests must NEVER introduce their own local block pins instead
+(`git grep createSelectFork` should show only `Constants.*_BLOCK`); if a test inherently
+needs historical state, the constraint belongs in `ForkBlocks.sol` with a comment.
+Exception pins are still exercised by CI like any other block.
 
 ```solidity
 // Create forks
