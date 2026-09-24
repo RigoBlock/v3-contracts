@@ -221,9 +221,9 @@ library NavView {
         index = appBalances.length;
         address token;
 
-        // Wallet balances aggregate into an existing entry when the token matches (e.g. GMX
-        // collateral USDC plus wallet USDC), so each token converts once — mirroring the write
-        // path (_computeTotalPoolValue) and avoiding 1-wei floor-rounding drift per duplicate.
+        // A token held both by an application and in the wallet must appear as a single
+        // entry, so it is converted once — mirroring the write path and avoiding
+        // per-entry rounding drift.
         for (uint256 k = 0; k < portfolioTokensLength; k++) {
             if (k == portfolioTokensLength - 1) {
                 token = tokens.baseToken;
