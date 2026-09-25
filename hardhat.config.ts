@@ -167,9 +167,9 @@ const userConfig: HardhatUserConfig = {
     skipFiles: ["contracts/mocks", "contracts/test"],
   },
   // Keep the Hardhat coverage scope aligned with the Foundry report
-  // (scripts/foundry-coverage.sh excludes mocks/test/tokens/utils and never
-  // reports third-party lib/ code); without this the merged Codecov total
-  // inflates and the percentage dilutes.
+  // (foundry.toml [profile.coverage] no_match_coverage excludes
+  // mocks/test/tokens/utils and never reports third-party lib/ code); without
+  // this the merged Codecov total inflates and the percentage dilutes.
   coverage: {
     skipFiles: [
       "lib/**",

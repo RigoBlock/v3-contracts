@@ -1,5 +1,22 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# Coverage ANALYZER — read-only. Runs no coverage, modifies no reports.
+#
+# Inputs (all produced by the native coverage commands):
+#   coverage/lcov.info         Hardhat 3 raw report (`hardhat test mocha --coverage`)
+#   coverage/foundry_lcov.info Foundry raw report (coverage:foundry, tee'd to the log below)
+#   /tmp/forge_coverage.log    stdout of `forge coverage` (tee'd by the package.json script)
+#
+# Outputs: analysis on stdout only. No report files are written, filtered, or
+# amended — Codecov receives both lcov files exactly as the tools produced them
+# (we are deliberately testing Codecov's own union aggregation after upgrades).
+#
+# Guard rails (exit 1): forge coverage exits 0 even when tests fail or fork
+# suites silently never run, which used to upload garbage reports to Codecov
+# (see docs/COVERAGE_TROUBLESHOOTING.md). See docs/COVERAGE_TROUBLESHOOTING.md.
+
+LOG=/tmp/forge_coverage.log
 
 echo ""
 echo "════════════════════════════════════════════════════════════════"
@@ -16,6 +33,11 @@ fi
 
 if [ ! -f "coverage/foundry_lcov.info" ]; then
     echo "❌ Foundry coverage file not found!"
+    exit 1
+fi
+
+if [ ! -f "$LOG" ]; then
+    echo "❌ Forge coverage log not found at $LOG (coverage:foundry must tee its output there)"
     exit 1
 fi
 
@@ -49,98 +71,90 @@ else
 fi
 echo "   Lines: $foundry_hit_lines/$foundry_total_lines ($foundry_pct%)"
 
-# ─── Codecov upload preparation ──────────────────────────────────────────────
-#
-# The Hardhat report contains zero-hit entries for every file Hardhat never
-# executes (Hardhat compiles every contract under contracts/ and reports all
-# compiled sources — GmxLib, GmxAdapterLib, EGmxCallback, GmxCallbackLib,
-# GmxClaimableHelpers, CrosschainLib, Escrow, HyperliquidLib) AND zero-hit
-# lines inside files it does execute, on continuation lines of multi-line
-# statements that Foundry instruments only at the statement anchor. Example
-# (AGmxV2.sol): Foundry reports hits on L84/86/90 and nothing on L85/87/89;
-# Hardhat reports 0 on L85/87/89. Those zeros are instrumentation artifacts
-# of executed statements, but Codecov counts them as patch misses (observed
-# on PR #964: 6 false misses on changed GMX lines).
-#
-# Codecov union-merges uploads per line and "does not override report data"
-# (docs.codecov.com/docs/merging-reports), so filtering cannot hide Foundry
-# hits in the merged view. The filter drops, from the Hardhat upload:
-#   1. SF blocks whose total hits are 0 (Foundry-only files — keeps per-flag
-#      views consistent: each file is owned by the suite that executes it).
-#   2. Individual DA:line,0 entries for files Foundry covers, when Foundry
-#      does not instrument that line at all. A line Foundry considers
-#      non-executable cannot be a genuine miss of executable code; if it
-#      were genuinely uncovered, Foundry would list it with 0 hits and the
-#      union would still report 0.
-if [ "$hardhat_lcov_available" = true ]; then
-    awk '
-    NR == FNR {
-        # Pass 1: index the Foundry report — covered files and instrumented lines.
-        if ($0 ~ /^SF:/) {
-            sf = substr($0, 4)
-            gsub(/.*\/contracts\//, "contracts/", sf)
-        } else if ($0 ~ /^DA:/) {
-            split($0, p, ",")
-            sub(/^DA:/, "", p[1])
-            fline[sf ":" p[1]] = 1
-            if (p[2] + 0 > 0) fhitfile[sf] = 1
-        }
-        next
-    }
-    function emitblock() {
-        if (inblock && lh > 0) printf "%s%sLF:%d\nLH:%d\nend_of_record\n", buf, das, lf, lh
-        inblock = 0; buf = ""; das = ""; lf = 0; lh = 0
-    }
-    /^SF:/              { emitblock(); inblock = 1
-                          sf = substr($0, 4); gsub(/.*\/contracts\//, "contracts/", sf)
-                          buf = $0 ORS; next }
-    inblock && /^DA:/   {
-        split($0, p, ","); sub(/^DA:/, "", p[1])
-        if (fhitfile[sf] && p[2] + 0 == 0 && !((sf ":" p[1]) in fline)) next
-        das = das $0 ORS; lf++
-        if (p[2] + 0 > 0) lh++
-        next
-    }
-    inblock && /^LF:/   { next }  # recomputed from the filtered DA set
-    inblock && /^LH:/   { next }
-    inblock             { buf = buf $0 ORS }
-    inblock && /^end_of_record/ { emitblock(); next }
-    END                 { emitblock() }
-    ' coverage/foundry_lcov.info coverage/lcov.info > coverage/lcov-upload.info
-
-    raw_files=$(grep -c "^SF:" coverage/lcov.info || echo "0")
-    kept_files=$(grep -c "^SF:" coverage/lcov-upload.info || echo "0")
-    echo ""
-    echo "📤 CODECOV UPLOAD PREPARATION:"
-    echo "   Hardhat report: $raw_files files → $kept_files files after removing zero-hit blocks"
-    echo "   (removed files are covered exclusively by Foundry; uploaded as Foundry-owned)"
+# ─── Guard 1: forge coverage exits 0 even with failing tests (RPC rate limits,
+# archive timeouts). Without detection, an all-zero fork coverage report gets
+# uploaded to Codecov and lines that fork tests cover show as uncovered.
+if grep -Eq "([1-9][0-9]* failed|Failing tests)" "$LOG"; then
+    echo "" >&2
+    echo "❌ ERROR: forge coverage had failing tests (usually RPC/fork issues)." >&2
+    echo "   Refusing to upload a bad coverage report. Retry the CI job." >&2
+    echo "   See docs/COVERAGE_TROUBLESHOOTING.md" >&2
+    exit 1
 fi
+echo "   ✅ no failing tests in forge coverage log"
 
-# ─── Foundry fork-coverage floor ─────────────────────────────────────────────
-#
-# The failure grep in foundry-coverage.sh already rejects reports with failed
-# tests. This floor catches the other silent-degradation mode: fork suites
-# dropping out via a future exclusion/path change with every remaining test
-# still "passing" — e.g. AGmxV2Fork excluded would zero out all GMX files yet
-# produce a clean-looking report. Historical bad run (RPC outage era): 462 hit
-# lines (16.9% of the report); a normal full run is ~1800+.
+# ─── Guard 2: sentinel fork suites. The failure grep above cannot catch fork
+# suites that SILENTLY never ran (a future exclusion/path change, or a
+# fork-creation error that forge reports but does not count as a test failure):
+# unit tests still pass, coverage is still written, and it is garbage for every
+# fork-only file.
+if ! grep -Eq ":(AUniswapRouterForkTest|AUniswapRouterExecuteForkTest|AUniswapRouterModifyLiquiditiesForkTest|AGmxV2ForkTest|A0xRouterForkTest)\b" "$LOG"; then
+    echo "" >&2
+    echo "❌ ERROR: no known fork suite (AUniswapRouter/AGmxV2/A0xRouter) appears in the forge output." >&2
+    echo "   Fork tests did not actually run — coverage would be silently incomplete." >&2
+    echo "   Check foundry.toml [profile.coverage] exclusions and RPC availability; retry the CI job." >&2
+    echo "   See docs/COVERAGE_TROUBLESHOOTING.md" >&2
+    exit 1
+fi
+echo "   ✅ sentinel fork suites ran"
+
+# ─── Guard 3: deployCode instrumentation canary. The coverage:foundry prebuild
+# (FOUNDRY_PROFILE=coverage forge build) must produce optimizer-off artifacts
+# byte-identical to forge coverage's internal build, or every deployCode-
+# deployed contract (AUniswapRouter.sol via its 0.8.37 isolated job, fixtures,
+# mocks) records zero hits. A zero total/hit DA count on either adapter file
+# means that mechanism silently broke (e.g. a future forge version changes the
+# coverage build) and the report would re-introduce rogue uncovered lines.
+for adapter in \
+    contracts/protocol/extensions/adapters/AUniswapRouter.sol \
+    contracts/protocol/extensions/adapters/AUniswapDecoder.sol; do
+    da=$(awk -v sf="$adapter" '/^SF:/{insf=($0=="SF:"sf)} insf && /^DA:/{tot++; if ($0 !~ /,0$/) hit++} insf && /^end_of_record/{print hit+0 "/" tot+0; exit}' coverage/foundry_lcov.info)
+    total_part="${da##*/}"
+    hit_part="${da%%/*}"
+    if [ -z "$da" ] || [ "${total_part:-0}" -eq 0 ] || [ "${hit_part:-0}" -eq 0 ]; then
+        echo "" >&2
+        echo "❌ ERROR: $adapter has $da hit/total DA lines in the Foundry report." >&2
+        echo "   The coverage-profile prebuild is not taking effect (see foundry.toml" >&2
+        echo "   [profile.coverage] and docs/COVERAGE_TROUBLESHOOTING.md)." >&2
+        echo "   Refusing to upload a report with rogue uncovered lines." >&2
+        exit 1
+    fi
+    echo "   ✅ $adapter instrumented: $da DA lines hit"
+done
+
+# ─── Guard 4: fork-coverage floor. Catches the other silent-degradation mode:
+# fork suites dropping out via a future exclusion/path change with every
+# remaining test still "passing" — e.g. AGmxV2Fork excluded would zero out all
+# GMX files yet produce a clean-looking report. Historical bad run (RPC outage
+# era): 462 hit lines (16.9% of the report); a normal full run is ~1800+.
 if [ "$foundry_hit_lines" -lt 1000 ]; then
     echo "" >&2
     echo "❌ Foundry report has only $foundry_hit_lines hit lines — fork suites did not contribute." >&2
-    echo "   Refusing to upload coverage. Check exclusions in scripts/foundry-coverage.sh" >&2
-    echo "   and retry the CI job. See docs/COVERAGE_TROUBLESHOOTING.md" >&2
+    echo "   Refusing to upload coverage. Check exclusions in foundry.toml" >&2
+    echo "   [profile.coverage] and retry the CI job. See docs/COVERAGE_TROUBLESHOOTING.md" >&2
     exit 1
 fi
 echo "   ✅ foundry fork-coverage floor: $foundry_hit_lines hit lines (floor 1000)"
 
 echo ""
+echo "📤 CODECOV UPLOAD (raw reports, unmodified):"
+if [ "$hardhat_lcov_available" = true ]; then
+    echo "   - Hardhat: ./coverage/lcov.info"
+fi
+echo "   - Foundry: ./coverage/foundry_lcov.info"
+echo "   Codecov union-merges the two uploads per line; no client-side filtering is applied."
+
+echo ""
 echo "📋 FILES WITH MISSING COVERAGE (uncovered by BOTH Hardhat and Foundry):"
 echo ""
 
-# Find files with missing coverage from both tools
-temp_hardhat="/tmp/hardhat_missing.txt"
-temp_foundry="/tmp/foundry_missing.txt"
-temp_common="/tmp/common_missing.txt"
+# Find lines with missing coverage from both tools (temp files in a private
+# mktemp dir, removed on exit — the script writes no reports).
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+temp_hardhat="$tmpdir/hardhat_missing.txt"
+temp_foundry="$tmpdir/foundry_missing.txt"
+temp_common="$tmpdir/common_missing.txt"
 
 # Extract missing lines from Hardhat coverage (normalize paths to relative)
 if [ "$hardhat_lcov_available" = true ]; then
@@ -161,7 +175,7 @@ fi
 # Extract missing lines from Foundry coverage (deduplicate and only count truly uncovered)
 awk '
 /^SF:/ { current_file = substr($0, 4) }
-/^DA:/ { 
+/^DA:/ {
     split($0, parts, ",")
     line_num = substr(parts[1], 4)
     hits = parts[2]
@@ -201,7 +215,7 @@ cat "$temp_common" | grep -E "(protocol/|staking/|governance/|rigoToken/)" | awk
             # Print accumulated lines for previous file
             for (i = 1; i <= count; i++) {
                 if (i == 1) printf "   Missing lines: " lines[i]
-                else if (i <= 15) printf ", " lines[i]  
+                else if (i <= 15) printf ", " lines[i]
                 else if (i == 16) printf " ... (+" (count-15) " more)"
                 else break
             }
@@ -219,7 +233,7 @@ END {
     if (count > 0) {
         for (i = 1; i <= count; i++) {
             if (i == 1) printf "   Missing lines: " lines[i]
-            else if (i <= 15) printf ", " lines[i]  
+            else if (i <= 15) printf ", " lines[i]
             else if (i == 16) printf " ... (+" (count-15) " more)"
             else break
         }
@@ -227,17 +241,6 @@ END {
     }
 }' | head -50
 
-rm -f "$temp_hardhat" "$temp_foundry" "$temp_common"
-
-echo ""
-echo "📤 Uploading coverage files to Codecov:"
-if [ "$hardhat_lcov_available" = true ]; then
-    echo "   - Hardhat: ./coverage/lcov-upload.info (zero-hit files removed)"
-else
-    echo "   - Hardhat: (not available)"
-fi
-echo "   - Foundry: ./coverage/foundry_lcov.info"
-echo "   Codecov union-merges per line; each file is owned by one suite only"
 echo ""
 echo "════════════════════════════════════════════════════════════════"
 echo ""
