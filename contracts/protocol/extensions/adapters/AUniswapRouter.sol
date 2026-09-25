@@ -38,8 +38,6 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     using SafeTransferLib for address;
 
     /// @notice Thrown when a call is made to the adapter directly.
-    /// @dev Not moved to IAUniswapRouter: the name is also declared in IAIntents and both are
-    /// combined in IRigoblockExtensions, where an inherited duplicate would not compile.
     error DirectCallNotAllowed();
 
     string private constant _REQUIRED_VERSION = "4.0.0";
