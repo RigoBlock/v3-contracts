@@ -23,7 +23,6 @@ import {IAUniswapRouter} from "../../contracts/protocol/extensions/adapters/inte
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
-import {AUniswapDecoder} from "../../contracts/protocol/extensions/adapters/AUniswapDecoder.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -100,8 +99,7 @@ contract AUniswapRouterForkTest is Test {
         // The production Authority maps these selectors to the previously deployed adapter;
         // repoint them at the adapter under test, otherwise pool calls would delegatecall
         // stale production code. `execute` is overloaded on IAUniswapRouter, so its selectors
-        // are encoded manually (expected values per AUniswapRouter.spec.ts) — same pattern
-        // as the overloaded unwrapWETH9 selectors in AUniswapFork.t.sol.
+        // are extracted via typed function pointers (expected values per AUniswapRouter.spec.ts).
         _repointMethod(IAUniswapRouter.modifyLiquidities.selector, aUniswapRouter);
         _repointMethod(bytes4(keccak256("execute(bytes,bytes[],uint256)")), aUniswapRouter); // 0x3593564c
         _repointMethod(bytes4(keccak256("execute(bytes,bytes[])")), aUniswapRouter); // 0x24856bc3
@@ -150,7 +148,7 @@ contract AUniswapRouterForkTest is Test {
         bytes[] memory inputs = new bytes[](1);
         inputs[0] = hex"";
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.InvalidCommandType.selector, uint256(0x40)));
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.InvalidCommandType.selector, uint256(0x40)));
         IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
     }
 
@@ -161,7 +159,7 @@ contract AUniswapRouterForkTest is Test {
         bytes[] memory inputs = new bytes[](1);
         inputs[0] = hex"";
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.InvalidCommandType.selector, uint256(0x40)));
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.InvalidCommandType.selector, uint256(0x40)));
         IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
     }
 
@@ -174,7 +172,7 @@ contract AUniswapRouterForkTest is Test {
         bytes[] memory inputs = new bytes[](1);
         inputs[0] = abi.encode(hex"02", encodedParams); // action 0x02 < SETTLE, not a swap type
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.UnsupportedAction.selector, uint256(0x02)));
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.UnsupportedAction.selector, uint256(0x02)));
         IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
     }
 

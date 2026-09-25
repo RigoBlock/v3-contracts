@@ -121,7 +121,7 @@ endpoint" and continues normally. There is **no flag, env var, or config key**
 to disable it (checked `forge test/coverage --help` and the foundry source on
 1.8.3).
 
-Crucially, the probe is **volume, not data**: fork *state* (the heavy RPC
+Crucially, the probe is **volume, not data**: fork _state_ (the heavy RPC
 fetches — storage, code, logs at the pinned blocks) is disk-cached in
 `~/.foundry/cache/rpc` and CI-cached (key includes the `ForkBlocks.sol` hash),
 so state is fetched at most once per pinned block per cache generation. The
@@ -129,6 +129,18 @@ so state is fetched at most once per pinned block per cache generation. The
 one extra lightweight 400 request per fork creation — noisy in RPC dashboards,
 functionally harmless; no fork test result is affected. Do not try to "fix" it
 by pinning an older forge — the probe is intentional upstream behavior.
+
+Upstream check (2026-09-25): v1.8.3 is still the **latest stable** foundry
+release and carries the 500 ms probe-latency bound (#16833). Nightlies after it
+do not change the forge side: `AnvilNodeInfoProbe` on master still fires
+unconditionally per fork creation with no opt-out flag, env var, or config key,
+and no per-endpoint probe-result caching exists. The only related post-1.8.3
+change is the anvil-side `--no-fork-node-info` CLI flag (#16778), which skips
+_Anvil's own_ fork-identity probes and does not affect forge's probe against
+real providers. Verdict: intentional-but-wasteful upstream detection behavior,
+not a misconfiguration. If the dashboard noise matters, the remedy is an
+upstream issue requesting probe-result caching per endpoint or a `FOUNDRY_*`
+opt-out — no local pin bump helps.
 
 ### Fork-initialization hygiene (probe-volume reduction)
 
@@ -145,21 +157,6 @@ test that needs mainnet; the rest of the file runs on the local chain, so a
 `test/fixtures/RealDeploymentFixture.sol` (the two mainnet calls are in
 mutually-exclusive single-chain / multi-chain branches). Genuinely multi-chain
 tests (mainnet+base etc.) are correct by design and untouched.
-
-### `anvil_nodeInfo` HTTP 400 spam on fork creation (upstream, harmless)
-
-Every `vm.createSelectFork` makes forge send an `anvil_nodeInfo` probe to the
-real RPC endpoint (foundry 1.8.x `AnvilNodeInfoProbe` in
-`foundry_evm_core::opts`, added by foundry-rs/foundry#16151/#16295 to detect
-Anvil-backed endpoints). Public providers (Alchemy, ...) do not implement this
-anvil-only method and answer with HTTP 400 "Unsupported method: anvil_nodeInfo".
-This is a **best-effort probe**: forge treats the failure as "not an Anvil
-endpoint" and continues normally. There is **no flag, env var, or config key**
-to disable it (checked `forge test/coverage --help` and the foundry source on
-1.8.3). Impact: one extra lightweight 400 request per fork creation — noisy in
-RPC dashboards, functionally harmless; no fork test result is affected. Do not
-try to "fix" it by pinning an older forge — the probe is intentional upstream
-behavior.
 
 ## Inconsistent Coverage in CI
 

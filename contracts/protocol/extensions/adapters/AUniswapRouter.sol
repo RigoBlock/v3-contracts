@@ -37,26 +37,10 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
 
-    /// @notice Thrown when executing commands with an expired deadline
-    error TransactionDeadlinePassed();
-
-    /// @notice Thrown when the pool is not the position owner
-    error PositionOwner();
-
-    /// @notice Thrown when the pool reached maximum number of liquidity positions
-    error UniV4PositionsLimitExceeded();
-
-    /// @notice Thrown when a call is made to the adapter directly
+    /// @notice Thrown when a call is made to the adapter directly.
+    /// @dev Not moved to IAUniswapRouter: the name is also declared in IAIntents and both are
+    /// combined in IRigoblockExtensions, where an inherited duplicate would not compile.
     error DirectCallNotAllowed();
-
-    /// @notice Thrown when a pool hook can access liquidity deltas
-    error LiquidityMintHookError(address hook);
-
-    /// @notice Thrown when the pool does not hold enough balance
-    error InsufficientNativeBalance();
-
-    /// @notice Thrown when the calldata contains both mint and increase for the same tokenId
-    error PositionDoesNotExist();
 
     string private constant _REQUIRED_VERSION = "4.0.0";
 

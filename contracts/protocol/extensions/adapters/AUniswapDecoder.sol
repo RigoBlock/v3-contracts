@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.37;
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
@@ -13,14 +13,12 @@ import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecod
 import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from "@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol";
+import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
     using TransientStateLibrary for IPoolManager;
     using CalldataDecoder for bytes;
-
-    error InvalidCommandType(uint256 commandType);
-    error UnsupportedAction(uint256 action);
 
     address internal constant ZERO_ADDRESS = address(0);
     address internal constant NON_EXISTENT_POSITION_FLAG = address(1);
@@ -78,9 +76,9 @@ abstract contract AUniswapDecoder {
                         params.tokensIn = _addUnique(params.tokensIn, lastTokenBytes.toAddress());
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.PERMIT2_PERMIT_BATCH) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.SWEEP) {
                         // sweep is used when the router is used for transfers to clear leftover
                         // address token, address recipient, uint160 amountMin
@@ -108,7 +106,7 @@ abstract contract AUniswapDecoder {
                         return params;
                     } else {
                         // placeholder area for command 0x07
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     }
                 } else {
                     // 0x08 <= command < 0x10
@@ -127,12 +125,12 @@ abstract contract AUniswapDecoder {
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
                         // Native ETH exact-out needs UniswapV2Library.getAmountInMultihop(); use WRAP_ETH + V2 exact-in instead
-                        if (path[0] == ZERO_ADDRESS) revert InvalidCommandType(command);
+                        if (path[0] == ZERO_ADDRESS) revert IAUniswapRouter.InvalidCommandType(command);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
                         return params;
                     } else if (command == Commands.PERMIT2_PERMIT) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.WRAP_ETH) {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
@@ -149,13 +147,13 @@ abstract contract AUniswapDecoder {
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
                         // no further assertion needed as uni router uses staticcall
                         return params;
                     } else {
                         // placeholder area for command 0x0f
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     }
                 }
             } else {
@@ -212,7 +210,7 @@ abstract contract AUniswapDecoder {
                                     : 0;
                                 continue;
                             } else {
-                                revert UnsupportedAction(action);
+                                revert IAUniswapRouter.UnsupportedAction(action);
                             }
                         } else {
                             if (action == Actions.SETTLE_ALL) {
@@ -242,20 +240,20 @@ abstract contract AUniswapDecoder {
                                 params.recipients = _addUnique(params.recipients, recipient);
                                 continue;
                             } else {
-                                revert UnsupportedAction(action);
+                                revert IAUniswapRouter.UnsupportedAction(action);
                             }
                         }
                     }
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 } else if (command == Commands.V3_POSITION_MANAGER_CALL) {
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 } else if (command == Commands.V4_POSITION_MANAGER_CALL) {
                     // v4 liquidity actions must be routed via modifyLiquidities endpoint
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 } else {
                     // placeholder area for commands 0x13-0x20
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 }
             }
         } else {
@@ -271,7 +269,7 @@ abstract contract AUniswapDecoder {
                 }
             } else {
                 // placeholder area for commands 0x22-0x3f
-                revert InvalidCommandType(command);
+                revert IAUniswapRouter.InvalidCommandType(command);
             }
         }
         return params;
@@ -314,7 +312,7 @@ abstract contract AUniswapDecoder {
                 positions = _addUniquePosition(positions, Position(hook, tokenId, Actions.INCREASE_LIQUIDITY));
                 return (params, positions);
             } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId, , , , ) = actionParams.decodeModifyLiquidityParams();
@@ -337,7 +335,7 @@ abstract contract AUniswapDecoder {
                 positions = _addUniquePosition(positions, Position(address(poolKey.hooks), 0, Actions.MINT_POSITION));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId, , , ) = actionParams.decodeBurnParams();
@@ -345,7 +343,7 @@ abstract contract AUniswapDecoder {
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
                 return (params, positions);
             } else {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             }
         } else {
             if (action == Actions.SETTLE_PAIR) {
@@ -393,7 +391,7 @@ abstract contract AUniswapDecoder {
                 params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
                 return (params, positions);
             } else {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             }
         }
     }

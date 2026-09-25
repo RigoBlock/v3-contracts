@@ -19,9 +19,7 @@ import {Constants} from "../../contracts/test/Constants.sol";
 import {RealDeploymentFixture} from "../fixtures/RealDeploymentFixture.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
-
-error PoolAmountSmallerThanMinimum(uint16 minimumOrderDivisor);
-error NonFractionable();
+import {MixinActions} from "../../contracts/protocol/core/actions/MixinActions.sol";
 
 contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
     /// @notice Test the high-impact direction: base token has more decimals than tokenIn.
@@ -71,7 +69,7 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
 
         vm.startPrank(user);
         IERC20(Constants.ETH_WETH).approve(poolAddr, type(uint256).max);
-        vm.expectRevert(NonFractionable.selector);
+        vm.expectRevert(MixinActions.NonFractionable.selector);
         ISmartPool(payable(poolAddr)).mintWithToken(user, amountIn, 0, Constants.ETH_WETH);
         vm.stopPrank();
     }
@@ -98,7 +96,7 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
 
         vm.startPrank(user);
         IERC20(Constants.ETH_WETH).approve(poolAddr, type(uint256).max);
-        vm.expectRevert(abi.encodeWithSelector(PoolAmountSmallerThanMinimum.selector, uint16(1000)));
+        vm.expectRevert(abi.encodeWithSelector(MixinActions.PoolAmountSmallerThanMinimum.selector, uint16(1000)));
         ISmartPool(payable(poolAddr)).mintWithToken(user, amountIn, 0, Constants.ETH_WETH);
         vm.stopPrank();
     }
@@ -147,7 +145,7 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
 
         vm.startPrank(user);
         IERC20(Constants.ETH_USDC).approve(poolAddr, type(uint256).max);
-        vm.expectRevert(NonFractionable.selector);
+        vm.expectRevert(MixinActions.NonFractionable.selector);
         ISmartPool(payable(poolAddr)).mintWithToken(user, amountIn, 0, Constants.ETH_USDC);
         vm.stopPrank();
     }
@@ -171,7 +169,7 @@ contract MintWithTokenMinimumGuardTest is Test, RealDeploymentFixture {
 
         vm.startPrank(user);
         IERC20(Constants.ETH_USDC).approve(poolAddr, type(uint256).max);
-        vm.expectRevert(abi.encodeWithSelector(PoolAmountSmallerThanMinimum.selector, uint16(1000)));
+        vm.expectRevert(abi.encodeWithSelector(MixinActions.PoolAmountSmallerThanMinimum.selector, uint16(1000)));
         ISmartPool(payable(poolAddr)).mintWithToken(user, amountIn, 0, Constants.ETH_USDC);
         vm.stopPrank();
     }

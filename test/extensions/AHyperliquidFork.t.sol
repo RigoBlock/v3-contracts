@@ -36,6 +36,9 @@ import {IA0xRouter} from "../../contracts/protocol/extensions/adapters/interface
 import {IAStaking} from "../../contracts/protocol/extensions/adapters/interfaces/IAStaking.sol";
 import {IAGovernance} from "../../contracts/protocol/extensions/adapters/interfaces/IAGovernance.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
+import {MixinPoolValue} from "../../contracts/protocol/core/state/MixinPoolValue.sol";
+import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
+import {HyperliquidLib} from "../../contracts/protocol/libraries/HyperliquidLib.sol";
 import {IOwnedUninitialized} from "../../contracts/utils/owned/IOwnedUninitialized.sol";
 import {IRigoblockGovernance} from "../../contracts/governance/IRigoblockGovernance.sol";
 
@@ -45,11 +48,6 @@ import {ISettlerActions} from "0x-settler/src/ISettlerActions.sol";
 import {IAllowanceHolder} from "0x-settler/src/allowanceholder/IAllowanceHolder.sol";
 import {IDeployer} from "0x-settler/src/deployer/IDeployer.sol";
 import {Feature} from "0x-settler/src/deployer/Feature.sol";
-
-/// @dev Local copies of error selectors so we do not need to import the implementation.
-error BaseTokenPriceFeedError();
-error TokenPriceFeedDoesNotExist(address token);
-error NavLocked();
 
 /// @title AHyperliquidForkTest
 /// @notice HyperEVM fork tests for the Hyperliquid adapter.
@@ -197,7 +195,7 @@ contract AHyperliquidForkTest is Test {
         // The next EVM block (same L1 block): the EApps balance view is settlement-locked, while the
         // unguarded NavView reader no longer adds the in-flight amount.
         vm.roll(block.number + 1);
-        vm.expectRevert(NavLocked.selector);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
 
         // The precompile has caught up by the next EVM block: the NavView read reports the same
@@ -242,7 +240,7 @@ contract AHyperliquidForkTest is Test {
             fixture.HYPER_WHYPE()
         );
 
-        vm.expectRevert(BaseTokenPriceFeedError.selector);
+        vm.expectRevert(MixinPoolValue.BaseTokenPriceFeedError.selector);
         ISmartPoolActions(whypePool).updateUnitaryValue();
     }
 
@@ -251,7 +249,7 @@ contract AHyperliquidForkTest is Test {
         address whype = fixture.HYPER_WHYPE();
 
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(TokenPriceFeedDoesNotExist.selector, whype));
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, whype));
         ISmartPoolOwnerActions(pool).setAcceptableMintToken(whype, true);
     }
 
@@ -461,7 +459,7 @@ contract AHyperliquidForkTest is Test {
 
         address user = fixture.user();
         vm.startPrank(user);
-        vm.expectRevert(NavLocked.selector);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(user, 1_000e6, 0);
         vm.stopPrank();
     }
@@ -502,7 +500,7 @@ contract AHyperliquidForkTest is Test {
 
         address user = fixture.user();
         vm.startPrank(user);
-        vm.expectRevert(NavLocked.selector);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(user, 1_000e6, 0);
         vm.stopPrank();
     }
@@ -545,7 +543,7 @@ contract AHyperliquidForkTest is Test {
         address user = fixture.user();
         uint256 userBalance = IERC20(pool).balanceOf(user);
         vm.startPrank(user);
-        vm.expectRevert(NavLocked.selector);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
         ISmartPoolActions(pool).burn(userBalance / 10, 0);
         vm.stopPrank();
     }
@@ -585,7 +583,7 @@ contract AHyperliquidForkTest is Test {
         _advanceL1Block();
 
         vm.startPrank(poolOwner);
-        vm.expectRevert(NavLocked.selector);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
         ISmartPoolOwnerActions(pool).purgeInactiveTokensAndApps();
         vm.stopPrank();
     }
@@ -611,7 +609,7 @@ contract AHyperliquidForkTest is Test {
         _advanceL1Block();
         address user = fixture.user();
         vm.startPrank(user);
-        vm.expectRevert(NavLocked.selector);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(user, 1_000e6, 0);
         vm.stopPrank();
     }
@@ -708,7 +706,7 @@ contract AHyperliquidForkTest is Test {
         _advanceL1Block();
         address user = fixture.user();
         vm.startPrank(user);
-        vm.expectRevert(NavLocked.selector);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(user, 1_000e6, 0);
         vm.stopPrank();
     }
@@ -888,7 +886,7 @@ contract AHyperliquidForkTest is Test {
 
         address whype = fixture.HYPER_WHYPE();
         vm.startPrank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(TokenPriceFeedDoesNotExist.selector, whype));
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, whype));
         IAUniswap(pool).wrapETH(1 ether);
         vm.stopPrank();
     }
@@ -915,7 +913,7 @@ contract AHyperliquidForkTest is Test {
         bytes memory data = _build0xExecuteCalldata(whype);
 
         vm.startPrank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(TokenPriceFeedDoesNotExist.selector, whype));
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, whype));
         IA0xRouter(pool).exec(settler, usdc, 0, payable(settler), data);
         vm.stopPrank();
     }

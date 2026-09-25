@@ -29,7 +29,6 @@ import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.so
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
-import {AUniswapDecoder} from "../../contracts/protocol/extensions/adapters/AUniswapDecoder.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
@@ -44,16 +43,10 @@ import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol"
 
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
-// AUniswapRouter.sol is pinned to solc 0.8.37 and cannot be imported from this 0.8.28 test job, so
-// its custom errors are re-declared here to obtain matching selectors (technical duplication,
-// mirroring the execute selector encoding in AUniswapRouterFork.t.sol).
-error PositionOwner();
-error PositionDoesNotExist();
-error InsufficientNativeBalance();
-error LiquidityMintHookError(address hook);
-
-// Test-local error used to assert raw custom-error propagation from the posm call.
-error PosmCustomError(uint256 code);
+/// @dev Test-local error used to assert raw custom-error propagation from the posm call.
+interface IPosmCustomError {
+    error PosmCustomError(uint256 code);
+}
 
 /// @notice Minimal no-op IHooks implementation. Mined via CREATE2 so that its address carries the
 ///         AFTER_ADD/REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG bits: the real PoolManager then accepts
@@ -261,7 +254,7 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
 
         // pool has no native balance: the derived value exceeds the balance
         vm.prank(poolOwner);
-        vm.expectRevert(InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(ethPool).modifyLiquidities(unlockData, block.timestamp + 1 hours);
 
         deal(ethPool, 2 ether);
@@ -467,7 +460,7 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
         );
 
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(LiquidityMintHookError.selector, hook));
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.LiquidityMintHookError.selector, hook));
         IAUniswapRouter(pool).modifyLiquidities(unlockData, block.timestamp + 1 hours);
     }
 
@@ -494,7 +487,7 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
         params[1] = abi.encode(poolKey.currency0, poolKey.currency1);
 
         vm.prank(poolOwner);
-        vm.expectRevert(PositionOwner.selector);
+        vm.expectRevert(IAUniswapRouter.PositionOwner.selector);
         IAUniswapRouter(pool).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1 hours);
     }
 
@@ -521,13 +514,13 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
         vm.mockCallRevert(
             POSM,
             abi.encodeWithSelector(IPositionManager.modifyLiquidities.selector),
-            abi.encodeWithSelector(PosmCustomError.selector, uint256(42))
+            abi.encodeWithSelector(IPosmCustomError.PosmCustomError.selector, uint256(42))
         );
 
         bytes memory unlockData = _encodeCloseCurrency(WETH);
 
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(PosmCustomError.selector, uint256(42)));
+        vm.expectRevert(abi.encodeWithSelector(IPosmCustomError.PosmCustomError.selector, uint256(42)));
         IAUniswapRouter(pool).modifyLiquidities(unlockData, block.timestamp + 1 hours);
     }
 
@@ -564,7 +557,7 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
         params[2] = abi.encode(poolKey.currency0, poolKey.currency1);
 
         vm.prank(poolOwner);
-        vm.expectRevert(PositionDoesNotExist.selector);
+        vm.expectRevert(IAUniswapRouter.PositionDoesNotExist.selector);
         IAUniswapRouter(ethPool).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1 hours);
     }
 
@@ -783,7 +776,7 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
 
         // pool has no native balance: the derived value (WRAP amount) exceeds the balance
         vm.prank(poolOwner);
-        vm.expectRevert(InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(ethPool).modifyLiquidities(unlockData, block.timestamp + 1 hours);
 
         deal(ethPool, 1 ether);
@@ -817,7 +810,7 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
         vm.prank(poolOwner);
         vm.expectRevert(
             abi.encodeWithSelector(
-                AUniswapDecoder.UnsupportedAction.selector,
+                IAUniswapRouter.UnsupportedAction.selector,
                 uint256(Actions.INCREASE_LIQUIDITY_FROM_DELTAS)
             )
         );
@@ -831,7 +824,7 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
         vm.prank(poolOwner);
         vm.expectRevert(
             abi.encodeWithSelector(
-                AUniswapDecoder.UnsupportedAction.selector,
+                IAUniswapRouter.UnsupportedAction.selector,
                 uint256(Actions.MINT_POSITION_FROM_DELTAS)
             )
         );

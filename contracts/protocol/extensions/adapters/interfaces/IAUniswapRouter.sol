@@ -7,6 +7,32 @@ interface IAUniswapRouter {
     /// @notice Thrown when a command recipient is neither the pool nor the router.
     error RecipientNotSmartPoolOrRouter();
 
+    /// @notice Thrown when executing commands with an expired deadline.
+    error TransactionDeadlinePassed();
+
+    /// @notice Thrown when the pool is not the position owner.
+    error PositionOwner();
+
+    /// @notice Thrown when the pool reached maximum number of liquidity positions.
+    error UniV4PositionsLimitExceeded();
+
+    /// @notice Thrown when a pool hook can access liquidity deltas.
+    error LiquidityMintHookError(address hook);
+
+    /// @notice Thrown when the pool does not hold enough balance.
+    error InsufficientNativeBalance();
+
+    /// @notice Thrown when the calldata contains both mint and increase for the same tokenId.
+    error PositionDoesNotExist();
+
+    /// @notice Thrown when a universal router command is not supported.
+    /// @param commandType The unsupported command byte.
+    error InvalidCommandType(uint256 commandType);
+
+    /// @notice Thrown when a v4 swap action inside a V4_SWAP command is not supported.
+    /// @param action The unsupported action byte.
+    error UnsupportedAction(uint256 action);
+
     /// @notice Emitted when a Uniswap V4 liquidity position token ID is tracked by the pool.
     /// @param tokenId The ERC-721 token ID of the newly minted V4 position.
     event UniV4PositionAdded(uint256 indexed tokenId);

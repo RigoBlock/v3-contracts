@@ -22,8 +22,8 @@ import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISm
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol";
 import {IAUniswapRouter} from "../../contracts/protocol/extensions/adapters/interfaces/IAUniswapRouter.sol";
+import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
-import {AUniswapDecoder} from "../../contracts/protocol/extensions/adapters/AUniswapDecoder.sol";
 import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
@@ -44,14 +44,10 @@ interface IPermit2Forwarder {
     function permit2() external view returns (IAllowanceTransfer);
 }
 
-/// @dev Mirrors AUniswapRouter.sol, which is pinned to solc 0.8.37 and cannot be imported here.
-interface IAUniswapRouterErrors {
-    error TransactionDeadlinePassed();
-    error DirectCallNotAllowed();
-    error InsufficientNativeBalance();
-}
-
-/// @dev Mirrors Universal Router's V3SwapRouter.V3TooLittleReceived(), propagated raw by the adapter.
+/// @dev Re-declaration of Universal Router's V3SwapRouter.V3TooLittleReceived(), which the adapter
+/// propagates raw. The upstream file (lib/universal-router/contracts/modules/uniswap/v3/V3SwapRouter.sol)
+/// cannot be imported in this 0.8.28 test job: it pulls in the v3-core module, whose submodule is
+/// not checked out under lib/universal-router/lib/.
 error V3TooLittleReceived();
 
 /// @title AUniswapRouterExecuteForkTest
@@ -195,7 +191,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         );
 
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(pool).execute(commands, inputs, _deadline());
 
         deal(pool, 1 ether);
@@ -213,7 +209,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         (bytes memory commands, bytes[] memory inputs) = _v4Swap(abi.encodePacked(uint8(Actions.TAKE)), params);
 
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.TransactionDeadlinePassed.selector);
+        vm.expectRevert(IAUniswapRouter.TransactionDeadlinePassed.selector);
         IAUniswapRouter(pool).execute(commands, inputs, block.timestamp - 1);
     }
 
@@ -286,7 +282,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         );
 
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(pool).execute(commands, inputs, _deadline());
 
         deal(pool, 1 ether);
@@ -321,7 +317,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         );
 
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(pool).execute(commands, inputs, _deadline());
 
         deal(pool, 1 ether);
@@ -392,7 +388,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         bytes memory commands = abi.encodePacked(CMD_V4_SWAP, CMD_SWEEP);
 
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(pool).execute(commands, inputs, _deadline());
 
         deal(pool, 1 ether);
@@ -462,7 +458,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         bytes memory commands = abi.encodePacked(CMD_V4_SWAP, CMD_SWEEP);
 
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(pool).execute(commands, inputs, _deadline());
 
         deal(pool, 1 ether);
@@ -653,13 +649,15 @@ contract AUniswapRouterExecuteForkTest is Test {
     }
 
     /// @notice Migrated from "a direct call should revert". 1:1: calling the adapter outside the
-    ///         pool context reverts with DirectCallNotAllowed.
+    ///         pool context reverts with DirectCallNotAllowed. The selector is sourced from
+    ///         IAIntents, which declares the identically-named error (same signature, same
+    ///         selector); AUniswapRouter's own copy is not importable from this 0.8.28 job.
     function test_Execute_DirectCall_Reverts() public {
         bytes[] memory params = new bytes[](1);
         params[0] = abi.encode(Currency.wrap(USDC), pool, uint256(1));
         (bytes memory commands, bytes[] memory inputs) = _v4Swap(abi.encodePacked(uint8(Actions.TAKE)), params);
 
-        vm.expectRevert(IAUniswapRouterErrors.DirectCallNotAllowed.selector);
+        vm.expectRevert(IAIntents.DirectCallNotAllowed.selector);
         IAUniswapRouter(aUniswapRouter).execute(commands, inputs, _deadline());
     }
 
@@ -870,7 +868,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         nativeInputs[0] = abi.encode(pool, uint256(100), uint256(1), nativePath, true, new uint256[](0));
 
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(pool).execute(nativeCommands, nativeInputs, _deadline());
 
         // phase 4: native path whose derived value exceeds the pool balance also reverts with
@@ -878,7 +876,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         deal(pool, 0.1 ether);
         nativeInputs[0] = abi.encode(pool, uint256(1 ether), uint256(1), nativePath, true, new uint256[](0));
         vm.prank(poolOwner);
-        vm.expectRevert(IAUniswapRouterErrors.InsufficientNativeBalance.selector);
+        vm.expectRevert(IAUniswapRouter.InsufficientNativeBalance.selector);
         IAUniswapRouter(pool).execute(nativeCommands, nativeInputs, _deadline());
 
         // phase 5: recipient other than pool or router reverts at decode time
@@ -899,7 +897,7 @@ contract AUniswapRouterExecuteForkTest is Test {
         inputs[0] = abi.encode(pool, uint256(100), uint256(1), path, true, new uint256[](0));
 
         vm.prank(poolOwner);
-        vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.InvalidCommandType.selector, uint256(0x09)));
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.InvalidCommandType.selector, uint256(0x09)));
         IAUniswapRouter(pool).execute(commands, inputs, _deadline());
     }
 
@@ -951,7 +949,7 @@ contract AUniswapRouterExecuteForkTest is Test {
             bytes[] memory inputs = new bytes[](1);
             inputs[0] = hex"";
             vm.prank(poolOwner);
-            vm.expectRevert(abi.encodeWithSelector(AUniswapDecoder.InvalidCommandType.selector, unsupported[i]));
+            vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.InvalidCommandType.selector, unsupported[i]));
             IAUniswapRouter(pool).execute(commands, inputs, _deadline());
         }
     }
