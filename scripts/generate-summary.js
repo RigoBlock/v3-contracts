@@ -2,8 +2,8 @@
 // Generates/updates a GitBook SUMMARY.md section from a directory of markdown files.
 // Usage: node generate-summary.js <api-dir> <summary-path>
 
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
 
 const API_DIR = process.argv[2] || "contracts/api";
 const SUMMARY_PATH = process.argv[3] || "SUMMARY.md";

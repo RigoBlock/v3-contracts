@@ -10,6 +10,7 @@ import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperliquid.sol";
 import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
@@ -147,6 +148,7 @@ contract HyperliquidDeploymentFixture is Test {
         EUpgrade eUpgrade = new EUpgrade(factory);
         ECrosschain eCrosschain = new ECrosschain();
         ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
+        EERC20 eErc20 = new EERC20();
 
         Extensions memory extensions = Extensions({
             eApps: address(eApps),
@@ -154,7 +156,8 @@ contract HyperliquidDeploymentFixture is Test {
             eUpgrade: address(eUpgrade),
             eCrosschain: address(eCrosschain),
             eNavView: address(eNavView),
-            eGmxCallback: address(0)
+            eGmxCallback: address(0),
+            eErc20: address(eErc20)
         });
 
         ExtensionsMapDeployer deployer = new ExtensionsMapDeployer();

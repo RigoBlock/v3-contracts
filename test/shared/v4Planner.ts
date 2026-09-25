@@ -1,4 +1,6 @@
-import { defaultAbiCoder } from 'ethers/lib/utils'
+import { AbiCoder } from "ethers";
+
+const defaultAbiCoder = AbiCoder.defaultAbiCoder();
 
 /**
  * Actions
@@ -46,30 +48,74 @@ export enum Actions {
   // BURN_6909 = 0x18,
 }
 
-const POOL_KEY_STRUCT = '(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)'
+const POOL_KEY_STRUCT =
+  "(address currency0,address currency1,uint24 fee,int24 tickSpacing,address hooks)";
 
-const PATH_KEY_STRUCT = '(address intermediateCurrency,uint256 fee,int24 tickSpacing,address hooks,bytes hookData)'
+const PATH_KEY_STRUCT =
+  "(address intermediateCurrency,uint256 fee,int24 tickSpacing,address hooks,bytes hookData)";
 
 const SWAP_EXACT_IN_SINGLE_STRUCT =
-  '(' + POOL_KEY_STRUCT + ' poolKey,bool zeroForOne,uint128 amountIn,uint128 amountOutMinimum,bytes hookData)'
+  "(" +
+  POOL_KEY_STRUCT +
+  " poolKey,bool zeroForOne,uint128 amountIn,uint128 amountOutMinimum,uint256 minHopPriceX36,bytes hookData)";
 
 const SWAP_EXACT_IN_STRUCT =
-  '(address currencyIn,' + PATH_KEY_STRUCT + '[] path,uint128 amountIn,uint128 amountOutMinimum)'
+  "(address currencyIn," +
+  PATH_KEY_STRUCT +
+  "[] path,uint256[] minHopPriceX36,uint128 amountIn,uint128 amountOutMinimum)";
 
 const SWAP_EXACT_OUT_SINGLE_STRUCT =
-  '(' + POOL_KEY_STRUCT + ' poolKey,bool zeroForOne,uint128 amountOut,uint128 amountInMaximum,bytes hookData)'
+  "(" +
+  POOL_KEY_STRUCT +
+  " poolKey,bool zeroForOne,uint128 amountOut,uint128 amountInMaximum,uint256 minHopPriceX36,bytes hookData)";
 
 const SWAP_EXACT_OUT_STRUCT =
-  '(address currencyOut,' + PATH_KEY_STRUCT + '[] path,uint128 amountOut,uint128 amountInMaximum)'
+  "(address currencyOut," +
+  PATH_KEY_STRUCT +
+  "[] path,uint256[] minHopPriceX36,uint128 amountOut,uint128 amountInMaximum)";
 
 const ABI_DEFINITION: { [key in Actions]: string[] } = {
   // Liquidity commands
-  [Actions.INCREASE_LIQUIDITY]: ['uint256', 'uint256', 'uint128', 'uint128', 'bytes'],
-  [Actions.DECREASE_LIQUIDITY]: ['uint256', 'uint256', 'uint128', 'uint128', 'bytes'],
-  [Actions.MINT_POSITION]: [POOL_KEY_STRUCT, 'int24', 'int24', 'uint256', 'uint128', 'uint128', 'address', 'bytes'],
-  [Actions.BURN_POSITION]: ['uint256', 'uint128', 'uint128', 'bytes'],
-  [Actions.INCREASE_LIQUIDITY_FROM_DELTAS]: ['uint256', 'uint128', 'uint128', 'bytes'],
-  [Actions.MINT_POSITION_FROM_DELTAS]: [POOL_KEY_STRUCT, 'int24', 'int24', 'uint128', 'uint128', 'address', 'bytes'],
+  [Actions.INCREASE_LIQUIDITY]: [
+    "uint256",
+    "uint256",
+    "uint128",
+    "uint128",
+    "bytes",
+  ],
+  [Actions.DECREASE_LIQUIDITY]: [
+    "uint256",
+    "uint256",
+    "uint128",
+    "uint128",
+    "bytes",
+  ],
+  [Actions.MINT_POSITION]: [
+    POOL_KEY_STRUCT,
+    "int24",
+    "int24",
+    "uint256",
+    "uint128",
+    "uint128",
+    "address",
+    "bytes",
+  ],
+  [Actions.BURN_POSITION]: ["uint256", "uint128", "uint128", "bytes"],
+  [Actions.INCREASE_LIQUIDITY_FROM_DELTAS]: [
+    "uint256",
+    "uint128",
+    "uint128",
+    "bytes",
+  ],
+  [Actions.MINT_POSITION_FROM_DELTAS]: [
+    POOL_KEY_STRUCT,
+    "int24",
+    "int24",
+    "uint128",
+    "uint128",
+    "address",
+    "bytes",
+  ],
 
   // Swapping commands
   [Actions.SWAP_EXACT_IN_SINGLE]: [SWAP_EXACT_IN_SINGLE_STRUCT],
@@ -78,48 +124,56 @@ const ABI_DEFINITION: { [key in Actions]: string[] } = {
   [Actions.SWAP_EXACT_OUT]: [SWAP_EXACT_OUT_STRUCT],
 
   // Payments commands
-  [Actions.SETTLE]: ['address', 'uint256', 'bool'],
-  [Actions.SETTLE_ALL]: ['address', 'uint256'],
-  [Actions.SETTLE_PAIR]: ['address', 'address'],
-  [Actions.TAKE]: ['address', 'address', 'uint256'],
-  [Actions.TAKE_ALL]: ['address', 'uint256'],
-  [Actions.TAKE_PORTION]: ['address', 'address', 'uint256'],
-  [Actions.TAKE_PAIR]: ['address', 'address', 'address'],
+  [Actions.SETTLE]: ["address", "uint256", "bool"],
+  [Actions.SETTLE_ALL]: ["address", "uint256"],
+  [Actions.SETTLE_PAIR]: ["address", "address"],
+  [Actions.TAKE]: ["address", "address", "uint256"],
+  [Actions.TAKE_ALL]: ["address", "uint256"],
+  [Actions.TAKE_PORTION]: ["address", "address", "uint256"],
+  [Actions.TAKE_PAIR]: ["address", "address", "address"],
 
-  [Actions.CLOSE_CURRENCY]: ['address'],
-  [Actions.CLEAR_OR_TAKE]: ['address', 'uint256'],
-  [Actions.SWEEP]: ['address', 'address'],
+  [Actions.CLOSE_CURRENCY]: ["address"],
+  [Actions.CLEAR_OR_TAKE]: ["address", "uint256"],
+  [Actions.SWEEP]: ["address", "address"],
 
-  [Actions.WRAP]: ['uint256'],
-  [Actions.UNWRAP]: ['uint256'],
-}
+  [Actions.WRAP]: ["uint256"],
+  [Actions.UNWRAP]: ["uint256"],
+};
 
 export class V4Planner {
-  actions: string
-  params: string[]
+  actions: string;
+  params: string[];
 
   constructor() {
-    this.actions = '0x'
-    this.params = []
+    this.actions = "0x";
+    this.params = [];
   }
 
   addAction(type: Actions, parameters: any[]): void {
-    let command = createAction(type, parameters)
-    this.params.push(command.encodedInput)
-    this.actions = this.actions.concat(command.action.toString(16).padStart(2, '0'))
+    let command = createAction(type, parameters);
+    this.params.push(command.encodedInput);
+    this.actions = this.actions.concat(
+      command.action.toString(16).padStart(2, "0"),
+    );
   }
 
   finalize(): string {
-    return defaultAbiCoder.encode(['bytes', 'bytes[]'], [this.actions, this.params])
+    return defaultAbiCoder.encode(
+      ["bytes", "bytes[]"],
+      [this.actions, this.params],
+    );
   }
 }
 
 export type RouterAction = {
-  action: Actions
-  encodedInput: string
-}
+  action: Actions;
+  encodedInput: string;
+};
 
 export function createAction(action: Actions, parameters: any[]): RouterAction {
-  const encodedInput = defaultAbiCoder.encode(ABI_DEFINITION[action], parameters)
-  return { action, encodedInput }
+  const encodedInput = defaultAbiCoder.encode(
+    ABI_DEFINITION[action],
+    parameters,
+  );
+  return { action, encodedInput };
 }

@@ -81,14 +81,13 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         require(CrosschainLib.isAllowedCrosschainToken(token), CrosschainLib.UnsupportedCrossChainToken());
 
         address wrappedNative = ISmartPoolImmutable(address(this)).wrappedNative();
+        bool isUnwrap = token == wrappedNative && params.shouldUnwrapNative;
 
-        if (token == wrappedNative && params.shouldUnwrapNative) {
-            // amountDelta (actual balance delta) for unwrapping
+        if (isUnwrap) {
             IWETH9(wrappedNative).withdraw(amountDelta);
             token = address(0);
         }
 
-        // Single positions[token] read: returns whether token was already active AND adds it if not.
         bool previouslyActive = StorageLib.activeTokensSet().addUnique(
             IEOracle(address(this)),
             token,
@@ -103,7 +102,7 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         }
 
         // Validate NAV integrity (common to both Transfer and Sync modes)
-        _validateNavIntegrity(token, amountDelta, storedBalance, previouslyActive);
+        _validateNavIntegrity(token, amountDelta, storedBalance, previouslyActive, isUnwrap);
 
         if (amountDelta > 0) {
             emit TokensReceived(msg.sender, token, amountDelta, uint8(params.opType));
@@ -118,10 +117,9 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
         // This increases effective supply, keeping NAV unchanged
         address baseToken = StorageLib.pool().baseToken;
 
-        // Convert amount to base token value for share calculation
-        uint256 amountValueInBase = IEOracle(address(this))
-            .convertTokenAmount(token, amount.toInt256(), baseToken)
-            .toUint256();
+        uint256 amountValueInBase = token == baseToken
+            ? amount
+            : IEOracle(address(this)).convertTokenAmount(token, amount.toInt256(), baseToken).toUint256();
 
         uint8 poolDecimals = StorageLib.pool().decimals;
         uint256 storedNav = TransientStorage.getStoredNav();
@@ -134,36 +132,38 @@ contract ECrosschain is IECrosschain, ReentrancyGuardTransient {
     }
 
     /// @dev Validates that NAV wasn't manipulated between the lock and finalize calls.
-    /// @dev Ensures no internal transfers or unauthorized operations occurred during donation flow.
-    /// @dev Updates state by calling `updateUnitaryValue` method in the pool proxy.
     function _validateNavIntegrity(
         address token,
-        uint256 amountDelta,
+        uint256 tokenAmount,
         uint256 storedBalance,
-        bool previouslyActive
+        bool previouslyActive,
+        bool isUnwrap
     ) private {
-        address baseToken = StorageLib.pool().baseToken;
-
-        // Get current NAV state after the donation
         NetAssetsValue memory navParams = ISmartPoolActions(address(this)).updateUnitaryValue();
 
-        // Calculate expected assets based on stored state + received amount
+        address baseToken = StorageLib.pool().baseToken;
         uint256 expectedAssets = TransientStorage.getStoredAssets();
 
         if (!previouslyActive) {
-            amountDelta += storedBalance;
+            if (isUnwrap) {
+                tokenAmount = address(this).balance;
+            } else {
+                tokenAmount += storedBalance;
+            }
         }
 
-        if (amountDelta > 0) {
-            expectedAssets += IEOracle(address(this))
-                .convertTokenAmount(token, amountDelta.toInt256(), baseToken)
-                .toUint256();
+        if (tokenAmount > 0) {
+            expectedAssets += token == baseToken
+                ? tokenAmount
+                : IEOracle(address(this)).convertTokenAmount(token, tokenAmount.toInt256(), baseToken).toUint256();
         }
 
-        // slither-disable-next-line incorrect-equality
+        // The snapshot converts the donated token's balance in one pass while the check converts only the delta,
+        // so fresh NAV can only exceed the reconstructed expectation - by at most 1 wei of floor rounding.
+        uint256 netTotalValue = navParams.netTotalValue;
         require(
-            navParams.netTotalValue == expectedAssets,
-            NavManipulationDetected(expectedAssets, navParams.netTotalValue)
+            netTotalValue >= expectedAssets && netTotalValue - expectedAssets <= 1,
+            NavManipulationDetected(expectedAssets, netTotalValue)
         );
 
         // Any interleaved operation that affects the supply/asset ratio must not reduce unitary NAV.

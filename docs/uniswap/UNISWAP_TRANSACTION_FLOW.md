@@ -15,6 +15,44 @@
 - Authority: `contracts/protocol/deps/Authority.sol`
 - Pool fallback: `contracts/protocol/core/sys/MixinFallback.sol`
 
+**Router version:** Universal Router `2.1.2` (git submodule `lib/universal-router` pinned to
+tag `2.1.2`). Uniswap ended API support for routers `2.0` and `2.1.1` on **October 21, 2026**;
+`2.1.2` is the only version the Uniswap API serves after that date. Compared to `2.0`, calldata
+for the swap commands changed (breaking):
+- `V3_SWAP_EXACT_IN`/`V3_SWAP_EXACT_OUT` and `V2_SWAP_EXACT_IN`/`V2_SWAP_EXACT_OUT` carry a
+  trailing `uint256[] minHopPriceX36` per-hop slippage array (index 5 of the input).
+- The v4 swap actions (`SWAP_EXACT_IN`, `SWAP_EXACT_IN_SINGLE`, `SWAP_EXACT_OUT`,
+  `SWAP_EXACT_OUT_SINGLE`) carry a `uint256[] minHopPriceX36` field inside the action params
+  (for single-hop actions: between the amount field and `hookData`; for multi-hop: between
+  `path` and the amount fields).
+- New commands `PAY_PORTION_FULL_PRECISION` (`0x07`, decoded like `PAY_PORTION`) and
+  `ACROSS_V4_DEPOSIT_V3` (`0x40`, rejected by the adapter as unsupported).
+- `COMMAND_TYPE_MASK` changed from `0x3f` to `0x7f`.
+
+The `execute` selector is unchanged, but calldata encoded for `2.0` must not be sent to `2.1.2`
+(or vice versa). The adapter's `execute`/`modifyLiquidities` signatures are unchanged.
+
+**2.1.2 router addresses (per chain):** listed in `src/utils/constants.ts` (`universalRouter`)
+and, for Arbitrum fork tests, `contracts/test/Constants.sol` (`ARB_UNIVERSAL_ROUTER`). The
+authoritative list is the Uniswap
+[supported chains](https://developers.uniswap.org/docs/trading/swapping-api/supported-chains) page.
+
+**Fork-test note:** `ForkBlocks.ARB_BLOCK` (508_400_000) is pinned past the Arbitrum 2.1.2
+deployment (block 506_233_838, 2026-09-17) so adapter fork tests execute against the live 2.1.2
+router. Bumping the block past the deployment surfaced a 1-wei failure in
+`NavViewStressedParityFork` (view NAV vs write NAV under a mocked +10% WETH price). Root
+cause: the private `NavView._getTokensAndBalances` helper converted a token appearing in both
+application balances and wallet balances (GMX collateral USDC plus wallet USDC) in separate
+entries, so each entry floor-rounded independently and drifted by up to 1 wei per duplicate
+from the write path, which aggregates per token before converting. The old block masked this
+because oracle rates happened to convert exactly; the drift is structural, not block-state.
+Fix: wallet balances are aggregated into the matching app entry per token inside
+`_getTokensAndBalances` only — no public interface or `AppTokenBalance` semantics changed
+(`getAppTokensAndBalancesView` still returns pure app balances; `getNavDataView` returns the
+same `NavData` shape, now exactly equal to the write path). Note this test deploys fresh
+extensions + implementation on the fork, so live Rigoblock code version at the pin is not a
+factor; live third-party state (GMX, oracle) is.
+
 ---
 
 ## Architecture: How Calls Reach the Adapter

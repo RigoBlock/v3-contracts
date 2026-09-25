@@ -1,55 +1,55 @@
-## [2.5.2](https://github.com/RigoBlock/v3-contracts/compare/v2.5.1...v2.5.2) (2026-07-28)
+# [2.7.0](https://github.com/RigoBlock/v3-contracts/compare/v2.6.4...v2.7.0) (2026-09-12)
 
 
 ### Bug Fixes
 
-* **ci:** remove npm registry-url to enable OIDC trusted publishing ([fe422ec](https://github.com/RigoBlock/v3-contracts/commit/fe422ec33e191d353d4fc53f4e26349265f02ed3))
-
-
-
-## [2.5.1](https://github.com/RigoBlock/v3-contracts/compare/v2.5.0...v2.5.1) (2026-07-28)
-
-
-### Bug Fixes
-
-* phantom virtual supply on donate ([856e143](https://github.com/RigoBlock/v3-contracts/commit/856e143f7ae68ac3169ec39929e3b60cd21058b2))
-
-
-
-# [2.5.0](https://github.com/RigoBlock/v3-contracts/compare/v2.4.2...v2.5.0) (2026-07-13)
-
-
-### Bug Fixes
-
-* assert long token price feed ([7188128](https://github.com/RigoBlock/v3-contracts/commit/7188128ea55bd4affb5e8f3f8f49e7665e4800a3))
-* conform erc20 methods to standard ([c1177da](https://github.com/RigoBlock/v3-contracts/commit/c1177da5e6e6e22f77cedab01f23445f03a18ec8))
-* emit log when updating uni token ids ([dffcd96](https://github.com/RigoBlock/v3-contracts/commit/dffcd966a6798ba436ecd373eb1fd0fb015b24be))
-* gmx adapter gas optimization ([d43dcab](https://github.com/RigoBlock/v3-contracts/commit/d43dcab61d51c368d350e4becc2e29e7edf0a824))
-* nav gap with gmx closed positions ([2bc7cab](https://github.com/RigoBlock/v3-contracts/commit/2bc7cab18a7e22f193e92fd54b138a75f3fc92d8))
-* update multicall adapter ([43986df](https://github.com/RigoBlock/v3-contracts/commit/43986df64264c65f70045af02ea69397397bda6f))
+* canonicalize all CBOR blobs so unchanged contracts reproduce CREATE2 addresses ([9a293fc](https://github.com/RigoBlock/v3-contracts/commit/9a293fc3372a8b3c9d179cf15f27dcdff5b7ec69))
+* deploy through Safe singleton factory on production chains ([b22cc0f](https://github.com/RigoBlock/v3-contracts/commit/b22cc0f252f84202a8780b03bcd0c2aee8e33b31))
+* move disabled ERC20 methods to EERC20 extension, restore deployable SmartPool size ([c080103](https://github.com/RigoBlock/v3-contracts/commit/c080103779d9362abe1edf4092bb669da3d38fa5))
+* scope hardhat coverage to foundry parity via coverage.skipFiles ([fe00628](https://github.com/RigoBlock/v3-contracts/commit/fe006283a442099d4886cd6d9d41593ce333693c))
 
 
 ### Features
 
-* support CHECK_SLIPPAGE action to allow exact output swaps ([9e1a600](https://github.com/RigoBlock/v3-contracts/commit/9e1a6003a85ffe452a6631bceb4b32e5f1aba5e9))
+* canonical CBOR tails restore cross-chain CREATE2 parity under Hardhat 3 ([a2e3638](https://github.com/RigoBlock/v3-contracts/commit/a2e3638ebb1e2ef4184ec5b2c6b21e6d796a821b))
+* fail closed when deploying to an unconfigured live chain ([9abdbd0](https://github.com/RigoBlock/v3-contracts/commit/9abdbd0a7502390c2bf4c1c5fbe8b61281afbe40))
 
 
 
-## [2.4.2](https://github.com/RigoBlock/v3-contracts/compare/v2.4.1...v2.4.2) (2026-05-19)
-
-
-### Bug Fixes
-
-* prompt conventional changelog version bump ([1510d4c](https://github.com/RigoBlock/v3-contracts/commit/1510d4c41ec9bca59cf7a204440e167264eeea8b))
-
-
-
-## [2.4.1](https://github.com/RigoBlock/v3-contracts/compare/v2.4.0...v2.4.1) (2026-04-17)
+## [2.6.4](https://github.com/RigoBlock/v3-contracts/compare/v2.6.3...v2.6.4) (2026-09-12)
 
 
 ### Bug Fixes
 
-* prevent pool DOS by enforcing effective supply ratio in AIntents ([3c0633b](https://github.com/RigoBlock/v3-contracts/commit/3c0633b737d3086a9072cca76872518394c99e6b)), closes [#898](https://github.com/RigoBlock/v3-contracts/issues/898) [#897](https://github.com/RigoBlock/v3-contracts/issues/897) [#895](https://github.com/RigoBlock/v3-contracts/issues/895)
+* same block nav lock on hyperEvm ([db2816f](https://github.com/RigoBlock/v3-contracts/commit/db2816f0a9a987a352919dac32e0ef02fb66dfe9))
+
+
+
+## [2.6.3](https://github.com/RigoBlock/v3-contracts/compare/v2.6.2...v2.6.3) (2026-09-10)
+
+
+### Bug Fixes
+
+* 1wei donate rounding error ([5d79afd](https://github.com/RigoBlock/v3-contracts/commit/5d79afd46f748db2e3e1a7f9e9dd4727da5cebe0))
+
+
+
+## [2.6.2](https://github.com/RigoBlock/v3-contracts/compare/v2.6.1...v2.6.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* document gmx fallback heartbeat, zero-price nav semantics and oracle twap window arithmetic ([029fccf](https://github.com/RigoBlock/v3-contracts/commit/029fccf8cd2d83757b7d96c02525a0e0d0a17e52))
+
+
+
+## [2.6.1](https://github.com/RigoBlock/v3-contracts/compare/v2.6.0...v2.6.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* EOracle conversion ([612be46](https://github.com/RigoBlock/v3-contracts/commit/612be468ea1cfd964ebf41036e47c8e3fc9b2295))
+* gmx mappings ([1cd38e3](https://github.com/RigoBlock/v3-contracts/commit/1cd38e36fdbd1c63013efa16bf8699e40d547a89))
 
 
 

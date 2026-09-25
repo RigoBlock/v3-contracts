@@ -1,86 +1,82 @@
 import { expect } from "chai";
-import { BigNumber } from "ethers";
-import hre, { deployments, waffle, ethers } from "hardhat";
-import { parseEther } from "@ethersproject/units";
-import "@nomiclabs/hardhat-ethers";
-import { AddressZero } from "@ethersproject/constants";
-import { signEip712Message } from "../utils/eip712sig";
+import { network } from "hardhat";
+import { encodeBytes32String, parseEther } from "ethers";
+import { connect, getFixedGasSigners } from "../shared/helper";
+import { createFixture } from "../utils/fixtures";
 import {
-  timeTravel,
-  stakeProposalThreshold,
-  ProposalState,
   ProposedAction,
   StakeInfo,
   StakeStatus,
   TimeType,
   VoteType,
+  stakeProposalThreshold,
+  timeTravel,
 } from "../utils/utils";
 
 describe("Governance Flash Attack", async () => {
-  const [user1, user2, user3] = waffle.provider.getWallets();
-  const mockBytes = hre.ethers.utils.formatBytes32String("mock");
-  const mockAddress = user2.address;
   const description = "gov proposal one";
 
-  const setupTests = deployments.createFixture(async ({ deployments }) => {
-    await deployments.fixture("governance-tests");
-    const StakingInstance = await deployments.get("StakingProxy");
-    const Staking = await hre.ethers.getContractFactory("Staking");
-    const GovernanceFactoryInstance = await deployments.get(
+  const setupTests = createFixture(["governance-tests"], async ({ get }) => {
+    const { ethers } = await network.getOrCreate();
+    const [user1, user2, user3] = await getFixedGasSigners();
+    const staking = await ethers.getContractAt(
+      "Staking",
+      (await get("StakingProxy")).address,
+    );
+    const governanceFactory = await ethers.getContractAt(
       "RigoblockGovernanceFactory",
+      (await get("RigoblockGovernanceFactory")).address,
     );
-    const GovernanceFactory = await hre.ethers.getContractFactory(
-      "RigoblockGovernanceFactory",
-    );
-    const ImplementationInstance = await deployments.get("RigoblockGovernance");
-    const StrategyInstance = await deployments.get(
-      "RigoblockGovernanceStrategy",
-    );
-    const governanceFactory = GovernanceFactory.attach(
-      GovernanceFactoryInstance.address,
-    );
-    const governance = await governanceFactory.callStatic.createGovernance(
-      ImplementationInstance.address,
-      StrategyInstance.address,
+    const implementation = (await get("RigoblockGovernance")).address;
+    const strategy = (await get("RigoblockGovernanceStrategy")).address;
+    const governance = await governanceFactory.createGovernance.staticCall(
+      implementation,
+      strategy,
       parseEther("100000"), // 100k GRG
       parseEther("400000"), // 400K GRG
       TimeType.Timestamp,
       "Rigoblock Governance",
     );
     await governanceFactory.createGovernance(
-      ImplementationInstance.address,
-      StrategyInstance.address,
+      implementation,
+      strategy,
       parseEther("100000"), // 100k GRG
       parseEther("400000"), // 400K GRG
       TimeType.Timestamp,
       "Rigoblock Governance",
     );
-    const Implementation = await hre.ethers.getContractFactory(
+    const governanceInstance = await ethers.getContractAt(
       "RigoblockGovernance",
+      governance,
     );
-    const mockBytes = hre.ethers.utils.formatBytes32String("mock");
-    const MockOwned = await hre.ethers.getContractFactory("MockOwned");
-    const mockPool = await MockOwned.deploy();
-    const AuthorityInstance = await deployments.get("Authority");
-    const Authority = await hre.ethers.getContractFactory("Authority");
-    const authority = Authority.attach(AuthorityInstance.address);
+    const mockPool = await ethers.deployContract("MockOwned");
+    const authority = await ethers.getContractAt(
+      "Authority",
+      (await get("Authority")).address,
+    );
     await authority.setFactory(user1.address, true);
-    const RegistryInstance = await deployments.get("PoolRegistry");
-    const Registry = await hre.ethers.getContractFactory("PoolRegistry");
-    const registry = Registry.attach(RegistryInstance.address);
-    const poolAddress = mockPool.address;
-    await registry.register(poolAddress, "mock pool", "MOCK", mockBytes);
-    const GrgTokenInstance = await deployments.get("RigoToken");
-    const GrgToken = await hre.ethers.getContractFactory("RigoToken");
-    const GrgTransferProxyInstance = await deployments.get("ERC20Proxy");
+    const registry = await ethers.getContractAt(
+      "PoolRegistry",
+      (await get("PoolRegistry")).address,
+    );
+    const poolAddress = await mockPool.getAddress();
+    const poolId = encodeBytes32String("mock");
+    await registry.register(poolAddress, "mock pool", "MOCK", poolId);
+    const grgToken = await ethers.getContractAt(
+      "RigoToken",
+      (await get("RigoToken")).address,
+    );
     return {
-      staking: Staking.attach(StakingInstance.address),
-      governanceInstance: Implementation.attach(governance),
-      grgToken: GrgToken.attach(GrgTokenInstance.address),
-      grgTransferProxyAddress: GrgTransferProxyInstance.address,
-      poolId: mockBytes,
+      staking,
+      governanceInstance,
+      grgToken,
+      grgTransferProxyAddress: (await get("ERC20Proxy")).address,
+      poolId,
       poolAddress,
-      strategy: StrategyInstance.address,
+      strategy,
+      user1,
+      user2,
+      user3,
     };
   });
 
@@ -95,6 +91,7 @@ describe("Governance Flash Attack", async () => {
         poolAddress,
         poolId,
         staking,
+        user2,
       } = await setupTests();
       // we stake the minimum amount to make a proposal
       let amount = parseEther("100000");
@@ -111,11 +108,7 @@ describe("Governance Flash Attack", async () => {
         "approve(address,uint256)",
         [user2.address, amount],
       );
-      const action = new ProposedAction(
-        grgToken.address,
-        data,
-        BigNumber.from("0"),
-      );
+      const action = new ProposedAction(await grgToken.getAddress(), data, 0n);
       // at the beginning of the new epoch, we make a proposal which can be voted on in 14 days
       // after the end of the new epoch, we make a proposal which can be voted from current block + 1
       await timeTravel({ days: 14, mine: true });
@@ -125,22 +118,22 @@ describe("Governance Flash Attack", async () => {
       // after the end of the epoch, we  flash borrow and stake GRG in order to gain quorum and > 2/3 of all stake
       amount = parseEther("400000");
       await grgToken.transfer(user2.address, amount);
-      await grgToken.connect(user2).approve(grgTransferProxyAddress, amount);
-      await staking.connect(user2).stake(amount);
+      await connect(grgToken, user2).approve(grgTransferProxyAddress, amount);
+      await connect(staking, user2).stake(amount);
       const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId);
       const toInfo = new StakeInfo(StakeStatus.Delegated, poolId);
-      await staking.connect(user2).moveStake(fromInfo, toInfo, amount);
+      await connect(staking, user2).moveStake(fromInfo, toInfo, amount);
       await staking.endEpoch();
       // voting is active since it has just started
-      await governanceInstance.connect(user2).castVote(1, VoteType.For);
+      await connect(governanceInstance, user2).castVote(1, VoteType.For);
       // voting is closed as we have reached qualified consensus (proposal cannot fail under any circumstance)
       await expect(
-        governanceInstance.connect(user2).castVote(1, VoteType.For),
-      ).to.be.revertedWith("GovVotingClosed");
+        connect(governanceInstance, user2).castVote(1, VoteType.For),
+      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
       // transaction will be executed as it is in a new block. We keep this test as we want to catch an error should
       //  future upgrades modify this logic. Relevant as moving the voting end 1 block forward instead of same block
       //  as qualifying vote would create an attack vector with limited impact where voters keep postponing voting end.
-      await expect(governanceInstance.connect(user2).execute(1)).to.emit(
+      await expect(connect(governanceInstance, user2).execute(1)).to.emit(
         grgToken,
         "Approval",
       );
@@ -156,7 +149,9 @@ describe("Governance Flash Attack", async () => {
         poolAddress,
         poolId,
         staking,
+        user2,
       } = await setupTests();
+      const { ethers } = await network.getOrCreate();
       // we stake the minimum amount to make a proposal
       let amount = parseEther("100000");
       // stake 100k GRG from user1
@@ -172,11 +167,7 @@ describe("Governance Flash Attack", async () => {
         "approve(address,uint256)",
         [user2.address, amount],
       );
-      const action = new ProposedAction(
-        grgToken.address,
-        data,
-        BigNumber.from("0"),
-      );
+      const action = new ProposedAction(await grgToken.getAddress(), data, 0n);
       // at the beginning of the new epoch, we make a proposal which can be voted on in 14 days
       // after the end of the new epoch, we make a proposal which can be voted from current block + 1
       await timeTravel({ days: 14, mine: true });
@@ -185,18 +176,17 @@ describe("Governance Flash Attack", async () => {
       await timeTravel({ seconds: 2, mine: true });
       // after the end of the epoch, we  flash borrow and stake GRG in order to gain quorum and > 2/3 of all stake
       amount = parseEther("400000");
-      const FlashGovernance =
-        await hre.ethers.getContractFactory("FlashGovernance");
-      const flashGovernance = await FlashGovernance.deploy(
-        staking.address,
-        governanceInstance.address,
+      const flashGovernance = await ethers.deployContract("FlashGovernance", [
+        await staking.getAddress(),
+        await governanceInstance.getAddress(),
         grgTransferProxyAddress,
-      );
+      ]);
       // we allow the flash governance to move GRG
-      await grgToken.approve(flashGovernance.address, amount);
+      await grgToken.approve(await flashGovernance.getAddress(), amount);
       await expect(flashGovernance.flashAttack(poolId, amount))
         .to.emit(governanceInstance, "VoteCast")
-        .withArgs(flashGovernance.address, 1, VoteType.For, amount)
+        .withArgs(await flashGovernance.getAddress(), 1, VoteType.For, amount)
+        // governance reverts with custom errors, which are emitted as raw return data
         .to.emit(flashGovernance, "ReturnDataEvent")
         .to.emit(flashGovernance, "ReturnDataEvent")
         .to.emit(flashGovernance, "CatchStringEvent")
@@ -205,7 +195,7 @@ describe("Governance Flash Attack", async () => {
         .to.emit(flashGovernance, "ReturnDataEvent")
         .withArgs("0x");
       // during the next block, transaction will be executed
-      await expect(governanceInstance.connect(user2).execute(1)).to.emit(
+      await expect(connect(governanceInstance, user2).execute(1)).to.emit(
         grgToken,
         "Approval",
       );

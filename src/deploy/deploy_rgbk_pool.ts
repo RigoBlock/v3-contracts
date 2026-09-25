@@ -1,143 +1,129 @@
-import "hardhat-deploy";
-import "@nomiclabs/hardhat-ethers";
-import { DeployFunction } from "hardhat-deploy/types";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { chainConfig, extensionsMapSalt } from "../utils/constants";
+import {ethers} from "ethers";
+import {readArtifact} from "../../rocketh/artifacts.js";
+import {deployScript} from "../../rocketh/deploy.js";
+import {isLocalEnvironment, type Environment} from "../../rocketh/config.js";
+import {chainConfig, extensionsMapSalt} from "../utils/constants";
 
-const deploy: DeployFunction = async function (
-  hre: HardhatRuntimeEnvironment,
-) {
-  if (!["hardhat", "localhost"].includes(hre.network.name)) {
-    console.log(`Skipping ${__filename} on ${hre.network.name}`);
-    return;
-  }
-
-  const { deployments, getNamedAccounts, getChainId } = hre;
-  const { deployer } = await getNamedAccounts();
-  const { deploy } = deployments;
-
-  const chainId = await getChainId();
-  const chainIdNum = parseInt(chainId, 10);
-  if (!chainId || !chainConfig[chainIdNum]) {
-    if (chainId === "31337") {
-      console.log("Skipping for Hardhat Network");
+export default deployScript(
+  async (env: Environment) => {
+    if (!isLocalEnvironment(env)) {
+      console.log(`Skipping pool deployment on ${env.name}`);
       return;
-    } else {
-      throw new Error(`Unsupported network: Chain ID ${chainId}`);
     }
-  }
 
-  const config = chainConfig[chainIdNum];
+    const deployer = env.namedAccounts.deployer;
 
-  const authority = await deploy("Authority", {
-    from: deployer,
-    args: [deployer],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const chainId = env.network.chain.id;
+    if (!chainConfig[chainId]) {
+      if (chainId === 31337) {
+        console.log("Skipping for Hardhat Network");
+        return;
+      } else {
+        throw new Error(`Unsupported network: Chain ID ${chainId}`);
+      }
+    }
 
-  const registry = await deploy("PoolRegistry", {
-    from: deployer,
-    args: [
-      authority.address,
-      deployer  // Rigoblock Dao
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const config = chainConfig[chainId];
 
-  const originalImplementationAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const proxyFactory = await deploy("RigoblockPoolProxyFactory", {
-    from: deployer,
-    args: [
-      originalImplementationAddress,
-      registry.address
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const authority = await env.deploy("Authority", {
+      account: deployer,
+      artifact: await readArtifact("Authority"),
+      args: [deployer]
+      }, {deterministic: true});
 
-  const eUpgrade = await deploy("EUpgrade", {
-    from: deployer,
-    args: [proxyFactory.address],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const registry = await env.deploy("PoolRegistry", {
+      account: deployer,
+      artifact: await readArtifact("PoolRegistry"),
+      args: [authority.address, deployer], // Rigoblock Dao
+      }, {deterministic: true});
 
-  // Notice: make sure the constants.ts file is updated with the correct address.
-  const wethAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const eOracle = await deploy("EOracle", {
-    from: deployer,
-    args: [config.oracle, wethAddress],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const originalImplementationAddress =
+      "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516";
+    const proxyFactory = await env.deploy("RigoblockPoolProxyFactory", {
+      account: deployer,
+      artifact: await readArtifact("RigoblockPoolProxyFactory"),
+      args: [originalImplementationAddress, registry.address]
+      }, {deterministic: true});
 
-  const grgStakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516"
-  const eApps = await deploy("EApps", {
-    from: deployer,
-    args: [
-      [grgStakingProxy, univ4Posm],
-    ],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const eUpgrade = await env.deploy("EUpgrade", {
+      account: deployer,
+      artifact: await readArtifact("EUpgrade"),
+      args: [proxyFactory.address]
+      }, {deterministic: true});
 
-  const eCrosschain = await deploy("ECrosschain", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
+    // Notice: make sure the constants.ts file is updated with the correct address.
+    const wethAddress = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516";
+    const eOracle = await env.deploy("EOracle", {
+      account: deployer,
+      artifact: await readArtifact("EOracle"),
+      args: [config.oracle, wethAddress]
+      }, {deterministic: true});
 
-  const extensions = {
-    eApps: eApps.address,
-    eOracle: eOracle.address,
-    eUpgrade: eUpgrade.address,
-    eCrosschain: eCrosschain.address
-  }
+    const grgStakingProxy = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516";
+    const univ4Posm = "0xeb0c08Ad44af89BcBB5Ed6dD28caD452311B8516";
+    const eApps = await env.deploy("EApps", {
+      account: deployer,
+      artifact: await readArtifact("EApps"),
+      args: [[grgStakingProxy, univ4Posm]]
+      }, {deterministic: true});
 
-  const extensionsMapDeployer = await deploy("ExtensionsMapDeployer", {
-    from: deployer,
-    args: [],
-    log: true,
-    deterministicDeployment: true,
-  });
+    const eCrosschain = await env.deploy("ECrosschain", {
+      account: deployer,
+      artifact: await readArtifact("ECrosschain"),
+      args: []
+      }, {deterministic: true});
 
-  const extensionsMapDeployerInstance = await hre.ethers.getContractAt(
-    "ExtensionsMapDeployer",
-    extensionsMapDeployer.address
-  );
+    const extensions = {
+      eApps: eApps.address,
+      eOracle: eOracle.address,
+      eUpgrade: eUpgrade.address,
+      eCrosschain: eCrosschain.address,
+    };
 
-  const params = {
-    extensions: extensions,
-    wrappedNative: wethAddress
-  }
+    await env.deploy("ExtensionsMapDeployer", {
+      account: deployer,
+      artifact: await readArtifact("ExtensionsMapDeployer"),
+      args: []
+      }, {deterministic: true});
 
-  // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
-  const salt = hre.ethers.utils.formatBytes32String(extensionsMapSalt);
-  const extensionsMapAddress = await extensionsMapDeployerInstance.callStatic.deployExtensionsMap(params, salt);
+    const params = {
+      extensions: extensions,
+      wrappedNative: wethAddress,
+    };
 
-  // Check if extensionsMapAddress has code (is a deployed contract)
-  const code = await hre.ethers.provider.getCode(extensionsMapAddress);
+    // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
+    const salt = ethers.encodeBytes32String(extensionsMapSalt);
+    const extensionsMapAddress = (await env.readByName(
+      "ExtensionsMapDeployer",
+      {
+        functionName: "deployExtensionsMap",
+        args: [params, salt],
+      },
+    )) as unknown as string;
 
-  if (code === '0x') {
-    // No code at address, proceed with deployment
-    const tx = await extensionsMapDeployerInstance.deployExtensionsMap(params, salt);
-    await tx.wait();
-  } else {
-    // skip onchain call if the contract is already deployed (would just return the address, so we can skip it)
-    console.log(`Contract already deployed at ${extensionsMapAddress}`);
-  }
+    // Check if extensionsMapAddress has code (is a deployed contract)
+    const code = (await env.network.provider.request({
+      method: "eth_getCode",
+      params: [extensionsMapAddress as `0x${string}`, "latest"],
+    })) as string;
 
-  await deploy("SmartPool", {
-    from: deployer,
-    args: [authority.address, extensionsMapAddress, config.tokenJar],
-    log: true,
-    deterministicDeployment: true,
-  });
-};
+    if (code === "0x") {
+      // No code at address, proceed with deployment
+      await env.executeByName("ExtensionsMapDeployer", {
+        account: deployer,
+        functionName: "deployExtensionsMap",
+        args: [params, salt],
+      });
+    } else {
+      // skip onchain call if the contract is already deployed (would just return the address, so we can skip it)
+      console.log(`Contract already deployed at ${extensionsMapAddress}`);
+    }
 
-deploy.tags = ['pool', 'main-suite']
-export default deploy;
+    await env.deploy("SmartPool", {
+      account: deployer,
+      artifact: await readArtifact("SmartPool"),
+      args: [authority.address, extensionsMapAddress, config.tokenJar]
+      }, {deterministic: true});
+  },
+  {tags: ["pool", "main-suite"]},
+);

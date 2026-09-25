@@ -1233,6 +1233,54 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         console2.log("\n=== WETH UNWRAPPING TEST COMPLETE ===");
     }
 
+    /// @notice Regression test: WETH unwrapping succeeds when pool holds pre-existing WETH dust.
+    function test_IntegrationFork_WethUnwrapping_WithWethPrebalance() public {
+        console2.log("\n=== WETH UNWRAPPING WITH PRE-BALANCE TEST ===");
+        uint256 wethAmount = 1 ether;
+        uint256 dust = 1e12;
+        address griefer = address(0xBAD);
+
+        // Seed pool with WETH dust before the unwrap flow.
+        deal(Constants.ETH_WETH, griefer, dust);
+        vm.prank(griefer);
+        IERC20(Constants.ETH_WETH).transfer(address(pool()), dust);
+
+        uint256 initialEthBalance = address(pool()).balance;
+        uint256 initialWethBalance = IERC20(Constants.ETH_WETH).balanceOf(address(pool()));
+        console2.log("Initial ETH balance:", initialEthBalance);
+        console2.log("Initial WETH balance:", initialWethBalance);
+        assertEq(initialWethBalance, dust, "Pool must hold WETH dust");
+
+        DestinationMessageParams memory destMsg = DestinationMessageParams({
+            opType: OpType.Transfer,
+            shouldUnwrapNative: true
+        });
+
+        deal(Constants.ETH_WETH, ethMulticallHandler, wethAmount);
+        vm.startPrank(ethMulticallHandler);
+
+        IECrosschain(address(pool())).donate(Constants.ETH_WETH, 1, destMsg);
+        IERC20(Constants.ETH_WETH).transfer(address(pool()), wethAmount);
+        IECrosschain(address(pool())).donate(Constants.ETH_WETH, wethAmount, destMsg);
+
+        vm.stopPrank();
+
+        uint256 finalEthBalance = address(pool()).balance;
+        uint256 finalWethBalance = IERC20(Constants.ETH_WETH).balanceOf(address(pool()));
+
+        console2.log("Final ETH balance:", finalEthBalance);
+        console2.log("Final WETH balance:", finalWethBalance);
+
+        assertEq(
+            finalEthBalance,
+            initialEthBalance + wethAmount,
+            "ETH balance should increase by the wrapped amount only"
+        );
+        assertEq(finalWethBalance, initialWethBalance, "Pre-existing WETH dust should remain untouched");
+
+        console2.log("\n=== WETH UNWRAPPING WITH PRE-BALANCE TEST COMPLETE ===");
+    }
+
     /*//////////////////////////////////////////////////////////////////////////
                         MULTICALL HANDLER SIMULATION TESTS
     //////////////////////////////////////////////////////////////////////////*/
@@ -1797,6 +1845,97 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             IERC20(Constants.ETH_WETH).balanceOf(ethereum.pool),
             0,
             "No WETH should remain in pool after unwrapping"
+        );
+    }
+
+    /// @notice Regression test: unwrapping Transfer donation succeeds when pool already holds WETH dust.
+    function test_IntegrationFork_ECrosschain_UnwrapWrappedTransfer_WithWethPrebalance() public {
+        uint256 initialEthBalance = ethereum.pool.balance;
+        uint256 donationAmount = 0.5e18;
+        uint256 dust = 1e12; // value rounds to >0 USDC units
+        address griefer = address(0xBAD);
+
+        // Griefer sends WETH dust directly to the pool.
+        deal(Constants.ETH_WETH, griefer, dust);
+        vm.prank(griefer);
+        IERC20(Constants.ETH_WETH).transfer(ethereum.pool, dust);
+
+        address donor = Constants.ETH_MULTICALL_HANDLER;
+        deal(Constants.ETH_WETH, donor, donationAmount);
+        vm.startPrank(donor);
+
+        // Step 1: Initialize with amount=1 using WETH
+        IECrosschain(ethereum.pool).donate(
+            Constants.ETH_WETH,
+            1,
+            DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: true})
+        );
+
+        // Step 2: Transfer WETH to pool (simulates bridge transfer)
+        IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
+
+        // Step 3: Perform actual donation with unwrapping
+        IECrosschain(ethereum.pool).donate(
+            Constants.ETH_WETH,
+            donationAmount,
+            DestinationMessageParams({opType: OpType.Transfer, shouldUnwrapNative: true})
+        );
+
+        vm.stopPrank();
+
+        // Verify only the donated WETH was unwrapped to ETH; pre-existing dust stays as WETH.
+        assertEq(
+            ethereum.pool.balance,
+            initialEthBalance + donationAmount,
+            "ETH balance should increase by donation amount only"
+        );
+        assertEq(
+            IERC20(Constants.ETH_WETH).balanceOf(ethereum.pool),
+            dust,
+            "Pre-existing WETH dust should remain untouched"
+        );
+    }
+
+    /// @notice Regression test: unwrapping Sync donation succeeds when pool already holds WETH dust.
+    function test_IntegrationFork_ECrosschain_UnwrapWrappedSync_WithWethPrebalance() public {
+        uint256 initialEthBalance = ethereum.pool.balance;
+        uint256 donationAmount = 0.5e18;
+        uint256 dust = 1e12;
+        address griefer = address(0xBAD);
+
+        deal(Constants.ETH_WETH, griefer, dust);
+        vm.prank(griefer);
+        IERC20(Constants.ETH_WETH).transfer(ethereum.pool, dust);
+
+        address donor = Constants.ETH_MULTICALL_HANDLER;
+        deal(Constants.ETH_WETH, donor, donationAmount);
+        vm.startPrank(donor);
+
+        IECrosschain(ethereum.pool).donate(
+            Constants.ETH_WETH,
+            1,
+            DestinationMessageParams({opType: OpType.Sync, shouldUnwrapNative: true})
+        );
+
+        IERC20(Constants.ETH_WETH).transfer(ethereum.pool, donationAmount);
+
+        IECrosschain(ethereum.pool).donate(
+            Constants.ETH_WETH,
+            donationAmount,
+            DestinationMessageParams({opType: OpType.Sync, shouldUnwrapNative: true})
+        );
+
+        vm.stopPrank();
+
+        assertEq(
+            ethereum.pool.balance,
+            initialEthBalance + donationAmount,
+            "ETH balance should increase by donation amount only"
+        );
+        assertEq(
+            IERC20(Constants.ETH_WETH).balanceOf(ethereum.pool),
+            dust,
+            "Pre-existing WETH dust should remain untouched"
         );
     }
 

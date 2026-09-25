@@ -1,4 +1,4 @@
-forget-std/=lib/forget-std
+forge-std/=lib/forge-std/src/
 gmx-synthetics/=lib/gmx-synthetics/contracts/
 solmate/=lib/solmate
 permit2/=lib/permit2
@@ -13,3 +13,4 @@ permit2/=lib/permit2
 @openzeppelin/=lib/permit2/lib/openzeppelin-contracts/
 hyper-evm-lib/=lib/hyper-evm-lib/src/
 wormhole-solidity-sdk/=lib/wormhole-solidity-sdk/
+prb-math/contracts/=lib/prb-math/contracts/

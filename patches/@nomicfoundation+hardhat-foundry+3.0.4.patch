@@ -1,0 +1,13 @@
+diff --git a/node_modules/@nomicfoundation/hardhat-foundry/dist/src/internal/foundry/forge.js b/node_modules/@nomicfoundation/hardhat-foundry/dist/src/internal/foundry/forge.js
+index a419c68..bab556d 100644
+--- a/node_modules/@nomicfoundation/hardhat-foundry/dist/src/internal/foundry/forge.js
++++ b/node_modules/@nomicfoundation/hardhat-foundry/dist/src/internal/foundry/forge.js
+@@ -5,7 +5,7 @@ import { HardhatError } from "@nomicfoundation/hardhat-errors";
+ import { ensureError } from "@nomicfoundation/hardhat-utils/error";
+ import { exists } from "@nomicfoundation/hardhat-utils/fs";
+ const execAsync = promisify(exec);
+-const FORGE_TIMEOUT_MS = 500;
++const FORGE_TIMEOUT_MS = 30000; // patched: cold `forge remappings` can exceed the upstream 500ms timeout on first run
+ const FORGE_VERSION_TIMEOUT_MS = 500; // 0.5 seconds
+ // Module-level mock for testing
+ let execMock;

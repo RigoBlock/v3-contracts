@@ -1,8 +1,11 @@
 import fs from "fs";
 import https from "https";
 import path from "path";
-import { Deployment } from "hardhat-deploy/types";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
+
+export interface MinimalDeployment {
+  address: string;
+  metadata?: string;
+}
 
 export interface VendorStatus {
   verified: boolean;
@@ -28,18 +31,19 @@ const SOURCIFY_RATE_LIMIT_MS = 210;
 const SOURCIFY_POLL_INTERVAL_MS = 3000;
 const SOURCIFY_POLL_MAX_ATTEMPTS = 20;
 
-function getStatusFilePath(hre: HardhatRuntimeEnvironment): string {
-  return path.join(".rigo", "verification-status", `${hre.network.name}.json`);
+function getStatusFilePath(networkName: string): string {
+  return path.join(".rigo", "verification-status", `${networkName}.json`);
 }
 
 export function loadVerificationStatus(
-  hre: HardhatRuntimeEnvironment,
+  networkName: string,
+  chainId: string | number,
 ): VerificationStatusFile {
-  const filePath = getStatusFilePath(hre);
+  const filePath = getStatusFilePath(networkName);
   if (!fs.existsSync(filePath)) {
     return {
-      network: hre.network.name,
-      chainId: hre.network.config.chainId?.toString() || "",
+      network: networkName,
+      chainId: chainId.toString(),
       contracts: {},
     };
   }
@@ -49,18 +53,18 @@ export function loadVerificationStatus(
     ) as VerificationStatusFile;
   } catch {
     return {
-      network: hre.network.name,
-      chainId: hre.network.config.chainId?.toString() || "",
+      network: networkName,
+      chainId: chainId.toString(),
       contracts: {},
     };
   }
 }
 
 export function saveVerificationStatus(
-  hre: HardhatRuntimeEnvironment,
+  networkName: string,
   status: VerificationStatusFile,
 ): void {
-  const filePath = getStatusFilePath(hre);
+  const filePath = getStatusFilePath(networkName);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(status, null, 2));
 }
@@ -71,7 +75,7 @@ export function saveVerificationStatus(
  */
 export function resetStatusForChangedContracts(
   status: VerificationStatusFile,
-  deployments: Record<string, Deployment>,
+  deployments: Record<string, MinimalDeployment>,
 ): void {
   for (const [name, contractStatus] of Object.entries(status.contracts)) {
     const deployment = deployments[name];
@@ -201,13 +205,11 @@ function sleep(ms: number): Promise<void> {
  * Returns a map address -> verified.
  */
 export async function checkSourcifyBatch(
-  hre: HardhatRuntimeEnvironment,
+  chainId: string | number,
   addresses: string[],
 ): Promise<Record<string, boolean>> {
   const result: Record<string, boolean> = {};
   if (addresses.length === 0) return result;
-
-  const chainId = await hre.getChainId();
 
   for (const address of addresses) {
     const url = `${SOURCIFY_ENDPOINT}/v2/contract/${chainId}/${address.toLowerCase()}`;
@@ -261,12 +263,11 @@ function formatSourcifyError(contractName: string, customCode: string): string {
  * until the verification job completes.
  */
 export async function verifySourcifyV2(
-  hre: HardhatRuntimeEnvironment,
+  chainId: string | number,
   contractName: string,
   address: string,
   metadataString: string,
 ): Promise<boolean> {
-  const chainId = await hre.getChainId();
   const metadata = JSON.parse(metadataString) as {
     language: string;
     compiler: { version: string };
@@ -387,10 +388,9 @@ export async function verifySourcifyV2(
  * Uses Etherscan v2 API (chainid parameter).
  */
 export async function checkEtherscan(
-  hre: HardhatRuntimeEnvironment,
+  chainId: string | number,
   address: string,
 ): Promise<boolean> {
-  const chainId = await hre.getChainId();
   const apiKey = process.env.ETHERSCAN_API_KEY;
   if (!apiKey) {
     console.warn("ETHERSCAN_API_KEY not set; skipping Etherscan status check.");
@@ -413,12 +413,12 @@ export async function checkEtherscan(
  * Throttles Etherscan checks to respect rate limits.
  */
 export async function checkEtherscanBatch(
-  hre: HardhatRuntimeEnvironment,
+  chainId: string | number,
   addresses: string[],
 ): Promise<Record<string, boolean>> {
   const result: Record<string, boolean> = {};
   for (const address of addresses) {
-    result[address.toLowerCase()] = await checkEtherscan(hre, address);
+    result[address.toLowerCase()] = await checkEtherscan(chainId, address);
     await sleep(ETHERSCAN_RATE_LIMIT_MS);
   }
   return result;

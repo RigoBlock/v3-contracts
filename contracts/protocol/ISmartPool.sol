@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {IERC20} from "./interfaces/IERC20.sol";
 import {ISmartPoolActions} from "./interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolEvents} from "./interfaces/v4/pool/ISmartPoolEvents.sol";
 import {ISmartPoolFallback} from "./interfaces/v4/pool/ISmartPoolFallback.sol";
@@ -15,7 +14,6 @@ import {IStorageAccessible} from "./interfaces/v4/pool/IStorageAccessible.sol";
 /// @author Gabriele Rigo - <gab@rigoblock.com>
 // solhint-disable-next-line
 interface ISmartPool is
-    IERC20,
     ISmartPoolImmutable,
     ISmartPoolEvents,
     ISmartPoolFallback,

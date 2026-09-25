@@ -51,7 +51,7 @@ interface IOracle {
     function getState(PoolKey calldata key) external view returns (ObservationState memory);
 }
 
-contract AIntentsPerformanceAttributionAnalysisTest is Test, RealDeploymentFixture {
+contract AIntentsPerformanceAttributionAnalysisForkTest is Test, RealDeploymentFixture {
     uint256 public constant TOLERANCE_BPS = 500; // 5%
 
     /// @notice Calculate secondsAgos array for oracle queries (matches EOracle implementation)

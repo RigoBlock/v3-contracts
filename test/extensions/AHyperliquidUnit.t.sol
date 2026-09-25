@@ -6,6 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperliquid.sol";
 import {IAHyperliquid} from "../../contracts/protocol/extensions/adapters/interfaces/IAHyperliquid.sol";
 import {HyperliquidLib} from "../../contracts/protocol/libraries/HyperliquidLib.sol";
+import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
@@ -76,8 +77,21 @@ contract HyperliquidLibHarness {
         return HyperliquidLib.getHyperliquidBalances(account);
     }
 
+    function assertNavUnlocked() external view {
+        HyperliquidLib.assertNavUnlocked();
+    }
+
     function recordAction(int256 amount) external {
-        HyperliquidLib.recordAction(amount);
+        HyperliquidLib.recordAction(amount, false);
+    }
+
+    function recordSpotSend(uint64 amount) external returns (uint64 pendingBefore) {
+        return HyperliquidLib.recordAction(int256(uint256(amount)), true);
+    }
+
+    /// @notice Returns the raw lastActionCompositeBlock to assert the composite packing.
+    function lastActionCompositeBlock() external view returns (uint256) {
+        return uint256(StorageLib.hyperliquidData().lastActionCompositeBlock);
     }
 }
 
@@ -130,6 +144,11 @@ contract AHyperliquidUnit is Test {
     AHyperliquid private adapter;
     PoolHarness private pool;
     HyperliquidLibHarness private libHarness;
+
+    // Current value mocked for the HyperCore L1 block number precompile. In-flight tracking and the
+    // settlement lock are keyed to the L1 block, so tests advance this value to simulate a new
+    // HyperCore block (HyperEVM learns about HyperCore state changes only when the L1 block advances).
+    uint64 private _l1Block;
 
     // Hyperliquid system and precompile addresses are sourced from hyper-evm-lib and Constants.
     address private immutable _usdc = Constants.HYPER_USDC;
@@ -193,12 +212,23 @@ contract AHyperliquidUnit is Test {
         // Mock the account-existence precompile so sendRawAction tests can run.
         _mockCoreUserExists(address(pool), true);
 
-        // Mock the L1 block number precompile so composite-block in-flight tracking can run.
-        _mockL1BlockNumber();
+        // Mock the L1 block number precompile so L1-keyed in-flight tracking can run.
+        _l1Block = uint64(block.number);
+        _mockL1BlockNumber(_l1Block);
     }
 
-    function _mockL1BlockNumber() private {
-        vm.mockCall(_l1BlockNumber, abi.encode(), abi.encode(uint64(block.number)));
+    function _mockL1BlockNumber(uint64 l1Block) private {
+        vm.mockCall(_l1BlockNumber, abi.encode(), abi.encode(l1Block));
+    }
+
+    /// @dev Simulates a new HyperCore block: the L1 block number precompile advances and the EVM
+    ///  block rolls forward. State precompiles only reflect HyperCore state from this point on.
+    function _advanceL1Block() private {
+        unchecked {
+            _l1Block += 1;
+        }
+        vm.roll(block.number + 1);
+        _mockL1BlockNumber(_l1Block);
     }
 
     function _mockCoreUserExists(address account, bool exists) private {
@@ -465,6 +495,7 @@ contract AHyperliquidUnit is Test {
     function testGetHyperliquidBalancesWithAccountValue() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
+        // Perp account value is already in 6-decimal USDC: 1_000_000 = 1 USDC.
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
@@ -483,13 +514,13 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 10_000); // 1_000_000 HyperCore wei / 1e2 -> 10_000 EVM USDC
+        assertEq(balances[0].amount, 1_000_000); // 1 USDC (6 dec)
     }
 
     function testGetHyperliquidBalancesReturnsNegativeNet() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
-        // Perp account value -0.01 USDC Core wei, zero spot -> return -0.01 USDC (EVM 6-dec).
+        // Perp account value -1 USDC (6 dec), zero spot -> return -1 USDC.
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
@@ -507,18 +538,18 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, -10_000, "Negative net balance should be returned as-is");
+        assertEq(balances[0].amount, -1_000_000, "Negative net balance should be returned as-is");
     }
 
     function testGetHyperliquidBalancesNegativePerpOffsetBySpot() public {
         vm.chainId(Constants.HYPEREVM_CHAIN_ID);
 
-        // Perp -0.5 USDC Core wei, spot +1.5 USDC Core wei -> net 1 USDC (EVM 6-dec).
+        // Perp -0.5 USDC (6 dec), spot +1.5 USDC (8-dec wei) -> net 1 USDC (6 dec).
         vm.mockCall(
             _accountMarginSummary,
             abi.encode(uint32(0), address(libHarness)),
             abi.encode(
-                PrecompileLib.AccountMarginSummary({accountValue: -50_000_000, marginUsed: 0, ntlPos: 0, rawUsd: 0})
+                PrecompileLib.AccountMarginSummary({accountValue: -500_000, marginUsed: 0, ntlPos: 0, rawUsd: 0})
             )
         );
 
@@ -556,16 +587,24 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 0);
 
-        // After recording an action, zero account value returns 1 wei dust to prevent purge.
+        // Recording an action in the same EVM block keeps the lock open: the in-flight dust keeps the
+        // app active and share issuance is not blocked while the Core-side view is unchanged.
         libHarness.recordAction(0);
+        libHarness.assertNavUnlocked();
         balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 1);
-        assertEq(balances[0].token, _usdc);
         assertEq(balances[0].amount, 1);
 
-        // After advancing one block, the dust is gone and the app can be purged because the
-        // HyperCore account does not exist.
-        vm.roll(block.number + 1);
+        // From the next EVM block on, the 16-second settlement lock applies until the window elapses,
+        // even if the L1 block is unchanged.
+        _advanceL1Block();
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        libHarness.assertNavUnlocked();
+
+        // After the window elapses, the in-flight dust is reset and the app can be purged because
+        // the HyperCore account does not exist.
+        vm.warp(block.timestamp + 17 seconds);
+        libHarness.assertNavUnlocked();
         balances = libHarness.getHyperliquidBalances(address(libHarness));
         assertEq(balances.length, 0);
     }
@@ -654,13 +693,14 @@ contract AHyperliquidUnit is Test {
         IAHyperliquid(address(pool)).sendRawAction(data);
         IAHyperliquid(address(pool)).sendRawAction(data);
 
-        // Third send in the same block must revert because the cumulative pending amount exceeds the
+        // Third send in the same EVM block must revert because the cumulative pending amount exceeds the
         // available spot balance once the reserve is accounted for.
         vm.expectRevert(IAHyperliquid.InsufficientBridgeReserve.selector);
         IAHyperliquid(address(pool)).sendRawAction(data);
 
-        // After rolling to a new block the cumulative counter is reset, so a fresh send succeeds.
-        vm.roll(block.number + 1);
+        // The cumulative counter resets at the next EVM block (HyperCore processes the queued sends
+        // and the precompile view catches up), so a fresh send succeeds.
+        _advanceL1Block();
         _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, amountWei + _BRIDGE_GAS_RESERVE());
         IAHyperliquid(address(pool)).sendRawAction(data);
     }
@@ -686,7 +726,7 @@ contract AHyperliquidUnit is Test {
             abi.encode(uint256(0))
         );
 
-        // Mock a non-zero HyperCore account value so the Hyperliquid branch produces a balance.
+        // Mock a non-zero HyperCore perp account value (6-dec USDC) so the Hyperliquid branch produces a balance.
         _mockAccountMarginSummary(address(pool), 1_000_000);
         _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, 0);
         _mockCoreUserExists(address(pool), true);
@@ -694,7 +734,174 @@ contract AHyperliquidUnit is Test {
         AppTokenBalance[] memory balances = navHarness.getAppTokenBalances(address(pool), grgStakingProxy, address(0));
         assertEq(balances.length, 1);
         assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 10_000);
+        assertEq(balances[0].amount, 1_000_000);
+    }
+
+    /// @notice A spot-send withdrawal request does not deflate the Hyperliquid balance: no in-flight
+    ///  subtraction is applied, because the request only queues the action and its destination is the
+    ///  pool's own address (NAV-neutral at every stage). Within the same EVM block the lock stays open;
+    ///  from the next L1 block the settlement time lock applies until the Core debit and EVM credit
+    ///  have both landed; balance views keep working throughout.
+    function testSpotSendWithdrawalDoesNotChangeNavAfterWindow() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        HyperliquidLibHarness harness = new HyperliquidLibHarness();
+        uint64 spotAmountWei = 200e6 * 1e2;
+
+        // HyperCore holds 200 USDC for the pool; zero perp account value.
+        _mockAccountMarginSummary(address(harness), 0);
+        _mockSpotBalance(address(harness), HLConstants.USDC_TOKEN_INDEX, spotAmountWei);
+        _mockCoreUserExists(address(harness), true);
+
+        AppTokenBalance[] memory balances = harness.getHyperliquidBalances(address(harness));
+        assertEq(balances.length, 1);
+        int256 appBalanceBefore = balances[0].amount;
+        assertEq(appBalanceBefore, 200e6);
+
+        // Record the spot-send action: the same EVM block stays unlocked (nothing has moved yet and
+        // the transfer is NAV-neutral), and the balance view does not subtract the pending send.
+        harness.recordSpotSend(50e6 * 1e2);
+        harness.assertNavUnlocked();
+
+        // The balance view still reports the raw Core balance, which does not subtract the pending send.
+        balances = harness.getHyperliquidBalances(address(harness));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].amount, appBalanceBefore, "Spot-send request must not deflate NAV");
+
+        // From the next L1 block on, the time lock keeps share issuance/redemption reverting.
+        _advanceL1Block();
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+
+        // After the window elapses the balance is still the unchanged Core balance.
+        vm.warp(block.timestamp + 17 seconds);
+        harness.assertNavUnlocked();
+        balances = harness.getHyperliquidBalances(address(harness));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].amount, appBalanceBefore, "Spot-send request must not deflate NAV");
+    }
+
+    /// @notice `assertNavUnlocked` allows same-EVM-block actions after a recorded deposit and reverts
+    ///  with `NavLocked()` from the next EVM block until the 16-second window has elapsed.
+    function testAssertNavUnlockedSettlementWindow() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+        HyperliquidLibHarness harness = new HyperliquidLibHarness();
+
+        _mockAccountMarginSummary(address(harness), 0);
+        _mockSpotBalance(address(harness), HLConstants.USDC_TOKEN_INDEX, 0);
+        _mockCoreUserExists(address(harness), true);
+
+        // No action recorded yet: unlocked.
+        harness.assertNavUnlocked();
+
+        // Record a deposit: the same EVM block stays unlocked (in-flight applies).
+        harness.recordAction(100e6);
+        harness.assertNavUnlocked();
+
+        // From the next EVM block on, within the window, share issuance/redemption must revert.
+        _advanceL1Block();
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+
+        // Warp just past the 16-second window; unlocked again.
+        vm.warp(block.timestamp + 17 seconds);
+        harness.assertNavUnlocked();
+    }
+
+    /// @notice The in-flight amount applies only within the same EVM block as the recorded action and
+    ///  is dropped at the next EVM block — HyperCore processes EVM->Core transfers and CoreWriter
+    ///  actions right after each EVM block is built, so the precompile view can already reflect the
+    ///  deposit in the next block; keeping the add-back any longer would double-count.
+    function testInFlightAppliesOnlyInSameEvmBlock() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        HyperliquidLibHarness harness = new HyperliquidLibHarness();
+
+        // HyperCore does not reflect the deposit yet.
+        _mockAccountMarginSummary(address(harness), 0);
+        _mockSpotBalance(address(harness), HLConstants.USDC_TOKEN_INDEX, 0);
+        _mockCoreUserExists(address(harness), true);
+
+        int256 depositAmount = 100e6;
+        harness.recordAction(depositAmount);
+
+        // Same EVM block: in-flight applies, lock stays open.
+        harness.assertNavUnlocked();
+        AppTokenBalance[] memory balances = harness.getHyperliquidBalances(address(harness));
+        assertEq(balances[0].amount, depositAmount, "In-flight amount must apply in the same EVM block");
+
+        // Next EVM block (same L1 block): in-flight is dropped — the precompile is expected to
+        // reflect the deposit by now — and the time lock takes over.
+        vm.roll(block.number + 1);
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+        balances = harness.getHyperliquidBalances(address(harness));
+        assertEq(balances[0].amount, 1, "In-flight amount must be dropped at the next EVM block");
+    }
+
+    /// @notice The composite block packing identifies the current EVM block and HyperCore block
+    ///  together: high 128 bits = HyperCore L1 block number, low 128 bits = EVM block number. The
+    ///  full composite is the comparison key for in-flight expiry.
+    function testCompositeBlockPacking() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        HyperliquidLibHarness harness = new HyperliquidLibHarness();
+
+        harness.recordAction(100e6);
+        uint256 composite = harness.lastActionCompositeBlock();
+        assertEq(composite >> 128, uint256(_l1Block), "High bits must hold the L1 block number");
+        assertEq(uint128(composite), uint128(block.number), "Low bits must hold the EVM block number");
+
+        // The L1 block advances: a new action repacks the composite with the new L1 block and the
+        // current EVM block.
+        _advanceL1Block();
+        harness.recordAction(50e6);
+        composite = harness.lastActionCompositeBlock();
+        assertEq(composite >> 128, uint256(_l1Block), "High bits must track the advanced L1 block");
+        assertEq(uint128(composite), uint128(block.number), "Low bits must track the current EVM block");
+    }
+
+    /// @notice Recording a new action within the window re-arms the 16-second settlement lock.
+    function testRecordActionReArmsSettlementWindow() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        libHarness.recordAction(0);
+        _advanceL1Block();
+        vm.warp(block.timestamp + 10 seconds);
+
+        // Still locked 10 seconds in; a new action re-arms the window from the new timestamp.
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        libHarness.assertNavUnlocked();
+        libHarness.recordAction(0);
+
+        // Same EVM block as the new action: unlocked. Next EVM block within 16s of the new action: locked again.
+        libHarness.assertNavUnlocked();
+        _advanceL1Block();
+        vm.expectRevert(HyperliquidLib.NavLocked.selector);
+        libHarness.assertNavUnlocked();
+
+        vm.warp(block.timestamp + 17 seconds);
+        libHarness.assertNavUnlocked();
+    }
+
+    /// @notice `recordAction` with `isSpotSend=true` accumulates pending amounts within the same EVM
+    ///  block, and resets them at the next EVM block (HyperCore processes actions right after each
+    ///  EVM block is built, so the precompile view catches up).
+    function testRecordSpotSendCumulativeSameBlock() public {
+        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
+
+        uint64 amount = 100e6 * 1e2;
+        uint64 pending1 = libHarness.recordSpotSend(amount);
+        assertEq(pending1, 0, "First spot-send should have zero prior pending amount");
+
+        // A second request in the SAME EVM block still sees the pending amount.
+        uint64 pending2 = libHarness.recordSpotSend(amount);
+        assertEq(pending2, amount, "Second spot-send in the same block should see the first amount as pending");
+
+        // The pending counter resets at the next EVM block.
+        _advanceL1Block();
+        uint64 pending3 = libHarness.recordSpotSend(amount);
+        assertEq(pending3, 0, "Pending amount must reset at the next EVM block");
     }
 
     function _BRIDGE_GAS_RESERVE() private pure returns (uint64) {

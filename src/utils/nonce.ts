@@ -1,29 +1,34 @@
-import { BigNumber, Wallet } from "ethers";
-import { JsonRpcSigner } from "@ethersproject/providers";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
+import type {EIP1193GenericRequest, EIP1193SignerProvider} from "eip-1193";
+import {NETWORK_FEE_CAPS} from "./networkFees";
 
 let isEnabled = false;
 const managedCounter = new Map<string, number>();
-let originalNetworkSend:
-  | ((method: string, params: any[]) => Promise<any>)
+let originalRequest:
+  | ((args: {method: string; params?: any}) => Promise<any>)
   | undefined;
+let activeFeeCaps: {maxFeePerGas: bigint; maxPriorityFeePerGas: bigint} | undefined;
+let localEnvironment = false;
 
 function normalizeAddress(address: string): string {
   return address.toLowerCase();
+}
+
+function toHex(value: number | bigint): string {
+  return `0x${BigInt(value).toString(16)}`;
 }
 
 async function getRealTransactionCount(
   address: string,
   blockTag: string,
 ): Promise<number> {
-  if (!originalNetworkSend) {
+  if (!originalRequest) {
     throw new Error("Nonce manager not initialized");
   }
-  const result = await originalNetworkSend("eth_getTransactionCount", [
-    address,
-    blockTag,
-  ]);
-  return BigNumber.from(result).toNumber();
+  const result = await originalRequest({
+    method: "eth_getTransactionCount",
+    params: [address, blockTag],
+  });
+  return Number(BigInt(result as string));
 }
 
 async function ensureCounter(address: string): Promise<number> {
@@ -36,24 +41,22 @@ async function ensureCounter(address: string): Promise<number> {
   return count;
 }
 
-function applyTransactionOverrides(
+function applyFeeCapsAndNonce(
   transaction: any,
-  nonce: number,
-  maxFeePerGas: number | undefined,
-  maxPriorityFeePerGas: number | undefined,
+  nonce: number | undefined,
 ): any {
-  const tx = { ...transaction, nonce };
+  const tx = {...transaction};
+  if (nonce !== undefined) {
+    tx.nonce = toHex(nonce);
+  }
 
-  if (maxFeePerGas !== undefined || maxPriorityFeePerGas !== undefined) {
+  if (activeFeeCaps) {
     // Network config supplies EIP-1559 caps: force a type-2 transaction and
-    // drop any legacy gasPrice that may have been added by Hardhat.
+    // drop any legacy gasPrice that may have been added by rocketh.
     delete tx.gasPrice;
-    if (maxFeePerGas !== undefined) {
-      tx.maxFeePerGas = maxFeePerGas;
-    }
-    if (maxPriorityFeePerGas !== undefined) {
-      tx.maxPriorityFeePerGas = maxPriorityFeePerGas;
-    }
+    tx.type = "0x2";
+    tx.maxFeePerGas = toHex(activeFeeCaps.maxFeePerGas);
+    tx.maxPriorityFeePerGas = toHex(activeFeeCaps.maxPriorityFeePerGas);
   } else if (
     tx.maxFeePerGas !== undefined ||
     tx.maxPriorityFeePerGas !== undefined
@@ -66,104 +69,110 @@ function applyTransactionOverrides(
   return tx;
 }
 
+function bumpCounter(address: string, nonce: number): void {
+  const normalized = normalizeAddress(address);
+  managedCounter.set(
+    normalized,
+    Math.max(managedCounter.get(normalized) ?? nonce, nonce + 1),
+  );
+}
+
 function isManagedBlockTag(blockTag?: string): boolean {
   return blockTag === "latest" || blockTag === "pending";
 }
 
+/**
+ * Wraps a rocketh signer so that, at signing time, transactions get the
+ * managed nonce and the network's EIP-1559 fee caps applied. rocketh signs
+ * locally (signerOnly) before broadcasting, so this is the last point where
+ * the transaction can still be modified.
+ */
+export function wrapManagedSigner(
+  signer: EIP1193SignerProvider,
+): EIP1193SignerProvider {
+  return {
+    request: async (args: EIP1193GenericRequest): Promise<any> => {
+      if (
+        args.method === "eth_signTransaction" ||
+        args.method === "eth_sendTransaction"
+      ) {
+        const transaction = (args.params as any[])[0];
+        const from = transaction.from as string;
+        let nonce: number | undefined;
+        if (transaction.nonce !== undefined && transaction.nonce !== null) {
+          nonce = Number(BigInt(transaction.nonce));
+        } else if (managedCounter.has(normalizeAddress(from))) {
+          nonce = managedCounter.get(normalizeAddress(from))!;
+        }
+        const result = await signer.request({
+          ...args,
+          params: [applyFeeCapsAndNonce(transaction, nonce)],
+        } as any);
+        if (nonce !== undefined) {
+          bumpCounter(from, nonce);
+        }
+        return result;
+      }
+      return signer.request(args as any);
+    },
+  } as EIP1193SignerProvider;
+}
+
+interface ManagedNonceNetwork {
+  name: string;
+  network: {provider: {request: (args: any) => Promise<any>}};
+}
+
 export async function enableManagedNonce(
-  hre: HardhatRuntimeEnvironment,
+  env: ManagedNonceNetwork,
   deployer: string,
 ): Promise<void> {
-  if (isEnabled) {
-    return;
-  }
-
   // The nonce manager is only meant for live/forked deployments. Applying it
   // to the in-memory hardhat network breaks unit tests that rely on
   // snapshots/evm_revert, because the managed counter does not reset with the
   // chain state.
-  if (hre.network.name === "hardhat") {
+  if (
+    localEnvironment ||
+    ["hardhat", "localhost", "default"].includes(env.name) ||
+    (env as any).network?.chain?.id === 31337
+  ) {
+    localEnvironment = true;
+    return;
+  }
+
+  if (isEnabled) {
     return;
   }
 
   isEnabled = true;
 
-  const networkProvider = hre.network.provider;
-  originalNetworkSend = networkProvider.send.bind(networkProvider);
+  activeFeeCaps = NETWORK_FEE_CAPS[env.name];
 
-  const networkConfig = hre.network.config as {
-    maxFeePerGas?: number;
-    maxPriorityFeePerGas?: number;
-  };
-  const configMaxFee = networkConfig.maxFeePerGas;
-  const configPriorityFee = networkConfig.maxPriorityFeePerGas;
+  const networkProvider = env.network.provider as any;
+  originalRequest = networkProvider.request.bind(networkProvider);
 
-  // Intercept RPC nonce queries so hardhat-deploy's internal nonce resolution
-  // (deploy/execute use "latest") reads from our shared counter instead of
-  // the RPC, preventing two calls from grabbing the same nonce.
-  (networkProvider as any).send = async function (
-    method: string,
-    params: any[],
-  ): Promise<any> {
-    if (method === "eth_getTransactionCount") {
-      const [address, blockTag] = params;
+  // Intercept RPC nonce queries so rocketh's transaction preparation
+  // (eth_getTransactionCount with "pending") reads from our shared counter
+  // instead of the RPC, preventing two calls from grabbing the same nonce.
+  networkProvider.request = async function (args: {
+    method: string;
+    params?: any;
+  }): Promise<any> {
+    if (args.method === "eth_getTransactionCount") {
+      const [address, blockTag] = args.params as [string, string];
       const normalized = normalizeAddress(address);
       if (isManagedBlockTag(blockTag) && managedCounter.has(normalized)) {
-        return BigNumber.from(managedCounter.get(normalized)!).toHexString();
+        return toHex(managedCounter.get(normalized)!);
       }
     }
-    return originalNetworkSend!(method, params);
-  };
-
-  const originalJsonRpcSend = JsonRpcSigner.prototype.sendTransaction;
-  JsonRpcSigner.prototype.sendTransaction = async function (
-    transaction: any,
-  ): Promise<any> {
-    const address = normalizeAddress(await this.getAddress());
-    let nonce: number;
-    if (transaction.nonce !== undefined && transaction.nonce !== null) {
-      nonce = BigNumber.from(transaction.nonce).toNumber();
-    } else {
-      nonce = await ensureCounter(address);
-    }
-    const response = await originalJsonRpcSend.call(
-      this,
-      applyTransactionOverrides(transaction, nonce, configMaxFee, configPriorityFee),
-    );
-    managedCounter.set(
-      address,
-      Math.max(managedCounter.get(address) ?? nonce, nonce + 1),
-    );
-    return response;
-  };
-
-  const originalWalletSend = Wallet.prototype.sendTransaction;
-  Wallet.prototype.sendTransaction = async function (
-    transaction: any,
-  ): Promise<any> {
-    const address = normalizeAddress(await this.getAddress());
-    let nonce: number;
-    if (transaction.nonce !== undefined && transaction.nonce !== null) {
-      nonce = BigNumber.from(transaction.nonce).toNumber();
-    } else {
-      nonce = await ensureCounter(address);
-    }
-    const response = await originalWalletSend.call(
-      this,
-      applyTransactionOverrides(transaction, nonce, configMaxFee, configPriorityFee),
-    );
-    managedCounter.set(
-      address,
-      Math.max(managedCounter.get(address) ?? nonce, nonce + 1),
-    );
-    return response;
+    return originalRequest!(args);
   };
 
   await ensureCounter(deployer);
 }
 
 export async function waitForNonceSync(
-  hre: HardhatRuntimeEnvironment,
+  env: ManagedNonceNetwork,
   deployer: string,
 ): Promise<void> {
   const normalized = normalizeAddress(deployer);
@@ -174,6 +183,6 @@ export async function waitForNonceSync(
       `Waiting for nonce sync: managed ${managed}, latest ${onChain}...`,
     );
     await new Promise((resolve) => setTimeout(resolve, 3000));
-    await waitForNonceSync(hre, deployer);
+    await waitForNonceSync(env, deployer);
   }
 }

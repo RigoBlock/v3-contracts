@@ -1,0 +1,18 @@
+diff --git a/node_modules/@solarity/hardhat-markup/dist/src/parser/Parser.js b/node_modules/@solarity/hardhat-markup/dist/src/parser/Parser.js
+index e74a4ae..55f794e 100644
+--- a/node_modules/@solarity/hardhat-markup/dist/src/parser/Parser.js
++++ b/node_modules/@solarity/hardhat-markup/dist/src/parser/Parser.js
+@@ -429,7 +429,12 @@ export class Parser {
+                             break;
+                         }
+                         default: {
+-                            throw new Error(`Unknown tag: ${tag}`);
++                            // patched: tolerate non-standard NatSpec tags (e.g. `@params` in
++                            // contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol) instead
++                            // of failing the whole docgen run; unknown tags are recorded as custom.
++                            natSpec.custom ??= {};
++                            natSpec.custom[tag] = text;
++                            break;
+                         }
+                     }
+                 }

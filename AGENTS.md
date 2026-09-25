@@ -22,6 +22,37 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 9. **Compilation**: Fix all warnings in new code (legacy warnings acceptable)
 10. **Named Mapping Variables**: All new mappings must use named key/value parameters — `mapping(KeyType name => ValueType name)` — as required by Solidity ≥0.8.18 style.
 11. **ALWAYS RUN TESTS**: After ANY modification to .sol files or test files, IMMEDIATELY run tests to verify they pass
+12. **CODE SIZE**: After ANY change that can alter deployed bytecode (including library edits — libraries compile into every importer), measure the affected contracts' deployed size with the production settings (optimizer 200 runs, no viaIR) via `npx hardhat codesize --skipcompile true`, and update the table in `docs/CODE_SIZE.md` in the same PR. Never merge a contract at or above the 24576-byte limit. `SmartPool` and `ENavView` have <300 bytes of headroom — flag any PR that shrinks it further.
+13. **NEVER push directly to `development` (or any default branch).** Commits reach `development` ONLY via a pull request, so CI (tests, security checks, coverage) always runs. This has accidentally happened twice — see "Branch creation and push safety" below.
+
+## Branch creation and push safety (CRITICAL)
+
+A new branch MUST track its own same-named remote branch — never `origin/development`.
+`git checkout -b feat/x origin/development` silently sets the upstream to
+`origin/development`, and a later plain `git push` then **pushes your commits straight onto
+the default branch**, bypassing CI entirely.
+
+Required workflow for every new branch:
+
+```bash
+# 1. Create WITHOUT tracking the source branch
+git fetch origin
+git checkout -b feat/my-branch origin/development --no-track
+
+# 2. Do the work, commit...
+
+# 3. Push ONLY with an explicit refspec naming the same branch
+git push -u origin feat/my-branch:feat/my-branch
+
+# 4. VERIFY the upstream before every push — upstream must be origin/<same-name>, never development
+git rev-parse --abbrev-ref --symbolic-full-name @{u}
+git branch -vv | grep '^\*'
+```
+
+If `git branch -vv` ever shows `[origin/development]` (or any upstream that is not
+`origin/<same-name>`) on a feature branch: `git branch --unset-upstream` immediately, then
+re-push with the explicit refspec from step 3. Never use `git push` without a refspec on a
+branch you did not just verify.
 
 ## AI Agent Limitations (CRITICAL)
 
@@ -70,14 +101,21 @@ User → Pool Proxy (delegatecall)→ Implementation
 
 - **When to bump**: Bump the salt whenever a new ExtensionsMap must be deployed. This happens in two cases:
   1. The ExtensionsMap contract code itself changes (new selectors, new routing logic).
-  2. Any extension is redeployed to a **new address** (because ExtensionsMap immutably stores extension addresses and CREATE2 cannot overwrite an existing contract).
-- **When NOT to bump**: If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+  2. The bytecode of **any contract stored in the ExtensionsMap** changes — which includes not only editing an extension's source, but also editing **any library or shared contract compiled into an extension** (libraries are compiled into the bytecode of every contract that imports them). Examples:
+     - `HyperliquidLib` change → `EApps`, `ENavView`, `EOracle` all change → new extension addresses → **bump salt**.
+     - `GmxLib` change → `EApps`, `EGmxCallback` change → **bump salt**.
+     - `NavView` change → `ENavView` changes → **bump salt**.
+     - `MixinConstants` / other implementation-only libraries → implementation only → no salt bump (see "When NOT to bump").
+
+     **Decision rule when you change a library**: grep for every contract that imports it. If any importer is an extension (anything whose address is stored in the ExtensionsMap), the salt MUST be bumped. Never assume "I only touched a library" means extensions are unchanged.
+- **When NOT to bump**: If only the implementation changes and everything compiled into extensions is byte-identical, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
+- **The unreleased-train exception**: If the salt was already bumped in a previous PR of the same release train and that ExtensionsMap was **never deployed** (nothing exists at the computed CREATE2 address on any chain), do NOT bump again — reuse the pending salt. The deploy script's `map.code.length == 0` check only works because the address is empty; once deployed, any further extension-bytecode change requires a fresh bump.
 - **Important**: The deploy script checks `if (map.code.length == 0)` and skips deployment if an ExtensionsMap already exists at the computed CREATE2 address. If the salt is not bumped when an extension address changed, the script will silently reuse the old ExtensionsMap that points to stale extension addresses.
-- **Automation limitation**: The current scripts require manual salt bumps. Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
+- **Automation limitation**: The current scripts require manual salt bumps. The salt lives in `src/utils/constants.ts` (`extensionsMapSalt`, e.g. `"extensionsMapSalt15"`): bump the numeric suffix in the same PR that changes an extension (directly or via a compiled-in library). Full automation would need to read the existing ExtensionsMap's immutables (`eOracle()`, `eApps()`, etc.) and compare them with the new deployment params before deciding whether to bump. This is not implemented.
 
 ### Version Bump
 
-Version bumps are required for ANY change compiled into the implementation (Mixin contracts, libraries, or constructor parameters).
+Version bumps are required for ANY change that requires redeploying the implementation. That includes: changes compiled into the implementation itself (Mixin contracts, libraries, or constructor parameters) **and extension changes**: an extension redeploy (e.g. `ECrosschain`) requires a new ExtensionsMap (immutable constructor parameter of the implementation), so a new implementation is compiled with a new `VERSION` even though the implementation source is unchanged. The salt bump (`extensionsMapSalt`) and the `VERSION` bump are independent and both are required for an extension change. Note: commit 4b1d66c4 skipped the `VERSION` bump for an `ECrosschain` change — that was incorrect, do not treat it as precedent.
 
 1. **Read the base branch version first.** Open `contracts/protocol/core/immutable/MixinConstants.sol` on the PR's base branch and note the current `VERSION` value. This is the starting point.
 2. **Choose the next version exactly once per PR**, based on the scope of the change:
@@ -89,8 +127,16 @@ Version bumps are required for ANY change compiled into the implementation (Mixi
    - `_REQUIRED_VERSION` in any adapter that requires a minimum implementation version.
    - The `pool.VERSION()` assertion in `test/core/RigoblockPool.Basetoken.spec.ts`.
 4. **Do not bump multiple times within the same PR.** If the base branch already has a higher version, use that version without further bumping.
+5. **Unreleased-train rule.** If the base branch's version belongs to a previous PR of the same release train whose contracts were **never deployed** (no factory `setImplementation` with that version ever executed on any chain), keep that version — do not burn another number. The version identifies a deployed implementation; merging additional changes before the first deployment of the train does not create a new deployment identity. If the previous train WAS deployed, bump normally.
 
 The `pool.VERSION()` test is the guard that reminds future agents to bump the version when the implementation changes; it must stay in sync with `MixinConstants.sol`.
+
+### Deterministic deployment & cross-chain address parity (HARD REQUIREMENT)
+
+- **Same address on every chain is a spec, not a nicety.** Authority is at `0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472` on all chains, produced by `create2(Safe singleton factory 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7, salt 0, init code)`.
+- All production chain ids are declared in `PRODUCTION_CHAIN_IDS` in `rocketh/config.ts` with Safe's singleton factory as `deterministicDeployment`. The `deployScript` wrapper in `rocketh/deploy.ts` **throws** on any live chain not in that list — never let a deploy fall back to rocketh's default CREATE2 factory. When adding a chain: add its id + Safe factory entry to `rocketh/config.ts` (the factory address/signed tx are chain-independent; `@safe-global/safe-singleton-factory` has them).
+- **Hardhat 3 changes the CBOR metadata tail** (`project/` source namespacing — a build-info format contract, not configurable), which changes CREATE2 addresses even though the executable bytecode is identical. `readArtifact` (`rocketh/artifacts.ts`) restores the authoritative tail from `rocketh/canonical-cbor.json` for every contract whose executable code is unchanged, so fresh chains reproduce the established addresses. Only the metadata stamp is canonicalized — the deployed executable code is always what the current toolchain compiled from current sources.
+- **After deploying an upgrade to the authoritative chain (mainnet), regenerate the tails**: `npx hardhat run scripts/generate-canonical-cbor.ts --network hardhat`. Contracts whose code legitimately changed keep the current build's tail; since metadata depends only on source + settings (never on the chain), all chains still compute identical addresses for them.
 
 ### Shared nonce management
 
@@ -129,6 +175,7 @@ The `pool.VERSION()` test is the guard that reminds future agents to bump the ve
 - `EOracle.sol` - Price feeds and token conversions
 - `EUpgrade.sol` - Implementation upgrades
 - `ECrosschain.sol` - Across bridge destination handler
+- `EERC20.sol` - Disabled ERC20 methods (non-transferable shares; keeps SmartPool under the contract size limit)
 
 ### Adapters (Upgradeable Mapping)
 
@@ -326,6 +373,12 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 yarn test
 ```
 
+`yarn test` runs `hardhat test mocha` — Hardhat 3's mocha subtask, i.e. **only the .ts
+specs**. Foundry owns ALL .sol tests; HH3's built-in solidity test runner must stay
+unused (do NOT re-add `paths.tests` redirects in `hardhat.config.ts` to work around it,
+and never run bare `hardhat test` — it would feed Foundry test files to the solidity
+runner). Coverage likewise uses `hardhat test mocha --coverage`.
+
 ### Integration Tests (Foundry)
 
 ```bash
@@ -333,6 +386,52 @@ forge test
 ```
 
 ### Fork Testing Pattern
+
+**Fork-block hygiene (REQUIRED at branch creation):** every new branch MUST bump all fork
+blocks in `contracts/test/ForkBlocks.sol` to recent values as the first task of the branch,
+and fix whatever surfaces. Stale pins hide fork-state-dependent regressions (oracle drift,
+accrued fees, new deployments, rounding edges) that then explode in unrelated later work —
+investigating them alongside an unrelated feature wastes time and erodes trust in the suite.
+Bumping blocks can legitimately make tests fail; per "test failures are signals", each failure
+must be root-caused (is the test asserting stale third-party state, or is the protocol wrong?)
+and fixed or documented in the same branch. Pick blocks a few hours/days below "latest" for
+RPC/archive stability, keep any documented ordering constraints (e.g. MAINNET_BLOCK must stay
+after the TEST_POOL donate() routing upgrade), and update the per-block comments with the new
+values and dates. `ForkBlocks.sol` is hashed into the CI cache key, so the bump also keeps
+fork caches fresh. Tests must NEVER introduce their own local block pins (`git grep
+createSelectFork` should show only `Constants.*_BLOCK`); if a test seems to need a historical
+pin, make the test pin-agnostic instead — e.g. `A0xRouterUnichainFork` replays calldata
+extracted at block 41_291_308 but resolves the 0x settler dynamically from the Deployer at
+the fork block, so its pin follows routine bumps. Reserve documented historical pins in
+`ForkBlocks.sol` for cases that genuinely cannot be made pin-agnostic, and revisit them at
+every bump.
+
+**Test obsolescence review (part of the same hygiene task):** a block bump is also the moment
+to audit which fork tests have been made obsolete by protocol upgrades landing in production.
+Keep what is still meaningful; update or delete what is not. Examples of tests that decay:
+
+- tests that force-upgrade the factory implementation or Authority mappings to assert
+  pre-upgrade behavior — once governance has executed the upgrade, assert the NEW production
+  state instead (remove the forced upgrade when it duplicates live state);
+- tests comparing states across implementation versions — collapse to the current live
+  version once the rollout is complete;
+- replay/incident fixtures — keep only while the replayed bytes still represent what the
+  external protocol (0x, Across, GMX, Uniswap) actually produces; re-extract or delete when
+  the format or key contracts rotate.
+
+Remember that each pool operator must approve an upgraded implementation for their pool, so
+live pool code always lags the factory upgrade — fork tests must assert the state that is
+actually live at the pinned block, not the state the factory points to after the upgrade
+transaction.
+
+**Arbitrum `block.number` returns the L1 block number, not the L2 height.** An Arbitrum
+fork pinned at `Constants.ARB_BLOCK` (an L2 height, e.g. 508_400_000) is correctly pinned —
+the L2 state at that height is what the EVM runs against — but `block.number` inside the
+test reports the block's `l1BlockNumber` field (~26M), exactly as the NUMBER opcode behaves
+for contracts on Arbitrum mainnet. Never assert `block.number` against an L2 pin and never
+"treat as latest"; use `block.timestamp` for deadlines and `vm.roll`/`vm.warp` with L1-height
+semantics in mind. If a diagnostic shows a ~26M number on an Arbitrum fork, the fork is NOT
+poisoned — verify the actual L2 pin via `eth_getBlockByNumber` on the block hash instead.
 
 ```solidity
 // Create forks
@@ -383,11 +482,23 @@ Full list: https://docs.rigoblock.com/readme-2/deployed-contracts-v4
 - Pool proxies (if deployed with same params)
 - Core implementations
 - Staking suite, Governance core
+- **ExtensionsMap** — see below
+
+**ExtensionsMap has NO constructor parameters.** The deployment params (extension
+addresses, wrapped native) are written to the `ExtensionsMapDeployer`'s storage and
+read by the ExtensionsMap constructor at deploy time (`msg.sender` context). The map is
+always deployed via `ExtensionsMapDeployer.deployExtensionsMap(params, salt)`, and its
+CREATE2 address depends only on three chain-independent inputs: the deployer contract's
+address, the salt, and `type(ExtensionsMap).creationCode`. Same code + same salt ⇒ same
+address on every chain (mainnet's map is at `0x591cc27B8fc9D9BCd93375B0F4d3a2cd23F1a007`).
+Apparent mismatches on production chains (e.g. arbitrum/hyperliquid) are upgrade-timing
+artifacts — those chains received the map under an older deployer/salt generation — not a
+by-design per-chain address. A fresh chain with the current code and current salt always
+reproduces the canonical address.
 
 ### Different Address Per Chain
 
-- ExtensionsMap (extensions have chain-specific params)
-- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain)
+- Individual extensions (EApps, EOracle, EUpgrade, ECrosschain) — chain-specific constructor params
 - Governance strategy
 
 ### NAV Integrity in Cross-Chain Transfers
@@ -449,7 +560,7 @@ When modifying code:
 
 - NatSpec all public/external functions
 - Use `@inheritdoc` for interface implementations
-- Document known limitations clearly (see docs/across/KNOWN_ISSUES_AND_EDGE_CASES.md)
+- Document known limitations clearly (see docs/across/IMPLEMENTATION_GUIDE.md)
 - **Keep inline code comments strictly minimal**: only what is needed to understand core functionality. Readers should infer "what" from code; comments should only explain non-obvious "why".
 - **Design rationale, audit responses, and known limitations belong in `/docs/`**, not in source code. A one-line comment may reference the relevant doc section if needed.
 - **Do NOT add verbose NatSpec justifying design decisions or mentioning future features** in contract source. Example: the reason `receive()` is `payable` (while `fallback()` is non-payable) is documented in `docs/staking/CANTINA_FINDINGS_STATUS.md`, not in the contract.
@@ -558,11 +669,13 @@ When making changes:
 - [ ] Preserve storage layout (never reorder/remove storage)
 - [ ] Use existing patterns (extensions, adapters, storage access)
 - [ ] Add storage slot assertions if adding new storage (dot notation in names)
+- [ ] **Extension changed → bump `extensionsMapSalt`** in `src/utils/constants.ts` in the same PR (new extension address ⇒ new ExtensionsMap ⇒ new implementation) **and bump `VERSION`** in `MixinConstants.sol` (the new implementation carries a new constructor parameter, so it is a new implementation deployment even though no implementation source changed)
 - [ ] Verify security (delegatecall context, access control)
 - [ ] **Add `override` keyword** to interface implementations
 - [ ] **Fix all compilation warnings** in new code (not required for legacy code)
 - [ ] **Write or update tests** (unit tests, integration tests, fork tests)
 - [ ] **IMMEDIATELY RUN TESTS after ANY code change** (`forge test` for Foundry, `yarn test` for Hardhat)
+- [ ] **Check deployed code size** after any bytecode-affecting change (production settings: optimizer 200 runs, no viaIR) and **update the table in `docs/CODE_SIZE.md`** in the same PR — see `docs/CODE_SIZE.md` for the command and current sizes
 - [ ] **Run tests to ensure they pass** (`forge test` for Foundry, `npm test` for Hardhat)
 - [ ] Test with forks if cross-chain or integration work
 - [ ] Update interfaces and use `@inheritdoc`
@@ -609,7 +722,7 @@ When making changes:
     - `IInterface.FUNCTION.selector` instead of `bytes4(keccak256("FUNCTION(param_types)"))`
     - Solidity calldata slicing (`data[a:b]`) over manual `calldataload` math
     - Assembly is acceptable ONLY for: raw error propagation (`revert(add(d,32),mload(d))`), extracting `bytes4` from `bytes memory` (no Solidity cast exists), and ERC-7201 storage slot access.
-18. **USE .selector INSTEAD OF keccak256 HASHING** - ALWAYS use `IInterface.functionName.selector` to obtain function selectors. NEVER use `bytes4(keccak256("functionName(paramTypes)"))` — it is fragile (typos in the string silently produce wrong selectors) and not type-checked by the compiler. If the interface doesn't exist locally, vendor a minimal interface with just the function signatures needed. Example: `ISettlerActions.RFQ.selector` not `bytes4(keccak256("RFQ(address,((address,uint256),uint256,uint256),...)"))`
+18. **USE .selector INSTEAD OF keccak256 HASHING** - ALWAYS use `IInterface.functionName.selector` to obtain function selectors. NEVER use `bytes4(keccak256("functionName(paramTypes)"))` — it is fragile (typos in the string silently produce wrong selectors) and not type-checked by the compiler. If the interface doesn't exist locally, vendor a minimal interface with just the function signatures needed. Example: `ISettlerActions.RFQ.selector` not `bytes4(keccak256("RFQ(address,((address,uint256),uint256,uint256),...)"))`. Overloaded functions are the ONLY exception: Solidity cannot apply `.selector` to an overloaded member (`.selector`, typed function-pointer assignment, and `abi.encodeCall` all fail or bind arbitrarily — verified on solc 0.8.28/0.8.37), so encode the selector manually as `bytes4(keccak256("name(paramTypes)"))` and document the expected 4-byte value in an inline comment. Precedents: `unwrapWETH9` in test/extensions/AUniswapFork.t.sol, `execute` in test/extensions/AUniswapRouterFork.t.sol (expected values cross-checked against AUniswapRouter.spec.ts).
 19. **LOW-LEVEL CALLS IN TESTS** - NEVER use `(bool success, bytes memory data) = target.call(abi.encodeCall(...))` in tests. Always use typed interface calls: `IInterface(target).method(...)`. For expected reverts, use `vm.expectRevert(expectedError)` or `try IInterface(target).method(...) { revert("should fail"); } catch (bytes memory err) { /* check err */ }`. Low-level calls bypass Solidity's type checking and make tests harder to read and audit.
 20. **APP ACTIVATION: only when creating non-token external positions** - Call `StorageLib.activeApplications().storeApplication(uint256(Applications.X))` ONLY when the adapter creates an EXTERNAL POSITION that lives outside the pool's ERC-20 wallet and must be valued by EApps. Examples that NEED activation: AGmxV2 (opens DataStore perpetual positions), AUniswapRouter (creates UniV4 LP NFT positions). Examples that DO NOT need activation: A0xRouter (pure swap — output tokens land in pool wallet and are tracked on arrival), AIntents/AcrossBridge (funds leave the pool via bridge; no position held on-chain). The rule: if there is no on-chain struct/position to value at NAV time, storeApplication is not needed.
 21. **ADAPTER INTERFACE SELECTORS MUST MATCH THE TARGET PROTOCOL EXACTLY** — When an adapter wraps an external protocol (e.g., GMX, Uniswap, 0x), the `IAdapter` interface MUST expose the SAME function signatures (and therefore selectors) as the underlying protocol interface. This allows the GMX/Uniswap/etc. API to be used directly with minimal changes. Rules:
@@ -624,13 +737,17 @@ When making changes:
 
 24. **NAMED MAPPING VARIABLES** — All new or modified mappings must use named key and value parameters (Solidity ≥0.8.18 feature). Write `mapping(bytes4 selector => address[] addresses)` not `mapping(bytes4 => address[])`. Both key and value must be named; for nested mappings name all levels: `mapping(address owner => mapping(bytes4 selector => uint256 position))`. This applies to struct fields, state variables, and library-internal structs. Do NOT retrofit old legacy contracts not being modified in the current PR.
 
+25. **DEPLOYED CODE SIZE MUST BE TRACKED IN EVERY PR** — The EVM limit is 24576 bytes per contract, and `SmartPool` (24321) and `ENavView` (24299) have under 300 bytes of headroom with production settings. After any change that can alter deployed bytecode — including library edits, since libraries compile into every importer's bytecode — measure with the production profile (`SOLIDITY_SETTINGS='{"optimizer":{"enabled":true,"runs":200}}' npx hardhat compile && npx hardhat codesize --skipcompile true`) and update the table in `docs/CODE_SIZE.md` in the same PR. Never trust Foundry's size output (it uses `optimizer_runs = 1_000_000` and produces different bytecode). Never merge a contract at or above the limit.
+
+26. **SKIPPING `forge clean` AFTER BRANCH OR SUBMODULE SWITCHES** — Foundry's incremental cache can serve artifacts with mismatched CBOR metadata tails across compilation units, causing spurious test failures (observed: AIntentsRealFork escrow CREATE2 assertion failing with an unchanged Escrow.sol — executable bytecode identical, only the metadata tail differed). Always run `forge clean` before `forge build`/`forge test` after switching branches or updating git submodules. CI is unaffected (clean runners).
+
 ## GMX v2 Integration
 
 See `docs/gmx/` for the full GMX integration guide. Key rules for AI agents:
 
 - `GmxLib` returns **native collateral tokens** (not WETH). See `docs/gmx/nav-accounting.md`.
 - Always call `_trackToken(collateralToken)` in `createIncreaseOrder`. See `docs/gmx/architecture.md#token-tracking`.
-- `ARBITRUM_CHAIN_ID` is defined in `GmxLib` — never duplicate it.
+- `ARBITRUM_CHAIN_ID` is defined in `GmxConstants` and re-exported by `GmxLib` — never duplicate it.
 - The chain guard is the `GMX_V2_POSITIONS` activation bit, not a `block.chainid` check in `GmxLib`.
 - For P&L fork tests, mock the Chainlink oracle BEFORE `_executeOrder`. See `docs/gmx/architecture.md#common-pitfalls`.
 - **32-position cap**: `assertPositionLimitNotReached` blocks NEW positions (non-matching market+collateral+direction) when 32 are open. Increasing an EXISTING position is allowed at any count. The NAV loop uses `type(uint256).max` — it reads ALL positions, never just 32.

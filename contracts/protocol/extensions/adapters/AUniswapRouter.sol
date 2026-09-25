@@ -1,25 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-// solhint-disable-next-line
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import {BaseHook} from "@uniswap/v4-periphery/src/base/hooks/BaseHook.sol";
 import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecoder.sol";
 import {PositionInfo, PositionInfoLibrary} from "@uniswap/v4-periphery/src/libraries/PositionInfoLibrary.sol";
-import {IERC721Enumerable as IERC721} from "forge-std/interfaces/IERC721.sol";
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
 import {ApplicationsLib, ApplicationsSlot} from "../../libraries/ApplicationsLib.sol";
-import {EnumerableSet, AddressSet, Pool} from "../../libraries/EnumerableSet.sol";
+import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
-import {SlotDerivation} from "../../libraries/SlotDerivation.sol";
 import {StorageLib} from "../../libraries/StorageLib.sol";
-import {TransientSlot} from "../../libraries/TransientSlot.sol";
 import {Applications, TokenIdsSlot} from "../../types/Applications.sol";
-import {IAUniswapRouter, IPositionManager} from "./interfaces/IAUniswapRouter.sol";
+import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 import {IEOracle} from "./interfaces/IEOracle.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {AUniswapDecoder} from "./AUniswapDecoder.sol";
@@ -42,29 +37,8 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
     using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
 
-    /// @notice Thrown when executing commands with an expired deadline
-    error TransactionDeadlinePassed();
-
-    /// @notice Thrown when the pool is not the position owner
-    error PositionOwner();
-
-    /// @notice Thrown when the pool is not the recipient
-    error RecipientNotSmartPoolOrRouter();
-
-    /// @notice Thrown when the pool reached maximum number of liquidity positions
-    error UniV4PositionsLimitExceeded();
-
-    /// @notice Thrown when a call is made to the adapter directly
+    /// @notice Thrown when a call is made to the adapter directly.
     error DirectCallNotAllowed();
-
-    /// @notice Thrown when a pool hook can access liquidity deltas
-    error LiquidityMintHookError(address hook);
-
-    /// @notice Thrown when the pool does not hold enough balance
-    error InsufficientNativeBalance();
-
-    /// @notice Thrown when the calldata contains both mint and increase for the same tokenId
-    error PositionDoesNotExist();
 
     string private constant _REQUIRED_VERSION = "4.0.0";
 

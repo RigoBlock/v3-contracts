@@ -93,6 +93,12 @@ contract EApps is IEApps {
         } else if (appType == Applications.GMX_V2_POSITIONS) {
             balances = GmxLib.getGmxPositionBalances(address(this));
         } else if (appType == Applications.HYPERLIQUID) {
+            // Hyperliquid-specific settlement lock: reverts with NavLocked while a Core deposit/spot-send
+            // may still leave NAV reads stale. updateUnitaryValue (and crosschain donate, which routes
+            // through it) is explicitly exempt via the transient flag; see docs/hyperliquid/INTEGRATION.md.
+            if (!TransientStorage.getNavLockExempt()) {
+                HyperliquidLib.assertNavUnlocked();
+            }
             balances = HyperliquidLib.getHyperliquidBalances(address(this));
         } else {
             revert UnknownApplication(uint256(appType));

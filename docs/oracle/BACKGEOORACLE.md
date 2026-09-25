@@ -107,6 +107,8 @@ The window is:
 - **300 seconds** (5 minutes) if cardinality is large enough
 - Otherwise `(cardinality - 1) * blockTime` (1s on L2s, 8s on Ethereum), because `N` observations span at most `N - 1` block-time intervals. Using `N * blockTime` could request a timestamp before the oldest observation and revert.
 
+The multiplication is computed in `uint256` and only then cast to `uint32` (Solidity 0.8 checked arithmetic on a `uint16 * uint8` product would panic once the product exceeds 65535, e.g. mainnet cardinality ≥ 8193). No lower-bound guard on cardinality is needed here: a token can only enter a pool's active tokens set if `hasPriceFeed()` returned true, which requires `cardinality > 1`, and cardinality is monotonic (`grow()` never shrinks it) — so `_getSecondsAgos` can never observe a cardinality below 2 on any token the pool holds.
+
 The returned tick is converted to a price via `TickMath.getSqrtPriceAtTick()` inside `convertTokenAmount()`.
 
 ### Cross-Price Routing

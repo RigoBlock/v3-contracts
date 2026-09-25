@@ -3,10 +3,9 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
-import {
-    IGmxReader,
-    GmxOrderInfo
-} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {ReaderUtils} from "gmx-synthetics/reader/ReaderUtils.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
@@ -68,7 +67,7 @@ contract NavViewHarness {
 /// @notice Non-fork unit tests for the NavView library.
 contract NavViewTest is Test {
     // GMX hardcoded Reader address (same as in GmxLib)
-    address internal constant GMX_READER = 0x470fbC46bcC0f16532691Df360A07d8Bf5ee0789;
+    address internal constant GMX_READER = Constants.ARB_GMX_READER;
 
     // Applications enum: GRG_STAKING=0, UNIV4_LIQUIDITY=1, GMX_V2_POSITIONS=2
     uint256 constant GMX_V2_BIT = 1 << 2; // 4
@@ -112,13 +111,11 @@ contract NavViewTest is Test {
 
     function _mockActiveTokens() internal {
         address[] memory activeTokens = new address[](0);
-        ISmartPoolState.ActiveTokens memory att =
-            ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
-        vm.mockCall(
-            POOL,
-            abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector),
-            abi.encode(att)
-        );
+        ISmartPoolState.ActiveTokens memory att = ISmartPoolState.ActiveTokens({
+            activeTokens: activeTokens,
+            baseToken: BASE_TOKEN
+        });
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(att));
     }
 
     function _mockBaseTokenBalance(uint256 amount) internal {
@@ -130,28 +127,18 @@ contract NavViewTest is Test {
     }
 
     function _mockPoolTokens(uint256 unitaryValue, uint256 totalSupply) internal {
-        ISmartPoolState.PoolTokens memory pt =
-            ISmartPoolState.PoolTokens({unitaryValue: unitaryValue, totalSupply: totalSupply});
-        vm.mockCall(
-            POOL,
-            abi.encodeWithSelector(ISmartPoolState.getPoolTokens.selector),
-            abi.encode(pt)
-        );
+        ISmartPoolState.PoolTokens memory pt = ISmartPoolState.PoolTokens({
+            unitaryValue: unitaryValue,
+            totalSupply: totalSupply
+        });
+        vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getPoolTokens.selector), abi.encode(pt));
     }
 
     function _mockGmxEmpty() internal {
         Position.Props[] memory emptyPos = new Position.Props[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountPositions.selector),
-            abi.encode(emptyPos)
-        );
-        GmxOrderInfo[] memory emptyOrders = new GmxOrderInfo[](0);
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getAccountOrders.selector),
-            abi.encode(emptyOrders)
-        );
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(Reader.getAccountPositions.selector), abi.encode(emptyPos));
+        ReaderUtils.OrderInfo[] memory emptyOrders = new ReaderUtils.OrderInfo[](0);
+        vm.mockCall(GMX_READER, abi.encodeWithSelector(Reader.getAccountOrders.selector), abi.encode(emptyOrders));
     }
 
     // =========================================================================
@@ -162,8 +149,7 @@ contract NavViewTest is Test {
         _mockActiveApplications(0);
         _mockGrgZeroStake();
 
-        AppTokenBalance[] memory balances =
-            harness.getAppTokenBalances(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        AppTokenBalance[] memory balances = harness.getAppTokenBalances(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
         assertEq(balances.length, 0);
     }
 
@@ -179,11 +165,7 @@ contract NavViewTest is Test {
             abi.encodeWithSelector(IStaking.getTotalStake.selector, POOL),
             abi.encode(stakingBalance)
         );
-        vm.mockCall(
-            GRG_STAKING_PROXY,
-            abi.encodeWithSelector(IStaking.getGrgContract.selector),
-            abi.encode(GRG_TOKEN)
-        );
+        vm.mockCall(GRG_STAKING_PROXY, abi.encodeWithSelector(IStaking.getGrgContract.selector), abi.encode(GRG_TOKEN));
         vm.mockCall(
             GRG_STAKING_PROXY,
             abi.encodeWithSelector(IStorage.poolIdByRbPoolAccount.selector, POOL),
@@ -195,8 +177,7 @@ contract NavViewTest is Test {
             abi.encode(rewardBalance)
         );
 
-        AppTokenBalance[] memory balances =
-            harness.getAppTokenBalances(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        AppTokenBalance[] memory balances = harness.getAppTokenBalances(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         assertEq(balances.length, 1);
         assertEq(balances[0].token, GRG_TOKEN);
@@ -212,8 +193,7 @@ contract NavViewTest is Test {
         _mockGrgZeroStake();
         _mockGmxEmpty();
 
-        AppTokenBalance[] memory balances =
-            harness.getAppTokenBalances(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        AppTokenBalance[] memory balances = harness.getAppTokenBalances(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
         assertEq(balances.length, 0);
     }
 
@@ -245,8 +225,10 @@ contract NavViewTest is Test {
 
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = OTHER_TOKEN;
-        ISmartPoolState.ActiveTokens memory att =
-            ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
+        ISmartPoolState.ActiveTokens memory att = ISmartPoolState.ActiveTokens({
+            activeTokens: activeTokens,
+            baseToken: BASE_TOKEN
+        });
         vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(att));
 
         _mockBaseTokenBalance(500e18);
@@ -282,8 +264,10 @@ contract NavViewTest is Test {
         // Pool holds 1 ETH (address(0)) and BASE_TOKEN (ERC20)
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = address(0); // native ETH as active token
-        ISmartPoolState.ActiveTokens memory att =
-            ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
+        ISmartPoolState.ActiveTokens memory att = ISmartPoolState.ActiveTokens({
+            activeTokens: activeTokens,
+            baseToken: BASE_TOKEN
+        });
         vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(att));
 
         // Give POOL 1 ETH
@@ -318,8 +302,10 @@ contract NavViewTest is Test {
 
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = OTHER_TOKEN;
-        ISmartPoolState.ActiveTokens memory att =
-            ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
+        ISmartPoolState.ActiveTokens memory att = ISmartPoolState.ActiveTokens({
+            activeTokens: activeTokens,
+            baseToken: BASE_TOKEN
+        });
         vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(att));
 
         _mockBaseTokenBalance(500e18);
@@ -391,8 +377,10 @@ contract NavViewTest is Test {
 
         address[] memory activeTokens = new address[](1);
         activeTokens[0] = OTHER_TOKEN;
-        ISmartPoolState.ActiveTokens memory att =
-            ISmartPoolState.ActiveTokens({activeTokens: activeTokens, baseToken: BASE_TOKEN});
+        ISmartPoolState.ActiveTokens memory att = ISmartPoolState.ActiveTokens({
+            activeTokens: activeTokens,
+            baseToken: BASE_TOKEN
+        });
         vm.mockCall(POOL, abi.encodeWithSelector(ISmartPoolState.getActiveTokens.selector), abi.encode(att));
 
         _mockBaseTokenBalance(0);

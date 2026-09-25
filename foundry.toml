@@ -7,19 +7,36 @@ cache_path = "cache_forge"
 optimizer_runs = 1_000_000
 auto_detect_solc = true
 gas_reports_ignore = ["MockHandlerPool", "TestEscrowUser", "MockERC20", "MockNavImpactPool", "TestSafeTransferLib", "ExtensionsMap", "RigoblockPoolProxy.0.8.17"]
-fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }]
+fs_permissions = [{ access = "read", path = "test/fixtures" }, { access = "read", path = "out" }, { access = "read", path = "lib/gmx-synthetics/deployments" }]
 ignored_warnings_from = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 
-# Note: --fork-retries, --fork-retry-backoff, --compute-units-per-second are CLI-only
-# flags that also require --fork-url to be present (Foundry rejects the combination
-# without it). Our fork tests create their own forks via vm.createSelectFork() using
-# the named [rpc_endpoints] below — no global --fork-url is needed or used.
-# These CLI flags are therefore incompatible with our workflow and are intentionally omitted.
-#
-# All chains (mainnet, base, arbitrum, unichain, polygon) have RPC URL secrets in CI.
-# The coverage script (scripts/foundry-coverage.sh) excludes PolygonForkTest from CI
-# (local-only) and A0xRouterUnichainForkTest (optional, can be re-enabled). All other
-# fork tests run in CI Step 2 using their vm.createSelectFork() calls.
+# Isolate mode is the default since Foundry v1.8.0. It must stay disabled here: the ECrosschain
+# donation-lock tests model the production two-phase `donate` as separate top-level calls, and the
+# lock is transient storage — under isolate mode each top-level call is a separate transaction and
+# EIP-1153 clears the lock between the two calls. In production both phases execute atomically in a
+# single MulticallHandler transaction, so the transient lock is correct on-chain; isolate mode would
+# make the tests contradict mainnet semantics.
+isolate = false
+
+# Fork test conventions:
+# - Fork tests never rely on a global --fork-url. Each test pins a hardcoded block via
+#   vm.createSelectFork("<chain>", Constants.X_BLOCK), where the block numbers live in
+#   contracts/test/ForkBlocks.sol (re-exported through contracts/test/Constants.sol).
+# - Fork state is cached in CI keyed on the pinned block, so bumping a block in
+#   ForkBlocks.sol repopulates the cache exactly once. Fork tests must NEVER use
+#   latest-block forks: archive availability, CI caching, and deterministic results
+#   all depend on the pinned block.
+# - --fork-retries, --fork-retry-backoff, --compute-units-per-second are CLI-only
+#   flags that also require --fork-url to be present (Foundry rejects the combination
+#   without it), so they are intentionally omitted — see the createSelectFork note above.
+# - All chains (mainnet, base, arbitrum, unichain, polygon) have RPC URL secrets in CI.
+#   Coverage (`yarn coverage:foundry`) runs fork and non-fork tests in a single
+#   invocation via [profile.coverage]; only the local-only networks are excluded
+#   (PolygonFork, A0xRouterUnichainFork) plus test/debug/** and the two invariant
+#   (fuzz) suites.
+#   Do NOT add per-file exclusions there: if a new fork test needs excluding, it is
+#   either a local-only network (add its FILE to the exclusion brace list) or a fuzz
+#   suite (add the CONTRACT name). Everything else must just run.
 
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
@@ -40,6 +57,27 @@ compilation_restrictions = [
     { paths = "contracts/tokens/**", via_ir = false },
     { paths = "contracts/utils/**", via_ir = false },
 ]
+
+# Coverage profile. `forge coverage` compiles the project optimizer-OFF (its own
+# in-memory build), while tests that deploy via deployCode("out/<file>.json") read
+# the PREBUILT on-disk artifacts. With the default profile's optimizer ON, the
+# bytecodes hash differently and every deployCode-deployed contract records zero
+# hits (AUniswapRouter.sol, Authority.sol, Staking.sol, fixtures, mocks). The
+# coverage:foundry package.json script therefore runs TWO native steps:
+#   1. FOUNDRY_PROFILE=coverage forge build        — writes optimizer-off artifacts
+#      into the SAME out/ dir (test files hardcode out/ paths in deployCode), so
+#      the on-disk bytecode is byte-identical to forge coverage's internal build
+#      and deployCode attribution works without any artifact swap.
+#   2. FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file ...
+# Forge caches per compilation settings, so a later default-profile
+# `forge build`/`forge test` transparently rebuilds the optimizer-on artifacts.
+# All keys not set here are inherited from [profile.default], including the
+# via_ir compilation_restrictions machinery (the 0.8.37 isolated job included).
+[profile.coverage]
+optimizer = false
+no_match_path = "test/{debug/**,extensions/PolygonFork.t.sol,extensions/A0xRouterUnichainFork.t.sol}"
+no_match_contract = "DelegationLibFuzz|ECrosschainFuzzTest"
+no_match_coverage = "mocks/|examples/|test/|tokens/|utils/"
 
 [fmt]
 line_length = 120

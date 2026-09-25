@@ -1,0 +1,218 @@
+[
+  {
+    "indexToken": "0xB46A094Bc4B0adBD801E14b9DB95e05E28962764",
+    "symbol": "LTC",
+    "market": "0xD9535bB5f58A1a75032416F2dFe7880C30575a41",
+    "feedAddress": "0x5698690a7B7B84F6aa985ef7690A8A7288FBc9c8",
+    "feedName": "LTC / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x3E57D02f9d196873e55727382974b02EdebE6bfd",
+    "symbol": "SHIB",
+    "market": "0xB62369752D8Ad08392572db6d0cc872127888beD",
+    "feedAddress": "0x0E278D14B4bf6429dDB0a1B353e2Ae8A4e128C93",
+    "feedName": "SHIB / USD",
+    "decimals": 18
+  },
+  {
+    "indexToken": "0xBaf07cF91D413C0aCB2b7444B9Bf13b4e03c9D71",
+    "symbol": "STX",
+    "market": "0xD9377d9B9a2327C7778867203deeA73AB8a68b6B",
+    "feedAddress": "0x3a9659C071dD3C37a8b1A2363409A8D41B2Feae3",
+    "feedName": "STX / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x9c74772b713a1B032aEB173E28683D937E51921c",
+    "symbol": "POL",
+    "market": "0xD0a1AFDDE31Eb51e8b53bdCE989EB8C2404828a4",
+    "feedAddress": "0x82BA56a2fADF9C14f17D08bc51bDA0bDB83A8934",
+    "feedName": "POL / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x197aa2DE1313c7AD50184234490E12409B2a1f95",
+    "symbol": "SUI",
+    "market": "0x6Ecf2133E2C9751cAAdCb6958b9654baE198a797",
+    "feedAddress": "0x4a85B128EBDaFC24d5CB611e161376ffDECeB289",
+    "feedName": "SUI / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x55e85A147a1029b985384822c0B2262dF8023452",
+    "symbol": "SEI",
+    "market": "0xB489711B1cB86afDA48924730084e23310EB4883",
+    "feedAddress": "0xCc9742d77622eE9abBF1Df03530594f9097bDcB3",
+    "feedName": "SEI / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x3f8f0dCE4dCE4d0D1d0871941e79CDA82cA50d0B",
+    "symbol": "APT",
+    "market": "0x66A69c8eb98A7efE22A22611d1967dfec786a708",
+    "feedAddress": "0xdc49F292ad1bb3DAb6C11363d74ED06F38b9bd9C",
+    "feedName": "APT / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0xB2f7cefaeEb08Aa347705ac829a7b8bE2FB560f3",
+    "symbol": "TON",
+    "market": "0x15c6eBD4175ffF9EE3c2615c556fCf62D2d9499c",
+    "feedAddress": "0x0301e5D0A8f7490444ebd1921E3d0f0fe7722786",
+    "feedName": "TON / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0xc5dbD52Ae5a927Cf585B884011d0C7631C9974c6",
+    "symbol": "XLM",
+    "market": "0xe902D1526c834D5001575b2d0Ef901dfD0aa097A",
+    "feedAddress": "0x5a0a07CD0E9e4754B3FeC4Fb1ee1a5baBbaa6051",
+    "feedName": "XLM / USD",
+    "decimals": 18
+  },
+  {
+    "indexToken": "0x67ADABbAd211eA9b3B4E2fd0FD165E593De1e983",
+    "symbol": "BERA",
+    "market": "0x876Ff160d63809674e03f82DC4D3C3Ae8B0acF28",
+    "feedAddress": "0x4f861F14246229530a881D32C8d26D78b8c48BE6",
+    "feedName": "BERA / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x8F6cCb99d4Fd0B4095915147b5ae3bbDb8075394",
+    "symbol": "S",
+    "market": "0x4d9bA415649c4B3c703562770C8ff3033478Cea1",
+    "feedAddress": "0xFeaC1A3936514746e70170c0f539e70b23d36F19",
+    "feedName": "S / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964",
+    "symbol": "DOLO",
+    "market": "0x4D3Eb91efd36C2b74181F34B111bc1E91a0d0cb4",
+    "feedAddress": "0x17d8D87dF3E279c737568aB0C5cC3fF750aB763e",
+    "feedName": "DOLO / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x13674172E6E44D31d4bE489d5184f3457c40153A",
+    "symbol": "XMR",
+    "market": "0x7c54D547FAD72f8AFbf6E5b04403A0168b654C6f",
+    "feedAddress": "0x8c76E8cab5ef3B410a318DDb82d83Ed47D7d2701",
+    "feedName": "XMR / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x9c060B2fA953b5f69879a8B7B81f62BFfEF360be",
+    "symbol": "PUMP",
+    "market": "0x4C0Bb704529Fa49A26bD854802d70206982c6f1B",
+    "feedAddress": "0x0C997958ccE7A0403AEA7E34d14bbaDA897B5bb3",
+    "feedName": "PUMP / USD",
+    "decimals": 18
+  },
+  {
+    "indexToken": "0xEcc5eb985Ddbb8335b175b0A2A1144E4c978F1f6",
+    "symbol": "AERO",
+    "market": "0xfaEaE570B07618D3F10360608E43c241181c4614",
+    "feedAddress": "0x0B2aB7AE5276F6f466f8e62953138B106dD19A63",
+    "feedName": "AERO / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0xC5799ab6E2818fD8d0788dB8D156B0c5db1Bf97b",
+    "symbol": "WLFI",
+    "market": "0xb3588455858a49D3244237CEe00880CcB84b91Dd",
+    "feedAddress": "0x4b13Dd76De990Db9A2Dab58D35C2c02E5e3AE848",
+    "feedName": "WLFI / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0xF67b2a901D674B443Fa9f6DB2A689B37c07fD4fE",
+    "symbol": "MORPHO",
+    "market": "0x4De268aC68477f794C3eAC5A419Cbcffc2cD5e02",
+    "feedAddress": "0x1E48733Eeee02468b674b69958b046EB6A0a7d94",
+    "feedName": "MORPHO / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0xB79Eb5BA64A167676694bB41bc1640F95d309a2F",
+    "symbol": "VVV",
+    "market": "0x947C521E44f727219542B0f91a85182193c1D2ad",
+    "feedAddress": "0xE56BEA9Ff0780D668f92a9ab4Ace1D713CaA1016",
+    "feedName": "VVV / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x2e73bDBee83D91623736D514b0BB41f2afd9C7Fd",
+    "symbol": "XPL",
+    "market": "0x4b67aa8F754b17b1029Ad2DB4fb6a276CCe350c4",
+    "feedAddress": "0x1b47b4124b9A5094C59710E6b9126e5e32a4fb8E",
+    "feedName": "XPL / USD",
+    "decimals": 18
+  },
+  {
+    "indexToken": "0x2aAB60E62f05d17e58dEc982870bfAdc7F4e7ADF",
+    "symbol": "ASTER",
+    "market": "0x0164B6c847c65e07C9F6226149ADBFA7C1dE40Cf",
+    "feedAddress": "0xAD57D7c059E2aFef2241EB6EF43559f8a409897E",
+    "feedName": "ASTER / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x95c317066CF214b2E6588B2685D949384504F51e",
+    "symbol": "0G",
+    "market": "0xe024188850A822409F362209C1EF2cFdc7c4DE4C",
+    "feedAddress": "0x47C38C695639aE97A00f57D6D9f5ece1DebB033C",
+    "feedName": "0G / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x6eAbbaA3278556Dc5b19c034dc26c0eaB60d65B5",
+    "symbol": "ZEC",
+    "market": "0x587759c237acCa739bCE3911647BacF56C876E60",
+    "feedAddress": "0x21082CA28570f0ccfb089465bFaEfDc77b00D367",
+    "feedName": "ZEC / USD",
+    "decimals": 18
+  },
+  {
+    "indexToken": "0x4b9a2b862E1a30e6E844c991D31Dc6387c9d65D5",
+    "symbol": "AR",
+    "market": "0xfa19f7d23a475575BD0270AE7de4FC6852442945",
+    "feedAddress": "0x26DC0763135Db2EC0dC4563148AC57eB48Ed0BAd",
+    "feedName": "AR / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x9759C297fb6C91e252c7292cECa30a509558E5De",
+    "symbol": "SYRUP",
+    "market": "0x8965e821c7C8c09c6eB3Cb9cCf7Eb6f386441EA2",
+    "feedAddress": "0xA0C8611b0CfB31Bc8AdE3189ae2b982c90D9302f",
+    "feedName": "SYRUP / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0xE6172EecBB07F197F52bb73d74daa0e19C31c4Db",
+    "symbol": "LIT",
+    "market": "0x044dFE01863CE85f9ECd5639eE5485c90AC320FC",
+    "feedAddress": "0x569dCA98c58d7A89cEE87801805A8EaAf2C72B5b",
+    "feedName": "LIT / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x0315441076FF6d3eA09814a2F90a1f980cF03e9e",
+    "symbol": "SPY",
+    "market": "0xcBd4c1b0c89D50793c5A3e8d96d98FcB4f1B1c47",
+    "feedAddress": "0x46306F3795342117721D8DEd50fbcF6DF2b3cc10",
+    "feedName": "SPY / USD",
+    "decimals": 8
+  },
+  {
+    "indexToken": "0x13983f27Ce9365055a6a553233c49fE28e70103e",
+    "symbol": "MEGA",
+    "market": "0xE26E7b91143f367445f1c0a5dCf4f4aC8EaDcDb1",
+    "feedAddress": "0xCCa91A477fBF466D676B2056bfDfDA94f343a64F",
+    "feedName": "MEGA / USD",
+    "decimals": 8
+  }
+]

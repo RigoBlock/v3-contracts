@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
+import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {OrderEventUtils} from "gmx-synthetics/order/OrderEventUtils.sol";
-import {IGmxDataStore, IGmxReader, IGmxRoleStore} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {EGmxCallback} from "../../contracts/protocol/extensions/EGmxCallback.sol";
@@ -19,9 +23,16 @@ contract EGmxCallbackTest is Test {
     address internal market;
 
     function setUp() public {
-        vm.chainId(GmxLib.ARBITRUM_CHAIN_ID);
+        vm.chainId(ARBITRUM_CHAIN_ID);
         callback = new EGmxCallback();
         market = makeAddr("market");
+    }
+
+    /// @notice Deployment reverts on any chain other than Arbitrum.
+    function test_Constructor_RevertsOnNonArbitrumChain() public {
+        vm.chainId(1);
+        vm.expectRevert(EGmxCallback.NotArbitrum.selector);
+        new EGmxCallback();
     }
 
     /// @notice A valid controller call records the market in callback storage.
@@ -31,8 +42,8 @@ contract EGmxCallbackTest is Test {
 
         // Mock controller role check.
         vm.mockCall(
-            GmxLib._GMX_ROLE_STORE,
-            abi.encodeWithSelector(IGmxRoleStore.hasRole.selector, address(this), keccak256(abi.encode("CONTROLLER"))),
+            _GMX_ROLE_STORE,
+            abi.encodeWithSelector(RoleStore.hasRole.selector, address(this), _GMX_CONTROLLER_ROLE),
             abi.encode(true)
         );
 
@@ -44,8 +55,8 @@ contract EGmxCallbackTest is Test {
 
         // Mock market info.
         vm.mockCall(
-            GmxLib._GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector, GmxLib._GMX_DATA_STORE, market),
+            _GMX_READER,
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
             abi.encode(
                 Market.Props({marketToken: market, indexToken: longToken, longToken: longToken, shortToken: shortToken})
             )
@@ -53,20 +64,13 @@ contract EGmxCallbackTest is Test {
 
         // Mock time divisor so the callback can compute the time key.
         vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(
-                IGmxDataStore.getUint.selector,
-                GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY
-            ),
+            _GMX_DATA_STORE,
+            abi.encodeWithSelector(DataStore.getUint.selector, GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY),
             abi.encode(uint256(1))
         );
 
         // No claimable collateral.
-        vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
-            abi.encode(uint256(0))
-        );
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(DataStore.getUint.selector), abi.encode(uint256(0)));
 
         vm.expectEmit(true, false, false, false);
         emit IEGmxCallback.TrackedMarketAdded(market);
@@ -115,11 +119,7 @@ contract EGmxCallbackTest is Test {
         _mockMarketInfo(market, token, token);
         _mockTimeDivisor(1);
 
-        vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(IGmxDataStore.getUint.selector),
-            abi.encode(uint256(1 ether))
-        );
+        vm.mockCall(_GMX_DATA_STORE, abi.encodeWithSelector(DataStore.getUint.selector), abi.encode(uint256(1 ether)));
 
         uint256 timeKey = block.timestamp;
         bytes32 expectedKey = keccak256(
@@ -155,6 +155,7 @@ contract EGmxCallbackTest is Test {
                 executionFee: 5,
                 callbackGasLimit: 6,
                 minOutputAmount: 7,
+                uiFeeFactor: 0,
                 updatedAtTime: 8,
                 validFromTime: 9,
                 srcChainId: 0
@@ -174,13 +175,13 @@ contract EGmxCallbackTest is Test {
     }
 
     function _mockController() private {
-        vm.mockCall(GmxLib._GMX_ROLE_STORE, abi.encodeWithSelector(IGmxRoleStore.hasRole.selector), abi.encode(true));
+        vm.mockCall(_GMX_ROLE_STORE, abi.encodeWithSelector(RoleStore.hasRole.selector), abi.encode(true));
     }
 
     function _mockMarketInfo(address mkt, address longToken, address shortToken) private {
         vm.mockCall(
-            GmxLib._GMX_READER,
-            abi.encodeWithSelector(IGmxReader.getMarket.selector),
+            _GMX_READER,
+            abi.encodeWithSelector(Reader.getMarket.selector),
             abi.encode(
                 Market.Props({marketToken: mkt, indexToken: longToken, longToken: longToken, shortToken: shortToken})
             )
@@ -189,11 +190,8 @@ contract EGmxCallbackTest is Test {
 
     function _mockTimeDivisor(uint256 divisor) private {
         vm.mockCall(
-            GmxLib._GMX_DATA_STORE,
-            abi.encodeWithSelector(
-                IGmxDataStore.getUint.selector,
-                GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY
-            ),
+            _GMX_DATA_STORE,
+            abi.encodeWithSelector(DataStore.getUint.selector, GmxCallbackLib.CLAIMABLE_COLLATERAL_TIME_DIVISOR_KEY),
             abi.encode(divisor)
         );
     }

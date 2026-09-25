@@ -111,6 +111,15 @@ interface ISmartPoolState {
     /// @return Number of total issued tokens.
     function totalSupply() external view returns (uint256);
 
+    /// @notice Returns the balance of pool tokens for a given holder.
+    /// @param who Address of the token holder.
+    /// @return Number of pool tokens held.
+    function balanceOf(address who) external view returns (uint256);
+
+    /// @notice Returns the number of decimals of the pool token.
+    /// @return Number of decimals.
+    function decimals() external view returns (uint8);
+
     /// @param holder The address of the holder.
     /// @param operator The address of the operator.
     /// @return approved The approval status.

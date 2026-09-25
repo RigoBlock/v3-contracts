@@ -1,58 +1,59 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.28;
 
-import { Test } from "forge-std/Test.sol";
-import { console2 } from "forge-std/console2.sol";
+import {GMX_ROUTER, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
-import { Constants } from "../../contracts/test/Constants.sol";
+import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 
-import { AGmxV2 } from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
-import { AUniswapRouter } from "../../contracts/protocol/extensions/adapters/AUniswapRouter.sol";
-import { EApps } from "../../contracts/protocol/extensions/EApps.sol";
-import { ECrosschain } from "../../contracts/protocol/extensions/ECrosschain.sol";
-import { EGmxCallback } from "../../contracts/protocol/extensions/EGmxCallback.sol";
-import { ENavView } from "../../contracts/protocol/extensions/ENavView.sol";
-import { EOracle } from "../../contracts/protocol/extensions/EOracle.sol";
-import { EUpgrade } from "../../contracts/protocol/extensions/EUpgrade.sol";
-import { SmartPool } from "../../contracts/protocol/SmartPool.sol";
-import { ExtensionsMapDeployer } from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
-import { IRigoblockPoolProxyFactory } from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
-import { IAuthority } from "../../contracts/protocol/interfaces/IAuthority.sol";
-import { IOwnedUninitialized } from "../../contracts/utils/owned/IOwnedUninitialized.sol";
-import { IPoolRegistry } from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
+import {Constants} from "../../contracts/test/Constants.sol";
 
-import { ISmartPoolActions } from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
-import { ISmartPoolState } from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
-import { IERC20 } from "../../contracts/protocol/interfaces/IERC20.sol";
-import { IAGmxV2 } from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
-import { IAStaking } from "../../contracts/protocol/extensions/adapters/interfaces/IAStaking.sol";
-import { IAUniswapRouter } from "../../contracts/protocol/extensions/adapters/interfaces/IAUniswapRouter.sol";
-import { IEApps } from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
-import { IENavView } from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
+import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
+import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
+import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
+import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
+import {EGmxCallback} from "../../contracts/protocol/extensions/EGmxCallback.sol";
+import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
+import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
+import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
+import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
+import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
+import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
+import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
+import {IOwnedUninitialized} from "../../contracts/utils/owned/IOwnedUninitialized.sol";
+import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
 
-import { Actions } from "@uniswap/v4-periphery/src/libraries/Actions.sol";
-import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
-import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
-import { IPositionManager } from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
+import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
+import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
+import {IAGmxV2} from "../../contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol";
+import {IAStaking} from "../../contracts/protocol/extensions/adapters/interfaces/IAStaking.sol";
+import {IAUniswapRouter} from "../../contracts/protocol/extensions/adapters/interfaces/IAUniswapRouter.sol";
+import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 
-import { NavView } from "../../contracts/protocol/libraries/NavView.sol";
-import { GmxLib } from "../../contracts/protocol/libraries/GmxLib.sol";
-import { IStaking } from "../../contracts/staking/interfaces/IStaking.sol";
+import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 
-import { DeploymentParams, Extensions, EAppsParams } from "../../contracts/protocol/types/DeploymentParams.sol";
-import { NetAssetsValue } from "../../contracts/protocol/types/NavComponents.sol";
-import {
-    IGmxReader,
-    IGmxDataStore,
-    IGmxRoleStore,
-    IGmxOrderHandler,
-    IGmxChainlinkPriceFeedProvider,
-    GmxValidatedPrice
-} from "../../contracts/utils/exchanges/gmx/IGmxSynthetics.sol";
-import { Market } from "gmx-synthetics/market/Market.sol";
-import { Order } from "gmx-synthetics/order/Order.sol";
-import { IBaseOrderUtils } from "gmx-synthetics/order/IBaseOrderUtils.sol";
+import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
+import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
+import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
+
+import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
+import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
+import {Reader} from "gmx-synthetics/reader/Reader.sol";
+import {RoleStore} from "gmx-synthetics/role/RoleStore.sol";
+import {OrderHandler} from "gmx-synthetics/exchange/OrderHandler.sol";
+import {ExchangeRouter} from "gmx-synthetics/router/ExchangeRouter.sol";
+import {OracleUtils} from "gmx-synthetics/oracle/OracleUtils.sol";
+import {ChainlinkPriceFeedProvider} from "gmx-synthetics/oracle/ChainlinkPriceFeedProvider.sol";
+import {DataStore} from "gmx-synthetics/data/DataStore.sol";
+import {Market} from "gmx-synthetics/market/Market.sol";
+import {Order} from "gmx-synthetics/order/Order.sol";
+import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
 
 /// @dev Minimal GrgVault interface to read the GRG transfer proxy address.
 interface IGrgVaultWithAssetProxy {
@@ -80,7 +81,6 @@ contract NavViewStressedParityForkTest is Test {
     address private constant GMX_REFERRAL_STORAGE = Constants.ARB_GMX_REFERRAL_STORAGE;
     address private constant GMX_ETH_USD_MARKET = Constants.ARB_GMX_ETH_USD_MARKET;
     address private constant GMX_ROLE_STORE = Constants.ARB_GMX_ROLE_STORE;
-    address private constant GMX_ORACLE_ADDRESS = 0x7F01614cA5198Ec979B1aAd1DAF0DE7e0a215BDF;
 
     // Arbitrum chain-specific addresses
     address private constant ARB_WETH = Constants.ARB_WETH;
@@ -160,7 +160,7 @@ contract NavViewStressedParityForkTest is Test {
         // 4. Create pool with WETH as base token
         // ------------------------------------------------------------------
         vm.prank(poolOwner);
-        (pool,) = IRigoblockPoolProxyFactory(FACTORY).createPool("NavStressedPool", "NVSP", ARB_WETH);
+        (pool, ) = IRigoblockPoolProxyFactory(FACTORY).createPool("NavStressedPool", "NVSP", ARB_WETH);
         console2.log("Pool created:", pool);
 
         // ------------------------------------------------------------------
@@ -176,24 +176,26 @@ contract NavViewStressedParityForkTest is Test {
         deal(grgToken, pool, STAKE_AMOUNT);
     }
 
-    function _deployAdapters()
-        private
-        returns (address agmxV2, address aStaking, address aUniswapRouter)
-    {
+    function _deployAdapters() private returns (address agmxV2, address aStaking, address aUniswapRouter) {
         agmxV2 = address(new AGmxV2());
-        aStaking = deployCode("out/AStaking.sol/AStaking.json", abi.encode(ARB_GRG_STAKING, grgToken, grgTransferProxy));
-        aUniswapRouter = address(new AUniswapRouter(ARB_UNIVERSAL_ROUTER, ARB_UNISWAP_V4_POSM, ARB_WETH));
+        aStaking = deployCode(
+            "out/AStaking.sol/AStaking.json",
+            abi.encode(ARB_GRG_STAKING, grgToken, grgTransferProxy)
+        );
+        // Deploy via artifact: AUniswapRouter is pinned to solc 0.8.37 (see AUniswapRouterFork).
+        aUniswapRouter = deployCode(
+            "out/AUniswapRouter.sol/AUniswapRouter.json",
+            abi.encode(ARB_UNIVERSAL_ROUTER, ARB_UNISWAP_V4_POSM, ARB_WETH)
+        );
     }
 
-    function _deployExtensions(address eGmxCallback)
-        private
-        returns (DeploymentParams memory params)
-    {
-        EApps eApps = new EApps(EAppsParams({ grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM }));
+    function _deployExtensions(address eGmxCallback) private returns (DeploymentParams memory params) {
+        EApps eApps = new EApps(EAppsParams({grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM}));
         EOracle eOracle = new EOracle(ARB_ORACLE, ARB_WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView =
-            new ENavView(EAppsParams({ grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM }));
+        ENavView eNavView = new ENavView(
+            EAppsParams({grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM})
+        );
         ECrosschain eCrosschain = new ECrosschain();
 
         params = DeploymentParams({
@@ -203,7 +205,8 @@ contract NavViewStressedParityForkTest is Test {
                 eUpgrade: address(eUpgrade),
                 eNavView: address(eNavView),
                 eCrosschain: address(eCrosschain),
-                eGmxCallback: eGmxCallback
+                eGmxCallback: eGmxCallback,
+                eErc20: address(new EERC20())
             }),
             wrappedNative: ARB_WETH
         });
@@ -276,19 +279,21 @@ contract NavViewStressedParityForkTest is Test {
         IAStaking(pool).stake(STAKE_AMOUNT);
 
         // ── Positive PnL: mock GMX Chainlink oracle +10% on WETH ─────────────
-        GmxValidatedPrice memory realPrice =
-            IGmxChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED).getOraclePrice(ARB_WETH, "");
+        OracleUtils.ValidatedPrice memory realPrice = ChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED)
+            .getOraclePrice(ARB_WETH, "");
 
         vm.mockCall(
             GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeCall(IGmxChainlinkPriceFeedProvider.getOraclePrice, (ARB_WETH, "")),
+            abi.encodeCall(ChainlinkPriceFeedProvider.getOraclePrice, (ARB_WETH, "")),
             abi.encode(
-                GmxValidatedPrice({
+                OracleUtils.ValidatedPrice({
                     token: ARB_WETH,
-                    min: realPrice.min * 110 / 100,
-                    max: realPrice.max * 110 / 100,
+                    min: (realPrice.min * 110) / 100,
+                    max: (realPrice.max * 110) / 100,
                     timestamp: realPrice.timestamp,
-                    blockNumber: realPrice.blockNumber
+                    rawMin: realPrice.min,
+                    rawMax: realPrice.max,
+                    provider: GMX_CHAINLINK_PRICE_FEED
                 })
             )
         );
@@ -298,7 +303,9 @@ contract NavViewStressedParityForkTest is Test {
         vm.clearMockedCalls();
 
         assertEq(
-            viewNavHigh.unitaryValue, writeNavHigh.unitaryValue, "view-NAV and write-NAV must agree at +10% WETH price"
+            viewNavHigh.unitaryValue,
+            writeNavHigh.unitaryValue,
+            "view-NAV and write-NAV must agree at +10% WETH price"
         );
         assertEq(viewNavHigh.totalValue, writeNavHigh.netTotalValue, "totalValue must agree at +10% WETH price");
         assertGt(writeNavHigh.unitaryValue, 1e18, "NAV must exceed par after positive PnL");
@@ -340,13 +347,14 @@ contract NavViewStressedParityForkTest is Test {
     /// @dev Builds the WETH/USDC PoolKey used in the Uni V4 LP helpers.
     /// @notice WETH address is numerically smaller than USDC on Arbitrum, so WETH is currency0.
     function _uniV4PoolKey() private pure returns (PoolKey memory) {
-        return PoolKey({
-            currency0: Currency.wrap(ARB_WETH),
-            currency1: Currency.wrap(ARB_USDC),
-            fee: 0,
-            tickSpacing: 60,
-            hooks: IHooks(address(0))
-        });
+        return
+            PoolKey({
+                currency0: Currency.wrap(ARB_WETH),
+                currency1: Currency.wrap(ARB_USDC),
+                fee: 0,
+                tickSpacing: 60,
+                hooks: IHooks(address(0))
+            });
     }
 
     /// @dev Initializes the WETH/USDC pool and mints a small full-range LP position through the pool.
@@ -354,9 +362,7 @@ contract NavViewStressedParityForkTest is Test {
         PoolKey memory poolKey = _uniV4PoolKey();
 
         // Initialize the pool at ~3000 USDC/WETH if it does not already exist.
-        IPositionManager(ARB_UNISWAP_V4_POSM).initializePool(
-            poolKey, uint160(4_339_505_179_874_779_475_002_393)
-        );
+        IPositionManager(ARB_UNISWAP_V4_POSM).initializePool(poolKey, uint160(4_339_505_179_874_779_475_002_393));
 
         int24 tickLower = -887220;
         int24 tickUpper = 887220;
@@ -405,34 +411,35 @@ contract NavViewStressedParityForkTest is Test {
 
     /// @dev Shared builder for the test USDC-collateral long position.
     function _usdcOrderParams(bool isIncrease) private pure returns (IBaseOrderUtils.CreateOrderParams memory) {
-        return IBaseOrderUtils.CreateOrderParams({
-            addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
-                receiver: address(0),
-                cancellationReceiver: address(0),
-                callbackContract: address(0),
-                uiFeeReceiver: address(0),
-                market: GMX_ETH_USD_MARKET,
-                initialCollateralToken: ARB_USDC,
-                swapPath: new address[](0)
-            }),
-            numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
-                sizeDeltaUsd: SIZE_DELTA_USD,
-                initialCollateralDeltaAmount: isIncrease ? COLLATERAL_AMOUNT_USDC : 0,
-                triggerPrice: 0,
-                acceptablePrice: isIncrease ? type(uint256).max : 0, // Long: accept any price
-                executionFee: 0,
-                callbackGasLimit: 0,
-                minOutputAmount: 0,
-                validFromTime: 0
-            }),
-            orderType: isIncrease ? Order.OrderType.MarketIncrease : Order.OrderType.MarketDecrease,
-            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
-            isLong: true,
-            shouldUnwrapNativeToken: false,
-            autoCancel: false,
-            referralCode: bytes32(0),
-            dataList: new bytes32[](0)
-        });
+        return
+            IBaseOrderUtils.CreateOrderParams({
+                addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                    receiver: address(0),
+                    cancellationReceiver: address(0),
+                    callbackContract: address(0),
+                    uiFeeReceiver: address(0),
+                    market: GMX_ETH_USD_MARKET,
+                    initialCollateralToken: ARB_USDC,
+                    swapPath: new address[](0)
+                }),
+                numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                    sizeDeltaUsd: SIZE_DELTA_USD,
+                    initialCollateralDeltaAmount: isIncrease ? COLLATERAL_AMOUNT_USDC : 0,
+                    triggerPrice: 0,
+                    acceptablePrice: isIncrease ? type(uint256).max : 0, // Long: accept any price
+                    executionFee: 0,
+                    callbackGasLimit: 0,
+                    minOutputAmount: 0,
+                    validFromTime: 0
+                }),
+                orderType: isIncrease ? Order.OrderType.MarketIncrease : Order.OrderType.MarketDecrease,
+                decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+                isLong: true,
+                shouldUnwrapNativeToken: false,
+                autoCancel: false,
+                referralCode: bytes32(0),
+                dataList: new bytes32[](0)
+            });
     }
 
     // =========================================================================
@@ -446,7 +453,14 @@ contract NavViewStressedParityForkTest is Test {
     }
 
     function _getController() private view returns (address) {
-        return IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keccak256(abi.encode("CONTROLLER")), 0, 1)[0];
+        return RoleStore(GMX_ROLE_STORE).getRoleMembers(_GMX_CONTROLLER_ROLE, 0, 1)[0];
+    }
+
+    /// @dev Returns the Oracle module of the current GMX OrderHandler, resolved dynamically
+    ///  because oracle provider registrations are keyed by the oracle address and GMX
+    ///  rotations (e.g. v2.2c, ~Sep 2026) deploy a new Oracle alongside new handlers.
+    function _gmxOracle() private view returns (address) {
+        return address(OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler()))).oracle());
     }
 
     function _oracleProviderKey(address oracleContract, address token) private pure returns (bytes32) {
@@ -455,7 +469,7 @@ contract NavViewStressedParityForkTest is Test {
     }
 
     function _prepareOracleProviders(address market) private returns (OracleProviderEntry[] memory entries) {
-        Market.Props memory mkt = IGmxReader(GMX_READER).getMarket(GMX_DATA_STORE, market);
+        Market.Props memory mkt = Reader(GMX_READER).getMarket(DataStore(GMX_DATA_STORE), market);
         address controller = _getController();
 
         address[3] memory rawTokens = [mkt.indexToken, mkt.longToken, mkt.shortToken];
@@ -487,9 +501,11 @@ contract NavViewStressedParityForkTest is Test {
             }
             if (dup) continue;
 
-            bytes32 key = _oracleProviderKey(GMX_ORACLE_ADDRESS, rawTokens[i]);
+            bytes32 key = _oracleProviderKey(_gmxOracle(), rawTokens[i]);
             entries[k] = OracleProviderEntry({
-                token: rawTokens[i], key: key, originalProvider: IDataStore(GMX_DATA_STORE).getAddress(key)
+                token: rawTokens[i],
+                key: key,
+                originalProvider: IDataStore(GMX_DATA_STORE).getAddress(key)
             });
             vm.prank(controller);
             IDataStore(GMX_DATA_STORE).setAddress(key, GMX_CHAINLINK_PRICE_FEED);
@@ -508,7 +524,7 @@ contract NavViewStressedParityForkTest is Test {
         }
 
         bytes32 keeperKey = keccak256(abi.encode("ORDER_KEEPER"));
-        address[] memory members = IGmxRoleStore(GMX_ROLE_STORE).getRoleMembers(keeperKey, 0, 10);
+        address[] memory members = RoleStore(GMX_ROLE_STORE).getRoleMembers(keeperKey, 0, 10);
         address keeper = members.length > 0 ? members[0] : _getController();
 
         if (members.length == 0) {
@@ -519,11 +535,9 @@ contract NavViewStressedParityForkTest is Test {
             );
         }
 
-        IGmxOrderHandler handler = GmxLib.GMX_ROUTER.orderHandler();
+        OrderHandler handler = OrderHandler(payable(address(ExchangeRouter(GMX_ROUTER).orderHandler())));
         vm.prank(keeper);
-        handler.executeOrder(
-            orderKey, IGmxOrderHandler.SetPricesParams({ tokens: tokens, providers: providers, data: data })
-        );
+        handler.executeOrder(orderKey, OracleUtils.SetPricesParams({tokens: tokens, providers: providers, data: data}));
     }
 
     function _executeOrder(bytes32 orderKey, address market) private {

@@ -54,6 +54,7 @@ library NavView {
         address uniV4Posm
     ) internal view returns (AppTokenBalance[] memory balances) {
         uint256 packedApps = ISmartPoolState(pool).getActiveApplications();
+
         uint256 appsCount = uint256(Applications.COUNT);
         AppTokenBalance[][] memory appBalances = new AppTokenBalance[][](appsCount);
         uint256 activeAppIndex;
@@ -201,7 +202,7 @@ library NavView {
         address grgStakingProxy,
         address uniV4Posm
     ) private view returns (AppTokenBalance[] memory) {
-        // Get active tokens and application balances
+        // Get active tokens and application balances (already unique per token)
         ISmartPoolState.ActiveTokens memory tokens = ISmartPoolState(pool).getActiveTokens();
         AppTokenBalance[] memory appBalances = getAppTokenBalances(pool, grgStakingProxy, uniV4Posm);
 
@@ -220,6 +221,9 @@ library NavView {
         index = appBalances.length;
         address token;
 
+        // A token held both by an application and in the wallet must appear as a single
+        // entry, so it is converted once — mirroring the write path and avoiding
+        // per-entry rounding drift.
         for (uint256 k = 0; k < portfolioTokensLength; k++) {
             if (k == portfolioTokensLength - 1) {
                 token = tokens.baseToken;
@@ -234,7 +238,23 @@ library NavView {
                 bal = int256(IERC20(token).balanceOf(pool));
             }
 
-            aggregatedBalances[index++] = AppTokenBalance({token: token, amount: bal});
+            bool found;
+            for (uint256 j = 0; j < index; j++) {
+                if (aggregatedBalances[j].token == token) {
+                    aggregatedBalances[j].amount += bal;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                aggregatedBalances[index++] = AppTokenBalance({token: token, amount: bal});
+            }
+        }
+
+        // Resize array to actual unique token count
+        assembly {
+            mstore(aggregatedBalances, index)
         }
 
         return aggregatedBalances;
@@ -244,6 +264,9 @@ library NavView {
         address pool,
         address grgStakingProxy
     ) private view returns (AppTokenBalance[] memory balances) {
+        // Skip staking on chains where the GRG staking proxy is not deployed (e.g. HyperEVM).
+        if (grgStakingProxy == address(0)) return balances;
+
         uint256 stakingBalance = IStaking(grgStakingProxy).getTotalStake(pool);
 
         // Continue querying unclaimed rewards only with positive balance
