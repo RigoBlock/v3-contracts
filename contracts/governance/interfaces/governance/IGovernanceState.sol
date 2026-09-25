@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./IGovernanceVoting.sol";
+import {TimeType} from "../../types/TimeType.sol";
 
 interface IGovernanceState {
     enum ProposalState {
@@ -14,11 +15,6 @@ interface IGovernanceState {
         Queued,
         Expired,
         Executed
-    }
-
-    enum TimeType {
-        Blocknumber,
-        Timestamp
     }
 
     struct Proposal {

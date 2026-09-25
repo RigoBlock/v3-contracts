@@ -209,6 +209,13 @@ contract CrosschainReceiverTest is Test {
         new CrosschainReceiver(address(0), EMITTER_CHAIN, EMITTER_ADDRESS);
     }
 
+    function test_Receive_HoldsNativeFunds() public {
+        // the receiver must be able to hold native currency to execute actions with value
+        (bool success, ) = address(receiver).call{value: 1 ether}("");
+        assertTrue(success);
+        assertEq(address(receiver).balance, 1 ether);
+    }
+
     function test_ReceiveMessage_UnknownEmitterChain_Reverts() public {
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);

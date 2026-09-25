@@ -86,7 +86,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-25 (branch `feat/crossch
 | A0xRouter       |         5069 |    19507 |     20.63% |
 | AStaking        |         2151 |    22425 |      8.75% |
 | AUniswap        |         1359 |    23217 |      5.53% |
-| AMulticall      |         1168 |    23408 |      4.75% |
+| AMulticall      |         1169 |    23407 |      4.76% |
 | AGovernance     |         1590 |    22986 |      6.47% |
 | AUniswapDecoder |            0 |    24576 |      0.00% |
 

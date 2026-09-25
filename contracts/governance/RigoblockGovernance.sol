@@ -9,6 +9,7 @@ import {MixinStorage} from "./mixins/MixinStorage.sol";
 import {MixinUpgrade} from "./mixins/MixinUpgrade.sol";
 import {MixinVoting} from "./mixins/MixinVoting.sol";
 import {IRigoblockGovernance} from "./IRigoblockGovernance.sol";
+import {TimeType} from "./types/TimeType.sol";
 
 contract RigoblockGovernance is
     IRigoblockGovernance,

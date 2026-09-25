@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
+import {TimeType} from "../types/TimeType.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
 
@@ -187,8 +188,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
         // if vote reaches qualified majority we prepare execution at next block
         if (_getProposalState(proposalId) == IGovernanceState.ProposalState.Qualified) {
-            proposal.endBlockOrTime = _paramsWrapper().governanceParameters.timeType ==
-                IGovernanceState.TimeType.Timestamp
+            proposal.endBlockOrTime = _paramsWrapper().governanceParameters.timeType == TimeType.Timestamp
                 ? block.timestamp
                 : block.number;
         }
