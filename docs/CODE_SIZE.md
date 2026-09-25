@@ -13,7 +13,9 @@ still fit.
    "ExtensionsMap Salt" for the same reasoning applied to salt bumps).
 2. **Use the production compiler settings.** Sizes are only meaningful when measured with
    the same settings used for deployment and CI:
-   - solc 0.8.28, evmVersion `cancun`
+   - the hardhat default compiler (0.8.37), except contracts pinned to an exact older
+     pragma (e.g. `pragma solidity 0.8.28`), which still compile with their pinned
+     version until the pragma migration lands; evmVersion `cancun` in all cases
    - optimizer enabled, **200 runs** (NOT Foundry's `optimizer_runs = 1_000_000` — that
      profile produces different bytecode and different sizes)
    - **no viaIR** (except the `MockAcrossSpokePool` override, which is not deployed)
@@ -45,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-09-23 (branch `fix/gmx-import-submodule-abi`).
+Limit: 24576 bytes per contract. Last measured: 2026-09-24 (branch `fix/uniswap-router-adapter`).
 
 ### Implementation and factory
 
@@ -58,7 +60,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-23 (branch `fix/gmx-impo
 
 | Contract     | Size (bytes) | Headroom | % of limit |
 | ------------ | -----------: | -------: | ---------: |
-| ENavView     |        24320 |      256 |     98.96% |
+| ENavView     |        24455 |      121 |     99.51% |
 | EApps        |        22668 |     1908 |     92.24% |
 | EGmxCallback |         6227 |    18349 |     25.34% |
 | ECrosschain  |         5175 |    19401 |     21.06% |
@@ -78,7 +80,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-23 (branch `fix/gmx-impo
 | Contract        | Size (bytes) | Headroom | % of limit |
 | --------------- | -----------: | -------: | ---------: |
 | AGmxV2          |        17580 |     6996 |     71.53% |
-| AUniswapRouter  |        12764 |    11812 |     51.94% |
+| AUniswapRouter  |        12772 |    11804 |     51.97% |
 | AIntents        |        11466 |    13110 |     46.66% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         5069 |    19507 |     20.63% |

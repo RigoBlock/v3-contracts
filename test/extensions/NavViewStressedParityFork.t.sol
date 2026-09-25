@@ -9,7 +9,6 @@ import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 
 import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
-import {AUniswapRouter} from "../../contracts/protocol/extensions/adapters/AUniswapRouter.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
@@ -183,7 +182,11 @@ contract NavViewStressedParityForkTest is Test {
             "out/AStaking.sol/AStaking.json",
             abi.encode(ARB_GRG_STAKING, grgToken, grgTransferProxy)
         );
-        aUniswapRouter = address(new AUniswapRouter(ARB_UNIVERSAL_ROUTER, ARB_UNISWAP_V4_POSM, ARB_WETH));
+        // Deploy via artifact: AUniswapRouter is pinned to solc 0.8.37 (see AUniswapRouterFork).
+        aUniswapRouter = deployCode(
+            "out/AUniswapRouter.sol/AUniswapRouter.json",
+            abi.encode(ARB_UNIVERSAL_ROUTER, ARB_UNISWAP_V4_POSM, ARB_WETH)
+        );
     }
 
     function _deployExtensions(address eGmxCallback) private returns (DeploymentParams memory params) {

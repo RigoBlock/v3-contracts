@@ -108,6 +108,9 @@ contract AGmxV2ForkTest is Test {
 
     address private constant GMX_ROLE_STORE = Constants.ARB_GMX_ROLE_STORE;
 
+    /// @dev Fork id of the Arbitrum fork created in setUp; tests switch back with vm.selectFork.
+    uint256 private arbForkId;
+
     /// @dev Collateral size for a test increase order: 1 WETH.
     uint256 private constant COLLATERAL_AMOUNT = 1 ether;
 
@@ -148,8 +151,9 @@ contract AGmxV2ForkTest is Test {
     // =========================================================================
 
     function setUp() public {
-        // Create Arbitrum fork
-        vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
+        // Create Arbitrum fork (stored so tests can switch back with vm.selectFork
+        // instead of paying a second createSelectFork probe)
+        arbForkId = vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
 
         // Guard: if the RPC does not serve state at ARB_BLOCK, contracts have no code.
         // Fail loud here so the root cause (wrong/missing ARBITRUM_MAINNET_RPC_URL) is obvious.
@@ -3146,7 +3150,7 @@ contract AGmxV2ForkTest is Test {
     ///  packed exponent matches GMX's own on-chain token decimals, so the multiplier can
     ///  never again silently assume the wrong token scale (e.g. a default of 18).
     function test_FallbackMetadata_MatchesOnChainGmxConfig() public {
-        vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
+        vm.selectFork(arbForkId);
 
         for (uint256 i; i < fallbackEntries.length; ++i) {
             FallbackEntry memory e = fallbackEntries[i];
@@ -3175,7 +3179,7 @@ contract AGmxV2ForkTest is Test {
     ///  `gmxTokenDecimals` comes from GMX's on-chain DATA_STREAM_MULTIPLIER. This asserts the
     ///  packed multiplier produces the correct absolute price, not just a self-consistent one.
     function test_GetFallbackPrice_MatchesLiveFeedScaling() public {
-        vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
+        vm.selectFork(arbForkId);
 
         uint256[] memory expectedPrices = new uint256[](fallbackEntries.length);
         uint256 maxUpdatedAt;

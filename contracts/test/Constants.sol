@@ -162,7 +162,7 @@ library Constants {
     address internal constant ARB_UNISWAP_V4_POSM = 0xd88F38F930b7952f2DB2432Cb002E7abbF3dD869;
 
     /// @dev Uniswap Universal Router v4 on Arbitrum.
-    address internal constant ARB_UNIVERSAL_ROUTER = 0xA51afAFe0263b40EdaEf0Df8781eA9aa03E381a3;
+    address internal constant ARB_UNIVERSAL_ROUTER = 0x2d01411773c8C24805306E89A41F7855C3c4Fe65;
     /// @notice Uniswap Universal Router is not deployed on HyperEVM. This sentinel is checked by the Hyperliquid fixture.
     address internal constant HYPER_UNIVERSAL_ROUTER = address(0);
 

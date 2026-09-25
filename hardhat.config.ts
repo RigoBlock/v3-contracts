@@ -88,7 +88,7 @@ if (
   );
 }
 
-const primarySolidityVersion = SOLIDITY_VERSION || "0.8.28";
+const primarySolidityVersion = SOLIDITY_VERSION || "0.8.37";
 const soliditySettings = !!SOLIDITY_SETTINGS
   ? {
       ...JSON.parse(SOLIDITY_SETTINGS),
@@ -167,9 +167,9 @@ const userConfig: HardhatUserConfig = {
     skipFiles: ["contracts/mocks", "contracts/test"],
   },
   // Keep the Hardhat coverage scope aligned with the Foundry report
-  // (scripts/foundry-coverage.sh excludes mocks/test/tokens/utils and never
-  // reports third-party lib/ code); without this the merged Codecov total
-  // inflates and the percentage dilutes.
+  // (foundry.toml [profile.coverage] no_match_coverage excludes
+  // mocks/test/tokens/utils and never reports third-party lib/ code); without
+  // this the merged Codecov total inflates and the percentage dilutes.
   coverage: {
     skipFiles: [
       "lib/**",
@@ -183,10 +183,6 @@ const userConfig: HardhatUserConfig = {
     artifacts: "build/artifacts",
     cache: "build/cache",
     sources: "contracts",
-    // Solidity tests are run by Foundry (`forge test`), not Hardhat. Point
-    // HH3's built-in solidity-test runner at a nonexistent dir so `hardhat test`
-    // only runs the mocha specs under `test/`.
-    tests: { mocha: "test", solidity: "test-solidity-none" },
   },
   solidity: {
     profiles: {
@@ -284,6 +280,8 @@ const userConfig: HardhatUserConfig = {
     },
   },
   test: {
+    // Always invoke the mocha subtask (`hardhat test mocha`, see `yarn test`): Foundry
+    // owns all .sol tests, HH3's built-in solidity test runner must stay unused.
     mocha: {
       timeout: 2000000,
     },

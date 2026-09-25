@@ -12,14 +12,12 @@ import {IAMulticall} from "../../contracts/protocol/extensions/adapters/interfac
 import {IAStaking} from "../../contracts/protocol/extensions/adapters/interfaces/IAStaking.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {Delegation} from "../../contracts/protocol/types/Delegation.sol";
+import {MixinOwnerActions} from "../../contracts/protocol/core/actions/MixinOwnerActions.sol";
 
 /// @dev Minimal single-overload interface so `.selector` is unambiguous (IAMulticall overloads multicall).
 interface IMulticallSimple {
     function multicall(bytes[] calldata data) external returns (bytes[] memory results);
 }
-
-/// @dev Local copy of the core onlyOwner auth error so we do not need to import the implementation.
-error PoolCallerIsNotOwner();
 
 /// @title MulticallDelegationSecurityForkTest
 /// @notice Proves that delegating the AMulticall selectors to an agent does not escalate privileges.
@@ -121,7 +119,7 @@ contract MulticallDelegationSecurityForkTest is Test {
 
         bytes[] memory data = _singleInner(abi.encodeCall(ISmartPoolOwnerActions.setOwner, (agent)));
         vm.prank(agent);
-        vm.expectRevert(PoolCallerIsNotOwner.selector);
+        vm.expectRevert(MixinOwnerActions.PoolCallerIsNotOwner.selector);
         IAMulticall(pool).multicall(data);
 
         assertEq(ISmartPoolState(pool).owner(), poolOwner);
@@ -138,7 +136,7 @@ contract MulticallDelegationSecurityForkTest is Test {
         bytes[] memory data = _singleInner(abi.encodeCall(ISmartPoolOwnerActions.updateDelegation, (delegations)));
 
         vm.prank(agent);
-        vm.expectRevert(PoolCallerIsNotOwner.selector);
+        vm.expectRevert(MixinOwnerActions.PoolCallerIsNotOwner.selector);
         IAMulticall(pool).multicall(data);
 
         _assertAgentDelegatedSelectorsUnchanged();
@@ -163,7 +161,7 @@ contract MulticallDelegationSecurityForkTest is Test {
         _grantSelector(agent, MULTICALL_SELECTOR);
 
         vm.prank(agent);
-        vm.expectRevert(PoolCallerIsNotOwner.selector);
+        vm.expectRevert(MixinOwnerActions.PoolCallerIsNotOwner.selector);
         ISmartPoolOwnerActions(pool).setOwner(agent);
 
         assertEq(ISmartPoolState(pool).owner(), poolOwner);
