@@ -89,17 +89,11 @@ export default deployScript(
     );
 
     // GrgVault must be authorized in the GRG transfer proxy to move GRG on behalf of stakers.
-    const grgVaultAuthorized = (await env.readByName("ERC20Proxy", {
-      functionName: "authorized",
+    await env.executeByName("ERC20Proxy", {
+      account: deployer,
+      functionName: "addAuthorizedAddress",
       args: [grgVault.address],
-    })) as boolean;
-    if (!grgVaultAuthorized) {
-      await env.executeByName("ERC20Proxy", {
-        account: deployer,
-        functionName: "addAuthorizedAddress",
-        args: [grgVault.address],
-      });
-    }
+    });
 
     // same on altchains but different from one deployed on Ethereum
     const staking = await env.deploy(

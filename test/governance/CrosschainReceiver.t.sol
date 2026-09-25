@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.35;
+pragma solidity 0.8.37;
 import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 
@@ -19,6 +19,14 @@ contract Counter {
 
     function setValue(uint256 newValue) external {
         value = newValue;
+    }
+}
+
+contract RevertingTarget {
+    error TargetRevert();
+
+    function fail() external pure {
+        revert TargetRevert();
     }
 }
 
@@ -64,7 +72,12 @@ contract CrosschainReceiverTest is Test {
     }
 
     function _buildIncrementAction() private view returns (IGovernanceVoting.ProposedAction memory) {
-        return IGovernanceVoting.ProposedAction({target: address(counter), data: abi.encodeCall(Counter.increment, ()), value: 0});
+        return
+            IGovernanceVoting.ProposedAction({
+                target: address(counter),
+                data: abi.encodeCall(Counter.increment, ()),
+                value: 0
+            });
     }
 
     function test_ReceiveMessage_HappyPath() public {
@@ -188,6 +201,41 @@ contract CrosschainReceiverTest is Test {
         );
 
         vm.expectRevert(abi.encodeWithSelector(CrosschainReceiver.GovReceiverInvalidVaa.selector, "invalid signature"));
+        receiver.receiveMessage("");
+    }
+
+    function test_Constructor_ZeroWormhole_Reverts() public {
+        vm.expectRevert(CrosschainReceiver.GovReceiverInvalidWormhole.selector);
+        new CrosschainReceiver(address(0), EMITTER_CHAIN, EMITTER_ADDRESS);
+    }
+
+    function test_ReceiveMessage_UnknownEmitterChain_Reverts() public {
+        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        bytes memory payload = _encodePayload(action);
+        CoreBridgeVM memory vaa = _buildVaa(payload, 1);
+        vaa.emitterChainId = EMITTER_CHAIN + 1;
+        _mockParseAndVerify(vaa);
+
+        vm.expectRevert(CrosschainReceiver.GovReceiverUnknownEmitter.selector);
+        receiver.receiveMessage("");
+    }
+
+    function test_ReceiveMessage_ExecutionFailed_Reverts() public {
+        RevertingTarget reverter = new RevertingTarget();
+        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
+            target: address(reverter),
+            data: abi.encodeCall(RevertingTarget.fail, ()),
+            value: 0
+        });
+        bytes memory payload = _encodePayload(action);
+        _mockParseAndVerify(_buildVaa(payload, 1));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CrosschainReceiver.GovReceiverExecutionFailed.selector,
+                abi.encodeWithSelector(RevertingTarget.TargetRevert.selector)
+            )
+        );
         receiver.receiveMessage("");
     }
 }

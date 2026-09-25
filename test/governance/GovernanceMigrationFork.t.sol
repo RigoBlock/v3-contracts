@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.35;
+pragma solidity 0.8.37;
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -204,7 +204,9 @@ contract GovernanceMigrationForkTest is Test {
 
     /// @dev Creates a proposal as the voter, casts the voter's full voting power for it and
     ///     executes it once the voting period ends.
-    function _createVoteAndExecute(IGovernanceVoting.ProposedAction[] memory actions) internal returns (uint256 proposalId) {
+    function _createVoteAndExecute(
+        IGovernanceVoting.ProposedAction[] memory actions
+    ) internal returns (uint256 proposalId) {
         proposalId = _createProposal(actions, "proposal");
 
         IGovernanceState.ProposalWrapper memory wrapper = IGovernanceState(PROXY).getProposalById(proposalId);

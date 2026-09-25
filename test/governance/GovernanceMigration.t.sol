@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.35;
+pragma solidity 0.8.37;
 
 import {Test} from "forge-std/Test.sol";
 import {MixinStorage} from "../../contracts/governance/mixins/MixinStorage.sol";
@@ -229,6 +229,33 @@ contract GovernanceMigrationTest is Test {
         harness.castVote(postReductionId, IGovernanceVoting.VoteType.For);
         vm.warp(block.timestamp + 8 days);
         assertEq(uint256(harness.getProposalState(postReductionId)), uint256(IGovernanceState.ProposalState.Succeeded));
+    }
+
+    /// @notice Exercises the view getters getActions, getReceipt and proposals against a
+    ///     proposal created and voted on through the normal propose/castVote flow.
+    function test_Getters_ReturnProposalActionsAndReceipt() public {
+        uint256 proposalId = _createProposal("getter proposal");
+        vm.warp(block.timestamp + 2);
+        vm.prank(whale);
+        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+
+        IGovernanceVoting.ProposedAction[] memory actions = harness.getActions(proposalId);
+        assertEq(actions.length, 1);
+        assertEq(actions[0].target, address(target));
+        assertEq(actions[0].value, 0);
+
+        IGovernanceState.Receipt memory receipt = harness.getReceipt(proposalId, whale);
+        assertTrue(receipt.hasVoted);
+        assertEq(uint256(receipt.voteType), uint256(IGovernanceVoting.VoteType.For));
+        assertEq(receipt.votes, VOTING_POWER);
+        IGovernanceState.Receipt memory noReceipt = harness.getReceipt(proposalId, makeAddr("nonVoter"));
+        assertFalse(noReceipt.hasVoted);
+
+        IGovernanceState.ProposalWrapper[] memory allProposals = harness.proposals();
+        assertEq(allProposals.length, 1);
+        assertEq(allProposals[0].proposal.actionsLength, 1);
+        assertEq(allProposals[0].proposedAction.length, 1);
+        assertEq(allProposals[0].proposedAction[0].target, address(target));
     }
 
     /// @notice Stores a proposal through the harness and then reads the underlying

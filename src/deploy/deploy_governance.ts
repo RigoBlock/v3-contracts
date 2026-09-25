@@ -21,46 +21,15 @@ export default deployScript(
     }
 
     const config = chainConfig[chainId];
-
-    // Mainnet is the source of cross-chain governance messages: deploy the full
-    // governance suite (factory, implementation, strategy) there.
-    if (chainId === 1) {
-      await env.deploy(
-        "RigoblockGovernanceFactory",
-        {
-          account: deployer,
-          artifact: await readArtifact("RigoblockGovernanceFactory"),
-          args: [],
-        },
-        { deterministic: true },
-      );
-
-      await env.deploy(
-        "RigoblockGovernance",
-        {
-          account: deployer,
-          artifact: await readArtifact("RigoblockGovernance"),
-          args: [],
-        },
-        { deterministic: true },
-      );
-
-      await env.deploy(
-        "RigoblockGovernanceStrategy",
-        {
-          account: deployer,
-          artifact: await readArtifact("RigoblockGovernanceStrategy"),
-          args: [config.stakingProxy, config.wormhole, config.wormholeChainId],
-        },
-        { deterministic: true },
-      );
-      return;
-    }
+    const zeroAddress = "0x0000000000000000000000000000000000000000";
 
     // Receiver chains execute governance actions coming from Ethereum mainnet.
     // This includes chains with no staking proxy (e.g. HyperEVM) and chains where
     // the local staking proxy is being deprecated for governance (e.g. Unichain).
-    if (config.wormhole != "0x0000000000000000000000000000000000000000") {
+    // Mainnet (chainId 1) is the source of cross-chain governance messages, so it
+    // always gets the full suite below, as do legacy L2s without Wormhole config
+    // until they are migrated to cross-chain governance.
+    if (chainId !== 1 && config.wormhole != zeroAddress) {
       await env.deploy(
         "CrosschainReceiver",
         {
@@ -77,8 +46,6 @@ export default deployScript(
       return;
     }
 
-    // Fallback for legacy L2s without Wormhole config: keep deploying the full
-    // governance suite until they are migrated to cross-chain governance.
     await env.deploy(
       "RigoblockGovernanceFactory",
       {

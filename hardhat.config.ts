@@ -103,10 +103,6 @@ const defaultProfile = {
   compilers: [
     { version: primarySolidityVersion, settings: soliditySettings },
     {
-      version: "0.8.35",
-      settings: { ...soliditySettings, evmVersion: "cancun" },
-    },
-    {
       version: "0.8.28",
       settings: { ...soliditySettings, evmVersion: "cancun" },
     },

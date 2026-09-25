@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.35;
+pragma solidity 0.8.37;
 import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -22,7 +22,11 @@ contract RigoblockGovernanceStrategyTest is Test {
         vm.mockCall(WORMHOLE, abi.encodeWithSelector(ICoreBridge.messageFee.selector), abi.encode(FEE));
     }
 
-    function _action(address target, bytes memory data, uint256 value) private pure returns (IGovernanceVoting.ProposedAction memory) {
+    function _action(
+        address target,
+        bytes memory data,
+        uint256 value
+    ) private pure returns (IGovernanceVoting.ProposedAction memory) {
         return IGovernanceVoting.ProposedAction({target: target, data: data, value: value});
     }
 
@@ -51,7 +55,9 @@ contract RigoblockGovernanceStrategyTest is Test {
 
     function test_beforePropose_WormholeCorrect_Passes() public {
         vm.chainId(1);
-        IGovernanceVoting.ProposedAction memory result = strategy.beforePropose(_action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0));
+        IGovernanceVoting.ProposedAction memory result = strategy.beforePropose(
+            _action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0)
+        );
         assertEq(result.target, WORMHOLE);
     }
 

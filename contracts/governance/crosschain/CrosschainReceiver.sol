@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.35;
+pragma solidity 0.8.37;
 
 import {CrossChainPayload} from "../types/GovernanceTypes.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
