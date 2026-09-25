@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {IEUpgrade} from "./adapters/interfaces/IEUpgrade.sol";
 import {IRigoblockPoolProxyFactory as Beacon} from "../interfaces/IRigoblockPoolProxyFactory.sol";

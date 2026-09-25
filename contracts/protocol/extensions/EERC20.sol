@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {IEERC20} from "./adapters/interfaces/IEERC20.sol";
 

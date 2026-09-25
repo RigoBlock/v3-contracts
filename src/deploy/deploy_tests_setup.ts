@@ -207,26 +207,6 @@ export default deployScript(
       { deterministic: true },
     );
 
-    const acrossSpokePool = await env.deploy(
-      "MockAcrossSpokePool",
-      {
-        account: deployer,
-        artifact: await readArtifact("MockAcrossSpokePool"),
-        args: [weth.address],
-      },
-      { deterministic: true },
-    );
-
-    await env.deploy(
-      "MockAcrossMulticallHandler",
-      {
-        account: deployer,
-        artifact: await readArtifact("MockAcrossMulticallHandler"),
-        args: [],
-      },
-      { deterministic: true },
-    );
-
     const eCrosschain = await env.deploy(
       "ECrosschain",
       {
@@ -435,7 +415,9 @@ export default deployScript(
       {
         account: deployer,
         artifact: await readArtifact("AIntents"),
-        args: [acrossSpokePool.address],
+        // Placeholder: no remaining mocha spec exercises cross-chain deposits locally;
+        // Foundry fork tests wire AIntents to the real Across SpokePool.
+        args: [weth.address],
       },
       { deterministic: true },
     );

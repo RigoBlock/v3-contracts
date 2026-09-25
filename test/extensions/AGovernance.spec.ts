@@ -182,5 +182,32 @@ describe("AGovernance", async () => {
         .to.emit(governanceInstance, "ProposalExecuted")
         .withArgs(1);
     });
+
+    it("should return the required implementation version", async () => {
+      const { user2 } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      const aGovernance = await ethers.deployContract("AGovernance", [
+        user2.address,
+      ]);
+      expect(await aGovernance.requiredVersion()).to.eq("4.0.0");
+    });
+
+    it("should revert when called directly", async () => {
+      const { user2 } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      const aGovernance = await ethers.deployContract("AGovernance", [
+        user2.address,
+      ]);
+      await expect(aGovernance.execute(1)).to.be.revertedWithCustomError(
+        aGovernance,
+        "DirectCallNotAllowed",
+      );
+      await expect(
+        aGovernance.castVote(1, VoteType.For),
+      ).to.be.revertedWithCustomError(aGovernance, "DirectCallNotAllowed");
+      await expect(
+        aGovernance.propose([], "direct call"),
+      ).to.be.revertedWithCustomError(aGovernance, "DirectCallNotAllowed");
+    });
   });
 });

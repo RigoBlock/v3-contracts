@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {IEApps} from "../extensions/adapters/interfaces/IEApps.sol";
 import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";

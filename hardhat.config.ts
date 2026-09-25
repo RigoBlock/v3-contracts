@@ -103,10 +103,6 @@ const defaultProfile = {
   compilers: [
     { version: primarySolidityVersion, settings: soliditySettings },
     {
-      version: "0.8.28",
-      settings: { ...soliditySettings, evmVersion: "cancun" },
-    },
-    {
       version: "0.8.26",
       settings: { ...soliditySettings, evmVersion: "berlin" },
     },
@@ -125,14 +121,6 @@ const defaultProfile = {
     "contracts/protocol/proxies/RigoblockPoolProxy.sol": {
       version: "0.8.17",
       settings: { ...soliditySettings, evmVersion: "london" },
-    },
-    "contracts/mocks/MockAcrossSpokePool.sol": {
-      version: "0.8.28",
-      settings: {
-        ...soliditySettings,
-        viaIR: true,
-        evmVersion: "cancun",
-      },
     },
   },
 };
@@ -191,9 +179,8 @@ const userConfig: HardhatUserConfig = {
     profiles: {
       // NOTE: hardhat-deploy v2's `deploy` task compiles with the `production`
       // build profile. Hardhat 3 auto-generates that profile from `default` but
-      // STRIPS compiler `settings` (including `viaIR`), so it must be declared
-      // explicitly here with the same settings or compilation fails
-      // (MockAcrossSpokePool needs viaIR).
+      // STRIPS compiler `settings`, so it must be declared explicitly here with
+      // the same settings.
       default: defaultProfile,
       production: defaultProfile,
     },
