@@ -104,9 +104,6 @@ abstract contract AUniswapDecoder {
                         params.tokensOut = _addUnique(params.tokensOut, token);
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
-                    } else {
-                        // placeholder area for command 0x07
-                        revert IAUniswapRouter.InvalidCommandType(command);
                     }
                 } else {
                     // 0x08 <= command < 0x10

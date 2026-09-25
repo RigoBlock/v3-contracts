@@ -176,6 +176,20 @@ contract AUniswapRouterForkTest is Test {
         IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
     }
 
+    /// @notice V4_SWAP actions at or above SETTLE that are not one of the five settle/take
+    ///         types revert UnsupportedAction at decode time. SETTLE_PAIR (0x0d) is only
+    ///         supported in modifyLiquidities, not inside a V4_SWAP command.
+    function test_Execute_V4Swap_UnknownActionAboveSettle_Reverts() public {
+        bytes memory commands = hex"10"; // V4_SWAP
+        bytes[] memory encodedParams = new bytes[](1);
+        encodedParams[0] = hex"";
+        bytes[] memory inputs = new bytes[](1);
+        inputs[0] = abi.encode(hex"0d", encodedParams); // SETTLE_PAIR >= SETTLE, unsupported here
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.UnsupportedAction.selector, uint256(0x0d)));
+        IAUniswapRouter(pool).execute(commands, inputs, block.timestamp + 1000);
+    }
+
     /// @notice PAY_PORTION_FULL_PRECISION (0x07, UR 2.1.2) to the pool: a V3 swap whose output
     ///         stays on the router, a 50% portion payment back to the pool, then a trailing
     ///         SWEEP that clears the router. Positive path against the live 2.1.2 router.

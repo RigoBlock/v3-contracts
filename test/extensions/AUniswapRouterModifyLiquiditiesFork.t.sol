@@ -829,6 +829,26 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
             )
         );
         IAUniswapRouter(pool).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1 hours);
+
+        // DONATE (0x0a) is below SETTLE but is not a position action: unsupported in modifyLiquidities.
+        actions = abi.encodePacked(uint8(Actions.DONATE));
+        params = new bytes[](1);
+        params[0] = hex"";
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.UnsupportedAction.selector, uint256(Actions.DONATE)));
+        IAUniswapRouter(pool).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1 hours);
+
+        // SETTLE_ALL (0x0c) is a settle-category action that is only supported inside V4_SWAP.
+        actions = abi.encodePacked(uint8(Actions.SETTLE_ALL));
+        params = new bytes[](1);
+        params[0] = hex"";
+
+        vm.prank(poolOwner);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAUniswapRouter.UnsupportedAction.selector, uint256(Actions.SETTLE_ALL))
+        );
+        IAUniswapRouter(pool).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1 hours);
     }
 
     /// @notice Ports "should decode CLOSE_CURRENCY action": supported currencies pass, tokens
