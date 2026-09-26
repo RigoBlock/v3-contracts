@@ -22,16 +22,11 @@ interface ChainConfig {
 }
 
 // Ethereum mainnet Rigoblock governance proxy. This address is the Wormhole emitter
-// for cross-chain governance messages.
+// for cross-chain governance messages and, since the governance proxy is deterministically
+// deployed at the same address on every chain, also the trusted emitter hardcoded in the
+// governance implementation's cross-chain receiver mixin.
 export const mainnetGovernanceProxy =
   "0x5F8607739c2D2d0b57a4292868C368AB1809767a";
-
-// Rigoblock-controlled recovery wallet that owns the cross-chain governance receiver
-// proxies as their constructor-supplied admin: it can upgrade the receiver implementation
-// (e.g. when Wormhole is unavailable). Unlike Uniswap's Owned(msg.sender), ownership is an
-// explicit deploy parameter so deterministic CREATE2 deployment does not grant the
-// deployer EOA any privileges. Must be set to a live address before deploying receivers.
-export const governanceOwner = "0x0000000000000000000000000000000000000000";
 
 // Chain-specific configuration
 export const chainConfig: { [chainId: number]: ChainConfig } = {

@@ -16,6 +16,10 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSAL_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalcount")) - 1));
         assert(_PROPOSED_ACTION_SLOT == bytes32(uint256(keccak256("governance.proxy.proposedaction")) - 1));
         assert(_PROPOSAL_QUORUM_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.quorum")) - 1));
+        assert(_CROSSCHAIN_SEQUENCE_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.sequence")) - 1));
+        assert(_CROSSCHAIN_CONSUMED_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.consumed")) - 1));
+        assert(_CROSSCHAIN_QUEUE_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.queue")) - 1));
+        assert(_CROSSCHAIN_FAILED_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.failed")) - 1));
     }
 
     function _governanceParameters() internal pure returns (IGovernanceState.GovernanceParameters storage s) {
@@ -101,6 +105,46 @@ abstract contract MixinStorage is MixinImmutables {
     function _receipt() internal pure returns (UserReceipt storage s) {
         assembly {
             s.slot := _RECEIPT_SLOT
+        }
+    }
+
+    struct ExpectedSequenceSlot {
+        uint64 value;
+    }
+
+    function _crosschainSequence() internal pure returns (ExpectedSequenceSlot storage s) {
+        assembly {
+            s.slot := _CROSSCHAIN_SEQUENCE_SLOT
+        }
+    }
+
+    struct ConsumedVaa {
+        mapping(bytes32 vaaHash => bool executed) consumedVaa;
+    }
+
+    function _consumedVaa() internal pure returns (ConsumedVaa storage s) {
+        assembly {
+            s.slot := _CROSSCHAIN_CONSUMED_SLOT
+        }
+    }
+
+    struct QueuedPayload {
+        mapping(uint64 sequence => bytes encodedAction) queuedPayload;
+    }
+
+    function _queuedPayload() internal pure returns (QueuedPayload storage s) {
+        assembly {
+            s.slot := _CROSSCHAIN_QUEUE_SLOT
+        }
+    }
+
+    struct FailedAction {
+        mapping(uint64 sequence => IGovernanceVoting.ProposedAction action) failedAction;
+    }
+
+    function _failedAction() internal pure returns (FailedAction storage s) {
+        assembly {
+            s.slot := _CROSSCHAIN_FAILED_SLOT
         }
     }
 }

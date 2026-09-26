@@ -34,7 +34,15 @@ abstract contract MixinUpgrade is MixinStorage {
             newProposalThreshold != params.proposalThreshold || newQuorumThreshold != params.quorumThreshold,
             GovUpgradeSameAsCurrent()
         );
-        IGovernanceStrategy(params.strategy).assertValidThresholds(newProposalThreshold, newQuorumThreshold);
+        // an unchanged threshold is not re-validated: supply inflation can drift a previously
+        // valid threshold out of range, and blocking single-threshold updates would brick governance
+        IGovernanceStrategy strategy = IGovernanceStrategy(params.strategy);
+        if (newProposalThreshold != params.proposalThreshold) {
+            strategy.assertValidProposalThreshold(newProposalThreshold);
+        }
+        if (newQuorumThreshold != params.quorumThreshold) {
+            strategy.assertValidQuorumThreshold(newQuorumThreshold);
+        }
         params.proposalThreshold = newProposalThreshold;
         params.quorumThreshold = newQuorumThreshold;
         emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);

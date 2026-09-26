@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 
 import {IGovernanceState} from "./interfaces/governance/IGovernanceState.sol";
+import {MixinCrosschain} from "./mixins/MixinCrosschain.sol";
 import {MixinImmutables} from "./mixins/MixinImmutables.sol";
 import {MixinInitializer} from "./mixins/MixinInitializer.sol";
 import {MixinState} from "./mixins/MixinState.sol";
@@ -17,7 +18,8 @@ contract RigoblockGovernance is
     MixinInitializer,
     MixinUpgrade,
     MixinVoting,
-    MixinState
+    MixinState,
+    MixinCrosschain
 {
     /// @notice Constructor has no inputs to guarantee same deterministic address across chains.
     /// @dev Setting high proposal threshold locks propose action, which also lock vote actions.

@@ -17,28 +17,36 @@ target chains such as HyperEVM through Wormhole cross-chain messages.
 ## Architecture
 
 ```
-Ethereum mainnet
+Ethereum mainnet (sender chain)
   RigoblockGovernance proxy
     └─ MixinVoting.execute
        └─ every action is routed through RigoblockGovernanceStrategy.beforeExecute
        └─ Wormhole actions call IWormhole.publishMessage{value: messageFee}(payload)
 
-Target chain (e.g. HyperEVM)
-  CrosschainReceiverProxy  (owner: Rigoblock recovery wallet)
-    └─ CrosschainReceiver (implementation, upgradeable by owner)
+Target chain (e.g. HyperEVM, receiver chain)
+  RigoblockGovernance proxy  (same deterministic address as on mainnet)
+    └─ MixinCrosschain.receiveMessage (inside the governance implementation)
        └─ parseAndVerifyVM(encodedVaa)
           └─ execute actions in order
 ```
 
+There is no dedicated receiver contract: the cross-chain receiver is a mixin of
+the `RigoblockGovernance` implementation, so the governance proxy itself is the
+receiver hub on each chain. Because the governance proxy is deployed at the same
+deterministic address on every chain, the trusted emitter is a compile-time
+constant and the receiver address on a new chain is known before deployment.
+
 The `RigoblockGovernance` implementation has no constructor arguments, so it can
 be deployed at the same deterministic address on every chain. The Wormhole core
-address is stored in `RigoblockGovernanceStrategy`, which is deployed per chain
-and therefore does not affect the governance implementation address.
-
-Each target-chain `CrosschainReceiver` is configured with the Wormhole-formatted
-address of the trusted emitter (by default the Ethereum mainnet governance proxy
-`0x5F8607739c2D2d0b57a4292868C368AB1809767a`) and the Wormhole chain id of
-Ethereum (`2`).
+address and local Wormhole chain id are stored in `RigoblockGovernanceStrategy`,
+which is deployed per chain and therefore does not affect the governance
+implementation address. A chain is a **receiver** when its governance strategy
+has a nonzero Wormhole address; a chain with a zero Wormhole address in its
+strategy does not process cross-chain messages at all. Ethereum mainnet is the
+only **sender** today, enforced by the strategy (`beforePropose` requires
+`block.chainid == 1`), but which chain acts as sender vs receiver is ultimately
+a configuration choice expressed through per-chain strategy deployment and
+strategy upgrades.
 
 ## Governance side
 
@@ -60,10 +68,10 @@ The `encodedPayload` is `abi.encode(CrossChainPayload)`:
   enforced by the Wormhole VAA hash and by atomic proposal execution on
   mainnet.
 - `action`: the single `ProposedAction` to execute on the target chain. Its
-  `value` is paid on the destination chain from the receiver contract's own
+  `value` is paid on the destination chain from the governance proxy's own
   balance — it is not sent through Wormhole and must not be confused with the
-  source-chain fee. If the receiver holds insufficient native currency for the
-  inner action value, execution fails and the action is deferred to
+  source-chain fee. If the governance proxy holds insufficient native currency
+  for the inner action value, execution fails and the action is deferred to
   `failedActions` (see Receiver side), from where it can be retried once the
   balance is funded.
 
@@ -87,18 +95,27 @@ individually by the strategy.
 
 ## Receiver side
 
-`CrosschainReceiver` is deployed behind a `CrosschainReceiverProxy` on each
-target chain (the proxy is the address governance actions target). It follows
-the same validation steps as the Wormhole `HelloWorld` example:
+The receiver logic lives in `MixinCrosschain`, a mixin of the governance
+implementation (`contracts/governance/mixins/MixinCrosschain.sol`). Relayers
+deliver VAAs by calling `receiveMessage` on the chain's governance proxy, whose
+fallback delegatecalls into the implementation. It follows the same validation
+steps as the Wormhole `HelloWorld` example:
 
-1. Parses and verifies the VAA through the Wormhole core contract.
+1. Parses and verifies the VAA through the Wormhole core contract read from the
+   governance strategy.
    `parseAndVerifyVM` checks the guardian-set signature proof. Forged or
    malformed VAAs return `valid == false` and the receiver reverts with the
    reason provided by Wormhole.
-2. Asserts the emitter chain id and emitter address match the trusted mainnet
-   governance proxy.
+2. Asserts the emitter chain id (`2`, Ethereum) and emitter address (the
+   governance proxy address, identical on every chain) match the trusted
+   sender-chain governance proxy. A receiver on the sender chain itself reverts
+   (`GovReceiverLocalEmitter`).
 3. Checks the `consumed` mapping to prevent replay of a valid VAA.
 4. Verifies the payload's `targetWormholeChainId` equals the local chain.
+
+If the governance strategy has no Wormhole address configured,
+`receiveMessage` reverts with `GovReceiverNotConfigured`: the chain has not
+opted in as a receiver.
 
 The VAA is marked `consumed` only after emitter and target-chain checks pass.
 This prevents a VAA intended for a different chain from being burned here.
@@ -128,34 +145,42 @@ later message, since the queue is re-drained on each delivery):
   past it. `receiveMessage` therefore always succeeds once the VAA itself is
   valid, for both the direct path and the queue drain.
 - Anyone can call `retryFailedAction(sequence)` once the action's
-  preconditions on the target chain are satisfied. On success the entry is
-  cleared and `CrossChainActionExecuted` is emitted; a retry that still reverts
-  propagates `GovReceiverExecutionFailed`.
+  preconditions on the target chain are satisfied. The entry is cleared
+  **before** the action is called, so a reentrant `retryFailedAction` finds
+  nothing to retry and the action cannot execute (or be paid) twice. On success
+  `CrossChainActionExecuted` is emitted; a retry that still reverts propagates
+  `GovReceiverExecutionFailed`.
 - Ordering caveat: a retried action executes after whatever was delivered in
   the meantime. Governance actions should be authored to be
   precondition-safe (target contracts should no-op rather than revert where
   possible). If strict ordering with later actions matters, governance
   re-sends the action as a new message instead of relying on retry.
 
-## Recovery: proxy owner
+## Recovery
 
-The receiver is deployed behind a `CrosschainReceiverProxy` whose owner is a
-Rigoblock-controlled recovery wallet on the target chain (`governanceOwner` in
-`src/utils/constants.ts`). The owner can upgrade the receiver implementation
-via `upgradeToAndCall`. This is the same escape hatch Uniswap's
-`ReceiverHub` provides through its owner-swappable decoder modules: it covers
-Wormhole liveness outages (an implementation can add an alternative message
-path), an action that can never succeed, and receiver bugs. Day-to-day
-execution remains trustless: only messages verified against the trusted
-mainnet emitter are executed, and the owner cannot forge a VAA.
+Because the receiver is part of the governance implementation, recovery from
+unrecoverable states (a Wormhole liveness outage, an action that can never
+succeed, receiver bugs) uses the governance's own existing mechanisms, with no
+separate owner or proxy:
+
+- The chain's local governance can propose and execute `upgradeImplementation`
+  or `upgradeStrategy` (both `onlyGovernance`), replacing the receiver logic or
+  reconfiguring the Wormhole address. On receiver chains the local governance
+  acts through its own staking-based voting; it does not depend on Wormhole.
+- Mainnet governance keeps full control of the sender side through ordinary
+  proposals.
+
+Day-to-day execution remains trustless: only messages verified against the
+trusted mainnet emitter are executed, and neither the local governance voters
+nor any third party can forge a VAA.
 
 ## Ordered execution
 
-Wormhole assigns an increasing sequence number to every message published by a
-given emitter. `CrosschainReceiver` starts at `expectedSequence = 1` and only
-accepts the next sequence in order. If Wormhole delivers messages out of order,
-later messages are stored in `queuedPayloads` and executed automatically when the
-missing sequence arrives.
+Wormhole assigns an increasing sequence number (starting at 0) to every message
+published by a given emitter. The receiver starts at `expectedSequence = 0` and
+only accepts the next sequence in order. If Wormhole delivers messages out of
+order, later messages are stored in `queuedPayloads` and executed automatically
+when the missing sequence arrives.
 
 ## Replay protection
 
@@ -171,24 +196,31 @@ from being replayed to emit different cross-chain messages.
 
 ## Receiver is part of governance, not the protocol
 
-`CrosschainReceiver` lives under `contracts/governance/crosschain/`. It has no
-special authority over Rigoblock pools; it only holds the trust relationship
-with the Ethereum mainnet governance proxy and dispatches the decoded actions.
+The receiver logic lives in `contracts/governance/mixins/MixinCrosschain.sol`
+and its interface in `contracts/governance/interfaces/ICrosschainReceiver.sol`.
+Executing a cross-chain action through the governance proxy means the action
+runs with the governance proxy's authority on that chain — the same trust
+relationship as a locally executed proposal, just authorized by the sender
+chain's governance instead of the local one.
 
-## Why not make the governance contract the receiver?
+## Why the governance proxy is the receiver
 
-The governance contract itself could theoretically receive cross-chain messages
-on target chains, but a separate `CrosschainReceiver` is preferred:
+Making the governance proxy the receiver hub (instead of a dedicated contract)
+is deliberate:
 
-- It keeps the governance contract's execution surface minimal: on Ethereum
-  mainnet the receive path must revert, while on target chains it would need a
-  second, privileged execution path. A dedicated receiver isolates that path.
-- It avoids bypassing the local strategy on target chains for actions that
-  originate from mainnet. The receiver only executes mainnet-authorized actions;
-  it does not participate in local voting.
-- Deployment and upgrade management are simpler: the receiver is a small,
-  single-purpose contract behind an owner-administered proxy, so upgrades and
-  redeployments never touch the governance implementation.
+- The governance proxy already exists on every chain at a deterministic,
+  well-known address, so no extra deployment or proxy is needed and the
+  receiver address is known in advance on new chains.
+- The receiver benefits from the governance proxy's existing upgrade path:
+  receiver fixes ship inside governance implementation upgrades.
+- Sequencing, replay, and failure-deferral state live in dedicated governance
+  storage slots, completely separate from voting state, and are asserted in the
+  `MixinStorage` constructor like every other governance slot.
+
+The trade-off — the receive path shares the governance implementation's audit
+surface — is accepted because the validation sequence is identical to the
+previously reviewed standalone receiver, and the sender chain is fixed to
+Ethereum mainnet by the strategy.
 
 ## Quorum snapshot (issue #200)
 
@@ -213,26 +245,25 @@ effective quorum through `getProposalState(proposalId)`.
 
 ## Deployment
 
-`src/deploy/deploy_governance.ts` handles chain-specific deployment:
-
-- On receiver chains (any chain with Wormhole config other than mainnet) it
-  deploys the `CrosschainReceiver` implementation plus the
-  `CrosschainReceiverProxy` pointed at it, with `governanceOwner` from
-  `src/utils/constants.ts` as the proxy owner (constructor input, mirroring
-  Uniswap's deployer-as-owner except the deployer EOA is never granted
-  ownership). The proxy address is the one governance targets on that chain.
-  The script throws if `governanceOwner` is unset.
-- On all other chains it deploys `RigoblockGovernance` (no constructor
-  arguments), then `RigoblockGovernanceStrategy` with the local Wormhole core
-  address (or `address(0)` where Wormhole is not available).
+`src/deploy/deploy_governance.ts` deploys the same suite on every chain:
+`RigoblockGovernanceFactory` (no constructor arguments), `RigoblockGovernance`
+(no constructor arguments — same address on every chain), then
+`RigoblockGovernanceStrategy` with the chain's staking proxy and Wormhole
+configuration. A chain with a nonzero Wormhole address in
+`src/utils/constants.ts` is a receiver chain; a chain with a zero Wormhole
+address is not able to process cross-chain messages.
 
 Chain-specific Wormhole addresses and chain ids are stored in
 `src/utils/constants.ts` and `contracts/test/Constants.sol`.
 
+To fund actions with native currency on a receiver chain, send ETH directly to
+the governance proxy address on that chain; the receiver pays each action's
+`value` from the governance proxy's own balance.
+
 ## Testing
 
-- Foundry (cross-chain receiver + Wormhole integration):
-  `forge test --match-path test/governance/CrosschainReceiver.t.sol`
+- Foundry (cross-chain receiver inside the governance implementation):
+  `forge test --match-path test/governance/Governance.Crosschain.t.sol`
 - Foundry (strategy Wormhole validation):
   `forge test --match-path test/governance/RigoblockGovernanceStrategy.t.sol`
 - Foundry (quorum snapshot storage layout / backwards compatibility):

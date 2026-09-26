@@ -95,14 +95,12 @@ deployed instance of its own.
 
 ### Staking and governance
 
-| Contract                 | Size (bytes) | Headroom | % of limit |
-| ------------------------ | -----------: | -------: | ---------: |
-| Staking                  |        22820 |     1756 |     92.85% |
-| GrgVault                 |         4392 |    20184 |     17.87% |
-| RigoblockGovernance      |        11590 |    12986 |     47.16% |
-| RigoblockGovernanceStrategy |      5206 |    19370 |     21.18% |
-| CrosschainReceiver       |         5495 |    19081 |     22.36% |
-| CrosschainReceiverProxy  |          698 |    23878 |      2.84% |
+| Contract                    | Size (bytes) | Headroom | % of limit |
+| --------------------------- | -----------: | -------: | ---------: |
+| Staking                     |        22820 |     1756 |     92.85% |
+| GrgVault                    |         4392 |    20184 |     17.87% |
+| RigoblockGovernance         |        16151 |     8425 |     65.72% |
+| RigoblockGovernanceStrategy |         5434 |    19142 |     22.11% |
 
 ## Notes
 

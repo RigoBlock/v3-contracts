@@ -37,4 +37,24 @@ abstract contract MixinConstants is IRigoblockGovernance {
         0xe4ff3d203d0a873fb9ffd3a1bbd07943574a73114c5affe6aa0217c743adeb06;
 
     bytes32 internal constant _RECEIPT_SLOT = 0x5a7421539532aa5504e4251551519aa0a06f7c2a3b40bbade5235843e09ad5fe;
+
+    /// @notice Wormhole-formatted address of the trusted sender-chain governance proxy. The governance
+    ///         proxy is deterministically deployed at the same address on every chain, so the expected
+    ///         emitter is a constant. See docs/wormhole/GOVERNANCE_CROSSCHAIN.md.
+    bytes32 internal constant _EXPECTED_EMITTER = bytes32(uint256(uint160(0x5F8607739c2D2d0b57a4292868C368AB1809767a)));
+
+    /// @notice Wormhole chain id of the sender chain (Ethereum mainnet).
+    uint16 internal constant _EMITTER_CHAIN_ID = 2;
+
+    bytes32 internal constant _CROSSCHAIN_SEQUENCE_SLOT =
+        0xac0ac78c54bb73764538302bc1bda8524f435b774942256fff0e0adfcc8e9619;
+
+    bytes32 internal constant _CROSSCHAIN_CONSUMED_SLOT =
+        0x3bd8e8e33c91da57468c9ee1cbb66af5a180d31f2aaec4f722fa2a662d16c8ec;
+
+    bytes32 internal constant _CROSSCHAIN_QUEUE_SLOT =
+        0x279f36212bfd68d35cea78a95badb30afe907cfedc4501913ca1cac929f2b01f;
+
+    bytes32 internal constant _CROSSCHAIN_FAILED_SLOT =
+        0x9b3acb084638d07b9d567b826ea38a33a3bd320a8ce55638f5937893df56ff78;
 }

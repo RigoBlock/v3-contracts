@@ -63,6 +63,16 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
+    function assertValidProposalThreshold(uint256 proposalThreshold) public view override {
+        _assertValidProposalThreshold(proposalThreshold);
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function assertValidQuorumThreshold(uint256 quorumThreshold) public view override {
+        _assertValidQuorumThreshold(quorumThreshold);
+    }
+
+    /// @inheritdoc IGovernanceStrategy
     function getProposalState(
         IGovernanceState.Proposal memory proposal,
         uint256 minimumQuorum,
@@ -201,6 +211,16 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         action.value = ICoreBridge(_wormhole).messageFee();
 
         return action;
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function wormhole() external view override returns (address) {
+        return _wormhole;
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function wormholeChainId() external view override returns (uint16) {
+        return _wormholeChainId;
     }
 
     /// @notice Decodes a Wormhole publishMessage call and validates its inner payload.

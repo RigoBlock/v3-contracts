@@ -17,6 +17,14 @@ interface IGovernanceStrategy {
     /// @param quorumThreshold Number of votes required for a proposal to succeed.
     function assertValidThresholds(uint256 proposalThreshold, uint256 quorumThreshold) external view;
 
+    /// @notice Reverts if the proposal threshold is incorrect.
+    /// @param proposalThreshold Number of votes required to make a proposal.
+    function assertValidProposalThreshold(uint256 proposalThreshold) external view;
+
+    /// @notice Reverts if the quorum threshold is incorrect.
+    /// @param quorumThreshold Number of votes required for a proposal to succeed.
+    function assertValidQuorumThreshold(uint256 quorumThreshold) external view;
+
     /// @notice Returns the state of a proposal for a required quorum.
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
@@ -57,4 +65,12 @@ interface IGovernanceStrategy {
     function beforeExecute(
         IGovernanceVoting.ProposedAction calldata action
     ) external view returns (IGovernanceVoting.ProposedAction memory);
+
+    /// @notice Returns the Wormhole core contract used for cross-chain governance.
+    /// @return Address of the Wormhole core contract, or the zero address if this chain is not
+    ///         configured as a cross-chain governance receiver.
+    function wormhole() external view returns (address);
+
+    /// @notice Returns the Wormhole chain id of the chain this strategy is deployed on.
+    function wormholeChainId() external view returns (uint16);
 }

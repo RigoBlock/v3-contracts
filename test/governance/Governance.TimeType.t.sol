@@ -39,7 +39,7 @@ contract GovernanceTimeTypeTest is Test {
 
     function setUp() public {
         harness = new MigrationHarness();
-        strategy = new MockMigrationStrategy();
+        strategy = new MockMigrationStrategy(false, false);
         target = new MockTarget();
         bundler = new QualifyAndExecute();
         strategy.setParams(PROPOSAL_THRESHOLD, QUORUM_THRESHOLD, VOTING_POWER);

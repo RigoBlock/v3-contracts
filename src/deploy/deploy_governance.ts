@@ -2,11 +2,7 @@ import { ethers } from "ethers";
 import { readArtifact } from "../../rocketh/artifacts.js";
 import { deployScript } from "../../rocketh/deploy.js";
 import type { Environment } from "../../rocketh/config.js";
-import {
-  chainConfig,
-  governanceOwner,
-  mainnetGovernanceProxy,
-} from "../utils/constants";
+import { chainConfig } from "../utils/constants";
 import { enableManagedNonce } from "../utils/nonce";
 
 export default deployScript(
@@ -25,49 +21,12 @@ export default deployScript(
     }
 
     const config = chainConfig[chainId];
-    const zeroAddress = "0x0000000000000000000000000000000000000000";
 
-    // Receiver chains execute governance actions coming from Ethereum mainnet.
-    // This includes chains with no staking proxy (e.g. HyperEVM) and chains where
-    // the local staking proxy is being deprecated for governance (e.g. Unichain).
-    // Mainnet (chainId 1) is the source of cross-chain governance messages, so it
-    // always gets the full suite below, as do legacy L2s without Wormhole config
-    // until they are migrated to cross-chain governance.
-    if (chainId !== 1 && config.wormhole != zeroAddress) {
-      if (governanceOwner === zeroAddress) {
-        throw new Error(
-          `governanceOwner in src/utils/constants.ts must be set before deploying a receiver on chain ${chainId}`,
-        );
-      }
-
-      const implementation = await env.deploy(
-        "CrosschainReceiver",
-        {
-          account: deployer,
-          artifact: await readArtifact("CrosschainReceiver"),
-          args: [
-            config.wormhole,
-            2,
-            ethers.zeroPadValue(mainnetGovernanceProxy, 32),
-          ],
-        },
-        { deterministic: true },
-      );
-
-      // the proxy is the address governance targets on this chain; governanceOwner
-      // can upgrade the receiver implementation if Wormhole is unavailable
-      await env.deploy(
-        "CrosschainReceiverProxy",
-        {
-          account: deployer,
-          artifact: await readArtifact("CrosschainReceiverProxy"),
-          args: [implementation.address, governanceOwner],
-        },
-        { deterministic: true },
-      );
-      return;
-    }
-
+    // The cross-chain receiver capability lives inside the governance implementation itself:
+    // the governance proxy is the receiver hub on each chain, and its deterministic address is
+    // known in advance on every chain. A chain opts in as a receiver by deploying its governance
+    // strategy with a Wormhole address (config.wormhole); chains with a zero Wormhole address are
+    // senders-only. Ethereum mainnet is the only sender today (enforced by the strategy).
     await env.deploy(
       "RigoblockGovernanceFactory",
       {
