@@ -10,6 +10,10 @@
 > compiled contract (Hardhat instruments all of `contracts/` regardless of which
 > tests run). Both reports are uploaded **raw** (no client-side filtering) — see
 > "Raw uploads" below for why.
+>
+> Instrumentation also changes compiled bytecode: `Governance.DeterministicDeployment.spec.ts`
+> asserts CREATE2 addresses over artifact init code, which no longer hash to the deployed
+> addresses under instrumentation. It skips when `COVERAGE=true` (set by `coverage:hardhat`).
 
 ## Coverage Architecture (Foundry)
 
