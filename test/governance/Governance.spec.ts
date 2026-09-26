@@ -81,6 +81,17 @@ describe("Governance Implementation", async () => {
     });
   });
 
+  describe("cancel", async () => {
+    it("should revert with direct call", async () => {
+      const { implementation } = await setupTests();
+      // no proposal can exist on the implementation, so cancellation cannot find one
+      const proposalId = 1;
+      await expect(
+        implementation.cancel(proposalId),
+      ).to.be.revertedWithCustomError(implementation, "GovProposalIdInvalid");
+    });
+  });
+
   describe("upgradeImplementation", async () => {
     it("should revert with direct call", async () => {
       const { implementation, user2 } = await setupTests();

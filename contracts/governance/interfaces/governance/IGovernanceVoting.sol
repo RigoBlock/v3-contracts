@@ -29,6 +29,12 @@ interface IGovernanceVoting {
     /// @param proposalId The ID of the proposal to execute.
     function execute(uint256 proposalId) external payable;
 
+    /// @notice Cancels a proposal that has not started voting yet.
+    /// @dev Only the proposer can cancel, and only while the proposal is Pending. A canceled
+    ///      proposal cannot be voted on or executed. Cancelling does not consume the proposal id.
+    /// @param proposalId The ID of the proposal to cancel.
+    function cancel(uint256 proposalId) external;
+
     struct ProposedAction {
         address target;
         bytes data;

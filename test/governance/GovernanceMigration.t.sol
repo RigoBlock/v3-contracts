@@ -8,6 +8,7 @@ import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
 import {MixinInitializer} from "../../contracts/governance/mixins/MixinInitializer.sol";
 import {MixinUpgrade} from "../../contracts/governance/mixins/MixinUpgrade.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
+import {IGovernanceEvents} from "../../contracts/governance/interfaces/governance/IGovernanceEvents.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IRigoblockGovernance} from "../../contracts/governance/IRigoblockGovernance.sol";
@@ -42,7 +43,6 @@ contract MockMigrationStrategy is IGovernanceStrategy {
     }
 
     function assertValidInitParams(IRigoblockGovernanceFactory.Parameters calldata) external pure {}
-    function assertValidThresholds(uint256, uint256) external pure {}
 
     function assertValidProposalThreshold(uint256) external view override {
         require(!_revertOnProposalValidation, MockInvalidProposalThreshold());
@@ -152,6 +152,10 @@ contract MigrationHarness is MixinStorage, MixinInitializer, MixinUpgrade, Mixin
 
     function proposalQuorumSlot() external pure returns (bytes32) {
         return _PROPOSAL_QUORUM_SLOT;
+    }
+
+    function proposalMetaSlot() external pure returns (bytes32) {
+        return _PROPOSAL_META_SLOT;
     }
 
     function proposalCountSlot() external pure returns (bytes32) {
@@ -316,6 +320,135 @@ contract GovernanceMigrationTest is Test {
         IGovernanceState.EnhancedParams memory params = harness.governanceParameters();
         assertEq(params.params.proposalThreshold, LOWERED_PROPOSAL_THRESHOLD);
         assertEq(params.params.quorumThreshold, LOWERED_QUORUM);
+    }
+
+    /// @notice A proposer can cancel their own proposal while it is still Pending, after which
+    ///     it reads as Canceled and neither votes nor execution are possible anymore.
+    function test_Cancel_ProposerWhilePending_Succeeds() public {
+        uint256 proposalId = _createProposal("cancelable proposal");
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Pending));
+        assertEq(harness.proposer(proposalId), whale);
+        assertFalse(harness.canceled(proposalId));
+
+        vm.expectEmit(true, false, false, true);
+        emit IGovernanceEvents.ProposalCanceled(proposalId);
+        vm.prank(whale);
+        harness.cancel(proposalId);
+
+        assertTrue(harness.canceled(proposalId));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Canceled));
+
+        // voting and executing a canceled proposal must revert
+        vm.warp(block.timestamp + 2);
+        vm.prank(whale);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MixinVoting.GovVotingClosed.selector,
+                proposalId,
+                IGovernanceState.ProposalState.Canceled
+            )
+        );
+        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+
+        vm.warp(block.timestamp + 8 days);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MixinVoting.GovVotingClosed.selector,
+                proposalId,
+                IGovernanceState.ProposalState.Canceled
+            )
+        );
+        harness.execute(proposalId);
+    }
+
+    /// @notice An account that did not create the proposal cannot cancel it. The proposer
+    ///     themselves can cancel the very same proposal, proving the check is on the creator
+    ///     and not on voting power.
+    function test_Cancel_NonProposer_Reverts() public {
+        uint256 proposalId = _createProposal("not yours");
+        address other = makeAddr("other");
+        vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovUnableToCancel.selector, proposalId, other));
+        vm.prank(other);
+        harness.cancel(proposalId);
+
+        assertFalse(harness.canceled(proposalId));
+
+        // the proposer retains the right to cancel what they created
+        vm.prank(whale);
+        harness.cancel(proposalId);
+        assertTrue(harness.canceled(proposalId));
+    }
+
+    /// @notice Cancellation is only possible while the proposal is Pending: once voting has
+    ///     started (or the proposal is over), the proposer can no longer retract it.
+    function test_Cancel_AfterVotingStarts_Reverts() public {
+        uint256 proposalId = _createProposal("already active");
+
+        // an Against vote keeps the proposal Active (a For vote would qualify it)
+        vm.warp(block.timestamp + 2);
+        vm.prank(whale);
+        harness.castVote(proposalId, IGovernanceVoting.VoteType.Against);
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Active));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MixinVoting.GovVotingClosed.selector,
+                proposalId,
+                IGovernanceState.ProposalState.Active
+            )
+        );
+        vm.prank(whale);
+        harness.cancel(proposalId);
+        assertFalse(harness.canceled(proposalId));
+
+        // also not after the voting period has ended
+        vm.warp(block.timestamp + 8 days);
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Defeated));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MixinVoting.GovVotingClosed.selector,
+                proposalId,
+                IGovernanceState.ProposalState.Defeated
+            )
+        );
+        vm.prank(whale);
+        harness.cancel(proposalId);
+        assertFalse(harness.canceled(proposalId));
+    }
+
+    /// @notice A proposal created before the cancel feature existed (no recorded proposer in
+    ///     storage) cannot be canceled by anyone: the zero-address proposer check blocks
+    ///     cancellation instead of letting address(0) cancel.
+    function test_Cancel_LegacyProposal_HasNoProposer() public {
+        uint256 legacyId = _createLegacyProposal();
+
+        // simulate the old implementation, which never wrote the proposer: clear the meta slot
+        bytes32 metaSlot = keccak256(abi.encode(uint256(legacyId), uint256(harness.proposalMetaSlot())));
+        vm.store(address(harness), metaSlot, bytes32(0));
+        assertEq(harness.proposer(legacyId), address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovUnableToCancel.selector, legacyId, whale));
+        vm.prank(whale);
+        harness.cancel(legacyId);
+        assertFalse(harness.canceled(legacyId));
+    }
+
+    /// @notice Canceling one proposal must not leak into other proposals' meta or state.
+    function test_Cancel_IsolatedPerProposal() public {
+        uint256 first = _createProposal("first");
+        uint256 second = _createProposal("second");
+
+        vm.prank(whale);
+        harness.cancel(first);
+
+        assertTrue(harness.canceled(first));
+        assertFalse(harness.canceled(second));
+        assertEq(harness.proposer(second), whale);
+        assertEq(uint256(harness.getProposalState(second)), uint256(IGovernanceState.ProposalState.Pending));
+
+        // the surviving proposal remains fully executable
+        _voteAndExecute(second);
+        assertEq(uint256(harness.getProposalState(second)), uint256(IGovernanceState.ProposalState.Executed));
     }
 
     /// @notice Exercises the view getters getActions, getReceipt and proposals against a

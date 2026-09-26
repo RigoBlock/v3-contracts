@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
-import {IGovernanceVoting} from "./governance/IGovernanceVoting.sol";
+import {IGovernanceVoting} from "./IGovernanceVoting.sol";
 
 /// @title Cross-chain governance receiver interface.
 /// @notice Implemented by the Rigoblock governance on chains that execute actions decided by the
@@ -10,7 +10,7 @@ import {IGovernanceVoting} from "./governance/IGovernanceVoting.sol";
 /// @dev The Wormhole configuration is read from the governance strategy, so receiver capability is
 ///      enabled by pointing the governance at a Wormhole-enabled strategy and can only be changed
 ///      through a governance proposal. See docs/wormhole/GOVERNANCE_CROSSCHAIN.md.
-interface ICrosschainReceiver {
+interface IGovernanceCrosschain {
     /// @notice Emitted when a cross-chain action is executed on this chain.
     /// @param sequence Wormhole sequence number of the consumed VAA.
     /// @param actionHash keccak256 hash of the executed action.

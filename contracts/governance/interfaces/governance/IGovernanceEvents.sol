@@ -24,6 +24,10 @@ interface IGovernanceEvents {
     /// @param proposalId Number of the proposal.
     event ProposalExecuted(uint256 proposalId);
 
+    /// @notice Emitted when a proposal is canceled.
+    /// @param proposalId Number of the proposal.
+    event ProposalCanceled(uint256 proposalId);
+
     /// @notice Emmited when the governance strategy is upgraded.
     /// @param newStrategy Address of the new strategy contract.
     event StrategyUpgraded(address newStrategy);

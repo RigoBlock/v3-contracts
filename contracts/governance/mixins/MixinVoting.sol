@@ -41,6 +41,11 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @param provided The amount of native tokens sent with the call.
     error GovExecutionValueMismatch(uint256 required, uint256 provided);
 
+    /// @notice Thrown when an account other than the proposer tries to cancel a proposal.
+    /// @param proposalId The id of the proposal.
+    /// @param caller The account that attempted the cancellation.
+    error GovUnableToCancel(uint256 proposalId, address caller);
+
     /// @inheritdoc IGovernanceVoting
     function propose(
         IGovernanceVoting.ProposedAction[] memory actions,
@@ -63,6 +68,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         // proposals start from id = 1
         _proposalCount().value++;
         proposalId = _getProposalCount();
+        _proposalMeta().proposalMetaById[proposalId].proposer = msg.sender;
         IGovernanceState.Proposal memory newProposal = IGovernanceState.Proposal({
             actionsLength: length,
             startBlockOrTime: startBlockOrTime,
@@ -161,6 +167,18 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         }
 
         emit ProposalExecuted(proposalId);
+    }
+
+    /// @inheritdoc IGovernanceVoting
+    function cancel(uint256 proposalId) external override {
+        IGovernanceState.ProposalState state = _getProposalState(proposalId);
+        require(state == IGovernanceState.ProposalState.Pending, GovVotingClosed(proposalId, state));
+
+        ProposalMeta storage meta = _proposalMeta().proposalMetaById[proposalId];
+        require(meta.proposer == msg.sender, GovUnableToCancel(proposalId, msg.sender));
+        meta.canceled = true;
+
+        emit ProposalCanceled(proposalId);
     }
 
     /// @notice Casts a vote for the given proposal.

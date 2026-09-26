@@ -2,7 +2,7 @@
 pragma solidity 0.8.37;
 
 import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
-import {ICrosschainReceiver} from "../../contracts/governance/interfaces/ICrosschainReceiver.sol";
+import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernance.sol";
@@ -48,7 +48,7 @@ contract ReentrantRetryTarget {
     function run() external payable {
         calls++;
         if (calls == 1) {
-            try ICrosschainReceiver(msg.sender).retryFailedAction(0) {
+            try IGovernanceCrosschain(msg.sender).retryFailedAction(0) {
                 reentrySucceeded = true;
             } catch (bytes memory err) {
                 reentryError = err;
@@ -153,7 +153,7 @@ contract GovernanceCrosschainTest is Test {
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
 
-        vm.expectRevert(ICrosschainReceiver.GovReceiverNotConfigured.selector);
+        vm.expectRevert(IGovernanceCrosschain.GovReceiverNotConfigured.selector);
         unconfigured.receiveMessage("");
     }
 
@@ -165,7 +165,7 @@ contract GovernanceCrosschainTest is Test {
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
 
-        vm.expectRevert(ICrosschainReceiver.GovReceiverNotConfigured.selector);
+        vm.expectRevert(IGovernanceCrosschain.GovReceiverNotConfigured.selector);
         otherChain.receiveMessage("");
     }
 
@@ -176,7 +176,7 @@ contract GovernanceCrosschainTest is Test {
         vaa.emitterAddress = bytes32(uint256(1));
         _mockParseAndVerify(vaa);
 
-        vm.expectRevert(ICrosschainReceiver.GovReceiverUnknownEmitter.selector);
+        vm.expectRevert(IGovernanceCrosschain.GovReceiverUnknownEmitter.selector);
         governance.receiveMessage("");
     }
 
@@ -187,7 +187,7 @@ contract GovernanceCrosschainTest is Test {
         vaa.emitterChainId = EMITTER_CHAIN + 1;
         _mockParseAndVerify(vaa);
 
-        vm.expectRevert(ICrosschainReceiver.GovReceiverUnknownEmitter.selector);
+        vm.expectRevert(IGovernanceCrosschain.GovReceiverUnknownEmitter.selector);
         governance.receiveMessage("");
     }
 
@@ -200,7 +200,7 @@ contract GovernanceCrosschainTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICrosschainReceiver.GovReceiverWrongChain.selector,
+                IGovernanceCrosschain.GovReceiverWrongChain.selector,
                 uint16(9999),
                 uint16(TARGET_CHAIN)
             )
@@ -216,7 +216,7 @@ contract GovernanceCrosschainTest is Test {
         bytes memory payload = _encodePayload(action);
         _mockParseAndVerify(_buildVaa(payload, 0));
 
-        vm.expectRevert(abi.encodeWithSelector(ICrosschainReceiver.GovReceiverLocalEmitter.selector, EMITTER_CHAIN));
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverLocalEmitter.selector, EMITTER_CHAIN));
         governance.receiveMessage("");
     }
 
@@ -228,7 +228,7 @@ contract GovernanceCrosschainTest is Test {
         governance.receiveMessage("");
 
         vm.expectRevert(
-            abi.encodeWithSelector(ICrosschainReceiver.GovReceiverAlreadyConsumed.selector, keccak256(payload))
+            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverAlreadyConsumed.selector, keccak256(payload))
         );
         governance.receiveMessage("");
     }
@@ -276,7 +276,7 @@ contract GovernanceCrosschainTest is Test {
         bytes memory stalePayload = _encodePayload(staleAction);
         _mockParseAndVerify(_buildVaa(stalePayload, 0));
         vm.expectRevert(
-            abi.encodeWithSelector(ICrosschainReceiver.GovReceiverSequenceTooOld.selector, uint64(0), uint64(1))
+            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverSequenceTooOld.selector, uint64(0), uint64(1))
         );
         governance.receiveMessage("");
     }
@@ -289,7 +289,7 @@ contract GovernanceCrosschainTest is Test {
         );
 
         vm.expectRevert(
-            abi.encodeWithSelector(ICrosschainReceiver.GovReceiverInvalidVaa.selector, "invalid signature")
+            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverInvalidVaa.selector, "invalid signature")
         );
         governance.receiveMessage("");
     }
@@ -322,7 +322,7 @@ contract GovernanceCrosschainTest is Test {
         _mockParseAndVerify(_buildVaa(payload, 0));
 
         vm.expectEmit(true, true, true, true);
-        emit ICrosschainReceiver.CrossChainActionFailed(
+        emit IGovernanceCrosschain.CrossChainActionFailed(
             0,
             keccak256(abi.encode(action)),
             abi.encodeWithSelector(FlakyTarget.TargetRevert.selector)
@@ -351,7 +351,7 @@ contract GovernanceCrosschainTest is Test {
         // retry while the target still reverts
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICrosschainReceiver.GovReceiverExecutionFailed.selector,
+                IGovernanceCrosschain.GovReceiverExecutionFailed.selector,
                 abi.encodeWithSelector(FlakyTarget.TargetRevert.selector)
             )
         );
@@ -366,7 +366,7 @@ contract GovernanceCrosschainTest is Test {
     }
 
     function test_RetryFailedAction_NothingToRetry_Reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(ICrosschainReceiver.GovReceiverNothingToRetry.selector, uint64(7)));
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverNothingToRetry.selector, uint64(7)));
         governance.retryFailedAction(7);
     }
 
@@ -428,7 +428,7 @@ contract GovernanceCrosschainTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICrosschainReceiver.GovReceiverWrongChain.selector,
+                IGovernanceCrosschain.GovReceiverWrongChain.selector,
                 uint16(9999),
                 uint16(TARGET_CHAIN)
             )
@@ -489,7 +489,7 @@ contract GovernanceCrosschainTest is Test {
         assertFalse(target.reentrySucceeded());
         assertEq(
             target.reentryError(),
-            abi.encodeWithSelector(ICrosschainReceiver.GovReceiverNothingToRetry.selector, uint64(0))
+            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverNothingToRetry.selector, uint64(0))
         );
         assertEq(target.calls(), 1);
         // the action value is paid out exactly once; the reentrant attempt got nothing

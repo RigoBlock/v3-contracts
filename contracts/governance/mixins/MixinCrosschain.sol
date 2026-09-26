@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ICrosschainReceiver} from "../interfaces/ICrosschainReceiver.sol";
+import {IGovernanceCrosschain} from "../interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {CrossChainPayload} from "../types/GovernanceTypes.sol";
@@ -23,12 +23,12 @@ import {MixinStorage} from "./MixinStorage.sol";
 ///      are fixed, so receiveMessage can never be bricked by target behavior. Unrecoverable states
 ///      (e.g. a Wormhole outage) are handled by the governance itself, which can upgrade the
 ///      implementation or the strategy through a local proposal. See docs/wormhole/GOVERNANCE_CROSSCHAIN.md.
-abstract contract MixinCrosschain is MixinStorage, ICrosschainReceiver {
+abstract contract MixinCrosschain is MixinStorage, IGovernanceCrosschain {
     /// @notice Maximum number of queued messages executed per receiveMessage call, bounding the gas
     ///         spent draining the queue; the remainder is processed by subsequent deliveries.
     uint256 private constant _MAX_QUEUE_DRAIN = 8;
 
-    /// @inheritdoc ICrosschainReceiver
+    /// @inheritdoc IGovernanceCrosschain
     function receiveMessage(bytes memory encodedMessage) external override {
         address wormholeAddress = _wormhole();
         require(wormholeAddress != address(0), GovReceiverNotConfigured());
@@ -81,7 +81,7 @@ abstract contract MixinCrosschain is MixinStorage, ICrosschainReceiver {
         _crosschainSequence().value = expected;
     }
 
-    /// @inheritdoc ICrosschainReceiver
+    /// @inheritdoc IGovernanceCrosschain
     function retryFailedAction(uint64 sequence) external override {
         IGovernanceVoting.ProposedAction memory action = _failedAction().failedAction[sequence];
         require(action.target != address(0), GovReceiverNothingToRetry(sequence));
@@ -95,22 +95,22 @@ abstract contract MixinCrosschain is MixinStorage, ICrosschainReceiver {
         emit CrossChainActionExecuted(sequence, keccak256(abi.encode(action)));
     }
 
-    /// @inheritdoc ICrosschainReceiver
+    /// @inheritdoc IGovernanceCrosschain
     function expectedSequence() external view override returns (uint64) {
         return _crosschainSequence().value;
     }
 
-    /// @inheritdoc ICrosschainReceiver
+    /// @inheritdoc IGovernanceCrosschain
     function consumed(bytes32 vaaHash) external view override returns (bool) {
         return _consumedVaa().consumedVaa[vaaHash];
     }
 
-    /// @inheritdoc ICrosschainReceiver
+    /// @inheritdoc IGovernanceCrosschain
     function queuedPayloads(uint64 sequence) external view override returns (bytes memory) {
         return _queuedPayload().queuedPayload[sequence];
     }
 
-    /// @inheritdoc ICrosschainReceiver
+    /// @inheritdoc IGovernanceCrosschain
     function failedActions(uint64 sequence) external view override returns (IGovernanceVoting.ProposedAction memory) {
         return _failedAction().failedAction[sequence];
     }

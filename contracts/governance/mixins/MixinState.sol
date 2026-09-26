@@ -59,6 +59,16 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
+    function proposer(uint256 proposalId) external view override returns (address proposer) {
+        return _proposalMeta().proposalMetaById[proposalId].proposer;
+    }
+
+    /// @inheritdoc IGovernanceState
+    function canceled(uint256 proposalId) external view override returns (bool canceled) {
+        return _proposalMeta().proposalMetaById[proposalId].canceled;
+    }
+
+    /// @inheritdoc IGovernanceState
     function proposals() external view override returns (IGovernanceState.ProposalWrapper[] memory proposalWrapper) {
         uint256 length = _getProposalCount();
         proposalWrapper = new IGovernanceState.ProposalWrapper[](length);
@@ -95,6 +105,10 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     function _getProposalState(uint256 proposalId) internal view override returns (IGovernanceState.ProposalState) {
         require(_proposalCount().value >= proposalId && proposalId != 0, GovProposalIdInvalid(proposalId));
         IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
+
+        if (_proposalMeta().proposalMetaById[proposalId].canceled) {
+            return IGovernanceState.ProposalState.Canceled;
+        }
 
         // prevent old-format proposals execution if quorum drops
         uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];

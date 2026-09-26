@@ -197,7 +197,7 @@ from being replayed to emit different cross-chain messages.
 ## Receiver is part of governance, not the protocol
 
 The receiver logic lives in `contracts/governance/mixins/MixinCrosschain.sol`
-and its interface in `contracts/governance/interfaces/ICrosschainReceiver.sol`.
+and its interface in `contracts/governance/interfaces/governance/IGovernanceCrosschain.sol`.
 Executing a cross-chain action through the governance proxy means the action
 runs with the governance proxy's authority on that chain — the same trust
 relationship as a locally executed proposal, just authorized by the sender

@@ -12,11 +12,6 @@ interface IGovernanceStrategy {
     /// @param params Tuple of factory parameters.
     function assertValidInitParams(IRigoblockGovernanceFactory.Parameters calldata params) external view;
 
-    /// @notice Reverts if thresholds are incorrect.
-    /// @param proposalThreshold Number of votes required to make a proposal.
-    /// @param quorumThreshold Number of votes required for a proposal to succeed.
-    function assertValidThresholds(uint256 proposalThreshold, uint256 quorumThreshold) external view;
-
     /// @notice Reverts if the proposal threshold is incorrect.
     /// @param proposalThreshold Number of votes required to make a proposal.
     function assertValidProposalThreshold(uint256 proposalThreshold) external view;

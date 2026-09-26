@@ -53,13 +53,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @inheritdoc IGovernanceStrategy
     function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
-        assertValidThresholds(params.proposalThreshold, params.quorumThreshold);
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    function assertValidThresholds(uint256 proposalThreshold, uint256 quorumThreshold) public view override {
-        _assertValidProposalThreshold(proposalThreshold);
-        _assertValidQuorumThreshold(quorumThreshold);
+        _assertValidProposalThreshold(params.proposalThreshold);
+        _assertValidQuorumThreshold(params.quorumThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy
