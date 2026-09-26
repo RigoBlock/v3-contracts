@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 // solhint-disable-next-line
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER} from "../../types/GmxConstants.sol";
 

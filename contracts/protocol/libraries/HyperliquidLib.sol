@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.4;
 
 import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";

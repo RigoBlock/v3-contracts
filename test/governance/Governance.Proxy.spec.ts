@@ -97,7 +97,10 @@ describe("Governance Proxy", async () => {
       expect(await governanceInstance.name()).to.be.eq("Rigoblock Governance");
       await expect(
         governanceInstance.initializeGovernance(),
-      ).to.be.revertedWith("ALREADY_INITIALIZED_ERROR");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovAlreadyInitialized",
+      );
     });
   });
 
@@ -108,7 +111,7 @@ describe("Governance Proxy", async () => {
       const action = new ProposedAction(user2.address, mockBytes, 0n);
       await expect(
         governanceInstance.propose([action], "gov proposal one"),
-      ).to.be.revertedWith("GOV_LOW_VOTING_POWER");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovLowVotingPower");
     });
 
     it("should revert with empty actions", async () => {
@@ -131,7 +134,7 @@ describe("Governance Proxy", async () => {
       await staking.endEpoch();
       await expect(
         governanceInstance.propose([], "gov proposal one"),
-      ).to.be.revertedWith("GOV_NO_ACTIONS_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovNoActions");
     });
 
     it("can create invalid proposal", async () => {
@@ -170,7 +173,7 @@ describe("Governance Proxy", async () => {
       ];
       await expect(
         governanceInstance.propose(actions, description),
-      ).to.be.revertedWith("GOV_TOO_MANY_ACTIONS_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovTooManyActions");
       const proposalId = await governanceInstance.propose.staticCall(
         [action],
         description,
@@ -338,7 +341,10 @@ describe("Governance Proxy", async () => {
       // proposal does not exist
       await expect(
         governanceInstance.castVote(1, VoteType.For),
-      ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovProposalIdInvalid",
+      );
       const amount = parseEther("100000");
       await grgToken.approve(grgTransferProxyAddress, amount);
       await staking.stake(amount);
@@ -353,7 +359,7 @@ describe("Governance Proxy", async () => {
       await governanceInstance.propose([action], description);
       await expect(
         governanceInstance.castVote(1, VoteType.For),
-      ).to.be.revertedWith("VOTING_CLOSED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
     });
 
     it("should revert without voting power", async () => {
@@ -381,18 +387,18 @@ describe("Governance Proxy", async () => {
       await governanceInstance.propose([action], description);
       await expect(
         connect(governanceInstance, user2).castVote(1, VoteType.For),
-      ).to.be.revertedWith("VOTING_CLOSED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
       await timeTravel({ days: 14, mine: true });
       await staking.endEpoch();
       await expect(
         connect(governanceInstance, user2).castVote(1, VoteType.For),
-      ).to.be.revertedWith("VOTING_NO_VOTES_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
       await expect(governanceInstance.castVote(1, VoteType.For))
         .to.emit(governanceInstance, "VoteCast")
         .withArgs(user1.address, 1, VoteType.For, amount);
       await expect(
         governanceInstance.castVote(1, VoteType.For),
-      ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovAlreadyVoted");
     });
 
     it("should revert after voting period ended", async () => {
@@ -424,7 +430,112 @@ describe("Governance Proxy", async () => {
       await timeTravel({ days: 7, mine: true });
       await expect(
         connect(governanceInstance, user2).castVote(1, VoteType.For),
-      ).to.be.revertedWith("VOTING_CLOSED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
+    });
+  });
+
+  describe("cancel", async () => {
+    it("should let the proposer cancel while pending", async () => {
+      const {
+        governanceInstance,
+        grgToken,
+        grgTransferProxyAddress,
+        poolAddress,
+        poolId,
+        staking,
+        user1,
+      } = await setupTests();
+      const amount = parseEther("100000");
+      await stakeProposalThreshold({
+        amount,
+        grgToken,
+        grgTransferProxyAddress,
+        staking,
+        poolAddress,
+        poolId,
+      });
+      const zeroBytes = encodeBytes32String("");
+      const action = new ProposedAction(ZeroAddress, zeroBytes, 0n);
+      await governanceInstance.propose([action], description);
+      expect(await governanceInstance.proposer(1)).to.be.eq(user1.address);
+      expect(await governanceInstance.canceled(1)).to.be.false;
+      await expect(governanceInstance.cancel(1))
+        .to.emit(governanceInstance, "ProposalCanceled")
+        .withArgs(1);
+      expect(await governanceInstance.canceled(1)).to.be.true;
+      expect(await governanceInstance.getProposalState(1)).to.be.eq(
+        ProposalState.Canceled,
+      );
+      // a canceled proposal can neither be voted on nor executed
+      await expect(
+        governanceInstance.castVote(1, VoteType.For),
+      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
+      );
+    });
+
+    it("should revert if caller is not the proposer", async () => {
+      const {
+        governanceInstance,
+        grgToken,
+        grgTransferProxyAddress,
+        poolAddress,
+        poolId,
+        staking,
+        user2,
+      } = await setupTests();
+      const amount = parseEther("100000");
+      await stakeProposalThreshold({
+        amount,
+        grgToken,
+        grgTransferProxyAddress,
+        staking,
+        poolAddress,
+        poolId,
+      });
+      const zeroBytes = encodeBytes32String("");
+      const action = new ProposedAction(ZeroAddress, zeroBytes, 0n);
+      await governanceInstance.propose([action], description);
+      await expect(
+        connect(governanceInstance, user2).cancel(1),
+      ).to.be.revertedWithCustomError(governanceInstance, "GovUnableToCancel");
+      expect(await governanceInstance.canceled(1)).to.be.false;
+    });
+
+    it("should revert once voting has started", async () => {
+      const {
+        governanceInstance,
+        grgToken,
+        grgTransferProxyAddress,
+        poolAddress,
+        poolId,
+        staking,
+      } = await setupTests();
+      const amount = parseEther("100000");
+      await stakeProposalThreshold({
+        amount,
+        grgToken,
+        grgTransferProxyAddress,
+        staking,
+        poolAddress,
+        poolId,
+      });
+      const zeroBytes = encodeBytes32String("");
+      const action = new ProposedAction(ZeroAddress, zeroBytes, 0n);
+      // voting starts at the current epoch's earliest end
+      await timeTravel({ days: 8, mine: true });
+      await governanceInstance.propose([action], description);
+      await timeTravel({ days: 6, mine: true });
+      expect(await governanceInstance.getProposalState(1)).to.be.eq(
+        ProposalState.Active,
+      );
+      await expect(governanceInstance.cancel(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
+      );
+      expect(await governanceInstance.canceled(1)).to.be.false;
     });
   });
 
@@ -448,7 +559,10 @@ describe("Governance Proxy", async () => {
           r,
           s,
         ),
-      ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovProposalIdInvalid",
+      );
     });
 
     it("should vote on an existing proposal", async () => {
@@ -559,7 +673,7 @@ describe("Governance Proxy", async () => {
           r,
           s,
         ),
-      ).to.be.revertedWith("VOTING_NO_VOTES_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
       await expect(
         connect(governanceInstance, user2).castVoteBySignature(
           proposalId,
@@ -568,7 +682,7 @@ describe("Governance Proxy", async () => {
           r,
           s,
         ),
-      ).to.be.revertedWith("VOTING_NO_VOTES_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
       await expect(
         connect(governanceInstance, user2).castVoteBySignature(
           proposalId,
@@ -639,7 +753,7 @@ describe("Governance Proxy", async () => {
           r,
           s,
         ),
-      ).to.be.revertedWith("VOTING_NO_VOTES_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
       await expect(
         connect(governanceInstance, user3).castVoteBySignature(
           proposalId,
@@ -648,7 +762,7 @@ describe("Governance Proxy", async () => {
           r,
           s,
         ),
-      ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovAlreadyVoted");
     });
 
     it("should be able to vote if has unstaked", async () => {
@@ -718,7 +832,7 @@ describe("Governance Proxy", async () => {
           r,
           s,
         ),
-      ).to.be.revertedWith("VOTING_NO_VOTES_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
     });
   });
 
@@ -732,8 +846,9 @@ describe("Governance Proxy", async () => {
         poolId,
         staking,
       } = await setupTests();
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_PROPOSAL_ID_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovProposalIdInvalid",
       );
       const amount = parseEther("1000000");
       await grgToken.approve(grgTransferProxyAddress, amount);
@@ -747,13 +862,15 @@ describe("Governance Proxy", async () => {
       const zeroBytes = encodeBytes32String("");
       const action = new ProposedAction(ZeroAddress, zeroBytes, 0n);
       await governanceInstance.propose([action], description);
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
       // voting becomes active after 14 days if proposal made at beginning of epoch
       await timeTravel({ days: 14, mine: true });
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
       await governanceInstance.castVote(1, VoteType.For);
       // proposal becomes executable after voting period ends
@@ -800,8 +917,9 @@ describe("Governance Proxy", async () => {
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
       await governanceInstance.castVote(1, VoteType.For);
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(2n);
@@ -818,10 +936,11 @@ describe("Governance Proxy", async () => {
       await connect(governanceInstance, user2).castVote(2, VoteType.Abstain);
       await expect(
         connect(governanceInstance, user2).castVote(2, VoteType.Abstain),
-      ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovAlreadyVoted");
       // execution reverts as votes for below quorum
-      await expect(governanceInstance.execute(2)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(2)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
       const proposals = await governanceInstance.proposals();
       expect(proposals[0].proposal.actionsLength).to.be.eq(1);
@@ -891,13 +1010,15 @@ describe("Governance Proxy", async () => {
       await governanceInstance.castVote(1, VoteType.Abstain);
       await connect(governanceInstance, user2).castVote(1, VoteType.Against);
       await connect(governanceInstance, user3).castVote(2, VoteType.For);
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
       await timeTravel({ days: 14, mine: true });
       await staking.endEpoch();
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
     });
 
@@ -950,8 +1071,9 @@ describe("Governance Proxy", async () => {
       await connect(governanceInstance, user2).castVote(1, VoteType.Against);
       await timeTravel({ days: 14, mine: true });
       await staking.endEpoch();
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
       // add another voter
       await grgToken.transfer(user3.address, transferAmount + 1n);
@@ -977,10 +1099,11 @@ describe("Governance Proxy", async () => {
       expect(Number(receipt.voteType)).to.be.eq(0);
       await expect(
         connect(governanceInstance, user3).castVote(2, VoteType.Abstain),
-      ).to.be.revertedWith("VOTING_ALREADY_VOTED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovAlreadyVoted");
       await timeTravel({ days: 14, mine: true });
-      await expect(governanceInstance.execute(2)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(2)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
     });
 
@@ -1045,13 +1168,15 @@ describe("Governance Proxy", async () => {
       await governanceInstance.castVote(1, VoteType.Abstain);
       await connect(governanceInstance, user2).castVote(1, VoteType.Against);
       await connect(governanceInstance, user3).castVote(1, VoteType.For);
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
       await timeTravel({ days: 14, mine: true });
       // reverts as qualified majority but quorum not reached
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "VOTING_EXECUTION_STATE_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
     });
 
@@ -1180,6 +1305,104 @@ describe("Governance Proxy", async () => {
       // after execution state will find its final state
       expect(await governanceInstance.getProposalState(1)).to.be.eq(
         ProposalState.Executed,
+      );
+    });
+
+    it("should not let a lowered quorum make an old defeated proposal executable (RIGO-200)", async () => {
+      const { ethers } = await network.getOrCreate();
+      const {
+        governanceInstance,
+        grgToken,
+        grgTransferProxyAddress,
+        poolAddress,
+        poolId,
+        staking,
+        user2,
+        user3,
+      } = await setupTests();
+
+      // user1 stakes 600k GRG and delegates.
+      const user1Amount = parseEther("600000");
+      await grgToken.approve(grgTransferProxyAddress, user1Amount);
+      await staking.stake(user1Amount);
+      await staking.createStakingPool(poolAddress);
+      const fromInfo = new StakeInfo(StakeStatus.Undelegated, poolId);
+      const toInfo = new StakeInfo(StakeStatus.Delegated, poolId);
+      await staking.moveStake(fromInfo, toInfo, user1Amount);
+
+      // user2 stakes 1M GRG and delegates.
+      const user2Amount = parseEther("1000000");
+      await grgToken.transfer(user2.address, user2Amount);
+      await connect(grgToken, user2).approve(
+        grgTransferProxyAddress,
+        user2Amount,
+      );
+      await connect(staking, user2).stake(user2Amount);
+      await connect(staking, user2).moveStake(fromInfo, toInfo, user2Amount);
+
+      // Advance to just after the current epoch end and start the next epoch,
+      // so the delegated stake becomes active voting power.
+      const advanceToNextEpoch = async () => {
+        const latest = await ethers.provider.getBlock("latest");
+        const epochEnd =
+          await staking.getCurrentEpochEarliestEndTimeInSeconds();
+        await timeTravel({
+          seconds: Number(epochEnd) - (latest?.timestamp ?? 0) + 1,
+          mine: true,
+        });
+        await staking.endEpoch();
+      };
+
+      await advanceToNextEpoch();
+
+      // Proposal 1: created while the global quorum is 1M. user1 will vote 600k.
+      const data = grgToken.interface.encodeFunctionData(
+        "approve(address,uint256)",
+        [user3.address, user1Amount],
+      );
+      const action = new ProposedAction(await grgToken.getAddress(), data, 0n);
+      await governanceInstance.propose([action], description);
+
+      // Advance to the next epoch so proposal 1's voting period is active.
+      await advanceToNextEpoch();
+      await governanceInstance.castVote(1, VoteType.For);
+
+      // The voting period is 7 days; advance past it so proposal 1 is defeated.
+      await timeTravel({ days: 8, mine: true });
+      expect(await governanceInstance.getProposalState(1)).to.be.eq(
+        ProposalState.Defeated,
+      );
+
+      // Proposal 2: lower the global quorum below 1M. user2 votes with 1M to pass it.
+      const lowerQuorumData = governanceInstance.interface.encodeFunctionData(
+        "updateThresholds(uint256,uint256)",
+        [parseEther("101000"), parseEther("500000")],
+      );
+      const lowerQuorumAction = new ProposedAction(
+        await governanceInstance.getAddress(),
+        lowerQuorumData,
+        0n,
+      );
+      await governanceInstance.propose([lowerQuorumAction], "lower quorum");
+
+      // Advance to the next epoch so proposal 2's voting period is active.
+      await advanceToNextEpoch();
+      await connect(governanceInstance, user2).castVote(2, VoteType.For);
+
+      // Advance past the 7-day voting period so proposal 2 succeeds and can be executed.
+      await timeTravel({ days: 8, mine: true });
+      await expect(governanceInstance.execute(2)).to.emit(
+        governanceInstance,
+        "ThresholdsUpdated",
+      );
+
+      // After lowering the global quorum, proposal 1 must still use its snapshotted quorum.
+      expect(await governanceInstance.getProposalState(1)).to.be.eq(
+        ProposalState.Defeated,
+      );
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovVotingClosed",
       );
     });
   });

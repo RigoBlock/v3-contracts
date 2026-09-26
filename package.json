@@ -30,7 +30,7 @@
     "test:fuzz": "forge test --match-contract 'DelegationLibFuzz|ECrosschainFuzzTest' -vvv",
     "coverage": "yarn coverage:all",
     "coverage:setup": "mkdir -p coverage",
-    "coverage:hardhat": "hardhat test mocha --coverage",
+    "coverage:hardhat": "COVERAGE=true hardhat test mocha --coverage",
     "coverage:foundry": "mkdir -p coverage && rm -f coverage/foundry_lcov.info && bash -c 'set -o pipefail; FOUNDRY_PROFILE=coverage forge build && FOUNDRY_PROFILE=coverage forge coverage --report lcov --report-file coverage/foundry_lcov.info 2>&1 | tee /tmp/forge_coverage.log'",
     "coverage:all": "yarn coverage:setup && yarn coverage:hardhat && yarn coverage:foundry && chmod +x ./scripts/analyze-coverage.sh && ./scripts/analyze-coverage.sh",
     "coverage:clean": "rm -rf ~/.foundry/cache/rpc && yarn coverage:all && echo '✅ Coverage from clear RPC cache completed.'",

@@ -129,7 +129,7 @@ describe("Governance Flash Attack", async () => {
       // voting is closed as we have reached qualified consensus (proposal cannot fail under any circumstance)
       await expect(
         connect(governanceInstance, user2).castVote(1, VoteType.For),
-      ).to.be.revertedWith("VOTING_CLOSED_ERROR");
+      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
       // transaction will be executed as it is in a new block. We keep this test as we want to catch an error should
       //  future upgrades modify this logic. Relevant as moving the voting end 1 block forward instead of same block
       //  as qualifying vote would create an attack vector with limited impact where voters keep postponing voting end.
@@ -186,10 +186,9 @@ describe("Governance Flash Attack", async () => {
       await expect(flashGovernance.flashAttack(poolId, amount))
         .to.emit(governanceInstance, "VoteCast")
         .withArgs(await flashGovernance.getAddress(), 1, VoteType.For, amount)
-        .to.emit(flashGovernance, "CatchStringEvent")
-        .withArgs("VOTING_CLOSED_ERROR")
-        .to.emit(flashGovernance, "CatchStringEvent")
-        .withArgs("VOTING_EXECUTION_STATE_ERROR")
+        // governance reverts with custom errors, which are emitted as raw return data
+        .to.emit(flashGovernance, "ReturnDataEvent")
+        .to.emit(flashGovernance, "ReturnDataEvent")
         .to.emit(flashGovernance, "CatchStringEvent")
         .withArgs("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
         // will revert without reason in old ERC20

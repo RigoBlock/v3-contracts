@@ -20,6 +20,9 @@
 [submodule "lib/hyper-evm-lib"]
 	path = lib/hyper-evm-lib
 	url = https://github.com/hyperliquid-dev/hyper-evm-lib.git
+[submodule "lib/wormhole-solidity-sdk"]
+	path = lib/wormhole-solidity-sdk
+	url = https://github.com/wormhole-foundation/wormhole-solidity-sdk
 [submodule "lib/prb-math"]
 	path = lib/prb-math
 	url = https://github.com/PaulRBerg/prb-math.git

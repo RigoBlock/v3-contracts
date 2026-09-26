@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {GMX_ROUTER, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 

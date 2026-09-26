@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {ARBITRUM_CHAIN_ID, _GMX_READER, _GMX_DATA_STORE, _GMX_ROLE_STORE, _GMX_CONTROLLER_ROLE} from "../types/GmxConstants.sol";
 

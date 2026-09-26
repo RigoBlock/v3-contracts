@@ -10,6 +10,10 @@
 > compiled contract (Hardhat instruments all of `contracts/` regardless of which
 > tests run). Both reports are uploaded **raw** (no client-side filtering) — see
 > "Raw uploads" below for why.
+>
+> Instrumentation also changes compiled bytecode: `Governance.DeterministicDeployment.spec.ts`
+> asserts CREATE2 addresses over artifact init code, which no longer hash to the deployed
+> addresses under instrumentation. It skips when `COVERAGE=true` (set by `coverage:hardhat`).
 
 ## Coverage Architecture (Foundry)
 
@@ -52,10 +56,10 @@ commit's data, or fork tests failing under RPC pressure (see below).
 
 Several suites deploy contracts via `deployCode("out/<file>.json", ...)` — the
 prebuilt artifact on disk — instead of importing the source. The affected
-contracts are the ones that must compile with a different solc than the 0.8.28
-test files (e.g. `AUniswapRouter.sol`, pinned to 0.8.37 — see commit `8d4237f5`)
-plus fixtures that reuse artifacts (`Authority`, `PoolRegistry`, `RigoblockPool-
-ProxyFactory`, `Staking`, `GrgVault`, `AStaking`, mocks, ...).
+contracts are the ones that must compile with a different solc than the 0.8.37
+test files — today the 0.8.17-pinned legacy contracts (`Authority.sol`,
+`PoolRegistry.sol`, `RigoblockPoolProxyFactory.sol`, `Staking.sol`, `GrgVault.sol`,
+`AStaking.sol`, mocks, ...) — plus fixtures that reuse those artifacts.
 
 `forge coverage` compiles the project **optimizer-off in memory** (that build is
 never written to `out/` — verified on forge 1.8.3) and attributes execution

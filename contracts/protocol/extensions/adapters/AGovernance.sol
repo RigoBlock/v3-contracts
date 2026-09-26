@@ -1,53 +1,57 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2023 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache-2.0-or-later
 // solhint-disable-next-line
-pragma solidity =0.8.17;
+pragma solidity 0.8.37;
 
-import "./interfaces/IAGovernance.sol";
+import {IAGovernance} from "./interfaces/IAGovernance.sol";
+import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
+import {IRigoblockGovernance} from "../../../governance/IRigoblockGovernance.sol";
 
-/// @title Governance adapter - A helper contract for interacting with governance.
+/// @title Governance adapter - Allows a pool to interact with Rigoblock governance.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-// solhint-disable-next-line
-contract AGovernance is IAGovernance {
+contract AGovernance is IAGovernance, IMinimumVersion {
+    /// @notice Thrown when the adapter is called directly instead of via a pool's fallback.
+    error DirectCallNotAllowed();
+
+    string private constant _REQUIRED_VERSION = "4.0.0";
+
+    /// @notice Address of this adapter, used to prevent direct calls.
+    address private immutable _IMPLEMENTATION;
+
+    /// @notice Address of the Rigoblock governance contract.
     address private immutable _governance;
 
+    /// @param governance Address of the Rigoblock governance contract (chain-specific, immutable).
     constructor(address governance) {
+        _IMPLEMENTATION = address(this);
         _governance = governance;
     }
 
-    /// @inheritdoc IAGovernance
-    function propose(IRigoblockGovernance.ProposedAction[] memory actions, string memory description)
-        external
-        override
-    {
-        IRigoblockGovernance(_getGovernance()).propose(actions, description);
+    modifier onlyDelegateCall() {
+        require(address(this) != _IMPLEMENTATION, DirectCallNotAllowed());
+        _;
     }
 
     /// @inheritdoc IAGovernance
-    function castVote(uint256 proposalId, IRigoblockGovernance.VoteType voteType) external override {
+    function propose(
+        IRigoblockGovernance.ProposedAction[] calldata actions,
+        string calldata description
+    ) external override onlyDelegateCall returns (uint256 proposalId) {
+        return IRigoblockGovernance(_getGovernance()).propose(actions, description);
+    }
+
+    /// @inheritdoc IAGovernance
+    function castVote(uint256 proposalId, IRigoblockGovernance.VoteType voteType) external override onlyDelegateCall {
         IRigoblockGovernance(_getGovernance()).castVote(proposalId, voteType);
     }
 
     /// @inheritdoc IAGovernance
-    function execute(uint256 proposalId) external override {
-        IRigoblockGovernance(_getGovernance()).execute(proposalId);
+    function execute(uint256 proposalId) external payable override onlyDelegateCall {
+        IRigoblockGovernance(_getGovernance()).execute{value: msg.value}(proposalId);
+    }
+
+    /// @inheritdoc IMinimumVersion
+    function requiredVersion() external pure override returns (string memory) {
+        return _REQUIRED_VERSION;
     }
 
     function _getGovernance() private view returns (address) {

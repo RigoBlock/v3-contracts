@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 /// @notice Minimal adapter used exclusively in delegation tests.
 /// @dev When called via delegatecall the write succeeds; under staticcall the write reverts.

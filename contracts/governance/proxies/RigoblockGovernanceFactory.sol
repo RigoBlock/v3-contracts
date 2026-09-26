@@ -20,7 +20,7 @@
 pragma solidity 0.8.17;
 
 import "./RigoblockGovernanceProxy.sol";
-import "../IRigoblockGovernance.sol";
+import "../types/TimeType.sol";
 import "../interfaces/IRigoblockGovernanceFactory.sol";
 
 // solhint-disable-next-line
@@ -33,7 +33,7 @@ contract RigoblockGovernanceFactory is IRigoblockGovernanceFactory {
         address governanceStrategy,
         uint256 proposalThreshold,
         uint256 quorumThreshold,
-        IRigoblockGovernance.TimeType timeType,
+        TimeType timeType,
         string calldata name
     ) external returns (address governance) {
         assert(_isContract(implementation));

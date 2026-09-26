@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity ^0.8.28;
+pragma solidity 0.8.37;
 
 import {WRAPPED_NATIVE, _POSITION_SIZE_IN_USD_KEY, _FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";
 import {Constants} from "../../contracts/test/Constants.sol";

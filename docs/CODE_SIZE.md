@@ -14,8 +14,8 @@ still fit.
 2. **Use the production compiler settings.** Sizes are only meaningful when measured with
    the same settings used for deployment and CI:
    - the hardhat default compiler (0.8.37), except contracts pinned to an exact older
-     pragma (e.g. `pragma solidity 0.8.28`), which still compile with their pinned
-     version until the pragma migration lands; evmVersion `cancun` in all cases
+     pragma (e.g. `pragma solidity 0.8.17` — pool proxy, governance factory/proxy),
+     which still compile with their pinned version; evmVersion `cancun` in all cases
    - optimizer enabled, **200 runs** (NOT Foundry's `optimizer_runs = 1_000_000` — that
      profile produces different bytecode and different sizes)
    - **no viaIR** (except the `MockAcrossSpokePool` override, which is not deployed)
@@ -47,13 +47,13 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-09-24 (branch `fix/uniswap-router-adapter`).
+Limit: 24576 bytes per contract. Last measured: 2026-09-26 (branch `feat/crosschain-gov-inbox`).
 
 ### Implementation and factory
 
 | Contract                  | Size (bytes) | Headroom | % of limit |
 | ------------------------- | -----------: | -------: | ---------: |
-| SmartPool                 |        24321 |      255 |     98.96% |
+| SmartPool                 |        24328 |      248 |     99.03% |
 | RigoblockPoolProxyFactory |         4796 |    19780 |     19.52% |
 
 ### Extensions (stored in ExtensionsMap — a size change forces a salt bump)
@@ -80,14 +80,14 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-24 (branch `fix/uniswap-
 | Contract        | Size (bytes) | Headroom | % of limit |
 | --------------- | -----------: | -------: | ---------: |
 | AGmxV2          |        17580 |     6996 |     71.53% |
-| AUniswapRouter  |        12772 |    11804 |     51.97% |
+| AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         5069 |    19507 |     20.63% |
 | AStaking        |         2151 |    22425 |      8.75% |
 | AUniswap        |         1359 |    23217 |      5.53% |
-| AMulticall      |         1168 |    23408 |      4.75% |
-| AGovernance     |         1550 |    23026 |      6.31% |
+| AMulticall      |         1169 |    23407 |      4.76% |
+| AGovernance     |         1590 |    22986 |      6.47% |
 | AUniswapDecoder |            0 |    24576 |      0.00% |
 
 `AUniswapDecoder` is a library — its code is compiled into consumers, so it has no
@@ -95,11 +95,12 @@ deployed instance of its own.
 
 ### Staking and governance
 
-| Contract            | Size (bytes) | Headroom | % of limit |
-| ------------------- | -----------: | -------: | ---------: |
-| Staking             |        22820 |     1756 |     92.85% |
-| GrgVault            |         4392 |    20184 |     17.87% |
-| RigoblockGovernance |        11253 |    13323 |     45.79% |
+| Contract                    | Size (bytes) | Headroom | % of limit |
+| --------------------------- | -----------: | -------: | ---------: |
+| Staking                     |        22820 |     1756 |     92.85% |
+| GrgVault                    |         4392 |    20184 |     17.87% |
+| RigoblockGovernance         |        16785 |     7791 |     68.30% |
+| RigoblockGovernanceStrategy |         5358 |    19218 |     21.80% |
 
 ## Notes
 

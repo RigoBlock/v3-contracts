@@ -17,7 +17,16 @@ interface ChainConfig {
   universalRouter: string;
   tokenJar: string;
   acrossSpokePool: string;
+  wormhole: string;
+  wormholeChainId: number;
 }
+
+// Ethereum mainnet Rigoblock governance proxy. This address is the Wormhole emitter
+// for cross-chain governance messages and, since the governance proxy is deterministically
+// deployed at the same address on every chain, also the trusted emitter hardcoded in the
+// governance implementation's cross-chain receiver mixin.
+export const mainnetGovernanceProxy =
+  "0x5F8607739c2D2d0b57a4292868C368AB1809767a";
 
 // Chain-specific configuration
 export const chainConfig: { [chainId: number]: ChainConfig } = {
@@ -31,6 +40,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5",
+    wormhole: "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B",
+    wormholeChainId: 2,
   },
   // Arbitrum (Chain ID: 42161)
   42161: {
@@ -42,6 +53,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0x2d01411773c8C24805306E89A41F7855C3c4Fe65",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0xe35e9842fceaca96570b734083f4a58e8f7c5f2a",
+    wormhole: "0xa5f208e072434bC67592E4C49C1B991BA79BCA46",
+    wormholeChainId: 23,
   },
   // Optimism (Chain ID: 10)
   10: {
@@ -53,6 +66,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0xC09255D86DB563cBc11C2fCf4a0C512e160111B4",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x6f26Bf09B1C792e3228e5467807a900A503c0281",
+    wormhole: "0xEe91C335eab126dF5fDB3797EA9d6aD93aeC9722",
+    wormholeChainId: 24,
   },
   // Polygon (Chain ID: 137)
   137: {
@@ -64,6 +79,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x9295ee1d8C5b022Be115A2AD3c30C72E34e7F096",
+    wormhole: "0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7",
+    wormholeChainId: 5,
   },
   // BSC (Chain ID: 56)
   56: {
@@ -75,6 +92,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x4e8E101924eDE233C13e2D8622DC8aED2872d505",
+    wormhole: "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B",
+    wormholeChainId: 4,
   },
   // Unichain (Chain ID: 130)
   130: {
@@ -86,6 +105,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0xD1b797D92d87B688193A2B976eFc8D577D204343",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
+    wormhole: "0xCa1D5a146B03f6303baF59e5AD5615ae0b9d146D",
+    wormholeChainId: 44,
   },
   // Base (Chain ID: 8453)
   8453: {
@@ -97,6 +118,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
+    wormhole: "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6",
+    wormholeChainId: 30,
   },
   // Sepolia (Chain ID: 11155111)
   11155111: {
@@ -108,6 +131,8 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0x7E4f6c5e954Da5c61B3423D81E2277431Ac043f3",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
+    wormhole: "0x4a8bc80Ed5a4067f1CCf107057b8270E0cC11A78",
+    wormholeChainId: 10002,
   },
   // HyperEVM (Chain ID: 999)
   999: {
@@ -119,5 +144,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     universalRouter: "0x0000000000000000000000000000000000000000",
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x35E63eA3eb0fb7A3bc543C71FB66412e1F6B0E04",
+    wormhole: "0x7C0faFc4384551f063e05aee704ab943b8B53aB3",
+    wormholeChainId: 47,
   },
 };

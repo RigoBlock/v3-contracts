@@ -1,4 +1,4 @@
-import {readArtifact} from "../../rocketh/artifacts.js";
+import { readArtifact } from "../../rocketh/artifacts.js";
 import { deployScript } from "../../rocketh/deploy.js";
 import { isLocalEnvironment, type Environment } from "../../rocketh/config.js";
 
@@ -161,9 +161,7 @@ export default deployScript(
       "RigoblockGovernanceFactory",
       {
         account: deployer,
-        artifact: await readArtifact(
-          "RigoblockGovernanceFactory",
-        ),
+        artifact: await readArtifact("RigoblockGovernanceFactory"),
         args: [],
       },
       { deterministic: true },
@@ -183,10 +181,12 @@ export default deployScript(
       "RigoblockGovernanceStrategy",
       {
         account: deployer,
-        artifact: await readArtifact(
-          "RigoblockGovernanceStrategy",
-        ),
-        args: [stakingProxy.address],
+        artifact: await readArtifact("RigoblockGovernanceStrategy"),
+        args: [
+          stakingProxy.address,
+          "0x1111111111111111111111111111111111111111",
+          1,
+        ],
       },
       { deterministic: true },
     );

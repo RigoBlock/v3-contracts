@@ -4,6 +4,12 @@ pragma solidity >=0.8.0 <0.9.0;
 
 /// @notice As per https://github.com/Uniswap/swap-router-contracts/blob/main/contracts/interfaces/IMulticallExtended.sol
 interface IAMulticall {
+    /// @notice Thrown when the deadline has passed.
+    error MulticallDeadlinePast();
+
+    /// @notice Thrown when the previous blockhash does not match the expected one.
+    error MulticallInvalidBlockhash();
+
     /// @notice Enables calling multiple methods in a single call to the contract
     /// @param data Array of encoded calls.
     /// @return results Array of call responses.

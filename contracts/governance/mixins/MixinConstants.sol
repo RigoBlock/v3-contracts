@@ -1,30 +1,12 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2023 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../IRigoblockGovernance.sol";
+import {IRigoblockGovernance} from "../IRigoblockGovernance.sol";
 
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 abstract contract MixinConstants is IRigoblockGovernance {
     /// @notice Contract version
-    string internal constant VERSION = "1.0.0";
+    string internal constant VERSION = "1.1.0";
 
     /// @notice Maximum operations per proposal
     uint256 internal constant PROPOSAL_MAX_OPERATIONS = 10;
@@ -48,8 +30,33 @@ abstract contract MixinConstants is IRigoblockGovernance {
 
     bytes32 internal constant _PROPOSAL_COUNT_SLOT = 0x7d19d505a441201fb38442238c5f65c45e6231c74b35aed1c92ad842019eab9f;
 
+    bytes32 internal constant _PROPOSAL_QUORUM_SLOT =
+        0xf4c156034b6fb4a58e020267d829cfaef00618984d103ed2c234f43e7575a62e;
+
     bytes32 internal constant _PROPOSED_ACTION_SLOT =
         0xe4ff3d203d0a873fb9ffd3a1bbd07943574a73114c5affe6aa0217c743adeb06;
 
     bytes32 internal constant _RECEIPT_SLOT = 0x5a7421539532aa5504e4251551519aa0a06f7c2a3b40bbade5235843e09ad5fe;
+
+    /// @notice Wormhole-formatted address of the trusted sender-chain governance proxy. The governance
+    ///         proxy is deterministically deployed at the same address on every chain, so the expected
+    ///         emitter is a constant. See docs/wormhole/GOVERNANCE_CROSSCHAIN.md.
+    bytes32 internal constant _EXPECTED_EMITTER = bytes32(uint256(uint160(0x5F8607739c2D2d0b57a4292868C368AB1809767a)));
+
+    /// @notice Wormhole chain id of the sender chain (Ethereum mainnet).
+    uint16 internal constant _EMITTER_CHAIN_ID = 2;
+
+    bytes32 internal constant _CROSSCHAIN_SEQUENCE_SLOT =
+        0xac0ac78c54bb73764538302bc1bda8524f435b774942256fff0e0adfcc8e9619;
+
+    bytes32 internal constant _CROSSCHAIN_CONSUMED_SLOT =
+        0x3bd8e8e33c91da57468c9ee1cbb66af5a180d31f2aaec4f722fa2a662d16c8ec;
+
+    bytes32 internal constant _CROSSCHAIN_QUEUE_SLOT =
+        0x279f36212bfd68d35cea78a95badb30afe907cfedc4501913ca1cac929f2b01f;
+
+    bytes32 internal constant _CROSSCHAIN_FAILED_SLOT =
+        0x9b3acb084638d07b9d567b826ea38a33a3bd320a8ce55638f5937893df56ff78;
+
+    bytes32 internal constant _PROPOSAL_META_SLOT = 0x58222ce86aa7f6a1af2e7980a00d98a125b9758d945ecd9df9aabbdab887f816;
 }

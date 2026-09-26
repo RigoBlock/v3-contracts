@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.18;
 
 /// @notice Per-pool delegated-access state stored at a dedicated ERC-7201 slot.
 /// @dev Four parallel data structures maintain two enumerable mappings:
