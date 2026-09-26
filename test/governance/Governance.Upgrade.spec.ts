@@ -255,7 +255,7 @@ describe("Governance Upgrades", async () => {
       );
     });
 
-    it("should revert if either of new thresholds same as current", async () => {
+    it("should revert only when both new thresholds equal current", async () => {
       const { governanceInstance } = await setupTests();
       const { proposalThreshold, quorumThreshold } = (
         await governanceInstance.governanceParameters()
@@ -302,18 +302,26 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.castVote(2, VoteType.For);
       await governanceInstance.castVote(3, VoteType.For);
       await timeTravel({ days: 7, mine: true });
+      // a proposal that changes no threshold reverts
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
         governanceInstance,
         "GovUpgradeSameAsCurrent",
       );
-      await expect(governanceInstance.execute(2)).to.be.revertedWithCustomError(
-        governanceInstance,
-        "GovUpgradeSameAsCurrent",
-      );
-      await expect(governanceInstance.execute(3)).to.emit(
-        governanceInstance,
-        "ThresholdsUpdated",
-      );
+      // a proposal that changes a single threshold succeeds
+      await expect(governanceInstance.execute(2))
+        .to.emit(governanceInstance, "ThresholdsUpdated")
+        .withArgs(proposalThreshold, newQuorumThreshold);
+      let storedParams = (await governanceInstance.governanceParameters())
+        .params;
+      expect(storedParams.quorumThreshold).to.be.eq(newQuorumThreshold);
+      expect(storedParams.proposalThreshold).to.be.eq(proposalThreshold);
+      // a proposal that changes both thresholds succeeds
+      await expect(governanceInstance.execute(3))
+        .to.emit(governanceInstance, "ThresholdsUpdated")
+        .withArgs(newProposalThreshold, newQuorumThreshold);
+      storedParams = (await governanceInstance.governanceParameters()).params;
+      expect(storedParams.proposalThreshold).to.be.eq(newProposalThreshold);
+      expect(storedParams.quorumThreshold).to.be.eq(newQuorumThreshold);
     });
 
     it("should revert if either is invalid paramter", async () => {

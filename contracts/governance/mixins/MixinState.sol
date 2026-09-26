@@ -100,7 +100,12 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];
         quorum = quorum > 0 ? quorum : type(uint256).max;
 
-        return IGovernanceStrategy(_governanceParameters().strategy).getProposalState(proposal, quorum);
+        return
+            IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
+                proposal,
+                quorum,
+                _governanceParameters().timeType
+            );
     }
 
     function _getVotingPower(address account) internal view override returns (uint256) {

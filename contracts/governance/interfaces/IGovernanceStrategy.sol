@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity ^0.8.0;
 
 import {IGovernanceState} from "./governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "./governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "./IRigoblockGovernanceFactory.sol";
+import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {
     /// @notice Reverts if initialization paramters are incorrect.
@@ -19,10 +20,12 @@ interface IGovernanceStrategy {
     /// @notice Returns the state of a proposal for a required quorum.
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
+    /// @param timeType Time reference used by the proposal's voting period.
     /// @return Tuple of the proposal state.
     function getProposalState(
         IGovernanceState.Proposal calldata proposal,
-        uint256 minimumQuorum
+        uint256 minimumQuorum,
+        TimeType timeType
     ) external view returns (IGovernanceState.ProposalState);
 
     /// @notice Return the voting period.
@@ -30,9 +33,12 @@ interface IGovernanceStrategy {
     function votingPeriod() external view returns (uint256);
 
     /// @notice Returns the voting timestamps.
+    /// @param timeType Time reference used by the proposal's voting period.
     /// @return startBlockOrTime Timestamp when proposal starts.
     /// @return endBlockOrTime Timestamp when voting ends.
-    function votingTimestamps() external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime);
+    function votingTimestamps(
+        TimeType timeType
+    ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime);
 
     /// @notice Return a user's voting power.
     /// @param account Address to check votes for.

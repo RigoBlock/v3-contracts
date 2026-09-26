@@ -2,7 +2,11 @@ import { ethers } from "ethers";
 import { readArtifact } from "../../rocketh/artifacts.js";
 import { deployScript } from "../../rocketh/deploy.js";
 import type { Environment } from "../../rocketh/config.js";
-import { chainConfig, mainnetGovernanceProxy } from "../utils/constants";
+import {
+  chainConfig,
+  governanceOwner,
+  mainnetGovernanceProxy,
+} from "../utils/constants";
 import { enableManagedNonce } from "../utils/nonce";
 
 export default deployScript(
@@ -30,7 +34,13 @@ export default deployScript(
     // always gets the full suite below, as do legacy L2s without Wormhole config
     // until they are migrated to cross-chain governance.
     if (chainId !== 1 && config.wormhole != zeroAddress) {
-      await env.deploy(
+      if (governanceOwner === zeroAddress) {
+        throw new Error(
+          `governanceOwner in src/utils/constants.ts must be set before deploying a receiver on chain ${chainId}`,
+        );
+      }
+
+      const implementation = await env.deploy(
         "CrosschainReceiver",
         {
           account: deployer,
@@ -40,6 +50,18 @@ export default deployScript(
             2,
             ethers.zeroPadValue(mainnetGovernanceProxy, 32),
           ],
+        },
+        { deterministic: true },
+      );
+
+      // the proxy is the address governance targets on this chain; governanceOwner
+      // can upgrade the receiver implementation if Wormhole is unavailable
+      await env.deploy(
+        "CrosschainReceiverProxy",
+        {
+          account: deployer,
+          artifact: await readArtifact("CrosschainReceiverProxy"),
+          args: [implementation.address, governanceOwner],
         },
         { deterministic: true },
       );

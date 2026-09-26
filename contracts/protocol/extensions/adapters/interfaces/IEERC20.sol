@@ -17,7 +17,7 @@
 
 */
 
-pragma solidity 0.8.37;
+pragma solidity ^0.8.0;
 
 /// @title IEERC20 - Disabled ERC20 token methods of the pool.
 /// @author Gabriele Rigo - <gab@rigoblock.com>

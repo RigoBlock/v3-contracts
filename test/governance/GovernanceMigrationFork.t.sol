@@ -59,8 +59,11 @@ contract GovernanceMigrationForkTest is Test {
 
     /// @notice Verifies that the upgrade proposal executes and that historical proposals
     ///     are then treated as legacy proposals that can never become executable again.
+    /// @dev The implementation and strategy are upgraded in tandem: the new implementation
+    ///     calls the new strategy interface, so an old strategy would make state reads revert.
     function testFork_UpgradeProposal_ExecutesAndLegacyProposalsBecomeUnexecutable() public {
         _executeUpgradeProposal();
+        _upgradeStrategyToNewStrategy();
 
         uint256 count = IGovernanceState(PROXY).proposalCount();
         assertGt(count, 0, "no legacy proposals on fork");

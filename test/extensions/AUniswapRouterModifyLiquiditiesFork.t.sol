@@ -174,9 +174,10 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
 
         poolOwner = makeAddr("poolOwner");
 
-        // AUniswapRouter is pinned to solc 0.8.37 while fork tests stay on 0.8.28; forge
-        // compiles it in its own job and we deploy the artifact (deployCode), keeping the
-        // test's compilation job free of the router source. Same pattern as AUniswapRouterFork.
+        // AUniswapRouter pulls in the Universal Router modules (including an unchecked-out
+        // v3-core submodule), so it cannot be imported in this test job; forge compiles it in
+        // its own job and we deploy the artifact (deployCode), keeping the test's compilation
+        // job free of the router source. Same pattern as AUniswapRouterFork.
         address aUniswapRouter = deployCode(
             "out/AUniswapRouter.sol/AUniswapRouter.json",
             abi.encode(UNIVERSAL_ROUTER, POSM, WETH)

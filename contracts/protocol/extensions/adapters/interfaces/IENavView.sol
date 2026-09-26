@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.37;
+pragma solidity ^0.8.0;
 
 import {NavView} from "../../../libraries/NavView.sol";
 import {AppTokenBalance} from "../../../types/ExternalApp.sol";

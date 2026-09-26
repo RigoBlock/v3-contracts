@@ -56,7 +56,9 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         require(length <= PROPOSAL_MAX_OPERATIONS, GovTooManyActions(length, PROPOSAL_MAX_OPERATIONS));
 
         address strategy = _governanceParameters().strategy;
-        (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(strategy).votingTimestamps();
+        (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(strategy).votingTimestamps(
+            _governanceParameters().timeType
+        );
 
         // proposals start from id = 1
         _proposalCount().value++;

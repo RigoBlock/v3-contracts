@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.0;
 
 import {WRAPPED_NATIVE, _GMX_READER, _GMX_DATA_STORE, _GMX_REFERRAL_STORAGE, _GMX_CHAINLINK_PRICE_FEED} from "../types/GmxConstants.sol";
 

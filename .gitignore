@@ -34,3 +34,4 @@ docs/api-raw/
 generated-markups/
 .rigo/
 .venv/
+lcov.info

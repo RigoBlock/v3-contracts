@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity ^0.8.0;
 
 interface IGovernanceUpgrade {
     /// @notice Updates the proposal and quorum thresholds to the given values.

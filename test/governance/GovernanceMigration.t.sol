@@ -13,6 +13,7 @@ import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governan
 import {IRigoblockGovernance} from "../../contracts/governance/IRigoblockGovernance.sol";
 import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
+import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 
 /// @title MockMigrationStrategy
 /// @notice Simplified strategy that returns deterministic voting power and timestamps
@@ -33,13 +34,15 @@ contract MockMigrationStrategy is IGovernanceStrategy {
 
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
-        uint256 minimumQuorum
+        uint256 minimumQuorum,
+        TimeType timeType
     ) external view returns (IGovernanceState.ProposalState) {
-        if (block.timestamp <= proposal.startBlockOrTime) {
+        uint256 blockOrTime = timeType == TimeType.Timestamp ? block.timestamp : block.number;
+        if (blockOrTime <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
-        } else if (block.timestamp <= proposal.endBlockOrTime && _qualified(proposal, minimumQuorum)) {
+        } else if (blockOrTime <= proposal.endBlockOrTime && _qualified(proposal, minimumQuorum)) {
             return IGovernanceState.ProposalState.Qualified;
-        } else if (block.timestamp <= proposal.endBlockOrTime) {
+        } else if (blockOrTime <= proposal.endBlockOrTime) {
             return IGovernanceState.ProposalState.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
             return IGovernanceState.ProposalState.Defeated;
@@ -61,8 +64,10 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         return 7 days;
     }
 
-    function votingTimestamps() external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        startBlockOrTime = block.timestamp + 1;
+    function votingTimestamps(
+        TimeType timeType
+    ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        startBlockOrTime = timeType == TimeType.Timestamp ? block.timestamp + 1 : block.number + 1;
         endBlockOrTime = startBlockOrTime + 7 days;
     }
 
@@ -95,6 +100,10 @@ contract MigrationHarness is MixinStorage, MixinInitializer, MixinUpgrade, Mixin
     function setParams(uint256 proposalThreshold_, uint256 quorumThreshold_) external {
         _paramsWrapper().governanceParameters.proposalThreshold = proposalThreshold_;
         _paramsWrapper().governanceParameters.quorumThreshold = quorumThreshold_;
+    }
+
+    function setTimeType(TimeType timeType_) external {
+        _paramsWrapper().governanceParameters.timeType = timeType_;
     }
 
     function setProposalCount(uint256 count) external {
@@ -163,6 +172,7 @@ contract GovernanceMigrationTest is Test {
         strategy.setParams(PROPOSAL_THRESHOLD, INITIAL_QUORUM, VOTING_POWER);
         harness.setStrategy(address(strategy));
         harness.setParams(PROPOSAL_THRESHOLD, INITIAL_QUORUM);
+        harness.setTimeType(TimeType.Timestamp);
     }
 
     /// @notice Verifies that a proposal whose storage was written without a quorum
@@ -323,7 +333,8 @@ contract GovernanceMigrationTest is Test {
     }
 
     /// @dev Creates a proposal that lowers the global quorum to LOWERED_QUORUM.
-    ///     Both thresholds must change because updateThresholds requires both to differ.
+    ///     The proposal threshold is updated alongside, as updateThresholds reverts
+    ///     only when both thresholds are unchanged.
     function _createLowerQuorumProposal() private returns (uint256 proposalId) {
         bytes memory data = abi.encodeWithSelector(
             IGovernanceUpgrade.updateThresholds.selector,

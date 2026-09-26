@@ -14,8 +14,8 @@ still fit.
 2. **Use the production compiler settings.** Sizes are only meaningful when measured with
    the same settings used for deployment and CI:
    - the hardhat default compiler (0.8.37), except contracts pinned to an exact older
-     pragma (e.g. `pragma solidity 0.8.28`), which still compile with their pinned
-     version until the pragma migration lands; evmVersion `cancun` in all cases
+     pragma (e.g. `pragma solidity 0.8.17` — pool proxy, governance factory/proxy),
+     which still compile with their pinned version; evmVersion `cancun` in all cases
    - optimizer enabled, **200 runs** (NOT Foundry's `optimizer_runs = 1_000_000` — that
      profile produces different bytecode and different sizes)
    - **no viaIR** (except the `MockAcrossSpokePool` override, which is not deployed)
@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-09-25 (branch `feat/crosschain-gov-inbox`).
+Limit: 24576 bytes per contract. Last measured: 2026-09-26 (branch `feat/crosschain-gov-inbox`).
 
 ### Implementation and factory
 
@@ -95,11 +95,14 @@ deployed instance of its own.
 
 ### Staking and governance
 
-| Contract            | Size (bytes) | Headroom | % of limit |
-| ------------------- | -----------: | -------: | ---------: |
-| Staking             |        22820 |     1756 |     92.85% |
-| GrgVault            |         4392 |    20184 |     17.87% |
-| RigoblockGovernance |        11516 |    13060 |     46.86% |
+| Contract                 | Size (bytes) | Headroom | % of limit |
+| ------------------------ | -----------: | -------: | ---------: |
+| Staking                  |        22820 |     1756 |     92.85% |
+| GrgVault                 |         4392 |    20184 |     17.87% |
+| RigoblockGovernance      |        11590 |    12986 |     47.16% |
+| RigoblockGovernanceStrategy |      5206 |    19370 |     21.18% |
+| CrosschainReceiver       |         5495 |    19081 |     22.36% |
+| CrosschainReceiverProxy  |          698 |    23878 |      2.84% |
 
 ## Notes
 

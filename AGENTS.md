@@ -4,7 +4,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 
 ## Quick Facts
 
-- **Language**: Solidity 0.8.28
+- **Language**: Solidity 0.8.37 (protocol core; legacy pins remain at 0.8.17 for the pool proxy, governance factory/proxy, and other pre-upgrade contracts)
 - **Framework**: Hardhat (existing tests) + Foundry (new integration tests)
 - **Architecture**: Proxy pattern with extensions and adapters
 - **Chains**: EVM-compatible (Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Unichain)

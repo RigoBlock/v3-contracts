@@ -29,8 +29,9 @@ abstract contract MixinUpgrade is MixinStorage {
         uint256 newQuorumThreshold
     ) external override onlyGovernance {
         IGovernanceState.GovernanceParameters storage params = _governanceParameters();
+        // reverting only when both thresholds are unchanged, as a proposal may legitimately update a single one
         require(
-            newProposalThreshold != params.proposalThreshold && newQuorumThreshold != params.quorumThreshold,
+            newProposalThreshold != params.proposalThreshold || newQuorumThreshold != params.quorumThreshold,
             GovUpgradeSameAsCurrent()
         );
         IGovernanceStrategy(params.strategy).assertValidThresholds(newProposalThreshold, newQuorumThreshold);

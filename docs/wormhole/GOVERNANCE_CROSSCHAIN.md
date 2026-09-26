@@ -20,13 +20,14 @@ target chains such as HyperEVM through Wormhole cross-chain messages.
 Ethereum mainnet
   RigoblockGovernance proxy
     └─ MixinVoting.execute
-       └─ every action is validated by RigoblockGovernanceStrategy.validateAction
+       └─ every action is routed through RigoblockGovernanceStrategy.beforeExecute
        └─ Wormhole actions call IWormhole.publishMessage{value: messageFee}(payload)
 
 Target chain (e.g. HyperEVM)
-  CrosschainReceiver
-    └─ parseAndVerifyVM(encodedVaa)
-       └─ execute actions in order
+  CrosschainReceiverProxy  (owner: Rigoblock recovery wallet)
+    └─ CrosschainReceiver (implementation, upgradeable by owner)
+       └─ parseAndVerifyVM(encodedVaa)
+          └─ execute actions in order
 ```
 
 The `RigoblockGovernance` implementation has no constructor arguments, so it can
@@ -46,7 +47,8 @@ action is a normal `ProposedAction`:
 
 - `target` = the local Wormhole core contract.
 - `data` = `abi.encodeCall(IWormhole.publishMessage, (nonce, encodedPayload, consistencyLevel))`.
-- `value` = `IWormhole(wormhole).messageFee()`.
+- `value` = `0` at proposal time. The Wormhole fee is not part of the proposal;
+  it is attached by the strategy at execution time (see below).
 
 The `encodedPayload` is `abi.encode(CrossChainPayload)`:
 
@@ -57,26 +59,37 @@ The `encodedPayload` is `abi.encode(CrossChainPayload)`:
   included for auditability and off-chain indexing; replay protection is
   enforced by the Wormhole VAA hash and by atomic proposal execution on
   mainnet.
-- `action`: the single `ProposedAction` to execute on the target chain.
+- `action`: the single `ProposedAction` to execute on the target chain. Its
+  `value` is paid on the destination chain from the receiver contract's own
+  balance — it is not sent through Wormhole and must not be confused with the
+  source-chain fee. If the receiver holds insufficient native currency for the
+  inner action value, execution fails and the action is deferred to
+  `failedActions` (see Receiver side), from where it can be retried once the
+  balance is funded.
 
 Because cross-chain messages are ordinary proposal actions, the existing
 `PROPOSAL_MAX_OPERATIONS` limit is respected and each action is validated
 individually by the strategy.
 
-`RigoblockGovernanceStrategy.validateAction` enforces:
+`RigoblockGovernanceStrategy` enforces, via `beforePropose` / `beforeExecute`:
 
-- If the strategy has no Wormhole address, no cross-chain action is allowed.
+- Cross-chain actions are only allowed on Ethereum mainnet (`block.chainid == 1`).
 - If `action.target == wormhole`, the calldata selector must be
-  `IWormhole.publishMessage.selector`.
-- The action value must exactly match `IWormhole(wormhole).messageFee()` at
-  execution time. This avoids having to estimate the Wormhole fee client-side and
-  risking a transaction that cannot be relayed because the destination-chain fee
-  changed.
+  `IWormhole.publishMessage.selector` and the decoded `CrossChainPayload` must
+  target a chain other than the local Wormhole chain id.
+- The wrapper `value` must be `0` at proposal time (`GovCrosschainInvalidValue`
+  otherwise), because the inner action value is a destination-chain concern.
+- At execution time, `beforeExecute` sets `action.value = messageFee()`.
+  Wormhole's `publishMessage` requires `msg.value == messageFee()` exactly, so
+  the fee is read fresh at execution and any proposer-supplied value would be
+  overridden — this avoids estimating the fee client-side and risking a
+  transaction that reverts because the fee changed.
 
 ## Receiver side
 
-`CrosschainReceiver` is a standalone contract deployed on each target chain.
-It follows the same validation steps as the Wormhole `HelloWorld` example:
+`CrosschainReceiver` is deployed behind a `CrosschainReceiverProxy` on each
+target chain (the proxy is the address governance actions target). It follows
+the same validation steps as the Wormhole `HelloWorld` example:
 
 1. Parses and verifies the VAA through the Wormhole core contract.
    `parseAndVerifyVM` checks the guardian-set signature proof. Forged or
@@ -99,7 +112,42 @@ execution:
 - If `sequence < expectedSequence`, revert (`GovReceiverSequenceTooOld`).
 
 After executing a message, the receiver processes any queued messages that are
-now ready.
+now ready, at most 8 per call (`_MAX_QUEUE_DRAIN`). The remainder stays queued
+and drains lazily on subsequent deliveries, bounding the gas a single
+`receiveMessage` call can spend.
+
+## Failed actions: skip, defer, retry
+
+A target action that reverts does **not** revert the delivery that carried it
+and does **not** block the pipeline (a synchronously reverting queue entry
+would otherwise roll back an otherwise valid delivery and permanently jam every
+later message, since the queue is re-drained on each delivery):
+
+- The failing action is stored in `failedActions[sequence]`, a
+  `CrossChainActionFailed` event is emitted, and `expectedSequence` advances
+  past it. `receiveMessage` therefore always succeeds once the VAA itself is
+  valid, for both the direct path and the queue drain.
+- Anyone can call `retryFailedAction(sequence)` once the action's
+  preconditions on the target chain are satisfied. On success the entry is
+  cleared and `CrossChainActionExecuted` is emitted; a retry that still reverts
+  propagates `GovReceiverExecutionFailed`.
+- Ordering caveat: a retried action executes after whatever was delivered in
+  the meantime. Governance actions should be authored to be
+  precondition-safe (target contracts should no-op rather than revert where
+  possible). If strict ordering with later actions matters, governance
+  re-sends the action as a new message instead of relying on retry.
+
+## Recovery: proxy owner
+
+The receiver is deployed behind a `CrosschainReceiverProxy` whose owner is a
+Rigoblock-controlled recovery wallet on the target chain (`governanceOwner` in
+`src/utils/constants.ts`). The owner can upgrade the receiver implementation
+via `upgradeToAndCall`. This is the same escape hatch Uniswap's
+`ReceiverHub` provides through its owner-swappable decoder modules: it covers
+Wormhole liveness outages (an implementation can add an alternative message
+path), an action that can never succeed, and receiver bugs. Day-to-day
+execution remains trustless: only messages verified against the trusted
+mainnet emitter are executed, and the owner cannot forge a VAA.
 
 ## Ordered execution
 
@@ -138,9 +186,9 @@ on target chains, but a separate `CrosschainReceiver` is preferred:
 - It avoids bypassing the local strategy on target chains for actions that
   originate from mainnet. The receiver only executes mainnet-authorized actions;
   it does not participate in local voting.
-- Deployment and upgrade management are simpler: the receiver is a small, single-
-  purpose contract that can be redeployed without touching the governance
-  implementation.
+- Deployment and upgrade management are simpler: the receiver is a small,
+  single-purpose contract behind an owner-administered proxy, so upgrades and
+  redeployments never touch the governance implementation.
 
 ## Quorum snapshot (issue #200)
 
@@ -167,9 +215,13 @@ effective quorum through `getProposalState(proposalId)`.
 
 `src/deploy/deploy_governance.ts` handles chain-specific deployment:
 
-- On chains without a staking proxy (e.g. HyperEVM, `chainId == 999`) it deploys
-  only `CrosschainReceiver` with the trusted Ethereum governance proxy as
-  emitter.
+- On receiver chains (any chain with Wormhole config other than mainnet) it
+  deploys the `CrosschainReceiver` implementation plus the
+  `CrosschainReceiverProxy` pointed at it, with `governanceOwner` from
+  `src/utils/constants.ts` as the proxy owner (constructor input, mirroring
+  Uniswap's deployer-as-owner except the deployer EOA is never granted
+  ownership). The proxy address is the one governance targets on that chain.
+  The script throws if `governanceOwner` is unset.
 - On all other chains it deploys `RigoblockGovernance` (no constructor
   arguments), then `RigoblockGovernanceStrategy` with the local Wormhole core
   address (or `address(0)` where Wormhole is not available).

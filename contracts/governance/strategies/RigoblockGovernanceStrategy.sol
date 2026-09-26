@@ -8,6 +8,7 @@ import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFac
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {CrossChainPayload} from "../types/GovernanceTypes.sol";
+import {TimeType} from "../types/TimeType.sol";
 import {IStructs} from "../../staking/interfaces/IStructs.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
@@ -30,6 +31,11 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @notice Thrown when a Wormhole cross-chain proposal is created outside Ethereum mainnet.
     error GovCrosschainNotMainnet();
+
+    /// @notice Thrown when a Wormhole cross-chain action carries a non-zero wrapper value.
+    /// @dev The inner action value is paid on the destination chain from the receiver's balance,
+    /// so the wrapper must be zero and the Wormhole fee is attached at execution time only.
+    error GovCrosschainInvalidValue(uint256 value);
 
     /// @notice Thrown when the proposal threshold is outside the allowed range.
     error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
@@ -59,15 +65,17 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @inheritdoc IGovernanceStrategy
     function getProposalState(
         IGovernanceState.Proposal memory proposal,
-        uint256 minimumQuorum
+        uint256 minimumQuorum,
+        TimeType timeType
     ) external view override returns (IGovernanceState.ProposalState) {
         // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
         // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
-        if (block.timestamp <= proposal.startBlockOrTime) {
+        uint256 blockOrTime = timeType == TimeType.Timestamp ? block.timestamp : block.number;
+        if (blockOrTime <= proposal.startBlockOrTime) {
             return IGovernanceState.ProposalState.Pending;
-        } else if (block.timestamp <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum)) {
+        } else if (blockOrTime <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum)) {
             return IGovernanceState.ProposalState.Qualified;
-        } else if (block.timestamp <= proposal.endBlockOrTime) {
+        } else if (blockOrTime <= proposal.endBlockOrTime) {
             return IGovernanceState.ProposalState.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
             return IGovernanceState.ProposalState.Defeated;
@@ -105,11 +113,18 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function votingTimestamps() public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
+    function votingTimestamps(
+        TimeType timeType
+    ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        if (timeType == TimeType.Blocknumber) {
+            // we require voting starts next block to prevent instant upgrade
+            startBlockOrTime = block.number + 1;
+        } else {
+            startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
 
-        // we require voting starts next block to prevent instant upgrade
-        startBlockOrTime = block.timestamp >= startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
+            // we require voting starts next block to prevent instant upgrade
+            startBlockOrTime = block.timestamp >= startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
+        }
 
         endBlockOrTime = startBlockOrTime + votingPeriod();
     }
@@ -165,6 +180,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         // Cross-chain proposals are only allowed from Ethereum mainnet
         require(block.chainid == 1, GovCrosschainNotMainnet());
 
+        // The wrapped action value is paid on the destination chain from the receiver's own
+        // balance; Wormhole's fee is added at execution time in beforeExecute instead.
+        require(action.value == 0, GovCrosschainInvalidValue(action.value));
+
         _assertValidWormholeData(action.data);
         return action;
     }
@@ -177,7 +196,9 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
             return action;
         }
 
-        action.value += ICoreBridge(_wormhole).messageFee();
+        // Wormhole requires msg.value == messageFee() on publishMessage, so the wrapper value
+        // must be exactly the fee, overriding any (zero) value set at proposal time.
+        action.value = ICoreBridge(_wormhole).messageFee();
 
         return action;
     }

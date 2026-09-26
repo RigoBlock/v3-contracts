@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.18;
 
 import {IEOracle} from "../extensions/adapters/interfaces/IEOracle.sol";
 import {ISmartPoolEvents} from "../interfaces/v4/pool/ISmartPoolEvents.sol";
