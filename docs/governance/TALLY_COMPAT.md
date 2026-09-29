@@ -140,23 +140,40 @@ The OZ surface is compiled into the governance implementation (VERSION 1.3.0). A
 governance gains it by the standard implementation-upgrade flow (factory
 `setImplementation` + per-governance `upgradeImplementation` proposal).
 
-Storage deviation (important): the inherited OZ `EIP712` and `Nonces` contracts use
-**regular sequential storage** — OZ does not implement the Rigoblock ERC-7201
-namespaced storage pattern. Their state (EIP712's two deprecated string fallbacks,
-`Nonces`'s mapping) occupies regular slots 0–2 of the proxy. This is a deliberate,
-one-time deviation from the "all state in ERC-7201 slots" rule, introduced with
-VERSION 1.3.0. It cannot clash with existing governance data, for two reasons:
+Storage note: the inherited OZ `EIP712` and `Nonces` contracts keep a few **regular sequential
+storage slots** — OZ does not implement the Rigoblock ERC-7201 namespaced storage pattern
+(checked against OZ v5.7.0, identical on `master`). Since VERSION 1.3.0, the implementation
+neutralizes this with overrides: `MixinVoting` overrides `nonces` and `_useNonce` so that voter
+nonces live in the ERC-7201 slot `keccak256("governance.proxy.voter.nonces") - 1` (asserted
+in `MixinStorage`), exactly like every other governance mapping. (`_useCheckedNonce` needs
+no override: OZ's implementation writes only through the virtual `_useNonce`, so it
+dispatches to the overridden, namespaced version.) All **live** governance state is
+therefore namespaced. The
+sequential slots are permanently-zero OZ placeholders and are never read or written by
+Rigoblock code:
 
-1. slots 0–2 were **empty** before this version: the implementation kept all of its
-   state in ERC-7201 namespaced slots (hashed values in a ~2^256 range) and had no
-   regular storage at all;
-2. ERC-7201 slots and low sequential slots live in disjoint, astronomically distant
-   address spaces, so no namespaced slot can ever collide with slots 0–2 — and no
-   future regular storage may be added to the implementation without first auditing
-   these three slots.
+- **slot 0 — OZ `Nonces._nonces`.** Declared `private` in OZ, so inheriting `Nonces` reserves
+  the slot in the layout even though the overrides never touch it. Dead placeholder.
+- **slots 1–2 — `EIP712._nameFallback` / `_versionFallback`.** OZ marks both "Deprecated.
+  Kept to preserve the storage layout of inheriting contracts used as an implementation
+  behind a proxy." All EIP-712 domain data lives in immutables; the v5.7 constructor uses
+  `toShortString()` (reverts on names longer than 31 bytes) and never writes the fallbacks.
+  Dead placeholders, kept so contracts deployed under OZ ≤5.2 — where these slots held real
+  strings — can upgrade in place.
 
-Any future upgrade must preserve this layout: `EIP712` and `Nonces` stay in the
-inheritance chain, and no new regular-storage base may be inserted before them.
+It cannot clash with existing governance data, for two reasons:
+
+1. slots 0–2 were **empty** before VERSION 1.3.0: the implementation kept all of its state
+   in ERC-7201 namespaced slots (hashed values in a ~2^256 range) and had no regular storage
+   at all;
+2. ERC-7201 slots and low sequential slots live in disjoint, astronomically distant address
+   spaces, so no namespaced slot can ever collide with slots 0–2 — and no future regular
+   storage may be added to the implementation without first auditing these three slots.
+
+Any future upgrade must preserve this layout: `EIP712` and `Nonces` stay in the inheritance
+chain (so the placeholder slots keep their positions), and no new regular-storage base may be
+inserted before them. Because no live state sits in sequential slots, a future OZ release
+migrating `Nonces`/`EIP712` to namespaced storage cannot silently reset any Rigoblock state.
 
 Votes cast through the `AGovernance` pool adapter follow the adapter's own semantics:
 see the adapter's integration notes in

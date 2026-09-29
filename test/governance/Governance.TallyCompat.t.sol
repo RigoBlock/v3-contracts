@@ -596,6 +596,44 @@ contract GovernanceTallyCompatTest is Test {
         assertEq(harness.nonces(signatory), 1);
     }
 
+    /// @notice The consumed voter nonce lands in the ERC-7201 namespaced slot, while the sequential
+    ///     slots reserved by the OZ `Nonces`/`EIP712` base contracts stay untouched.
+    function test_VoterNonces_StoredInNamespacedSlot() public {
+        uint256 proposalId = _proposeDefault();
+        vm.warp(block.timestamp + 2);
+
+        uint256 privateKey = 0xB0B;
+        address signatory = vm.addr(privateKey);
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("Rigoblock Governance")),
+                keccak256(bytes("1.3.0")),
+                block.chainid,
+                address(harness)
+            )
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                keccak256("Ballot(uint256 proposalId,uint8 support,address voter,uint256 nonce)"),
+                proposalId,
+                uint8(1),
+                signatory,
+                uint256(0)
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        harness.castVoteBySig(proposalId, 1, signatory, abi.encodePacked(r, s, v));
+
+        bytes32 noncesSlot = bytes32(uint256(keccak256("governance.proxy.voter.nonces")) - 1);
+        bytes32 voterNonceSlot = keccak256(abi.encode(signatory, noncesSlot));
+        assertEq(vm.load(address(harness), voterNonceSlot), bytes32(uint256(1)));
+        assertEq(vm.load(address(harness), bytes32(uint256(0))), 0);
+        assertEq(vm.load(address(harness), bytes32(uint256(1))), 0);
+        assertEq(vm.load(address(harness), bytes32(uint256(2))), 0);
+    }
+
     /// @notice castVoteWithReasonAndParamsBySig verifies the OZ ExtendedBallot signature
     ///     (reason and params bound into the digest) and consumes the voter nonce.
     function test_CastVoteWithReasonAndParamsBySig_VerifiesOZSignature() public {

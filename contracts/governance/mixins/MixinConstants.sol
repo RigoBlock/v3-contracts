@@ -18,6 +18,11 @@ abstract contract MixinConstants is IRigoblockGovernance {
     bytes32 internal constant _GOVERNANCE_PARAMS_SLOT =
         0x0116feaee435dceaf94f40403a5223724fba6d709cb4ce4aea5becab48feb141;
 
+    /// @notice Voter nonces for signature-based voting. Overrides OZ `Nonces`'s regular
+    ///         mapping so that no live state sits in sequential storage slots.
+    bytes32 internal constant _GOVERNANCE_NONCES_SLOT =
+        0x9103dedfab5a7d1f4a8633498079ac4455e02d1be472f6c3ca589c4598a3aba1;
+
     // implementation slot is same as declared in proxy
     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 

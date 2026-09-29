@@ -99,7 +99,7 @@ deployed instance of its own.
 | --------------------------- | -----------: | -------: | ---------: |
 | Staking                     |        22820 |     1756 |     92.85% |
 | GrgVault                    |         4392 |    20184 |     17.87% |
-| RigoblockGovernance         |        21010 |     3566 |     85.49% |
+| RigoblockGovernance         |        21048 |     3528 |     85.64% |
 | RigoblockGovernanceStrategy |         5674 |    18902 |     23.09% |
 
 ## Notes

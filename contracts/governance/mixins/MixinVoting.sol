@@ -290,6 +290,18 @@ abstract contract MixinVoting is Nonces, EIP712, MixinStorage, MixinAbstract {
             );
     }
 
+    /// @dev Voter nonces are tracked in an ERC-7201 slot (see `_voterNonces`) instead of OZ
+    ///      `Nonces`'s private regular mapping, keeping all live governance state namespaced.
+    function nonces(address owner) public view override returns (uint256) {
+        return _voterNonces().nonceByVoter[owner];
+    }
+
+    function _useNonce(address owner) internal override returns (uint256) {
+        unchecked {
+            return _voterNonces().nonceByVoter[owner]++;
+        }
+    }
+
     /// @dev Converts the OZ support value to a vote type, reverting on out-of-range values.
     function _toVoteType(uint8 support) private pure returns (IGovernanceVoting.VoteType) {
         require(support <= uint8(IGovernanceVoting.VoteType.Abstain), GovInvalidSupport(support));

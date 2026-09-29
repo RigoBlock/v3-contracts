@@ -19,6 +19,7 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_CROSSCHAIN_SEQUENCE_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.sequence")) - 1));
         assert(_PROPOSAL_META_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.meta")) - 1));
         assert(_OZ_PROPOSAL_HASH_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.ozhash")) - 1));
+        assert(_GOVERNANCE_NONCES_SLOT == bytes32(uint256(keccak256("governance.proxy.voter.nonces")) - 1));
     }
 
     function _governanceParameters() internal pure returns (IGovernanceState.GovernanceParameters storage s) {
@@ -104,6 +105,16 @@ abstract contract MixinStorage is MixinImmutables {
     function _receipt() internal pure returns (UserReceipt storage s) {
         assembly {
             s.slot := _RECEIPT_SLOT
+        }
+    }
+
+    struct VoterNonces {
+        mapping(address voter => uint256 nonce) nonceByVoter;
+    }
+
+    function _voterNonces() internal pure returns (VoterNonces storage s) {
+        assembly {
+            s.slot := _GOVERNANCE_NONCES_SLOT
         }
     }
 
