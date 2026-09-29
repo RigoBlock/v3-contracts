@@ -8,6 +8,7 @@ import {IGovernanceState} from "../../contracts/governance/interfaces/governance
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IGovernanceEvents} from "../../contracts/governance/interfaces/governance/IGovernanceEvents.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
+import {IRigoblockGovernance} from "../../contracts/governance/IRigoblockGovernance.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 
 /// @title QualifyAndExecute
@@ -15,8 +16,8 @@ import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 ///     proposal cannot be executed in the same transaction that qualified it.
 contract QualifyAndExecute {
     function qualifyAndExecute(address governance, uint256 proposalId) external {
-        IGovernanceVoting(governance).castVote(proposalId, IGovernanceVoting.VoteType.For);
-        IGovernanceVoting(governance).execute(proposalId);
+        IRigoblockGovernance(governance).castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
+        IRigoblockGovernance(governance).execute(proposalId);
     }
 }
 
@@ -24,6 +25,10 @@ contract QualifyAndExecute {
 /// @notice Verifies that governance voting lifecycles are correct for both TimeType
 ///     values: a qualified proposal becomes executable only in a later block (Blocknumber)
 ///     or a later timestamp (Timestamp), never in the qualifying transaction itself.
+/// @dev Uses MockMigrationStrategy, an integrator-style strategy that supports both time
+///     types, as a reference implementation of correct TimeType.Blocknumber handling.
+///     RigoblockGovernanceStrategy itself only supports TimeType.Timestamp and reverts
+///     otherwise (see RigoblockGovernanceStrategy.t.sol).
 contract GovernanceTimeTypeTest is Test {
     MigrationHarness internal harness;
     MockMigrationStrategy internal strategy;
@@ -60,16 +65,16 @@ contract GovernanceTimeTypeTest is Test {
         // pass the pending phase, then vote: the proposal qualifies
         vm.roll(block.number + 2);
         vm.prank(whale);
-        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
 
         // qualifying sets the closing block to the current block
         wrapper = harness.getProposalById(proposalId);
         assertEq(wrapper.proposal.endBlockOrTime, block.number);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Qualified));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Qualified));
 
         vm.roll(block.number + 1);
         harness.execute(proposalId);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Executed));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Executed));
     }
 
     /// @notice Qualifying and executing in a single transaction reverts in Blocknumber mode.
@@ -82,10 +87,23 @@ contract GovernanceTimeTypeTest is Test {
             abi.encodeWithSelector(
                 MixinVoting.GovVotingClosed.selector,
                 proposalId,
-                IGovernanceState.ProposalState.Qualified
+                IGovernanceState.ProposalStatus.Qualified
             )
         );
         bundler.qualifyAndExecute(address(harness), proposalId);
+    }
+
+    /// @notice A Blocknumber proposal that never reaches quorum is Defeated once the voting
+    ///     window elapses in blocks. A seconds-denominated end (the historical bug of adding
+    ///     7 days to a block number) would still report Active after this roll.
+    function test_Blocknumber_UnqualifiedProposal_ExpiresAfterBlockWindow() public {
+        harness.setTimeType(TimeType.Blocknumber);
+        uint256 proposalId = _createProposal();
+
+        // roll past the block-based window (7 days ≈ 50_400 blocks at ~12s blocks)
+        vm.roll(block.number + strategy.BLOCK_VOTING_PERIOD() + 2);
+
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Defeated));
     }
 
     /// @notice A proposal qualified in Timestamp mode closes voting at the qualifying
@@ -101,16 +119,16 @@ contract GovernanceTimeTypeTest is Test {
         // pass the pending phase, then vote: the proposal qualifies
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
 
         // qualifying sets the closing timestamp to the current timestamp
         wrapper = harness.getProposalById(proposalId);
         assertEq(wrapper.proposal.endBlockOrTime, block.timestamp);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Qualified));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Qualified));
 
         vm.warp(block.timestamp + 1);
         harness.execute(proposalId);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Executed));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Executed));
     }
 
     /// @notice Qualifying and executing in a single transaction reverts in Timestamp mode.
@@ -123,7 +141,7 @@ contract GovernanceTimeTypeTest is Test {
             abi.encodeWithSelector(
                 MixinVoting.GovVotingClosed.selector,
                 proposalId,
-                IGovernanceState.ProposalState.Qualified
+                IGovernanceState.ProposalStatus.Qualified
             )
         );
         bundler.qualifyAndExecute(address(harness), proposalId);
@@ -141,12 +159,12 @@ contract GovernanceTimeTypeTest is Test {
 
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 1);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Succeeded));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Succeeded));
 
         vm.expectEmit(address(harness));
-        emit IGovernanceEvents.ThresholdsUpdated(PROPOSAL_THRESHOLD, LOWERED_QUORUM);
+        emit IGovernanceEvents.ProposalThresholdSet(PROPOSAL_THRESHOLD);
         harness.execute(proposalId);
 
         IGovernanceState.GovernanceParameters memory params = harness.governanceParameters().params;

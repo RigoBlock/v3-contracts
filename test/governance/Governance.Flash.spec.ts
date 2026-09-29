@@ -184,7 +184,7 @@ describe("Governance Flash Attack", async () => {
       // we allow the flash governance to move GRG
       await grgToken.approve(await flashGovernance.getAddress(), amount);
       await expect(flashGovernance.flashAttack(poolId, amount))
-        .to.emit(governanceInstance, "VoteCast")
+        .to.emit(governanceInstance, "VoteCast(address,uint256,uint8,uint256)")
         .withArgs(await flashGovernance.getAddress(), 1, VoteType.For, amount)
         // governance reverts with custom errors, which are emitted as raw return data
         .to.emit(flashGovernance, "ReturnDataEvent")

@@ -45,7 +45,7 @@ abstract contract MixinUpgrade is MixinStorage {
         }
         params.proposalThreshold = newProposalThreshold;
         params.quorumThreshold = newQuorumThreshold;
-        emit ThresholdsUpdated(newProposalThreshold, newQuorumThreshold);
+        emit ProposalThresholdSet(newProposalThreshold);
     }
 
     /// @inheritdoc IGovernanceUpgrade

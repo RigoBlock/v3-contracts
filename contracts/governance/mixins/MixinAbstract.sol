@@ -10,7 +10,7 @@ abstract contract MixinAbstract {
 
     function _getProposalCount() internal view virtual returns (uint256);
 
-    function _getProposalState(uint256 proposalId) internal view virtual returns (IGovernanceState.ProposalState);
+    function _getProposalState(uint256 proposalId) internal view virtual returns (IGovernanceState.ProposalStatus);
 
     function _getVotingPower(address account) internal view virtual returns (uint256);
 }

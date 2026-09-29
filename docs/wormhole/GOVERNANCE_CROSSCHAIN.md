@@ -14,6 +14,31 @@ target chains such as HyperEVM through Wormhole cross-chain messages.
 - Proposal quorum is snapshotted at creation time so future quorum changes cannot
   alter the outcome of an existing proposal (fixes [#200][issue-200]).
 
+## Sender and receiver roles
+
+A chain's role is expressed entirely through its governance strategy:
+
+- **Ethereum mainnet is the only sender.** `RigoblockGovernanceStrategy.beforePropose`
+  rejects Wormhole actions on any other chain (`GovCrosschainNotMainnet`), and the
+  receiver mixin cannot run on mainnet at all (`GovReceiverLocalEmitter`, since the
+  trusted emitter is mainnet itself). The trusted emitter is checked as
+  `emitterAddress == address(this)`: the proxy is deployed at the same deterministic
+  address on every chain, so the mainnet instance of that shared address is the only
+  valid emitter.
+- **Every other chain is a receiver** when its strategy has a nonzero Wormhole core
+  address. Receiving is permissionless (any relayer can deliver a VAA) and independent
+  of local governance.
+- **Receiver chains may also self-govern.** Receiving cross-chain messages does not
+  disable local proposals: a receiver-chain governance with a staking-backed strategy
+  can still propose, vote and execute with its own voting power. Concretely:
+  - _Arbitrum and the OP-stack chains (Optimism, Base, Unichain)_: controlled both by
+    their own local governance and by Ethereum mainnet.
+  - _HyperEVM, BSC, Polygon_: controlled via Ethereum mainnet only (no local voting
+    power is configured).
+    `test_LocalGovernance_CoexistsWithCrosschainReceive` in
+    `test/governance/Governance.Crosschain.t.sol` asserts both capabilities on one
+    contract.
+
 ## Architecture
 
 ```
@@ -27,14 +52,15 @@ Target chain (e.g. HyperEVM, receiver chain)
   RigoblockGovernance proxy  (same deterministic address as on mainnet)
     └─ MixinCrosschain.receiveMessage (inside the governance implementation)
        └─ parseAndVerifyVM(encodedVaa)
-          └─ execute actions in order
+          └─ sequence >= nextMinimumSequence check, then execute the action batch
 ```
 
 There is no dedicated receiver contract: the cross-chain receiver is a mixin of
 the `RigoblockGovernance` implementation, so the governance proxy itself is the
 receiver hub on each chain. Because the governance proxy is deployed at the same
-deterministic address on every chain, the trusted emitter is a compile-time
-constant and the receiver address on a new chain is known before deployment.
+deterministic address on every chain, the receiver asserts
+`emitterAddress == address(this)` — no emitter address needs to be configured per
+chain — and the receiver address on a new chain is known before deployment.
 
 The `RigoblockGovernance` implementation has no constructor arguments, so it can
 be deployed at the same deterministic address on every chain. The Wormhole core
@@ -42,11 +68,24 @@ address and local Wormhole chain id are stored in `RigoblockGovernanceStrategy`,
 which is deployed per chain and therefore does not affect the governance
 implementation address. A chain is a **receiver** when its governance strategy
 has a nonzero Wormhole address; a chain with a zero Wormhole address in its
-strategy does not process cross-chain messages at all. Ethereum mainnet is the
-only **sender** today, enforced by the strategy (`beforePropose` requires
-`block.chainid == 1`), but which chain acts as sender vs receiver is ultimately
-a configuration choice expressed through per-chain strategy deployment and
-strategy upgrades.
+strategy does not process cross-chain messages at all.
+
+## Native value policy
+
+- The governance is expected to hold **no native currency and no ERC-20 tokens**,
+  on every chain. Cross-chain governance is message-passing only.
+- Cross-chain payloads carry **no value**: the strategy validates at proposal time
+  on the sender chain that both the wrapper `action.value` and the inner payload
+  `action.value` are zero (`GovCrosschainInvalidValue`).
+- The Wormhole message fee (zero today, but adjustable by Wormhole) is **not part
+  of the proposal**. It is attached at execution time: `beforeExecute` overrides
+  the action value with a fresh `messageFee()` read, which is the only moment the
+  exact fee is knowable — if it were fixed at proposal time, a fee change between
+  propose and execute would brick the action. The executor pays it as part of
+  `execute`'s `msg.value`.
+- `MixinVoting.execute` requires `msg.value` to cover the summed action values;
+  any excess `msg.value` is not refunded and would remain in the governance, which
+  is one more reason to attach the exact amount.
 
 ## Governance side
 
@@ -56,7 +95,7 @@ action is a normal `ProposedAction`:
 - `target` = the local Wormhole core contract.
 - `data` = `abi.encodeCall(IWormhole.publishMessage, (nonce, encodedPayload, consistencyLevel))`.
 - `value` = `0` at proposal time. The Wormhole fee is not part of the proposal;
-  it is attached by the strategy at execution time (see below).
+  it is attached by the strategy at execution time (see above).
 
 The `encodedPayload` is `abi.encode(CrossChainPayload)`:
 
@@ -65,33 +104,28 @@ The `encodedPayload` is `abi.encode(CrossChainPayload)`:
   cannot be replayed here.
 - `proposalId`: the mainnet proposal id that produced the message. It is
   included for auditability and off-chain indexing; replay protection is
-  enforced by the Wormhole VAA hash and by atomic proposal execution on
+  enforced by the ordered sequence and by atomic proposal execution on
   mainnet.
-- `action`: the single `ProposedAction` to execute on the target chain. Its
-  `value` is paid on the destination chain from the governance proxy's own
-  balance — it is not sent through Wormhole and must not be confused with the
-  source-chain fee. If the governance proxy holds insufficient native currency
-  for the inner action value, execution fails and the action is deferred to
-  `failedActions` (see Receiver side), from where it can be retried once the
-  balance is funded.
+- `actions`: the batch of `ProposedAction`s to execute on the target chain, in
+  order. A message may carry one action or several — the typical case of an
+  adapter upgrade coupled with an implementation upgrade is a single message
+  with a two-action batch, executed atomically. Actions may target external
+  contracts or the governance proxy itself (implementation/strategy upgrades
+  and threshold updates use the same `onlyGovernance` path as local voting).
+  Every action must carry `value == 0`, validated on the sender chain at
+  proposal time (see Native value policy). Wormhole does not cap the payload
+  length on EVM; keep batches modest, as VAA verification cost grows with size.
 
-Because cross-chain messages are ordinary proposal actions, the existing
-`PROPOSAL_MAX_OPERATIONS` limit is respected and each action is validated
-individually by the strategy.
-
-`RigoblockGovernanceStrategy` enforces, via `beforePropose` / `beforeExecute`:
+Encoding is client-side: the proposer builds the `publishMessage` calldata
+off-chain. The only on-chain Wormhole specificity is `beforeExecute`'s fresh fee
+read. `RigoblockGovernanceStrategy` enforces, via `beforePropose`:
 
 - Cross-chain actions are only allowed on Ethereum mainnet (`block.chainid == 1`).
 - If `action.target == wormhole`, the calldata selector must be
   `IWormhole.publishMessage.selector` and the decoded `CrossChainPayload` must
   target a chain other than the local Wormhole chain id.
-- The wrapper `value` must be `0` at proposal time (`GovCrosschainInvalidValue`
-  otherwise), because the inner action value is a destination-chain concern.
-- At execution time, `beforeExecute` sets `action.value = messageFee()`.
-  Wormhole's `publishMessage` requires `msg.value == messageFee()` exactly, so
-  the fee is read fresh at execution and any proposer-supplied value would be
-  overridden — this avoids estimating the fee client-side and risking a
-  transaction that reverts because the fee changed.
+- The wrapper `value` and every inner action `value` must be `0`
+  (`GovCrosschainInvalidValue` otherwise).
 
 ## Receiver side
 
@@ -102,97 +136,198 @@ fallback delegatecalls into the implementation. It follows the same validation
 steps as the Wormhole `HelloWorld` example:
 
 1. Parses and verifies the VAA through the Wormhole core contract read from the
-   governance strategy.
-   `parseAndVerifyVM` checks the guardian-set signature proof. Forged or
-   malformed VAAs return `valid == false` and the receiver reverts with the
-   reason provided by Wormhole.
-2. Asserts the emitter chain id (`2`, Ethereum) and emitter address (the
-   governance proxy address, identical on every chain) match the trusted
-   sender-chain governance proxy. A receiver on the sender chain itself reverts
-   (`GovReceiverLocalEmitter`).
-3. Checks the `consumed` mapping to prevent replay of a valid VAA.
-4. Verifies the payload's `targetWormholeChainId` equals the local chain.
+   governance strategy. `parseAndVerifyVM` checks the guardian-set signature
+   proof. Forged or malformed VAAs return `valid == false` and the receiver
+   reverts with the reason provided by Wormhole.
+2. Asserts the emitter chain id (`2`, Ethereum) and emitter address
+   (`address(this)`, identical to the governance proxy on every chain) match the
+   trusted sender-chain governance proxy. A receiver on the sender chain itself
+   reverts (`GovReceiverLocalEmitter`).
+3. Requires the VAA sequence to be at least `nextMinimumSequence` and advances
+   the counter to `sequence + 1` — before anything executes, so a delivered VAA
+   can never be re-executed. This is the replay protection, taken from the
+   audited Uniswap receiver: it is a single monotonically increasing counter,
+   nothing more.
+4. Expiry: a VAA older than `_MESSAGE_TIMEOUT` (`2 days`, measured from the
+   guardians' timestamp) reverts (`GovReceiverMessageExpired`) **without**
+   advancing the counter, so it can be re-delivered after the failure condition
+   is fixed. Because gaps are allowed (step 3), a permanently expired message
+   can also simply be leapfrogged by any later sequence — expiry can never clog
+   the pipeline. Recovery is a re-send from the sender chain, which carries a
+   fresh timestamp.
+5. Decodes `CrossChainPayload` and verifies `targetWormholeChainId` equals the
+   local chain, then executes the `actions` batch in order via
+   `GovernanceActionLib.execute`, the same internal call primitive used by local
+   proposal execution: any sub-call failure reverts the whole delivery with the
+   target's revert payload, and the sequence advance rolls back with it. The
+   action has been approved by the sender chain's governance and is expected to
+   succeed; a failure means a precondition was missed and is surfaced loudly,
+   not silently skipped. The same VAA remains deliverable once the precondition
+   is fixed.
 
 If the governance strategy has no Wormhole address configured,
 `receiveMessage` reverts with `GovReceiverNotConfigured`: the chain has not
 opted in as a receiver.
 
-The VAA is marked `consumed` only after emitter and target-chain checks pass.
-This prevents a VAA intended for a different chain from being burned here.
+### Ordered execution and replay protection
 
-The receiver then uses Wormhole's per-emitter `sequence` to enforce ordered
-execution:
+Wormhole assigns an increasing sequence number (starting at 0) to every message
+published by a given emitter. The receiver stores a single counter,
+`nextMinimumSequence`, and requires each VAA to carry a sequence at least that
+high (`GovReceiverInvalidSequence` otherwise), then advances the counter to
+`sequence + 1`:
 
-- If `sequence == expectedSequence`, execute immediately.
-- If `sequence > expectedSequence`, queue the payload until its predecessors
-  arrive. The VAA is already marked `consumed`, so it cannot be processed twice.
-- If `sequence < expectedSequence`, revert (`GovReceiverSequenceTooOld`).
+- The counter advances **before** the batch executes, so a delivered VAA can
+  never be re-executed: re-delivering it fails the sequence check, since its
+  sequence is now strictly below the minimum. A re-send is a _new_ publication
+  with a new sequence and therefore requires a fresh governance-approved
+  execution on the sender chain — it is not a replay of the old VAA.
+  `test_ReceiveMessage_ReplayedVaa_Reverts` covers the replay attempt and
+  `test_ReceiveMessage_ResentAction_ExecutesAsNewMessage` covers the legitimate
+  counterpart. The fork test re-delivers an executed VAA against the real
+  Wormhole core to prove the sequence check is reachable and rejects the batch
+  before any re-execution.
+- **Gaps are allowed**: a message with a higher sequence advances the minimum
+  past any missing sequence, so a lost or permanently failing message can never
+  clog the pipeline — exactly the property of the audited Uniswap receiver.
+- A message with a **past** sequence is a replay attempt and reverts.
+- An **expired** message (older than `2 days`) reverts without advancing the
+  counter; it can be re-delivered after recovery, or leapfrogged by a later
+  sequence. An old approved action can never become executable years later.
 
-After executing a message, the receiver processes any queued messages that are
-now ready, at most 8 per call (`_MAX_QUEUE_DRAIN`). The remainder stays queued
-and drains lazily on subsequent deliveries, bounding the gas a single
-`receiveMessage` call can spend.
+A single mainnet `execute()` may publish several messages (one per Wormhole action in the
+proposal, e.g. one per destination chain). Wormhole assigns each `publishMessage` call the
+next consecutive per-emitter sequence. The executor attaches the summed message fees:
+`beforeExecute` sets each action's value to a fresh `messageFee()` read and `execute`
+requires `msg.value` to cover the total.
 
-## Failed actions: skip, defer, retry
+**Ordering guarantees.** Sequences are consecutive by construction (the Wormhole core
+contract assigns them at `publishMessage` time, and a cancelled or defeated proposal never
+publishes). In-order delivery therefore executes governance actions in the exact order
+they were approved, which matters because batches are authored with dependencies in mind
+(e.g. upgrade a strategy, then call it). If relayers invert two deliveries, the later
+sequence succeeds and the earlier one then fails the minimum check: an inverted delivery
+costs one reverted relay transaction, never a lost or reordered execution — the same
+self-healing behavior as the audited Uniswap receiver. Strictly in-order processing is
+never required for liveness, only for executing a specific message in its approved
+position; the sender chain can always re-send an orphaned action with a fresh sequence.
 
-A target action that reverts does **not** revert the delivery that carried it
-and does **not** block the pipeline (a synchronously reverting queue entry
-would otherwise roll back an otherwise valid delivery and permanently jam every
-later message, since the queue is re-drained on each delivery):
+Each message carries a batch of `ProposedAction`s, executed on the destination chain one by
+one in the encoded order via `GovernanceActionLib.execute` — the same pre-audited assembly
+call primitive local `execute` uses — so a coupled upgrade (adapter + implementation)
+lands atomically in one message. Self-targeted actions (the governance proxy itself) go
+through the same `onlyGovernance` path as locally executed proposals: the receiver can
+upgrade its own implementation, strategy, and voting thresholds;
+`test_ReceiveMessage_BatchWithSelfUpgrades_Executes` and
+`test_ReceiveMessage_UpgradesThresholds_ViaSelfCall` assert this.
 
-- The failing action is stored in `failedActions[sequence]`, a
-  `CrossChainActionFailed` event is emitted, and `expectedSequence` advances
-  past it. `receiveMessage` therefore always succeeds once the VAA itself is
-  valid, for both the direct path and the queue drain.
-- Anyone can call `retryFailedAction(sequence)` once the action's
-  preconditions on the target chain are satisfied. The entry is cleared
-  **before** the action is called, so a reentrant `retryFailedAction` finds
-  nothing to retry and the action cannot execute (or be paid) twice. On success
-  `CrossChainActionExecuted` is emitted; a retry that still reverts propagates
-  `GovReceiverExecutionFailed`.
-- Ordering caveat: a retried action executes after whatever was delivered in
-  the meantime. Governance actions should be authored to be
-  precondition-safe (target contracts should no-op rather than revert where
-  possible). If strict ordering with later actions matters, governance
-  re-sends the action as a new message instead of relying on retry.
+This is deliberately the minimal model: a single storage slot (the sequence
+counter), the exact validation order of the audited Uniswap receiver, and revert-
+on-failure execution. No hash registry, no per-message consumed flags, no
+sender-side application nonce, no owner-gated resync hatch — every additional
+counter or registry is another thing that can drift or clog, and none is needed:
+Wormhole's per-emitter sequence alone provides ordering and replay protection.
+
+### Failed actions: revert, fix, re-deliver
+
+A target action that reverts reverts the whole delivery, and the sequence
+advance rolls back with it:
+
+- The failure is surfaced loudly with the target's revert payload (the same
+  semantics as a locally executed proposal, which also reverts on failure), so a
+  missed precondition is diagnosable instead of silently skipped.
+- The message is **not** consumed: the same VAA remains deliverable once the
+  precondition on the target chain is satisfied
+  (`test_ReceiveMessage_FailedAction_RecoveredByRedelivery`), and any later
+  sequence can leapfrog it in the meantime
+  (`test_ReceiveMessage_FailureDoesNotBlockNextMessage`).
+- Action preconditions should be checked on the sender chain where possible (the
+  strategy's `beforePropose` does this for payload shape and value), so that a
+  message is only sent when it is expected to execute.
+- Recovery of a permanently unwanted action is the sender chain governance
+  re-sending the corrected action in a new message, or doing nothing: gaps are
+  allowed, so an abandoned sequence never stalls anything.
+
+### Model: the audited Uniswap receiver, adapted
+
+The receiver follows the [audited `UniswapWormholeMessageReceiver`](https://github.com/Uniswap/governance-crosschain-bridges/blob/master/src/WormholeMessageReceiver.sol)
+as closely as the architecture allows:
+
+- `sequence >= nextMinimumSequence`, then `nextMinimumSequence = sequence + 1`:
+  gaps are allowed, so a lost, expired, or permanently failing message can never
+  clog the pipeline. Their own code warns that mixed consistency levels can
+  orphan a slow message behind a fast later one — we pin the consistency level
+  in the payload validation, same mitigation.
+- `MESSAGE_TIME_OUT_SECONDS` (2 days): a VAA older than the timeout reverts
+  instead of executing, so an accidentally skipped action can never become
+  executable years later. Unlike Uniswap — whose timeout is only sound _because_
+  gaps are allowed and expiry reverts the delivery — we need no special
+  expire-and-advance logic: the gap allowance already guarantees expiry cannot
+  clog anything.
+- Sub-call failure reverts the whole delivery and the sequence advance rolls
+  back: the same VAA stays redeliverable after recovery, and any later sequence
+  can leapfrog it. No skip-and-report, no failure registry.
+
+The differences from the Uniswap receiver are driven by our architecture, not by
+a different security model:
+
+- **Batched payload.** Uniswap publishes `(version, targets, values, calldatas,
+receiver, chainId)` and executes the sub-calls directly. We publish a single
+  `CrossChainPayload { targetWormholeChainId, proposalId, actions }` where
+  `actions` is a batch of `ProposedAction`s executed atomically in order via the
+  same `GovernanceActionLib.execute` primitive local proposals use — so a coupled
+  upgrade (adapter + implementation) lands in one message, and self-targeted
+  actions (implementation/strategy/threshold upgrades) go through the same
+  `onlyGovernance` path as locally executed proposals.
+- **Emitter identity.** Uniswap stores the sender address as an immutable; we
+  assert `emitterAddress == address(this)` because the governance proxy is
+  deployed at the same deterministic address on every chain — no per-chain
+  emitter configuration and the receiver address is known in advance.
+- **Value policy.** Uniswap's receiver forwards `msg.value` to sub-calls; our
+  payloads are message-only (every inner action `value == 0`, validated on the
+  sender chain at proposal time), so the receiver never handles value and the
+  relayer needs no funds.
+- **No application-level nonce.** The newer [modular-multichain-governance](https://github.com/Uniswap/modular-multichain-governance)
+  adds a payload nonce tracked on the sender (`WormholeEncoder.nonces`) with
+  strict equality on the receiver plus an owner-gated `emergencySetNonce` hatch.
+  That counter exists because the module architecture abstracts the bridge: the
+  Wormhole sequence stays in the VAA envelope and never enters the generic
+  payload. We use Wormhole's per-emitter sequence directly, so sender and
+  receiver can never drift apart and no privileged resync hatch is needed.
 
 ## Recovery
 
-Because the receiver is part of the governance implementation, recovery from
-unrecoverable states (a Wormhole liveness outage, an action that can never
-succeed, receiver bugs) uses the governance's own existing mechanisms, with no
-separate owner or proxy:
+Because the receiver is part of the governance implementation, recovery uses the
+governance's own existing mechanisms, with no separate owner or admin key:
 
-- The chain's local governance can propose and execute `upgradeImplementation`
+- The chain's **local governance** can propose and execute `upgradeImplementation`
   or `upgradeStrategy` (both `onlyGovernance`), replacing the receiver logic or
-  reconfiguring the Wormhole address. On receiver chains the local governance
-  acts through its own staking-based voting; it does not depend on Wormhole.
+  reconfiguring the Wormhole address — upgrading the strategy takes effect
+  immediately, since the Wormhole address is read from it on every delivery.
+  On receiver chains the local governance acts through its own staking-based
+  voting; it does not depend on Wormhole.
+- A **compromised Wormhole guardian set** (forged VAAs) is countered the same
+  way: a local strategy upgrade pointing `wormhole()` at the zero address
+  disables the receiver instantly (`GovReceiverNotConfigured`), and a follow-up
+  upgrade can swap in a receiver for a different bridge. No externally owned
+  account is involved in either step.
+- A permanently **failing action** is never fatal: the delivery reverts without
+  consuming the message, so the same VAA can be re-delivered after recovery, or
+  simply abandoned — gaps are allowed and a later sequence leapfrogs it.
 - Mainnet governance keeps full control of the sender side through ordinary
   proposals.
+
+The single **catastrophic scenario** — the only one with no trustless recourse — is
+Wormhole itself being down: if the guardian network cannot produce or verify VAAs, no
+cross-chain message can be delivered and the receiver stalls (already-approved actions
+simply wait; nothing executes out of order or twice). This is intended behavior. The
+escape hatch does not depend on Wormhole: each receiver chain's local governance can
+upgrade its strategy or implementation through an ordinary local proposal, so the
+governances retain full control of their own chains even in a permanent Wormhole outage.
 
 Day-to-day execution remains trustless: only messages verified against the
 trusted mainnet emitter are executed, and neither the local governance voters
 nor any third party can forge a VAA.
-
-## Ordered execution
-
-Wormhole assigns an increasing sequence number (starting at 0) to every message
-published by a given emitter. The receiver starts at `expectedSequence = 0` and
-only accepts the next sequence in order. If Wormhole delivers messages out of
-order, later messages are stored in `queuedPayloads` and executed automatically
-when the missing sequence arrives.
-
-## Replay protection
-
-The Wormhole VAA hash is marked `consumed` as soon as it passes emitter and
-target-chain validation. A valid VAA can therefore be submitted by anyone but
-executed at most once per receiver. The same VAA cannot be replayed on the
-wrong chain because the receiver only accepts messages whose payload specifies
-the local Wormhole chain id.
-
-On Ethereum mainnet, the proposal itself can only be executed once because the
-`Proposal.executed` flag is set atomically. This prevents a mainnet proposal
-from being replayed to emit different cross-chain messages.
 
 ## Receiver is part of governance, not the protocol
 
@@ -213,14 +348,14 @@ is deliberate:
   receiver address is known in advance on new chains.
 - The receiver benefits from the governance proxy's existing upgrade path:
   receiver fixes ship inside governance implementation upgrades.
-- Sequencing, replay, and failure-deferral state live in dedicated governance
-  storage slots, completely separate from voting state, and are asserted in the
-  `MixinStorage` constructor like every other governance slot.
+- The receiver state is a single dedicated storage slot, completely separate
+  from voting state, and asserted in the `MixinStorage` constructor like every
+  other governance slot.
 
 The trade-off — the receive path shares the governance implementation's audit
 surface — is accepted because the validation sequence is identical to the
-previously reviewed standalone receiver, and the sender chain is fixed to
-Ethereum mainnet by the strategy.
+Wormhole reference receiver, and the sender chain is fixed to Ethereum mainnet
+by the strategy.
 
 ## Quorum snapshot (issue #200)
 
@@ -256,27 +391,26 @@ address is not able to process cross-chain messages.
 Chain-specific Wormhole addresses and chain ids are stored in
 `src/utils/constants.ts` and `contracts/test/Constants.sol`.
 
-To fund actions with native currency on a receiver chain, send ETH directly to
-the governance proxy address on that chain; the receiver pays each action's
-`value` from the governance proxy's own balance.
-
 ## Testing
 
-- Foundry (cross-chain receiver inside the governance implementation):
+- Foundry (cross-chain receiver inside the governance implementation, including
+  replay protection, gap tolerance, expiry, failure recovery by redelivery, and
+  local governance coexisting with receiving):
   `forge test --match-path test/governance/Governance.Crosschain.t.sol`
+- Foundry mainnet fork (multi-message batch against the real Wormhole core contract:
+  real `publishMessage`, real consecutive sequence assignment, real `messageFee`; only
+  guardian signature verification is mocked):
+  `forge test --match-path test/governance/Governance.CrosschainFork.t.sol`
 - Foundry (strategy Wormhole validation):
   `forge test --match-path test/governance/RigoblockGovernanceStrategy.t.sol`
-- Foundry (quorum snapshot storage layout / backwards compatibility):
-  `forge test --match-path test/governance/GovernanceQuorumSnapshot.t.sol`
 - Foundry (local migration simulation):
   `forge test --match-path test/governance/GovernanceMigration.t.sol`
 - Foundry (mainnet-fork migration simulation):
   `forge test --match-path test/governance/GovernanceMigrationFork.t.sol`
-- Hardhat (RIGO-200 end-to-end regression with real staking flow):
-  `npx hardhat test test/governance/Governance.Proxy.spec.ts --network hardhat`
+- Hardhat (full staking, voting and execution flow):
+  `npx hardhat test mocha test/governance/Governance.spec.ts --network hardhat`
 
-The Hardhat regression test is kept because it exercises the full staking,
-voting, and execution flow that the Foundry unit tests mock. It proves that a
-new proposal's snapshotted quorum survives a later global-quorum reduction.
+The Hardhat tests are kept because they exercise the full staking, voting, and
+execution flow that the Foundry unit tests mock.
 
 [issue-200]: https://github.com/RigoBlock/v3-contracts/issues/200

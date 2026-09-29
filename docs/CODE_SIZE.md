@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-09-26 (branch `feat/crosschain-gov-inbox`).
+Limit: 24576 bytes per contract. Last measured: 2026-09-29 (branch `feat/crosschain-gov-inbox`).
 
 ### Implementation and factory
 
@@ -83,11 +83,11 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-26 (branch `feat/crossch
 | AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
-| A0xRouter       |         5069 |    19507 |     20.63% |
+| A0xRouter       |         4321 |    20255 |     17.58% |
 | AStaking        |         2151 |    22425 |      8.75% |
 | AUniswap        |         1359 |    23217 |      5.53% |
 | AMulticall      |         1169 |    23407 |      4.76% |
-| AGovernance     |         1590 |    22986 |      6.47% |
+| AGovernance     |         1599 |    22977 |      6.51% |
 | AUniswapDecoder |            0 |    24576 |      0.00% |
 
 `AUniswapDecoder` is a library — its code is compiled into consumers, so it has no
@@ -99,8 +99,8 @@ deployed instance of its own.
 | --------------------------- | -----------: | -------: | ---------: |
 | Staking                     |        22820 |     1756 |     92.85% |
 | GrgVault                    |         4392 |    20184 |     17.87% |
-| RigoblockGovernance         |        16785 |     7791 |     68.30% |
-| RigoblockGovernanceStrategy |         5358 |    19218 |     21.80% |
+| RigoblockGovernance         |        19479 |     5097 |     79.26% |
+| RigoblockGovernanceStrategy |         5674 |    18902 |     23.09% |
 
 ## Notes
 

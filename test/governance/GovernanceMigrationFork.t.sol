@@ -11,6 +11,13 @@ import {IGovernanceVoting} from "../../contracts/governance/interfaces/governanc
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 
+/// @dev Interface matching the pre-upgrade deployed implementation, whose `castVote`
+///     does not return the voting weight. Calling the current interface (which returns
+///     uint256) against the old implementation reverts on return-data decoding.
+interface ILegacyVoting {
+    function castVote(uint256 proposalId, uint8 voteType) external;
+}
+
 /// @title GovernanceMigrationForkTest
 /// @notice Mainnet-fork migration test for the governance implementation upgrade that
 ///     introduces the `proposalQuorumById` snapshot mapping.
@@ -75,10 +82,10 @@ contract GovernanceMigrationForkTest is Test {
             IGovernanceState.ProposalWrapper memory wrapper = IGovernanceState(PROXY).getProposalById(i);
             if (wrapper.proposal.executed) continue;
 
-            IGovernanceState.ProposalState state = IGovernanceState(PROXY).getProposalState(i);
-            assertFalse(state == IGovernanceState.ProposalState.Succeeded, "legacy proposal became Succeeded");
-            assertFalse(state == IGovernanceState.ProposalState.Queued, "legacy proposal became Queued");
-            assertFalse(state == IGovernanceState.ProposalState.Expired, "legacy proposal became Expired");
+            IGovernanceState.ProposalStatus state = IGovernanceState(PROXY).getProposalState(i);
+            assertFalse(state == IGovernanceState.ProposalStatus.Succeeded, "legacy proposal became Succeeded");
+            assertFalse(state == IGovernanceState.ProposalStatus.Queued, "legacy proposal became Queued");
+            assertFalse(state == IGovernanceState.ProposalStatus.Expired, "legacy proposal became Expired");
         }
     }
 
@@ -88,11 +95,11 @@ contract GovernanceMigrationForkTest is Test {
         _executeUpgradeProposal();
         _upgradeStrategyToNewStrategy();
 
-        uint256 proposalId = _createVoteAndExecute(_noOpAction());
+        uint256 proposalId = _createVoteAndExecute(_noOpAction(), false);
 
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(proposalId)),
-            uint256(IGovernanceState.ProposalState.Executed),
+            uint256(IGovernanceState.ProposalStatus.Executed),
             "post-upgrade proposal should be Executed"
         );
     }
@@ -118,7 +125,7 @@ contract GovernanceMigrationForkTest is Test {
         _warpPastVotingPeriod(defeatedProposalId);
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(defeatedProposalId)),
-            uint256(IGovernanceState.ProposalState.Defeated),
+            uint256(IGovernanceState.ProposalStatus.Defeated),
             "proposal should be defeated at raised quorum"
         );
 
@@ -129,15 +136,15 @@ contract GovernanceMigrationForkTest is Test {
 
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(defeatedProposalId)),
-            uint256(IGovernanceState.ProposalState.Defeated),
+            uint256(IGovernanceState.ProposalStatus.Defeated),
             "lowering quorum resurrected legacy proposal"
         );
 
         // A new proposal created after the reduction snapshots the lowered quorum and succeeds.
-        uint256 newProposalId = _createVoteAndExecute(_noOpAction());
+        uint256 newProposalId = _createVoteAndExecute(_noOpAction(), false);
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(newProposalId)),
-            uint256(IGovernanceState.ProposalState.Executed),
+            uint256(IGovernanceState.ProposalStatus.Executed),
             "post-reduction proposal should be Executed"
         );
     }
@@ -154,7 +161,9 @@ contract GovernanceMigrationForkTest is Test {
             value: 0
         });
 
-        _createVoteAndExecute(actions);
+        // The upgrade proposal is created and voted before the implementation is upgraded,
+        // so the old (pre-Tally) vote semantics apply.
+        _createVoteAndExecute(actions, true);
 
         // Verify the proxy now delegates to the new implementation.
         assertEq(
@@ -198,17 +207,20 @@ contract GovernanceMigrationForkTest is Test {
             value: 0
         });
 
-        _createVoteAndExecute(actions);
+        _createVoteAndExecute(actions, false);
 
         IGovernanceState.EnhancedParams memory params = IGovernanceState(PROXY).governanceParameters();
         assertEq(params.params.proposalThreshold, proposalThreshold);
         assertEq(params.params.quorumThreshold, quorumThreshold);
     }
 
-    /// @dev Creates a proposal as the voter, casts the voter's full voting power for it and
-    ///     executes it once the voting period ends.
+    /// @dev Creates, votes on and executes a proposal as the voter.
+    /// @param legacyVote Whether the proposal is handled by the pre-upgrade implementation,
+    ///     whose `castVote` takes the internal VoteType enum (For = 0) and returns nothing.
+    ///     Post-upgrade votes use the reordered enum (Against = 0, For = 1), matching OZ.
     function _createVoteAndExecute(
-        IGovernanceVoting.ProposedAction[] memory actions
+        IGovernanceVoting.ProposedAction[] memory actions,
+        bool legacyVote
     ) internal returns (uint256 proposalId) {
         proposalId = _createProposal(actions, "proposal");
 
@@ -216,7 +228,12 @@ contract GovernanceMigrationForkTest is Test {
         vm.warp(wrapper.proposal.startBlockOrTime + 1);
 
         vm.prank(voter);
-        IGovernanceVoting(PROXY).castVote(proposalId, IGovernanceVoting.VoteType.For);
+        if (legacyVote) {
+            // pre-upgrade implementation: VoteType.For = 0, do not use the reordered enum
+            ILegacyVoting(PROXY).castVote(proposalId, 0);
+        } else {
+            RigoblockGovernance(PROXY).castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
+        }
 
         _warpPastVotingPeriod(proposalId);
 

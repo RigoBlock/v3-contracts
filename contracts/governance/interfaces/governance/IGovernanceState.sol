@@ -5,7 +5,7 @@ import "./IGovernanceVoting.sol";
 import {TimeType} from "../../types/TimeType.sol";
 
 interface IGovernanceState {
-    enum ProposalState {
+    enum ProposalStatus {
         Pending,
         Active,
         Canceled,
@@ -47,7 +47,7 @@ interface IGovernanceState {
     /// @notice Returns the state of a proposal.
     /// @param proposalId Number of the proposal.
     /// @return Number of proposal state.
-    function getProposalState(uint256 proposalId) external view returns (ProposalState);
+    function getProposalState(uint256 proposalId) external view returns (ProposalStatus);
 
     struct Receipt {
         bool hasVoted;
@@ -83,10 +83,6 @@ interface IGovernanceState {
     /// @return Tuple of the governance parameters.
     function governanceParameters() external view returns (EnhancedParams memory);
 
-    /// @notice Returns the name of the governace.
-    /// @return Human readable string of the name.
-    function name() external view returns (string memory);
-
     /// @notice Returns the total number of proposals.
     /// @return count The number of proposals.
     function proposalCount() external view returns (uint256 count);
@@ -101,11 +97,20 @@ interface IGovernanceState {
     /// @return canceled True if the proposal was canceled.
     function canceled(uint256 proposalId) external view returns (bool canceled);
 
+    /// @notice Voting power required to create a proposal.
+    /// @return The minimum voting power required to propose.
+    function proposalThreshold() external view returns (uint256);
+
     /// @notice Returns all proposals ever made to the governance.
     /// @return proposalWrapper Tuple array of all governance proposals.
     function proposals() external view returns (ProposalWrapper[] memory proposalWrapper);
 
-    /// @notice Returns the voting period.
-    /// @return Number of blocks or seconds.
-    function votingPeriod() external view returns (uint256);
+    /// @notice Returns the per-proposal tallies against, for, abstain.
+    /// @param proposalId Number of the proposal.
+    /// @return againstVotes Number of votes against.
+    /// @return forVotes Number of votes for.
+    /// @return abstainVotes Number of votes abstain.
+    function proposalVotes(
+        uint256 proposalId
+    ) external view returns (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes);
 }

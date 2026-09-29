@@ -21,6 +21,8 @@ interface IGovernanceStrategy {
     function assertValidQuorumThreshold(uint256 quorumThreshold) external view;
 
     /// @notice Returns the state of a proposal for a required quorum.
+    /// @dev Must use the same time reference as `timeType` and revert for unsupported time types.
+    ///      See docs/governance/STRATEGY.md.
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
     /// @param timeType Time reference used by the proposal's voting period.
@@ -29,13 +31,16 @@ interface IGovernanceStrategy {
         IGovernanceState.Proposal calldata proposal,
         uint256 minimumQuorum,
         TimeType timeType
-    ) external view returns (IGovernanceState.ProposalState);
+    ) external view returns (IGovernanceState.ProposalStatus);
 
     /// @notice Return the voting period.
-    /// @return Number of seconds of period duration.
+    /// @dev Informational only: the enforceable window is the one returned by votingTimestamps.
+    /// @return Number of blocks or seconds of period duration, matching the governance's time type.
     function votingPeriod() external view returns (uint256);
 
     /// @notice Returns the voting timestamps.
+    /// @dev Must produce start/end values expressed in the same unit as `timeType` (block numbers
+    ///      for TimeType.Blocknumber, timestamps for TimeType.Timestamp). See getProposalState.
     /// @param timeType Time reference used by the proposal's voting period.
     /// @return startBlockOrTime Timestamp when proposal starts.
     /// @return endBlockOrTime Timestamp when voting ends.

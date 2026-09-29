@@ -6,7 +6,7 @@ import {IRigoblockGovernance} from "../IRigoblockGovernance.sol";
 /// @notice Constants are copied in the bytecode and not assigned a storage slot, can safely be added to this contract.
 abstract contract MixinConstants is IRigoblockGovernance {
     /// @notice Contract version
-    string internal constant VERSION = "1.1.0";
+    string internal constant VERSION = "1.2.0";
 
     /// @notice Maximum operations per proposal
     uint256 internal constant PROPOSAL_MAX_OPERATIONS = 10;
@@ -15,8 +15,8 @@ abstract contract MixinConstants is IRigoblockGovernance {
     bytes32 internal constant DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
-    /// @notice The EIP-712 typehash for the vote struct
-    bytes32 internal constant VOTE_TYPEHASH = keccak256("Vote(uint256 proposalId,uint8 voteType)");
+    /// @notice The EIP-712 typehash for the vote struct, matching the OpenZeppelin Governor
+    bytes32 internal constant VOTE_TYPEHASH = keccak256("Vote(uint256 proposalId,uint8 support)");
 
     bytes32 internal constant _GOVERNANCE_PARAMS_SLOT =
         0x0116feaee435dceaf94f40403a5223724fba6d709cb4ce4aea5becab48feb141;
@@ -38,25 +38,24 @@ abstract contract MixinConstants is IRigoblockGovernance {
 
     bytes32 internal constant _RECEIPT_SLOT = 0x5a7421539532aa5504e4251551519aa0a06f7c2a3b40bbade5235843e09ad5fe;
 
-    /// @notice Wormhole-formatted address of the trusted sender-chain governance proxy. The governance
-    ///         proxy is deterministically deployed at the same address on every chain, so the expected
-    ///         emitter is a constant. See docs/wormhole/GOVERNANCE_CROSSCHAIN.md.
-    bytes32 internal constant _EXPECTED_EMITTER = bytes32(uint256(uint160(0x5F8607739c2D2d0b57a4292868C368AB1809767a)));
-
     /// @notice Wormhole chain id of the sender chain (Ethereum mainnet).
     uint16 internal constant _EMITTER_CHAIN_ID = 2;
 
+    /// @notice Maximum age of a delivered message; older VAAs revert and can be skipped
+    ///         by delivering any later sequence.
+    uint256 internal constant _MESSAGE_TIMEOUT = 2 days;
+
+    /// @notice Minimum Wormhole sequence number accepted by the cross-chain receiver. The
+    ///         monotonic sequence doubles as replay protection: executed sequences can never
+    ///         be re-executed, and gaps are allowed so a failed message never clogs the pipeline.
     bytes32 internal constant _CROSSCHAIN_SEQUENCE_SLOT =
         0xac0ac78c54bb73764538302bc1bda8524f435b774942256fff0e0adfcc8e9619;
 
-    bytes32 internal constant _CROSSCHAIN_CONSUMED_SLOT =
-        0x3bd8e8e33c91da57468c9ee1cbb66af5a180d31f2aaec4f722fa2a662d16c8ec;
-
-    bytes32 internal constant _CROSSCHAIN_QUEUE_SLOT =
-        0x279f36212bfd68d35cea78a95badb30afe907cfedc4501913ca1cac929f2b01f;
-
-    bytes32 internal constant _CROSSCHAIN_FAILED_SLOT =
-        0x9b3acb084638d07b9d567b826ea38a33a3bd320a8ce55638f5937893df56ff78;
-
     bytes32 internal constant _PROPOSAL_META_SLOT = 0x58222ce86aa7f6a1af2e7980a00d98a125b9758d945ecd9df9aabbdab887f816;
+
+    /// @notice Maps the OpenZeppelin proposal hash to the Rigoblock sequential proposal id, so
+    ///         the OZ execute(targets, values, calldatas, descriptionHash) flow resolves to the
+    ///         stored proposal.
+    bytes32 internal constant _OZ_PROPOSAL_HASH_SLOT =
+        0x6abe3cd9b47f70564dddb4a5361bb8553e8f9b2cf9a797f1f7cb404dd33df356;
 }

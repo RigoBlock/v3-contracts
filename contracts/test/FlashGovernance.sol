@@ -35,9 +35,9 @@ contract FlashGovernance {
             stakeAmount
         );
         IStaking(_stakingProxy).endEpoch();
-        IRigoblockGovernance(_governance).castVote(1, IGovernanceVoting.VoteType.For);
+        IRigoblockGovernance(_governance).castVote(1, uint8(IGovernanceVoting.VoteType.For));
         // should revert with reason voting closed, as state changed, not with already voted
-        try IRigoblockGovernance(_governance).castVote(1, IGovernanceVoting.VoteType.For) {
+        try IRigoblockGovernance(_governance).castVote(1, uint8(IGovernanceVoting.VoteType.For)) {
             revert("second castVote should have reverted");
         } catch Error(string memory revertReason) {
             emit CatchStringEvent(revertReason);

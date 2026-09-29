@@ -158,11 +158,11 @@ describe("AGovernance", async () => {
       // we make a proposal
       await expect(pool.propose([action], description)).to.emit(
         governanceInstance,
-        "ProposalCreated",
+        "ProposalCreated(address,uint256,(address,bytes,uint256)[],uint256,uint256,string)",
       );
       await timeTravel({ days: 14, mine: true });
       await expect(pool.castVote(1, VoteType.For))
-        .to.emit(governanceInstance, "VoteCast")
+        .to.emit(governanceInstance, "VoteCast(address,uint256,uint8,uint256)")
         .withArgs(await pool.getAddress(), 1, VoteType.For, amount);
       await timeTravel({ days: 7, mine: true });
       // must encode call, as execute method is also present in AUniswapRouter and hardhat will not be able to differentiate

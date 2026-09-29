@@ -110,7 +110,7 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
         governanceInstance,
@@ -132,7 +132,7 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
         governanceInstance,
@@ -154,7 +154,7 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
         .to.emit(governanceInstance, "Upgraded")
@@ -191,7 +191,7 @@ describe("Governance Upgrades", async () => {
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       // voting opens after 5 days
       await timeTravel({ days: 5, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       // proposal becomes executable 7 days after becoming active
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
@@ -214,7 +214,7 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
         governanceInstance,
@@ -236,7 +236,7 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
         .to.emit(governanceInstance, "StrategyUpgraded")
@@ -298,9 +298,9 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(3n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
-      await governanceInstance.castVote(2, VoteType.For);
-      await governanceInstance.castVote(3, VoteType.For);
+      await governanceInstance.castVote(1, 1);
+      await governanceInstance.castVote(2, 1);
+      await governanceInstance.castVote(3, 1);
       await timeTravel({ days: 7, mine: true });
       // a proposal that changes no threshold reverts
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
@@ -309,16 +309,16 @@ describe("Governance Upgrades", async () => {
       );
       // a proposal that changes a single threshold succeeds
       await expect(governanceInstance.execute(2))
-        .to.emit(governanceInstance, "ThresholdsUpdated")
-        .withArgs(proposalThreshold, newQuorumThreshold);
+        .to.emit(governanceInstance, "ProposalThresholdSet")
+        .withArgs(proposalThreshold);
       let storedParams = (await governanceInstance.governanceParameters())
         .params;
       expect(storedParams.quorumThreshold).to.be.eq(newQuorumThreshold);
       expect(storedParams.proposalThreshold).to.be.eq(proposalThreshold);
       // a proposal that changes both thresholds succeeds
       await expect(governanceInstance.execute(3))
-        .to.emit(governanceInstance, "ThresholdsUpdated")
-        .withArgs(newProposalThreshold, newQuorumThreshold);
+        .to.emit(governanceInstance, "ProposalThresholdSet")
+        .withArgs(newProposalThreshold);
       storedParams = (await governanceInstance.governanceParameters()).params;
       expect(storedParams.proposalThreshold).to.be.eq(newProposalThreshold);
       expect(storedParams.quorumThreshold).to.be.eq(newQuorumThreshold);
@@ -357,8 +357,8 @@ describe("Governance Upgrades", async () => {
       );
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
-      await governanceInstance.castVote(2, VoteType.For);
+      await governanceInstance.castVote(1, 1);
+      await governanceInstance.castVote(2, 1);
       await timeTravel({ days: 7, mine: true });
       // governance strategy reverts with a custom error in case of rogue params
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
@@ -367,7 +367,7 @@ describe("Governance Upgrades", async () => {
       );
       await expect(governanceInstance.execute(2)).to.emit(
         governanceInstance,
-        "ThresholdsUpdated",
+        "ProposalThresholdSet",
       );
     });
 
@@ -386,11 +386,11 @@ describe("Governance Upgrades", async () => {
       );
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
-        .to.emit(governanceInstance, "ThresholdsUpdated")
-        .withArgs(newProposalThreshold, newQuorumThreshold);
+        .to.emit(governanceInstance, "ProposalThresholdSet")
+        .withArgs(newProposalThreshold);
     });
   });
 });

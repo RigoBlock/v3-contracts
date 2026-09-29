@@ -20,23 +20,9 @@ interface IGovernanceEvents {
         string description
     );
 
-    /// @notice Emitted when a proposal is executed.
-    /// @param proposalId Number of the proposal.
-    event ProposalExecuted(uint256 proposalId);
-
-    /// @notice Emitted when a proposal is canceled.
-    /// @param proposalId Number of the proposal.
-    event ProposalCanceled(uint256 proposalId);
-
     /// @notice Emmited when the governance strategy is upgraded.
     /// @param newStrategy Address of the new strategy contract.
     event StrategyUpgraded(address newStrategy);
-
-    /// @notice Emitted when voting thresholds get updated.
-    /// @dev Only governance can update thresholds.
-    /// @param proposalThreshold Number of votes required to add a proposal.
-    /// @param quorumThreshold Number of votes required to execute a proposal.
-    event ThresholdsUpdated(uint256 proposalThreshold, uint256 quorumThreshold);
 
     /// @notice Emitted when implementation written to proxy storage.
     /// @dev Emitted also at first variable initialization.
@@ -49,4 +35,8 @@ interface IGovernanceEvents {
     /// @param voteType Number of vote type.
     /// @param votingPower Number of votes.
     event VoteCast(address voter, uint256 proposalId, IGovernanceVoting.VoteType voteType, uint256 votingPower);
+
+    /// @notice Emitted when the proposal threshold is updated.
+    /// @param proposalThreshold The new proposal threshold.
+    event ProposalThresholdSet(uint256 proposalThreshold);
 }

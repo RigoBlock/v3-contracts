@@ -13,6 +13,7 @@ import {IStructs} from "../../staking/interfaces/IStructs.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 
+/// @dev Reverts on any time type other than TimeType.Timestamp: see docs/governance/STRATEGY.md.
 contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Wormhole core contract on the same chain as this strategy.
     address private immutable _wormhole;
@@ -43,6 +44,9 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Thrown when the quorum threshold is outside the allowed range.
     error GovStrategyInvalidQuorumThreshold(uint256 quorumThreshold, uint256 floor, uint256 cap);
 
+    /// @notice Thrown when the governance time type is not TimeType.Timestamp.
+    error GovStrategyInvalidTimeType(TimeType timeType);
+
     constructor(address stakingProxy, address wormhole, uint16 wormholeChainId) {
         _stakingProxy = stakingProxy;
         _wormhole = wormhole;
@@ -52,6 +56,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
+        _assertTimestamp(params.timeType);
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
         _assertValidProposalThreshold(params.proposalThreshold);
         _assertValidQuorumThreshold(params.quorumThreshold);
@@ -72,22 +77,24 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         IGovernanceState.Proposal memory proposal,
         uint256 minimumQuorum,
         TimeType timeType
-    ) external view override returns (IGovernanceState.ProposalState) {
+    ) external view override returns (IGovernanceState.ProposalStatus) {
+        _assertTimestamp(timeType);
+
         // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
         // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
-        uint256 blockOrTime = timeType == TimeType.Timestamp ? block.timestamp : block.number;
-        if (blockOrTime <= proposal.startBlockOrTime) {
-            return IGovernanceState.ProposalState.Pending;
-        } else if (blockOrTime <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum)) {
-            return IGovernanceState.ProposalState.Qualified;
-        } else if (blockOrTime <= proposal.endBlockOrTime) {
-            return IGovernanceState.ProposalState.Active;
+        uint256 time = block.timestamp;
+        if (time <= proposal.startBlockOrTime) {
+            return IGovernanceState.ProposalStatus.Pending;
+        } else if (time <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum)) {
+            return IGovernanceState.ProposalStatus.Qualified;
+        } else if (time <= proposal.endBlockOrTime) {
+            return IGovernanceState.ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
-            return IGovernanceState.ProposalState.Defeated;
+            return IGovernanceState.ProposalStatus.Defeated;
         } else if (proposal.executed) {
-            return IGovernanceState.ProposalState.Executed;
+            return IGovernanceState.ProposalStatus.Executed;
         } else {
-            return IGovernanceState.ProposalState.Succeeded;
+            return IGovernanceState.ProposalStatus.Succeeded;
         }
     }
 
@@ -121,17 +128,19 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     function votingTimestamps(
         TimeType timeType
     ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        if (timeType == TimeType.Blocknumber) {
-            // we require voting starts next block to prevent instant upgrade
-            startBlockOrTime = block.number + 1;
-        } else {
-            startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
+        _assertTimestamp(timeType);
 
-            // we require voting starts next block to prevent instant upgrade
-            startBlockOrTime = block.timestamp >= startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
-        }
+        startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
+
+        // we require voting starts next block to prevent instant upgrade
+        startBlockOrTime = block.timestamp >= startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
 
         endBlockOrTime = startBlockOrTime + votingPeriod();
+    }
+
+    /// @dev Reverts unless the governance uses TimeType.Timestamp.
+    function _assertTimestamp(TimeType timeType) private pure {
+        require(timeType == TimeType.Timestamp, GovStrategyInvalidTimeType(timeType));
     }
 
     function _assertValidProposalThreshold(uint256 proposalThreshold) private view {
@@ -193,6 +202,26 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         return action;
     }
 
+    /// @notice Decodes a Wormhole publishMessage call and validates its inner payload.
+    /// @dev Enforced at proposal time on the sender chain: every inner action must carry no
+    ///      value, as the governance is expected to hold no native balance on receiver chains.
+    function _assertValidWormholeData(bytes calldata data) private view {
+        require(data.length >= 4 && bytes4(data) == ICoreBridge.publishMessage.selector, GovCrosschainInvalidData());
+
+        (, bytes memory payload, ) = abi.decode(data[4:], (uint32, bytes, uint8));
+        CrossChainPayload memory crossChainPayload = abi.decode(payload, (CrossChainPayload));
+        require(
+            crossChainPayload.targetWormholeChainId != _wormholeChainId,
+            GovCrosschainTargetSelf(crossChainPayload.targetWormholeChainId)
+        );
+        for (uint256 i = 0; i < crossChainPayload.actions.length; i++) {
+            require(
+                crossChainPayload.actions[i].value == 0,
+                GovCrosschainInvalidValue(crossChainPayload.actions[i].value)
+            );
+        }
+    }
+
     /// @inheritdoc IGovernanceStrategy
     function beforeExecute(
         IGovernanceVoting.ProposedAction memory action
@@ -216,18 +245,6 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @inheritdoc IGovernanceStrategy
     function wormholeChainId() external view override returns (uint16) {
         return _wormholeChainId;
-    }
-
-    /// @notice Decodes a Wormhole publishMessage call and validates its inner payload.
-    function _assertValidWormholeData(bytes calldata data) private view {
-        require(data.length >= 4 && bytes4(data) == ICoreBridge.publishMessage.selector, GovCrosschainInvalidData());
-
-        (, bytes memory payload, ) = abi.decode(data[4:], (uint32, bytes, uint8));
-        CrossChainPayload memory crossChainPayload = abi.decode(payload, (CrossChainPayload));
-        require(
-            crossChainPayload.targetWormholeChainId != _wormholeChainId,
-            GovCrosschainTargetSelf(crossChainPayload.targetWormholeChainId)
-        );
     }
 
     /// @notice It is more gas efficient at deploy to reading immutable from internal method.

@@ -3,6 +3,7 @@ pragma solidity 0.8.37;
 
 import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
+import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernance.sol";
@@ -12,6 +13,10 @@ import {Test} from "forge-std/Test.sol";
 import {ICoreBridge, CoreBridgeVM, GuardianSignature} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 import {CHAIN_ID_ETHEREUM, CHAIN_ID_HYPER_EVM} from "wormhole-solidity-sdk/src/constants/Chains.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
+import {IERC20} from "../../contracts/tokens/ERC20/IERC20.sol";
+import {IStructs} from "../../contracts/staking/interfaces/IStructs.sol";
+import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
+import {IStorage} from "../../contracts/staking/interfaces/IStorage.sol";
 
 contract Counter {
     uint256 public value;
@@ -39,24 +44,6 @@ contract FlakyTarget {
     }
 }
 
-/// @dev Reenters retryFailedAction from inside the retried action's execution.
-contract ReentrantRetryTarget {
-    uint256 public calls;
-    bool public reentrySucceeded;
-    bytes public reentryError;
-
-    function run() external payable {
-        calls++;
-        if (calls == 1) {
-            try IGovernanceCrosschain(msg.sender).retryFailedAction(0) {
-                reentrySucceeded = true;
-            } catch (bytes memory err) {
-                reentryError = err;
-            }
-        }
-    }
-}
-
 /// @title Governance crosschain harness
 /// @notice Deploys the governance implementation standalone and exposes strategy storage,
 ///     mirroring the MigrationHarness pattern used by GovernanceMigration.t.sol.
@@ -67,6 +54,11 @@ contract CrosschainHarness is RigoblockGovernance {
         _paramsWrapper().governanceParameters.strategy = strategy_;
     }
 
+    function setParams(uint256 proposalThreshold_, uint256 quorumThreshold_) external {
+        _paramsWrapper().governanceParameters.proposalThreshold = proposalThreshold_;
+        _paramsWrapper().governanceParameters.quorumThreshold = quorumThreshold_;
+    }
+
     function implementation() external view returns (address) {
         return _implementation().value;
     }
@@ -74,17 +66,18 @@ contract CrosschainHarness is RigoblockGovernance {
 
 /// @title Tests for the cross-chain receiver implemented inside the governance.
 /// @notice Wormhole's parseAndVerifyVM is mocked: these tests exercise the governance's own
-///     state machine (ordering, queueing, replay protection, failure deferral), not VAA cryptography.
+///     state machine (ordering, replay protection, gaps, expiry), not VAA cryptography.
 contract GovernanceCrosschainTest is Test {
     uint16 internal constant EMITTER_CHAIN = CHAIN_ID_ETHEREUM;
     uint16 internal constant TARGET_CHAIN = CHAIN_ID_HYPER_EVM;
     address internal constant STAKING = address(0x1111);
     address internal constant WORMHOLE = Constants.WORMHOLE_HYPEREVM;
-    bytes32 internal constant EMITTER_ADDRESS = bytes32(uint256(uint160(Constants.GOV_PROXY)));
+    uint256 internal constant DELEGATED_BALANCE = 1_000_000e18;
 
     CrosschainHarness internal governance;
     RigoblockGovernanceStrategy internal strategy;
     Counter internal counter;
+    address internal whale = makeAddr("whale");
 
     function setUp() public {
         strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN);
@@ -94,33 +87,43 @@ contract GovernanceCrosschainTest is Test {
     }
 
     function _encodePayload(IGovernanceVoting.ProposedAction memory action) private pure returns (bytes memory) {
-        return _encodePayload(action, 1);
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = action;
+        return _encodePayload(actions, 1);
     }
 
     function _encodePayload(
-        IGovernanceVoting.ProposedAction memory action,
+        IGovernanceVoting.ProposedAction[] memory actions,
         uint256 proposalId
     ) private pure returns (bytes memory) {
         return
             abi.encode(
-                CrossChainPayload({targetWormholeChainId: TARGET_CHAIN, proposalId: proposalId, action: action})
+                CrossChainPayload({targetWormholeChainId: TARGET_CHAIN, proposalId: proposalId, actions: actions})
             );
     }
 
     function _buildVaa(bytes memory payload, uint64 sequence) private view returns (CoreBridgeVM memory) {
+        return _buildVaa(payload, sequence, uint32(block.timestamp));
+    }
+
+    function _buildVaa(
+        bytes memory payload,
+        uint64 sequence,
+        uint32 timestamp
+    ) private view returns (CoreBridgeVM memory) {
         return
             CoreBridgeVM({
                 version: 1,
-                timestamp: uint32(block.timestamp),
+                timestamp: timestamp,
                 nonce: 0,
                 emitterChainId: EMITTER_CHAIN,
-                emitterAddress: EMITTER_ADDRESS,
+                emitterAddress: bytes32(uint256(uint160(address(governance)))),
                 sequence: sequence,
                 consistencyLevel: 1,
                 payload: payload,
                 guardianSetIndex: 0,
                 signatures: new GuardianSignature[](0),
-                hash: keccak256(payload)
+                hash: keccak256(abi.encode(payload, sequence))
             });
     }
 
@@ -137,6 +140,14 @@ contract GovernanceCrosschainTest is Test {
             });
     }
 
+    function _wrap(
+        IGovernanceVoting.ProposedAction memory action
+    ) private pure returns (IGovernanceVoting.ProposedAction[] memory) {
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = action;
+        return actions;
+    }
+
     function test_ReceiveMessage_HappyPath() public {
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
@@ -144,7 +155,7 @@ contract GovernanceCrosschainTest is Test {
 
         governance.receiveMessage("");
         assertEq(counter.value(), 1);
-        assertEq(governance.expectedSequence(), 1);
+        assertEq(governance.nextMinimumSequence(), 1);
     }
 
     function test_ReceiveMessage_NotConfigured_Reverts() public {
@@ -194,7 +205,7 @@ contract GovernanceCrosschainTest is Test {
     function test_ReceiveMessage_WrongChain_Reverts() public {
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = abi.encode(
-            CrossChainPayload({targetWormholeChainId: 9999, proposalId: 1, action: action})
+            CrossChainPayload({targetWormholeChainId: 9999, proposalId: 1, actions: _wrap(action)})
         );
         _mockParseAndVerify(_buildVaa(payload, 0));
 
@@ -220,67 +231,6 @@ contract GovernanceCrosschainTest is Test {
         governance.receiveMessage("");
     }
 
-    function test_ReceiveMessage_AlreadyConsumed_Reverts() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
-        bytes memory payload = _encodePayload(action);
-        _mockParseAndVerify(_buildVaa(payload, 0));
-
-        governance.receiveMessage("");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverAlreadyConsumed.selector, keccak256(payload))
-        );
-        governance.receiveMessage("");
-    }
-
-    function test_ReceiveMessage_OutOfOrder_QueuesAndExecutesInOrder() public {
-        IGovernanceVoting.ProposedAction memory action1 = _buildIncrementAction();
-        IGovernanceVoting.ProposedAction memory action2 = IGovernanceVoting.ProposedAction({
-            target: address(counter),
-            data: abi.encodeCall(Counter.setValue, (42)),
-            value: 0
-        });
-
-        bytes memory payload1 = _encodePayload(action1);
-        bytes memory payload2 = _encodePayload(action2);
-
-        // Deliver Wormhole sequence 1 first.
-        _mockParseAndVerify(_buildVaa(payload2, 1));
-        governance.receiveMessage("");
-        assertEq(counter.value(), 0);
-        assertGt(governance.queuedPayloads(1).length, 0);
-
-        // Deliver sequence 0: both execute in order.
-        _mockParseAndVerify(_buildVaa(payload1, 0));
-        governance.receiveMessage("");
-        assertEq(counter.value(), 42);
-        assertEq(governance.queuedPayloads(1).length, 0);
-        assertEq(governance.expectedSequence(), 2);
-    }
-
-    function test_ReceiveMessage_SequenceTooOld_Reverts() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
-        bytes memory payload = _encodePayload(action);
-
-        // First valid message with sequence 0.
-        _mockParseAndVerify(_buildVaa(payload, 0));
-        governance.receiveMessage("");
-        assertEq(governance.expectedSequence(), 1);
-
-        // A different VAA with the same sequence 0 is now too old and not a replay.
-        IGovernanceVoting.ProposedAction memory staleAction = IGovernanceVoting.ProposedAction({
-            target: address(counter),
-            data: abi.encodeCall(Counter.setValue, (42)),
-            value: 0
-        });
-        bytes memory stalePayload = _encodePayload(staleAction);
-        _mockParseAndVerify(_buildVaa(stalePayload, 0));
-        vm.expectRevert(
-            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverSequenceTooOld.selector, uint64(0), uint64(1))
-        );
-        governance.receiveMessage("");
-    }
-
     function test_ReceiveMessage_InvalidVaa_Reverts() public {
         vm.mockCall(
             WORMHOLE,
@@ -292,6 +242,153 @@ contract GovernanceCrosschainTest is Test {
             abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverInvalidVaa.selector, "invalid signature")
         );
         governance.receiveMessage("");
+    }
+
+    function test_ReceiveMessage_MalformedPayload_Reverts() public {
+        CoreBridgeVM memory vaa = _buildVaa(hex"1234", 0);
+        _mockParseAndVerify(vaa);
+
+        vm.expectRevert();
+        governance.receiveMessage("");
+
+        // the nonce did not advance, so later valid messages are not bricked
+        assertEq(governance.nextMinimumSequence(), 0);
+    }
+
+    /// @notice A re-delivered VAA is rejected by the monotonic sequence check.
+    function test_ReceiveMessage_ReplayedVaa_Reverts() public {
+        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        bytes memory payload = _encodePayload(action);
+        _mockParseAndVerify(_buildVaa(payload, 0));
+
+        governance.receiveMessage("");
+        assertEq(counter.value(), 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverInvalidSequence.selector, uint64(0), uint64(1))
+        );
+        governance.receiveMessage("");
+        assertEq(counter.value(), 1);
+        assertEq(governance.nextMinimumSequence(), 1);
+    }
+
+    /// @notice A governance-approved re-send executes as a new message: the sender chain
+    ///     published the action again, so it carries a new sequence and is not a replay.
+    function test_ReceiveMessage_ResentAction_ExecutesAsNewMessage() public {
+        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        bytes memory payload = _encodePayload(action);
+
+        _mockParseAndVerify(_buildVaa(payload, 0));
+        governance.receiveMessage("");
+        assertEq(counter.value(), 1);
+        assertEq(governance.nextMinimumSequence(), 1);
+
+        // the sender chain re-publishes the same action (new sequence, new VAA)
+        _mockParseAndVerify(_buildVaa(payload, 1));
+        governance.receiveMessage("");
+        assertEq(counter.value(), 2);
+        assertEq(governance.nextMinimumSequence(), 2);
+    }
+
+    /// @notice Sequences need not be consecutive (audited Uniswap receiver model): a message
+    ///     with a higher sequence delivers even if earlier sequences never executed, and a
+    ///     later message with a lower sequence is rejected.
+    function test_ReceiveMessage_GapAllowed_HigherSequenceSkipsMissing() public {
+        IGovernanceVoting.ProposedAction memory action1 = _buildIncrementAction();
+        IGovernanceVoting.ProposedAction memory action2 = IGovernanceVoting.ProposedAction({
+            target: address(counter),
+            data: abi.encodeCall(Counter.setValue, (42)),
+            value: 0
+        });
+
+        // sequence 1 delivers first: sequence 0 never executed, the gap is allowed
+        _mockParseAndVerify(_buildVaa(_encodePayload(action2), 1));
+        governance.receiveMessage("");
+        assertEq(counter.value(), 42);
+        assertEq(governance.nextMinimumSequence(), 2);
+
+        // the stale sequence 0 message is now permanently rejected
+        _mockParseAndVerify(_buildVaa(_encodePayload(action1), 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverInvalidSequence.selector, uint64(0), uint64(2))
+        );
+        governance.receiveMessage("");
+        assertEq(governance.nextMinimumSequence(), 2);
+    }
+
+    /// @notice A reverting action reverts the whole message with the target's return data and
+    ///     is not consumed: the sequence does not advance, so the same VAA can be re-delivered
+    ///     (e.g. after the failure condition is fixed) or skipped by a later sequence.
+    function test_ReceiveMessage_ExecutionFailure_RevertsAndStaysRedeliverable() public {
+        FlakyTarget flaky = new FlakyTarget();
+        flaky.setShouldRevert(true);
+        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
+            target: address(flaky),
+            data: abi.encodeCall(FlakyTarget.run, ()),
+            value: 0
+        });
+        bytes memory payload = _encodePayload(action);
+        _mockParseAndVerify(_buildVaa(payload, 0));
+
+        vm.expectRevert(abi.encodeWithSelector(FlakyTarget.TargetRevert.selector));
+        governance.receiveMessage("");
+
+        // not consumed: same VAA re-delivers, and succeeds once the target stops reverting
+        assertEq(governance.nextMinimumSequence(), 0);
+        flaky.setShouldRevert(false);
+        governance.receiveMessage("");
+        assertEq(governance.nextMinimumSequence(), 1);
+    }
+
+    /// @notice The message after a failed one still executes: the failed sequence stays
+    ///     unconsumed but never clogs the pipeline.
+    function test_ReceiveMessage_FailureDoesNotBlockNextMessage() public {
+        FlakyTarget flaky = new FlakyTarget();
+        flaky.setShouldRevert(true);
+
+        IGovernanceVoting.ProposedAction memory failingAction = IGovernanceVoting.ProposedAction({
+            target: address(flaky),
+            data: abi.encodeCall(FlakyTarget.run, ()),
+            value: 0
+        });
+        IGovernanceVoting.ProposedAction memory goodAction = _buildIncrementAction();
+
+        _mockParseAndVerify(_buildVaa(_encodePayload(failingAction), 0));
+        vm.expectRevert(abi.encodeWithSelector(FlakyTarget.TargetRevert.selector));
+        governance.receiveMessage("");
+        assertEq(governance.nextMinimumSequence(), 0);
+
+        _mockParseAndVerify(_buildVaa(_encodePayload(_wrap(goodAction), 2), 1));
+        governance.receiveMessage("");
+
+        assertEq(counter.value(), 1);
+        assertEq(governance.nextMinimumSequence(), 2);
+    }
+
+    /// @notice Recovery from a failed action can be a re-delivery of the same VAA (it was not
+    ///     consumed): a value-carrying action with an unfunded governance fails once, then
+    ///     succeeds once re-delivered after funding.
+    function test_ReceiveMessage_FailedAction_RecoveredByRedelivery() public {
+        address recipient = address(0xBEEF);
+        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
+            target: recipient,
+            data: "",
+            value: 0.25 ether
+        });
+
+        // the governance holds no native balance: the action reverts and is not consumed
+        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
+        vm.expectRevert();
+        governance.receiveMessage("");
+        assertEq(recipient.balance, 0);
+        assertEq(governance.nextMinimumSequence(), 0);
+
+        // fund the governance and re-deliver the same VAA: it now executes
+        vm.deal(address(governance), 0.25 ether);
+        governance.receiveMessage("");
+
+        assertEq(recipient.balance, 0.25 ether);
+        assertEq(address(governance).balance, 0);
     }
 
     function test_ReceiveMessage_PaysActionValueFromGovernanceBalance() public {
@@ -310,192 +407,130 @@ contract GovernanceCrosschainTest is Test {
         assertEq(address(governance).balance, 0.75 ether);
     }
 
-    function test_ReceiveMessage_ExecutionFailure_DefersWithoutReverting() public {
-        FlakyTarget flaky = new FlakyTarget();
-        flaky.setShouldRevert(true);
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: address(flaky),
-            data: abi.encodeCall(FlakyTarget.run, ()),
+    /// @notice A single message carries a batch of actions, executed in order: the typical
+    ///     case of coupling an adapter upgrade with an implementation upgrade lands atomically.
+    function test_ReceiveMessage_BatchActions_ExecuteInOrder() public {
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](3);
+        actions[0] = _buildIncrementAction();
+        actions[1] = IGovernanceVoting.ProposedAction({
+            target: address(counter),
+            data: abi.encodeCall(Counter.setValue, (42)),
             value: 0
         });
-        bytes memory payload = _encodePayload(action);
-        _mockParseAndVerify(_buildVaa(payload, 0));
+        actions[2] = _buildIncrementAction();
+        _mockParseAndVerify(_buildVaa(_encodePayload(actions, 1), 0));
 
-        vm.expectEmit(true, true, true, true);
-        emit IGovernanceCrosschain.CrossChainActionFailed(
-            0,
-            keccak256(abi.encode(action)),
-            abi.encodeWithSelector(FlakyTarget.TargetRevert.selector)
-        );
         governance.receiveMessage("");
-
-        // the pipeline advances past the failure and records it for retry
-        assertEq(governance.expectedSequence(), 1);
-        IGovernanceVoting.ProposedAction memory failed = governance.failedActions(0);
-        assertEq(failed.target, address(flaky));
+        assertEq(counter.value(), 43);
+        assertEq(governance.nextMinimumSequence(), 1);
     }
 
-    function test_RetryFailedAction_ExecutesOncePreconditionFixed() public {
-        FlakyTarget flaky = new FlakyTarget();
-        flaky.setShouldRevert(true);
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: address(flaky),
-            data: abi.encodeCall(FlakyTarget.run, ()),
+    /// @notice A batch can upgrade the receiver itself: implementation and strategy are swapped
+    ///     through self-targeted actions, exercising the same onlyGovernance path as local voting.
+    function test_ReceiveMessage_BatchWithSelfUpgrades_Executes() public {
+        CrosschainHarness newImpl = new CrosschainHarness();
+        RigoblockGovernanceStrategy newStrategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN);
+
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](2);
+        actions[0] = IGovernanceVoting.ProposedAction({
+            target: address(governance),
+            data: abi.encodeCall(IGovernanceUpgrade.upgradeImplementation, (address(newImpl))),
             value: 0
         });
-        bytes memory payload = _encodePayload(action);
-        _mockParseAndVerify(_buildVaa(payload, 0));
-        governance.receiveMessage("");
-        assertEq(governance.expectedSequence(), 1);
-
-        // retry while the target still reverts
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IGovernanceCrosschain.GovReceiverExecutionFailed.selector,
-                abi.encodeWithSelector(FlakyTarget.TargetRevert.selector)
-            )
-        );
-        governance.retryFailedAction(0);
-
-        // fix the precondition, then anyone can retry
-        flaky.setShouldRevert(false);
-        governance.retryFailedAction(0);
-
-        IGovernanceVoting.ProposedAction memory failed = governance.failedActions(0);
-        assertEq(failed.target, address(0));
-    }
-
-    function test_RetryFailedAction_NothingToRetry_Reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverNothingToRetry.selector, uint64(7)));
-        governance.retryFailedAction(7);
-    }
-
-    function test_ReceiveMessage_QueuedFailure_DoesNotRollBackDelivery() public {
-        // sequence 1 carries a reverting action and is relayed before sequence 0
-        FlakyTarget flaky = new FlakyTarget();
-        flaky.setShouldRevert(true);
-        IGovernanceVoting.ProposedAction memory failingAction = IGovernanceVoting.ProposedAction({
-            target: address(flaky),
-            data: abi.encodeCall(FlakyTarget.run, ()),
+        actions[1] = IGovernanceVoting.ProposedAction({
+            target: address(governance),
+            data: abi.encodeCall(IGovernanceUpgrade.upgradeStrategy, (address(newStrategy))),
             value: 0
         });
-        IGovernanceVoting.ProposedAction memory goodAction = _buildIncrementAction();
+        _mockParseAndVerify(_buildVaa(_encodePayload(actions, 1), 0));
 
-        _mockParseAndVerify(_buildVaa(_encodePayload(failingAction), 1));
         governance.receiveMessage("");
-        assertEq(governance.expectedSequence(), 0);
+        assertEq(governance.implementation(), address(newImpl));
+        assertEq(governance.governanceParameters().params.strategy, address(newStrategy));
+    }
 
-        // delivering sequence 0 succeeds even though draining sequence 1 fails
-        _mockParseAndVerify(_buildVaa(_encodePayload(goodAction), 0));
+    /// @notice Voting thresholds can also be upgraded cross-chain through the self-call path.
+    function test_ReceiveMessage_UpgradesThresholds_ViaSelfCall() public {
+        address grg = address(0x2222);
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.getGrgContract.selector), abi.encode(grg));
+        vm.mockCall(grg, abi.encodeWithSelector(IERC20.totalSupply.selector), abi.encode(uint256(40_000_000e18)));
+
+        uint256 proposalThreshold = 500_000e18;
+        uint256 quorumThreshold = 2_000_000e18;
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = IGovernanceVoting.ProposedAction({
+            target: address(governance),
+            data: abi.encodeCall(IGovernanceUpgrade.updateThresholds, (proposalThreshold, quorumThreshold)),
+            value: 0
+        });
+        _mockParseAndVerify(_buildVaa(_encodePayload(actions, 1), 0));
+
+        governance.receiveMessage("");
+        IGovernanceState.GovernanceParameters memory params = governance.governanceParameters().params;
+        assertEq(params.proposalThreshold, proposalThreshold);
+        assertEq(params.quorumThreshold, quorumThreshold);
+    }
+
+    /// @notice A message older than the execution window reverts with GovReceiverMessageExpired
+    ///     and is not consumed: it can never become executable years later, and the next
+    ///     sequence still delivers, so it does not clog the pipeline.
+    function test_ReceiveMessage_ExpiredMessage_RevertsAndDoesNotClog() public {
+        vm.warp(1_700_000_000);
+        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 3 days)));
+
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverMessageExpired.selector, uint64(0)));
+        governance.receiveMessage("");
+        assertEq(counter.value(), 0);
+        assertEq(governance.nextMinimumSequence(), 0);
+
+        // the next message executes: the expired one did not clog the pipeline
+        _mockParseAndVerify(_buildVaa(_encodePayload(action), 1));
         governance.receiveMessage("");
         assertEq(counter.value(), 1);
-        assertEq(governance.expectedSequence(), 2);
-        IGovernanceVoting.ProposedAction memory failed = governance.failedActions(1);
-        assertEq(failed.target, address(flaky));
+        assertEq(governance.nextMinimumSequence(), 2);
+
+        // the expired message stays expired: after seq 1 executed, its sequence is also stale
+        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 3 days)));
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverInvalidSequence.selector, 0, 2));
+        governance.receiveMessage("");
     }
 
-    function test_ReceiveMessage_QueueDrain_IsCappedPerCall() public {
-        // queue sequences 1..9 (9 messages) behind sequence 0, each with a unique payload
+    /// @notice Expiry is not permanent data loss: the sender chain re-sends the action with a
+    ///     fresh timestamp and the new message executes.
+    function test_ReceiveMessage_ExpiredMessage_ResentWithFreshTimestamp_Executes() public {
+        vm.warp(1_700_000_000);
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
-        for (uint64 sequence = 1; sequence <= 9; sequence++) {
-            _mockParseAndVerify(_buildVaa(_encodePayload(action, sequence), sequence));
-            governance.receiveMessage("");
-        }
-        assertEq(governance.expectedSequence(), 0);
-
-        // delivering sequence 0 executes it and drains at most 8 queued messages
-        _mockParseAndVerify(_buildVaa(_encodePayload(action, 0), 0));
+        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 3 days)));
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverMessageExpired.selector, uint64(0)));
         governance.receiveMessage("");
-        assertEq(governance.expectedSequence(), 9);
-        assertEq(counter.value(), 9);
-        assertGt(governance.queuedPayloads(9).length, 0);
+        assertEq(counter.value(), 0);
 
-        // the remainder drains lazily on the next delivery
-        _mockParseAndVerify(_buildVaa(_encodePayload(action, 10), 10));
+        _mockParseAndVerify(_buildVaa(_encodePayload(_wrap(action), 2), 1));
         governance.receiveMessage("");
-        assertEq(governance.expectedSequence(), 11);
-        assertEq(counter.value(), 11);
-        assertEq(governance.queuedPayloads(10).length, 0);
+        assertEq(counter.value(), 1);
     }
 
-    function test_ReceiveMessage_WrongChain_DoesNotConsumeVaa() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
-        bytes memory payload = abi.encode(
-            CrossChainPayload({targetWormholeChainId: 9999, proposalId: 1, action: action})
-        );
-        CoreBridgeVM memory vaa = _buildVaa(payload, 0);
-        _mockParseAndVerify(vaa);
+    /// @notice A failed call inside a batch reverts the whole message atomically: nothing
+    ///     executes and the sequence does not advance.
+    function test_ReceiveMessage_FailedCallInBatch_RevertsAtomically() public {
+        FlakyTarget flaky = new FlakyTarget();
+        flaky.setShouldRevert(true);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IGovernanceCrosschain.GovReceiverWrongChain.selector,
-                uint16(9999),
-                uint16(TARGET_CHAIN)
-            )
-        );
-        governance.receiveMessage("");
-
-        // the VAA is not burned here: it must remain usable on its intended chain
-        assertFalse(governance.consumed(vaa.hash));
-    }
-
-    function test_ReceiveMessage_MalformedPayload_Reverts() public {
-        CoreBridgeVM memory vaa = _buildVaa(hex"1234", 0);
-        _mockParseAndVerify(vaa);
-
-        vm.expectRevert();
-        governance.receiveMessage("");
-
-        assertFalse(governance.consumed(vaa.hash));
-    }
-
-    function test_ReceiveMessage_InsufficientBalanceForValue_Defers() public {
-        address recipient = address(0xBEEF);
-        // the governance has no ETH: the value-carrying action cannot execute
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: recipient,
-            data: "",
-            value: 0.25 ether
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](2);
+        actions[0] = IGovernanceVoting.ProposedAction({
+            target: address(flaky),
+            data: abi.encodeCall(FlakyTarget.run, ()),
+            value: 0
         });
-        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
+        actions[1] = _buildIncrementAction();
+        _mockParseAndVerify(_buildVaa(_encodePayload(actions, 1), 0));
 
+        vm.expectRevert(abi.encodeWithSelector(FlakyTarget.TargetRevert.selector));
         governance.receiveMessage("");
-        assertEq(recipient.balance, 0);
-        IGovernanceVoting.ProposedAction memory failed = governance.failedActions(0);
-        assertEq(failed.target, recipient);
-        assertEq(failed.value, 0.25 ether);
 
-        // funding the governance makes the action retriable by anyone
-        vm.deal(address(governance), 0.25 ether);
-        governance.retryFailedAction(0);
-        assertEq(recipient.balance, 0.25 ether);
-    }
-
-    function test_RetryFailedAction_ReentrantRetry_CannotReExecute() public {
-        ReentrantRetryTarget target = new ReentrantRetryTarget();
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: address(target),
-            data: abi.encodeCall(ReentrantRetryTarget.run, ()),
-            value: 0.5 ether
-        });
-        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
-        governance.receiveMessage("");
-        assertEq(governance.failedActions(0).target, address(target));
-
-        vm.deal(address(governance), 1 ether);
-        governance.retryFailedAction(0);
-
-        // the reentrant retry found nothing to retry: the entry is cleared before the call
-        assertFalse(target.reentrySucceeded());
-        assertEq(
-            target.reentryError(),
-            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverNothingToRetry.selector, uint64(0))
-        );
-        assertEq(target.calls(), 1);
-        // the action value is paid out exactly once; the reentrant attempt got nothing
-        assertEq(address(governance).balance, 0.5 ether);
-        assertEq(address(target).balance, 0.5 ether);
-        assertEq(governance.failedActions(0).target, address(0));
+        assertEq(counter.value(), 0);
+        assertEq(governance.nextMinimumSequence(), 0);
     }
 
     function test_ReceiveMessage_ExecutesOnlyGovernanceAction() public {
@@ -511,5 +546,56 @@ contract GovernanceCrosschainTest is Test {
 
         governance.receiveMessage("");
         assertEq(governance.implementation(), address(newImpl));
+    }
+
+    /// @notice A receiver-chain governance is also a fully functional local governance: it can
+    ///     receive cross-chain actions and, independently, make and execute its own proposals
+    ///     with its own voting power (e.g. Arbitrum and the OP-stack chains).
+    function test_LocalGovernance_CoexistsWithCrosschainReceive() public {
+        // local voting power comes from the staking contract on this chain
+        IStructs.StoredBalance memory balance = IStructs.StoredBalance({
+            currentEpoch: 1,
+            currentEpochBalance: uint96(DELEGATED_BALANCE),
+            nextEpochBalance: uint96(DELEGATED_BALANCE)
+        });
+        vm.mockCall(
+            STAKING,
+            abi.encodeWithSelector(IStaking.getOwnerStakeByStatus.selector, whale, IStructs.StakeStatus.DELEGATED),
+            abi.encode(balance)
+        );
+        vm.mockCall(
+            STAKING,
+            abi.encodeWithSelector(IStaking.getGlobalStakeByStatus.selector, IStructs.StakeStatus.DELEGATED),
+            abi.encode(balance)
+        );
+        vm.mockCall(
+            STAKING,
+            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
+            abi.encode(block.timestamp - 1)
+        );
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
+
+        // the cross-chain capability works...
+        _mockParseAndVerify(_buildVaa(_encodePayload(_buildIncrementAction()), 0));
+        governance.receiveMessage("");
+        assertEq(counter.value(), 1);
+        assertEq(governance.nextMinimumSequence(), 1);
+
+        // ...and so does local governance on the same contract
+        governance.setParams(1, 1);
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = _buildIncrementAction();
+        vm.prank(whale);
+        uint256 proposalId = governance.propose(actions, "local proposal");
+
+        vm.warp(block.timestamp + 2);
+        vm.prank(whale);
+        governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Qualified));
+
+        vm.warp(block.timestamp + 1);
+        governance.execute(proposalId);
+        assertEq(counter.value(), 2);
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Executed));
     }
 }

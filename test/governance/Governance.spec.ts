@@ -38,7 +38,7 @@ describe("Governance Implementation", async () => {
     it("should revert with direct call", async () => {
       const { implementation } = await setupTests();
       const proposalId = 1;
-      const voteType = VoteType.Abstain;
+      const voteType = 2;
       // we won't be able to vote as no proposal can exist on the implementation
       await expect(
         implementation.castVote(proposalId, voteType),
@@ -46,11 +46,11 @@ describe("Governance Implementation", async () => {
     });
   });
 
-  describe("castVoteBySignature", async () => {
+  describe("castVoteBySig", async () => {
     it("should revert with direct call", async () => {
       const { implementation, user2 } = await setupTests();
       const proposalId = 1;
-      const voteType = VoteType.Abstain;
+      const voteType = 2;
       const { signature } = await signEip712Message({
         governance: await implementation.getAddress(),
         proposalId: proposalId,
@@ -59,7 +59,7 @@ describe("Governance Implementation", async () => {
       const { v, r, s } = Signature.from(signature);
       // we won't be able to vote as no proposal can exist on the implementation
       await expect(
-        connect(implementation, user2).castVoteBySignature(
+        connect(implementation, user2).castVoteBySig(
           proposalId,
           voteType,
           v,

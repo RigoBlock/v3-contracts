@@ -11,9 +11,10 @@ import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol"
 /// @notice Payload delivered through Wormhole to a target-chain receiver.
 /// @param targetWormholeChainId Wormhole chain id of the target chain.
 /// @param proposalId Mainnet proposal id that produced the message.
-/// @param action Action to execute on the target chain.
+/// @param actions Actions to execute on the target chain, in order. Actions may target
+///         external contracts or the governance itself (e.g. implementation upgrades).
 struct CrossChainPayload {
     uint16 targetWormholeChainId;
     uint256 proposalId;
-    IGovernanceVoting.ProposedAction action;
+    IGovernanceVoting.ProposedAction[] actions;
 }

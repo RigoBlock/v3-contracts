@@ -4,26 +4,12 @@ pragma solidity ^0.8.0;
 import "./IGovernanceEvents.sol";
 
 interface IGovernanceVoting {
+    // Values match the OpenZeppelin support values. See docs/governance/TALLY_COMPAT.md.
     enum VoteType {
-        For,
         Against,
+        For,
         Abstain
     }
-
-    /// @notice Casts a vote for the given proposal.
-    /// @dev Only callable during the voting period for that proposal. One address can only vote once.
-    /// @param proposalId The ID of the proposal to vote on.
-    /// @param voteType Whether to support, not support or abstain.
-    function castVote(uint256 proposalId, VoteType voteType) external;
-
-    /// @notice Casts a vote for the given proposal, by signature.
-    /// @dev Only callable during the voting period for that proposal. One voter can only vote once.
-    /// @param proposalId The ID of the proposal to vote on.
-    /// @param voteType Whether to support, not support or abstain.
-    /// @param v the v field of the signature.
-    /// @param r the r field of the signature.
-    /// @param s the s field of the signature.
-    function castVoteBySignature(uint256 proposalId, VoteType voteType, uint8 v, bytes32 r, bytes32 s) external;
 
     /// @notice Executes a proposal that has passed and is currently executable.
     /// @param proposalId The ID of the proposal to execute.

@@ -17,10 +17,8 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSED_ACTION_SLOT == bytes32(uint256(keccak256("governance.proxy.proposedaction")) - 1));
         assert(_PROPOSAL_QUORUM_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.quorum")) - 1));
         assert(_CROSSCHAIN_SEQUENCE_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.sequence")) - 1));
-        assert(_CROSSCHAIN_CONSUMED_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.consumed")) - 1));
-        assert(_CROSSCHAIN_QUEUE_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.queue")) - 1));
-        assert(_CROSSCHAIN_FAILED_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.failed")) - 1));
         assert(_PROPOSAL_META_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.meta")) - 1));
+        assert(_OZ_PROPOSAL_HASH_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.ozhash")) - 1));
     }
 
     function _governanceParameters() internal pure returns (IGovernanceState.GovernanceParameters storage s) {
@@ -119,36 +117,6 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    struct ConsumedVaa {
-        mapping(bytes32 vaaHash => bool executed) consumedVaa;
-    }
-
-    function _consumedVaa() internal pure returns (ConsumedVaa storage s) {
-        assembly {
-            s.slot := _CROSSCHAIN_CONSUMED_SLOT
-        }
-    }
-
-    struct QueuedPayload {
-        mapping(uint64 sequence => bytes encodedAction) queuedPayload;
-    }
-
-    function _queuedPayload() internal pure returns (QueuedPayload storage s) {
-        assembly {
-            s.slot := _CROSSCHAIN_QUEUE_SLOT
-        }
-    }
-
-    struct FailedAction {
-        mapping(uint64 sequence => IGovernanceVoting.ProposedAction action) failedAction;
-    }
-
-    function _failedAction() internal pure returns (FailedAction storage s) {
-        assembly {
-            s.slot := _CROSSCHAIN_FAILED_SLOT
-        }
-    }
-
     struct ProposalMeta {
         address proposer;
         bool canceled;
@@ -161,6 +129,16 @@ abstract contract MixinStorage is MixinImmutables {
     function _proposalMeta() internal pure returns (ProposalMetaByIndex storage s) {
         assembly {
             s.slot := _PROPOSAL_META_SLOT
+        }
+    }
+
+    struct OzProposalIdByHash {
+        mapping(bytes32 ozHash => uint256 proposalId) idByHash;
+    }
+
+    function _ozProposalIds() internal pure returns (OzProposalIdByHash storage s) {
+        assembly {
+            s.slot := _OZ_PROPOSAL_HASH_SLOT
         }
     }
 }

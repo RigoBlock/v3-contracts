@@ -6,6 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
+import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
 import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 import {IStorage} from "../../contracts/staking/interfaces/IStorage.sol";
@@ -36,11 +37,12 @@ contract RigoblockGovernanceStrategyTest is Test {
     }
 
     function _payload(uint16 targetChainId) private pure returns (bytes memory) {
-        IGovernanceVoting.ProposedAction memory action = _action(TARGET, "", 0);
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = _action(TARGET, "", 0);
         CrossChainPayload memory crossChainPayload = CrossChainPayload({
             targetWormholeChainId: targetChainId,
             proposalId: 1,
-            action: action
+            actions: actions
         });
         return abi.encode(crossChainPayload);
     }
@@ -94,6 +96,26 @@ contract RigoblockGovernanceStrategyTest is Test {
         strategy.beforePropose(_action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), value));
     }
 
+    function test_beforePropose_WormholeNonZeroInnerActionValue_Reverts() public {
+        vm.chainId(1);
+        uint256 value = 0.5 ether;
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = _action(TARGET, "", value);
+        CrossChainPayload memory crossChainPayload = CrossChainPayload({
+            targetWormholeChainId: TARGET_CHAIN_ID,
+            proposalId: 1,
+            actions: actions
+        });
+        bytes memory data = abi.encodeWithSelector(
+            ICoreBridge.publishMessage.selector,
+            uint32(0),
+            abi.encode(crossChainPayload),
+            uint8(1)
+        );
+        vm.expectRevert(abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
+        strategy.beforePropose(_action(WORMHOLE, data, 0));
+    }
+
     function test_beforeExecute_NonWormhole_ReturnsUnchanged() public {
         IGovernanceVoting.ProposedAction memory action = _action(TARGET, "", 0.123 ether);
         IGovernanceVoting.ProposedAction memory result = strategy.beforeExecute(action);
@@ -117,10 +139,32 @@ contract RigoblockGovernanceStrategyTest is Test {
         assertEq(result.value, FEE);
     }
 
-    function test_VotingTimestamps_Blocknumber_StartsNextBlock() public view {
-        (uint256 startBlockOrTime, uint256 endBlockOrTime) = strategy.votingTimestamps(TimeType.Blocknumber);
-        assertEq(startBlockOrTime, block.number + 1);
-        assertEq(endBlockOrTime, startBlockOrTime + 7 days);
+    function test_AssertValidInitParams_Blocknumber_Reverts() public {
+        IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory.Parameters({
+            implementation: address(0),
+            governanceStrategy: address(strategy),
+            proposalThreshold: 0,
+            quorumThreshold: 0,
+            timeType: TimeType.Blocknumber,
+            name: "Rigoblock Governance"
+        });
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
+                TimeType.Blocknumber
+            )
+        );
+        strategy.assertValidInitParams(params);
+    }
+
+    function test_VotingTimestamps_Blocknumber_Reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
+                TimeType.Blocknumber
+            )
+        );
+        strategy.votingTimestamps(TimeType.Blocknumber);
     }
 
     function test_VotingTimestamps_Timestamp_StartsNextTimestamp() public {
@@ -134,29 +178,48 @@ contract RigoblockGovernanceStrategyTest is Test {
         assertEq(endBlockOrTime, startBlockOrTime + 7 days);
     }
 
-    function test_GetProposalState_Blocknumber_ComparesBlockNumber() public {
-        vm.roll(block.number + 100);
+    function test_GetProposalStatus_Blocknumber_Reverts() public {
+        IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({
+            actionsLength: 1,
+            startBlockOrTime: block.timestamp + 1,
+            endBlockOrTime: block.timestamp + 100,
+            votesFor: 0,
+            votesAgainst: 0,
+            votesAbstain: 0,
+            executed: false
+        });
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
+                TimeType.Blocknumber
+            )
+        );
+        strategy.getProposalState(proposal, 100, TimeType.Blocknumber);
+    }
+
+    function test_GetProposalStatus_Timestamp_ComparesTimestamp() public {
+        vm.warp(block.timestamp + 100);
 
         IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({
             actionsLength: 1,
-            startBlockOrTime: block.number + 1,
-            endBlockOrTime: block.number + 100,
+            startBlockOrTime: block.timestamp + 1,
+            endBlockOrTime: block.timestamp + 100,
             votesFor: 0,
             votesAgainst: 0,
             votesAbstain: 0,
             executed: false
         });
         assertEq(
-            uint256(strategy.getProposalState(proposal, 100, TimeType.Blocknumber)),
-            uint256(IGovernanceState.ProposalState.Pending)
+            uint256(strategy.getProposalState(proposal, 100, TimeType.Timestamp)),
+            uint256(IGovernanceState.ProposalStatus.Pending)
         );
 
-        proposal.startBlockOrTime = block.number - 2;
-        proposal.endBlockOrTime = block.number - 1;
+        proposal.startBlockOrTime = block.timestamp - 2;
+        proposal.endBlockOrTime = block.timestamp - 1;
         proposal.votesFor = 200;
         assertEq(
-            uint256(strategy.getProposalState(proposal, 100, TimeType.Blocknumber)),
-            uint256(IGovernanceState.ProposalState.Succeeded)
+            uint256(strategy.getProposalState(proposal, 100, TimeType.Timestamp)),
+            uint256(IGovernanceState.ProposalStatus.Succeeded)
         );
     }
 }

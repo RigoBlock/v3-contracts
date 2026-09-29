@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 
 import {Test} from "forge-std/Test.sol";
+import {MixinCrosschain} from "../../contracts/governance/mixins/MixinCrosschain.sol";
 import {MixinStorage} from "../../contracts/governance/mixins/MixinStorage.sol";
 import {MixinState} from "../../contracts/governance/mixins/MixinState.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -15,6 +16,7 @@ import {IRigoblockGovernance} from "../../contracts/governance/IRigoblockGoverna
 import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
+import {IGovernor as IOZGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 
 /// @title MockMigrationStrategy
 /// @notice Simplified strategy that returns deterministic voting power and timestamps
@@ -23,6 +25,11 @@ contract MockMigrationStrategy is IGovernanceStrategy {
     /// @notice Marker errors proving a threshold validator was invoked.
     error MockInvalidProposalThreshold();
     error MockInvalidQuorumThreshold();
+
+    /// @dev Voting period in blocks for TimeType.Blocknumber, i.e. 7 days at ~12s blocks.
+    ///      Must be denominated in blocks: the timestamp period (7 days) is expressed in
+    ///      seconds and cannot be added to a block number without corrupting the window.
+    uint256 public constant BLOCK_VOTING_PERIOD = 50_400;
 
     uint256 public proposalThreshold;
     uint256 public quorumThreshold;
@@ -56,20 +63,20 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         IRigoblockGovernance.Proposal memory proposal,
         uint256 minimumQuorum,
         TimeType timeType
-    ) external view returns (IGovernanceState.ProposalState) {
+    ) external view returns (IGovernanceState.ProposalStatus) {
         uint256 blockOrTime = timeType == TimeType.Timestamp ? block.timestamp : block.number;
         if (blockOrTime <= proposal.startBlockOrTime) {
-            return IGovernanceState.ProposalState.Pending;
+            return IGovernanceState.ProposalStatus.Pending;
         } else if (blockOrTime <= proposal.endBlockOrTime && _qualified(proposal, minimumQuorum)) {
-            return IGovernanceState.ProposalState.Qualified;
+            return IGovernanceState.ProposalStatus.Qualified;
         } else if (blockOrTime <= proposal.endBlockOrTime) {
-            return IGovernanceState.ProposalState.Active;
+            return IGovernanceState.ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
-            return IGovernanceState.ProposalState.Defeated;
+            return IGovernanceState.ProposalStatus.Defeated;
         } else if (proposal.executed) {
-            return IGovernanceState.ProposalState.Executed;
+            return IGovernanceState.ProposalStatus.Executed;
         } else {
-            return IGovernanceState.ProposalState.Succeeded;
+            return IGovernanceState.ProposalStatus.Succeeded;
         }
     }
 
@@ -87,8 +94,13 @@ contract MockMigrationStrategy is IGovernanceStrategy {
     function votingTimestamps(
         TimeType timeType
     ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        startBlockOrTime = timeType == TimeType.Timestamp ? block.timestamp + 1 : block.number + 1;
-        endBlockOrTime = startBlockOrTime + 7 days;
+        if (timeType == TimeType.Timestamp) {
+            startBlockOrTime = block.timestamp + 1;
+            endBlockOrTime = startBlockOrTime + 7 days;
+        } else {
+            startBlockOrTime = block.number + 1;
+            endBlockOrTime = startBlockOrTime + BLOCK_VOTING_PERIOD;
+        }
     }
 
     function getVotingPower(address) external view returns (uint256) {
@@ -118,7 +130,7 @@ contract MockMigrationStrategy is IGovernanceStrategy {
 
 /// @title MigrationHarness
 /// @notice Exposes governance storage and uses the real new-implementation mixins.
-contract MigrationHarness is MixinStorage, MixinInitializer, MixinUpgrade, MixinVoting, MixinState {
+contract MigrationHarness is MixinStorage, MixinInitializer, MixinUpgrade, MixinVoting, MixinState, MixinCrosschain {
     constructor() MixinStorage() {}
 
     function setStrategy(address strategy_) external {
@@ -218,7 +230,7 @@ contract GovernanceMigrationTest is Test {
 
         // Warp past voting period. The legacy proposal can never reach type(uint256).max quorum.
         vm.warp(block.timestamp + 8 days);
-        assertEq(uint256(harness.getProposalState(legacyId)), uint256(IGovernanceState.ProposalState.Defeated));
+        assertEq(uint256(harness.getProposalState(legacyId)), uint256(IGovernanceState.ProposalStatus.Defeated));
     }
 
     /// @notice Verifies that new proposals created after the migration snapshot the
@@ -233,14 +245,14 @@ contract GovernanceMigrationTest is Test {
         // Vote and execute the new proposal.
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(newId, IGovernanceVoting.VoteType.For);
+        harness.castVote(newId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 8 days);
-        assertEq(uint256(harness.getProposalState(newId)), uint256(IGovernanceState.ProposalState.Succeeded));
+        assertEq(uint256(harness.getProposalState(newId)), uint256(IGovernanceState.ProposalStatus.Succeeded));
         harness.execute(newId);
-        assertEq(uint256(harness.getProposalState(newId)), uint256(IGovernanceState.ProposalState.Executed));
+        assertEq(uint256(harness.getProposalState(newId)), uint256(IGovernanceState.ProposalStatus.Executed));
 
         // The legacy proposal remains unexecutable.
-        assertEq(uint256(harness.getProposalState(legacyId)), uint256(IGovernanceState.ProposalState.Defeated));
+        assertEq(uint256(harness.getProposalState(legacyId)), uint256(IGovernanceState.ProposalStatus.Defeated));
     }
 
     /// @notice Verifies that lowering the global quorum after the migration does not
@@ -253,14 +265,14 @@ contract GovernanceMigrationTest is Test {
         uint256 lowerQuorumId = _createLowerQuorumProposal();
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(lowerQuorumId, IGovernanceVoting.VoteType.For);
+        harness.castVote(lowerQuorumId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 8 days);
         harness.execute(lowerQuorumId);
 
         assertEq(_governanceQuorum(), LOWERED_QUORUM);
 
         // Legacy proposal still cannot reach quorum.
-        assertEq(uint256(harness.getProposalState(legacyId)), uint256(IGovernanceState.ProposalState.Defeated));
+        assertEq(uint256(harness.getProposalState(legacyId)), uint256(IGovernanceState.ProposalStatus.Defeated));
 
         // A new proposal created after the reduction uses the lowered quorum.
         uint256 postReductionId = _createProposal("post reduction proposal");
@@ -268,9 +280,12 @@ contract GovernanceMigrationTest is Test {
 
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(postReductionId, IGovernanceVoting.VoteType.For);
+        harness.castVote(postReductionId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 8 days);
-        assertEq(uint256(harness.getProposalState(postReductionId)), uint256(IGovernanceState.ProposalState.Succeeded));
+        assertEq(
+            uint256(harness.getProposalState(postReductionId)),
+            uint256(IGovernanceState.ProposalStatus.Succeeded)
+        );
     }
 
     /// @notice An unchanged threshold must not be re-validated on update: supply inflation can
@@ -300,7 +315,7 @@ contract GovernanceMigrationTest is Test {
         uint256 bothId = _createProposalWithData(both, "both thresholds");
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(bothId, IGovernanceVoting.VoteType.For);
+        harness.castVote(bothId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 8 days);
         vm.expectRevert(MockMigrationStrategy.MockInvalidProposalThreshold.selector);
         harness.execute(bothId);
@@ -326,17 +341,17 @@ contract GovernanceMigrationTest is Test {
     ///     it reads as Canceled and neither votes nor execution are possible anymore.
     function test_Cancel_ProposerWhilePending_Succeeds() public {
         uint256 proposalId = _createProposal("cancelable proposal");
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Pending));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Pending));
         assertEq(harness.proposer(proposalId), whale);
         assertFalse(harness.canceled(proposalId));
 
         vm.expectEmit(true, false, false, true);
-        emit IGovernanceEvents.ProposalCanceled(proposalId);
+        emit IOZGovernor.ProposalCanceled(proposalId);
         vm.prank(whale);
         harness.cancel(proposalId);
 
         assertTrue(harness.canceled(proposalId));
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Canceled));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Canceled));
 
         // voting and executing a canceled proposal must revert
         vm.warp(block.timestamp + 2);
@@ -345,17 +360,17 @@ contract GovernanceMigrationTest is Test {
             abi.encodeWithSelector(
                 MixinVoting.GovVotingClosed.selector,
                 proposalId,
-                IGovernanceState.ProposalState.Canceled
+                IGovernanceState.ProposalStatus.Canceled
             )
         );
-        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
 
         vm.warp(block.timestamp + 8 days);
         vm.expectRevert(
             abi.encodeWithSelector(
                 MixinVoting.GovVotingClosed.selector,
                 proposalId,
-                IGovernanceState.ProposalState.Canceled
+                IGovernanceState.ProposalStatus.Canceled
             )
         );
         harness.execute(proposalId);
@@ -387,14 +402,14 @@ contract GovernanceMigrationTest is Test {
         // an Against vote keeps the proposal Active (a For vote would qualify it)
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(proposalId, IGovernanceVoting.VoteType.Against);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Active));
+        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.Against));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Active));
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 MixinVoting.GovVotingClosed.selector,
                 proposalId,
-                IGovernanceState.ProposalState.Active
+                IGovernanceState.ProposalStatus.Active
             )
         );
         vm.prank(whale);
@@ -403,12 +418,12 @@ contract GovernanceMigrationTest is Test {
 
         // also not after the voting period has ended
         vm.warp(block.timestamp + 8 days);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalState.Defeated));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Defeated));
         vm.expectRevert(
             abi.encodeWithSelector(
                 MixinVoting.GovVotingClosed.selector,
                 proposalId,
-                IGovernanceState.ProposalState.Defeated
+                IGovernanceState.ProposalStatus.Defeated
             )
         );
         vm.prank(whale);
@@ -444,11 +459,11 @@ contract GovernanceMigrationTest is Test {
         assertTrue(harness.canceled(first));
         assertFalse(harness.canceled(second));
         assertEq(harness.proposer(second), whale);
-        assertEq(uint256(harness.getProposalState(second)), uint256(IGovernanceState.ProposalState.Pending));
+        assertEq(uint256(harness.getProposalState(second)), uint256(IGovernanceState.ProposalStatus.Pending));
 
         // the surviving proposal remains fully executable
         _voteAndExecute(second);
-        assertEq(uint256(harness.getProposalState(second)), uint256(IGovernanceState.ProposalState.Executed));
+        assertEq(uint256(harness.getProposalState(second)), uint256(IGovernanceState.ProposalStatus.Executed));
     }
 
     /// @notice Exercises the view getters getActions, getReceipt and proposals against a
@@ -457,7 +472,7 @@ contract GovernanceMigrationTest is Test {
         uint256 proposalId = _createProposal("getter proposal");
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
 
         IGovernanceVoting.ProposedAction[] memory actions = harness.getActions(proposalId);
         assertEq(actions.length, 1);
@@ -557,7 +572,7 @@ contract GovernanceMigrationTest is Test {
     function _voteAndExecute(uint256 proposalId) private {
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(proposalId, IGovernanceVoting.VoteType.For);
+        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 8 days);
         harness.execute(proposalId);
     }

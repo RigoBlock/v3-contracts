@@ -40,8 +40,8 @@ contract AGovernance is IAGovernance, IMinimumVersion {
     }
 
     /// @inheritdoc IAGovernance
-    function castVote(uint256 proposalId, IRigoblockGovernance.VoteType voteType) external override onlyDelegateCall {
-        IRigoblockGovernance(_getGovernance()).castVote(proposalId, voteType);
+    function castVote(uint256 proposalId, uint8 support) external override onlyDelegateCall {
+        IRigoblockGovernance(_getGovernance()).castVote(proposalId, support);
     }
 
     /// @inheritdoc IAGovernance
