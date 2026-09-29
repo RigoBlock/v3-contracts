@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
+import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
-import {IGovernor as IOZGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
-import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
-import {IERC6372} from "@openzeppelin-legacy/contracts/interfaces/IERC6372.sol";
+import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {IERC165} from "@openzeppelin-gov/utils/introspection/IERC165.sol";
+import {IERC5267} from "@openzeppelin-gov/interfaces/IERC5267.sol";
+import {IERC6372} from "@openzeppelin-gov/interfaces/IERC6372.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
 
@@ -24,7 +26,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernanceState
-    function getProposalState(uint256 proposalId) external view override returns (IGovernanceState.ProposalStatus) {
+    function getProposalState(uint256 proposalId) external view override returns (ProposalStatus) {
         return _getProposalState(proposalId);
     }
 
@@ -101,7 +103,8 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         return
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IOZGovernor).interfaceId ||
-            interfaceId == type(IERC6372).interfaceId;
+            interfaceId == type(IERC6372).interfaceId ||
+            interfaceId == type(IERC5267).interfaceId;
     }
 
     /// @inheritdoc IOZGovernor
@@ -116,7 +119,32 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         bytes[] memory calldatas,
         bytes32 descriptionHash
     ) public pure override returns (uint256) {
-        return uint256(keccak256(abi.encode(targets, values, calldatas, descriptionHash)));
+        return _hashProposal(targets, values, calldatas, descriptionHash);
+    }
+
+    /// @inheritdoc IOZGovernor
+    function getProposalId(
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas,
+        bytes32 descriptionHash
+    ) external view override returns (uint256) {
+        return hashProposal(targets, values, calldatas, descriptionHash);
+    }
+
+    /// @inheritdoc IOZGovernor
+    function proposalProposer(uint256 proposalId) external view override returns (address) {
+        return _proposalMeta().proposalMetaById[proposalId].proposer;
+    }
+
+    /// @inheritdoc IOZGovernor
+    function proposalEta(uint256) external pure override returns (uint256) {
+        return 0; // no timelock
+    }
+
+    /// @inheritdoc IOZGovernor
+    function proposalNeedsQueuing(uint256) external pure override returns (bool) {
+        return false; // no timelock
     }
 
     /// @inheritdoc IOZGovernor
@@ -126,14 +154,12 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
 
     /// @dev Translates the native state into the OZ Governor numbering: Qualified maps to
     ///      Succeeded, higher native values shift down one position. See docs/governance/TALLY_COMPAT.md.
-    function _toOZState(
-        IGovernanceState.ProposalStatus proposalState
-    ) private pure returns (IOZGovernor.ProposalState) {
+    function _toOZState(ProposalStatus proposalState) private pure returns (IOZGovernor.ProposalState) {
         uint8 value = uint8(proposalState);
-        if (value == uint8(IGovernanceState.ProposalStatus.Qualified)) {
+        if (value == uint8(ProposalStatus.Qualified)) {
             return IOZGovernor.ProposalState.Succeeded;
         }
-        return IOZGovernor.ProposalState(value > uint8(IGovernanceState.ProposalStatus.Canceled) ? value - 1 : value);
+        return IOZGovernor.ProposalState(value > uint8(ProposalStatus.Canceled) ? value - 1 : value);
     }
 
     /// @inheritdoc IOZGovernor
@@ -152,7 +178,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         return _proposal().proposalById[proposalId].endBlockOrTime;
     }
 
-    /// @inheritdoc IGovernanceState
+    /// @inheritdoc IOZGovernor
     function proposalThreshold() public view override returns (uint256) {
         return _governanceParameters().proposalThreshold;
     }
@@ -209,12 +235,12 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         return _proposalCount().value;
     }
 
-    function _getProposalState(uint256 proposalId) internal view override returns (IGovernanceState.ProposalStatus) {
+    function _getProposalState(uint256 proposalId) internal view override returns (ProposalStatus) {
         require(_proposalCount().value >= proposalId && proposalId != 0, GovProposalIdInvalid(proposalId));
         IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
 
         if (_proposalMeta().proposalMetaById[proposalId].canceled) {
-            return IGovernanceState.ProposalStatus.Canceled;
+            return ProposalStatus.Canceled;
         }
 
         // prevent old-format proposals execution if quorum drops

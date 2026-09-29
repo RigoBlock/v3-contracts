@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
+import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "./governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "./governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "./IRigoblockGovernanceFactory.sol";
@@ -31,7 +32,7 @@ interface IGovernanceStrategy {
         IGovernanceState.Proposal calldata proposal,
         uint256 minimumQuorum,
         TimeType timeType
-    ) external view returns (IGovernanceState.ProposalStatus);
+    ) external view returns (ProposalStatus);
 
     /// @notice Return the voting period.
     /// @dev Informational only: the enforceable window is the one returned by votingTimestamps.

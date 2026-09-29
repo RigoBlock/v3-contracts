@@ -87,7 +87,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-29 (branch `feat/crossch
 | AStaking        |         2151 |    22425 |      8.75% |
 | AUniswap        |         1359 |    23217 |      5.53% |
 | AMulticall      |         1169 |    23407 |      4.76% |
-| AGovernance     |         1599 |    22977 |      6.51% |
+| AGovernance     |         1596 |    22980 |      6.49% |
 | AUniswapDecoder |            0 |    24576 |      0.00% |
 
 `AUniswapDecoder` is a library — its code is compiled into consumers, so it has no
@@ -99,7 +99,7 @@ deployed instance of its own.
 | --------------------------- | -----------: | -------: | ---------: |
 | Staking                     |        22820 |     1756 |     92.85% |
 | GrgVault                    |         4392 |    20184 |     17.87% |
-| RigoblockGovernance         |        19479 |     5097 |     79.26% |
+| RigoblockGovernance         |        21010 |     3566 |     85.49% |
 | RigoblockGovernanceStrategy |         5674 |    18902 |     23.09% |
 
 ## Notes

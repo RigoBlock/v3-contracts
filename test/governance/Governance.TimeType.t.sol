@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {MigrationHarness, MockMigrationStrategy, MockTarget} from "./GovernanceMigration.t.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -70,11 +71,11 @@ contract GovernanceTimeTypeTest is Test {
         // qualifying sets the closing block to the current block
         wrapper = harness.getProposalById(proposalId);
         assertEq(wrapper.proposal.endBlockOrTime, block.number);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Qualified));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
 
         vm.roll(block.number + 1);
         harness.execute(proposalId);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Executed));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 
     /// @notice Qualifying and executing in a single transaction reverts in Blocknumber mode.
@@ -84,11 +85,7 @@ contract GovernanceTimeTypeTest is Test {
         vm.roll(block.number + 2);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                MixinVoting.GovVotingClosed.selector,
-                proposalId,
-                IGovernanceState.ProposalStatus.Qualified
-            )
+            abi.encodeWithSelector(MixinVoting.GovVotingClosed.selector, proposalId, ProposalStatus.Qualified)
         );
         bundler.qualifyAndExecute(address(harness), proposalId);
     }
@@ -103,7 +100,7 @@ contract GovernanceTimeTypeTest is Test {
         // roll past the block-based window (7 days ≈ 50_400 blocks at ~12s blocks)
         vm.roll(block.number + strategy.BLOCK_VOTING_PERIOD() + 2);
 
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Defeated));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Defeated));
     }
 
     /// @notice A proposal qualified in Timestamp mode closes voting at the qualifying
@@ -124,11 +121,11 @@ contract GovernanceTimeTypeTest is Test {
         // qualifying sets the closing timestamp to the current timestamp
         wrapper = harness.getProposalById(proposalId);
         assertEq(wrapper.proposal.endBlockOrTime, block.timestamp);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Qualified));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
 
         vm.warp(block.timestamp + 1);
         harness.execute(proposalId);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Executed));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 
     /// @notice Qualifying and executing in a single transaction reverts in Timestamp mode.
@@ -138,11 +135,7 @@ contract GovernanceTimeTypeTest is Test {
         vm.warp(block.timestamp + 2);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                MixinVoting.GovVotingClosed.selector,
-                proposalId,
-                IGovernanceState.ProposalStatus.Qualified
-            )
+            abi.encodeWithSelector(MixinVoting.GovVotingClosed.selector, proposalId, ProposalStatus.Qualified)
         );
         bundler.qualifyAndExecute(address(harness), proposalId);
     }
@@ -161,7 +154,7 @@ contract GovernanceTimeTypeTest is Test {
         vm.prank(whale);
         harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 1);
-        assertEq(uint256(harness.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Succeeded));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
 
         vm.expectEmit(address(harness));
         emit IGovernanceEvents.ProposalThresholdSet(PROPOSAL_THRESHOLD);

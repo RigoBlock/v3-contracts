@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
+import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -211,7 +212,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         });
         assertEq(
             uint256(strategy.getProposalState(proposal, 100, TimeType.Timestamp)),
-            uint256(IGovernanceState.ProposalStatus.Pending)
+            uint256(ProposalStatus.Pending)
         );
 
         proposal.startBlockOrTime = block.timestamp - 2;
@@ -219,7 +220,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         proposal.votesFor = 200;
         assertEq(
             uint256(strategy.getProposalState(proposal, 100, TimeType.Timestamp)),
-            uint256(IGovernanceState.ProposalStatus.Succeeded)
+            uint256(ProposalStatus.Succeeded)
         );
     }
 }

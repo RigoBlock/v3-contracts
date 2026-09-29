@@ -3,20 +3,9 @@ pragma solidity ^0.8.0;
 
 import "./IGovernanceVoting.sol";
 import {TimeType} from "../../types/TimeType.sol";
+import {ProposalStatus} from "../../types/GovernanceTypes.sol";
 
 interface IGovernanceState {
-    enum ProposalStatus {
-        Pending,
-        Active,
-        Canceled,
-        Qualified,
-        Defeated,
-        Succeeded,
-        Queued,
-        Expired,
-        Executed
-    }
-
     struct Proposal {
         uint256 actionsLength;
         uint256 startBlockOrTime;
@@ -96,10 +85,6 @@ interface IGovernanceState {
     /// @param proposalId Number of the proposal.
     /// @return canceled True if the proposal was canceled.
     function canceled(uint256 proposalId) external view returns (bool canceled);
-
-    /// @notice Voting power required to create a proposal.
-    /// @return The minimum voting power required to propose.
-    function proposalThreshold() external view returns (uint256);
 
     /// @notice Returns all proposals ever made to the governance.
     /// @return proposalWrapper Tuple array of all governance proposals.

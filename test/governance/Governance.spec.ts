@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import { encodeBytes32String, Signature } from "ethers";
+import { encodeBytes32String } from "ethers";
 import { connect, getFixedGasSigners } from "../shared/helper";
 import { createFixture } from "../utils/fixtures";
 import { signEip712Message } from "../utils/eip712sig";
@@ -48,7 +48,7 @@ describe("Governance Implementation", async () => {
 
   describe("castVoteBySig", async () => {
     it("should revert with direct call", async () => {
-      const { implementation, user2 } = await setupTests();
+      const { implementation, user1, user2 } = await setupTests();
       const proposalId = 1;
       const voteType = 2;
       const { signature } = await signEip712Message({
@@ -56,15 +56,13 @@ describe("Governance Implementation", async () => {
         proposalId: proposalId,
         voteType: voteType,
       });
-      const { v, r, s } = Signature.from(signature);
       // we won't be able to vote as no proposal can exist on the implementation
       await expect(
         connect(implementation, user2).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
       ).to.be.revertedWithCustomError(implementation, "GovProposalIdInvalid");
     });

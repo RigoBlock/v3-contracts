@@ -1,17 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
+import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
-import {IGovernor as IOZGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {EIP712} from "@openzeppelin-gov/utils/cryptography/EIP712.sol";
+import {Nonces} from "@openzeppelin-gov/utils/Nonces.sol";
+import {SignatureChecker} from "@openzeppelin-gov/utils/cryptography/SignatureChecker.sol";
 import {TimeType} from "../types/TimeType.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
 import {GovernanceActionLib} from "../libraries/GovernanceActionLib.sol";
 
-abstract contract MixinVoting is MixinStorage, MixinAbstract {
+abstract contract MixinVoting is Nonces, EIP712, MixinStorage, MixinAbstract {
+    /// @notice OpenZeppelin Governor ballot typehash, including the voter and its nonce.
+    bytes32 internal constant BALLOT_TYPEHASH =
+        keccak256("Ballot(uint256 proposalId,uint8 support,address voter,uint256 nonce)");
+
+    /// @notice OpenZeppelin Governor extended ballot typehash, including reason and params.
+    bytes32 internal constant EXTENDED_BALLOT_TYPEHASH =
+        keccak256(
+            "ExtendedBallot(uint256 proposalId,uint8 support,address voter,uint256 nonce,string reason,bytes params)"
+        );
+
+    constructor() EIP712(_EIP712_NAME, VERSION) {}
     /// @notice Thrown when the proposer has insufficient voting power.
     /// @param votingPower The proposer's current voting power.
     /// @param proposalThreshold The minimum voting power required to propose.
@@ -28,7 +42,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @notice Thrown when a vote is cast outside the active voting period.
     /// @param proposalId The id of the proposal.
     /// @param state The current state of the proposal.
-    error GovVotingClosed(uint256 proposalId, IGovernanceState.ProposalStatus state);
+    error GovVotingClosed(uint256 proposalId, ProposalStatus state);
 
     /// @notice Thrown when a voter tries to vote twice on the same proposal.
     /// @param proposalId The id of the proposal.
@@ -60,8 +74,13 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     /// @param proposalHash The OpenZeppelin proposal hash computed from the supplied arguments.
     error GovProposalIdUnknown(bytes32 proposalHash);
 
-    /// @notice Thrown when a vote signature does not recover to a valid signatory.
-    error GovInvalidSignature();
+    /// @notice Thrown when a vote signature is not valid for the claimed voter.
+    /// @param voter The address whose signature failed validation.
+    error GovInvalidSignature(address voter);
+
+    /// @notice Thrown when queue is called: Rigoblock governance has no timelock.
+    /// @param proposalId The id of the proposal that would have been queued.
+    error GovQueueNotImplemented(uint256 proposalId);
 
     /// @inheritdoc IGovernanceVoting
     function propose(
@@ -151,7 +170,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
             calldatas[i] = actions[i].data;
         }
         _ozProposalIds().idByHash[
-            bytes32(hashProposal(targets, values, calldatas, keccak256(bytes(description))))
+            bytes32(_hashProposal(targets, values, calldatas, keccak256(bytes(description))))
         ] = proposalId;
         emit IOZGovernor.ProposalCreated(
             proposalId,
@@ -199,28 +218,76 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
     function castVoteBySig(
         uint256 proposalId,
         uint8 support,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        address voter,
+        bytes memory signature
     ) public override returns (uint256 weight) {
-        weight = _castVoteBySig(proposalId, _toVoteType(support), "", v, r, s);
+        if (!_validateVoteSig(proposalId, support, voter, signature)) {
+            revert GovInvalidSignature(voter);
+        }
+        weight = _castVote(voter, proposalId, _toVoteType(support), "");
     }
 
     /// @inheritdoc IOZGovernor
     function castVoteWithReasonAndParamsBySig(
         uint256 proposalId,
         uint8 support,
+        address voter,
         string calldata reason,
         bytes memory params,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        bytes memory signature
     ) public override returns (uint256 weight) {
-        weight = _castVoteBySig(proposalId, _toVoteType(support), reason, v, r, s);
+        if (!_validateExtendedVoteSig(proposalId, support, voter, reason, params, signature)) {
+            revert GovInvalidSignature(voter);
+        }
+        weight = _castVote(voter, proposalId, _toVoteType(support), reason);
         if (params.length != 0) {
             uint256 votingPower = weight;
-            emit IOZGovernor.VoteCastWithParams(msg.sender, proposalId, support, votingPower, reason, params);
+            emit IOZGovernor.VoteCastWithParams(voter, proposalId, support, votingPower, reason, params);
         }
+    }
+
+    /// @dev Validates the signature used in {castVoteBySig}, following the OpenZeppelin Governor.
+    function _validateVoteSig(
+        uint256 proposalId,
+        uint8 support,
+        address voter,
+        bytes memory signature
+    ) internal returns (bool) {
+        return
+            SignatureChecker.isValidSignatureNow(
+                voter,
+                _hashTypedDataV4(keccak256(abi.encode(BALLOT_TYPEHASH, proposalId, support, voter, _useNonce(voter)))),
+                signature
+            );
+    }
+
+    /// @dev Validates the signature used in {castVoteWithReasonAndParamsBySig}.
+    function _validateExtendedVoteSig(
+        uint256 proposalId,
+        uint8 support,
+        address voter,
+        string calldata reason,
+        bytes memory params,
+        bytes memory signature
+    ) internal returns (bool) {
+        return
+            SignatureChecker.isValidSignatureNow(
+                voter,
+                _hashTypedDataV4(
+                    keccak256(
+                        abi.encode(
+                            EXTENDED_BALLOT_TYPEHASH,
+                            proposalId,
+                            support,
+                            voter,
+                            _useNonce(voter),
+                            keccak256(bytes(reason)),
+                            keccak256(params)
+                        )
+                    )
+                ),
+                signature
+            );
     }
 
     /// @dev Converts the OZ support value to a vote type, reverting on out-of-range values.
@@ -229,28 +296,16 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         return IGovernanceVoting.VoteType(support);
     }
 
-    function _castVoteBySig(
-        uint256 proposalId,
-        IGovernanceVoting.VoteType voteType,
-        string memory reason,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) internal returns (uint256 weight) {
-        bytes32 domainSeparator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH,
-                keccak256(bytes(_name().value)),
-                keccak256(bytes(VERSION)),
-                block.chainid,
-                address(this)
-            )
-        );
-        bytes32 structHash = keccak256(abi.encode(VOTE_TYPEHASH, proposalId, uint8(voteType)));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
-        (address signatory, ECDSA.RecoverError recoverError) = ECDSA.tryRecover(digest, v, r, s);
-        require(recoverError == ECDSA.RecoverError.NoError, GovInvalidSignature());
-        weight = _castVote(signatory, proposalId, voteType, reason);
+    /// @inheritdoc IOZGovernor
+    function queue(
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas,
+        bytes32 descriptionHash
+    ) external override returns (uint256 proposalId) {
+        // Rigoblock governance has no timelock: resolve the proposal for the revert reason.
+        proposalId = _ozProposalIds().idByHash[bytes32(_hashProposal(targets, values, calldatas, descriptionHash))];
+        revert GovQueueNotImplemented(proposalId);
     }
 
     /// @inheritdoc IGovernanceVoting
@@ -265,7 +320,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         bytes[] memory calldatas,
         bytes32 descriptionHash
     ) public payable override returns (uint256 proposalId) {
-        bytes32 proposalHash = bytes32(hashProposal(targets, values, calldatas, descriptionHash));
+        bytes32 proposalHash = bytes32(_hashProposal(targets, values, calldatas, descriptionHash));
         proposalId = _ozProposalIds().idByHash[proposalHash];
         require(proposalId != 0, GovProposalIdUnknown(proposalHash));
         _executeProposal(proposalId);
@@ -273,7 +328,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
     function _executeProposal(uint256 proposalId) internal {
         require(
-            _getProposalState(proposalId) == IGovernanceState.ProposalStatus.Succeeded,
+            _getProposalState(proposalId) == ProposalStatus.Succeeded,
             GovVotingClosed(proposalId, _getProposalState(proposalId))
         );
 
@@ -305,8 +360,25 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernanceVoting
     function cancel(uint256 proposalId) external override {
-        IGovernanceState.ProposalStatus state = _getProposalState(proposalId);
-        require(state == IGovernanceState.ProposalStatus.Pending, GovVotingClosed(proposalId, state));
+        _cancel(proposalId);
+    }
+
+    /// @inheritdoc IOZGovernor
+    function cancel(
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas,
+        bytes32 descriptionHash
+    ) external override returns (uint256 proposalId) {
+        bytes32 proposalHash = bytes32(_hashProposal(targets, values, calldatas, descriptionHash));
+        proposalId = _ozProposalIds().idByHash[proposalHash];
+        require(proposalId != 0, GovProposalIdUnknown(proposalHash));
+        _cancel(proposalId);
+    }
+
+    function _cancel(uint256 proposalId) internal {
+        ProposalStatus state = _getProposalState(proposalId);
+        require(state == ProposalStatus.Pending, GovVotingClosed(proposalId, state));
 
         ProposalMeta storage meta = _proposalMeta().proposalMetaById[proposalId];
         require(meta.proposer == msg.sender, GovUnableToCancel(proposalId, msg.sender));
@@ -323,8 +395,8 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         IGovernanceVoting.VoteType voteType,
         string memory reason
     ) private returns (uint256 votingPower) {
-        IGovernanceState.ProposalStatus state = _getProposalState(proposalId);
-        require(state == IGovernanceState.ProposalStatus.Active, GovVotingClosed(proposalId, state));
+        ProposalStatus state = _getProposalState(proposalId);
+        require(state == ProposalStatus.Active, GovVotingClosed(proposalId, state));
         IGovernanceState.Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, GovAlreadyVoted(proposalId, voter));
         votingPower = _getVotingPower(voter);
@@ -346,7 +418,7 @@ abstract contract MixinVoting is MixinStorage, MixinAbstract {
         });
 
         // if vote reaches qualified majority we prepare execution at next block
-        if (_getProposalState(proposalId) == IGovernanceState.ProposalStatus.Qualified) {
+        if (_getProposalState(proposalId) == ProposalStatus.Qualified) {
             proposal.endBlockOrTime = _paramsWrapper().governanceParameters.timeType == TimeType.Timestamp
                 ? block.timestamp
                 : block.number;

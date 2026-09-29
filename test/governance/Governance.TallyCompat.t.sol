@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {MixinCrosschain} from "../../contracts/governance/mixins/MixinCrosschain.sol";
@@ -16,9 +17,10 @@ import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governan
 import {IRigoblockGovernance} from "../../contracts/governance/IRigoblockGovernance.sol";
 import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
-import {IGovernor as OZGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
-import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
-import {IERC6372} from "@openzeppelin-legacy/contracts/interfaces/IERC6372.sol";
+import {IGovernor as OZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {IERC165} from "@openzeppelin-gov/utils/introspection/IERC165.sol";
+import {IERC6372} from "@openzeppelin-gov/interfaces/IERC6372.sol";
+import {IERC5267} from "@openzeppelin-gov/interfaces/IERC5267.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 
 /// @dev Emits OZ-format events so tests can compare topics against the ones the mixins emit.
@@ -116,20 +118,20 @@ contract MockCompatStrategy is IGovernanceStrategy {
         IRigoblockGovernance.Proposal memory proposal,
         uint256 minimumQuorum,
         TimeType timeType
-    ) external view returns (IGovernanceState.ProposalStatus) {
+    ) external view returns (ProposalStatus) {
         assert(timeType == TimeType.Timestamp);
         if (block.timestamp <= proposal.startBlockOrTime) {
-            return IGovernanceState.ProposalStatus.Pending;
+            return ProposalStatus.Pending;
         } else if (block.timestamp <= proposal.endBlockOrTime && _qualified(proposal, minimumQuorum)) {
-            return IGovernanceState.ProposalStatus.Qualified;
+            return ProposalStatus.Qualified;
         } else if (block.timestamp <= proposal.endBlockOrTime) {
-            return IGovernanceState.ProposalStatus.Active;
+            return ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
-            return IGovernanceState.ProposalStatus.Defeated;
+            return ProposalStatus.Defeated;
         } else if (proposal.executed) {
-            return IGovernanceState.ProposalStatus.Executed;
+            return ProposalStatus.Executed;
         } else {
-            return IGovernanceState.ProposalStatus.Succeeded;
+            return ProposalStatus.Succeeded;
         }
     }
 
@@ -238,11 +240,12 @@ contract GovernanceTallyCompatTest is Test {
         assertEq(harness.clock(), uint48(block.timestamp));
     }
 
-    /// @notice ERC-165: the governance declares the OZ Governor and ERC-6372 interfaces.
+    /// @notice ERC-165: the governance declares the OZ Governor, ERC-6372 and ERC-5267 interfaces.
     function test_SupportsInterface_DeclaresOZCompatibility() public {
         assertTrue(harness.supportsInterface(type(IERC165).interfaceId));
         assertTrue(harness.supportsInterface(type(OZGovernor).interfaceId));
         assertTrue(harness.supportsInterface(type(IERC6372).interfaceId));
+        assertTrue(harness.supportsInterface(type(IERC5267).interfaceId));
         assertFalse(harness.supportsInterface(bytes4(0xdeadbeef)));
     }
 
@@ -257,16 +260,16 @@ contract GovernanceTallyCompatTest is Test {
     ///     `getProposalState` keeps its historical numbering.
     function test_StateNumbering_MatchesOpenZeppelin() public {
         // native numbering is untouched
-        assertEq(uint8(IGovernanceState.ProposalStatus.Pending), 0);
-        assertEq(uint8(IGovernanceState.ProposalStatus.Active), 1);
-        assertEq(uint8(IGovernanceState.ProposalStatus.Canceled), 2);
-        assertEq(uint8(IGovernanceState.ProposalStatus.Qualified), 3);
-        assertEq(uint8(IGovernanceState.ProposalStatus.Defeated), 4);
-        assertEq(uint8(IGovernanceState.ProposalStatus.Succeeded), 5);
-        assertEq(uint8(IGovernanceState.ProposalStatus.Executed), 8);
+        assertEq(uint8(ProposalStatus.Pending), 0);
+        assertEq(uint8(ProposalStatus.Active), 1);
+        assertEq(uint8(ProposalStatus.Canceled), 2);
+        assertEq(uint8(ProposalStatus.Qualified), 3);
+        assertEq(uint8(ProposalStatus.Defeated), 4);
+        assertEq(uint8(ProposalStatus.Succeeded), 5);
+        assertEq(uint8(ProposalStatus.Executed), 8);
 
         uint256 proposalId = _proposeDefault();
-        assertEq(uint8(harness.getProposalState(proposalId)), uint8(IGovernanceState.ProposalStatus.Pending));
+        assertEq(uint8(harness.getProposalState(proposalId)), uint8(ProposalStatus.Pending));
         assertEq(uint8(harness.state(proposalId)), uint8(OZGovernor.ProposalState.Pending));
     }
 
@@ -284,7 +287,7 @@ contract GovernanceTallyCompatTest is Test {
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
         harness.castVote(qualifiedId, uint8(IGovernanceVoting.VoteType.For)); // For, reaches qualified majority
-        assertEq(uint8(harness.getProposalState(qualifiedId)), uint8(IGovernanceState.ProposalStatus.Qualified));
+        assertEq(uint8(harness.getProposalState(qualifiedId)), uint8(ProposalStatus.Qualified));
         assertEq(uint8(harness.state(qualifiedId)), uint8(OZGovernor.ProposalState.Succeeded));
 
         // native Defeated (4) shifts down to OZ Defeated (3)
@@ -294,7 +297,7 @@ contract GovernanceTallyCompatTest is Test {
         harness.castVote(defeatedId, uint8(IGovernanceVoting.VoteType.Against)); // Against
         IGovernanceState.ProposalWrapper memory wrapper = harness.getProposalById(defeatedId);
         vm.warp(wrapper.proposal.endBlockOrTime + 1);
-        assertEq(uint8(harness.getProposalState(defeatedId)), uint8(IGovernanceState.ProposalStatus.Defeated));
+        assertEq(uint8(harness.getProposalState(defeatedId)), uint8(ProposalStatus.Defeated));
         assertEq(uint8(harness.state(defeatedId)), uint8(OZGovernor.ProposalState.Defeated));
 
         // native Succeeded (5) shifts down to OZ Succeeded (4); Executed (8) to OZ Executed (7)
@@ -304,12 +307,12 @@ contract GovernanceTallyCompatTest is Test {
         harness.castVote(succeededId, uint8(IGovernanceVoting.VoteType.For));
         wrapper = harness.getProposalById(succeededId);
         vm.warp(wrapper.proposal.endBlockOrTime + 1);
-        assertEq(uint8(harness.getProposalState(succeededId)), uint8(IGovernanceState.ProposalStatus.Succeeded));
+        assertEq(uint8(harness.getProposalState(succeededId)), uint8(ProposalStatus.Succeeded));
         assertEq(uint8(harness.state(succeededId)), uint8(OZGovernor.ProposalState.Succeeded));
 
         vm.prank(whale);
         harness.execute(succeededId);
-        assertEq(uint8(harness.getProposalState(succeededId)), uint8(IGovernanceState.ProposalStatus.Executed));
+        assertEq(uint8(harness.getProposalState(succeededId)), uint8(ProposalStatus.Executed));
         assertEq(uint8(harness.state(succeededId)), uint8(OZGovernor.ProposalState.Executed));
     }
 
@@ -557,8 +560,8 @@ contract GovernanceTallyCompatTest is Test {
         assertEq(forVotes, VOTING_POWER);
     }
 
-    /// @notice castVoteBySig verifies the OZ EIP-712 vote signature: domain built from the
-    ///     governance name/version (matching OZ's construction) and the OZ Vote typehash.
+    /// @notice castVoteBySig verifies the OZ Governor ballot signature: fixed domain name/version
+    ///     (OZ EIP712 constructor immutables) and the OZ Ballot typehash with voter and nonce.
     function test_CastVoteBySig_VerifiesOZSignature() public {
         uint256 proposalId = _proposeDefault();
         vm.warp(block.timestamp + 2);
@@ -568,21 +571,114 @@ contract GovernanceTallyCompatTest is Test {
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256(bytes("")), // harness name slot is empty
-                keccak256(bytes("1.2.0")),
+                keccak256(bytes("Rigoblock Governance")),
+                keccak256(bytes("1.3.0")),
                 block.chainid,
                 address(harness)
             )
         );
         bytes32 structHash = keccak256(
-            abi.encode(keccak256("Vote(uint256 proposalId,uint8 support)"), proposalId, uint8(1))
+            abi.encode(
+                keccak256("Ballot(uint256 proposalId,uint8 support,address voter,uint256 nonce)"),
+                proposalId,
+                uint8(1),
+                signatory,
+                uint256(0)
+            )
         );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
 
-        uint256 weight = harness.castVoteBySig(proposalId, 1, v, r, s);
+        uint256 weight = harness.castVoteBySig(proposalId, 1, signatory, signature);
         assertEq(weight, VOTING_POWER);
         assertTrue(harness.hasVoted(proposalId, signatory));
+        assertEq(harness.nonces(signatory), 1);
+    }
+
+    /// @notice castVoteWithReasonAndParamsBySig verifies the OZ ExtendedBallot signature
+    ///     (reason and params bound into the digest) and consumes the voter nonce.
+    function test_CastVoteWithReasonAndParamsBySig_VerifiesOZSignature() public {
+        uint256 proposalId = _proposeDefault();
+        vm.warp(block.timestamp + 2);
+
+        uint256 privateKey = 0xB0B;
+        address signatory = vm.addr(privateKey);
+        string memory reason = "r";
+        bytes memory params = hex"01";
+        bytes32 digest = _extendedBallotDigest(proposalId, 1, signatory, 0, reason, params);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+        uint256 weight = harness.castVoteWithReasonAndParamsBySig(
+            proposalId,
+            1,
+            signatory,
+            reason,
+            params,
+            abi.encodePacked(r, s, v)
+        );
+        assertEq(weight, VOTING_POWER);
+        assertTrue(harness.hasVoted(proposalId, signatory));
+        assertEq(harness.nonces(signatory), 1);
+
+        (uint256 againstVotes, uint256 forVotes, ) = harness.proposalVotes(proposalId);
+        assertEq(againstVotes, 0);
+        assertEq(forVotes, VOTING_POWER);
+    }
+
+    /// @notice A signature bound to different params no longer validates (fresh nonce, same proposal).
+    function test_CastVoteWithReasonAndParamsBySig_DifferentParamsReverts() public {
+        uint256 proposalId = _proposeDefault();
+        vm.warp(block.timestamp + 2);
+
+        uint256 privateKey = 0xB0B;
+        address signatory = vm.addr(privateKey);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            privateKey,
+            _extendedBallotDigest(proposalId, 1, signatory, 0, "r", hex"01")
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovInvalidSignature.selector, signatory));
+        harness.castVoteWithReasonAndParamsBySig(proposalId, 1, signatory, "r", hex"02", abi.encodePacked(r, s, v));
+    }
+
+    function _extendedBallotDigest(
+        uint256 proposalId,
+        uint8 support,
+        address signatory,
+        uint256 nonce,
+        string memory reason,
+        bytes memory params
+    ) internal view returns (bytes32) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("Rigoblock Governance")),
+                keccak256(bytes("1.3.0")),
+                block.chainid,
+                address(harness)
+            )
+        );
+        return
+            keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    domainSeparator,
+                    keccak256(
+                        abi.encode(
+                            keccak256(
+                                "ExtendedBallot(uint256 proposalId,uint8 support,address voter,uint256 nonce,string reason,bytes params)"
+                            ),
+                            proposalId,
+                            support,
+                            signatory,
+                            nonce,
+                            keccak256(bytes(reason)),
+                            keccak256(params)
+                        )
+                    )
+                )
+            );
     }
 
     /// @notice The OZ execute flow resolves the proposal through the stored OZ proposal hash

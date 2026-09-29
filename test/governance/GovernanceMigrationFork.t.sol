@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
+import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -82,10 +83,10 @@ contract GovernanceMigrationForkTest is Test {
             IGovernanceState.ProposalWrapper memory wrapper = IGovernanceState(PROXY).getProposalById(i);
             if (wrapper.proposal.executed) continue;
 
-            IGovernanceState.ProposalStatus state = IGovernanceState(PROXY).getProposalState(i);
-            assertFalse(state == IGovernanceState.ProposalStatus.Succeeded, "legacy proposal became Succeeded");
-            assertFalse(state == IGovernanceState.ProposalStatus.Queued, "legacy proposal became Queued");
-            assertFalse(state == IGovernanceState.ProposalStatus.Expired, "legacy proposal became Expired");
+            ProposalStatus state = IGovernanceState(PROXY).getProposalState(i);
+            assertFalse(state == ProposalStatus.Succeeded, "legacy proposal became Succeeded");
+            assertFalse(state == ProposalStatus.Queued, "legacy proposal became Queued");
+            assertFalse(state == ProposalStatus.Expired, "legacy proposal became Expired");
         }
     }
 
@@ -99,7 +100,7 @@ contract GovernanceMigrationForkTest is Test {
 
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(proposalId)),
-            uint256(IGovernanceState.ProposalStatus.Executed),
+            uint256(ProposalStatus.Executed),
             "post-upgrade proposal should be Executed"
         );
     }
@@ -125,7 +126,7 @@ contract GovernanceMigrationForkTest is Test {
         _warpPastVotingPeriod(defeatedProposalId);
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(defeatedProposalId)),
-            uint256(IGovernanceState.ProposalStatus.Defeated),
+            uint256(ProposalStatus.Defeated),
             "proposal should be defeated at raised quorum"
         );
 
@@ -136,7 +137,7 @@ contract GovernanceMigrationForkTest is Test {
 
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(defeatedProposalId)),
-            uint256(IGovernanceState.ProposalStatus.Defeated),
+            uint256(ProposalStatus.Defeated),
             "lowering quorum resurrected legacy proposal"
         );
 
@@ -144,7 +145,7 @@ contract GovernanceMigrationForkTest is Test {
         uint256 newProposalId = _createVoteAndExecute(_noOpAction(), false);
         assertEq(
             uint256(IGovernanceState(PROXY).getProposalState(newProposalId)),
-            uint256(IGovernanceState.ProposalStatus.Executed),
+            uint256(ProposalStatus.Executed),
             "post-reduction proposal should be Executed"
         );
     }

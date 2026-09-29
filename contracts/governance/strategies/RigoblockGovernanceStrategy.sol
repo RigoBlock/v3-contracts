@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
@@ -77,24 +78,24 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         IGovernanceState.Proposal memory proposal,
         uint256 minimumQuorum,
         TimeType timeType
-    ) external view override returns (IGovernanceState.ProposalStatus) {
+    ) external view override returns (ProposalStatus) {
         _assertTimestamp(timeType);
 
         // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
         // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
         uint256 time = block.timestamp;
         if (time <= proposal.startBlockOrTime) {
-            return IGovernanceState.ProposalStatus.Pending;
+            return ProposalStatus.Pending;
         } else if (time <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum)) {
-            return IGovernanceState.ProposalStatus.Qualified;
+            return ProposalStatus.Qualified;
         } else if (time <= proposal.endBlockOrTime) {
-            return IGovernanceState.ProposalStatus.Active;
+            return ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
-            return IGovernanceState.ProposalStatus.Defeated;
+            return ProposalStatus.Defeated;
         } else if (proposal.executed) {
-            return IGovernanceState.ProposalStatus.Executed;
+            return ProposalStatus.Executed;
         } else {
-            return IGovernanceState.ProposalStatus.Succeeded;
+            return ProposalStatus.Succeeded;
         }
     }
 

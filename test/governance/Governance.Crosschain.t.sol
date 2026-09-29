@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
@@ -591,11 +592,11 @@ contract GovernanceCrosschainTest is Test {
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
-        assertEq(uint256(governance.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Qualified));
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
 
         vm.warp(block.timestamp + 1);
         governance.execute(proposalId);
         assertEq(counter.value(), 2);
-        assertEq(uint256(governance.getProposalState(proposalId)), uint256(IGovernanceState.ProposalStatus.Executed));
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 }

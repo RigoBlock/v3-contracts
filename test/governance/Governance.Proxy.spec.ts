@@ -3,7 +3,6 @@ import { network } from "hardhat";
 import {
   EventLog,
   Log,
-  Signature,
   TypedDataEncoder,
   ZeroAddress,
   encodeBytes32String,
@@ -560,7 +559,7 @@ describe("Governance Proxy", async () => {
 
   describe("castVoteBySig", async () => {
     it("should revert without proposal", async () => {
-      const { governanceInstance, user2 } = await setupTests();
+      const { governanceInstance, user1, user2 } = await setupTests();
       const proposalId = 1;
       const voteType = 2;
       const { signature } = await signEip712Message({
@@ -568,15 +567,13 @@ describe("Governance Proxy", async () => {
         proposalId: proposalId,
         voteType: voteType,
       });
-      const { v, r, s } = Signature.from(signature);
       // we use user2 as signed message should be relayable by anyone
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
       ).to.be.revertedWithCustomError(
         governanceInstance,
@@ -621,7 +618,6 @@ describe("Governance Proxy", async () => {
         proposalId: Number(proposalId),
         voteType: voteType,
       });
-      const { v, r, s } = Signature.from(signature);
       const structDataHash = TypedDataEncoder.hash(domain, types, value);
       const signerAddress = recoverAddress(structDataHash, signature);
       expect(signerAddress).to.be.eq(user1.address);
@@ -633,14 +629,12 @@ describe("Governance Proxy", async () => {
         await governanceInstance.getVotingPower(signerAddress);
       expect(currentEpochBalance).to.be.eq(votingPower);
       expect(votingPower).to.be.eq(amount);
-      // notice: contract only asserts signatory != address(0) as eip712 signatures on diff. domains always bypass the assertion
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
       )
         .to.emit(
@@ -683,35 +677,37 @@ describe("Governance Proxy", async () => {
         proposalId: proposalId,
         voteType: voteType,
       });
-      const { v, r, s } = Signature.from(signature);
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
-      // an invalid signature (we send signature for proposal 1, bypasses signature assertion)
+      // a signature for a different proposal or support value no longer validates
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
           proposalId + 1,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovInvalidSignature",
+      );
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
           proposalId,
           1,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovInvalidSignature",
+      );
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
       )
         .to.emit(
@@ -755,16 +751,14 @@ describe("Governance Proxy", async () => {
         proposalId: proposalId,
         voteType: voteType,
       });
-      const { v, r, s } = Signature.from(signature);
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
       )
         .to.emit(
@@ -772,25 +766,30 @@ describe("Governance Proxy", async () => {
           "VoteCast(address,uint256,uint8,uint256,string)",
         )
         .withArgs(user1.address, proposalId, voteType, amount, "");
-      // submitting a different vote type will return a different signer that probabilistically won't have votes.
+      // submitting a different vote type invalidates the signature
       await expect(
         connect(governanceInstance, user3).castVoteBySig(
           proposalId,
           1,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovInvalidSignature",
+      );
+      // replaying the same signature fails: the nonce was consumed by the first valid cast
       await expect(
         connect(governanceInstance, user3).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovAlreadyVoted");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovInvalidSignature",
+      );
     });
 
     it("should be able to vote if has unstaked", async () => {
@@ -826,7 +825,6 @@ describe("Governance Proxy", async () => {
         proposalId: proposalId,
         voteType: voteType,
       });
-      const { v, r, s } = Signature.from(signature);
       await timeTravel({ days: 14, mine: true });
       await staking.endEpoch();
       const fromInfo = new StakeInfo(StakeStatus.Delegated, poolId);
@@ -839,9 +837,8 @@ describe("Governance Proxy", async () => {
         connect(governanceInstance, user2).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
       )
         .to.emit(
@@ -854,16 +851,18 @@ describe("Governance Proxy", async () => {
       await timeTravel({ days: 14, mine: true });
       await staking.endEpoch();
       await staking.unstake(amount);
-      // an invalid signature (we send signature for proposal 1, bypasses signature assertion)
+      // a signature for a different proposal no longer validates (nonce was also consumed)
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
           proposalId + 1,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovNoVotes");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovInvalidSignature",
+      );
     });
   });
 

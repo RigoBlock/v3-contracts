@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
-import {IGovernor as IOZGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
-import {IERC6372} from "@openzeppelin-legacy/contracts/interfaces/IERC6372.sol";
+import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
 import "./interfaces/governance/IGovernanceCrosschain.sol";
 import "./interfaces/governance/IGovernanceEvents.sol";
 import "./interfaces/governance/IGovernanceInitializer.sol";
@@ -20,6 +19,5 @@ abstract contract IRigoblockGovernance is
     IGovernanceUpgrade,
     IGovernanceVoting,
     IGovernanceState,
-    IOZGovernor,
-    IERC6372
+    IOZGovernor
 {}
