@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -509,18 +509,18 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         // Check if we can call other pool methods first
         try ISmartPoolState(address(pool())).getPool() returns (ISmartPoolState.ReturnedPool memory poolData) {
             console2.log("getPool() works, pool name:", poolData.name);
-        } catch (bytes memory error) {
+        } catch (bytes memory revertData) {
             console2.log("getPool() failed:");
-            console2.logBytes(error);
+            console2.logBytes(revertData);
         }
 
         // Try updateUnitaryValue (this also has nonReentrant)
         try ISmartPoolActions(address(pool())).updateUnitaryValue() {
             console2.log("updateUnitaryValue() works");
-        } catch (bytes memory error) {
+        } catch (bytes memory revertData) {
             console2.log("updateUnitaryValue() failed:");
-            console2.logBytes(error);
-            bytes4 selector = bytes4(error);
+            console2.logBytes(revertData);
+            bytes4 selector = bytes4(revertData);
             if (selector == bytes4(0x3ee5aeb5)) {
                 console2.log("updateUnitaryValue also has reentrancy issue!");
             }
@@ -549,9 +549,9 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
         vm.prank(poolOwner);
         try IAIntents(address(pool())).depositV3(params) {
             console2.log("depositV3 SUCCESS");
-        } catch (bytes memory error) {
+        } catch (bytes memory revertData) {
             console2.log("depositV3 failed:");
-            console2.logBytes(error);
+            console2.logBytes(revertData);
         }
     }
 
@@ -1468,10 +1468,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             console2.log("SUCCESS: Relayer successfully called MulticallHandler!");
         } catch Error(string memory reason) {
             console2.log("Relayer call failed with reason:", reason);
-        } catch (bytes memory error) {
+        } catch (bytes memory revertData) {
             console2.log("Relayer call failed with low-level error:");
-            if (error.length >= 4) {
-                console2.logBytes4(bytes4(error));
+            if (revertData.length >= 4) {
+                console2.logBytes4(bytes4(revertData));
             }
         }
 
@@ -1602,10 +1602,10 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
             )
         {
             console2.log("Test", callCount, ": SUCCESS");
-        } catch (bytes memory error) {
+        } catch (bytes memory revertData) {
             console2.log("Test", callCount, ": FAILED");
-            if (error.length >= 4) {
-                console2.logBytes4(bytes4(error));
+            if (revertData.length >= 4) {
+                console2.logBytes4(bytes4(revertData));
             }
         }
     }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.0;
 
 import {EventUtils} from "gmx-synthetics/event/EventUtils.sol";
 

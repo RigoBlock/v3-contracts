@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import { encodeBytes32String, Signature } from "ethers";
+import { encodeBytes32String } from "ethers";
 import { connect, getFixedGasSigners } from "../shared/helper";
 import { createFixture } from "../utils/fixtures";
 import { signEip712Message } from "../utils/eip712sig";
@@ -38,35 +38,33 @@ describe("Governance Implementation", async () => {
     it("should revert with direct call", async () => {
       const { implementation } = await setupTests();
       const proposalId = 1;
-      const voteType = VoteType.Abstain;
+      const voteType = 2;
       // we won't be able to vote as no proposal can exist on the implementation
       await expect(
         implementation.castVote(proposalId, voteType),
-      ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR");
+      ).to.be.revertedWithCustomError(implementation, "GovProposalIdInvalid");
     });
   });
 
-  describe("castVoteBySignature", async () => {
+  describe("castVoteBySig", async () => {
     it("should revert with direct call", async () => {
-      const { implementation, user2 } = await setupTests();
+      const { implementation, user1, user2 } = await setupTests();
       const proposalId = 1;
-      const voteType = VoteType.Abstain;
+      const voteType = 2;
       const { signature } = await signEip712Message({
         governance: await implementation.getAddress(),
         proposalId: proposalId,
         voteType: voteType,
       });
-      const { v, r, s } = Signature.from(signature);
       // we won't be able to vote as no proposal can exist on the implementation
       await expect(
-        connect(implementation, user2).castVoteBySignature(
+        connect(implementation, user2).castVoteBySig(
           proposalId,
           voteType,
-          v,
-          r,
-          s,
+          user1.address,
+          signature,
         ),
-      ).to.be.revertedWith("VOTING_PROPOSAL_ID_ERROR");
+      ).to.be.revertedWithCustomError(implementation, "GovProposalIdInvalid");
     });
   });
 
@@ -75,9 +73,20 @@ describe("Governance Implementation", async () => {
       const { implementation } = await setupTests();
       // we will never be able to execute a proposal that does not exist
       const proposalId = 1;
-      await expect(implementation.execute(proposalId)).to.be.revertedWith(
-        "VOTING_PROPOSAL_ID_ERROR",
-      );
+      await expect(
+        implementation.execute(proposalId),
+      ).to.be.revertedWithCustomError(implementation, "GovProposalIdInvalid");
+    });
+  });
+
+  describe("cancel", async () => {
+    it("should revert with direct call", async () => {
+      const { implementation } = await setupTests();
+      // no proposal can exist on the implementation, so cancellation cannot find one
+      const proposalId = 1;
+      await expect(
+        implementation.cancel(proposalId),
+      ).to.be.revertedWithCustomError(implementation, "GovProposalIdInvalid");
     });
   });
 
@@ -86,25 +95,25 @@ describe("Governance Implementation", async () => {
       const { implementation, user2 } = await setupTests();
       await expect(
         implementation.upgradeImplementation(user2.address),
-      ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR");
+      ).to.be.revertedWithCustomError(implementation, "GovernorOnlyExecutor");
     });
   });
 
   describe("updateThresholds", async () => {
     it("should revert with direct call", async () => {
       const { implementation } = await setupTests();
-      await expect(implementation.updateThresholds(1, 1)).to.be.revertedWith(
-        "GOV_UPGRADE_APPROVAL_ERROR",
-      );
+      await expect(
+        implementation.updateThresholds(1, 1),
+      ).to.be.revertedWithCustomError(implementation, "GovernorOnlyExecutor");
     });
   });
 
   describe("initializeGovernance", async () => {
     it("should revert with direct call", async () => {
       const { implementation } = await setupTests();
-      await expect(implementation.initializeGovernance()).to.be.revertedWith(
-        "ALREADY_INITIALIZED_ERROR",
-      );
+      await expect(
+        implementation.initializeGovernance(),
+      ).to.be.revertedWithCustomError(implementation, "GovAlreadyInitialized");
     });
   });
 
@@ -113,7 +122,7 @@ describe("Governance Implementation", async () => {
       const { implementation, user2 } = await setupTests();
       await expect(
         implementation.upgradeStrategy(user2.address),
-      ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR");
+      ).to.be.revertedWithCustomError(implementation, "GovernorOnlyExecutor");
     });
   });
 });

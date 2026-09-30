@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import { encodeBytes32String, parseEther } from "ethers";
+import { encodeBytes32String, parseEther, zeroPadValue } from "ethers";
 import { getFixedGasSigners } from "../shared/helper";
 import { createFixture } from "../utils/fixtures";
 import {
@@ -80,6 +80,7 @@ describe("Governance Upgrades", async () => {
       governanceInstance,
       implementation,
       staking,
+      strategy,
       user2,
     };
   });
@@ -89,7 +90,10 @@ describe("Governance Upgrades", async () => {
       const { governanceInstance, user2 } = await setupTests();
       await expect(
         governanceInstance.upgradeImplementation(user2.address),
-      ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorOnlyExecutor",
+      );
     });
 
     it("should revert if new implementation same as current", async () => {
@@ -106,10 +110,11 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "UPGRADE_SAME_AS_CURRENT_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovUpgradeSameAsCurrent",
       );
     });
 
@@ -127,18 +132,24 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "UPGRADE_NOT_CONTRACT_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovUpgradeNotContract",
       );
     });
 
     it("should upgrade implementation", async () => {
-      const { governanceInstance, staking } = await setupTests();
+      const { governanceInstance } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      const newImplementation = await ethers.deployContract(
+        "RigoblockGovernance",
+      );
+      const newImplementationAddress = await newImplementation.getAddress();
       const data = governanceInstance.interface.encodeFunctionData(
         "upgradeImplementation(address)",
-        [await staking.getAddress()],
+        [newImplementationAddress],
       );
       const action = new ProposedAction(
         await governanceInstance.getAddress(),
@@ -148,11 +159,28 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
         .to.emit(governanceInstance, "Upgraded")
-        .withArgs(await staking.getAddress());
+        .withArgs(newImplementationAddress);
+      // the proxy EIP-1967 implementation slot must now delegate to the new implementation
+      const implementationSlot =
+        "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+      const { provider } = await network.getOrCreate();
+      const storedImplementation = (await provider.request({
+        method: "eth_getStorageAt",
+        params: [
+          await governanceInstance.getAddress(),
+          implementationSlot,
+          "latest",
+        ],
+      })) as string;
+      expect(storedImplementation).to.eq(
+        zeroPadValue(newImplementationAddress, 32),
+      );
+      // a view call through the proxy still works with the new implementation
+      expect(await governanceInstance.proposalCount()).to.be.eq(1n);
     });
   });
 
@@ -161,7 +189,10 @@ describe("Governance Upgrades", async () => {
       const { governanceInstance, user2 } = await setupTests();
       await expect(
         governanceInstance.upgradeStrategy(user2.address),
-      ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorOnlyExecutor",
+      );
     });
 
     it("should revert if new strategy same as current", async () => {
@@ -182,11 +213,12 @@ describe("Governance Upgrades", async () => {
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       // voting opens after 5 days
       await timeTravel({ days: 5, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       // proposal becomes executable 7 days after becoming active
       await timeTravel({ days: 7, mine: true });
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "UPGRADE_SAME_AS_CURRENT_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovUpgradeSameAsCurrent",
       );
     });
 
@@ -204,18 +236,20 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "UPGRADE_NOT_CONTRACT_ERROR",
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovUpgradeNotContract",
       );
     });
 
     it("should upgrade strategy", async () => {
       const { governanceInstance, staking } = await setupTests();
+      const stakingAddress = await staking.getAddress();
       const data = governanceInstance.interface.encodeFunctionData(
         "upgradeStrategy(address)",
-        [await staking.getAddress()],
+        [stakingAddress],
       );
       const action = new ProposedAction(
         await governanceInstance.getAddress(),
@@ -225,11 +259,15 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(1n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
         .to.emit(governanceInstance, "StrategyUpgraded")
-        .withArgs(await staking.getAddress());
+        .withArgs(stakingAddress);
+      // the new strategy must be stored in the governance parameters read through the proxy
+      const storedStrategy = (await governanceInstance.governanceParameters())
+        .params.strategy;
+      expect(storedStrategy).to.eq(stakingAddress);
     });
   });
 
@@ -238,10 +276,13 @@ describe("Governance Upgrades", async () => {
       const { governanceInstance } = await setupTests();
       await expect(
         governanceInstance.updateThresholds(1, 1),
-      ).to.be.revertedWith("GOV_UPGRADE_APPROVAL_ERROR");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorOnlyExecutor",
+      );
     });
 
-    it("should revert if either of new thresholds same as current", async () => {
+    it("should revert only when both new thresholds equal current", async () => {
       const { governanceInstance } = await setupTests();
       const { proposalThreshold, quorumThreshold } = (
         await governanceInstance.governanceParameters()
@@ -284,24 +325,40 @@ describe("Governance Upgrades", async () => {
       await governanceInstance.propose([action], description);
       expect(await governanceInstance.proposalCount()).to.be.eq(3n);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
-      await governanceInstance.castVote(2, VoteType.For);
-      await governanceInstance.castVote(3, VoteType.For);
+      await governanceInstance.castVote(1, 1);
+      await governanceInstance.castVote(2, 1);
+      await governanceInstance.castVote(3, 1);
       await timeTravel({ days: 7, mine: true });
-      await expect(governanceInstance.execute(1)).to.be.revertedWith(
-        "UPGRADE_SAME_AS_CURRENT_ERROR",
-      );
-      await expect(governanceInstance.execute(2)).to.be.revertedWith(
-        "UPGRADE_SAME_AS_CURRENT_ERROR",
-      );
-      await expect(governanceInstance.execute(3)).to.emit(
+      // a proposal that changes no threshold reverts
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
         governanceInstance,
-        "ThresholdsUpdated",
+        "GovUpgradeSameAsCurrent",
       );
+      // a proposal that changes a single threshold succeeds
+      await expect(governanceInstance.execute(2))
+        .to.emit(governanceInstance, "ProposalThresholdSet")
+        .withArgs(proposalThreshold);
+      let storedParams = (await governanceInstance.governanceParameters())
+        .params;
+      expect(storedParams.quorumThreshold).to.be.eq(newQuorumThreshold);
+      expect(storedParams.proposalThreshold).to.be.eq(proposalThreshold);
+      // a proposal that changes both thresholds succeeds
+      await expect(governanceInstance.execute(3))
+        .to.emit(governanceInstance, "ProposalThresholdSet")
+        .withArgs(newProposalThreshold);
+      storedParams = (await governanceInstance.governanceParameters()).params;
+      expect(storedParams.proposalThreshold).to.be.eq(newProposalThreshold);
+      expect(storedParams.quorumThreshold).to.be.eq(newQuorumThreshold);
     });
 
     it("should revert if either is invalid paramter", async () => {
-      const { governanceInstance } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      const { governanceInstance, strategy } = await setupTests();
+      // the threshold assertion runs in the strategy, which defines the custom error
+      const strategyInstance = await ethers.getContractAt(
+        "RigoblockGovernanceStrategy",
+        strategy,
+      );
       let newProposalThreshold = 100n;
       const newQuorumThreshold = parseEther("500000");
       let data = governanceInstance.interface.encodeFunctionData(
@@ -327,14 +384,17 @@ describe("Governance Upgrades", async () => {
       );
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
-      await governanceInstance.castVote(2, VoteType.For);
+      await governanceInstance.castVote(1, 1);
+      await governanceInstance.castVote(2, 1);
       await timeTravel({ days: 7, mine: true });
-      // governance strategy reverts without error in case of rogue params as proposer should be aware of params
-      await expect(governanceInstance.execute(1)).to.be.revertedWithPanic(0x1);
+      // governance strategy reverts with a custom error in case of rogue params
+      await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
+        strategyInstance,
+        "GovStrategyInvalidProposalThreshold",
+      );
       await expect(governanceInstance.execute(2)).to.emit(
         governanceInstance,
-        "ThresholdsUpdated",
+        "ProposalThresholdSet",
       );
     });
 
@@ -353,11 +413,11 @@ describe("Governance Upgrades", async () => {
       );
       await governanceInstance.propose([action], description);
       await timeTravel({ days: 14, mine: true });
-      await governanceInstance.castVote(1, VoteType.For);
+      await governanceInstance.castVote(1, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
-        .to.emit(governanceInstance, "ThresholdsUpdated")
-        .withArgs(newProposalThreshold, newQuorumThreshold);
+        .to.emit(governanceInstance, "ProposalThresholdSet")
+        .withArgs(newProposalThreshold);
     });
   });
 });

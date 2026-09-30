@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 // solhint-disable-next-line
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {ARBITRUM_CHAIN_ID, WRAPPED_NATIVE, GMX_ROUTER} from "../../types/GmxConstants.sol";
 
@@ -17,7 +17,7 @@ import {IEGmxCallback} from "./interfaces/IEGmxCallback.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
 import {IBaseOrderUtils} from "gmx-synthetics/order/IBaseOrderUtils.sol";
-import {IGmxOrderHandler} from "../../../utils/exchanges/gmx/IGmxSynthetics.sol";
+import {BaseOrderHandler} from "gmx-synthetics/exchange/BaseOrderHandler.sol";
 import {GmxCallbackLib} from "../../libraries/GmxCallbackLib.sol";
 import {GmxAdapterLib} from "../../libraries/GmxAdapterLib.sol";
 
@@ -55,6 +55,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     function createIncreaseOrder(
         IBaseOrderUtils.CreateOrderParams calldata params
     ) external override nonReentrant onlyDelegateCall returns (bytes32 orderKey) {
+        GmxAdapterLib.assertRouterAuthorized();
+
         // Cap concurrent positions (new positions only; increasing an existing slot is allowed).
         GmxAdapterLib.assertPositionLimitNotReached(
             address(this),
@@ -80,7 +82,7 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         address indexToken = GmxAdapterLib.getMarketIndexToken(params.addresses.market);
         require(GmxAdapterLib.isIndexTokenPriced(indexToken), UnpricedIndexToken(indexToken));
 
-        address orderVault = GMX_ROUTER.orderHandler().orderVault();
+        address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
 
         bool collateralIsWrappedNative = params.addresses.initialCollateralToken == WRAPPED_NATIVE;
 
@@ -143,11 +145,13 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
     function createDecreaseOrder(
         IBaseOrderUtils.CreateOrderParams calldata params
     ) external override nonReentrant onlyDelegateCall returns (bytes32 orderKey) {
+        GmxAdapterLib.assertRouterAuthorized();
+
         // Decrease orders reserve callback gas so afterOrderExecution can record claimable rebates.
         uint256 executionFee = GmxAdapterLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(executionFee <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
 
-        address orderVault = GMX_ROUTER.orderHandler().orderVault();
+        address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
         require(
             params.orderType == Order.OrderType.MarketDecrease ||
                 params.orderType == Order.OrderType.LimitDecrease ||
@@ -204,12 +208,14 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256 validFromTime,
         bool autoCancel
     ) external override nonReentrant onlyDelegateCall {
+        GmxAdapterLib.assertRouterAuthorized();
+
         // Top up fee at current gas price; use decrease-order limit because updated orders may
         // still trigger the rebate callback.
         uint256 feeTopUp = GmxAdapterLib.computeExecutionFee(false, _CALLBACK_GAS_LIMIT);
         require(feeTopUp <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
         if (feeTopUp > 0) {
-            address orderVault = GMX_ROUTER.orderHandler().orderVault();
+            address orderVault = address(BaseOrderHandler(payable(address(GMX_ROUTER.orderHandler()))).orderVault());
             _ensureWeth(feeTopUp);
             WRAPPED_NATIVE.safeTransfer(orderVault, feeTopUp);
         }
@@ -227,6 +233,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
 
     /// @inheritdoc IAGmxV2
     function cancelOrder(bytes32 key) external override nonReentrant onlyDelegateCall {
+        GmxAdapterLib.assertRouterAuthorized();
+
         // GMX refunds to cancellationReceiver (the pool).
         GMX_ROUTER.cancelOrder(key);
     }
@@ -237,6 +245,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         address[] calldata tokens,
         address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
+        GmxAdapterLib.assertRouterAuthorized();
+
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }
@@ -263,6 +273,8 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         uint256[] calldata timeKeys,
         address // receiver — overridden to address(this) to ensure funds stay in the pool
     ) external override nonReentrant onlyDelegateCall {
+        GmxAdapterLib.assertRouterAuthorized();
+
         for (uint256 i; i < tokens.length; ++i) {
             _trackToken(tokens[i]);
         }

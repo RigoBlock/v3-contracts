@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache 2.0
-// solhint-disable-next-line
-pragma solidity 0.8.28;
+pragma solidity ^0.8.37;
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
@@ -14,14 +13,12 @@ import {CalldataDecoder} from "@uniswap/v4-periphery/src/libraries/CalldataDecod
 import {PathKey} from "@uniswap/v4-periphery/src/libraries/PathKey.sol";
 import {Commands} from "@uniswap/universal-router/contracts/libraries/Commands.sol";
 import {BytesLib} from "@uniswap/universal-router/contracts/modules/uniswap/v3/BytesLib.sol";
+import {IAUniswapRouter} from "./interfaces/IAUniswapRouter.sol";
 
 abstract contract AUniswapDecoder {
     using BytesLib for bytes;
     using TransientStateLibrary for IPoolManager;
     using CalldataDecoder for bytes;
-
-    error InvalidCommandType(uint256 commandType);
-    error UnsupportedAction(uint256 action);
 
     address internal constant ZERO_ADDRESS = address(0);
     address internal constant NON_EXISTENT_POSITION_FLAG = address(1);
@@ -59,39 +56,29 @@ abstract contract AUniswapDecoder {
                 // 0x00 <= command < 0x08
                 if (command < Commands.V2_SWAP_EXACT_IN) {
                     if (command == Commands.V3_SWAP_EXACT_IN) {
-                        // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser
+                        // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser, uint256[] minHopPriceX36
                         address recipient = abi.decode(inputs, (address));
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensIn = _addUnique(params.tokensIn, path.toAddress());
-                        // slice last 20 bytes from path to find tokenIn address
-                        bytes calldata lastTokenBytes;
-                        assembly ("memory-safe") {
-                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
-                            lastTokenBytes.length := 20
-                            lastTokenBytes.offset := lastTokenOffset
-                        }
+                        // slice last 20 bytes from path to find tokenOut address
+                        bytes calldata lastTokenBytes = path[path.length - 20:];
                         params.tokensOut = _addUnique(params.tokensOut, lastTokenBytes.toAddress());
                         return params;
                     } else if (command == Commands.V3_SWAP_EXACT_OUT) {
-                        // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
+                        // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser, uint256[] minHopPriceX36
                         address recipient = abi.decode(inputs, (address));
                         bytes calldata path = inputs.toBytes(3);
                         params.recipients = _addUnique(params.recipients, recipient);
                         params.tokensOut = _addUnique(params.tokensOut, path.toAddress());
                         // slice last 20 bytes from path to find tokenIn address
-                        bytes calldata lastTokenBytes;
-                        assembly ("memory-safe") {
-                            let lastTokenOffset := sub(add(path.offset, path.length), 20)
-                            lastTokenBytes.length := 20
-                            lastTokenBytes.offset := lastTokenOffset
-                        }
+                        bytes calldata lastTokenBytes = path[path.length - 20:];
                         params.tokensIn = _addUnique(params.tokensIn, lastTokenBytes.toAddress());
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.PERMIT2_PERMIT_BATCH) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.SWEEP) {
                         // sweep is used when the router is used for transfers to clear leftover
                         // address token, address recipient, uint160 amountMin
@@ -111,14 +98,17 @@ abstract contract AUniswapDecoder {
                         params.tokensOut = _addUnique(params.tokensOut, token);
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
-                    } else {
-                        // placeholder area for command 0x07
-                        revert InvalidCommandType(command);
+                    } else if (command == Commands.PAY_PORTION_FULL_PRECISION) {
+                        // address token, address recipient, uint256 portion
+                        (address token, address recipient) = abi.decode(inputs, (address, address));
+                        params.tokensOut = _addUnique(params.tokensOut, token);
+                        params.recipients = _addUnique(params.recipients, recipient);
+                        return params;
                     }
                 } else {
                     // 0x08 <= command < 0x10
                     if (command == Commands.V2_SWAP_EXACT_IN) {
-                        // address recipient, uint256 amountIn, uint256 amountOutMin, bytes memory path, bool payerIsUser
+                        // address recipient, uint256 amountIn, uint256 amountOutMin, address[] memory path, bool payerIsUser, uint256[] minHopPriceX36
                         (address recipient, uint256 amountIn) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
@@ -127,17 +117,17 @@ abstract contract AUniswapDecoder {
                         params.value += path[0] == ZERO_ADDRESS ? amountIn : 0;
                         return params;
                     } else if (command == Commands.V2_SWAP_EXACT_OUT) {
-                        // address recipient, uint256 amountOut, uint256 amountInMax, bytes memory path, bool payerIsUser
+                        // address recipient, uint256 amountOut, uint256 amountInMax, address[] memory path, bool payerIsUser, uint256[] minHopPriceX36
                         address recipient = abi.decode(inputs, (address));
                         params.recipients = _addUnique(params.recipients, recipient);
                         address[] calldata path = inputs.toAddressArray(3);
                         // Native ETH exact-out needs UniswapV2Library.getAmountInMultihop(); use WRAP_ETH + V2 exact-in instead
-                        if (path[0] == ZERO_ADDRESS) revert InvalidCommandType(command);
+                        if (path[0] == ZERO_ADDRESS) revert IAUniswapRouter.InvalidCommandType(command);
                         params.tokensIn = _addUnique(params.tokensIn, path[0]);
                         params.tokensOut = _addUnique(params.tokensOut, path[path.length - 1]);
                         return params;
                     } else if (command == Commands.PERMIT2_PERMIT) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.WRAP_ETH) {
                         (address recipient, uint256 amount) = abi.decode(inputs, (address, uint256));
                         params.recipients = _addUnique(params.recipients, recipient);
@@ -154,13 +144,13 @@ abstract contract AUniswapDecoder {
                         params.recipients = _addUnique(params.recipients, recipient);
                         return params;
                     } else if (command == Commands.PERMIT2_TRANSFER_FROM_BATCH) {
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     } else if (command == Commands.BALANCE_CHECK_ERC20) {
                         // no further assertion needed as uni router uses staticcall
                         return params;
                     } else {
                         // placeholder area for command 0x0f
-                        revert InvalidCommandType(command);
+                        revert IAUniswapRouter.InvalidCommandType(command);
                     }
                 }
             } else {
@@ -216,6 +206,8 @@ abstract contract AUniswapDecoder {
                                     ? swapParams.amountInMaximum
                                     : 0;
                                 continue;
+                            } else {
+                                revert IAUniswapRouter.UnsupportedAction(action);
                             }
                         } else {
                             if (action == Actions.SETTLE_ALL) {
@@ -245,20 +237,20 @@ abstract contract AUniswapDecoder {
                                 params.recipients = _addUnique(params.recipients, recipient);
                                 continue;
                             } else {
-                                revert UnsupportedAction(action);
+                                revert IAUniswapRouter.UnsupportedAction(action);
                             }
                         }
                     }
                 } else if (command == Commands.V3_POSITION_MANAGER_PERMIT) {
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 } else if (command == Commands.V3_POSITION_MANAGER_CALL) {
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 } else if (command == Commands.V4_POSITION_MANAGER_CALL) {
                     // v4 liquidity actions must be routed via modifyLiquidities endpoint
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 } else {
                     // placeholder area for commands 0x13-0x20
-                    revert InvalidCommandType(command);
+                    revert IAUniswapRouter.InvalidCommandType(command);
                 }
             }
         } else {
@@ -274,7 +266,7 @@ abstract contract AUniswapDecoder {
                 }
             } else {
                 // placeholder area for commands 0x22-0x3f
-                revert InvalidCommandType(command);
+                revert IAUniswapRouter.InvalidCommandType(command);
             }
         }
         return params;
@@ -317,7 +309,7 @@ abstract contract AUniswapDecoder {
                 positions = _addUniquePosition(positions, Position(hook, tokenId, Actions.INCREASE_LIQUIDITY));
                 return (params, positions);
             } else if (action == Actions.INCREASE_LIQUIDITY_FROM_DELTAS) {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             } else if (action == Actions.DECREASE_LIQUIDITY) {
                 // uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId, , , , ) = actionParams.decodeModifyLiquidityParams();
@@ -340,7 +332,7 @@ abstract contract AUniswapDecoder {
                 positions = _addUniquePosition(positions, Position(address(poolKey.hooks), 0, Actions.MINT_POSITION));
                 return (params, positions);
             } else if (action == Actions.MINT_POSITION_FROM_DELTAS) {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             } else if (action == Actions.BURN_POSITION) {
                 // uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData
                 (uint256 tokenId, , , ) = actionParams.decodeBurnParams();
@@ -348,7 +340,7 @@ abstract contract AUniswapDecoder {
                 positions = _addUniquePosition(positions, Position(ZERO_ADDRESS, tokenId, Actions.BURN_POSITION));
                 return (params, positions);
             } else {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             }
         } else {
             if (action == Actions.SETTLE_PAIR) {
@@ -396,7 +388,7 @@ abstract contract AUniswapDecoder {
                 params.tokensOut = _addUnique(params.tokensOut, ZERO_ADDRESS);
                 return (params, positions);
             } else {
-                revert UnsupportedAction(action);
+                revert IAUniswapRouter.UnsupportedAction(action);
             }
         }
     }

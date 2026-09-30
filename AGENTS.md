@@ -4,7 +4,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 
 ## Quick Facts
 
-- **Language**: Solidity 0.8.28
+- **Language**: Solidity 0.8.37 (protocol core; legacy pins remain at 0.8.17 for the pool proxy, governance factory/proxy, and other pre-upgrade contracts)
 - **Framework**: Hardhat (existing tests) + Foundry (new integration tests)
 - **Architecture**: Proxy pattern with extensions and adapters
 - **Chains**: EVM-compatible (Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Unichain)
@@ -22,6 +22,37 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 9. **Compilation**: Fix all warnings in new code (legacy warnings acceptable)
 10. **Named Mapping Variables**: All new mappings must use named key/value parameters — `mapping(KeyType name => ValueType name)` — as required by Solidity ≥0.8.18 style.
 11. **ALWAYS RUN TESTS**: After ANY modification to .sol files or test files, IMMEDIATELY run tests to verify they pass
+12. **CODE SIZE**: After ANY change that can alter deployed bytecode (including library edits — libraries compile into every importer), measure the affected contracts' deployed size with the production settings (optimizer 200 runs, no viaIR) via `npx hardhat codesize --skipcompile true`, and update the table in `docs/CODE_SIZE.md` in the same PR. Never merge a contract at or above the 24576-byte limit. `SmartPool` and `ENavView` have <300 bytes of headroom — flag any PR that shrinks it further.
+13. **NEVER push directly to `development` (or any default branch).** Commits reach `development` ONLY via a pull request, so CI (tests, security checks, coverage) always runs. This has accidentally happened twice — see "Branch creation and push safety" below.
+
+## Branch creation and push safety (CRITICAL)
+
+A new branch MUST track its own same-named remote branch — never `origin/development`.
+`git checkout -b feat/x origin/development` silently sets the upstream to
+`origin/development`, and a later plain `git push` then **pushes your commits straight onto
+the default branch**, bypassing CI entirely.
+
+Required workflow for every new branch:
+
+```bash
+# 1. Create WITHOUT tracking the source branch
+git fetch origin
+git checkout -b feat/my-branch origin/development --no-track
+
+# 2. Do the work, commit...
+
+# 3. Push ONLY with an explicit refspec naming the same branch
+git push -u origin feat/my-branch:feat/my-branch
+
+# 4. VERIFY the upstream before every push — upstream must be origin/<same-name>, never development
+git rev-parse --abbrev-ref --symbolic-full-name @{u}
+git branch -vv | grep '^\*'
+```
+
+If `git branch -vv` ever shows `[origin/development]` (or any upstream that is not
+`origin/<same-name>`) on a feature branch: `git branch --unset-upstream` immediately, then
+re-push with the explicit refspec from step 3. Never use `git push` without a refspec on a
+branch you did not just verify.
 
 ## AI Agent Limitations (CRITICAL)
 
@@ -75,7 +106,7 @@ User → Pool Proxy (delegatecall)→ Implementation
      - `GmxLib` change → `EApps`, `EGmxCallback` change → **bump salt**.
      - `NavView` change → `ENavView` changes → **bump salt**.
      - `MixinConstants` / other implementation-only libraries → implementation only → no salt bump (see "When NOT to bump").
-     
+
      **Decision rule when you change a library**: grep for every contract that imports it. If any importer is an extension (anything whose address is stored in the ExtensionsMap), the salt MUST be bumped. Never assume "I only touched a library" means extensions are unchanged.
 - **When NOT to bump**: If only the implementation changes and everything compiled into extensions is byte-identical, reuse the existing ExtensionsMap address — no redeployment or salt bump needed.
 - **The unreleased-train exception**: If the salt was already bumped in a previous PR of the same release train and that ExtensionsMap was **never deployed** (nothing exists at the computed CREATE2 address on any chain), do NOT bump again — reuse the pending salt. The deploy script's `map.code.length == 0` check only works because the address is empty; once deployed, any further extension-bytecode change requires a fresh bump.
@@ -342,6 +373,12 @@ try target.exec{value: value}(...) returns (bytes memory result) {
 yarn test
 ```
 
+`yarn test` runs `hardhat test mocha` — Hardhat 3's mocha subtask, i.e. **only the .ts
+specs**. Foundry owns ALL .sol tests; HH3's built-in solidity test runner must stay
+unused (do NOT re-add `paths.tests` redirects in `hardhat.config.ts` to work around it,
+and never run bare `hardhat test` — it would feed Foundry test files to the solidity
+runner). Coverage likewise uses `hardhat test mocha --coverage`.
+
 ### Integration Tests (Foundry)
 
 ```bash
@@ -349,6 +386,52 @@ forge test
 ```
 
 ### Fork Testing Pattern
+
+**Fork-block hygiene (REQUIRED at branch creation):** every new branch MUST bump all fork
+blocks in `contracts/test/ForkBlocks.sol` to recent values as the first task of the branch,
+and fix whatever surfaces. Stale pins hide fork-state-dependent regressions (oracle drift,
+accrued fees, new deployments, rounding edges) that then explode in unrelated later work —
+investigating them alongside an unrelated feature wastes time and erodes trust in the suite.
+Bumping blocks can legitimately make tests fail; per "test failures are signals", each failure
+must be root-caused (is the test asserting stale third-party state, or is the protocol wrong?)
+and fixed or documented in the same branch. Pick blocks a few hours/days below "latest" for
+RPC/archive stability, keep any documented ordering constraints (e.g. MAINNET_BLOCK must stay
+after the TEST_POOL donate() routing upgrade), and update the per-block comments with the new
+values and dates. `ForkBlocks.sol` is hashed into the CI cache key, so the bump also keeps
+fork caches fresh. Tests must NEVER introduce their own local block pins (`git grep
+createSelectFork` should show only `Constants.*_BLOCK`); if a test seems to need a historical
+pin, make the test pin-agnostic instead — e.g. `A0xRouterUnichainFork` replays calldata
+extracted at block 41_291_308 but resolves the 0x settler dynamically from the Deployer at
+the fork block, so its pin follows routine bumps. Reserve documented historical pins in
+`ForkBlocks.sol` for cases that genuinely cannot be made pin-agnostic, and revisit them at
+every bump.
+
+**Test obsolescence review (part of the same hygiene task):** a block bump is also the moment
+to audit which fork tests have been made obsolete by protocol upgrades landing in production.
+Keep what is still meaningful; update or delete what is not. Examples of tests that decay:
+
+- tests that force-upgrade the factory implementation or Authority mappings to assert
+  pre-upgrade behavior — once governance has executed the upgrade, assert the NEW production
+  state instead (remove the forced upgrade when it duplicates live state);
+- tests comparing states across implementation versions — collapse to the current live
+  version once the rollout is complete;
+- replay/incident fixtures — keep only while the replayed bytes still represent what the
+  external protocol (0x, Across, GMX, Uniswap) actually produces; re-extract or delete when
+  the format or key contracts rotate.
+
+Remember that each pool operator must approve an upgraded implementation for their pool, so
+live pool code always lags the factory upgrade — fork tests must assert the state that is
+actually live at the pinned block, not the state the factory points to after the upgrade
+transaction.
+
+**Arbitrum `block.number` returns the L1 block number, not the L2 height.** An Arbitrum
+fork pinned at `Constants.ARB_BLOCK` (an L2 height, e.g. 508_400_000) is correctly pinned —
+the L2 state at that height is what the EVM runs against — but `block.number` inside the
+test reports the block's `l1BlockNumber` field (~26M), exactly as the NUMBER opcode behaves
+for contracts on Arbitrum mainnet. Never assert `block.number` against an L2 pin and never
+"treat as latest"; use `block.timestamp` for deadlines and `vm.roll`/`vm.warp` with L1-height
+semantics in mind. If a diagnostic shows a ~26M number on an Arbitrum fork, the fork is NOT
+poisoned — verify the actual L2 pin via `eth_getBlockByNumber` on the block hash instead.
 
 ```solidity
 // Create forks
@@ -592,6 +675,7 @@ When making changes:
 - [ ] **Fix all compilation warnings** in new code (not required for legacy code)
 - [ ] **Write or update tests** (unit tests, integration tests, fork tests)
 - [ ] **IMMEDIATELY RUN TESTS after ANY code change** (`forge test` for Foundry, `yarn test` for Hardhat)
+- [ ] **Check deployed code size** after any bytecode-affecting change (production settings: optimizer 200 runs, no viaIR) and **update the table in `docs/CODE_SIZE.md`** in the same PR — see `docs/CODE_SIZE.md` for the command and current sizes
 - [ ] **Run tests to ensure they pass** (`forge test` for Foundry, `npm test` for Hardhat)
 - [ ] Test with forks if cross-chain or integration work
 - [ ] Update interfaces and use `@inheritdoc`
@@ -638,7 +722,7 @@ When making changes:
     - `IInterface.FUNCTION.selector` instead of `bytes4(keccak256("FUNCTION(param_types)"))`
     - Solidity calldata slicing (`data[a:b]`) over manual `calldataload` math
     - Assembly is acceptable ONLY for: raw error propagation (`revert(add(d,32),mload(d))`), extracting `bytes4` from `bytes memory` (no Solidity cast exists), and ERC-7201 storage slot access.
-18. **USE .selector INSTEAD OF keccak256 HASHING** - ALWAYS use `IInterface.functionName.selector` to obtain function selectors. NEVER use `bytes4(keccak256("functionName(paramTypes)"))` — it is fragile (typos in the string silently produce wrong selectors) and not type-checked by the compiler. If the interface doesn't exist locally, vendor a minimal interface with just the function signatures needed. Example: `ISettlerActions.RFQ.selector` not `bytes4(keccak256("RFQ(address,((address,uint256),uint256,uint256),...)"))`
+18. **USE .selector INSTEAD OF keccak256 HASHING** - ALWAYS use `IInterface.functionName.selector` to obtain function selectors. NEVER use `bytes4(keccak256("functionName(paramTypes)"))` — it is fragile (typos in the string silently produce wrong selectors) and not type-checked by the compiler. If the interface doesn't exist locally, vendor a minimal interface with just the function signatures needed. Example: `ISettlerActions.RFQ.selector` not `bytes4(keccak256("RFQ(address,((address,uint256),uint256,uint256),...)"))`. Overloaded functions are the ONLY exception: Solidity cannot apply `.selector` to an overloaded member (`.selector`, typed function-pointer assignment, and `abi.encodeCall` all fail or bind arbitrarily — verified on solc 0.8.28/0.8.37), so encode the selector manually as `bytes4(keccak256("name(paramTypes)"))` and document the expected 4-byte value in an inline comment. Precedents: `unwrapWETH9` in test/extensions/AUniswapFork.t.sol, `execute` in test/extensions/AUniswapRouterFork.t.sol (expected values cross-checked against AUniswapRouter.spec.ts).
 19. **LOW-LEVEL CALLS IN TESTS** - NEVER use `(bool success, bytes memory data) = target.call(abi.encodeCall(...))` in tests. Always use typed interface calls: `IInterface(target).method(...)`. For expected reverts, use `vm.expectRevert(expectedError)` or `try IInterface(target).method(...) { revert("should fail"); } catch (bytes memory err) { /* check err */ }`. Low-level calls bypass Solidity's type checking and make tests harder to read and audit.
 20. **APP ACTIVATION: only when creating non-token external positions** - Call `StorageLib.activeApplications().storeApplication(uint256(Applications.X))` ONLY when the adapter creates an EXTERNAL POSITION that lives outside the pool's ERC-20 wallet and must be valued by EApps. Examples that NEED activation: AGmxV2 (opens DataStore perpetual positions), AUniswapRouter (creates UniV4 LP NFT positions). Examples that DO NOT need activation: A0xRouter (pure swap — output tokens land in pool wallet and are tracked on arrival), AIntents/AcrossBridge (funds leave the pool via bridge; no position held on-chain). The rule: if there is no on-chain struct/position to value at NAV time, storeApplication is not needed.
 21. **ADAPTER INTERFACE SELECTORS MUST MATCH THE TARGET PROTOCOL EXACTLY** — When an adapter wraps an external protocol (e.g., GMX, Uniswap, 0x), the `IAdapter` interface MUST expose the SAME function signatures (and therefore selectors) as the underlying protocol interface. This allows the GMX/Uniswap/etc. API to be used directly with minimal changes. Rules:
@@ -652,6 +736,10 @@ When making changes:
 23. **AUDIT FINDINGS REQUIRE INDEPENDENT VERIFICATION BEFORE APPLYING** — Never apply an audit finding without: (1) running the full test suite to detect regressions, (2) verifying through protocol documentation that the fix cannot block any legitimate protocol path, (3) documenting the decision in `/docs/` if preserving production code over the auditor's recommendation. A finding that looks safe in isolation may close off a critical path when the full system is considered. Defend each "not fixed" or "by-design" disposition clearly in the audit status document.
 
 24. **NAMED MAPPING VARIABLES** — All new or modified mappings must use named key and value parameters (Solidity ≥0.8.18 feature). Write `mapping(bytes4 selector => address[] addresses)` not `mapping(bytes4 => address[])`. Both key and value must be named; for nested mappings name all levels: `mapping(address owner => mapping(bytes4 selector => uint256 position))`. This applies to struct fields, state variables, and library-internal structs. Do NOT retrofit old legacy contracts not being modified in the current PR.
+
+25. **DEPLOYED CODE SIZE MUST BE TRACKED IN EVERY PR** — The EVM limit is 24576 bytes per contract, and `SmartPool` (24321) and `ENavView` (24299) have under 300 bytes of headroom with production settings. After any change that can alter deployed bytecode — including library edits, since libraries compile into every importer's bytecode — measure with the production profile (`SOLIDITY_SETTINGS='{"optimizer":{"enabled":true,"runs":200}}' npx hardhat compile && npx hardhat codesize --skipcompile true`) and update the table in `docs/CODE_SIZE.md` in the same PR. Never trust Foundry's size output (it uses `optimizer_runs = 1_000_000` and produces different bytecode). Never merge a contract at or above the limit.
+
+26. **SKIPPING `forge clean` AFTER BRANCH OR SUBMODULE SWITCHES** — Foundry's incremental cache can serve artifacts with mismatched CBOR metadata tails across compilation units, causing spurious test failures (observed: AIntentsRealFork escrow CREATE2 assertion failing with an unchanged Escrow.sol — executable bytecode identical, only the metadata tail differed). Always run `forge clean` before `forge build`/`forge test` after switching branches or updating git submodules. CI is unaffected (clean runners).
 
 ## GMX v2 Integration
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
@@ -69,14 +69,20 @@ contract A0xRouterUnichainForkTest is Test {
     /// @dev The caller in the production txs.
     address constant PROD_CALLER = 0xcA9F5049c1Ea8FC78574f94B7Cf5bE5fEE354C31;
 
-    /// @dev The settler used as both operator and target in all 3 production txs.
-    address constant PROD_SETTLER = 0x6A7dd96F25E70eD5F6beF1ACADd32b697935ff39;
+    /// @dev Settler that was live when the TX1/TX2/TX3 calldata fixtures were extracted
+    ///      (block 41_291_308, 0x6A7dd96F...). The tests do NOT use this value: they resolve
+    ///      the settler dynamically from the 0x Deployer at the fork block, so the fixtures
+    ///      stay usable across settler rotations and routine block bumps.
+    address constant EXTRACTION_TIME_SETTLER = 0x6A7dd96F25E70eD5F6beF1ACADd32b697935ff39;
 
     /// @dev GRG token on Unichain (sellToken in TX2, TX3; buyToken in TX1).
     address constant UNI_GRG = 0x03C2868c6D7fD27575426f395EE081498B1120dd;
 
     function setUp() public {
-        // Fork BEFORE the earliest failing tx (TX1 at block 41291308)
+        // Recent global pin. The replayed calldata fixtures were extracted from production
+        // txs at block 41_291_308 (see EXTRACTION_TIME_SETTLER), but the adapter validates
+        // the operator/target against the settler resolved dynamically below — exactly what
+        // production does — so the fixtures remain valid at any recent block.
         unichainFork = vm.createSelectFork("unichain", Constants.UNICHAIN_BLOCK);
 
         // Verify 0x infrastructure
@@ -85,10 +91,6 @@ contract A0xRouterUnichainForkTest is Test {
 
         currentSettler = IDeployer(DEPLOYER).ownerOf(Feature.unwrap(TAKER_SUBMITTED_FEATURE));
         assertTrue(currentSettler != address(0), "No settler");
-        console2.log("Settler:", currentSettler);
-
-        // Verify the production settler is genuine at this block
-        assertEq(currentSettler, PROD_SETTLER, "Settler mismatch at fork block");
 
         // Deploy fixed adapter
         a0xRouter = new A0xRouter(ALLOWANCE_HOLDER, DEPLOYER);
@@ -102,7 +104,7 @@ contract A0xRouterUnichainForkTest is Test {
 
     Each test loads the literal settler calldata bytes extracted from the failing
     on-chain transaction. The adapter's validation (settler check, recipient check,
-    price feed check, action allowlist) runs against the REAL bytes.
+    price feed check, action invariants) runs against the REAL bytes.
 
     The swap itself will fail (stale quote, expired deadline) but we verify the
     error is NOT from our adapter's validation layer.
@@ -110,7 +112,7 @@ contract A0xRouterUnichainForkTest is Test {
 
     /// @notice Replay exact TX1 calldata: ETH→GRG swap (0xcd79b65d, block 41291308).
     ///  operator=settler, token=address(0), amount=0.001 ETH, target=settler.
-    ///  Original error: ActionNotAllowed(BASIC) — now BASIC is in allowlist.
+    ///  Original error: ActionNotAllowed(BASIC) — BASIC now passes validation.
     function test_ReplayExact_TX1_ETHToGRG() public {
         // Fund pool with ETH (the pool is the vault — adapter derives value from params)
         deal(pool, 10 ether);
@@ -131,10 +133,10 @@ contract A0xRouterUnichainForkTest is Test {
         vm.prank(poolOwner);
         try
             IA0xRouter(pool).exec(
-                PROD_SETTLER, // operator (same as production)
+                currentSettler, // operator (resolved at fork block)
                 address(0), // token = native ETH (same as production)
                 0.001 ether, // amount = 1000000000000000 (same as production)
-                payable(PROD_SETTLER), // target (same as production)
+                payable(currentSettler), // target (resolved at fork block)
                 settlerData // EXACT production settler bytes
             )
         {
@@ -161,10 +163,10 @@ contract A0xRouterUnichainForkTest is Test {
         vm.prank(poolOwner);
         try
             IA0xRouter(pool).exec(
-                PROD_SETTLER, // operator
+                currentSettler, // operator
                 UNI_GRG, // token = GRG (0x03C2868c...)
                 50e18, // amount = 50000000000000000000
-                payable(PROD_SETTLER), // target
+                payable(currentSettler), // target
                 settlerData // EXACT production settler bytes
             )
         {
@@ -178,7 +180,7 @@ contract A0xRouterUnichainForkTest is Test {
     /// @notice Replay exact TX3 calldata: GRG→USDC swap (0x87b1059a, block 41298808).
     ///  operator=settler, token=GRG, amount=50e18, target=settler.
     ///  buyToken=0x078d782b760474a361dda0af3839290b0ef57ad6 (USDC on Unichain).
-    ///  Original error: ActionNotAllowed(BASIC) — now BASIC is in allowlist.
+    ///  Original error: ActionNotAllowed(BASIC) — BASIC now passes validation.
     function test_ReplayExact_TX3_GRGToUSDC() public {
         // Fund pool with GRG sell token
         deal(UNI_GRG, pool, 100e18);
@@ -192,10 +194,10 @@ contract A0xRouterUnichainForkTest is Test {
         vm.prank(poolOwner);
         try
             IA0xRouter(pool).exec(
-                PROD_SETTLER, // operator
+                currentSettler, // operator
                 UNI_GRG, // token = GRG
                 50e18, // amount
-                payable(PROD_SETTLER), // target
+                payable(currentSettler), // target
                 settlerData // EXACT production settler bytes
             )
         {
@@ -289,7 +291,6 @@ contract A0xRouterUnichainForkTest is Test {
                 "Blocked by: InvalidSettlerCalldata"
             );
             assertTrue(errorSelector != IA0xRouter.DirectCallNotAllowed.selector, "Blocked by: DirectCallNotAllowed");
-            assertTrue(errorSelector != IA0xRouter.ActionNotAllowed.selector, "Blocked by: ActionNotAllowed");
             assertTrue(
                 errorSelector != EnumerableSet.TokenPriceFeedDoesNotExist.selector,
                 "Blocked by: TokenPriceFeedDoesNotExist"

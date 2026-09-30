@@ -1,3 +1,45 @@
+# [2.8.0](https://github.com/RigoBlock/v3-contracts/compare/v2.7.0...v2.8.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* address gmx breaking change ([2727784](https://github.com/RigoBlock/v3-contracts/commit/272778415368921a4f9043b1588f40e27bf2f243))
+* NavView NAV parity aggregation, fork block bumps, solc 0.8.37 ([c14f233](https://github.com/RigoBlock/v3-contracts/commit/c14f23338f7296948addddd9fa3a7a94600066f8))
+* RIGO-200 quorum snapshot for legacy proposals ([b3486ff](https://github.com/RigoBlock/v3-contracts/commit/b3486ff3b46d1e3baa2f704301ddb55e71da9970))
+* support gmx breaking changes ([aa8ec50](https://github.com/RigoBlock/v3-contracts/commit/aa8ec50726e7da3145cc3ff651f2636658368086))
+
+
+### Features
+
+* add Tally compatibility missing methods ([f44d3ed](https://github.com/RigoBlock/v3-contracts/commit/f44d3edc4831a135601dae8edb7c0d43777e7a2a))
+* align specs with Tally compatibility reqs ([219b1d7](https://github.com/RigoBlock/v3-contracts/commit/219b1d712e57c8c149a65a36788ef77283167e31))
+* bump gov solc from 0.8.35 to 0.8.37 ([3f8d630](https://github.com/RigoBlock/v3-contracts/commit/3f8d63001127dadab444e498fbb3052a40b98e87))
+* bump solc from 0.8.28 to 0.8.37 everywhere ([f9f0d0a](https://github.com/RigoBlock/v3-contracts/commit/f9f0d0ad4343e350557481547ed73e9b5751a6ed))
+* compile AUniswapRouter with solc 0.8.37 via isolated forge job ([8d4237f](https://github.com/RigoBlock/v3-contracts/commit/8d4237f52bcc102edf0335001d7d0553e67d4cb4))
+* crosschain governance ([89daa51](https://github.com/RigoBlock/v3-contracts/commit/89daa5164479815954f6dea6f5864180396975fd))
+* implement cancel proposal ([e36c74a](https://github.com/RigoBlock/v3-contracts/commit/e36c74aeefad8c4b69dda581af0268314e07d89e))
+* nonces storage definitions ([9697c59](https://github.com/RigoBlock/v3-contracts/commit/9697c5971f1a36f6a396d6b2a83c8c9aa298e5a5))
+
+
+
+# [2.7.0](https://github.com/RigoBlock/v3-contracts/compare/v2.6.4...v2.7.0) (2026-09-12)
+
+
+### Bug Fixes
+
+* canonicalize all CBOR blobs so unchanged contracts reproduce CREATE2 addresses ([9a293fc](https://github.com/RigoBlock/v3-contracts/commit/9a293fc3372a8b3c9d179cf15f27dcdff5b7ec69))
+* deploy through Safe singleton factory on production chains ([b22cc0f](https://github.com/RigoBlock/v3-contracts/commit/b22cc0f252f84202a8780b03bcd0c2aee8e33b31))
+* move disabled ERC20 methods to EERC20 extension, restore deployable SmartPool size ([c080103](https://github.com/RigoBlock/v3-contracts/commit/c080103779d9362abe1edf4092bb669da3d38fa5))
+* scope hardhat coverage to foundry parity via coverage.skipFiles ([fe00628](https://github.com/RigoBlock/v3-contracts/commit/fe006283a442099d4886cd6d9d41593ce333693c))
+
+
+### Features
+
+* canonical CBOR tails restore cross-chain CREATE2 parity under Hardhat 3 ([a2e3638](https://github.com/RigoBlock/v3-contracts/commit/a2e3638ebb1e2ef4184ec5b2c6b21e6d796a821b))
+* fail closed when deploying to an unconfigured live chain ([9abdbd0](https://github.com/RigoBlock/v3-contracts/commit/9abdbd0a7502390c2bf4c1c5fbe8b61281afbe40))
+
+
+
 ## [2.6.4](https://github.com/RigoBlock/v3-contracts/compare/v2.6.3...v2.6.4) (2026-09-12)
 
 
@@ -22,38 +64,6 @@
 ### Bug Fixes
 
 * document gmx fallback heartbeat, zero-price nav semantics and oracle twap window arithmetic ([029fccf](https://github.com/RigoBlock/v3-contracts/commit/029fccf8cd2d83757b7d96c02525a0e0d0a17e52))
-
-
-
-## [2.6.1](https://github.com/RigoBlock/v3-contracts/compare/v2.6.0...v2.6.1) (2026-09-04)
-
-
-### Bug Fixes
-
-* EOracle conversion ([612be46](https://github.com/RigoBlock/v3-contracts/commit/612be468ea1cfd964ebf41036e47c8e3fc9b2295))
-* gmx mappings ([1cd38e3](https://github.com/RigoBlock/v3-contracts/commit/1cd38e36fdbd1c63013efa16bf8699e40d547a89))
-
-
-
-# [2.6.0](https://github.com/RigoBlock/v3-contracts/compare/v2.5.2...v2.6.0) (2026-09-01)
-
-
-### Bug Fixes
-
-* `mintWithToken` minimum amount ([0856556](https://github.com/RigoBlock/v3-contracts/commit/08565567bfbb761040a5071594594a8f02f5a517))
-* auditagent findings report and fixes ([4185410](https://github.com/RigoBlock/v3-contracts/commit/4185410c088c979579d41f38f4354353204a54a0))
-* eoracle amount conversion ([dada0fd](https://github.com/RigoBlock/v3-contracts/commit/dada0fd1e389d95ac4b5d2431f77645527286564))
-* gmx untracked indexToken price feeds ([fafe5c7](https://github.com/RigoBlock/v3-contracts/commit/fafe5c7283463409b8fab656fac9bca9b62f4020))
-* move hype usdc check from state to extension ([36001e7](https://github.com/RigoBlock/v3-contracts/commit/36001e78b1ca59199841896a03181595f007ef4c))
-* move settlement window assertion into HyperliquidLib ([77e4369](https://github.com/RigoBlock/v3-contracts/commit/77e43697cf6c52fce7d62dde65f0a3b970f8356b))
-* unwrap with inactive native ([4b1d66c](https://github.com/RigoBlock/v3-contracts/commit/4b1d66c4570c2592920e342b05e333c4421100d4))
-
-
-### Features
-
-* block nav-sensitive ops during hyperCore funds transfers ([81f7137](https://github.com/RigoBlock/v3-contracts/commit/81f71371a0d7423e1fe59ee33a90b48dfc74d747))
-* hyperliquid apps ([f8a73b6](https://github.com/RigoBlock/v3-contracts/commit/f8a73b6848aebb809ad8eb0bc85011f534304518))
-* narrow Hyperliquid settlement lock to deposits and withdrawals ([6d1efc6](https://github.com/RigoBlock/v3-contracts/commit/6d1efc69e0efa3e6779ce458d6b66c3bae23f3ec))
 
 
 

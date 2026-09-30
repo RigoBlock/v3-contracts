@@ -383,6 +383,109 @@ Equivalently, they can call the oracle directly to convert `minimumBase` from th
 
 ---
 
+## Bug Bounty Finding 03 — TimeType.Blocknumber disables the execution safeguard
+
+**Status**: ℹ️ Informational / by design — disposition documented, strategy hardened, integrator contract documented in `docs/governance/STRATEGY.md`
+
+**Finding**: When a governance is initialized with `TimeType.Blocknumber`, `MixinVoting._castVote` closes the voting window with `block.number`, but `RigoblockGovernanceStrategy.getProposalState` evaluated every transition against `block.timestamp`. Timestamps are always far larger than block numbers, so a proposal flipped straight to `Succeeded` once the qualified majority was reached, and `execute()` could run in the same transaction as the qualifying vote — collapsing the voting window, the reaction period and the next-block safeguard.
+
+**Classification rationale — informational**:
+
+- **No production exposure**: every Rigoblock governance deployed in production (including mainnet) uses `TimeType.Timestamp`, which is and always was evaluated correctly. The vulnerable combination required a non-standard configuration that Rigoblock itself never ships.
+- **Strategy is an integrator responsibility**: the governance package deliberately delegates the whole state machine (`getProposalState`, `votingTimestamps`) to a swappable strategy. The mixins correctly pass the configured `timeType` through; the pairing of a `Blocknumber` governance with a timestamp-only strategy is a strategy-integration bug, not a protocol bug. Projects deploying the governance with `TimeType.Blocknumber` must implement a strategy that uses `block.number` consistently — exactly as `MockMigrationStrategy` and `test/governance/Governance.TimeType.t.sol` demonstrate.
+
+**Mitigations applied (hardening, not a behavior fix)**:
+
+1. `RigoblockGovernanceStrategy` no longer half-supports `TimeType.Blocknumber`. It reverts with
+   `GovStrategyInvalidTimeType` at initialization (`assertValidInitParams`) and at runtime
+   (`votingTimestamps`, `getProposalState`). Rigoblock's strategy is specific to Rigoblock's
+   timestamp-based governance and is not meant for unmodified reuse by other projects.
+2. The runtime revert doubles as a guard against a hypothetical future rogue implementation upgrade
+   that changed the stored `timeType`: governance would brick at `propose` time (loud, recoverable
+   via another upgrade proposal) instead of silently reopening the same-transaction execution hole.
+3. The `timeType` parameter contract is documented on `IGovernanceStrategy.getProposalState` /
+   `votingTimestamps` (same-unit requirement, revert-if-unsupported) and expanded for integrators
+   in `docs/governance/STRATEGY.md`.
+
+**Tests**:
+
+- `test/governance/RigoblockGovernanceStrategy.t.sol` asserts the reverts for `TimeType.Blocknumber`
+  on all three entry points and keeps the `Timestamp` behavior tests.
+- `test/governance/Governance.TimeType.t.sol` keeps exercising both time types against
+  `MockMigrationStrategy` as the reference integrator strategy, including the
+  same-transaction qualify-and-execute revert for `Blocknumber`.
+
+**Follow-up — same unit bug in the example code (fixed)**: `MockMigrationStrategy.votingTimestamps`
+added the seconds period (`7 days`) to a block-number start for `TimeType.Blocknumber`, and the
+removed `Blocknumber` branch of `RigoblockGovernanceStrategy.votingTimestamps` did the equivalent
+(`votingPeriod()` returns `min(7 days, epochDurationInSeconds)`). Either mistake silently inflates
+the block-based voting window ~100x (604800 blocks ≈ 84 days at 12s blocks). The tests never caught
+it because a qualifying vote closes `endBlockOrTime` early, so the bogus far-future end was never
+read. Fixed by giving the mock a block-denominated period (`BLOCK_VOTING_PERIOD = 50_400`) and adding
+`test_Blocknumber_UnqualifiedProposal_ExpiresAfterBlockWindow`, which rolls past the end block and
+asserts `Defeated` — it fails against the seconds-mixed version. Documented as a pitfall in
+`docs/governance/STRATEGY.md`.
+
+---
+
 **Author**: GitHub Copilot (Claude Sonnet 4.5)  
 **Date**: January 13, 2026  
 **Status**: All issues addressed and tested
+
+---
+
+## Known Issues (do not report)
+
+The following behaviors are **known and accepted**. Reports describing them are classified as
+informational / out of scope; no fix is planned. See also `SECURITY_ANALYSIS.md`.
+
+### K1. Donation-Driven Share-Price Inflation on Pools Without Cross-Chain Activity
+
+**Claim** (paraphrased): an attacker can burn down a pool to 1 share and donate assets to
+inflate the share price, then profit from a victim's slippage-unprotected mint. The
+`validateSupply` guard in `NavImpactLib` (`contracts/protocol/libraries/NavImpactLib.sol:71`)
+never fires when `virtualSupply == 0` (no cross-chain activity), and plain-ETH `receive()`
+donations bypass NAV-impact validation.
+
+**Status**: known issue, documented as inherent to share-based NAV pools.
+
+- The attack is the classic vault share-price manipulation (affects ERC-4626-style vaults
+  generally, including OZ's, which mitigates rather than eliminates it). It requires the
+  victim to mint **without slippage protection** — the standard mitigation is for minters to
+  specify a minimum amount of shares / maximum NAV, which the Rigoblock app computes before
+  minting.
+- `validateSupply` is deliberately scoped to pools with negative virtual supply
+  (cross-chain Transfer mode), where it prevents effective-supply manipulation across chains.
+  Extending it to `virtualSupply == 0` pools was considered and rejected: it cannot
+  distinguish a donation attack from legitimate donations, and the guard itself creates
+  bricking edge cases for small pools.
+- The practical exposure is bounded to pools whose users mint without slippage protection;
+  pool operators and the official UI are expected to apply it.
+
+### K2. Permissionless `createStakingPool` Assigns the Caller as Staking Pal
+
+**Claim** (paraphrased): anyone can call `StakingProxy.createStakingPool()` through the proxy
+fallback; a caller other than the pool operator becomes the staking pal and receives 10% of
+the operator's reward share (≈ 7% of total pool staking rewards) at every epoch finalization.
+Because `setStakingPalAddress` rejects `address(0)`, a hijacked pal can never be removed.
+
+**Status**: known issue, accepted by design.
+
+- `createStakingPool` (`contracts/staking/staking_pools/MixinStakingPool.sol:43`) is
+  intentionally permissionless so that third parties can register pools for operators
+  (historically used by the onboarding flow). The pal assignment
+  (`msg.sender != operator ? msg.sender : address(0)`) is the intended incentive for that flow.
+- The exposure is **recoverable at any time**: `setStakingPalAddress` is
+  `onlyStakingPoolOperator`, so the operator can redirect the pal share to any address
+  (e.g. themselves) in one transaction as soon as they notice. The attacker's take is bounded
+  to the pal share accumulated before the redirect (at most a few epochs of ~7% of rewards).
+- The `address(0)` rejection prevents a different griefing vector (pal permanently disabled)
+  and is deliberate; "removal" is achieved by redirecting to an operator-controlled address.
+- Hardening (e.g. only the operator may create a staking pool, or pal opt-in) is possible in a
+  future staking upgrade but is not considered urgent: the financial impact is bounded and
+  self-recoverable, and the staking module is outside the bug-bounty reward scope
+  (`contracts/protocol` and `contracts/governance`).
+
+**Author**: GitHub Copilot (Claude Sonnet 4.5)
+**Date**: September 29, 2026
+**Status**: Known issues documented; no fix planned

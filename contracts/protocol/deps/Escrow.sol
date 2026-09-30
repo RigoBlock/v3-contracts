@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
 import {IERC20} from "../interfaces/IERC20.sol";

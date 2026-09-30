@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 // solhint-disable-next-line
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {EnumerableSet, AddressSet} from "../../libraries/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
@@ -18,7 +18,7 @@ import {Feature} from "0x-settler/src/deployer/Feature.sol";
 
 /// @title A0xRouter - Allows smart pool swaps via the 0x swap aggregator.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
-/// @dev See docs/0x/ACTION_ALLOWLIST.md for security rationale and blocked action details.
+/// @dev See docs/0x/ACTION_ALLOWLIST.md for the validation model and security rationale.
 contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
     using EnumerableSet for AddressSet;
     using SafeTransferLib for address;
@@ -91,46 +91,6 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         }
     }
 
-    /// @dev Reverts if the action selector is not in the allowlist.
-    ///  BASIC is allowed because the 0x API uses it for ETH wrapping/unwrapping and intermediate
-    ///  protocol interactions. The settler's _isRestrictedTarget() prevents BASIC from calling
-    ///  Permit2, AllowanceHolder, or the settler itself. The settler's slippage check
-    ///  (_checkSlippageAndTransfer) ensures minimum output, preventing fund loss.
-    ///  CHECK_SLIPPAGE is allowed because exact-output 0x swaps use it to pay the bought tokens
-    ///  to the vault after verifying the minimum output. _validateSettlerCalldata already enforces
-    ///  that the recipient is the vault and that the buy token has a price feed.
-    function _assertIsAllowedAction(bytes4 s) private pure {
-        require(
-            s == ISettlerActions.TRANSFER_FROM.selector ||
-                s == ISettlerActions.NATIVE_CHECK.selector ||
-                s == ISettlerActions.POSITIVE_SLIPPAGE.selector ||
-                s == ISettlerActions.BASIC.selector ||
-                s == ISettlerActions.UNISWAPV2.selector ||
-                s == ISettlerActions.UNISWAPV3.selector ||
-                s == ISettlerActions.UNISWAPV3_VIP.selector ||
-                s == ISettlerActions.UNISWAPV4.selector ||
-                s == ISettlerActions.UNISWAPV4_VIP.selector ||
-                s == ISettlerActions.BALANCERV3.selector ||
-                s == ISettlerActions.BALANCERV3_VIP.selector ||
-                s == ISettlerActions.PANCAKE_INFINITY.selector ||
-                s == ISettlerActions.PANCAKE_INFINITY_VIP.selector ||
-                s == ISettlerActions.CURVE_TRICRYPTO_VIP.selector ||
-                s == ISettlerActions.MAVERICKV2.selector ||
-                s == ISettlerActions.DODOV1.selector ||
-                s == ISettlerActions.DODOV2.selector ||
-                s == ISettlerActions.VELODROME.selector ||
-                s == ISettlerActions.MAKERPSM.selector ||
-                s == ISettlerActions.BEBOP.selector ||
-                s == ISettlerActions.EKUBO.selector ||
-                s == ISettlerActions.EKUBOV3.selector ||
-                s == ISettlerActions.EKUBOV3_VIP.selector ||
-                s == ISettlerActions.EULERSWAP.selector ||
-                s == ISettlerActions.HANJI.selector ||
-                s == ISettlerActions.CHECK_SLIPPAGE.selector,
-            ActionNotAllowed(s)
-        );
-    }
-
     /// @dev Adds buyToken to active tokens if it has a valid price feed.
     ///  Maps the 0x ETH sentinel (0xEeee...) to address(0) because the EOracle recognizes
     ///  address(0) and wrappedNative as having price feeds, but not the sentinel.
@@ -142,7 +102,10 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         values.addUnique(IEOracle(address(this)), buyToken, StorageLib.pool().baseToken);
     }
 
-    /// @dev Iterates settler actions and validates each selector against the allowlist.
+    /// @dev Iterates settler actions and enforces the adapter's own invariants. Action
+    ///  selectors are intentionally not filtered: the pool operator is responsible for
+    ///  calldata correctness (see docs/0x/ACTION_ALLOWLIST.md), and filtering would make
+    ///  the adapter fragile to 0x settler upgrades.
     function _checkActionsAllowed(address target, bytes calldata data) private pure {
         // ABI layout: data[100:132] = offset to actions[] (4th word after selector).
         uint256 actionsOffset = abi.decode(data[100:132], (uint256));
@@ -154,7 +117,6 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
             uint256 elOffset = abi.decode(data[elPos:elPos + 32], (uint256));
             uint256 selectorPos = arrStart + elOffset + 64;
             bytes4 actionSelector = bytes4(data[selectorPos:selectorPos + 4]);
-            _assertIsAllowedAction(actionSelector);
 
             // TRANSFER_FROM routes sell tokens from the pool into the Settler for internal routing.
             if (actionSelector == ISettlerActions.TRANSFER_FROM.selector) {
@@ -173,7 +135,7 @@ contract A0xRouter is IA0xRouter, IMinimumVersion, ReentrancyGuardTransient {
         );
     }
 
-    /// @dev Validates settler calldata: correct selector, recipient, price feed, and action allowlist.
+    /// @dev Validates settler calldata: correct selector, recipient, price feed, and action invariants.
     function _validateSettlerCalldata(address target, bytes calldata data) private {
         require(data.length >= 164, InvalidSettlerCalldata());
 
