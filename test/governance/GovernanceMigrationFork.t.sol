@@ -233,7 +233,7 @@ contract GovernanceMigrationForkTest is Test {
             // pre-upgrade implementation: VoteType.For = 0, do not use the reordered enum
             ILegacyVoting(PROXY).castVote(proposalId, 0);
         } else {
-            RigoblockGovernance(PROXY).castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
+            RigoblockGovernance(payable(PROXY)).castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         }
 
         _warpPastVotingPeriod(proposalId);

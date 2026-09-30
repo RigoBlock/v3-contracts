@@ -92,7 +92,7 @@ describe("Governance Upgrades", async () => {
         governanceInstance.upgradeImplementation(user2.address),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovUpgradeNotApproved",
+        "GovernorOnlyExecutor",
       );
     });
 
@@ -169,7 +169,7 @@ describe("Governance Upgrades", async () => {
         governanceInstance.upgradeStrategy(user2.address),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovUpgradeNotApproved",
+        "GovernorOnlyExecutor",
       );
     });
 
@@ -251,7 +251,7 @@ describe("Governance Upgrades", async () => {
         governanceInstance.updateThresholds(1, 1),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovUpgradeNotApproved",
+        "GovernorOnlyExecutor",
       );
     });
 

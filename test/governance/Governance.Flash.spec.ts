@@ -129,7 +129,10 @@ describe("Governance Flash Attack", async () => {
       // voting is closed as we have reached qualified consensus (proposal cannot fail under any circumstance)
       await expect(
         connect(governanceInstance, user2).castVote(1, VoteType.For),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorUnexpectedProposalState",
+      );
       // transaction will be executed as it is in a new block. We keep this test as we want to catch an error should
       //  future upgrades modify this logic. Relevant as moving the voting end 1 block forward instead of same block
       //  as qualifying vote would create an attack vector with limited impact where voters keep postponing voting end.

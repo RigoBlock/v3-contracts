@@ -374,7 +374,10 @@ describe("Governance Proxy", async () => {
       await governanceInstance.propose([action], description);
       await expect(
         governanceInstance.castVote(1, 1),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorUnexpectedProposalState",
+      );
     });
 
     it("should revert without voting power", async () => {
@@ -402,7 +405,10 @@ describe("Governance Proxy", async () => {
       await governanceInstance.propose([action], description);
       await expect(
         connect(governanceInstance, user2).castVote(1, 1),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorUnexpectedProposalState",
+      );
       await timeTravel({ days: 14, mine: true });
       await staking.endEpoch();
       await expect(
@@ -448,7 +454,10 @@ describe("Governance Proxy", async () => {
       await timeTravel({ days: 7, mine: true });
       await expect(
         connect(governanceInstance, user2).castVote(1, 1),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorUnexpectedProposalState",
+      );
     });
   });
 
@@ -487,7 +496,10 @@ describe("Governance Proxy", async () => {
       // a canceled proposal can neither be voted on nor executed
       await expect(
         governanceInstance.castVote(1, 1),
-      ).to.be.revertedWithCustomError(governanceInstance, "GovVotingClosed");
+      ).to.be.revertedWithCustomError(
+        governanceInstance,
+        "GovernorUnexpectedProposalState",
+      );
       await expect(governanceInstance.execute(1)).to.be.revertedWithCustomError(
         governanceInstance,
         "GovVotingClosed",
@@ -689,7 +701,7 @@ describe("Governance Proxy", async () => {
         ),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovInvalidSignature",
+        "GovernorInvalidSignature",
       );
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
@@ -700,7 +712,7 @@ describe("Governance Proxy", async () => {
         ),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovInvalidSignature",
+        "GovernorInvalidSignature",
       );
       await expect(
         connect(governanceInstance, user2).castVoteBySig(
@@ -776,7 +788,7 @@ describe("Governance Proxy", async () => {
         ),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovInvalidSignature",
+        "GovernorInvalidSignature",
       );
       // replaying the same signature fails: the nonce was consumed by the first valid cast
       await expect(
@@ -788,7 +800,7 @@ describe("Governance Proxy", async () => {
         ),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovInvalidSignature",
+        "GovernorInvalidSignature",
       );
     });
 
@@ -861,7 +873,7 @@ describe("Governance Proxy", async () => {
         ),
       ).to.be.revertedWithCustomError(
         governanceInstance,
-        "GovInvalidSignature",
+        "GovernorInvalidSignature",
       );
     });
   });

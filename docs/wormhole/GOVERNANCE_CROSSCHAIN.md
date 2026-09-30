@@ -124,6 +124,9 @@ read. `RigoblockGovernanceStrategy` enforces, via `beforePropose`:
 - If `action.target == wormhole`, the calldata selector must be
   `IWormhole.publishMessage.selector` and the decoded `CrossChainPayload` must
   target a chain other than the local Wormhole chain id.
+- The `consistencyLevel` argument must be `200` (Wormhole's finalized level):
+  governance messages must reach Ethereum finality before guardian attestation
+  (`GovCrosschainInvalidConsistencyLevel` otherwise).
 - The wrapper `value` and every inner action `value` must be `0`
   (`GovCrosschainInvalidValue` otherwise).
 

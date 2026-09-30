@@ -83,7 +83,7 @@ contract GovernanceCrosschainForkTest is Test {
                     abi.encode(
                         CrossChainPayload({targetWormholeChainId: TARGET_CHAIN, proposalId: 1, actions: innerActions})
                     ),
-                    uint8(1)
+                    uint8(200)
                 ),
                 value: 0
             });
@@ -98,7 +98,7 @@ contract GovernanceCrosschainForkTest is Test {
                 emitterChainId: EMITTER_CHAIN,
                 emitterAddress: bytes32(uint256(uint160(address(governance)))),
                 sequence: sequence,
-                consistencyLevel: 1,
+                consistencyLevel: 200,
                 payload: payload,
                 guardianSetIndex: 0,
                 signatures: new GuardianSignature[](0),

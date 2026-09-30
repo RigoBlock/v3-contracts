@@ -120,7 +120,7 @@ contract GovernanceCrosschainTest is Test {
                 emitterChainId: EMITTER_CHAIN,
                 emitterAddress: bytes32(uint256(uint160(address(governance)))),
                 sequence: sequence,
-                consistencyLevel: 1,
+                consistencyLevel: 200,
                 payload: payload,
                 guardianSetIndex: 0,
                 signatures: new GuardianSignature[](0),

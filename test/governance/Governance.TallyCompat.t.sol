@@ -180,7 +180,7 @@ contract MockCompatStrategy is IGovernanceStrategy {
 }
 
 /// @dev Harness using the real mixins, same pattern as the migration tests.
-contract CompatHarness is MixinStorage, MixinInitializer, MixinUpgrade, MixinVoting, MixinState, MixinCrosschain {
+contract CompatHarness is MixinStorage, MixinInitializer, MixinVoting, MixinUpgrade, MixinCrosschain {
     constructor() MixinStorage() {}
 
     function setStrategy(address strategy_) external {
@@ -314,6 +314,32 @@ contract GovernanceTallyCompatTest is Test {
         harness.execute(succeededId);
         assertEq(uint8(harness.getProposalState(succeededId)), uint8(ProposalStatus.Executed));
         assertEq(uint8(harness.state(succeededId)), uint8(OZGovernor.ProposalState.Executed));
+    }
+
+    /// @notice The OZ hash-based `cancel` resolves the proposal from its content hash, enforces
+    ///     proposer auth, and cancels it exactly like the id-based entry point.
+    function test_Cancel_ByProposalHash_Succeeds() public {
+        address[] memory targets = new address[](1);
+        targets[0] = address(compatTarget);
+        uint256[] memory values = new uint256[](1);
+        bytes[] memory calldatas = new bytes[](1);
+        bytes32 descriptionHash = keccak256(bytes("proposal"));
+
+        uint256 proposalId = _proposeDefault();
+        assertEq(uint8(harness.state(proposalId)), uint8(OZGovernor.ProposalState.Pending));
+
+        vm.expectEmit(true, false, false, true);
+        emit OZGovernor.ProposalCanceled(proposalId);
+        vm.prank(whale);
+        uint256 canceledId = harness.cancel(targets, values, calldatas, descriptionHash);
+        assertEq(canceledId, proposalId);
+        assertEq(uint8(harness.state(proposalId)), uint8(OZGovernor.ProposalState.Canceled));
+
+        // the same hash form enforces proposer auth on a still-pending proposal
+        uint256 otherId = _proposeDefault();
+        vm.prank(voter2);
+        vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovUnableToCancel.selector, otherId, voter2));
+        harness.cancel(targets, values, calldatas, descriptionHash);
     }
 
     /// @notice castVoteWithReason records the vote and emits the OZ VoteCast event carrying
@@ -537,7 +563,7 @@ contract GovernanceTallyCompatTest is Test {
         vm.warp(block.timestamp + 2);
 
         vm.expectEmit(true, true, false, true);
-        emit OZEventEmitter.VoteCast(whale, proposalId, 1, VOTING_POWER, "r");
+        emit IGovernanceEvents.VoteCast(whale, proposalId, IGovernanceVoting.VoteType.For, VOTING_POWER);
 
         vm.expectEmit(true, true, false, false);
         emit OZEventEmitter.VoteCastWithParams(whale, proposalId, 1, VOTING_POWER, "r", hex"01");
@@ -676,7 +702,7 @@ contract GovernanceTallyCompatTest is Test {
             _extendedBallotDigest(proposalId, 1, signatory, 0, "r", hex"01")
         );
 
-        vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovInvalidSignature.selector, signatory));
+        vm.expectRevert(abi.encodeWithSelector(OZGovernor.GovernorInvalidSignature.selector, signatory));
         harness.castVoteWithReasonAndParamsBySig(proposalId, 1, signatory, "r", hex"02", abi.encodePacked(r, s, v));
     }
 

@@ -5,7 +5,6 @@ import {IGovernanceState} from "./interfaces/governance/IGovernanceState.sol";
 import {MixinCrosschain} from "./mixins/MixinCrosschain.sol";
 import {MixinImmutables} from "./mixins/MixinImmutables.sol";
 import {MixinInitializer} from "./mixins/MixinInitializer.sol";
-import {MixinState} from "./mixins/MixinState.sol";
 import {MixinStorage} from "./mixins/MixinStorage.sol";
 import {MixinUpgrade} from "./mixins/MixinUpgrade.sol";
 import {MixinVoting} from "./mixins/MixinVoting.sol";
@@ -16,9 +15,8 @@ contract RigoblockGovernance is
     IRigoblockGovernance,
     MixinStorage,
     MixinInitializer,
-    MixinUpgrade,
     MixinVoting,
-    MixinState,
+    MixinUpgrade,
     MixinCrosschain
 {
     /// @notice Constructor has no inputs to guarantee same deterministic address across chains.

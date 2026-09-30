@@ -95,7 +95,7 @@ describe("Governance Implementation", async () => {
       const { implementation, user2 } = await setupTests();
       await expect(
         implementation.upgradeImplementation(user2.address),
-      ).to.be.revertedWithCustomError(implementation, "GovUpgradeNotApproved");
+      ).to.be.revertedWithCustomError(implementation, "GovernorOnlyExecutor");
     });
   });
 
@@ -104,7 +104,7 @@ describe("Governance Implementation", async () => {
       const { implementation } = await setupTests();
       await expect(
         implementation.updateThresholds(1, 1),
-      ).to.be.revertedWithCustomError(implementation, "GovUpgradeNotApproved");
+      ).to.be.revertedWithCustomError(implementation, "GovernorOnlyExecutor");
     });
   });
 
@@ -122,7 +122,7 @@ describe("Governance Implementation", async () => {
       const { implementation, user2 } = await setupTests();
       await expect(
         implementation.upgradeStrategy(user2.address),
-      ).to.be.revertedWithCustomError(implementation, "GovUpgradeNotApproved");
+      ).to.be.revertedWithCustomError(implementation, "GovernorOnlyExecutor");
     });
   });
 });

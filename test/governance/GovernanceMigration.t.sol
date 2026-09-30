@@ -18,6 +18,7 @@ import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovern
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 import {IGovernor as IOZGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
+import {IGovernor as OZGovernorV5} from "@openzeppelin-gov/governance/IGovernor.sol";
 
 /// @title MockMigrationStrategy
 /// @notice Simplified strategy that returns deterministic voting power and timestamps
@@ -131,7 +132,7 @@ contract MockMigrationStrategy is IGovernanceStrategy {
 
 /// @title MigrationHarness
 /// @notice Exposes governance storage and uses the real new-implementation mixins.
-contract MigrationHarness is MixinStorage, MixinInitializer, MixinUpgrade, MixinVoting, MixinState, MixinCrosschain {
+contract MigrationHarness is MixinStorage, MixinInitializer, MixinVoting, MixinUpgrade, MixinCrosschain {
     constructor() MixinStorage() {}
 
     function setStrategy(address strategy_) external {
@@ -351,11 +352,17 @@ contract GovernanceMigrationTest is Test {
         assertTrue(harness.canceled(proposalId));
         assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Canceled));
 
-        // voting and executing a canceled proposal must revert
+        // voting and executing a canceled proposal must revert. The vote path is OZ's
+        // `castVote`, which validates state before counting and reverts with the OZ error.
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
         vm.expectRevert(
-            abi.encodeWithSelector(MixinVoting.GovVotingClosed.selector, proposalId, ProposalStatus.Canceled)
+            abi.encodeWithSelector(
+                OZGovernorV5.GovernorUnexpectedProposalState.selector,
+                proposalId,
+                OZGovernorV5.ProposalState.Canceled,
+                bytes32(uint256(1 << uint8(OZGovernorV5.ProposalState.Active)))
+            )
         );
         harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
 

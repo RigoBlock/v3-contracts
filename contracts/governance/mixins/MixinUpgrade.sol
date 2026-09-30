@@ -4,24 +4,15 @@ pragma solidity >=0.8.0 <0.9.0;
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceUpgrade} from "../interfaces/governance/IGovernanceUpgrade.sol";
-import {MixinStorage} from "./MixinStorage.sol";
+import {MixinVoting} from "./MixinVoting.sol";
 
-abstract contract MixinUpgrade is MixinStorage {
-    /// @notice Thrown when an upgrade method is called by an account other than the governance proxy.
-    error GovUpgradeNotApproved();
-
+abstract contract MixinUpgrade is MixinVoting {
     /// @notice Thrown when a new threshold, implementation, or strategy is the same as the current one.
     error GovUpgradeSameAsCurrent();
 
     /// @notice Thrown when an upgrade target is not a contract.
     /// @param target The supplied address.
     error GovUpgradeNotContract(address target);
-
-    // upgrades must go through voting, i.e. execute method, which cannot be invoked directly in the implementation
-    modifier onlyGovernance() {
-        require(msg.sender == address(this), GovUpgradeNotApproved());
-        _;
-    }
 
     /// @inheritdoc IGovernanceUpgrade
     function updateThresholds(

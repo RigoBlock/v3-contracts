@@ -5,6 +5,7 @@ import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
+import {Governor} from "@openzeppelin-gov/governance/Governor.sol";
 import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
 import {IERC165} from "@openzeppelin-gov/utils/introspection/IERC165.sol";
 import {IERC5267} from "@openzeppelin-gov/interfaces/IERC5267.sol";
@@ -12,7 +13,7 @@ import {IERC6372} from "@openzeppelin-gov/interfaces/IERC6372.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
 
-abstract contract MixinState is MixinStorage, MixinAbstract {
+abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
     function getActions(
         uint256 proposalId
@@ -54,7 +55,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IOZGovernor
-    function name() public view override returns (string memory) {
+    function name() public view override(Governor, IOZGovernor) returns (string memory) {
         return _name().value;
     }
 
@@ -84,22 +85,22 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IOZGovernor
-    function votingPeriod() public view override returns (uint256) {
+    function votingPeriod() public view override(Governor, IOZGovernor) returns (uint256) {
         return IGovernanceStrategy(_governanceParameters().strategy).votingPeriod();
     }
 
     /// @inheritdoc IERC6372
-    function CLOCK_MODE() external pure override returns (string memory) {
+    function CLOCK_MODE() public pure override(Governor, IERC6372) returns (string memory) {
         return "mode=timestamp";
     }
 
     /// @inheritdoc IERC6372
-    function clock() external view override returns (uint48) {
+    function clock() public view override(Governor, IERC6372) returns (uint48) {
         return uint48(block.timestamp);
     }
 
     /// @inheritdoc IERC165
-    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override(Governor, IERC165) returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IOZGovernor).interfaceId ||
@@ -118,7 +119,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    ) public pure override returns (uint256) {
+    ) public pure override(Governor, IOZGovernor) returns (uint256) {
         return _hashProposal(targets, values, calldatas, descriptionHash);
     }
 
@@ -128,27 +129,27 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    ) external view override returns (uint256) {
+    ) public view override(Governor, IOZGovernor) returns (uint256) {
         return hashProposal(targets, values, calldatas, descriptionHash);
     }
 
     /// @inheritdoc IOZGovernor
-    function proposalProposer(uint256 proposalId) external view override returns (address) {
+    function proposalProposer(uint256 proposalId) public view override(Governor, IOZGovernor) returns (address) {
         return _proposalMeta().proposalMetaById[proposalId].proposer;
     }
 
     /// @inheritdoc IOZGovernor
-    function proposalEta(uint256) external pure override returns (uint256) {
+    function proposalEta(uint256) public pure override(Governor, IOZGovernor) returns (uint256) {
         return 0; // no timelock
     }
 
     /// @inheritdoc IOZGovernor
-    function proposalNeedsQueuing(uint256) external pure override returns (bool) {
+    function proposalNeedsQueuing(uint256) public pure override(Governor, IOZGovernor) returns (bool) {
         return false; // no timelock
     }
 
     /// @inheritdoc IOZGovernor
-    function state(uint256 proposalId) public view override returns (IOZGovernor.ProposalState) {
+    function state(uint256 proposalId) public view override(Governor, IOZGovernor) returns (IOZGovernor.ProposalState) {
         return _toOZState(_getProposalState(proposalId));
     }
 
@@ -163,39 +164,29 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IOZGovernor
-    function votingDelay() public pure override returns (uint256) {
+    function votingDelay() public pure override(Governor, IOZGovernor) returns (uint256) {
         // voting starts at least one second in the future (see votingTimestamps)
         return 1;
     }
 
     /// @inheritdoc IOZGovernor
-    function proposalSnapshot(uint256 proposalId) public view override returns (uint256) {
+    function proposalSnapshot(uint256 proposalId) public view override(Governor, IOZGovernor) returns (uint256) {
         return _proposal().proposalById[proposalId].startBlockOrTime;
     }
 
     /// @inheritdoc IOZGovernor
-    function proposalDeadline(uint256 proposalId) public view override returns (uint256) {
+    function proposalDeadline(uint256 proposalId) public view override(Governor, IOZGovernor) returns (uint256) {
         return _proposal().proposalById[proposalId].endBlockOrTime;
     }
 
     /// @inheritdoc IOZGovernor
-    function proposalThreshold() public view override returns (uint256) {
+    function proposalThreshold() public view override(Governor, IOZGovernor) returns (uint256) {
         return _governanceParameters().proposalThreshold;
     }
 
     /// @inheritdoc IOZGovernor
-    function quorum(uint256) public view override returns (uint256) {
+    function quorum(uint256) public view override(Governor, IOZGovernor) returns (uint256) {
         return _governanceParameters().quorumThreshold;
-    }
-
-    /// @inheritdoc IOZGovernor
-    function getVotes(address account, uint256) public view override returns (uint256) {
-        return _getVotingPower(account);
-    }
-
-    /// @inheritdoc IOZGovernor
-    function getVotesWithParams(address account, uint256, bytes memory) public view override returns (uint256) {
-        return _getVotingPower(account);
     }
 
     /// @inheritdoc IOZGovernor
@@ -212,7 +203,7 @@ abstract contract MixinState is MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IOZGovernor
-    function version() public view override returns (string memory) {
+    function version() public view override(Governor, IOZGovernor) returns (string memory) {
         return VERSION;
     }
 

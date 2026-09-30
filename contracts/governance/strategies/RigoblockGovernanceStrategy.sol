@@ -39,6 +39,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// so the wrapper must be zero and the Wormhole fee is attached at execution time only.
     error GovCrosschainInvalidValue(uint256 value);
 
+    /// @notice Thrown when a Wormhole message is published with a consistency level other than finalized.
+    /// @param consistencyLevel The supplied consistency level.
+    error GovCrosschainInvalidConsistencyLevel(uint8 consistencyLevel);
+
     /// @notice Thrown when the proposal threshold is outside the allowed range.
     error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
 
@@ -209,7 +213,9 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     function _assertValidWormholeData(bytes calldata data) private view {
         require(data.length >= 4 && bytes4(data) == ICoreBridge.publishMessage.selector, GovCrosschainInvalidData());
 
-        (, bytes memory payload, ) = abi.decode(data[4:], (uint32, bytes, uint8));
+        (, bytes memory payload, uint8 consistencyLevel) = abi.decode(data[4:], (uint32, bytes, uint8));
+        // 200 is Wormhole's finalized consistency level: mainnet votes must reach finality before attestation
+        require(consistencyLevel == 200, GovCrosschainInvalidConsistencyLevel(consistencyLevel));
         CrossChainPayload memory crossChainPayload = abi.decode(payload, (CrossChainPayload));
         require(
             crossChainPayload.targetWormholeChainId != _wormholeChainId,

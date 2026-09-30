@@ -50,7 +50,7 @@ contract RigoblockGovernanceStrategyTest is Test {
 
     function _wormholeData(uint16 targetChainId) private pure returns (bytes memory) {
         return
-            abi.encodeWithSelector(ICoreBridge.publishMessage.selector, uint32(0), _payload(targetChainId), uint8(1));
+            abi.encodeWithSelector(ICoreBridge.publishMessage.selector, uint32(0), _payload(targetChainId), uint8(200));
     }
 
     function test_beforePropose_NonWormhole_Passes() public view {
@@ -111,9 +111,24 @@ contract RigoblockGovernanceStrategyTest is Test {
             ICoreBridge.publishMessage.selector,
             uint32(0),
             abi.encode(crossChainPayload),
-            uint8(1)
+            uint8(200)
         );
         vm.expectRevert(abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
+        strategy.beforePropose(_action(WORMHOLE, data, 0));
+    }
+
+    function test_beforePropose_WormholeNonFinalizedConsistencyLevel_Reverts() public {
+        vm.chainId(1);
+        // 1 = "confirmed": guardians attest without Ethereum finality, which governance messages must not use
+        bytes memory data = abi.encodeWithSelector(
+            ICoreBridge.publishMessage.selector,
+            uint32(0),
+            _payload(TARGET_CHAIN_ID),
+            uint8(1)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidConsistencyLevel.selector, uint8(1))
+        );
         strategy.beforePropose(_action(WORMHOLE, data, 0));
     }
 
