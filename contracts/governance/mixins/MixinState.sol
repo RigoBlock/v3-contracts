@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
-import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
-import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
-import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {Governor} from "@openzeppelin-gov/governance/Governor.sol";
-import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
 import {IERC165} from "@openzeppelin-gov/utils/introspection/IERC165.sol";
 import {IERC5267} from "@openzeppelin-gov/interfaces/IERC5267.sol";
 import {IERC6372} from "@openzeppelin-gov/interfaces/IERC6372.sol";
+import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
+import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
+import {ProposalStatus} from "../types/GovernanceTypes.sol";
 
 abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
@@ -62,16 +62,6 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
     function proposalCount() external view override returns (uint256 count) {
         return _getProposalCount();
-    }
-
-    /// @inheritdoc IGovernanceState
-    function proposer(uint256 proposalId) external view override returns (address proposer) {
-        return _proposalMeta().proposalMetaById[proposalId].proposer;
-    }
-
-    /// @inheritdoc IGovernanceState
-    function canceled(uint256 proposalId) external view override returns (bool canceled) {
-        return _proposalMeta().proposalMetaById[proposalId].canceled;
     }
 
     /// @inheritdoc IGovernanceState
@@ -139,8 +129,11 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IOZGovernor
+    /// @dev eta is the timelock availability timestamp, written by `queue()`. With no
+    ///      timelock nothing is ever queued, so it is always 0; returning the voting
+    ///      deadline here would flip OZ `state()` from Succeeded to Queued.
     function proposalEta(uint256) public pure override(Governor, IOZGovernor) returns (uint256) {
-        return 0; // no timelock
+        return 0;
     }
 
     /// @inheritdoc IOZGovernor
@@ -193,14 +186,6 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IOZGovernor
     function hasVoted(uint256 proposalId, address account) public view override returns (bool) {
         return _receipt().userReceiptByProposal[proposalId][account].hasVoted;
-    }
-
-    /// @inheritdoc IGovernanceState
-    function proposalVotes(
-        uint256 proposalId
-    ) external view override returns (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes) {
-        IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
-        return (proposal.votesAgainst, proposal.votesFor, proposal.votesAbstain);
     }
 
     /// @inheritdoc IOZGovernor

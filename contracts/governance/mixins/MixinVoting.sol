@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
-import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
-import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
-import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {Governor} from "@openzeppelin-gov/governance/Governor.sol";
 import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
-import {TimeType} from "../types/TimeType.sol";
-import {MixinState} from "./MixinState.sol";
 import {GovernanceActionLib} from "../libraries/GovernanceActionLib.sol";
+import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
+import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
+import {MixinState} from "./MixinState.sol";
+import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {TimeType} from "../types/TimeType.sol";
 
 /// @dev Inherits `MixinState` (which inherits OZ `Governor`) as a single chain, avoiding a
 ///      diamond between the voting and state mixins over the Governor branch.

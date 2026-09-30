@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "./governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "./governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "./IRigoblockGovernanceFactory.sol";
+import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {

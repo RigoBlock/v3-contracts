@@ -484,12 +484,12 @@ describe("Governance Proxy", async () => {
       const zeroBytes = encodeBytes32String("");
       const action = new ProposedAction(ZeroAddress, zeroBytes, 0n);
       await governanceInstance.propose([action], description);
-      expect(await governanceInstance.proposer(1)).to.be.eq(user1.address);
-      expect(await governanceInstance.canceled(1)).to.be.false;
+      expect(await governanceInstance.proposalProposer(1)).to.be.eq(
+        user1.address,
+      );
       await expect(governanceInstance.cancel(1))
         .to.emit(governanceInstance, "ProposalCanceled")
         .withArgs(1);
-      expect(await governanceInstance.canceled(1)).to.be.true;
       expect(await governanceInstance.getProposalState(1)).to.be.eq(
         ProposalStatus.Canceled,
       );
@@ -531,7 +531,9 @@ describe("Governance Proxy", async () => {
       await expect(
         connect(governanceInstance, user2).cancel(1),
       ).to.be.revertedWithCustomError(governanceInstance, "GovUnableToCancel");
-      expect(await governanceInstance.canceled(1)).to.be.false;
+      expect(await governanceInstance.getProposalState(1)).to.be.eq(
+        ProposalStatus.Pending,
+      );
     });
 
     it("should revert once voting has started", async () => {
@@ -565,7 +567,9 @@ describe("Governance Proxy", async () => {
         governanceInstance,
         "GovVotingClosed",
       );
-      expect(await governanceInstance.canceled(1)).to.be.false;
+      expect(await governanceInstance.getProposalState(1)).to.be.eq(
+        ProposalStatus.Active,
+      );
     });
   });
 

@@ -201,7 +201,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         assertEq(endBlockOrTime, startBlockOrTime + 7 days);
     }
 
-    function test_GetProposalStatus_Blocknumber_Reverts() public {
+    function test_GetProposalState_Blocknumber_Reverts() public {
         IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({
             actionsLength: 1,
             startBlockOrTime: block.timestamp + 1,
@@ -220,7 +220,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         strategy.getProposalState(proposal, 100, TimeType.Blocknumber);
     }
 
-    function test_GetProposalStatus_Timestamp_ComparesTimestamp() public {
+    function test_GetProposalState_Timestamp_ComparesTimestamp() public {
         vm.warp(block.timestamp + 100);
 
         IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({

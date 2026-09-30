@@ -19,9 +19,9 @@
 
 pragma solidity 0.8.17;
 
-import "./RigoblockGovernanceProxy.sol";
-import "../types/TimeType.sol";
 import "../interfaces/IRigoblockGovernanceFactory.sol";
+import "../types/TimeType.sol";
+import "./RigoblockGovernanceProxy.sol";
 
 // solhint-disable-next-line
 contract RigoblockGovernanceFactory is IRigoblockGovernanceFactory {

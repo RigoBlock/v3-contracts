@@ -196,6 +196,14 @@ contract CompatHarness is MixinStorage, MixinInitializer, MixinVoting, MixinUpgr
     function setTimeType(TimeType timeType_) external {
         _paramsWrapper().governanceParameters.timeType = timeType_;
     }
+
+    function quorumReached(uint256 proposalId) external view returns (bool) {
+        return _quorumReached(proposalId);
+    }
+
+    function voteSucceeded(uint256 proposalId) external view returns (bool) {
+        return _voteSucceeded(proposalId);
+    }
 }
 
 contract MockCompatTarget {
@@ -360,8 +368,8 @@ contract GovernanceTallyCompatTest is Test {
         assertEq(weight, VOTING_POWER);
     }
 
-    /// @notice hasVoted and proposalVotes expose receipts and tallies in OZ shape.
-    function test_HasVoted_And_ProposalVotes() public {
+    /// @notice hasVoted exposes vote receipts in OZ shape.
+    function test_HasVoted() public {
         uint256 proposalId = _proposeDefault();
         assertFalse(harness.hasVoted(proposalId, whale));
 
@@ -373,11 +381,6 @@ contract GovernanceTallyCompatTest is Test {
 
         assertTrue(harness.hasVoted(proposalId, whale));
         assertFalse(harness.hasVoted(proposalId, makeAddr("nobody")));
-
-        (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes) = harness.proposalVotes(proposalId);
-        assertEq(againstVotes, VOTING_POWER);
-        assertEq(forVotes, VOTING_POWER);
-        assertEq(abstainVotes, 0);
     }
 
     /// @notice Selector identity with OpenZeppelin's interface is compile-enforced: the
@@ -581,10 +584,6 @@ contract GovernanceTallyCompatTest is Test {
             }
         }
         assertTrue(found);
-
-        (uint256 againstVotes, uint256 forVotes, ) = harness.proposalVotes(proposalId);
-        assertEq(againstVotes, 0);
-        assertEq(forVotes, VOTING_POWER);
     }
 
     /// @notice castVoteBySig verifies the OZ Governor ballot signature: fixed domain name/version
@@ -685,10 +684,6 @@ contract GovernanceTallyCompatTest is Test {
         assertEq(weight, VOTING_POWER);
         assertTrue(harness.hasVoted(proposalId, signatory));
         assertEq(harness.nonces(signatory), 1);
-
-        (uint256 againstVotes, uint256 forVotes, ) = harness.proposalVotes(proposalId);
-        assertEq(againstVotes, 0);
-        assertEq(forVotes, VOTING_POWER);
     }
 
     /// @notice A signature bound to different params no longer validates (fresh nonce, same proposal).
@@ -783,10 +778,56 @@ contract GovernanceTallyCompatTest is Test {
         assertEq(harness.votingDelay(), 1);
         assertEq(harness.proposalSnapshot(proposalId), wrapper.proposal.startBlockOrTime);
         assertEq(harness.proposalDeadline(proposalId), wrapper.proposal.endBlockOrTime);
+        assertEq(harness.proposalProposer(proposalId), whale);
+        // no timelock: eta is always 0 and nothing is ever queued
+        assertEq(harness.proposalEta(proposalId), 0);
+        assertFalse(harness.proposalNeedsQueuing(proposalId));
         assertEq(harness.proposalThreshold(), PROPOSAL_THRESHOLD);
         assertEq(harness.quorum(block.timestamp), QUORUM);
         assertEq(harness.getVotes(whale, block.timestamp), VOTING_POWER);
         assertEq(harness.getVotesWithParams(whale, block.timestamp, hex""), VOTING_POWER);
+    }
+
+    /// @notice The OZ abstract-hook views are wired to Rigoblock tallies: quorum counts
+    ///     for + against + abstain, success is strictly more for than against.
+    function test_OZHooks_ReflectRigoblockTallies() public {
+        uint256 againstProposal = _proposeDefault();
+        assertFalse(harness.quorumReached(againstProposal));
+        assertFalse(harness.voteSucceeded(againstProposal));
+
+        vm.warp(block.timestamp + 2);
+        vm.prank(whale);
+        harness.castVote(againstProposal, uint8(IGovernanceVoting.VoteType.Against));
+
+        // against votes count toward quorum but can never succeed
+        assertTrue(harness.quorumReached(againstProposal));
+        assertFalse(harness.voteSucceeded(againstProposal));
+
+        uint256 forProposal = _proposeDefault();
+        vm.warp(block.timestamp + 2);
+        vm.prank(whale);
+        harness.castVote(forProposal, uint8(IGovernanceVoting.VoteType.For));
+
+        assertTrue(harness.quorumReached(forProposal));
+        assertTrue(harness.voteSucceeded(forProposal));
+    }
+
+    /// @notice The OZ cancel flow resolves the proposal through the stored OZ proposal hash;
+    ///     an unknown hash reverts like execute does.
+    function test_OZCancel_UnknownHash_Reverts() public {
+        address[] memory targets = new address[](1);
+        uint256[] memory values = new uint256[](1);
+        bytes[] memory calldatas = new bytes[](1);
+        targets[0] = address(compatTarget);
+        calldatas[0] = hex"";
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MixinVoting.GovProposalIdUnknown.selector,
+                bytes32(harness.hashProposal(targets, values, calldatas, keccak256("unknown")))
+            )
+        );
+        harness.cancel(targets, values, calldatas, keccak256("unknown"));
     }
 
     /// @notice updateThresholds emits the OZ ProposalThresholdSet event for Tally indexing.

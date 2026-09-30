@@ -7,9 +7,11 @@ import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol"
 /// @notice This file holds types that are not already declared inside the public
 ///         governance interfaces, which must keep their types as interface members
 ///         for backwards compatibility with deployed contracts.
-///         The native proposal-state enum lives here: inheriting an enum named
-///         `ProposalState` would clash with the OpenZeppelin Governor's enum of the
-///         same name. The name `ProposalStatus` keeps the two unambiguous.
+///         The native proposal-state enum lives here under the name `ProposalStatus`:
+///         two inherited enums cannot share the `ProposalState` name (solc 9097
+///         "Identifier already declared" — see `IRigoblockGovernance`, which inherits
+///         both `IGovernanceState` and OZ's `IGovernor`), and a name distinct from
+///         the OZ enum keeps every use site unambiguous.
 
 /// @notice Native Rigoblock proposal states, a superset of the OZ Governor numbering
 ///         (adds Qualified). Encoded as uint8; value numbering is part of the

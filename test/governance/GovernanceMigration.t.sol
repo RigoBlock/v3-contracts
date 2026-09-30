@@ -378,15 +378,13 @@ contract GovernanceMigrationTest is Test {
     function test_Cancel_ProposerWhilePending_Succeeds() public {
         uint256 proposalId = _createProposal(harness, "cancelable proposal");
         assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Pending));
-        assertEq(harness.proposer(proposalId), whale);
-        assertFalse(harness.canceled(proposalId));
+        assertEq(harness.proposalProposer(proposalId), whale);
 
         vm.expectEmit(true, false, false, true);
         emit IOZGovernor.ProposalCanceled(proposalId);
         vm.prank(whale);
         harness.cancel(proposalId);
 
-        assertTrue(harness.canceled(proposalId));
         assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Canceled));
 
         // voting and executing a canceled proposal must revert. The vote path is OZ's
@@ -420,12 +418,12 @@ contract GovernanceMigrationTest is Test {
         vm.prank(other);
         harness.cancel(proposalId);
 
-        assertFalse(harness.canceled(proposalId));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Pending));
 
         // the proposer retains the right to cancel what they created
         vm.prank(whale);
         harness.cancel(proposalId);
-        assertTrue(harness.canceled(proposalId));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Canceled));
     }
 
     /// @notice Cancellation is only possible while the proposal is Pending: once voting has
@@ -444,7 +442,7 @@ contract GovernanceMigrationTest is Test {
         );
         vm.prank(whale);
         harness.cancel(proposalId);
-        assertFalse(harness.canceled(proposalId));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Active));
 
         // also not after the voting period has ended
         vm.warp(block.timestamp + 8 days);
@@ -454,7 +452,7 @@ contract GovernanceMigrationTest is Test {
         );
         vm.prank(whale);
         harness.cancel(proposalId);
-        assertFalse(harness.canceled(proposalId));
+        assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Defeated));
     }
 
     /// @notice A proposal created before the cancel feature existed (no recorded proposer in
@@ -466,12 +464,12 @@ contract GovernanceMigrationTest is Test {
         // simulate the old implementation, which never wrote the proposer: clear the meta slot
         bytes32 metaSlot = keccak256(abi.encode(uint256(legacyId), uint256(harness.proposalMetaSlot())));
         vm.store(address(harness), metaSlot, bytes32(0));
-        assertEq(harness.proposer(legacyId), address(0));
+        assertEq(harness.proposalProposer(legacyId), address(0));
 
         vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovUnableToCancel.selector, legacyId, whale));
         vm.prank(whale);
         harness.cancel(legacyId);
-        assertFalse(harness.canceled(legacyId));
+        assertEq(uint256(harness.getProposalState(legacyId)), uint256(ProposalStatus.Pending));
     }
 
     /// @notice Canceling one proposal must not leak into other proposals' meta or state.
@@ -482,9 +480,8 @@ contract GovernanceMigrationTest is Test {
         vm.prank(whale);
         harness.cancel(first);
 
-        assertTrue(harness.canceled(first));
-        assertFalse(harness.canceled(second));
-        assertEq(harness.proposer(second), whale);
+        assertEq(uint256(harness.getProposalState(first)), uint256(ProposalStatus.Canceled));
+        assertEq(harness.proposalProposer(second), whale);
         assertEq(uint256(harness.getProposalState(second)), uint256(ProposalStatus.Pending));
 
         // the surviving proposal remains fully executable

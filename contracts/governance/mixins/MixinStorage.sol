@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {MixinImmutables} from "./MixinImmutables.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
+import {MixinImmutables} from "./MixinImmutables.sol";
 
 abstract contract MixinStorage is MixinImmutables {
     // we use the constructor to assert that we are not using occupied storage slots

@@ -2,13 +2,13 @@
 pragma solidity 0.8.37;
 
 import {IGovernanceState} from "./interfaces/governance/IGovernanceState.sol";
+import {IRigoblockGovernance} from "./IRigoblockGovernance.sol";
 import {MixinCrosschain} from "./mixins/MixinCrosschain.sol";
 import {MixinImmutables} from "./mixins/MixinImmutables.sol";
 import {MixinInitializer} from "./mixins/MixinInitializer.sol";
 import {MixinStorage} from "./mixins/MixinStorage.sol";
 import {MixinUpgrade} from "./mixins/MixinUpgrade.sol";
 import {MixinVoting} from "./mixins/MixinVoting.sol";
-import {IRigoblockGovernance} from "./IRigoblockGovernance.sol";
 import {TimeType} from "./types/TimeType.sol";
 
 contract RigoblockGovernance is

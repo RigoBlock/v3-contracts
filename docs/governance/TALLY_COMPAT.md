@@ -20,6 +20,36 @@ branch that bypasses the overrides.
 
 ## Supported surface
 
+### Tally required-signature audit
+
+Audited against Tally's documented
+[OpenZeppelin Governor compatibility spec](https://docs.tally.xyz/set-up-and-technical-documentation/deploying-daos/smart-contract-compatibility/openzeppelin-governor/)
+("Cactus" app requirements, last reviewed 2026-09-30). Every required signature is
+present, either inherited unmodified from the vendored OZ `Governor` or overridden in the
+mixins:
+
+| Tally requirement                                                                                          | Where implemented                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `votingDelay()`, `votingPeriod()`, `proposalThreshold()`                                                   | `MixinState` views                                                                                                                                                  |
+| `quorum(uint256 timepoint)`                                                                                | `MixinState` (strategy threshold)                                                                                                                                   |
+| `state(uint256) → ProposalState`                                                                           | `MixinState.state` (OZ numbering)                                                                                                                                   |
+| `getVotes(address, uint256)` / `getVotesWithParams`                                                        | inherited from OZ `Governor`, which calls the overridden `_getVotes` (`MixinVoting`) — indirect implementation, asserted in `test_ViewShims_ReturnGovernanceParams` |
+| `propose(address[], uint256[], bytes[], string)`                                                           | `MixinVoting` (dual id + dual event)                                                                                                                                |
+| `execute(address[], uint256[], bytes[], bytes32)`                                                          | `MixinVoting` (resolves stored id)                                                                                                                                  |
+| `castVote`, `castVoteWithReason`, `castVoteWithReasonAndParams`                                            | inherited from OZ `Governor`                                                                                                                                        |
+| `castVoteBySig` (OZ 5.x `(uint256, uint8, address, bytes)` form)                                           | inherited from OZ `Governor` (Tally's docs still show the removed OZ 4.x `v,r,s` overload; the inherited 5.x form is the live OZ surface Tally indexes)             |
+| Events `ProposalCreated` (incl. `string[] signatures`), `VoteCast`, `ProposalCanceled`, `ProposalExecuted` | dual-emit: native + OZ declaration (identical topics)                                                                                                               |
+| Event `ProposalThresholdSet` (parameter changes)                                                           | emitted by `updateThresholds`                                                                                                                                       |
+| IERC-6372 `clock()` / `CLOCK_MODE()`                                                                       | `MixinState` (`mode=timestamp`)                                                                                                                                     |
+| Timelock-only items (`queue`, `ProposalQueued`, `TimelockChange`)                                          | N/A: no timelock; `proposalNeedsQueuing()` is false so Tally never queues                                                                                           |
+| `VotingDelaySet` / `VotingPeriodSet`                                                                       | N/A: delay/period are strategy-fixed, not settable on-chain                                                                                                         |
+| `QuorumNumeratorUpdated`                                                                                   | N/A: absolute threshold quorum, not a supply fraction (`GovernorVotesQuorumFraction` extension)                                                                     |
+
+`COUNTING_MODE()` is exposed for OZ counting-mode discovery; `hasVoted(uint256, address)`
+comes with the inherited OZ surface. Neither is in Tally's documented required list, and
+no native per-proposal tallies view is exposed — tallies are read from the stored
+`Proposal` via the native `getProposalById` / `proposals` views.
+
 ### ERC-6372 clock
 
 - `clock()` returns `uint48(block.timestamp)`.
@@ -34,7 +64,10 @@ governances are rejected by the Rigoblock strategy (see `docs/governance/STRATEG
 enum is `ProposalStatus`, declared in `contracts/governance/types/GovernanceTypes.sol`
 and **imported** (not inherited) by `IGovernanceState`: an import does not inject the
 name into inheriting contracts, so the two same-meaning enums coexist unambiguously
-(`ProposalStatus` = Rigoblock native, `ProposalState` = OZ). Its historical numbering
+(`ProposalStatus` = Rigoblock native, `ProposalState` = OZ). The native enum cannot be
+named `ProposalState`: `IRigoblockGovernance` inherits both `IGovernanceState` and OZ's
+`IGovernor`, and two inherited enums sharing one name fail compilation (solc 9097,
+"Identifier already declared") with no qualification escape. Its historical numbering
 is ABI- and storage-neutral, and `state()` translates on read:
 
 | OZ value | OZ state  | Rigoblock native value | Rigoblock state |
@@ -57,6 +90,15 @@ This is safe for existing governances: proposal state is computed on demand and 
 stored, so the translation applies uniformly to past and future proposals with no
 migration step. The native `getProposalState(uint256)` keeps the historical numbering.
 
+The cancel feature records the proposer and a canceled flag in a dedicated
+`_proposalMeta` mapping — the `Proposal` struct layout is frozen, so they cannot move
+into it. Deliberately, `IGovernanceState` exposes **no** native `proposer`/`canceled`
+views: the proposer is already readable through OZ's `proposalProposer(proposalId)`
+(required by the inherited Governor), and cancellation is observable through
+`state`/`getProposalState` (`Canceled`). Keeping them off the native surface avoids
+two views that merely duplicate other accessors; the storage remains, gated by cancel
+authorization (`msg.sender == proposer` while `Pending`).
+
 ### Voting
 
 - `castVote(uint256, uint8)`, `castVoteWithReason(uint256, uint8, string)` and
@@ -78,9 +120,9 @@ migration step. The native `getProposalState(uint256)` keeps the historical numb
 - Votes emit the native `VoteCast(voter, proposalId, voteType, votingPower)` (from
   `_countVote`) plus the OZ event: `VoteCast(..., reason)` when params are empty,
   `VoteCastWithParams(..., reason, params)` otherwise (OZ emits exactly one of the two).
-- `hasVoted(uint256, address)`, `proposalVotes(uint256) → (against, for, abstain)` and
-  `COUNTING_MODE() == "support=bravo&quorum=bravo"` expose receipts and tallies in OZ
-  shape.
+- `hasVoted(uint256, address)` comes with the inherited OZ surface, and
+  `COUNTING_MODE() == "support=bravo&quorum=bravo"` is exposed for OZ counting-mode
+  discovery. Neither is in Tally's documented required-signature list.
 
 ### Signed voting (OZ Governor ballot)
 
@@ -128,7 +170,15 @@ copies were deleted):
   returns the raw OZ content hash, and `state()` reverts `GovProposalIdInvalid(hash)`
   for that unknown id before the `proposalNeedsQueuing` check is ever reached.
   Accepted: Tally never calls `queue` when `proposalNeedsQueuing()` returns false, so
-  the exact revert reason is irrelevant to indexing. `proposalEta` returns 0.
+  the exact revert reason is irrelevant to indexing. `proposalEta` returns 0 because
+  there is no timelock: eta is the timelock availability timestamp written by `queue()`
+  — not the voting deadline, which is exposed via `proposalSnapshot` /
+  `proposalDeadline`. A nonzero eta would flip OZ `state()` from Succeeded to Queued.
+- `_quorumReached` / `_voteSucceeded` exist only to satisfy OZ Governor's abstract
+  hooks (quorum counts for + against + abstain; success is strictly more for than
+  against). OZ's own `state()` is the only internal caller and is fully overridden in
+  `MixinState`, so they are never authoritative: the strategy's rules (2/3 qualified
+  majority, snapshotted quorum) decide.
 - Content-identical proposals (same targets, values, calldatas and description) hash to
   the same OZ proposal hash, so the OZ `execute`/`cancel` overloads resolve to the
   **most recently proposed** id with that content. This matches OZ Governor's own

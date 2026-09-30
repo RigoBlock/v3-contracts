@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "./IGovernanceVoting.sol";
-import {TimeType} from "../../types/TimeType.sol";
 import {ProposalStatus} from "../../types/GovernanceTypes.sol";
+import {TimeType} from "../../types/TimeType.sol";
 
 interface IGovernanceState {
     struct Proposal {
@@ -76,26 +76,7 @@ interface IGovernanceState {
     /// @return count The number of proposals.
     function proposalCount() external view returns (uint256 count);
 
-    /// @notice Returns the proposer of a proposal.
-    /// @param proposalId Number of the proposal.
-    /// @return proposer Address of the account that created the proposal.
-    function proposer(uint256 proposalId) external view returns (address proposer);
-
-    /// @notice Returns whether a proposal has been canceled.
-    /// @param proposalId Number of the proposal.
-    /// @return canceled True if the proposal was canceled.
-    function canceled(uint256 proposalId) external view returns (bool canceled);
-
     /// @notice Returns all proposals ever made to the governance.
     /// @return proposalWrapper Tuple array of all governance proposals.
     function proposals() external view returns (ProposalWrapper[] memory proposalWrapper);
-
-    /// @notice Returns the per-proposal tallies against, for, abstain.
-    /// @param proposalId Number of the proposal.
-    /// @return againstVotes Number of votes against.
-    /// @return forVotes Number of votes for.
-    /// @return abstainVotes Number of votes abstain.
-    function proposalVotes(
-        uint256 proposalId
-    ) external view returns (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes);
 }

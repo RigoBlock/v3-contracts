@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
-import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
-import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
+import {CrossChainPayload, ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
-import {CrossChainPayload} from "../types/GovernanceTypes.sol";
-import {TimeType} from "../types/TimeType.sol";
-import {IStructs} from "../../staking/interfaces/IStructs.sol";
+import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
+import {IStructs} from "../../staking/interfaces/IStructs.sol";
+import {TimeType} from "../types/TimeType.sol";
 
 /// @dev Reverts on any time type other than TimeType.Timestamp: see docs/governance/STRATEGY.md.
 contract RigoblockGovernanceStrategy is IGovernanceStrategy {
