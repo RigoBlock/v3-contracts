@@ -27,6 +27,19 @@ const argv = yargs(hideBin(process.argv))
   .version(false)
   .parseSync();
 
+// hardhat-deploy's after-build hook (typed-artifact generation) reads each
+// build-info file whole into a single string. The merged solc-0.8.37 unit's
+// build-info is ~465 MB (solc duplicates the full metadata, which embeds every
+// unit source, into each of the ~600 contract outputs) and the instrumented
+// coverage build exceeds V8's max string length, crashing `hardhat test
+// --coverage` and, as the unit grows, plain compiles. Nothing in the test flow
+// uses hardhat-deploy — fixtures run deploy scripts through @rocketh/node, and
+// the deploy-adjacent tasks use its rocketh-based helper — so the plugin is
+// registered only for its `deploy` task; `test` and `compile` never load its
+// hook.
+const TASK = String(argv._[0] ?? "");
+const needsHardhatDeploy = TASK === "deploy";
+
 // Load environment variables.
 dotenv.config();
 const {
@@ -142,7 +155,8 @@ const userConfig: HardhatUserConfig = {
     HardhatNetworkHelpers,
     HardhatVerify,
     HardhatFoundry,
-    HardhatDeploy,
+    // see needsHardhatDeploy above
+    ...(needsHardhatDeploy ? [HardhatDeploy] : []),
     HardhatMarkup,
   ],
   tasks: [

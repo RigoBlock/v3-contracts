@@ -1,6 +1,11 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import { encodeBytes32String, parseEther } from "ethers";
+import {
+  encodeBytes32String,
+  keccak256,
+  parseEther,
+  toUtf8Bytes,
+} from "ethers";
 import { connect, getFixedGasSigners } from "../shared/helper";
 import { createFixture } from "../utils/fixtures";
 import {
@@ -192,6 +197,94 @@ describe("Governance Flash Attack", async () => {
         // governance reverts with custom errors, which are emitted as raw return data
         .to.emit(flashGovernance, "ReturnDataEvent")
         .to.emit(flashGovernance, "ReturnDataEvent")
+        .to.emit(flashGovernance, "CatchStringEvent")
+        .withArgs("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
+        // will revert without reason in old ERC20
+        .to.emit(flashGovernance, "ReturnDataEvent")
+        .withArgs("0x");
+      // during the next block, transaction will be executed
+      await expect(connect(governanceInstance, user2).execute(1)).to.emit(
+        grgToken,
+        "Approval",
+      );
+    });
+
+    it("should not be able to execute via the OZ hash path during voting period", async () => {
+      const {
+        governanceInstance,
+        grgToken,
+        grgTransferProxyAddress,
+        poolAddress,
+        poolId,
+        staking,
+        user2,
+      } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      // we stake the minimum amount to make a proposal
+      let amount = parseEther("100000");
+      // stake 100k GRG from user1
+      await stakeProposalThreshold({
+        amount,
+        grgToken,
+        grgTransferProxyAddress,
+        staking,
+        poolAddress,
+        poolId,
+      });
+      const data = grgToken.interface.encodeFunctionData(
+        "approve(address,uint256)",
+        [user2.address, amount],
+      );
+      const action = new ProposedAction(await grgToken.getAddress(), data, 0n);
+      // at the beginning of the new epoch, we make a proposal which can be voted on in 14 days
+      // after the end of the new epoch, we make a proposal which can be voted from current block + 1
+      await timeTravel({ days: 14, mine: true });
+      await governanceInstance.propose([action], description);
+      // we move forward 2 seconds to make sure proposal can be voted on
+      await timeTravel({ seconds: 2, mine: true });
+      // after the end of the epoch, we  flash borrow and stake GRG in order to gain quorum and > 2/3 of all stake
+      amount = parseEther("400000");
+      const flashGovernance = await ethers.deployContract("FlashGovernance", [
+        await staking.getAddress(),
+        await governanceInstance.getAddress(),
+        grgTransferProxyAddress,
+      ]);
+      // we allow the flash governance to move GRG
+      await grgToken.approve(await flashGovernance.getAddress(), amount);
+      const targets = [await grgToken.getAddress()];
+      const values = [0n];
+      const calldatas = [data];
+      const descriptionHash = keccak256(toUtf8Bytes(description));
+      // the OZ execute resolves the proposal hash to id 1, then hits the same same-tx
+      //  execution safeguard as execute(uint256): GovVotingClosed(1, Qualified)
+      const govVotingClosed = governanceInstance.interface.getError(
+        "GovVotingClosed(uint256,uint8)",
+      );
+      const expectedRevertData =
+        govVotingClosed.selector +
+        ethers.AbiCoder.defaultAbiCoder()
+          .encode(["uint256", "uint8"], [1n, 3n])
+          .slice(2);
+      await expect(
+        flashGovernance.flashAttackWithOzExecute(
+          poolId,
+          amount,
+          targets,
+          values,
+          calldatas,
+          descriptionHash,
+        ),
+      )
+        .to.emit(governanceInstance, "VoteCast(address,uint256,uint8,uint256)")
+        .withArgs(await flashGovernance.getAddress(), 1, VoteType.For, amount)
+        // governance reverts with custom errors, which are emitted as raw return data
+        .to.emit(flashGovernance, "ReturnDataEvent")
+        // the OZ hash-based execute reverts with the governance state error
+        .to.emit(flashGovernance, "ReturnDataEvent")
+        .withArgs(expectedRevertData)
+        // plain execute(uint256) reverts with the same state error
+        .to.emit(flashGovernance, "ReturnDataEvent")
+        .withArgs(expectedRevertData)
         .to.emit(flashGovernance, "CatchStringEvent")
         .withArgs("MOVE_STAKE_AMOUNT_HIGHER_THAN_WITHDRAWABLE_ERROR")
         // will revert without reason in old ERC20

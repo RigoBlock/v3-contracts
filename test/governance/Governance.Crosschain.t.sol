@@ -273,6 +273,27 @@ contract GovernanceCrosschainTest is Test {
         assertEq(governance.nextMinimumSequence(), 1);
     }
 
+    /// @notice The sequence bump happens before action execution: an action that re-enters
+    ///     receiveMessage with the same VAA is rejected by the monotonic sequence check,
+    ///     reverting the whole batch atomically.
+    function test_ReceiveMessage_Reentrancy_BumpsSequenceBeforeExecution() public {
+        ReentrantRelayerTarget relayerTarget = new ReentrantRelayerTarget(address(governance));
+        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
+            target: address(relayerTarget),
+            data: abi.encodeCall(ReentrantRelayerTarget.reenter, ("")),
+            value: 0
+        });
+        bytes memory payload = _encodePayload(action);
+        _mockParseAndVerify(_buildVaa(payload, 0));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverInvalidSequence.selector, uint64(0), uint64(1))
+        );
+        governance.receiveMessage("");
+
+        assertEq(governance.nextMinimumSequence(), 0);
+    }
+
     /// @notice A governance-approved re-send executes as a new message: the sender chain
     ///     published the action again, so it carries a new sequence and is not a replay.
     function test_ReceiveMessage_ResentAction_ExecutesAsNewMessage() public {
@@ -512,6 +533,30 @@ contract GovernanceCrosschainTest is Test {
         assertEq(counter.value(), 1);
     }
 
+    /// @notice The expiry window is inclusive: a VAA whose timestamp is exactly at the
+    ///     boundary (block.timestamp == vaa.timestamp + 2 days) still executes.
+    function test_ReceiveMessage_ExpiryBoundary_ExactTimeout_Executes() public {
+        vm.warp(1_700_000_000);
+        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 2 days)));
+
+        governance.receiveMessage("");
+        assertEq(counter.value(), 1);
+        assertEq(governance.nextMinimumSequence(), 1);
+    }
+
+    /// @notice One second past the boundary the message is expired and not consumed.
+    function test_ReceiveMessage_ExpiryBoundary_OneSecondPast_Reverts() public {
+        vm.warp(1_700_000_000);
+        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 2 days - 1)));
+
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverMessageExpired.selector, uint64(0)));
+        governance.receiveMessage("");
+        assertEq(counter.value(), 0);
+        assertEq(governance.nextMinimumSequence(), 0);
+    }
+
     /// @notice A failed call inside a batch reverts the whole message atomically: nothing
     ///     executes and the sequence does not advance.
     function test_ReceiveMessage_FailedCallInBatch_RevertsAtomically() public {
@@ -598,5 +643,20 @@ contract GovernanceCrosschainTest is Test {
         governance.execute(proposalId);
         assertEq(counter.value(), 2);
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
+    }
+}
+
+/// @title Re-entrancy probe for the cross-chain receiver.
+/// @notice Re-delivers the VAA it was invoked with, so a re-entrant receiveMessage lands
+///     mid-execution, while the outer message's sequence has already been consumed.
+contract ReentrantRelayerTarget {
+    address internal immutable governance;
+
+    constructor(address governance_) {
+        governance = governance_;
+    }
+
+    function reenter(bytes memory vaa) external {
+        IGovernanceCrosschain(governance).receiveMessage(vaa);
     }
 }

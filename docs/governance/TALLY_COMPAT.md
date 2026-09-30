@@ -99,6 +99,10 @@ copies were deleted):
   `nonces(voter)` view and is consumed by each validation, following OZ semantics.
   Invalid signatures revert with OZ `GovernorInvalidSignature(voter)` (replacing the
   removed native `GovInvalidSignature`).
+- Invalid vote signatures **do not consume the nonce**: `castVoteBySig` reverts with
+  `GovernorInvalidSignature(voter)`, which rolls back the tentative nonce increment
+  inside `_validateVoteSig`. A rogue submitted signature therefore cannot invalidate a
+  voter's pending ballot (unlike a mined invalid transaction in nonce-sequence models).
 - `eip712Domain()` (ERC-5267) is exposed by the inherited `EIP712` for wallet discovery.
 
 ### Proposing, queueing and executing
@@ -118,10 +122,18 @@ copies were deleted):
   `cancel(targets, values, calldatas, descriptionHash)` resolve to the same stored
   proposal (unknown hashes revert with `GovProposalIdUnknown(bytes32)`). The native
   `execute(uint256)` / `cancel(uint256)` are unchanged for existing integrations.
-- There is no timelock: OZ's `queue(...)` is inherited unmodified — since
-  `proposalNeedsQueuing` always returns false, a Succeeded proposal reverts with
-  `GovernorProposalQueueingNotRequired(proposalId)` (a non-succeeded one with
-  `GovernorUnexpectedProposalState`). `proposalEta` returns 0.
+- There is no timelock: OZ's `queue(targets, values, calldatas, descriptionHash)`
+  (the only overload in OZ 5.x) is inherited unmodified and is **doubly disabled**:
+  the inherited body resolves the id through the overridden `getProposalId`, which
+  returns the raw OZ content hash, and `state()` reverts `GovProposalIdInvalid(hash)`
+  for that unknown id before the `proposalNeedsQueuing` check is ever reached.
+  Accepted: Tally never calls `queue` when `proposalNeedsQueuing()` returns false, so
+  the exact revert reason is irrelevant to indexing. `proposalEta` returns 0.
+- Content-identical proposals (same targets, values, calldatas and description) hash to
+  the same OZ proposal hash, so the OZ `execute`/`cancel` overloads resolve to the
+  **most recently proposed** id with that content. This matches OZ Governor's own
+  one-id-per-content model and is accepted: the native `execute(uint256)` /
+  `cancel(uint256)` entry points are unaffected and distinguish proposals unambiguously.
 - `supportsInterface` reports `IERC165`, `IGovernor`, `IERC6372` and `IERC5267`
   interface ids.
 
@@ -148,6 +160,18 @@ copies were deleted):
 - `quorum(timepoint)` returns the stored quorum threshold only. Rigoblock additionally
   requires a **2/3 qualified majority of global delegated stake** to reach the Qualified
   state; Tally has no representation for this, so its quorum display is incomplete.
+- `quorum(timepoint)` always returns the **current global** quorum threshold, while
+  execution enforces the **per-proposal snapshot** taken at propose time: a proposal
+  created under a higher quorum stays bound to it, and lowering the quorum afterwards
+  can never resurrect a proposal that already failed (RIGO-200). This deliberate
+  divergence between the Tally display and the executable rule is accepted; the
+  strategy's `getProposalState` is authoritative. As a corollary, proposals created
+  before VERSION 1.3.0 carry no snapshot and are **unexecutable** after the upgrade
+  (fail-closed): the proposal queue must be empty before upgrading.
+- `updateThresholds` emits only the OZ `ProposalThresholdSet` event, even for a
+  quorum-only change (the event then carries the unchanged proposal threshold).
+  Accepted: the historical `ThresholdsUpdated` event was never emitted by any live
+  governance, and indexers read the current thresholds from the views.
 - `getVotes(account, timepoint)` returns the account's **current** voting power.
   Rigoblock voting power is epoch-based and timepoint-specific values cannot be
   reconstructed on chain. `getVotesWithParams` delegates to `getVotes`.
@@ -216,7 +240,9 @@ Other inherited-surface notes:
   transfers. This changes nothing about the intended operating model (the governance
   holds no ETH or token balances; cross-chain messages carry no value — see
   `docs/governance/` cross-chain docs), but integrations should not treat a nonzero
-  governance balance as impossible.
+  governance balance as impossible. The same applies to the inherited
+  `onERC721Received` / `onERC1155Received` hooks: the governance can receive NFTs, so
+  "the governance holds nothing" must never become an assumption.
 - The upgrade functions (`updateThresholds`, `upgradeImplementation`, `upgradeStrategy`)
   live in `MixinUpgrade` (which inherits `MixinVoting`) and are gated by OZ's
   `onlyGovernance` modifier. Because

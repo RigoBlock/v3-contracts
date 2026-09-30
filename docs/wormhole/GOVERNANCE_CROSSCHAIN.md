@@ -83,9 +83,11 @@ strategy does not process cross-chain messages at all.
   exact fee is knowable — if it were fixed at proposal time, a fee change between
   propose and execute would brick the action. The executor pays it as part of
   `execute`'s `msg.value`.
-- `MixinVoting.execute` requires `msg.value` to cover the summed action values;
-  any excess `msg.value` is not refunded and would remain in the governance, which
-  is one more reason to attach the exact amount.
+- `MixinVoting.execute` requires `msg.value` to **equal** the summed action values:
+  any excess or shortfall reverts with `GovExecutionValueMismatch(required, provided)`,
+  so no surplus can be left in the governance. Note the inherited OZ `Governor` also
+  brings a payable `receive()`, so a plain ETH transfer can still park funds; recovering
+  them requires a governance action.
 
 ## Governance side
 
@@ -202,7 +204,7 @@ A single mainnet `execute()` may publish several messages (one per Wormhole acti
 proposal, e.g. one per destination chain). Wormhole assigns each `publishMessage` call the
 next consecutive per-emitter sequence. The executor attaches the summed message fees:
 `beforeExecute` sets each action's value to a fresh `messageFee()` read and `execute`
-requires `msg.value` to cover the total.
+requires `msg.value` to equal the total exactly.
 
 **Ordering guarantees.** Sequences are consecutive by construction (the Wormhole core
 contract assigns them at `publishMessage` time, and a cancelled or defeated proposal never
@@ -359,6 +361,15 @@ The trade-off — the receive path shares the governance implementation's audit
 surface — is accepted because the validation sequence is identical to the
 Wormhole reference receiver, and the sender chain is fixed to Ethereum mainnet
 by the strategy.
+
+**Re-entrancy.** Actions execute as arbitrary calls from the governance, with no
+reentrancy lock (matching the Uniswap reference receiver). The sequence number is
+bumped *before* execution, so an action that re-delivers its own VAA reverts
+(`GovReceiverInvalidSequence`) and the whole batch rolls back — same-VAA re-entrancy
+is impossible. An action that delivers a *different, later* VAA mid-execution would
+nest a second batch; this is accepted because every delivered VAA still passes the
+full emitter/chain/sequence/expiry validation, so nesting grants no extra authority
+beyond what a valid later message already has.
 
 ## Quorum snapshot (issue #200)
 

@@ -149,6 +149,7 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IOZGovernor
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
     function state(uint256 proposalId) public view override(Governor, IOZGovernor) returns (IOZGovernor.ProposalState) {
         return _toOZState(_getProposalState(proposalId));
     }

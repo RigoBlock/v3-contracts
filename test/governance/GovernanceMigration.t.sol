@@ -205,6 +205,15 @@ contract GovernanceMigrationTest is Test {
 
     address internal whale = makeAddr("whale");
 
+    // initialization parameters served to the RigoblockGovernanceProxy constructor, which reads
+    // them from msg.sender (this test contract, when the proxy is deployed via deployCode)
+    IRigoblockGovernanceFactory.Parameters internal _proxyParams;
+
+    /// @notice Returns the parameters used to initialize a freshly deployed governance proxy.
+    function parameters() external view returns (IRigoblockGovernanceFactory.Parameters memory) {
+        return _proxyParams;
+    }
+
     uint256 internal constant INITIAL_QUORUM = 1_000_000e18;
     uint256 internal constant LOWERED_QUORUM = 500_000e18;
     uint256 internal constant PROPOSAL_THRESHOLD = 100_000e18;
@@ -225,10 +234,10 @@ contract GovernanceMigrationTest is Test {
     ///     snapshot is treated as legacy (mapping returns 0) and uses type(uint256).max
     ///     as its effective quorum.
     function test_Migration_LegacyProposal_BecomesDefeated() public {
-        uint256 legacyId = _createLegacyProposal();
+        uint256 legacyId = _createLegacyProposal(harness);
 
         // The legacy proposal has no quorum mapping entry.
-        assertEq(_readProposalQuorum(legacyId), 0);
+        assertEq(_readProposalQuorum(harness, legacyId), 0);
 
         // Warp past voting period. The legacy proposal can never reach type(uint256).max quorum.
         vm.warp(block.timestamp + 8 days);
@@ -238,11 +247,11 @@ contract GovernanceMigrationTest is Test {
     /// @notice Verifies that new proposals created after the migration snapshot the
     ///     current global quorum in a dedicated mapping and remain executable.
     function test_Migration_NewProposal_ExecutesAfterUpgrade() public {
-        uint256 legacyId = _createLegacyProposal();
+        uint256 legacyId = _createLegacyProposal(harness);
 
         // Create a new proposal after the (simulated) migration.
-        uint256 newId = _createProposal("new proposal");
-        assertEq(_readProposalQuorum(newId), INITIAL_QUORUM);
+        uint256 newId = _createProposal(harness, "new proposal");
+        assertEq(_readProposalQuorum(harness, newId), INITIAL_QUORUM);
 
         // Vote and execute the new proposal.
         vm.warp(block.timestamp + 2);
@@ -257,14 +266,42 @@ contract GovernanceMigrationTest is Test {
         assertEq(uint256(harness.getProposalState(legacyId)), uint256(ProposalStatus.Defeated));
     }
 
+    /// @notice Runs a full proposal lifecycle through a real governance proxy (harness as
+    ///     implementation) and asserts the OZ Governor, EIP712 and Nonces linear slots 0..8
+    ///     are never written.
+    function test_Migration_OzLinearSlots_StayZeroThroughLifecycle() public {
+        // the proxy constructor and initializer read the parameters from msg.sender, which is
+        // this test contract when deploying via deployCode (0.8.17 artifact, cannot be imported)
+        _proxyParams = IRigoblockGovernanceFactory.Parameters({
+            implementation: address(harness),
+            governanceStrategy: address(strategy),
+            proposalThreshold: PROPOSAL_THRESHOLD,
+            quorumThreshold: INITIAL_QUORUM,
+            timeType: TimeType.Timestamp,
+            name: "Rigoblock Governance"
+        });
+        MigrationHarness proxy = MigrationHarness(
+            payable(deployCode("out/RigoblockGovernanceProxy.sol/RigoblockGovernanceProxy.json"))
+        );
+
+        uint256 proposalId = _createProposal(proxy, "proxy lifecycle proposal");
+        _voteAndExecute(proxy, proposalId);
+        assertEq(uint256(proxy.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
+
+        // OZ Governor/EIP712/Nonces linear slots: must stay dead as lifecycle overrides never call super.
+        for (uint256 slot; slot <= 8; ++slot) {
+            assertEq(vm.load(address(proxy), bytes32(slot)), bytes32(0));
+        }
+    }
+
     /// @notice Verifies that lowering the global quorum after the migration does not
     ///     make a legacy proposal executable, while a new proposal created after the
     ///     reduction snapshots the lower quorum and can be executed.
     function test_Migration_LoweredQuorum_DoesNotResurrectLegacy() public {
-        uint256 legacyId = _createLegacyProposal();
+        uint256 legacyId = _createLegacyProposal(harness);
 
         // Create and execute a proposal that lowers the global quorum.
-        uint256 lowerQuorumId = _createLowerQuorumProposal();
+        uint256 lowerQuorumId = _createLowerQuorumProposal(harness);
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
         harness.castVote(lowerQuorumId, uint8(IGovernanceVoting.VoteType.For));
@@ -277,8 +314,8 @@ contract GovernanceMigrationTest is Test {
         assertEq(uint256(harness.getProposalState(legacyId)), uint256(ProposalStatus.Defeated));
 
         // A new proposal created after the reduction uses the lowered quorum.
-        uint256 postReductionId = _createProposal("post reduction proposal");
-        assertEq(_readProposalQuorum(postReductionId), LOWERED_QUORUM);
+        uint256 postReductionId = _createProposal(harness, "post reduction proposal");
+        assertEq(_readProposalQuorum(harness, postReductionId), LOWERED_QUORUM);
 
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
@@ -301,8 +338,8 @@ contract GovernanceMigrationTest is Test {
             PROPOSAL_THRESHOLD,
             LOWERED_QUORUM
         );
-        uint256 quorumOnlyId = _createProposalWithData(quorumOnly, "quorum only");
-        _voteAndExecute(quorumOnlyId);
+        uint256 quorumOnlyId = _createProposalWithData(harness, quorumOnly, "quorum only");
+        _voteAndExecute(harness, quorumOnlyId);
         assertEq(_governanceQuorum(), LOWERED_QUORUM);
 
         // an update that changes the proposal threshold is validated and reverts
@@ -311,7 +348,7 @@ contract GovernanceMigrationTest is Test {
             LOWERED_PROPOSAL_THRESHOLD,
             LOWERED_QUORUM
         );
-        uint256 bothId = _createProposalWithData(both, "both thresholds");
+        uint256 bothId = _createProposalWithData(harness, both, "both thresholds");
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
         harness.castVote(bothId, uint8(IGovernanceVoting.VoteType.For));
@@ -328,8 +365,8 @@ contract GovernanceMigrationTest is Test {
             LOWERED_PROPOSAL_THRESHOLD,
             LOWERED_QUORUM
         );
-        uint256 proposalOnlyId = _createProposalWithData(proposalOnly, "proposal only");
-        _voteAndExecute(proposalOnlyId);
+        uint256 proposalOnlyId = _createProposalWithData(harness, proposalOnly, "proposal only");
+        _voteAndExecute(harness, proposalOnlyId);
 
         IGovernanceState.EnhancedParams memory params = harness.governanceParameters();
         assertEq(params.params.proposalThreshold, LOWERED_PROPOSAL_THRESHOLD);
@@ -339,7 +376,7 @@ contract GovernanceMigrationTest is Test {
     /// @notice A proposer can cancel their own proposal while it is still Pending, after which
     ///     it reads as Canceled and neither votes nor execution are possible anymore.
     function test_Cancel_ProposerWhilePending_Succeeds() public {
-        uint256 proposalId = _createProposal("cancelable proposal");
+        uint256 proposalId = _createProposal(harness, "cancelable proposal");
         assertEq(uint256(harness.getProposalState(proposalId)), uint256(ProposalStatus.Pending));
         assertEq(harness.proposer(proposalId), whale);
         assertFalse(harness.canceled(proposalId));
@@ -377,7 +414,7 @@ contract GovernanceMigrationTest is Test {
     ///     themselves can cancel the very same proposal, proving the check is on the creator
     ///     and not on voting power.
     function test_Cancel_NonProposer_Reverts() public {
-        uint256 proposalId = _createProposal("not yours");
+        uint256 proposalId = _createProposal(harness, "not yours");
         address other = makeAddr("other");
         vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovUnableToCancel.selector, proposalId, other));
         vm.prank(other);
@@ -394,7 +431,7 @@ contract GovernanceMigrationTest is Test {
     /// @notice Cancellation is only possible while the proposal is Pending: once voting has
     ///     started (or the proposal is over), the proposer can no longer retract it.
     function test_Cancel_AfterVotingStarts_Reverts() public {
-        uint256 proposalId = _createProposal("already active");
+        uint256 proposalId = _createProposal(harness, "already active");
 
         // an Against vote keeps the proposal Active (a For vote would qualify it)
         vm.warp(block.timestamp + 2);
@@ -424,7 +461,7 @@ contract GovernanceMigrationTest is Test {
     ///     storage) cannot be canceled by anyone: the zero-address proposer check blocks
     ///     cancellation instead of letting address(0) cancel.
     function test_Cancel_LegacyProposal_HasNoProposer() public {
-        uint256 legacyId = _createLegacyProposal();
+        uint256 legacyId = _createLegacyProposal(harness);
 
         // simulate the old implementation, which never wrote the proposer: clear the meta slot
         bytes32 metaSlot = keccak256(abi.encode(uint256(legacyId), uint256(harness.proposalMetaSlot())));
@@ -439,8 +476,8 @@ contract GovernanceMigrationTest is Test {
 
     /// @notice Canceling one proposal must not leak into other proposals' meta or state.
     function test_Cancel_IsolatedPerProposal() public {
-        uint256 first = _createProposal("first");
-        uint256 second = _createProposal("second");
+        uint256 first = _createProposal(harness, "first");
+        uint256 second = _createProposal(harness, "second");
 
         vm.prank(whale);
         harness.cancel(first);
@@ -451,14 +488,14 @@ contract GovernanceMigrationTest is Test {
         assertEq(uint256(harness.getProposalState(second)), uint256(ProposalStatus.Pending));
 
         // the surviving proposal remains fully executable
-        _voteAndExecute(second);
+        _voteAndExecute(harness, second);
         assertEq(uint256(harness.getProposalState(second)), uint256(ProposalStatus.Executed));
     }
 
     /// @notice Exercises the view getters getActions, getReceipt and proposals against a
     ///     proposal created and voted on through the normal propose/castVote flow.
     function test_Getters_ReturnProposalActionsAndReceipt() public {
-        uint256 proposalId = _createProposal("getter proposal");
+        uint256 proposalId = _createProposal(harness, "getter proposal");
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
         harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
@@ -522,60 +559,64 @@ contract GovernanceMigrationTest is Test {
         assertEq(vm.load(address(harness), quorumSlot), bytes32(uint256(12345)));
     }
 
-    /// @dev Creates a proposal using the current (new) implementation and returns its id.
-    function _createProposal(string memory description) private returns (uint256 proposalId) {
+    /// @dev Creates a proposal on the given instance and returns its id.
+    function _createProposal(
+        MigrationHarness instance,
+        string memory description
+    ) private returns (uint256 proposalId) {
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
         actions[0] = IGovernanceVoting.ProposedAction({target: address(target), data: "", value: 0});
         vm.prank(whale);
-        return harness.propose(actions, description);
+        return instance.propose(actions, description);
     }
 
     /// @dev Simulates a proposal written by the old implementation by creating a
     ///     proposal with the new implementation and then deleting its quorum mapping entry.
-    function _createLegacyProposal() private returns (uint256 proposalId) {
-        proposalId = _createProposal("legacy proposal");
-        harness.setProposalQuorum(proposalId, 0);
+    function _createLegacyProposal(MigrationHarness instance) private returns (uint256 proposalId) {
+        proposalId = _createProposal(instance, "legacy proposal");
+        instance.setProposalQuorum(proposalId, 0);
 
         // Sanity check: the new implementation reads it as legacy.
-        assertEq(_readProposalQuorum(proposalId), 0);
+        assertEq(_readProposalQuorum(instance, proposalId), 0);
     }
 
     /// @dev Returns the raw quorum snapshot for a proposal from storage.
-    function _readProposalQuorum(uint256 proposalId) private view returns (uint256) {
-        bytes32 quorumSlot = keccak256(abi.encode(proposalId, uint256(harness.proposalQuorumSlot())));
-        return uint256(vm.load(address(harness), quorumSlot));
+    function _readProposalQuorum(MigrationHarness instance, uint256 proposalId) private view returns (uint256) {
+        bytes32 quorumSlot = keccak256(abi.encode(proposalId, uint256(instance.proposalQuorumSlot())));
+        return uint256(vm.load(address(instance), quorumSlot));
     }
 
-    /// @dev Creates a proposal whose single action calls the harness with the given calldata.
+    /// @dev Creates a proposal whose single action calls the given instance with the given calldata.
     function _createProposalWithData(
+        MigrationHarness instance,
         bytes memory data,
         string memory description
     ) private returns (uint256 proposalId) {
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(harness), data: data, value: 0});
+        actions[0] = IGovernanceVoting.ProposedAction({target: address(instance), data: data, value: 0});
         vm.prank(whale);
-        return harness.propose(actions, description);
+        return instance.propose(actions, description);
     }
 
     /// @dev Votes for and executes a proposal after its voting period.
-    function _voteAndExecute(uint256 proposalId) private {
+    function _voteAndExecute(MigrationHarness instance, uint256 proposalId) private {
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
-        harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
+        instance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 8 days);
-        harness.execute(proposalId);
+        instance.execute(proposalId);
     }
 
     /// @dev Creates a proposal that lowers the global quorum to LOWERED_QUORUM.
     ///     The proposal threshold is updated alongside, as updateThresholds reverts
     ///     only when both thresholds are unchanged.
-    function _createLowerQuorumProposal() private returns (uint256 proposalId) {
+    function _createLowerQuorumProposal(MigrationHarness instance) private returns (uint256 proposalId) {
         bytes memory data = abi.encodeWithSelector(
             IGovernanceUpgrade.updateThresholds.selector,
             LOWERED_PROPOSAL_THRESHOLD,
             LOWERED_QUORUM
         );
-        return _createProposalWithData(data, "lower quorum");
+        return _createProposalWithData(instance, data, "lower quorum");
     }
 
     /// @dev Reads the current global quorum from governance parameters.

@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import { encodeBytes32String, parseEther } from "ethers";
+import { encodeBytes32String, parseEther, zeroPadValue } from "ethers";
 import { getFixedGasSigners } from "../shared/helper";
 import { createFixture } from "../utils/fixtures";
 import {
@@ -141,10 +141,15 @@ describe("Governance Upgrades", async () => {
     });
 
     it("should upgrade implementation", async () => {
-      const { governanceInstance, staking } = await setupTests();
+      const { governanceInstance } = await setupTests();
+      const { ethers } = await network.getOrCreate();
+      const newImplementation = await ethers.deployContract(
+        "RigoblockGovernance",
+      );
+      const newImplementationAddress = await newImplementation.getAddress();
       const data = governanceInstance.interface.encodeFunctionData(
         "upgradeImplementation(address)",
-        [await staking.getAddress()],
+        [newImplementationAddress],
       );
       const action = new ProposedAction(
         await governanceInstance.getAddress(),
@@ -158,7 +163,24 @@ describe("Governance Upgrades", async () => {
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
         .to.emit(governanceInstance, "Upgraded")
-        .withArgs(await staking.getAddress());
+        .withArgs(newImplementationAddress);
+      // the proxy EIP-1967 implementation slot must now delegate to the new implementation
+      const implementationSlot =
+        "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+      const { provider } = await network.getOrCreate();
+      const storedImplementation = (await provider.request({
+        method: "eth_getStorageAt",
+        params: [
+          await governanceInstance.getAddress(),
+          implementationSlot,
+          "latest",
+        ],
+      })) as string;
+      expect(storedImplementation).to.eq(
+        zeroPadValue(newImplementationAddress, 32),
+      );
+      // a view call through the proxy still works with the new implementation
+      expect(await governanceInstance.proposalCount()).to.be.eq(1n);
     });
   });
 
@@ -224,9 +246,10 @@ describe("Governance Upgrades", async () => {
 
     it("should upgrade strategy", async () => {
       const { governanceInstance, staking } = await setupTests();
+      const stakingAddress = await staking.getAddress();
       const data = governanceInstance.interface.encodeFunctionData(
         "upgradeStrategy(address)",
-        [await staking.getAddress()],
+        [stakingAddress],
       );
       const action = new ProposedAction(
         await governanceInstance.getAddress(),
@@ -240,7 +263,11 @@ describe("Governance Upgrades", async () => {
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(1))
         .to.emit(governanceInstance, "StrategyUpgraded")
-        .withArgs(await staking.getAddress());
+        .withArgs(stakingAddress);
+      // the new strategy must be stored in the governance parameters read through the proxy
+      const storedStrategy = (await governanceInstance.governanceParameters())
+        .params.strategy;
+      expect(storedStrategy).to.eq(stakingAddress);
     });
   });
 

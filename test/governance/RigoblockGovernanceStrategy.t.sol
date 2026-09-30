@@ -5,6 +5,7 @@ import {CrossChainPayload} from "../../contracts/governance/types/GovernanceType
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
+import {IERC20} from "../../contracts/tokens/ERC20/IERC20.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
@@ -15,6 +16,7 @@ import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
 
 contract RigoblockGovernanceStrategyTest is Test {
     address internal constant STAKING = address(0x1111);
+    address internal constant GRG = address(0x2222);
     address internal constant TARGET = address(0x3333);
     address internal constant WORMHOLE = address(0x4444);
     uint16 internal constant LOCAL_CHAIN_ID = 2;
@@ -51,6 +53,11 @@ contract RigoblockGovernanceStrategyTest is Test {
     function _wormholeData(uint16 targetChainId) private pure returns (bytes memory) {
         return
             abi.encodeWithSelector(ICoreBridge.publishMessage.selector, uint32(0), _payload(targetChainId), uint8(200));
+    }
+
+    function _mockSupply(uint256 supply) private {
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.getGrgContract.selector), abi.encode(GRG));
+        vm.mockCall(GRG, abi.encodeWithSelector(IERC20.totalSupply.selector), abi.encode(supply));
     }
 
     function test_beforePropose_NonWormhole_Passes() public view {
@@ -237,5 +244,115 @@ contract RigoblockGovernanceStrategyTest is Test {
             uint256(strategy.getProposalState(proposal, 100, TimeType.Timestamp)),
             uint256(ProposalStatus.Succeeded)
         );
+    }
+
+    function test_ProposalThreshold_Mainnet_AtBounds_Passes() public {
+        vm.chainId(1);
+        _mockSupply(10_000_000e18);
+        strategy.assertValidProposalThreshold(100_000e18);
+        strategy.assertValidProposalThreshold(200_000e18);
+    }
+
+    function test_ProposalThreshold_Mainnet_BelowFloor_Reverts() public {
+        vm.chainId(1);
+        _mockSupply(10_000_000e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                99_999e18,
+                100_000e18,
+                200_000e18
+            )
+        );
+        strategy.assertValidProposalThreshold(99_999e18);
+    }
+
+    function test_ProposalThreshold_Mainnet_AboveCap_Reverts() public {
+        vm.chainId(1);
+        _mockSupply(10_000_000e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                200_001e18,
+                100_000e18,
+                200_000e18
+            )
+        );
+        strategy.assertValidProposalThreshold(200_001e18);
+    }
+
+    function test_QuorumThreshold_Mainnet_AtBounds_Passes() public {
+        vm.chainId(1);
+        _mockSupply(10_000_000e18);
+        strategy.assertValidQuorumThreshold(400_000e18);
+        strategy.assertValidQuorumThreshold(1_000_000e18);
+    }
+
+    function test_QuorumThreshold_Mainnet_BelowFloor_Reverts() public {
+        vm.chainId(1);
+        _mockSupply(10_000_000e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                399_999e18,
+                400_000e18,
+                1_000_000e18
+            )
+        );
+        strategy.assertValidQuorumThreshold(399_999e18);
+    }
+
+    function test_QuorumThreshold_Mainnet_AboveCap_Reverts() public {
+        vm.chainId(1);
+        _mockSupply(10_000_000e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                1_000_001e18,
+                400_000e18,
+                1_000_000e18
+            )
+        );
+        strategy.assertValidQuorumThreshold(1_000_001e18);
+    }
+
+    function test_ProposalThreshold_Altchain_WithinHardLimits_Passes() public {
+        // derived supply limits (10k/20k) are below the altchain hard limits (20k/100k)
+        _mockSupply(1_000_000e18);
+        strategy.assertValidProposalThreshold(20_000e18);
+        strategy.assertValidProposalThreshold(100_000e18);
+    }
+
+    function test_ProposalThreshold_Altchain_BelowHardFloor_Reverts() public {
+        _mockSupply(1_000_000e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                15_000e18,
+                20_000e18,
+                100_000e18
+            )
+        );
+        strategy.assertValidProposalThreshold(15_000e18);
+    }
+
+    function test_QuorumThreshold_Altchain_WithinHardLimits_Passes() public {
+        // derived supply limits (40k/100k) are below the altchain hard limits (100k/400k)
+        _mockSupply(1_000_000e18);
+        strategy.assertValidQuorumThreshold(100_000e18);
+        strategy.assertValidQuorumThreshold(400_000e18);
+    }
+
+    function test_QuorumThreshold_Altchain_BelowHardFloor_Reverts() public {
+        _mockSupply(1_000_000e18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                50_000e18,
+                100_000e18,
+                400_000e18
+            )
+        );
+        strategy.assertValidQuorumThreshold(50_000e18);
     }
 }

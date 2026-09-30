@@ -5,6 +5,7 @@ import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.s
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {MixinCrosschain} from "../../contracts/governance/mixins/MixinCrosschain.sol";
+import {MixinAbstract} from "../../contracts/governance/mixins/MixinAbstract.sol";
 import {MixinStorage} from "../../contracts/governance/mixins/MixinStorage.sol";
 import {MixinState} from "../../contracts/governance/mixins/MixinState.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -806,6 +807,51 @@ contract GovernanceTallyCompatTest is Test {
         vm.prank(whale);
         harness.execute(proposalId);
         assertEq(harness.proposalThreshold(), 1);
+    }
+
+    /// @notice The vendored OZ Governor only exposes the hash-based queue overload
+    ///     (there is no queue(uint256)). queue() is doubly disabled in Rigoblock: the
+    ///     overridden getProposalId returns the raw content hash, which does not match any
+    ///     stored sequential proposal id, so the state check reverts before the timelock
+    ///     check (proposalNeedsQueuing is false) could fire GovernorProposalQueueingNotRequired.
+    function test_Queue_RevertsQueueingNotRequired() public {
+        address[] memory targets = new address[](1);
+        uint256[] memory values = new uint256[](1);
+        bytes[] memory calldatas = new bytes[](1);
+        targets[0] = address(compatTarget);
+        calldatas[0] = hex"";
+
+        uint256 proposalId = _propose(_toActions(targets, values, calldatas), "oz queue");
+        _voteAndWarpPast(proposalId, uint8(IGovernanceVoting.VoteType.For));
+        assertEq(uint8(harness.getProposalState(proposalId)), uint8(ProposalStatus.Succeeded));
+
+        bytes32 proposalHash = bytes32(harness.hashProposal(targets, values, calldatas, keccak256("oz queue")));
+        vm.expectRevert(abi.encodeWithSelector(MixinAbstract.GovProposalIdInvalid.selector, uint256(proposalHash)));
+        harness.queue(targets, values, calldatas, keccak256("oz queue"));
+        // silence unused warning, documents that the stored id differs from the content hash
+        assertEq(proposalId, 1);
+    }
+
+    /// @notice IERC5267: eip712Domain exposes the fixed OZ signing domain used by
+    ///     castVoteBySig (name/version bound as immutables, no salt or extensions).
+    function test_Eip712Domain_ReturnsFixedDomain() public {
+        (
+            bytes1 fields,
+            string memory name,
+            string memory version,
+            uint256 chainId,
+            address verifyingContract,
+            bytes32 salt,
+            uint256[] memory extensions
+        ) = harness.eip712Domain();
+
+        assertEq(uint8(fields), uint8(0x0f)); // name, version, chainId, verifyingContract
+        assertEq(name, "Rigoblock Governance");
+        assertEq(version, "1.3.0");
+        assertEq(chainId, block.chainid);
+        assertEq(verifyingContract, address(harness));
+        assertEq(salt, bytes32(0));
+        assertEq(extensions.length, 0);
     }
 
     function _toActions(
