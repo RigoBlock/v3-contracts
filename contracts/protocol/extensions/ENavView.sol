@@ -5,6 +5,7 @@ import {IENavView} from "./adapters/interfaces/IENavView.sol";
 import {NavView} from "../libraries/NavView.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
+import {NavData} from "../types/NavData.sol";
 
 /// @title ENavView - Navigation and application view extension for Rigoblock smart pools
 /// @notice Provides view methods to retrieve token balances and NAV without modifying state
@@ -32,7 +33,7 @@ contract ENavView is IENavView {
     }
 
     /// @inheritdoc IENavView
-    function getNavDataView() external view override returns (NavView.NavData memory navData) {
+    function getNavDataView() external view override returns (NavData memory navData) {
         return (address(this)).getNavData(grgStakingProxy, uniV4Posm);
     }
 }

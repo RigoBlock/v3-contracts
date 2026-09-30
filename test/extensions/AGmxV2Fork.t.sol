@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {GMX_ROUTER, _MAX_GMX_POSITIONS, _GMX_DATA_STORE, _FLOAT_PRECISION, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -973,7 +974,7 @@ contract AGmxV2ForkTest is Test {
         // No mint has happened — stored unitaryValue == 0, fallback is 10^decimals.
         ISmartPoolState.PoolTokens memory pt = ISmartPoolState(pool).getPoolTokens();
         // getPoolTokens() also uses the same fallback, so stored and pool-state values match.
-        NavView.NavData memory navData = IENavView(pool).getNavDataView();
+        NavData memory navData = IENavView(pool).getNavDataView();
 
         assertEq(navData.unitaryValue, pt.unitaryValue, "ENavView NAV must equal pool-state NAV at par (no supply)");
         assertEq(navData.unitaryValue, 10 ** 18, "Par NAV must be 1e18 for 18-decimal base token");
@@ -996,7 +997,7 @@ contract AGmxV2ForkTest is Test {
         uint256 storedNav = ISmartPoolState(pool).getPoolTokens().unitaryValue;
 
         // ENavView must report the same NAV computed fresh from on-chain state.
-        NavView.NavData memory navData = IENavView(pool).getNavDataView();
+        NavData memory navData = IENavView(pool).getNavDataView();
         assertEq(
             navData.unitaryValue,
             storedNav,
@@ -1046,7 +1047,7 @@ contract AGmxV2ForkTest is Test {
         );
         ISmartPoolActions(pool).updateUnitaryValue();
         uint256 storedNavHighPrice = ISmartPoolState(pool).getPoolTokens().unitaryValue;
-        NavView.NavData memory navDataHighPrice = IENavView(pool).getNavDataView();
+        NavData memory navDataHighPrice = IENavView(pool).getNavDataView();
         vm.clearMockedCalls();
 
         assertEq(
@@ -1074,7 +1075,7 @@ contract AGmxV2ForkTest is Test {
         );
         ISmartPoolActions(pool).updateUnitaryValue();
         uint256 storedNavLowPrice = ISmartPoolState(pool).getPoolTokens().unitaryValue;
-        NavView.NavData memory navDataLowPrice = IENavView(pool).getNavDataView();
+        NavData memory navDataLowPrice = IENavView(pool).getNavDataView();
         vm.clearMockedCalls();
 
         assertEq(

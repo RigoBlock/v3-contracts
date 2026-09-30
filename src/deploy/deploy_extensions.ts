@@ -94,6 +94,8 @@ export default deployScript(
       { deterministic: true },
     );
 
+    // Extensions/adapters/implementation are not canonical: any metadata change
+    // (e.g. a solc bump) must trigger a redeploy, so compare bytecode verbatim.
     const eUpgrade = await env.deploy(
       "EUpgrade",
       {
@@ -101,7 +103,7 @@ export default deployScript(
         artifact: await readArtifact("EUpgrade"),
         args: [proxyFactory.address],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     // Notice: make sure the constants.ts file is updated with the correct address.
@@ -112,7 +114,7 @@ export default deployScript(
         artifact: await readArtifact("EOracle"),
         args: [config.oracle, config.weth],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     const eApps = await env.deploy(
@@ -122,7 +124,7 @@ export default deployScript(
         artifact: await readArtifact("EApps"),
         args: [[config.stakingProxy, config.univ4Posm]],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     const navViewParams = {
@@ -137,7 +139,7 @@ export default deployScript(
         artifact: await readArtifact("ENavView"),
         args: [navViewParams],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     const eCrosschain = await env.deploy(
@@ -147,7 +149,7 @@ export default deployScript(
         artifact: await readArtifact("ECrosschain"),
         args: [],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     // EGmxCallback is Arbitrum-only; use address zero as a no-op placeholder elsewhere.
@@ -161,7 +163,7 @@ export default deployScript(
                 artifact: await readArtifact("EGmxCallback"),
                 args: [],
               },
-              { deterministic: true },
+              { deterministic: true, strictBytecodeMatch: true },
             )
           ).address
         : ethers.ZeroAddress;
@@ -173,7 +175,7 @@ export default deployScript(
         artifact: await readArtifact("EERC20"),
         args: [],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     const extensions = {
@@ -193,7 +195,7 @@ export default deployScript(
         artifact: await readArtifact("ExtensionsMapDeployer"),
         args: [],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     const params = {
@@ -267,7 +269,7 @@ export default deployScript(
         artifact: await readArtifact("SmartPool"),
         args: [authority.address, extensionsMapAddress, config.tokenJar],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     // On chains where the factory is still owned by the deployer (sepolia,
@@ -299,7 +301,7 @@ export default deployScript(
         artifact: await readArtifact("AMulticall"),
         args: [],
       },
-      { deterministic: true },
+      { deterministic: true, strictBytecodeMatch: true },
     );
 
     // Across is supported wherever a SpokePool is configured.
@@ -311,7 +313,7 @@ export default deployScript(
           artifact: await readArtifact("AIntents"),
           args: [config.acrossSpokePool],
         },
-        { deterministic: true },
+        { deterministic: true, strictBytecodeMatch: true },
       );
     }
 
@@ -324,7 +326,7 @@ export default deployScript(
           artifact: await readArtifact("AUniswap"),
           args: [config.weth],
         },
-        { deterministic: true },
+        { deterministic: true, strictBytecodeMatch: true },
       );
 
       await env.deploy(
@@ -334,7 +336,7 @@ export default deployScript(
           artifact: await readArtifact("AUniswapRouter"),
           args: [config.universalRouter, config.univ4Posm, config.weth],
         },
-        { deterministic: true },
+        { deterministic: true, strictBytecodeMatch: true },
       );
 
       await env.deploy(
@@ -344,7 +346,7 @@ export default deployScript(
           artifact: await readArtifact("A0xRouter"),
           args: [zeroExAllowanceHolder, zeroExDeployer],
         },
-        { deterministic: true },
+        { deterministic: true, strictBytecodeMatch: true },
       );
     }
 
@@ -357,7 +359,7 @@ export default deployScript(
           artifact: await readArtifact("AHyperliquid"),
           args: [],
         },
-        { deterministic: true },
+        { deterministic: true, strictBytecodeMatch: true },
       );
     }
 
@@ -370,7 +372,7 @@ export default deployScript(
           artifact: await readArtifact("AGmxV2"),
           args: [],
         },
-        { deterministic: true },
+        { deterministic: true, strictBytecodeMatch: true },
       );
     }
   },

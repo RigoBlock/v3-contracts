@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {GMX_ROUTER, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -299,7 +300,7 @@ contract NavViewStressedParityForkTest is Test {
         );
 
         NetAssetsValue memory writeNavHigh = ISmartPoolActions(pool).updateUnitaryValue();
-        NavView.NavData memory viewNavHigh = IENavView(pool).getNavDataView();
+        NavData memory viewNavHigh = IENavView(pool).getNavDataView();
         vm.clearMockedCalls();
 
         assertEq(
@@ -329,7 +330,7 @@ contract NavViewStressedParityForkTest is Test {
         deal(ARB_WETH, pool, 0);
 
         NetAssetsValue memory writeNavSentinel = ISmartPoolActions(pool).updateUnitaryValue();
-        NavView.NavData memory viewNavSentinel = IENavView(pool).getNavDataView();
+        NavData memory viewNavSentinel = IENavView(pool).getNavDataView();
 
         assertEq(
             viewNavSentinel.unitaryValue,

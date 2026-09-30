@@ -22,6 +22,7 @@ import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
+import {NavData} from "../types/NavData.sol";
 import {GmxLib} from "./GmxLib.sol";
 import {HyperliquidLib} from "./HyperliquidLib.sol";
 /// @title NavView - Internal library for navigation and application view functionality
@@ -41,12 +42,6 @@ library NavView {
     int24 internal constant OUT_OF_RANGE_FLAG = -887273;
 
     address internal constant ZERO_ADDRESS = address(0);
-
-    struct NavData {
-        uint256 totalValue; // Total pool value in base token
-        uint256 unitaryValue; // NAV per share
-        uint256 timestamp; // Block timestamp when calculated
-    }
 
     function getAppTokenBalances(
         address pool,
