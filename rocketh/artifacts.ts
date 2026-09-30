@@ -22,19 +22,20 @@ import { splitBytecode, joinBytecode, type BlobGap } from "./cbor";
  * compiled from the current sources.
  *
  * Redeploy rule: the blobs are restored only when the current build's solc
- * version matches the one recorded in the canonical entry. Bumping solc
- * changes the metadata even when the executable code is byte-identical, and
- * such contracts MUST be redeployed with the new compiler — the fresh metadata
- * then flows into the init code and CREATE2 yields a new address. Pragma-pinned
- * contracts (the factories, proxies, Authority, staking suite at 0.8.17) never
- * recompile with a bumped solc, so their canonical addresses are unaffected.
+ * version matches the one that produced the authoritative deployment recorded
+ * in the canonical entry. Bumping solc changes the metadata even when the
+ * executable code is byte-identical, and such contracts MUST be redeployed
+ * with the new compiler — the fresh metadata then flows into the init code and
+ * CREATE2 yields a new address. Pragma-pinned contracts (the factories,
+ * proxies, Authority, staking suite at 0.8.17) never recompile with a bumped
+ * solc, so their canonical addresses are unaffected.
  */
 type CanonicalEntry = {
   initSkeletonHash: string;
   initGaps: BlobGap[];
   deployedSkeletonHash?: string;
   deployedGaps?: BlobGap[];
-  solcLongVersion?: string;
+  solcVersion?: string;
 };
 
 let canonical: Record<string, CanonicalEntry> | undefined;
@@ -54,27 +55,10 @@ function loadCanonical(): Record<string, CanonicalEntry> {
   return canonical;
 }
 
-const solcVersionCache = new Map<string, string | undefined>();
-function solcLongVersionOf(buildInfoId?: string): string | undefined {
-  if (!buildInfoId) return undefined;
-  if (!solcVersionCache.has(buildInfoId)) {
-    const p = path.join(
-      hre.config.paths.artifacts,
-      "build-info",
-      `${buildInfoId}.json`,
-    );
-    solcVersionCache.set(
-      buildInfoId,
-      fs.existsSync(p)
-        ? (
-            JSON.parse(fs.readFileSync(p, "utf8")) as {
-              solcLongVersion?: string;
-            }
-          ).solcLongVersion
-        : undefined,
-    );
-  }
-  return solcVersionCache.get(buildInfoId);
+/** Parses the short solc version out of a Hardhat 3 buildInfoId. */
+function solcVersionOf(buildInfoId?: string): string | undefined {
+  const m = buildInfoId?.match(/^solc-(\d+_\d+_\d+)-/);
+  return m ? m[1].replace(/_/g, ".") : undefined;
 }
 
 /**
@@ -115,14 +99,14 @@ export async function readArtifact(name: string): Promise<Artifact> {
       // executable skeleton is identical. Do not restore the old blobs across
       // a compiler mismatch — the new metadata must take effect so CREATE2
       // produces a fresh address and the contract is redeployed.
-      if (entry.solcLongVersion) {
-        const current = solcLongVersionOf(
+      if (entry.solcVersion) {
+        const current = solcVersionOf(
           (artifact as { buildInfoId?: string }).buildInfoId,
         );
-        if (current && current !== entry.solcLongVersion) {
+        if (current && current !== entry.solcVersion) {
           console.log(
             `canonical-cbor: ${name} recompiled with a new compiler ` +
-              `(${entry.solcLongVersion} -> ${current}); not restoring canonical blobs ` +
+              `(${entry.solcVersion} -> ${current}); not restoring canonical blobs ` +
               `so the contract is redeployed with the new metadata`,
           );
           return { ...artifact, metadata: "" } as unknown as Artifact;
