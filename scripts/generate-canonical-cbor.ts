@@ -19,14 +19,19 @@ import { splitBytecode } from "../rocketh/cbor";
  * even though the executable bytecode is byte-identical.
  *
  * Cross-chain address parity ("Authority at 0xe351... on every chain") is a
- * protocol requirement, so for each contract whose executable code is
- * UNCHANGED since the authoritative deployment, we canonicalize the metadata
- * stamps: the deploy pipeline swaps the artifact's blobs for the authoritative
- * ones. The init code then matches the already-deployed chains byte-for-byte
- * and CREATE2 reproduces the same address. Contracts whose code legitimately
- * changed keep the current build's blobs: their metadata depends only on
- * source + settings (never on the chain), so every chain still computes the
- * same address for them.
+ * protocol requirement for the core suite only (Authority, PoolRegistry, the
+ * factories and proxies whitelisted in CANONICAL_CONTRACTS below). For each
+ * whitelisted contract whose executable code is UNCHANGED since the
+ * authoritative deployment, we canonicalize the metadata stamps: the deploy
+ * pipeline swaps the artifact's blobs for the authoritative ones. The init
+ * code then matches the already-deployed chains byte-for-byte and CREATE2
+ * reproduces the same address. Contracts whose code legitimately changed
+ * keep the current build's blobs: their metadata depends only on source +
+ * settings (never on the chain), so every chain still computes the same
+ * address for them. Extensions, adapters, the ExtensionsMap and the
+ * implementation are intentionally NOT canonical — they ride every
+ * deployment train and must keep the current build's metadata so a
+ * recompiled contract is actually redeployed.
  *
  * Each entry records the solc version that produced the current build. This is
  * what makes the redeploy rule enforceable: bumping solc changes the metadata
@@ -44,6 +49,20 @@ import { splitBytecode } from "../rocketh/cbor";
  *
  * (CANONICAL_CHAIN env var overrides `mainnet`.)
  */
+
+// Canonical-address preservation applies ONLY to the core protocol suite:
+// Authority, PoolRegistry, and the factories/proxies that must sit at the same
+// address on every chain. Extensions, adapters, the ExtensionsMap and the
+// implementation are redeployed on every train anyway, so they always carry
+// the current build's metadata — no blob restoration, and a solc bump flows
+// straight into fresh CREATE2 addresses without any canonical bookkeeping.
+const CANONICAL_CONTRACTS = new Set([
+  "Authority",
+  "PoolRegistry",
+  "RigoblockGovernanceFactory",
+  "RigoblockGovernanceProxy",
+  "RigoblockPoolProxyFactory",
+]);
 
 async function main() {
   const chain = process.env.CANONICAL_CHAIN || "mainnet";
@@ -69,6 +88,7 @@ async function main() {
   for (const file of fs.readdirSync(dir)) {
     if (!file.endsWith(".json")) continue;
     const name = file.replace(".json", "");
+    if (!CANONICAL_CONTRACTS.has(name)) continue;
     const record = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
     if (!record.bytecode) continue;
     let artifact;
@@ -95,7 +115,8 @@ async function main() {
       initSkeletonHash: keccak256("0x" + artifactInit.skeleton),
       initGaps: recordInit.gaps,
       solcVersion:
-        solcVersionOf(record.buildInfoId) ?? solcVersionOf(artifact.buildInfoId),
+        solcVersionOf(record.buildInfoId) ??
+        solcVersionOf(artifact.buildInfoId),
     };
     const recordDeployed = record.deployedBytecode?.toLowerCase();
     const artifactDeployed =
@@ -116,6 +137,16 @@ async function main() {
   }
 
   const outPath = path.join("rocketh", "canonical-cbor.json");
+  for (const name of CANONICAL_CONTRACTS) {
+    if (!(name in out)) {
+      console.warn(
+        `warn: whitelisted canonical contract "${name}" produced no entry ` +
+          `(missing ${chain} deployment record or artifact, or executable ` +
+          `code changed). Its canonical blobs were NOT regenerated — ` +
+          `investigate before deploying fresh chains.`,
+      );
+    }
+  }
   fs.writeFileSync(outPath, JSON.stringify(out, null, 2) + "\n");
   console.log(
     `wrote ${outPath}: ${matched} canonical blob sets (${skipped} changed contracts keep current blobs)`,

@@ -30,8 +30,11 @@ const ETHERSCAN_RATE_LIMIT_MS = 210; // ~5 requests/sec for free API keys
 const ETHERSCAN_POLL_INTERVAL_MS = Number(
   process.env.RB_VERIFY_POLL_INTERVAL_MS ?? 5000,
 );
+// Big standard-json inputs (adapter closures with hundreds of sources) can
+// sit in Etherscan's queue for several minutes; Arbiscan in particular
+// regularly exceeds the old 40 x 5s = 200s budget.
 const ETHERSCAN_POLL_MAX_ATTEMPTS = Number(
-  process.env.RB_VERIFY_POLL_MAX_ATTEMPTS ?? 40,
+  process.env.RB_VERIFY_POLL_MAX_ATTEMPTS ?? 120,
 );
 const ETHERSCAN_POST_TIMEOUT_MS = 60_000;
 const ETHERSCAN_POST_MAX_ATTEMPTS = 3;
@@ -516,9 +519,15 @@ function resolveImport(
   }
 
   // Remappings follow solc's `<context>:<prefix>=<target>` format; the
-  // context restricts which importing files a remapping applies to. Longest
-  // matching prefix wins.
-  let best: { prefix: string; target: string } | undefined;
+  // context restricts which importing files a remapping applies to. Precedence
+  // mirrors solc/Hardhat 3 (selectBestRemapping): among the remappings whose
+  // context matches the importing file, the LONGEST CONTEXT wins; the prefix
+  // length breaks ties within the same context. Getting this wrong picks a
+  // different source than solc did (e.g. `project/:permit2/` over the more
+  // specific `project/lib/universal-router/:permit2/`), so the submitted
+  // standard-json input is missing a source Etherscan then fails to resolve.
+  let best:
+    { contextLength: number; prefixLength: number; target: string } | undefined;
   for (const remapping of remappings) {
     const eq = remapping.indexOf("=");
     if (eq === -1) continue;
@@ -529,12 +538,21 @@ function resolveImport(
     const prefix = ctxEnd === -1 ? lhs : lhs.slice(ctxEnd + 1);
     if (context && !importingFile.startsWith(context)) continue;
     if (!specifier.startsWith(prefix)) continue;
-    if (!best || prefix.length > best.prefix.length) {
-      best = { prefix, target };
+    if (
+      !best ||
+      context.length > best.contextLength ||
+      (context.length === best.contextLength &&
+        prefix.length >= best.prefixLength)
+    ) {
+      best = {
+        contextLength: context.length,
+        prefixLength: prefix.length,
+        target,
+      };
     }
   }
   if (best) {
-    const resolved = best.target + specifier.slice(best.prefix.length);
+    const resolved = best.target + specifier.slice(best.prefixLength);
     return sourceKeys.has(resolved) ? resolved : undefined;
   }
   return sourceKeys.has(specifier) ? specifier : undefined;

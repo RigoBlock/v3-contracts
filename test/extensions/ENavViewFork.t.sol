@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
@@ -181,7 +182,7 @@ contract ENavViewForkTest is Test {
         console2.log("=== Testing ENavView.getNavDataView() ===");
 
         // Call getNavDataView via the pool (using fallback to extension)
-        NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+        NavData memory navData = IENavView(TEST_POOL).getNavDataView();
 
         console2.log("NAV Data:");
         console2.log("  Total Value:", navData.totalValue);
@@ -277,7 +278,7 @@ contract ENavViewForkTest is Test {
             uint256 storedNav = poolTokens.unitaryValue;
 
             // Get NAV from ENavView
-            NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+            NavData memory navData = IENavView(TEST_POOL).getNavDataView();
 
             console2.log("NAV Comparison:");
             console2.log("  Stored NAV:", storedNav);
@@ -301,7 +302,7 @@ contract ENavViewForkTest is Test {
             console2.logBytes(reason);
 
             // Test that ENavView handles the failure gracefully
-            NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+            NavData memory navData = IENavView(TEST_POOL).getNavDataView();
             assertEq(navData.totalValue, 0, "Should return zero when oracle fails");
             assertEq(navData.unitaryValue, 0, "Should return zero when oracle fails");
             assertGt(navData.timestamp, 0, "Timestamp should be set even when oracle fails");
@@ -344,7 +345,7 @@ contract ENavViewForkTest is Test {
         }
 
         // Test that calls work even when pool has minimal state
-        NavView.NavData memory navData = IENavView(TEST_POOL).getNavDataView();
+        NavData memory navData = IENavView(TEST_POOL).getNavDataView();
 
         // When oracle fails, NAV calculation returns zero values - this is expected
         if (navData.totalValue == 0 && navData.unitaryValue == 0) {

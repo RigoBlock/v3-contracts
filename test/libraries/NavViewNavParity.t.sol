@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 
@@ -94,7 +95,7 @@ contract NavViewNavParityTest is UnitTestFixture {
     ///      view-NAV : getNavDataView()     — computes NAV from live state (used by ZK coprocessors).
     function _assertNavParity() internal {
         NetAssetsValue memory writeNav = ISmartPoolActions(pool).updateUnitaryValue();
-        NavView.NavData memory viewNav = IENavView(pool).getNavDataView();
+        NavData memory viewNav = IENavView(pool).getNavDataView();
 
         assertEq(
             viewNav.unitaryValue,
@@ -287,7 +288,7 @@ contract NavViewNavParityTest is UnitTestFixture {
         _assertNavParity();
 
         // Both paths must return the sentinel value, not 0.
-        NavView.NavData memory viewNav = IENavView(pool).getNavDataView();
+        NavData memory viewNav = IENavView(pool).getNavDataView();
         assertEq(viewNav.unitaryValue, 1, "view-NAV must use sentinel 1 when value <= 0");
     }
 

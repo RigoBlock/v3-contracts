@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
+import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -174,7 +175,7 @@ contract AHyperliquidForkTest is Test {
     function testFork_InFlightBalanceDuringGap() public {
         uint256 depositAmount = 10_000e6;
 
-        NavView.NavData memory navBefore = IENavView(pool).getNavDataView();
+        NavData memory navBefore = IENavView(pool).getNavDataView();
 
         vm.prank(poolOwner);
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
@@ -202,7 +203,7 @@ contract AHyperliquidForkTest is Test {
         // The precompile has caught up by the next EVM block: the NavView read reports the same
         // total value as before the deposit (no double-counted in-flight amount).
         _mockAccountMarginSummary(int64(uint64(depositAmount)));
-        NavView.NavData memory navData = IENavView(pool).getNavDataView();
+        NavData memory navData = IENavView(pool).getNavDataView();
         assertEq(navData.totalValue, navBefore.totalValue, "Total value must not change once Core has caught up");
 
         // Warp past the settlement window and advance the L1 block: the EApps view works again.
@@ -619,7 +620,7 @@ contract AHyperliquidForkTest is Test {
     ///  report a stale NAV because HyperCore has not yet caught up. On-chain NAV writes still revert.
     function testFork_NavViewReadsStaleNavDuringSettlementWindow() public {
         // Capture the pre-deposit NAV.
-        NavView.NavData memory navBefore = IENavView(pool).getNavDataView();
+        NavData memory navBefore = IENavView(pool).getNavDataView();
         uint256 unitaryBefore = navBefore.unitaryValue;
         assertGt(unitaryBefore, 0, "Pre-deposit NAV should be positive");
 
@@ -642,7 +643,7 @@ contract AHyperliquidForkTest is Test {
         // Off-chain view succeeds but reads the lagging Core balance (zero), so it reports a stale NAV
         // that is lower than the pre-deposit value because the pool's USDC has already left the wallet
         // but has not yet been credited by the HyperCore precompile.
-        NavView.NavData memory navDuring = IENavView(pool).getNavDataView();
+        NavData memory navDuring = IENavView(pool).getNavDataView();
         assertLt(navDuring.unitaryValue, unitaryBefore, "Off-chain NAV should be stale during window");
 
         // After the settlement window elapses and HyperCore reflects the deposit, the settled NAV
@@ -652,7 +653,7 @@ contract AHyperliquidForkTest is Test {
         _advanceL1Block();
         _mockAccountMarginSummary(int64(uint64(depositAmount)));
 
-        NavView.NavData memory navAfter = IENavView(pool).getNavDataView();
+        NavData memory navAfter = IENavView(pool).getNavDataView();
         assertEq(navAfter.unitaryValue, unitaryBefore, "Settled NAV should match pre-deposit value");
     }
 
@@ -669,7 +670,7 @@ contract AHyperliquidForkTest is Test {
         _mockAccountMarginSummary(int64(uint64(depositAmount)));
         _mockSpotBalance(pool, 0, 0);
 
-        NavView.NavData memory navData = IENavView(pool).getNavDataView();
+        NavData memory navData = IENavView(pool).getNavDataView();
         assertGt(navData.unitaryValue, 0, "NavView should report a positive unitary value after the window");
     }
 

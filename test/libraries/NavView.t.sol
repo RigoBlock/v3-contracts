@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {Test} from "forge-std/Test.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
 import {Reader} from "gmx-synthetics/reader/Reader.sol";
@@ -51,7 +52,7 @@ contract NavViewHarness {
         address pool,
         address grgStakingProxy,
         address uniV4Posm
-    ) external view returns (NavView.NavData memory) {
+    ) external view returns (NavData memory) {
         return NavView.getNavData(pool, grgStakingProxy, uniV4Posm);
     }
 
@@ -208,7 +209,7 @@ contract NavViewTest is Test {
         _mockBaseTokenBalance(1000e18);
         _mockPoolTokens(1e18, 1000e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         assertEq(data.totalValue, 1000e18);
         assertEq(data.unitaryValue, 1e18); // 1000e18 * 1e18 / 1000e18 = 1e18
@@ -247,7 +248,7 @@ contract NavViewTest is Test {
 
         _mockPoolTokens(1e18, 550e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         assertEq(data.totalValue, 550e18);
         assertEq(data.unitaryValue, 1e18);
@@ -285,7 +286,7 @@ contract NavViewTest is Test {
 
         _mockPoolTokens(1e18, 3500e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         // totalValue = 500e18 (base) + 3000e18 (ETH converted) = 3500e18
         assertEq(data.totalValue, 3500e18);
@@ -323,7 +324,7 @@ contract NavViewTest is Test {
 
         _mockPoolTokens(1e18, 550e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         assertEq(data.totalValue, 0);
         assertEq(data.unitaryValue, 0);
@@ -343,7 +344,7 @@ contract NavViewTest is Test {
         _mockBaseTokenBalance(0);
         _mockPoolTokens(2e18, 0); // stored unitaryValue = 2e18, totalSupply = 0
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         // effectiveSupply = 0 + (-1000e18) < 0 → use stored unitaryValue = 2e18
         assertEq(data.unitaryValue, 2e18);
@@ -360,7 +361,7 @@ contract NavViewTest is Test {
         _mockBaseTokenBalance(0); // pool has no assets
         _mockPoolTokens(1e18, 100e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         // totalValue = 0, effectiveSupply > 0 → matches _updateNav sentinel 1
         assertEq(data.totalValue, 0);
@@ -399,7 +400,7 @@ contract NavViewTest is Test {
 
         _mockPoolTokens(1e18, 100e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         // totalValue < 0, effectiveSupply > 0 → matches _updateNav sentinel 1
         assertEq(data.totalValue, 0);
@@ -420,7 +421,7 @@ contract NavViewTest is Test {
         _mockBaseTokenBalance(1);
         _mockPoolTokens(1e18, 2e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         // Without the safety net: unitaryValue = (1 * 1e18) / 2e18 = 0.
         // Safety net must set it to 1, matching _updateNav.
@@ -440,7 +441,7 @@ contract NavViewTest is Test {
         _mockBaseTokenBalance(500e18);
         _mockPoolTokens(1e18, 500e18);
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         assertEq(data.totalValue, 500e18);
         assertEq(data.unitaryValue, 1e18);
@@ -459,7 +460,7 @@ contract NavViewTest is Test {
         _mockBaseTokenBalance(1500e18);
         _mockPoolTokens(1e18, 1000e18); // totalSupply = 1000, VS = +500 → effective = 1500
 
-        NavView.NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
+        NavData memory data = harness.getNavData(POOL, GRG_STAKING_PROXY, UNI_V4_POSM);
 
         // unitaryValue = 1500e18 * 1e18 / 1500e18 = 1e18
         assertEq(data.totalValue, 1500e18);

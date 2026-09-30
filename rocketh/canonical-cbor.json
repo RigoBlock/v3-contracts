@@ -1,46 +1,4 @@
 {
-  "AIntents": {
-    "initSkeletonHash": "0x5aed90ba03bbc91f2ef365b67e16a1eeec93eda82ac711e917cb62ebf19d7cb3",
-    "initGaps": [
-      {
-        "offset": 22972,
-        "blob": "a2646970667358221220fa0f6038435223a23c39ffd46213eb2bf2678b2c8377bc61696601c096853c0164736f6c634300081c0033"
-      },
-      {
-        "offset": 23036,
-        "blob": "a2646970667358221220f847a966b95ce0b29f5cf0e5e67dbce338a349565c46a90e10f5c515b862ce9764736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0x5315acd698987024f6ec2a522698cc11058033f2adaabb15dbba4e9cf9a882f7",
-    "deployedGaps": [
-      {
-        "offset": 22656,
-        "blob": "a2646970667358221220fa0f6038435223a23c39ffd46213eb2bf2678b2c8377bc61696601c096853c0164736f6c634300081c0033"
-      },
-      {
-        "offset": 22720,
-        "blob": "a2646970667358221220f847a966b95ce0b29f5cf0e5e67dbce338a349565c46a90e10f5c515b862ce9764736f6c634300081c0033"
-      }
-    ]
-  },
-  "AUniswap": {
-    "initSkeletonHash": "0xbbe383b998f3407c6f1322a72372e6bf0c8e2c4c492f5bc28c38d9fd6d967cc0",
-    "initGaps": [
-      {
-        "offset": 2914,
-        "blob": "a26469706673582212204af5823a278c66043e5b3e67ba98a368058c8a61070720628cfe5684a0b2cbc564736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0x2feed4221f9dfb4449bfa86d1dec0c0a2ed0290320f9d7f4fd80ef09dabac52d",
-    "deployedGaps": [
-      {
-        "offset": 2612,
-        "blob": "a26469706673582212204af5823a278c66043e5b3e67ba98a368058c8a61070720628cfe5684a0b2cbc564736f6c634300081c0033"
-      }
-    ]
-  },
   "Authority": {
     "initSkeletonHash": "0x242912a83e9bfc546f387101485f87ce61e8792c63334f2fa105eaed440d82b7",
     "initGaps": [
@@ -58,116 +16,6 @@
       }
     ]
   },
-  "ECrosschain": {
-    "initSkeletonHash": "0x77bd117f877a7ba3c04b770af4f24524537d429a4a4c8d35f581b006dc22fe45",
-    "initGaps": [
-      {
-        "offset": 10300,
-        "blob": "a264697066735822122081c42d75d5451681edeeb570ba46092be128fc25109e164f862efca465ab51a664736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0xc1134782f92f46889e2a5a2aa03f5b4a320a175de6754e31a38fbbbbd92642a5",
-    "deployedGaps": [
-      {
-        "offset": 10244,
-        "blob": "a264697066735822122081c42d75d5451681edeeb570ba46092be128fc25109e164f862efca465ab51a664736f6c634300081c0033"
-      }
-    ]
-  },
-  "EERC20": {
-    "initSkeletonHash": "0xea000ed8917d0b71fcab4dfeaad3ff6445078614951dafc866e0af9851e87c38",
-    "initGaps": [
-      {
-        "offset": 792,
-        "blob": "a2646970667358221220df472c01557a5c1cb9e63ec36739fcdc1d3a69de9ea49453f6c7cbb2a596b0aa64736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0x43b0a43a79e981b0d7f2ede518dbfd94a56c68955f5257accedc722ef4922f41",
-    "deployedGaps": [
-      {
-        "offset": 736,
-        "blob": "a2646970667358221220df472c01557a5c1cb9e63ec36739fcdc1d3a69de9ea49453f6c7cbb2a596b0aa64736f6c634300081c0033"
-      }
-    ]
-  },
-  "EOracle": {
-    "initSkeletonHash": "0x49d11ab5ba5149a86288715f24fb69bb5141436379da1f6f2841c15040f57451",
-    "initGaps": [
-      {
-        "offset": 9538,
-        "blob": "a264697066735822122015e8dcc7e919e5c4c63736a503ada24d0a8c7909191ed5f0063b9004cd4a164d64736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0x3dda6977807a97b07117903741c8548ddeb4f15f29266658e4c59137d7cab89f",
-    "deployedGaps": [
-      {
-        "offset": 9112,
-        "blob": "a264697066735822122015e8dcc7e919e5c4c63736a503ada24d0a8c7909191ed5f0063b9004cd4a164d64736f6c634300081c0033"
-      }
-    ]
-  },
-  "EUpgrade": {
-    "initSkeletonHash": "0x72442352c77b5cb829fe629b263f14316fb5985e5a309f3736f3ed3fdaac1164",
-    "initGaps": [
-      {
-        "offset": 1574,
-        "blob": "a2646970667358221220dcfdcee2e9cefb410065a1bbe0c8809a61009822d00619b933f85f9d1ac79b1964736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0x06f5e2db13572a518458a595e077bf44918357d5ae0465b346c136c260f470d1",
-    "deployedGaps": [
-      {
-        "offset": 1288,
-        "blob": "a2646970667358221220dcfdcee2e9cefb410065a1bbe0c8809a61009822d00619b933f85f9d1ac79b1964736f6c634300081c0033"
-      }
-    ]
-  },
-  "ExtensionsMap": {
-    "initSkeletonHash": "0x392bf519463538e7cf6ff26201da54bc02542635c959cad2d3c9febf0bad15cc",
-    "initGaps": [
-      {
-        "offset": 4270,
-        "blob": "a2646970667358221220608328c9a98a74165cda8997acc01d766f2931ff338e3beefe1b74521e0fa54864736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0x0dce28db923b776cdfd36ca4d3cf8bfd4a360d8f5b36751f0139a4c93e0c9aa0",
-    "deployedGaps": [
-      {
-        "offset": 2888,
-        "blob": "a2646970667358221220608328c9a98a74165cda8997acc01d766f2931ff338e3beefe1b74521e0fa54864736f6c634300081c0033"
-      }
-    ]
-  },
-  "ExtensionsMapDeployer": {
-    "initSkeletonHash": "0x8f484e1a5d6e936a6e8594af9589fcc4ab7c3396f1a1d3e4a9762d26dd5fad35",
-    "initGaps": [
-      {
-        "offset": 7304,
-        "blob": "a2646970667358221220608328c9a98a74165cda8997acc01d766f2931ff338e3beefe1b74521e0fa54864736f6c634300081c0033"
-      },
-      {
-        "offset": 7304,
-        "blob": "a2646970667358221220c43c312bd830eb78c352ebfe6a12b1d1a06ac7936cbe1b71d37e28ddb0f4c10864736f6c634300081c0033"
-      }
-    ],
-    "solcVersion": "0.8.28",
-    "deployedSkeletonHash": "0x4f4c02376dee023716be71d2f4fbd3bf1c92695a0f5e090c779c584db59c31b1",
-    "deployedGaps": [
-      {
-        "offset": 7248,
-        "blob": "a2646970667358221220608328c9a98a74165cda8997acc01d766f2931ff338e3beefe1b74521e0fa54864736f6c634300081c0033"
-      },
-      {
-        "offset": 7248,
-        "blob": "a2646970667358221220c43c312bd830eb78c352ebfe6a12b1d1a06ac7936cbe1b71d37e28ddb0f4c10864736f6c634300081c0033"
-      }
-    ]
-  },
   "PoolRegistry": {
     "initSkeletonHash": "0x85cc49f20fb2d3d687771059bbbc5666bf31ddaab3b7c0e1186fd2b0075117db",
     "initGaps": [
@@ -182,6 +30,31 @@
       {
         "offset": 7556,
         "blob": "a264697066735822122073e75ac3b8c1adf691f488a40c982626b75f2de75e2da12a95537a887a930a1d64736f6c63430008110033"
+      }
+    ]
+  },
+  "RigoblockPoolProxyFactory": {
+    "initSkeletonHash": "0x4f0e2cbfdb89819d9b6e1740fcc337be319923afd4e65d4a16f0922ec1c5e07d",
+    "initGaps": [
+      {
+        "offset": 9696,
+        "blob": "a26469706673582212200f74c83651b80afff3529310debe8504f073a23e59eec106c535ef5765dd152e64736f6c63430008110033"
+      },
+      {
+        "offset": 9760,
+        "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
+      }
+    ],
+    "solcVersion": "0.8.17",
+    "deployedSkeletonHash": "0x2792db09f8da3ffc3cb4c2165da8aaf37278ac191734a5b244191e66c41ad6a3",
+    "deployedGaps": [
+      {
+        "offset": 9316,
+        "blob": "a26469706673582212200f74c83651b80afff3529310debe8504f073a23e59eec106c535ef5765dd152e64736f6c63430008110033"
+      },
+      {
+        "offset": 9380,
+        "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
       }
     ]
   },
@@ -226,30 +99,5 @@
       }
     ],
     "solcVersion": "0.8.17"
-  },
-  "RigoblockPoolProxyFactory": {
-    "initSkeletonHash": "0x4f0e2cbfdb89819d9b6e1740fcc337be319923afd4e65d4a16f0922ec1c5e07d",
-    "initGaps": [
-      {
-        "offset": 9696,
-        "blob": "a26469706673582212200f74c83651b80afff3529310debe8504f073a23e59eec106c535ef5765dd152e64736f6c63430008110033"
-      },
-      {
-        "offset": 9760,
-        "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
-      }
-    ],
-    "solcVersion": "0.8.17",
-    "deployedSkeletonHash": "0x2792db09f8da3ffc3cb4c2165da8aaf37278ac191734a5b244191e66c41ad6a3",
-    "deployedGaps": [
-      {
-        "offset": 9316,
-        "blob": "a26469706673582212200f74c83651b80afff3529310debe8504f073a23e59eec106c535ef5765dd152e64736f6c63430008110033"
-      },
-      {
-        "offset": 9380,
-        "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
-      }
-    ]
   }
 }
