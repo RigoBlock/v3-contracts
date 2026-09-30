@@ -1,6 +1,3 @@
-import { ethers } from "ethers";
-import fs from "fs";
-import os from "os";
 import path from "path";
 import { task } from "hardhat/config";
 import { ArgumentType } from "hardhat/types/arguments";
@@ -11,56 +8,17 @@ import {
   checkSourcifyBatch,
   isVendorVerified,
   verifySourcifyV2,
+  verifyEtherscanStdJson,
   loadVerificationStatus,
   markVendorUnverified,
   markVendorVerified,
   resetStatusForChangedContracts,
   saveVerificationStatus,
-  type MinimalDeployment,
 } from "../utils/verification";
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
-}
-
-function decodeConstructorArgs(
-  deployment: MinimalDeployment & { abi: any[]; argsData: string },
-): unknown[] {
-  // ethers decodes tuple components as Result objects (Array subclasses). They
-  // must stay arrays: stringifying them flattens "0xaddr1,0xaddr2" and the
-  // verifier's ABI encoder rejects that with "invalid tuple value" (HHE80017).
-  const toPlainValue = (value: unknown): unknown => {
-    if (typeof value === "bigint") return value.toString();
-    if (Array.isArray(value)) return value.map(toPlainValue);
-    return value;
-  };
-  try {
-    const iface = new ethers.Interface(deployment.abi as any);
-    const args = ethers.AbiCoder.defaultAbiCoder().decode(
-      iface.deploy.inputs,
-      deployment.argsData,
-    );
-    return args.map(toPlainValue);
-  } catch (error) {
-    console.warn(
-      `Failed to decode constructor args for ${deployment.address}:`,
-      getErrorMessage(error),
-    );
-    return [];
-  }
-}
-
-/**
- * The verify task's `constructorArgs` variadic argument only accepts strings,
- * which cannot express tuple params. `constructorArgsPath` loads an ESM module
- * whose default export is passed through verbatim, preserving nested arrays.
- */
-async function writeConstructorArgsModule(args: unknown[]): Promise<string> {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rb-verify-args-"));
-  const file = path.join(dir, "constructor-args.mjs");
-  fs.writeFileSync(file, `export default ${JSON.stringify(args)};\n`);
-  return file;
 }
 
 export const deployContractsTask: NewTaskDefinition = task(
@@ -295,41 +253,15 @@ export const deployContractsTask: NewTaskDefinition = task(
 
         console.log(`Verifying ${contractName} on Etherscan...`);
         try {
-          let contractPath: string | undefined;
-          if (deployment.metadata && typeof deployment.metadata === "string") {
-            try {
-              const parsedMetadata = JSON.parse(deployment.metadata);
-              const compilationTarget =
-                parsedMetadata?.settings?.compilationTarget;
-              const sourcePath =
-                compilationTarget &&
-                typeof compilationTarget === "object" &&
-                Object.keys(compilationTarget)[0];
-              if (sourcePath) {
-                contractPath = `${sourcePath}:${contractName}`;
-              }
-            } catch (parseError) {
-              console.warn(
-                `Failed to parse metadata for ${contractName}:`,
-                getErrorMessage(parseError),
-              );
-            }
-          }
-
-          const constructorArgs = decodeConstructorArgs(deployment as any);
-          // The task's variadic constructorArgs only accepts strings; tuple
-          // params go through a temp module instead (see writeConstructorArgsModule).
-          const viaModule = constructorArgs.some(
-            (arg) => typeof arg !== "string",
+          const buildInfoDir = path.join(
+            hre.config.paths.artifacts,
+            "build-info",
           );
-          await hre.tasks.getTask(["verify", "etherscan"]).run({
-            address: deployment.address,
-            constructorArgs: viaModule ? [] : constructorArgs,
-            constructorArgsPath: viaModule
-              ? await writeConstructorArgsModule(constructorArgs)
-              : undefined,
-            contract: contractPath,
-          });
+          await verifyEtherscanStdJson(
+            chainId,
+            deployment as any,
+            buildInfoDir,
+          );
           markVendorVerified(
             status,
             contractName,

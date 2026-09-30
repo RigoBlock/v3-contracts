@@ -9,7 +9,10 @@ target chains such as HyperEVM through Wormhole cross-chain messages.
 - No staking rewards / staking proxy on the target chain.
 - Any governance proposal can include actions that target the local Wormhole core contract.
 - Each target-chain receiver is configured to trust a specific emitter (by default the Ethereum mainnet governance proxy), so only messages from that emitter are executed.
-- Actions are executed on the target chain in the exact order they were sent.
+- Actions within one message are executed on the target chain in the exact order they
+  were encoded. Across messages, only increasing sequence numbers are enforced
+  (see "Ordered execution and replay protection" below), so order-sensitive
+  cross-message dependencies must be batched into one message.
 - Each proposal is protected against replay on every chain.
 - Proposal quorum is snapshotted at creation time so future quorum changes cannot
   alter the outcome of an existing proposal (fixes [#200][issue-200]).
@@ -210,12 +213,16 @@ requires `msg.value` to equal the total exactly.
 contract assigns them at `publishMessage` time, and a cancelled or defeated proposal never
 publishes). In-order delivery therefore executes governance actions in the exact order
 they were approved, which matters because batches are authored with dependencies in mind
-(e.g. upgrade a strategy, then call it). If relayers invert two deliveries, the later
-sequence succeeds and the earlier one then fails the minimum check: an inverted delivery
-costs one reverted relay transaction, never a lost or reordered execution — the same
-self-healing behavior as the audited Uniswap receiver. Strictly in-order processing is
-never required for liveness, only for executing a specific message in its approved
-position; the sender chain can always re-send an orphaned action with a fresh sequence.
+(e.g. upgrade a strategy, then call it). Actions within one message execute atomically in
+their encoded order. Across messages, the receiver enforces increasing accepted sequence
+numbers, not delivery of every earlier message: a successful later delivery permanently
+invalidates any earlier undelivered VAA on that receiver (its sequence falls below
+`nextMinimumSequence`). An inverted delivery therefore costs one reverted relay
+transaction only when the earlier message is delivered again before any later one lands;
+otherwise the inversion is permanent — the later message's effects apply and the earlier
+message requires fresh governance-approved publication, after rechecking its
+preconditions, to take effect at all. Batch dependent same-target actions into one
+message. An orphaned action does not self-heal by retrying the old VAA.
 
 Each message carries a batch of `ProposedAction`s, executed on the destination chain one by
 one in the encoded order via `GovernanceActionLib.execute` — the same pre-audited assembly
@@ -242,10 +249,13 @@ advance rolls back with it:
   semantics as a locally executed proposal, which also reverts on failure), so a
   missed precondition is diagnosable instead of silently skipped.
 - The message is **not** consumed: the same VAA remains deliverable once the
-  precondition on the target chain is satisfied
+  precondition on the target chain is satisfied, as long as it has not expired
+  and no later message has been delivered in the meantime (a later delivery
+  advances the minimum past it permanently)
   (`test_ReceiveMessage_FailedAction_RecoveredByRedelivery`), and any later
   sequence can leapfrog it in the meantime
-  (`test_ReceiveMessage_FailureDoesNotBlockNextMessage`).
+  (`test_ReceiveMessage_FailureDoesNotBlockNextMessage`). An expired VAA needs
+  fresh publication, not simply a repaired action precondition.
 - Action preconditions should be checked on the sender chain where possible (the
   strategy's `beforePropose` does this for payload shape and value), so that a
   message is only sent when it is expected to execute.

@@ -1,9 +1,8 @@
 import fs from "fs";
 import path from "path";
 import hre from "hardhat";
-import {keccak256} from "ethers";
-import {splitBytecode} from "../rocketh/cbor";
-
+import { keccak256 } from "ethers";
+import { splitBytecode } from "../rocketh/cbor";
 /**
  * Generates rocketh/canonical-cbor.json from an authoritative chain's deployment
  * records (default: mainnet).
@@ -29,6 +28,15 @@ import {splitBytecode} from "../rocketh/cbor";
  * source + settings (never on the chain), so every chain still computes the
  * same address for them.
  *
+ * Each entry records the solc version that produced the current build. This is
+ * what makes the redeploy rule enforceable: bumping solc changes the metadata
+ * even when the executable code is byte-identical, and the rule requires such
+ * contracts to be redeployed with the new compiler (they may carry compiler
+ * bug fixes invisible at source level). readArtifact refuses to restore blobs
+ * across a compiler mismatch, so the new metadata takes effect and CREATE2
+ * yields a fresh address. A solc bump on an extension therefore requires the
+ * usual salt + VERSION bump (see AGENTS.md).
+ *
  * Run this after deploying an upgrade to the authoritative chain so future
  * chains reproduce the new canonical addresses:
  *
@@ -44,6 +52,30 @@ async function main() {
   let matched = 0;
   let skipped = 0;
 
+  // Records the compiler that produced the current build. On a solc bump the
+  // metadata changes even when the executable code is byte-identical, and the
+  // redeploy rule requires the new metadata to take effect (readArtifact
+  // refuses to restore blobs recorded under a different compiler version).
+  const buildInfoDir = path.join(hre.config.paths.artifacts, "build-info");
+  const solcVersionCache = new Map<string, string | undefined>();
+  const solcLongVersion = (buildInfoId?: string): string | undefined => {
+    if (!buildInfoId) return undefined;
+    if (!solcVersionCache.has(buildInfoId)) {
+      const p = path.join(buildInfoDir, `${buildInfoId}.json`);
+      solcVersionCache.set(
+        buildInfoId,
+        fs.existsSync(p)
+          ? (
+              JSON.parse(fs.readFileSync(p, "utf8")) as {
+                solcLongVersion?: string;
+              }
+            ).solcLongVersion
+          : undefined,
+      );
+    }
+    return solcVersionCache.get(buildInfoId);
+  };
+
   for (const file of fs.readdirSync(dir)) {
     if (!file.endsWith(".json")) continue;
     const name = file.replace(".json", "");
@@ -55,23 +87,31 @@ async function main() {
     } catch {
       continue; // no matching artifact (e.g. imported deployment records)
     }
-    const artifactBytecode = typeof artifact.bytecode === "string" ? artifact.bytecode : artifact.bytecode?.object;
+    const artifactBytecode =
+      typeof artifact.bytecode === "string"
+        ? artifact.bytecode
+        : artifact.bytecode?.object;
     if (!artifactBytecode) continue;
     const recordInit = splitBytecode(record.bytecode.toLowerCase());
     const artifactInit = splitBytecode(artifactBytecode.toLowerCase());
     if (recordInit.skeleton !== artifactInit.skeleton) {
-      console.log(`skip ${name}: executable code changed since the ${chain} deployment (new canonical address)`);
+      console.log(
+        `skip ${name}: executable code changed since the ${chain} deployment (new canonical address)`,
+      );
       skipped++;
       continue;
     }
     const entry: Record<string, unknown> = {
       initSkeletonHash: keccak256("0x" + artifactInit.skeleton),
       initGaps: recordInit.gaps,
+      solcLongVersion: solcLongVersion(artifact.buildInfoId),
     };
     const recordDeployed = record.deployedBytecode?.toLowerCase();
     const artifactDeployed =
       artifact.deployedBytecode &&
-      (typeof artifact.deployedBytecode === "string" ? artifact.deployedBytecode : artifact.deployedBytecode?.object);
+      (typeof artifact.deployedBytecode === "string"
+        ? artifact.deployedBytecode
+        : artifact.deployedBytecode?.object);
     if (recordDeployed && artifactDeployed) {
       const recordRuntime = splitBytecode(recordDeployed);
       const artifactRuntime = splitBytecode(artifactDeployed);
@@ -86,7 +126,9 @@ async function main() {
 
   const outPath = path.join("rocketh", "canonical-cbor.json");
   fs.writeFileSync(outPath, JSON.stringify(out, null, 2) + "\n");
-  console.log(`wrote ${outPath}: ${matched} canonical blob sets (${skipped} changed contracts keep current blobs)`);
+  console.log(
+    `wrote ${outPath}: ${matched} canonical blob sets (${skipped} changed contracts keep current blobs)`,
+  );
 }
 
 main().catch((e) => {

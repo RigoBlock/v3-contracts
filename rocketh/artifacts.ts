@@ -1,10 +1,10 @@
-import type {Artifact} from "@rocketh/core/types";
-import {keccak256} from "ethers";
+import type { Artifact } from "@rocketh/core/types";
+import { keccak256 } from "ethers";
 import fs from "fs";
-import {fileURLToPath} from "url";
+import { fileURLToPath } from "url";
 import path from "path";
 import hre from "hardhat";
-import {splitBytecode, joinBytecode, type BlobGap} from "./cbor";
+import { splitBytecode, joinBytecode, type BlobGap } from "./cbor";
 
 /**
  * Canonical CBOR metadata blobs (see scripts/generate-canonical-cbor.ts).
@@ -20,23 +20,61 @@ import {splitBytecode, joinBytecode, type BlobGap} from "./cbor";
  * 0x8DE8895ddD702d9a216E640966A98e08c9228f24). Only the metadata stamps are
  * touched; the executable code deployed is always what the current toolchain
  * compiled from the current sources.
+ *
+ * Redeploy rule: the blobs are restored only when the current build's solc
+ * version matches the one recorded in the canonical entry. Bumping solc
+ * changes the metadata even when the executable code is byte-identical, and
+ * such contracts MUST be redeployed with the new compiler — the fresh metadata
+ * then flows into the init code and CREATE2 yields a new address. Pragma-pinned
+ * contracts (the factories, proxies, Authority, staking suite at 0.8.17) never
+ * recompile with a bumped solc, so their canonical addresses are unaffected.
  */
 type CanonicalEntry = {
   initSkeletonHash: string;
   initGaps: BlobGap[];
   deployedSkeletonHash?: string;
   deployedGaps?: BlobGap[];
+  solcLongVersion?: string;
 };
 
 let canonical: Record<string, CanonicalEntry> | undefined;
 function loadCanonical(): Record<string, CanonicalEntry> {
   if (canonical === undefined) {
-    const p = path.join(path.dirname(fileURLToPath(import.meta.url)), "canonical-cbor.json");
+    const p = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "canonical-cbor.json",
+    );
     canonical = fs.existsSync(p)
-      ? (JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, CanonicalEntry>)
+      ? (JSON.parse(fs.readFileSync(p, "utf8")) as Record<
+          string,
+          CanonicalEntry
+        >)
       : {};
   }
   return canonical;
+}
+
+const solcVersionCache = new Map<string, string | undefined>();
+function solcLongVersionOf(buildInfoId?: string): string | undefined {
+  if (!buildInfoId) return undefined;
+  if (!solcVersionCache.has(buildInfoId)) {
+    const p = path.join(
+      hre.config.paths.artifacts,
+      "build-info",
+      `${buildInfoId}.json`,
+    );
+    solcVersionCache.set(
+      buildInfoId,
+      fs.existsSync(p)
+        ? (
+            JSON.parse(fs.readFileSync(p, "utf8")) as {
+              solcLongVersion?: string;
+            }
+          ).solcLongVersion
+        : undefined,
+    );
+  }
+  return solcVersionCache.get(buildInfoId);
 }
 
 /**
@@ -57,24 +95,57 @@ export async function readArtifact(name: string): Promise<Artifact> {
   const artifact = await hre.artifacts.readArtifact(name);
   const entry = loadCanonical()[name];
   if (entry) {
-    const apply = (bytecode: string, skeletonHash: string, gaps?: BlobGap[]) => {
+    const apply = (
+      bytecode: string,
+      skeletonHash: string,
+      gaps?: BlobGap[],
+    ) => {
       const split = splitBytecode(bytecode);
       if (keccak256("0x" + split.skeleton) !== skeletonHash) return undefined;
       if (!gaps || gaps.length !== split.gaps.length) return undefined;
       return "0x" + joinBytecode(split.skeleton, gaps);
     };
-    const bytecode = apply(artifact.bytecode, entry.initSkeletonHash, entry.initGaps);
+    const bytecode = apply(
+      artifact.bytecode,
+      entry.initSkeletonHash,
+      entry.initGaps,
+    );
     if (bytecode) {
+      // Redeploy rule: a bumped compiler changes the metadata even when the
+      // executable skeleton is identical. Do not restore the old blobs across
+      // a compiler mismatch — the new metadata must take effect so CREATE2
+      // produces a fresh address and the contract is redeployed.
+      if (entry.solcLongVersion) {
+        const current = solcLongVersionOf(
+          (artifact as { buildInfoId?: string }).buildInfoId,
+        );
+        if (current && current !== entry.solcLongVersion) {
+          console.log(
+            `canonical-cbor: ${name} recompiled with a new compiler ` +
+              `(${entry.solcLongVersion} -> ${current}); not restoring canonical blobs ` +
+              `so the contract is redeployed with the new metadata`,
+          );
+          return { ...artifact, metadata: "" } as unknown as Artifact;
+        }
+      }
       const deployedBytecode = artifact.deployedBytecode
-        ? apply(artifact.deployedBytecode, entry.deployedSkeletonHash ?? "", entry.deployedGaps) ??
-          artifact.deployedBytecode
+        ? (apply(
+            artifact.deployedBytecode,
+            entry.deployedSkeletonHash ?? "",
+            entry.deployedGaps,
+          ) ?? artifact.deployedBytecode)
         : artifact.deployedBytecode;
-      return {...artifact, bytecode, deployedBytecode, metadata: ""} as unknown as Artifact;
+      return {
+        ...artifact,
+        bytecode,
+        deployedBytecode,
+        metadata: "",
+      } as unknown as Artifact;
     }
     console.warn(
       `canonical-cbor: ${name} executable code changed since the blobs were generated; ` +
         `keeping the current metadata. Regenerate with scripts/generate-canonical-cbor.ts.`,
     );
   }
-  return {...artifact, metadata: ""} as unknown as Artifact;
+  return { ...artifact, metadata: "" } as unknown as Artifact;
 }
