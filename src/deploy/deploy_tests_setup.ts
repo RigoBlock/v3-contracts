@@ -88,7 +88,7 @@ export default deployScript(
       { deterministic: true },
     );
 
-    // TODO: test if following condition necessary
+    // GrgVault must be authorized in the GRG transfer proxy to move GRG on behalf of stakers.
     await env.executeByName("ERC20Proxy", {
       account: deployer,
       functionName: "addAuthorizedAddress",
@@ -203,26 +203,6 @@ export default deployScript(
         account: deployer,
         artifact: await readArtifact("ENavView"),
         args: [[stakingProxy.address, univ4Posm.address]],
-      },
-      { deterministic: true },
-    );
-
-    const acrossSpokePool = await env.deploy(
-      "MockAcrossSpokePool",
-      {
-        account: deployer,
-        artifact: await readArtifact("MockAcrossSpokePool"),
-        args: [weth.address],
-      },
-      { deterministic: true },
-    );
-
-    await env.deploy(
-      "MockAcrossMulticallHandler",
-      {
-        account: deployer,
-        artifact: await readArtifact("MockAcrossMulticallHandler"),
-        args: [],
       },
       { deterministic: true },
     );
@@ -435,7 +415,9 @@ export default deployScript(
       {
         account: deployer,
         artifact: await readArtifact("AIntents"),
-        args: [acrossSpokePool.address],
+        // Placeholder: no remaining mocha spec exercises cross-chain deposits locally;
+        // Foundry fork tests wire AIntents to the real Across SpokePool.
+        args: [weth.address],
       },
       { deterministic: true },
     );

@@ -120,7 +120,7 @@ function patchContract() {
 function buildTestFile() {
   const lines = [
     "// SPDX-License-Identifier: Apache-2.0-or-later",
-    "pragma solidity ^0.8.28;",
+    "pragma solidity 0.8.37;",
     "",
     'import {Test} from "forge-std/Test.sol";',
     'import {_FLOAT_PRECISION} from "../../contracts/protocol/types/GmxConstants.sol";',

@@ -41,13 +41,9 @@ isolate = false
 # add via_ir profile
 additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
 
-# Enforce compiling project contracts without via-ir. MockAcrossSpokePool needs
-# via-ir to avoid a stack-too-deep error, so it is listed separately. Other mock
-# files are enumerated explicitly to avoid overlapping paths that Foundry cannot
-# merge.
+# Enforce compiling project contracts without via-ir. Mock files are enumerated
+# explicitly to avoid overlapping paths that Foundry cannot merge.
 compilation_restrictions = [
-    { paths = "contracts/mocks/MockAcrossSpokePool.sol", via_ir = true },
-    { paths = "contracts/mocks/MockAcrossMulticallHandler.sol", via_ir = false },
     { paths = "contracts/mocks/MockERC20.sol", via_ir = false },
     { paths = "contracts/governance/**", via_ir = false },
     { paths = "contracts/protocol/**", via_ir = false },

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
@@ -104,7 +104,7 @@ contract A0xRouterUnichainForkTest is Test {
 
     Each test loads the literal settler calldata bytes extracted from the failing
     on-chain transaction. The adapter's validation (settler check, recipient check,
-    price feed check, action allowlist) runs against the REAL bytes.
+    price feed check, action invariants) runs against the REAL bytes.
 
     The swap itself will fail (stale quote, expired deadline) but we verify the
     error is NOT from our adapter's validation layer.
@@ -112,7 +112,7 @@ contract A0xRouterUnichainForkTest is Test {
 
     /// @notice Replay exact TX1 calldata: ETH→GRG swap (0xcd79b65d, block 41291308).
     ///  operator=settler, token=address(0), amount=0.001 ETH, target=settler.
-    ///  Original error: ActionNotAllowed(BASIC) — now BASIC is in allowlist.
+    ///  Original error: ActionNotAllowed(BASIC) — BASIC now passes validation.
     function test_ReplayExact_TX1_ETHToGRG() public {
         // Fund pool with ETH (the pool is the vault — adapter derives value from params)
         deal(pool, 10 ether);
@@ -180,7 +180,7 @@ contract A0xRouterUnichainForkTest is Test {
     /// @notice Replay exact TX3 calldata: GRG→USDC swap (0x87b1059a, block 41298808).
     ///  operator=settler, token=GRG, amount=50e18, target=settler.
     ///  buyToken=0x078d782b760474a361dda0af3839290b0ef57ad6 (USDC on Unichain).
-    ///  Original error: ActionNotAllowed(BASIC) — now BASIC is in allowlist.
+    ///  Original error: ActionNotAllowed(BASIC) — BASIC now passes validation.
     function test_ReplayExact_TX3_GRGToUSDC() public {
         // Fund pool with GRG sell token
         deal(UNI_GRG, pool, 100e18);
@@ -291,7 +291,6 @@ contract A0xRouterUnichainForkTest is Test {
                 "Blocked by: InvalidSettlerCalldata"
             );
             assertTrue(errorSelector != IA0xRouter.DirectCallNotAllowed.selector, "Blocked by: DirectCallNotAllowed");
-            assertTrue(errorSelector != IA0xRouter.ActionNotAllowed.selector, "Blocked by: ActionNotAllowed");
             assertTrue(
                 errorSelector != EnumerableSet.TokenPriceFeedDoesNotExist.selector,
                 "Blocked by: TokenPriceFeedDoesNotExist"

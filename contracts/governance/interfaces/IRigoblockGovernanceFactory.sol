@@ -17,9 +17,9 @@
 
 */
 
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity ^0.8.0;
 
-import "../IRigoblockGovernance.sol";
+import {TimeType} from "../types/TimeType.sol";
 
 // solhint-disable-next-line
 interface IRigoblockGovernanceFactory {
@@ -40,7 +40,7 @@ interface IRigoblockGovernanceFactory {
         address governanceStrategy,
         uint256 proposalThreshold,
         uint256 quorumThreshold,
-        IRigoblockGovernance.TimeType timeType,
+        TimeType timeType,
         string calldata name
     ) external returns (address governance);
 
@@ -54,7 +54,7 @@ interface IRigoblockGovernanceFactory {
         /// @notice Number of votes required for execution.
         uint256 quorumThreshold;
         /// @notice Type of time chosed, block number of timestamp.
-        IRigoblockGovernance.TimeType timeType;
+        TimeType timeType;
         /// @notice String of the name of the application.
         string name;
     }

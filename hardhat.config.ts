@@ -27,6 +27,19 @@ const argv = yargs(hideBin(process.argv))
   .version(false)
   .parseSync();
 
+// hardhat-deploy's after-build hook (typed-artifact generation) reads each
+// build-info file whole into a single string. The merged solc-0.8.37 unit's
+// build-info is ~465 MB (solc duplicates the full metadata, which embeds every
+// unit source, into each of the ~600 contract outputs) and the instrumented
+// coverage build exceeds V8's max string length, crashing `hardhat test
+// --coverage` and, as the unit grows, plain compiles. Nothing in the test flow
+// uses hardhat-deploy — fixtures run deploy scripts through @rocketh/node, and
+// the deploy-adjacent tasks use its rocketh-based helper — so the plugin is
+// registered only for its `deploy` task; `test` and `compile` never load its
+// hook.
+const TASK = String(argv._[0] ?? "");
+const needsHardhatDeploy = TASK === "deploy";
+
 // Load environment variables.
 dotenv.config();
 const {
@@ -70,6 +83,8 @@ if (PK) {
   };
 }
 
+// All live networks require an Infura key, even those that use a chain-specific RPC,
+// to ensure deployments do not run on an environment missing shared credentials.
 if (
   [
     "mainnet",
@@ -80,6 +95,7 @@ if (
     "arbitrum",
     "bsc",
     "unichain",
+    "hyperliquid",
   ].includes(argv.network) &&
   INFURA_KEY === undefined
 ) {
@@ -100,10 +116,6 @@ const defaultProfile = {
   compilers: [
     { version: primarySolidityVersion, settings: soliditySettings },
     {
-      version: "0.8.28",
-      settings: { ...soliditySettings, evmVersion: "cancun" },
-    },
-    {
       version: "0.8.26",
       settings: { ...soliditySettings, evmVersion: "berlin" },
     },
@@ -122,14 +134,6 @@ const defaultProfile = {
     "contracts/protocol/proxies/RigoblockPoolProxy.sol": {
       version: "0.8.17",
       settings: { ...soliditySettings, evmVersion: "london" },
-    },
-    "contracts/mocks/MockAcrossSpokePool.sol": {
-      version: "0.8.28",
-      settings: {
-        ...soliditySettings,
-        viaIR: true,
-        evmVersion: "cancun",
-      },
     },
   },
 };
@@ -151,7 +155,8 @@ const userConfig: HardhatUserConfig = {
     HardhatNetworkHelpers,
     HardhatVerify,
     HardhatFoundry,
-    HardhatDeploy,
+    // see needsHardhatDeploy above
+    ...(needsHardhatDeploy ? [HardhatDeploy] : []),
     HardhatMarkup,
   ],
   tasks: [
@@ -188,9 +193,8 @@ const userConfig: HardhatUserConfig = {
     profiles: {
       // NOTE: hardhat-deploy v2's `deploy` task compiles with the `production`
       // build profile. Hardhat 3 auto-generates that profile from `default` but
-      // STRIPS compiler `settings` (including `viaIR`), so it must be declared
-      // explicitly here with the same settings or compilation fails
-      // (MockAcrossSpokePool needs viaIR).
+      // STRIPS compiler `settings`, so it must be declared explicitly here with
+      // the same settings.
       default: defaultProfile,
       production: defaultProfile,
     },
@@ -271,7 +275,7 @@ const userConfig: HardhatUserConfig = {
     hyperliquid: {
       type: "http",
       ...sharedNetworkConfig,
-      url: process.env.HYPERLIQUID_RPC_URL || "http://localhost:8545",
+      url: process.env.HYPERLIQUID_RPC_URL || "https://rpc.hyperliquid.xyz/evm",
       // HyperEVM has 1s small blocks (3M gas) and 60s big blocks (30M gas).
       // Large protocol contracts must be deployed in big blocks; the deployer account must first
       // set the Core user flag `usingBigBlocks: true` via a HyperCore action (see

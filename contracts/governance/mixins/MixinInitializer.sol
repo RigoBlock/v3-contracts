@@ -1,35 +1,20 @@
-// SPDX-License-Identifier: Apache 2.0
-/*
-
- Copyright 2023 Rigo Intl.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
-*/
-
+// SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import "../interfaces/IGovernanceStrategy.sol";
-import "../interfaces/IRigoblockGovernanceFactory.sol";
-import "./MixinStorage.sol";
+import {IGovernanceInitializer} from "../interfaces/governance/IGovernanceInitializer.sol";
+import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
+import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
+import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
+import {MixinStorage} from "./MixinStorage.sol";
 
 abstract contract MixinInitializer is MixinStorage {
+    error GovAlreadyInitialized();
     error InitParamsVerification();
 
     modifier onlyUninitialized() {
         // proxy is always initialized in the constructor, therefore
         // empty extcodesize means the governance has not been initialized
-        require(address(this).code.length == 0, "ALREADY_INITIALIZED_ERROR");
+        require(address(this).code.length == 0, GovAlreadyInitialized());
         _;
     }
 
@@ -43,7 +28,7 @@ abstract contract MixinInitializer is MixinStorage {
         }
 
         _name().value = params.name;
-        _paramsWrapper().governanceParameters = GovernanceParameters({
+        _paramsWrapper().governanceParameters = IGovernanceState.GovernanceParameters({
             strategy: params.governanceStrategy,
             proposalThreshold: params.proposalThreshold,
             quorumThreshold: params.quorumThreshold,

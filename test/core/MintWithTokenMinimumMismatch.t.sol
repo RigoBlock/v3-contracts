@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 // Tests that mintWithToken's minimum-order guard is checked against the gross input
 // value expressed in the base token's decimals, not the input token's decimals.

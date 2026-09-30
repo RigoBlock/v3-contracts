@@ -18,7 +18,7 @@
 */
 
 // solhint-disable-next-line
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {INonfungiblePositionManager} from "../../../utils/exchanges/uniswap/INonfungiblePositionManager/INonfungiblePositionManager.sol";
 import {IWETH9} from "../../interfaces/IWETH9.sol";

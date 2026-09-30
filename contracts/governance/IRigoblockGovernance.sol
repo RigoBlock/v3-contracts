@@ -1,34 +1,23 @@
-// SPDX-License-Identifier: Apache-2.0
-/*
+// SPDX-License-Identifier: Apache-2.0-or-later
+pragma solidity ^0.8.0;
 
-  Copyright 2023 Rigo Intl.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-*/
-
-pragma solidity >=0.8.0 <0.9.0;
-
+import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import "./interfaces/governance/IGovernanceCrosschain.sol";
 import "./interfaces/governance/IGovernanceEvents.sol";
 import "./interfaces/governance/IGovernanceInitializer.sol";
 import "./interfaces/governance/IGovernanceState.sol";
 import "./interfaces/governance/IGovernanceUpgrade.sol";
 import "./interfaces/governance/IGovernanceVoting.sol";
 
-interface IRigoblockGovernance is
+/// @title Rigoblock governance aggregate interface.
+/// @dev Inherits the OpenZeppelin Governor and ERC-6372 interfaces so external tooling
+///      compatibility (Tally) is enforced at compile time. Specification: docs/governance/TALLY_COMPAT.md.
+abstract contract IRigoblockGovernance is
+    IGovernanceCrosschain,
     IGovernanceEvents,
     IGovernanceInitializer,
     IGovernanceUpgrade,
     IGovernanceVoting,
-    IGovernanceState
+    IGovernanceState,
+    IOZGovernor
 {}

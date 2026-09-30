@@ -198,5 +198,45 @@
         "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
       }
     ]
+  },
+  "RigoblockGovernanceFactory": {
+    "initSkeletonHash": "0x402db8acda9e16d8a69d8537713cdf31a6a063064e6700f4289682944278777f",
+    "initGaps": [
+      {
+        "offset": 6300,
+        "blob": "a2646970667358221220b46548fd0886cca68ec07b40b37c6d687a9b39ebefe4fc50ce2a0f50e26277ab64736f6c63430008110033"
+      },
+      {
+        "offset": 6364,
+        "blob": "a26469706673582212200114d65018832463a479fb84d03b352d431ea4fcb18714a47998250420e8d80164736f6c63430008110033"
+      }
+    ],
+    "deployedSkeletonHash": "0x27b7f25328bea034367d125e4cc3110de0318f118725c562c88ad9dc2bacff88",
+    "deployedGaps": [
+      {
+        "offset": 6236,
+        "blob": "a2646970667358221220b46548fd0886cca68ec07b40b37c6d687a9b39ebefe4fc50ce2a0f50e26277ab64736f6c63430008110033"
+      },
+      {
+        "offset": 6300,
+        "blob": "a26469706673582212200114d65018832463a479fb84d03b352d431ea4fcb18714a47998250420e8d80164736f6c63430008110033"
+      }
+    ]
+  },
+  "RigoblockGovernanceProxy": {
+    "initSkeletonHash": "0x615d4e548e901a142f70a6badae024f559b908f940d87d553afcbc918e9fed8d",
+    "initGaps": [
+      {
+        "offset": 2128,
+        "blob": "a2646970667358221220b46548fd0886cca68ec07b40b37c6d687a9b39ebefe4fc50ce2a0f50e26277ab64736f6c63430008110033"
+      }
+    ],
+    "deployedSkeletonHash": "0xeea43587e5a0fa098e0333c49aef575be26206a455534a1a849b3695f10671f6",
+    "deployedGaps": [
+      {
+        "offset": 176,
+        "blob": "a2646970667358221220b46548fd0886cca68ec07b40b37c6d687a9b39ebefe4fc50ce2a0f50e26277ab64736f6c63430008110033"
+      }
+    ]
   }
 }

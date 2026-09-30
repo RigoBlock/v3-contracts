@@ -115,7 +115,7 @@ jobs:
       with:
         script: |
           const fs = require('fs');
-          const script = require('.github/scripts/comment');
+          const script = require('.github/scripts/comment.cjs');
           const header = '# Slither report';
           const ref = '${{ inputs.ref || github.ref_name }}';
           const body = `**Analyzed ref:** \`${ref}\`\n\n` + fs.readFileSync('slither-report.md', 'utf8');

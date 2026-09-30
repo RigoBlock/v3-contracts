@@ -1,44 +1,11 @@
-// SPDX-License-Identifier: Apache-2.0
-/*
-
-  Copyright 2023 Rigo Intl.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-*/
-
-pragma solidity >=0.8.0 <0.9.0;
+// SPDX-License-Identifier: Apache-2.0-or-later
+pragma solidity ^0.8.0;
 
 import "./IGovernanceVoting.sol";
+import {ProposalStatus} from "../../types/GovernanceTypes.sol";
+import {TimeType} from "../../types/TimeType.sol";
 
 interface IGovernanceState {
-    enum ProposalState {
-        Pending,
-        Active,
-        Canceled,
-        Qualified,
-        Defeated,
-        Succeeded,
-        Queued,
-        Expired,
-        Executed
-    }
-
-    enum TimeType {
-        Blocknumber,
-        Timestamp
-    }
-
     struct Proposal {
         uint256 actionsLength;
         uint256 startBlockOrTime;
@@ -57,10 +24,9 @@ interface IGovernanceState {
     /// @notice Returns the actions proposed for a given proposal.
     /// @param proposalId Number of the proposal.
     /// @return proposedActions Array of tuple of proposed actions.
-    function getActions(uint256 proposalId)
-        external
-        view
-        returns (IGovernanceVoting.ProposedAction[] memory proposedActions);
+    function getActions(
+        uint256 proposalId
+    ) external view returns (IGovernanceVoting.ProposedAction[] memory proposedActions);
 
     /// @notice Returns a proposal for a given id.
     /// @param proposalId The number of the proposal.
@@ -70,7 +36,7 @@ interface IGovernanceState {
     /// @notice Returns the state of a proposal.
     /// @param proposalId Number of the proposal.
     /// @return Number of proposal state.
-    function getProposalState(uint256 proposalId) external view returns (ProposalState);
+    function getProposalState(uint256 proposalId) external view returns (ProposalStatus);
 
     struct Receipt {
         bool hasVoted;
@@ -106,10 +72,6 @@ interface IGovernanceState {
     /// @return Tuple of the governance parameters.
     function governanceParameters() external view returns (EnhancedParams memory);
 
-    /// @notice Returns the name of the governace.
-    /// @return Human readable string of the name.
-    function name() external view returns (string memory);
-
     /// @notice Returns the total number of proposals.
     /// @return count The number of proposals.
     function proposalCount() external view returns (uint256 count);
@@ -117,8 +79,4 @@ interface IGovernanceState {
     /// @notice Returns all proposals ever made to the governance.
     /// @return proposalWrapper Tuple array of all governance proposals.
     function proposals() external view returns (ProposalWrapper[] memory proposalWrapper);
-
-    /// @notice Returns the voting period.
-    /// @return Number of blocks or seconds.
-    function votingPeriod() external view returns (uint256);
 }

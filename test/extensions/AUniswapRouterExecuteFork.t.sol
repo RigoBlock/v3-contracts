@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.37;
 
 import {Test, console2} from "forge-std/Test.sol";
 
@@ -46,7 +46,7 @@ interface IPermit2Forwarder {
 
 /// @dev Re-declaration of Universal Router's V3SwapRouter.V3TooLittleReceived(), which the adapter
 /// propagates raw. The upstream file (lib/universal-router/contracts/modules/uniswap/v3/V3SwapRouter.sol)
-/// cannot be imported in this 0.8.28 test job: it pulls in the v3-core module, whose submodule is
+/// cannot be imported in the test compilation job: it pulls in the v3-core module, whose submodule is
 /// not checked out under lib/universal-router/lib/.
 error V3TooLittleReceived();
 
@@ -97,9 +97,10 @@ contract AUniswapRouterExecuteForkTest is Test {
 
         poolOwner = makeAddr("poolOwner");
 
-        // AUniswapRouter is pinned to solc 0.8.37 while fork tests stay on 0.8.28; forge
-        // compiles it in its own job and we deploy the artifact (deployCode), keeping the
-        // test's compilation job free of the router source. Same pattern as AUniswapRouterFork.t.sol.
+        // AUniswapRouter pulls in the Universal Router modules (including an unchecked-out
+        // v3-core submodule), so it cannot be imported in this test job; forge compiles it in
+        // its own job and we deploy the artifact (deployCode), keeping the test's compilation
+        // job free of the router source. Same pattern as AUniswapRouterFork.t.sol.
         aUniswapRouter = deployCode(
             "out/AUniswapRouter.sol/AUniswapRouter.json",
             abi.encode(UNIVERSAL_ROUTER, POSM, WETH)
@@ -651,7 +652,7 @@ contract AUniswapRouterExecuteForkTest is Test {
     /// @notice Migrated from "a direct call should revert". 1:1: calling the adapter outside the
     ///         pool context reverts with DirectCallNotAllowed. The selector is sourced from
     ///         IAIntents, which declares the identically-named error (same signature, same
-    ///         selector); AUniswapRouter's own copy is not importable from this 0.8.28 job.
+    ///         selector); AUniswapRouter's own copy is not importable from this test job.
     function test_Execute_DirectCall_Reverts() public {
         bytes[] memory params = new bytes[](1);
         params[0] = abi.encode(Currency.wrap(USDC), pool, uint256(1));

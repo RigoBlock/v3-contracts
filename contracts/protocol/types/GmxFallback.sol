@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.8;
 
 import {_FLOAT_PRECISION} from "./GmxConstants.sol";
 
