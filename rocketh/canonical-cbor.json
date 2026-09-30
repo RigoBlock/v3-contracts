@@ -11,7 +11,7 @@
         "blob": "a2646970667358221220f847a966b95ce0b29f5cf0e5e67dbce338a349565c46a90e10f5c515b862ce9764736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0x5315acd698987024f6ec2a522698cc11058033f2adaabb15dbba4e9cf9a882f7",
     "deployedGaps": [
       {
@@ -32,7 +32,7 @@
         "blob": "a26469706673582212204af5823a278c66043e5b3e67ba98a368058c8a61070720628cfe5684a0b2cbc564736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0x2feed4221f9dfb4449bfa86d1dec0c0a2ed0290320f9d7f4fd80ef09dabac52d",
     "deployedGaps": [
       {
@@ -49,7 +49,7 @@
         "blob": "a2646970667358221220e5feb7bf111e6413ccdaa9582f879ba37e6c55b72e9311b571712991290e911164736f6c63430008110033"
       }
     ],
-    "solcLongVersion": "0.8.17+commit.8df45f5f",
+    "solcVersion": "0.8.17",
     "deployedSkeletonHash": "0x36ff06951b99480548121e5180f21021b1778e3ee93d4a1e041d4756575f64b8",
     "deployedGaps": [
       {
@@ -66,7 +66,7 @@
         "blob": "a264697066735822122081c42d75d5451681edeeb570ba46092be128fc25109e164f862efca465ab51a664736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0xc1134782f92f46889e2a5a2aa03f5b4a320a175de6754e31a38fbbbbd92642a5",
     "deployedGaps": [
       {
@@ -83,7 +83,7 @@
         "blob": "a2646970667358221220df472c01557a5c1cb9e63ec36739fcdc1d3a69de9ea49453f6c7cbb2a596b0aa64736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0x43b0a43a79e981b0d7f2ede518dbfd94a56c68955f5257accedc722ef4922f41",
     "deployedGaps": [
       {
@@ -100,7 +100,7 @@
         "blob": "a264697066735822122015e8dcc7e919e5c4c63736a503ada24d0a8c7909191ed5f0063b9004cd4a164d64736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0x3dda6977807a97b07117903741c8548ddeb4f15f29266658e4c59137d7cab89f",
     "deployedGaps": [
       {
@@ -117,7 +117,7 @@
         "blob": "a2646970667358221220dcfdcee2e9cefb410065a1bbe0c8809a61009822d00619b933f85f9d1ac79b1964736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0x06f5e2db13572a518458a595e077bf44918357d5ae0465b346c136c260f470d1",
     "deployedGaps": [
       {
@@ -134,7 +134,7 @@
         "blob": "a2646970667358221220608328c9a98a74165cda8997acc01d766f2931ff338e3beefe1b74521e0fa54864736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0x0dce28db923b776cdfd36ca4d3cf8bfd4a360d8f5b36751f0139a4c93e0c9aa0",
     "deployedGaps": [
       {
@@ -155,7 +155,7 @@
         "blob": "a2646970667358221220c43c312bd830eb78c352ebfe6a12b1d1a06ac7936cbe1b71d37e28ddb0f4c10864736f6c634300081c0033"
       }
     ],
-    "solcLongVersion": "0.8.37+commit.f401782d",
+    "solcVersion": "0.8.28",
     "deployedSkeletonHash": "0x4f4c02376dee023716be71d2f4fbd3bf1c92695a0f5e090c779c584db59c31b1",
     "deployedGaps": [
       {
@@ -176,7 +176,7 @@
         "blob": "a264697066735822122073e75ac3b8c1adf691f488a40c982626b75f2de75e2da12a95537a887a930a1d64736f6c63430008110033"
       }
     ],
-    "solcLongVersion": "0.8.17+commit.8df45f5f",
+    "solcVersion": "0.8.17",
     "deployedSkeletonHash": "0xe9a8320f7280e41a2615ab3dfc11b5d1da917a7d1e15b4e4aebb6a2e45ae8bf5",
     "deployedGaps": [
       {
@@ -208,7 +208,7 @@
         "blob": "a26469706673582212200114d65018832463a479fb84d03b352d431ea4fcb18714a47998250420e8d80164736f6c63430008110033"
       }
     ],
-    "solcLongVersion": "0.8.17+commit.8df45f5f"
+    "solcVersion": "0.8.17"
   },
   "RigoblockGovernanceProxy": {
     "initSkeletonHash": "0x615d4e548e901a142f70a6badae024f559b908f940d87d553afcbc918e9fed8d",
@@ -225,7 +225,7 @@
         "blob": "a2646970667358221220b46548fd0886cca68ec07b40b37c6d687a9b39ebefe4fc50ce2a0f50e26277ab64736f6c63430008110033"
       }
     ],
-    "solcLongVersion": "0.8.17+commit.8df45f5f"
+    "solcVersion": "0.8.17"
   },
   "RigoblockPoolProxyFactory": {
     "initSkeletonHash": "0x4f0e2cbfdb89819d9b6e1740fcc337be319923afd4e65d4a16f0922ec1c5e07d",
@@ -239,7 +239,7 @@
         "blob": "a2646970667358221220a95e49aca36f8844744cd5771c3e48d1cb425e3a6c4c8d2864fee086cff653b164736f6c63430008110033"
       }
     ],
-    "solcLongVersion": "0.8.17+commit.8df45f5f",
+    "solcVersion": "0.8.17",
     "deployedSkeletonHash": "0x2792db09f8da3ffc3cb4c2165da8aaf37278ac191734a5b244191e66c41ad6a3",
     "deployedGaps": [
       {

@@ -52,28 +52,18 @@ async function main() {
   let matched = 0;
   let skipped = 0;
 
-  // Records the compiler that produced the current build. On a solc bump the
-  // metadata changes even when the executable code is byte-identical, and the
-  // redeploy rule requires the new metadata to take effect (readArtifact
+  // Records the compiler that produced the AUTHORITATIVE DEPLOYMENT, parsed
+  // from the deployment record's buildInfoId (`solc-0_8_28-...`). The redeploy
+  // rule compares it against the current build's compiler: bumping solc
+  // changes the metadata even when the executable code is byte-identical, and
+  // such contracts MUST be redeployed with the new compiler (readArtifact
   // refuses to restore blobs recorded under a different compiler version).
-  const buildInfoDir = path.join(hre.config.paths.artifacts, "build-info");
-  const solcVersionCache = new Map<string, string | undefined>();
-  const solcLongVersion = (buildInfoId?: string): string | undefined => {
-    if (!buildInfoId) return undefined;
-    if (!solcVersionCache.has(buildInfoId)) {
-      const p = path.join(buildInfoDir, `${buildInfoId}.json`);
-      solcVersionCache.set(
-        buildInfoId,
-        fs.existsSync(p)
-          ? (
-              JSON.parse(fs.readFileSync(p, "utf8")) as {
-                solcLongVersion?: string;
-              }
-            ).solcLongVersion
-          : undefined,
-      );
-    }
-    return solcVersionCache.get(buildInfoId);
+  // The short version is enough for the rule and avoids depending on old
+  // build-info files still being present on disk. Falls back to the current
+  // artifact's compiler for records that lack a buildInfoId.
+  const solcVersionOf = (buildInfoId?: string): string | undefined => {
+    const m = buildInfoId?.match(/^solc-(\d+_\d+_\d+)-/);
+    return m ? m[1].replace(/_/g, ".") : undefined;
   };
 
   for (const file of fs.readdirSync(dir)) {
@@ -104,7 +94,8 @@ async function main() {
     const entry: Record<string, unknown> = {
       initSkeletonHash: keccak256("0x" + artifactInit.skeleton),
       initGaps: recordInit.gaps,
-      solcLongVersion: solcLongVersion(artifact.buildInfoId),
+      solcVersion:
+        solcVersionOf(record.buildInfoId) ?? solcVersionOf(artifact.buildInfoId),
     };
     const recordDeployed = record.deployedBytecode?.toLowerCase();
     const artifactDeployed =
