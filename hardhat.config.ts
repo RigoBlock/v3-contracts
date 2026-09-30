@@ -35,10 +35,10 @@ const argv = yargs(hideBin(process.argv))
 // --coverage` and, as the unit grows, plain compiles. Nothing in the test flow
 // uses hardhat-deploy — fixtures run deploy scripts through @rocketh/node, and
 // the deploy-adjacent tasks use its rocketh-based helper — so the plugin is
-// registered only for its `deploy` task; `test` and `compile` never load its
-// hook.
+// registered only for the deploy tasks (`deploy-contracts` runs hardhat-deploy's
+// `deploy` task internally); `test` and `compile` never load its hook.
 const TASK = String(argv._[0] ?? "");
-const needsHardhatDeploy = TASK === "deploy";
+const needsHardhatDeploy = TASK === "deploy" || TASK === "deploy-contracts";
 
 // Load environment variables.
 dotenv.config();
