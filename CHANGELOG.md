@@ -1,3 +1,13 @@
+## [2.8.1](https://github.com/RigoBlock/v3-contracts/compare/v2.8.0...v2.8.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* bump version to prompt redeployment ([5b286c7](https://github.com/RigoBlock/v3-contracts/commit/5b286c77e929513a805fc12b0aef2139e4963cf6))
+* prevent cascade imports for artifacts by moving type to own type ([edf8fee](https://github.com/RigoBlock/v3-contracts/commit/edf8fee1490ac1adcf2c6be0b6e9a916a9d1d5a7))
+
+
+
 # [2.8.0](https://github.com/RigoBlock/v3-contracts/compare/v2.7.0...v2.8.0) (2026-09-30)
 
 
@@ -55,15 +65,6 @@
 ### Bug Fixes
 
 * 1wei donate rounding error ([5d79afd](https://github.com/RigoBlock/v3-contracts/commit/5d79afd46f748db2e3e1a7f9e9dd4727da5cebe0))
-
-
-
-## [2.6.2](https://github.com/RigoBlock/v3-contracts/compare/v2.6.1...v2.6.2) (2026-09-07)
-
-
-### Bug Fixes
-
-* document gmx fallback heartbeat, zero-price nav semantics and oracle twap window arithmetic ([029fccf](https://github.com/RigoBlock/v3-contracts/commit/029fccf8cd2d83757b7d96c02525a0e0d0a17e52))
 
 
 
