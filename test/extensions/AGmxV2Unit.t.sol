@@ -19,6 +19,7 @@ import {Position} from "gmx-synthetics/position/Position.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IWETH9} from "../../contracts/protocol/interfaces/IWETH9.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
+import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
@@ -39,12 +40,19 @@ interface IHandlerOrderVault {
 }
 
 /// @dev Proxy that delegatecalls an AGmxV2 adapter. Implements hasPriceFeed so
-///  `_trackToken` can skip the oracle check when the token is the base token.
+///  `_trackToken` and the market-token feed validation can exercise both the
+///  priced and feedless paths (tokens default to priced; mark them feedless explicitly).
 contract AGmxV2UnitProxy {
     address public immutable adapter;
 
+    mapping(address token => bool feedless) public feedlessTokens;
+
     constructor(address _adapter) {
         adapter = _adapter;
+    }
+
+    function setFeedless(address token, bool feedless) external {
+        feedlessTokens[token] = feedless;
     }
 
     function exec(bytes calldata data) external payable returns (bytes memory) {
@@ -57,8 +65,8 @@ contract AGmxV2UnitProxy {
         return res;
     }
 
-    function hasPriceFeed(address) external pure returns (bool) {
-        return true;
+    function hasPriceFeed(address token) external view returns (bool) {
+        return !feedlessTokens[token];
     }
 
     receive() external payable {}
@@ -418,6 +426,71 @@ contract AGmxV2UnitTest is Test {
         IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
 
         proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    /// @notice A short on a market whose longToken has no pool price feed reverts at
+    ///  admission: GMX pays funding in both market tokens, so an unpriceable longToken
+    ///  would brick NAV once claimable funding accrues.
+    function test_CreateIncreaseOrder_ShortFeedlessLongToken_Reverts() public {
+        address feedlessLong = makeAddr("feedlessLong");
+        proxy.setFeedless(feedlessLong, true);
+
+        _mockCreateOrderInfrastructure();
+        vm.mockCall(
+            _GMX_READER,
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encode(
+                Market.Props({
+                    marketToken: market,
+                    indexToken: feedlessLong,
+                    longToken: feedlessLong,
+                    shortToken: token
+                })
+            )
+        );
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, false);
+
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, feedlessLong));
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    /// @notice Mirror case: a long on a market whose shortToken has no pool price feed
+    ///  reverts at admission.
+    function test_CreateIncreaseOrder_LongFeedlessShortToken_Reverts() public {
+        address feedlessShort = makeAddr("feedlessShort");
+        proxy.setFeedless(feedlessShort, true);
+
+        _mockCreateOrderInfrastructure();
+        vm.mockCall(
+            _GMX_READER,
+            abi.encodeWithSelector(Reader.getMarket.selector, _GMX_DATA_STORE, market),
+            abi.encode(
+                Market.Props({marketToken: market, indexToken: token, longToken: token, shortToken: feedlessShort})
+            )
+        );
+
+        IBaseOrderUtils.CreateOrderParams memory params = _buildCreateOrderParams(market, token, true);
+
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, feedlessShort));
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.createIncreaseOrder.selector, params));
+    }
+
+    /// @notice claimFundingFees with a feedless token still reverts in `_trackToken`:
+    ///  the pool cannot price the claimed funding, so the claim must not go through.
+    function test_ClaimFundingFees_FeedlessToken_Reverts() public {
+        address feedless = makeAddr("feedless");
+        proxy.setFeedless(feedless, true);
+
+        _mockRouterAuthorized();
+
+        address[] memory markets = new address[](1);
+        markets[0] = market;
+        address[] memory tokens = new address[](1);
+        tokens[0] = feedless;
+
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, feedless));
+        proxy.exec(abi.encodeWithSelector(IAGmxV2.claimFundingFees.selector, markets, tokens, address(this)));
     }
 
     /// @dev Mocks the RoleStore check used by GmxAdapterLib.assertRouterAuthorized.

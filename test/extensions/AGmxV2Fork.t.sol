@@ -58,6 +58,7 @@ import {Position} from "gmx-synthetics/position/Position.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
+import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
 import {Order} from "gmx-synthetics/order/Order.sol";
@@ -962,6 +963,162 @@ contract AGmxV2ForkTest is Test {
         // Should NOT revert with MaxGmxPositionsReached (fast path exits before the count check).
         vm.prank(poolOwner);
         IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
+    }
+
+    // =========================================================================
+    // Tests — market token feed validation (GMX funds in both market tokens)
+    // =========================================================================
+
+    /// @notice A short on a market whose longToken has no pool BackGeoOracle feed reverts at
+    ///  admission with TokenPriceFeedDoesNotExist(longToken), before any state write. GMX pays
+    ///  funding in both market tokens, so without this check claimable funding in the feedless
+    ///  token would enter NAV via GmxLib and brick updateUnitaryValue/mint/burn/claims.
+    function test_CreateIncreaseOrder_Short_MarketWithFeedlessLongToken_Reverts() public {
+        (address market, address longToken, address shortToken) = _findMarketWithFeedlessToken(true);
+        if (market == address(0)) {
+            console2.log("SKIP: no GMX market with feedless longToken at ARB_BLOCK");
+            vm.skip(true);
+        }
+
+        assertFalse(IEOracle(pool).hasPriceFeed(longToken), "longToken must lack a pool feed");
+        assertTrue(IEOracle(pool).hasPriceFeed(shortToken), "shortToken must have a pool feed");
+
+        // Collateral is the fed market token so the admission revert isolates the
+        // market-token feed validation (collateral tracking succeeds first).
+        IBaseOrderUtils.CreateOrderParams memory p = IBaseOrderUtils.CreateOrderParams({
+            addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                receiver: address(0),
+                cancellationReceiver: address(0),
+                callbackContract: address(0),
+                uiFeeReceiver: address(0),
+                market: market,
+                initialCollateralToken: shortToken,
+                swapPath: new address[](0)
+            }),
+            numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                sizeDeltaUsd: SIZE_DELTA_USD,
+                initialCollateralDeltaAmount: 100 * 10 ** _tokenDecimals(shortToken),
+                triggerPrice: 0,
+                acceptablePrice: 0, // short: accept any price
+                executionFee: 0,
+                callbackGasLimit: 0,
+                minOutputAmount: 0,
+                validFromTime: 0
+            }),
+            orderType: Order.OrderType.MarketIncrease,
+            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+            isLong: false,
+            shouldUnwrapNativeToken: false,
+            autoCancel: false,
+            referralCode: bytes32(0),
+            dataList: new bytes32[](0)
+        });
+
+        uint256 collateralBefore = IERC20(shortToken).balanceOf(pool);
+        assertEq(vm.load(pool, GmxCallbackLib.GMX_CALLBACK_DATA_SLOT), bytes32(0), "no tracked markets before");
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, longToken));
+        IAGmxV2(pool).createIncreaseOrder(p);
+
+        // The reverted call must be stateless: no tracked market, no app activation, no funds moved.
+        assertEq(
+            vm.load(pool, GmxCallbackLib.GMX_CALLBACK_DATA_SLOT),
+            bytes32(0),
+            "reverted order must not track the market"
+        );
+        uint256 flag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+        assertEq(ISmartPoolState(pool).getActiveApplications() & flag, 0, "GMX app must not be activated");
+        assertEq(IERC20(shortToken).balanceOf(pool), collateralBefore, "collateral must not leave the pool");
+    }
+
+    /// @notice Mirror case: a long on a market whose shortToken has no pool BackGeoOracle feed
+    ///  reverts at admission with TokenPriceFeedDoesNotExist(shortToken).
+    function test_CreateIncreaseOrder_Long_MarketWithFeedlessShortToken_Reverts() public {
+        (address market, address longToken, address shortToken) = _findMarketWithFeedlessToken(false);
+        if (market == address(0)) {
+            console2.log("SKIP: no GMX market with feedless shortToken at ARB_BLOCK");
+            vm.skip(true);
+        }
+
+        assertTrue(IEOracle(pool).hasPriceFeed(longToken), "longToken must have a pool feed");
+        assertFalse(IEOracle(pool).hasPriceFeed(shortToken), "shortToken must lack a pool feed");
+
+        IBaseOrderUtils.CreateOrderParams memory p = IBaseOrderUtils.CreateOrderParams({
+            addresses: IBaseOrderUtils.CreateOrderParamsAddresses({
+                receiver: address(0),
+                cancellationReceiver: address(0),
+                callbackContract: address(0),
+                uiFeeReceiver: address(0),
+                market: market,
+                initialCollateralToken: longToken,
+                swapPath: new address[](0)
+            }),
+            numbers: IBaseOrderUtils.CreateOrderParamsNumbers({
+                sizeDeltaUsd: SIZE_DELTA_USD,
+                initialCollateralDeltaAmount: 100 * 10 ** _tokenDecimals(longToken),
+                triggerPrice: 0,
+                acceptablePrice: type(uint256).max, // long: accept any price
+                executionFee: 0,
+                callbackGasLimit: 0,
+                minOutputAmount: 0,
+                validFromTime: 0
+            }),
+            orderType: Order.OrderType.MarketIncrease,
+            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+            isLong: true,
+            shouldUnwrapNativeToken: false,
+            autoCancel: false,
+            referralCode: bytes32(0),
+            dataList: new bytes32[](0)
+        });
+
+        uint256 collateralBefore = IERC20(longToken).balanceOf(pool);
+        assertEq(vm.load(pool, GmxCallbackLib.GMX_CALLBACK_DATA_SLOT), bytes32(0), "no tracked markets before");
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, shortToken));
+        IAGmxV2(pool).createIncreaseOrder(p);
+
+        assertEq(
+            vm.load(pool, GmxCallbackLib.GMX_CALLBACK_DATA_SLOT),
+            bytes32(0),
+            "reverted order must not track the market"
+        );
+        uint256 flag = 1 << uint256(Applications.GMX_V2_POSITIONS);
+        assertEq(ISmartPoolState(pool).getActiveApplications() & flag, 0, "GMX app must not be activated");
+        assertEq(IERC20(longToken).balanceOf(pool), collateralBefore, "collateral must not leave the pool");
+    }
+
+    /// @dev Scans the live GMX markets at the fork block (resolved dynamically from the Reader —
+    ///  pin-agnostic) for a market whose `feedlessIsLong ? longToken : shortToken` lacks a pool
+    ///  BackGeoOracle feed while the other market token has one, and whose index token is priced
+    ///  through GMX — so the pool-oracle validation is the check that fails.
+    function _findMarketWithFeedlessToken(
+        bool feedlessIsLong
+    ) private view returns (address market, address longToken, address shortToken) {
+        uint256 count = IDataStore(GMX_DATA_STORE).getAddressCount(keccak256(abi.encode("MARKET_LIST")));
+        Market.Props[] memory markets = Reader(GMX_READER).getMarkets(DataStore(GMX_DATA_STORE), 0, count);
+        for (uint256 i; i < markets.length; ++i) {
+            Market.Props memory mkt = markets[i];
+            if (mkt.indexToken == address(0)) continue; // pure spot/swap markets have no funding
+            if (!GmxAdapterLib.isIndexTokenPriced(mkt.indexToken)) continue;
+            address feedlessToken = feedlessIsLong ? mkt.longToken : mkt.shortToken;
+            address otherToken = feedlessIsLong ? mkt.shortToken : mkt.longToken;
+            if (feedlessToken == otherToken) continue;
+            if (IEOracle(pool).hasPriceFeed(feedlessToken)) continue;
+            if (!IEOracle(pool).hasPriceFeed(otherToken)) continue;
+            console2.log("Found market with feedless", feedlessIsLong ? "longToken" : "shortToken");
+            console2.log("  market:", mkt.marketToken);
+            console2.log("  feedless token:", feedlessToken);
+            console2.log("  other token:", otherToken);
+            return (mkt.marketToken, mkt.longToken, mkt.shortToken);
+        }
+    }
+
+    /// @dev ERC-20 decimals read for sizing the (never-transferred) collateral amount.
+    function _tokenDecimals(address token) private view returns (uint8) {
+        return IERC20Extended(token).decimals();
     }
 
     // =========================================================================
@@ -3242,11 +3399,13 @@ interface IDataStore {
     function setAddress(bytes32 key, address value) external returns (address);
     function addAddress(bytes32 setKey, address value) external;
     function getUint(bytes32 key) external view returns (uint256);
+    function getAddressCount(bytes32 setKey) external view returns (uint256);
 }
 
-// Helper: IERC20 with name()
+// Helper: IERC20 with name() and decimals()
 // ─────────────────────────────────────────────────────────────────────────────
 interface IERC20Extended {
     function name() external view returns (string memory);
     function balanceOf(address) external view returns (uint256);
+    function decimals() external view returns (uint8);
 }

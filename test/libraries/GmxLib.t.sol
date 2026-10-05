@@ -1043,29 +1043,20 @@ contract GmxLibTest is Test {
     }
 
     // =========================================================================
-    // getPnlToken
+    // getMarketTokens
     // =========================================================================
 
-    /// @notice Long positions settle PnL in the market's longToken.
-    function test_GetPnlToken_Long_ReturnsLongToken() public {
+    /// @notice The market tokens are the longToken and shortToken of the market.
+    function test_GetMarketTokens_ReturnsLongAndShortToken() public {
         vm.mockCall(
             GMX_READER,
             abi.encodeWithSelector(Reader.getMarket.selector, GMX_DATA_STORE, MARKET),
             abi.encode(_buildMarket())
         );
 
-        assertEq(GmxAdapterLib.getPnlToken(MARKET, true), LONG_TOKEN, "long PnL token must be longToken");
-    }
-
-    /// @notice Short positions settle PnL in the market's shortToken.
-    function test_GetPnlToken_Short_ReturnsShortToken() public {
-        vm.mockCall(
-            GMX_READER,
-            abi.encodeWithSelector(Reader.getMarket.selector, GMX_DATA_STORE, MARKET),
-            abi.encode(_buildMarket())
-        );
-
-        assertEq(GmxAdapterLib.getPnlToken(MARKET, false), SHORT_TOKEN, "short PnL token must be shortToken");
+        (address longToken, address shortToken) = GmxAdapterLib.getMarketTokens(MARKET);
+        assertEq(longToken, LONG_TOKEN, "long token mismatch");
+        assertEq(shortToken, SHORT_TOKEN, "short token mismatch");
     }
 
     /// @notice Verifies that claimable funding fees and collateral rebates recorded by
