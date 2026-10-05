@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {Governor} from "@openzeppelin-gov/governance/Governor.sol";
-import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {IGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
 import {GovernanceActionLib} from "../libraries/GovernanceActionLib.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
@@ -72,14 +72,14 @@ abstract contract MixinVoting is MixinState {
         proposalId = _propose(actions, description);
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
     function propose(
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         string memory description
-    ) public override(Governor, IOZGovernor) returns (uint256 proposalId) {
+    ) public override(Governor, IGovernor) returns (uint256 proposalId) {
         uint256 targetsLength = targets.length;
         require(targetsLength == values.length && targetsLength == calldatas.length, GovActionsLengthMismatch());
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](targetsLength);
@@ -155,7 +155,7 @@ abstract contract MixinVoting is MixinState {
         _ozProposalIds().idByHash[
             bytes32(_hashProposal(targets, values, calldatas, keccak256(bytes(description))))
         ] = proposalId;
-        emit IOZGovernor.ProposalCreated(
+        emit IGovernor.ProposalCreated(
             proposalId,
             msg.sender,
             targets,
@@ -249,14 +249,14 @@ abstract contract MixinVoting is MixinState {
         _executeProposal(proposalId);
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
     function execute(
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    ) public payable override(Governor, IOZGovernor) returns (uint256 proposalId) {
+    ) public payable override(Governor, IGovernor) returns (uint256 proposalId) {
         bytes32 proposalHash = bytes32(_hashProposal(targets, values, calldatas, descriptionHash));
         proposalId = _ozProposalIds().idByHash[proposalHash];
         require(proposalId != 0, GovProposalIdUnknown(proposalHash));
@@ -300,14 +300,14 @@ abstract contract MixinVoting is MixinState {
         _cancel(proposalId);
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
     function cancel(
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    ) public override(Governor, IOZGovernor) returns (uint256 proposalId) {
+    ) public override(Governor, IGovernor) returns (uint256 proposalId) {
         bytes32 proposalHash = bytes32(_hashProposal(targets, values, calldatas, descriptionHash));
         proposalId = _ozProposalIds().idByHash[proposalHash];
         require(proposalId != 0, GovProposalIdUnknown(proposalHash));

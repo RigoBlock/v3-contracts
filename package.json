@@ -55,7 +55,7 @@
     "lint": "yarn lint:sol && yarn lint:ts",
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:ts": "eslint --max-warnings 0 .",
-    "docgen": "hardhat markup --outdir docs/api-raw && node scripts/prepare-api-docs.js && rimraf docs/api-raw",
+    "docgen": "hardhat markup --no-compile --outdir docs/api-raw && node scripts/prepare-api-docs.js && rimraf docs/api-raw",
     "publish:docs": "./scripts/publish-docs.sh",
     "fmt:sol": "prettier 'contracts/**/*.sol' -w",
     "fmt:sol:protocol": "prettier 'contracts/protocol/**/*.sol' -w",
