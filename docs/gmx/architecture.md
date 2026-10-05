@@ -228,6 +228,38 @@ re-verify every arrival path in the table above against the new GMX version,
 and any ungated arrival path must be pre-tracked at admission like the PnL
 token.
 
+### External Positions and Griefing
+
+A third party cannot open a GMX position "for" the pool, so the feed-brick
+vector (a feedless token entering NAV) cannot be triggered externally — only by
+the pool operator's own actions, which admission now feed-validates:
+
+- **Attribution**: GMX's `ExchangeRouter.createOrder` sets `account = msg.sender`
+  (`lib/gmx-synthetics/contracts/router/ExchangeRouter.sol:222`), and `OrderUtils`
+  writes that account into the order (`order.setAccount(account)`,
+  `lib/gmx-synthetics/contracts/order/OrderUtils.sol:239`) and keys the position
+  by it (`OrderUtils.sol:321`). Positions, funding, and claimable collateral are
+  only ever recorded in the DataStore under `account` — caller-supplied fields
+  like `receiver` cannot re-attribute them.
+- **Collateral**: the adapter pushes collateral to the OrderVault itself
+  (`AGmxV2.sol:93-100`); there is no standing ERC-20 allowance from the pool to
+  GMX. GMX measures collateral via `orderVault.recordTransferIn`
+  (`OrderUtils.sol:122,186`), so tokens an attacker sends to the vault are
+  credited to the attacker's own orders, never to the pool.
+- **Callbacks**: `EGmxCallback.afterOrderExecution` is gated by
+  `onlyGmxController` (`EGmxCallback.sol:32-35`) and further requires the
+  event's `account == address(this)` (`EGmxCallback.sol:48`), so an attacker
+  cannot forge a callback to inject a tracked market or collateral key.
+- **Enumeration**: `GmxLib` reads positions, orders, and claimables strictly
+  from DataStore state keyed by `address(this)` (the pool —
+  `GmxLib.sol:35-38,62,174-212`). Nothing attacker-writable enters the NAV
+  enumeration.
+- **Benign cases**: tokens donated directly to the pool wallet but NOT in the
+  active-tokens set are ignored by NAV — wallet balances are only counted for
+  active-set tokens (`MixinPoolValue.sol:152-160`), so a dust donation neither
+  counts nor reverts. Tokens sent to GMX's OrderVault without an order are
+  unattributed and uncounted.
+
 ## Referral Code
 
 All orders pass `referralCode: bytes32(0)` to GMX — no referral code is accepted or stored.
