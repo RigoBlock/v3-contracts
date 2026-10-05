@@ -38,9 +38,9 @@ library GmxAdapterLib {
         return adjustedGasLimit * tx.gasprice;
     }
 
-    function getPnlToken(address market, bool isLong) internal view returns (address) {
+    function getMarketTokens(address market) internal view returns (address longToken, address shortToken) {
         Market.Props memory mkt = Reader(_GMX_READER).getMarket(DataStore(_GMX_DATA_STORE), market);
-        return isLong ? mkt.longToken : mkt.shortToken;
+        return (mkt.longToken, mkt.shortToken);
     }
 
     function getMarketIndexToken(address market) internal view returns (address) {

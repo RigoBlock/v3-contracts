@@ -79,7 +79,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-09-29 (branch `feat/crossch
 
 | Contract        | Size (bytes) | Headroom | % of limit |
 | --------------- | -----------: | -------: | ---------: |
-| AGmxV2          |        17580 |     6996 |     71.53% |
+| AGmxV2          |        17828 |     6748 |     72.54% |
 | AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |

@@ -22,14 +22,14 @@ The oracle is deployed as a **single pool per token pair** (`fee = 0`, `tickSpac
 
 The hook implements the following V4 hook callbacks:
 
-| Callback | Purpose |
-|----------|---------|
-| `beforeInitialize` | Enforces `fee = 0` and `tickSpacing = TickMath.MAX_TICK_SPACING` (one oracle pool per pair) |
-| `afterInitialize` | Initializes the observation array (cardinality tracking) |
-| `beforeAddLiquidity` | Enforces full-range positions only; updates the pool observation |
-| `beforeRemoveLiquidity` | Updates the pool observation |
-| `beforeSwap` | Only `exactInput` swaps are allowed; updates the pool observation |
-| `afterSwap` | Executes backrun logic if price moved beyond the safe threshold |
+| Callback                | Purpose                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| `beforeInitialize`      | Enforces `fee = 0` and `tickSpacing = TickMath.MAX_TICK_SPACING` (one oracle pool per pair) |
+| `afterInitialize`       | Initializes the observation array (cardinality tracking)                                    |
+| `beforeAddLiquidity`    | Enforces full-range positions only; updates the pool observation                            |
+| `beforeRemoveLiquidity` | Updates the pool observation                                                                |
+| `beforeSwap`            | Only `exactInput` swaps are allowed; updates the pool observation                           |
+| `afterSwap`             | Executes backrun logic if price moved beyond the safe threshold                             |
 
 ### Key Mechanisms
 
@@ -53,10 +53,10 @@ The hook maintains an array of `Observation` structs per pool (indexed by `PoolI
 
 ```solidity
 struct Observation {
-    uint32 blockTimestamp;
-    int24 prevTick;
-    int48 tickCumulative;
-    uint144 secondsPerLiquidityCumulativeX128;
+  uint32 blockTimestamp;
+  int24 prevTick;
+  int48 tickCumulative;
+  uint144 secondsPerLiquidityCumulativeX128;
 }
 ```
 
@@ -77,11 +77,18 @@ Rigoblock pools do not call the hook directly. They interact with the **`EOracle
 
 ```solidity
 contract EOracle is IEOracle {
-    function getTwap(address token) public view returns (int24 twap);
-    function convertTokenAmount(address token, int256 amount, address targetToken) external view returns (int256);
-    function hasPriceFeed(address token) external view returns (bool);
-    function convertBatchTokenAmounts(address[] calldata tokens, int256[] calldata amounts, address targetToken)
-        external view returns (int256 totalConvertedAmount);
+  function getTwap(address token) public view returns (int24 twap);
+  function convertTokenAmount(
+    address token,
+    int256 amount,
+    address targetToken
+  ) external view returns (int256);
+  function hasPriceFeed(address token) external view returns (bool);
+  function convertBatchTokenAmounts(
+    address[] calldata tokens,
+    int256[] calldata amounts,
+    address targetToken
+  ) external view returns (int256 totalConvertedAmount);
 }
 ```
 
@@ -104,6 +111,7 @@ return int24((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos
 ```
 
 The window is:
+
 - **300 seconds** (5 minutes) if cardinality is large enough
 - Otherwise `(cardinality - 1) * blockTime` (1s on L2s, 8s on Ethereum), because `N` observations span at most `N - 1` block-time intervals. Using `N * blockTime` could request a timestamp before the oldest observation and revert.
 
@@ -139,6 +147,7 @@ If the resulting tick is outside `MIN_TICK..MAX_TICK`, the conversion returns `0
 2. **Cardinality < 2**: A pool with fewer than two observations cannot compute a TWAP and is rejected by `EOracle.hasPriceFeed()`. Always increase cardinality to at least `2` (and preferably `300`) before a token can be used by a pool.
 3. **Router compatibility**: Routers that do not implement `IMsgSender` will cause reverts on backrun-triggering swaps.
 4. **Native currency mapping**: `address(0)` is used as the sentinel for native currency inside `EOracle`. The hook itself uses `address(0)` as `currency0` for ETH/token pools.
+5. **TWAP rounding (known deviation, accepted for this release)**: `EOracle.getTwap` computes the arithmetic mean tick with plain signed division, which truncates toward zero. The Uniswap reference (`OracleLibrary.consult`) instead rounds toward negative infinity ("always round to negative infinity": `if (delta < 0 && delta % window != 0) twap--`). Deviation: at most 1 tick (~0.01%) on feeds with a negative average tick, biased in one direction only. The upstream-conform fix plus regression tests is deferred to a future train because it requires an `EOracle` extension redeploy (ExtensionsMap salt bump + `VERSION` bump).
 
 ---
 
