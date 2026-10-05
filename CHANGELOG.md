@@ -1,3 +1,12 @@
+## [2.8.2](https://github.com/RigoBlock/v3-contracts/compare/v2.8.1...v2.8.2) (2026-10-05)
+
+
+### Bug Fixes
+
+* **gmx:** require pool price feed for both market tokens at order admission ([e489152](https://github.com/RigoBlock/v3-contracts/commit/e489152c1a63ddcd2f407779e5f52c49ec16349a))
+
+
+
 ## [2.8.1](https://github.com/RigoBlock/v3-contracts/compare/v2.8.0...v2.8.1) (2026-10-01)
 
 
@@ -56,15 +65,6 @@
 ### Bug Fixes
 
 * same block nav lock on hyperEvm ([db2816f](https://github.com/RigoBlock/v3-contracts/commit/db2816f0a9a987a352919dac32e0ef02fb66dfe9))
-
-
-
-## [2.6.3](https://github.com/RigoBlock/v3-contracts/compare/v2.6.2...v2.6.3) (2026-09-10)
-
-
-### Bug Fixes
-
-* 1wei donate rounding error ([5d79afd](https://github.com/RigoBlock/v3-contracts/commit/5d79afd46f748db2e3e1a7f9e9dd4727da5cebe0))
 
 
 
