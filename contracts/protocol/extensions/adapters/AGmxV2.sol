@@ -70,10 +70,20 @@ contract AGmxV2 is IAGmxV2, IMinimumVersion, ReentrancyGuardTransient {
         require(executionFee <= _MAX_EXECUTION_FEE, ExecutionFeeExceedsMax());
 
         require(params.orderType == Order.OrderType.MarketIncrease, InvalidIncreaseOrderType());
+
+        (address longToken, address shortToken) = GmxAdapterLib.getMarketTokens(params.addresses.market);
+        // GMX accrues funding in both market tokens. The directional PnL token's feed is
+        // enforced by _trackToken below; the other market token is never validated there.
+        address fundingToken = params.isLong ? shortToken : longToken;
+        require(
+            IEOracle(address(this)).hasPriceFeed(fundingToken),
+            EnumerableSet.TokenPriceFeedDoesNotExist(fundingToken)
+        );
+
         _trackToken(params.addresses.initialCollateralToken);
 
         // Track the PnL token so keeper-driven closes/liquidations remain visible to NAV.
-        address pnlToken = GmxAdapterLib.getPnlToken(params.addresses.market, params.isLong);
+        address pnlToken = params.isLong ? longToken : shortToken;
         if (pnlToken != params.addresses.initialCollateralToken) {
             _trackToken(pnlToken);
         }

@@ -267,6 +267,25 @@ In both cases, reporting **zero** is the correct NAV contribution — not a nega
 
 GMX closes positions via keeper execution, which sends collateral back to the pool wallet WITHOUT calling back into the adapter. Open time is the only reliable hook to ensure the collateral token is tracked. If the token arrived via a swap adapter it is already tracked (`_trackToken` is a no-op); if it arrived via direct external transfer, `_trackToken` adds it at open time so the returned collateral is visible after close.
 
+## Market Token Price-Feed Invariant
+
+**Invariant:** any token that can appear as a non-zero balance in NAV MUST have a pool BackGeoOracle price feed.
+
+A feedless token in a NAV path is not skipped — it reverts with `TokenPriceFeedDoesNotExist` at `activeTokensSet.addUnique` time. That reverts `updateUnitaryValue`, mint, burn, and `claimFundingFees` (the claim path itself needs the feed via `_trackToken`). GMX claimable funding never expires, so the freeze is indefinite: it only ends when a feed is registered for the token (a permissionless action) or the adapter is upgraded.
+
+**Why both market tokens are in scope:** GMX pays funding in BOTH market tokens of a position (longToken and shortToken), regardless of direction, and `GmxLib` queries `CLAIMABLE_FUNDING_AMOUNT` for both (see `EGmxCallback.trackedMarkets` above). The pre-fix adapter validated only the collateral token and the directional PnL token at admission, so a short on a market whose non-directional token had no feed (e.g. UNI/USD, with UNI feedless and USDC fed) was admitted; accrued UNI-denominated funding later entered NAV and froze the pool. Lesson: the feed requirement applies to every token that can carry value — not just tokens the position "holds".
+
+**Admission behavior after the fix** (`AGmxV2.createIncreaseOrder`):
+
+| Token                                          | Requirement                                                                                          | Tracked at admission?                                                                                                                      |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Collateral                                     | Pool feed (via `_trackToken` → `addUnique`)                                                          | Yes                                                                                                                                        |
+| Directional PnL token                          | Pool feed (via `_trackToken` → `addUnique`)                                                          | Yes (unless it is the collateral token)                                                                                                    |
+| Non-directional market token ("funding token") | Pool feed (explicit `require(hasPriceFeed(fundingToken), TokenPriceFeedDoesNotExist(fundingToken))`) | No — validated only; activated lazily by NAV-time `addUnique` when funding first becomes non-zero, and by `claimFundingFees` at claim time |
+| IndexToken                                     | GMX-side pricing only (`isIndexTokenPriced`)                                                         | No — it is never a pool balance                                                                                                            |
+
+Fork tests assert that shorts on markets with a feedless market token revert `TokenPriceFeedDoesNotExist` and that the rejected admission is stateless (no tracked market, no app activation, no funds moved).
+
 ## GMX Callback Extension (EGmxCallback)
 
 The `EGmxCallback` extension closes the two NAV gaps described above. It receives GMX `afterOrderExecution` callbacks from approved GMX controllers and writes two pieces of data into pool storage:
