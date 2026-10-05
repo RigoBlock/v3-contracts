@@ -58,6 +58,7 @@ import {Position} from "gmx-synthetics/position/Position.sol";
 import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
+import {GmxClaimableHelpers} from "../../contracts/protocol/types/GmxClaimableHelpers.sol";
 import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 import {GmxCallbackLib} from "../../contracts/protocol/libraries/GmxCallbackLib.sol";
 import {GmxLib} from "../../contracts/protocol/libraries/GmxLib.sol";
@@ -3378,6 +3379,143 @@ contract AGmxV2ForkTest is Test {
         }
     }
     // GMX_FALLBACK_FORK_TESTS_END
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GmxTestPoolNavSafetyForkTest
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// @title GmxTestPoolNavSafetyForkTest - The production TEST_POOL's existing GMX state
+///  cannot brick NAV when the new adapter is authorized.
+/// @notice At the fork block the test reads the live pool's EGmxCallback storage
+///  (trackedMarkets, claimableCollateralKeys) and every GMX market's claimable-funding
+///  buckets for the pool, then asserts: (1) every token carrying a non-zero claimable
+///  amount has a pool price feed, and (2) updateUnitaryValue succeeds on the pool's
+///  approved implementation. The full-market scan (not just tracked markets) catches
+///  feedless tokens such as UNI or XAUT before a market is ever tracked, since the
+///  operator could track an already-funded market later.
+contract GmxTestPoolNavSafetyForkTest is Test {
+    address private constant TEST_POOL = Constants.TEST_POOL;
+    address private constant GMX_DATA_STORE = Constants.ARB_GMX_DATA_STORE;
+    address private constant GMX_READER = Constants.ARB_GMX_READER;
+
+    /// @notice Bound the raw-storage reads so a layout mismatch fails loud instead of
+    ///  looping over a garbage length.
+    uint256 private constant _MAX_TRACKED_MARKETS = 50;
+    uint256 private constant _MAX_COLLATERAL_KEYS = 100;
+
+    /// @dev Current on-chain amounts are dust (well under $1 of funding per token): the
+    ///  dust-band guard proves sub-dollar claimables are valued at ~0 but never brick.
+    uint256 private constant _DUST_BAND_USD18 = 100 * 1e18;
+
+    function test_TestPool_GmxState_IsNavSafe() public {
+        vm.createSelectFork("arbitrum", Constants.ARB_BLOCK);
+        require(TEST_POOL.code.length > 0, "Fork guard: TEST_POOL has no code - check ARBITRUM_MAINNET_RPC_URL");
+
+        uint256 totalClaimableUsd18;
+        uint256 nonZeroTokens;
+
+        // ── 1. Tracked markets: claimable funding for BOTH market tokens ─────────
+        bytes32 slot = GmxCallbackLib.GMX_CALLBACK_DATA_SLOT;
+        uint256 marketCount = uint256(vm.load(TEST_POOL, slot));
+        require(marketCount <= _MAX_TRACKED_MARKETS, "implausible trackedMarkets count - layout mismatch?");
+
+        console2.log("trackedMarkets:", marketCount);
+        for (uint256 i; i < marketCount; ++i) {
+            bytes32 raw = vm.load(TEST_POOL, bytes32(uint256(keccak256(abi.encode(slot))) + i));
+            address market = address(uint160(uint256(raw)));
+            Market.Props memory mkt = Reader(GMX_READER).getMarket(DataStore(GMX_DATA_STORE), market);
+
+            uint256 longAmt = GmxClaimableHelpers.getClaimableFundingAmount(market, mkt.longToken, TEST_POOL);
+            nonZeroTokens += _assertFedAndValued(mkt.longToken, longAmt);
+            totalClaimableUsd18 += _usd18(mkt.longToken, longAmt);
+
+            if (mkt.shortToken != mkt.longToken) {
+                uint256 shortAmt = GmxClaimableHelpers.getClaimableFundingAmount(market, mkt.shortToken, TEST_POOL);
+                nonZeroTokens += _assertFedAndValued(mkt.shortToken, shortAmt);
+                totalClaimableUsd18 += _usd18(mkt.shortToken, shortAmt);
+            }
+        }
+
+        // ── 2. Claimable-collateral buckets the adapter accounts for ──────────────
+        bytes32 keysSlot = bytes32(uint256(slot) + 2);
+        uint256 keyCount = uint256(vm.load(TEST_POOL, keysSlot));
+        require(keyCount <= _MAX_COLLATERAL_KEYS, "implausible claimableCollateralKeys count - layout mismatch?");
+
+        console2.log("claimableCollateralKeys:", keyCount);
+        bytes32 infoBase = bytes32(uint256(slot) + 4);
+        for (uint256 i; i < keyCount; ++i) {
+            bytes32 key = vm.load(TEST_POOL, bytes32(uint256(keccak256(abi.encode(keysSlot))) + i));
+            bytes32 infoSlot = keccak256(abi.encode(key, infoBase));
+            address token = address(uint160(uint256(vm.load(TEST_POOL, infoSlot))));
+            address market = address(uint160(uint256(vm.load(TEST_POOL, bytes32(uint256(infoSlot) + 1)))));
+            uint256 timeKey = uint256(vm.load(TEST_POOL, bytes32(uint256(infoSlot) + 2)));
+
+            GmxCallbackLib.ClaimableCollateralInfo memory info = GmxCallbackLib.ClaimableCollateralInfo({
+                token: token,
+                market: market,
+                timeKey: timeKey
+            });
+            uint256 amount = GmxClaimableHelpers.getClaimableCollateralAmount(key, info, TEST_POOL);
+            nonZeroTokens += _assertFedAndValued(token, amount);
+            totalClaimableUsd18 += _usd18(token, amount);
+        }
+
+        // ── 3. Full-market scan: any claimable funding for the pool ANYWHERE ──────
+        // Covers untracked markets too — a feedless token here (e.g. UNI, XAUT) would
+        // enter NAV the moment the operator tracks the market or a callback fires.
+        uint256 allMarkets = IDataStore(GMX_DATA_STORE).getAddressCount(keccak256(abi.encode("MARKET_LIST")));
+        Market.Props[] memory markets = Reader(GMX_READER).getMarkets(DataStore(GMX_DATA_STORE), 0, allMarkets);
+        for (uint256 i; i < markets.length; ++i) {
+            uint256 longAmt = GmxClaimableHelpers.getClaimableFundingAmount(
+                markets[i].marketToken,
+                markets[i].longToken,
+                TEST_POOL
+            );
+            nonZeroTokens += _assertFedAndValued(markets[i].longToken, longAmt);
+            totalClaimableUsd18 += _usd18(markets[i].longToken, longAmt);
+
+            if (markets[i].shortToken != markets[i].longToken) {
+                uint256 shortAmt = GmxClaimableHelpers.getClaimableFundingAmount(
+                    markets[i].marketToken,
+                    markets[i].shortToken,
+                    TEST_POOL
+                );
+                nonZeroTokens += _assertFedAndValued(markets[i].shortToken, shortAmt);
+                totalClaimableUsd18 += _usd18(markets[i].shortToken, shortAmt);
+            }
+        }
+
+        console2.log("non-zero claimable token entries:", nonZeroTokens);
+        console2.log("total claimable USD (18dp):", totalClaimableUsd18);
+        assertLt(totalClaimableUsd18, _DUST_BAND_USD18, "claimable funding grew beyond the dust band - investigate");
+
+        // ── 4. NAV liveness on the pool's approved implementation ─────────────────
+        ISmartPoolActions(TEST_POOL).updateUnitaryValue();
+        uint256 unitaryValue = ISmartPoolState(TEST_POOL).getPoolTokens().unitaryValue;
+        assertGt(unitaryValue, 0, "unitary value must be positive");
+        assertLt(unitaryValue, 1000 ether, "unitary value implausible");
+    }
+
+    /// @dev Asserts the core invariant: a token with non-zero claimable value MUST have a
+    ///  pool feed, otherwise it enters NAV via `activeTokensSet.addUnique` and reverts
+    ///  `TokenPriceFeedDoesNotExist`, bricking updateUnitaryValue/mint/burn/claims.
+    ///  Returns 1 when the amount is non-zero (for counting/logging).
+    function _assertFedAndValued(address token, uint256 amount) private view returns (uint256) {
+        if (amount == 0) return 0;
+        assertTrue(IEOracle(TEST_POOL).hasPriceFeed(token), "feedless token carries claimable value");
+        console2.log("claimable token:", token, "amount:", amount);
+        return 1;
+    }
+
+    /// @dev Rough USD (18dp) of `amount` via the GMX price, only for the dust-band guard.
+    function _usd18(address token, uint256 amount) private view returns (uint256) {
+        if (amount == 0) return 0;
+        uint256 price = GmxLib.getGmxPrice(token).min;
+        if (price == 0) return 0; // unpriced per GMX; the feed assertion above is what matters
+        uint256 decimals = IERC20Extended(token).decimals();
+        return (amount * price) / 10 ** (decimals + 12);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
