@@ -31,6 +31,7 @@ address private immutable _adapter;  // = address(this) at deploy time
    - `MixinFallback` routes call via `delegatecall` only if `msg.sender == pool().owner`; non-owners are `staticcall`ed
    - position count < 32 (`error MaxGmxPositionsReached()` in `GmxAdapterLib`)
    - computedFee <= 0.05 ETH (ExecutionFeeExceedsMax)
+   - the non-directional market token ("funding token") has a pool BackGeoOracle feed (`TokenPriceFeedDoesNotExist`); the directional PnL token's feed is enforced later by `_trackToken`
    - the market's `indexToken` is priced by the GMX provider or by the hardcoded fallback list (UnpricedIndexToken)
 3. Transfer collateral to GMX OrderVault:
    - if collateral == WETH: transfer (initialCollateral + executionFee) WETH
@@ -190,6 +191,42 @@ after position close.
 
 For tokens that arrived via a swap adapter, `_trackToken` is a no-op (already
 tracked). The call is always safe.
+
+## Token Arrival Paths
+
+Every token class involved in a GMX position has exactly one way value can
+reach the pool wallet. Tracking and feed validation are organized around these
+paths — see "Market Token Price-Feed Invariant" in `nav-accounting.md` for why
+a feedless token in any of them is a hard revert, not a silent exclusion.
+
+| Token class                         | Where the value sits pre-arrival                  | How it reaches the pool wallet                                                     | Adapter-gated?                    |
+| ----------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------- |
+| Collateral                          | Pool wallet → GMX OrderVault / DataStore position | Order execution (decrease/liquidation/ADL); `claimCollateral` for withheld rebates | Yes                               |
+| PnL token (directional)             | Unrealized inside the GMX position                | Keeper-driven closes and liquidations send it to the pool wallet directly          | **No** — pre-tracked at admission |
+| Funding tokens (both market tokens) | GMX DataStore `CLAIMABLE_FUNDING_AMOUNT` bucket   | Only via `claimFundingFees`, which calls `_trackToken` BEFORE transferring         | Yes (claim)                       |
+| IndexToken                          | Never held                                        | Never transferred; priced by GMX's provider for position valuation only            | n/a                               |
+
+**Ungated paths must be pre-tracked.** The PnL token can arrive WITHOUT any
+adapter call (keeper-driven closes/liquidations), which is why
+`createIncreaseOrder` tracks it at admission. If it arrived untracked, there
+would be a window where the wallet balance is invisible to NAV and minters
+could dilute existing holders.
+
+**Pre-claim funding is valued independently of tracking.** Claimable funding
+appears in NAV via the `GMX_V2_POSITIONS` app-balance read (`GmxLib`), which
+does not depend on active-token membership; the feed requirement only bites at
+claim time (`_trackToken`) and at NAV time once the token is in the wallet.
+
+### Upgrade Protocol
+
+GMX has shipped breaking changes without notice — the v2.2c router rotation
+required an adapter migration (`assertRouterAuthorized` exists precisely
+because the ExchangeRouter can lose the CONTROLLER role). A future GMX version
+could introduce a NEW token-arrival path (e.g. auto-transferring funding to the
+position holder on close). Any adapter change following a GMX upgrade MUST
+re-verify every arrival path in the table above against the new GMX version,
+and any ungated arrival path must be pre-tracked at admission like the PnL
+token.
 
 ## Referral Code
 
