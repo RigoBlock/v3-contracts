@@ -5,6 +5,7 @@ import type { Environment } from "../../rocketh/config.js";
 import {
   chainConfig,
   extensionsMapSalt,
+  mainnetGovernanceProxy,
   zeroExAllowanceHolder,
   zeroExDeployer,
 } from "../utils/constants";
@@ -358,6 +359,21 @@ export default deployScript(
           account: deployer,
           artifact: await readArtifact("AHyperliquid"),
           args: [],
+        },
+        { deterministic: true, strictBytecodeMatch: true },
+      );
+    }
+
+    // AGovernance wraps the deterministic governance proxy. Skipped on HyperEVM,
+    // where the governance proxy has not been created yet, so there is no address
+    // to point the adapter at.
+    if (chainId !== 999) {
+      await env.deploy(
+        "AGovernance",
+        {
+          account: deployer,
+          artifact: await readArtifact("AGovernance"),
+          args: [mainnetGovernanceProxy],
         },
         { deterministic: true, strictBytecodeMatch: true },
       );
