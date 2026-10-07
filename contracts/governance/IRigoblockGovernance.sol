@@ -11,7 +11,8 @@ import "./interfaces/governance/IGovernanceVoting.sol";
 
 /// @title Rigoblock governance aggregate interface.
 /// @dev Inherits the OpenZeppelin Governor and ERC-6372 interfaces so external tooling
-///      compatibility (Tally) is enforced at compile time. Specification: docs/governance/TALLY_COMPAT.md.
+///      compatibility (Tally) is enforced at compile time. The full specification is
+///      maintained in the project documentation.
 abstract contract IRigoblockGovernance is
     IGovernanceCrosschain,
     IGovernanceEvents,

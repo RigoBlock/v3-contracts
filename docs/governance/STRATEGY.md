@@ -74,3 +74,62 @@ so execution is only possible in a later unit. Everything that depends on the st
   value — the wrapper `action.value` and every inner payload action's `value` are validated at
   proposal time, as the governance holds no native balance on receiver chains (the Wormhole fee
   is attached at execution time). See `docs/wormhole/GOVERNANCE_CROSSCHAIN.md`.
+
+## Governance modes
+
+The strategy is deployed with a `GovernanceMode` (`contracts/governance/types/GovernanceTypes.sol`),
+fixed per chain in `governanceMode` inside `chainConfig` (`src/utils/constants.ts`). The deploy
+script (`src/deploy/deploy_governance.ts`) reverts when the mode is not configured for a chain.
+
+| Chain                                                | Mode       |
+| ---------------------------------------------------- | ---------- |
+| Ethereum mainnet (1)                                 | `Sender`   |
+| Arbitrum, Optimism, Polygon, Unichain, Base, Sepolia | `Dual`     |
+| BSC (56), HyperEVM (999)                             | `Receiver` |
+
+The mode is validated only at deployment time. The deploy script is authoritative for the
+chain-to-mode mapping and reverts when the configured mode is missing, unknown, or not the
+expected one for the chain (mainnet → `Sender`, HyperEVM and BSC → `Receiver`, every other
+chain → `Dual`), so a new chain cannot be wired with an invalid or unintended configuration as
+long as the canonical deploy path (`deploy_governance.ts`) is used. The strategy contract
+itself carries no chain check — its only mode gate is that crosschain _sending_ requires
+`Sender`. An `upgradeStrategy` swap to a misconfigured strategy would only change
+local-governance behavior, never the crosschain receiver path, and would be visible on-chain
+before any local proposal is created.
+
+Sending and receiving are gated at two independent layers. The strategy's mode decides who may
+create crosschain proposals (only `Sender`); the receiver mixin independently pins the
+trusted emitter to Wormhole chain id 2 (Ethereum mainnet) as an implementation constant
+(`MixinConstants.sol`), so a strategy swap can never re-point which chain's governance is
+trusted — a message emitted by any other chain's governance proxy is rejected regardless of
+the local strategy.
+
+- **Sender** (mainnet): local GRG voting, plus crosschain sending — a local proposal may
+  contain Wormhole `publishMessage` actions (gated by `beforePropose`), which receivers execute.
+- **Dual**: local GRG voting plus crosschain receiving. Local proposals pass through
+  `beforePropose` unchanged unless they target the Wormhole contract, which reverts
+  (`GovCrosschainNotSender`) — only the `Sender` governance sends.
+- **Receiver** (BSC, HyperEVM): managed exclusively from mainnet; local governance is disabled
+  and every staking interaction is skipped, so the strategy works even where no staking system
+  exists (HyperEVM):
+  - `beforePropose`, `beforeExecute` and `votingTimestamps` revert `GovLocalGovernanceDisabled`
+    — no local proposal can be created or executed.
+  - `getVotingPower` returns 0 and `getProposalState` returns `Defeated` without reading
+    staking; `votingPeriod` returns the 7-day default. These are read methods and must not
+    revert, but they can never open a local path: `Defeated` can never satisfy the
+    `Succeeded` gate in `execute`, and the governance implementation reverts for non-stored
+    proposals before reaching the strategy, so the values are only observable on direct
+    strategy calls.
+  - `assertValidInitParams` and the threshold validators skip the GRG-supply bounds (thresholds
+    are inert on chains without local voting). The validators early-return rather than revert
+    because a mainnet-sent crosschain `updateThresholds` action must not revert and brick the
+    whole VAA batch.
+  - The crosschain receiver path (`receiveMessage`) is unaffected: it reads the strategy only
+    for `wormhole()` / `wormholeChainId()` and never touches staking.
+
+The staking proxy address is ignored in receiver mode — it may be the zero address on chains
+without staking (HyperEVM), or a real but retired one (BSC).
+
+Upgrading a live governance between modes is a strategy swap via `upgradeStrategy`: deploy the
+new strategy for the chain, then execute a single proposal with `upgradeImplementation` (only
+if the implementation changed) and `upgradeStrategy` — never split the two across proposals.

@@ -182,9 +182,12 @@ export default deployScript(
       {
         account: deployer,
         artifact: await readArtifact("RigoblockGovernanceStrategy"),
+        // hardhat network (chain id 31337): Dual mode (enum value 1) is the only valid
+        // non-mainnet mode for a chain with staking.
         args: [
           stakingProxy.address,
           "0x1111111111111111111111111111111111111111",
+          1,
           1,
         ],
       },

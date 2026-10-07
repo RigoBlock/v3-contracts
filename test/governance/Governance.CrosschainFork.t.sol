@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {CrossChainPayload, GovernanceMode} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -42,7 +42,9 @@ contract GovernanceCrosschainForkTest is Test {
 
         // sender role: the strategy's local Wormhole id is Ethereum's
         governance = new CrosschainHarness();
-        governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN)));
+        governance.setStrategy(
+            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN, GovernanceMode.Sender))
+        );
         governance.setParams(1, 1);
 
         counter = new Counter();
@@ -171,8 +173,11 @@ contract GovernanceCrosschainForkTest is Test {
         // the real Wormhole core assigned consecutive sequences to the two publishMessage calls
         bytes[] memory payloads = _publishedPayloads(firstSequence);
 
-        // swap to the receiver role: the strategy's local Wormhole id is now the target chain
-        governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN)));
+        // swap to the receiver role: the strategy's local Wormhole id is now the target chain.
+        // The receiver path only reads wormhole()/wormholeChainId(), so any non-receiver mode works.
+        governance.setStrategy(
+            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Sender))
+        );
 
         // delivering the two VAAs in order executes both batches in order
         vm.mockCall(

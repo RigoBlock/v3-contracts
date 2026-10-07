@@ -3,7 +3,7 @@ pragma solidity 0.8.37;
 
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
-import {CrossChainPayload, ProposalStatus} from "../types/GovernanceTypes.sol";
+import {CrossChainPayload, GovernanceMode, ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
@@ -13,7 +13,8 @@ import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {IStructs} from "../../staking/interfaces/IStructs.sol";
 import {TimeType} from "../types/TimeType.sol";
 
-/// @dev Reverts on any time type other than TimeType.Timestamp: see docs/governance/STRATEGY.md.
+/// @title RigoblockGovernanceStrategy - Custom specs of the Rigoblock governance.
+/// @dev Each strategy contract is specific to the governance model and may vary by chain.
 contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Wormhole core contract on the same chain as this strategy.
     address private immutable _wormhole;
@@ -24,14 +25,20 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     address private immutable _stakingProxy;
     uint256 private immutable _votingPeriod;
 
+    /// @notice Governance mode of the chain this strategy is deployed on.
+    GovernanceMode private immutable _mode;
+
+    /// @notice Thrown when a local governance method is called on a receiver-only chain.
+    error GovLocalGovernanceDisabled();
+
     /// @notice Thrown when a Wormhole cross-chain action has malformed calldata.
     error GovCrosschainInvalidData();
 
     /// @notice Thrown when a Wormhole cross-chain action targets the current chain.
     error GovCrosschainTargetSelf(uint16 targetChainId);
 
-    /// @notice Thrown when a Wormhole cross-chain proposal is created outside Ethereum mainnet.
-    error GovCrosschainNotMainnet();
+    /// @notice Thrown when a non-sender governance attempts to create a cross-chain proposal.
+    error GovCrosschainNotSender();
 
     /// @notice Thrown when a Wormhole cross-chain action carries a non-zero wrapper value.
     /// @dev The inner action value is paid on the destination chain from the receiver's balance,
@@ -51,10 +58,11 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Thrown when the governance time type is not TimeType.Timestamp.
     error GovStrategyInvalidTimeType(TimeType timeType);
 
-    constructor(address stakingProxy, address wormhole, uint16 wormholeChainId) {
+    constructor(address stakingProxy, address wormhole, uint16 wormholeChainId, GovernanceMode mode) {
         _stakingProxy = stakingProxy;
         _wormhole = wormhole;
         _wormholeChainId = wormholeChainId;
+        _mode = mode;
         _votingPeriod = 7 days;
     }
 
@@ -62,17 +70,20 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         _assertTimestamp(params.timeType);
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
+        if (_mode == GovernanceMode.Receiver) return;
         _assertValidProposalThreshold(params.proposalThreshold);
         _assertValidQuorumThreshold(params.quorumThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy
     function assertValidProposalThreshold(uint256 proposalThreshold) public view override {
+        if (_mode == GovernanceMode.Receiver) return;
         _assertValidProposalThreshold(proposalThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy
     function assertValidQuorumThreshold(uint256 quorumThreshold) public view override {
+        if (_mode == GovernanceMode.Receiver) return;
         _assertValidQuorumThreshold(quorumThreshold);
     }
 
@@ -82,6 +93,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         uint256 minimumQuorum,
         TimeType timeType
     ) external view override returns (ProposalStatus) {
+        if (_mode == GovernanceMode.Receiver) return ProposalStatus.Defeated;
         _assertTimestamp(timeType);
 
         // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
@@ -116,6 +128,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function getVotingPower(address account) public view override returns (uint256) {
+        if (_mode == GovernanceMode.Receiver) return 0;
         return
             IStaking(_getStakingProxy())
                 .getOwnerStakeByStatus(account, IStructs.StakeStatus.DELEGATED)
@@ -124,6 +137,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function votingPeriod() public view override returns (uint256) {
+        if (_mode == GovernanceMode.Receiver) return _votingPeriod;
         uint256 stakingEpochDuration = IStorage(_getStakingProxy()).epochDurationInSeconds();
         return stakingEpochDuration < _votingPeriod ? stakingEpochDuration : _votingPeriod;
     }
@@ -133,6 +147,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         TimeType timeType
     ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
         _assertTimestamp(timeType);
+        require(_mode != GovernanceMode.Receiver, GovLocalGovernanceDisabled());
 
         startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
 
@@ -191,19 +206,24 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     function beforePropose(
         IGovernanceVoting.ProposedAction calldata action
     ) external view override returns (IGovernanceVoting.ProposedAction memory) {
-        if (action.target != _wormhole) {
+        if (_mode == GovernanceMode.Receiver) {
+            revert GovLocalGovernanceDisabled();
+        } else if (_mode == GovernanceMode.Sender) {
+            if (action.target != _wormhole) {
+                return action;
+            }
+            // The wrapped action value is paid on the destination chain from the receiver's own
+            // balance; Wormhole's fee is added at execution time in beforeExecute instead.
+            require(action.value == 0, GovCrosschainInvalidValue(action.value));
+            _assertValidWormholeData(action.data);
+            return action;
+        } else {
+            // GovernanceMode.Dual: local proposals only, crosschain sending is exclusive to Sender
+            if (action.target == _wormhole) {
+                revert GovCrosschainNotSender();
+            }
             return action;
         }
-
-        // Cross-chain proposals are only allowed from Ethereum mainnet
-        require(block.chainid == 1, GovCrosschainNotMainnet());
-
-        // The wrapped action value is paid on the destination chain from the receiver's own
-        // balance; Wormhole's fee is added at execution time in beforeExecute instead.
-        require(action.value == 0, GovCrosschainInvalidValue(action.value));
-
-        _assertValidWormholeData(action.data);
-        return action;
     }
 
     /// @notice Decodes a Wormhole publishMessage call and validates its inner payload.
@@ -232,15 +252,20 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     function beforeExecute(
         IGovernanceVoting.ProposedAction memory action
     ) external view override returns (IGovernanceVoting.ProposedAction memory) {
-        if (action.target != _wormhole) {
+        if (_mode == GovernanceMode.Receiver) {
+            revert GovLocalGovernanceDisabled();
+        } else if (_mode == GovernanceMode.Sender) {
+            if (action.target != _wormhole) {
+                return action;
+            }
+            // Wormhole requires msg.value == messageFee() on publishMessage, so the wrapper value
+            // must be exactly the fee, overriding any (zero) value set at proposal time.
+            action.value = ICoreBridge(_wormhole).messageFee();
+            return action;
+        } else {
+            // GovernanceMode.Dual: wormhole actions cannot reach execution (beforePropose reverts them)
             return action;
         }
-
-        // Wormhole requires msg.value == messageFee() on publishMessage, so the wrapper value
-        // must be exactly the fee, overriding any (zero) value set at proposal time.
-        action.value = ICoreBridge(_wormhole).messageFee();
-
-        return action;
     }
 
     /// @inheritdoc IGovernanceStrategy

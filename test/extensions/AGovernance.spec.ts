@@ -94,11 +94,13 @@ describe("AGovernance", async () => {
       const govImplementation = await ethers.deployContract(
         "RigoblockGovernance",
       );
+      // hardhat network: Dual mode (enum value 1) — the only valid mode off mainnet
       const govStrategy = await ethers.deployContract(
         "RigoblockGovernanceStrategy",
         [
           await stakingProxy.getAddress(),
           "0x1111111111111111111111111111111111111111",
+          1,
           1,
         ],
       );

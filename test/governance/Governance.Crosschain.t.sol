@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
-import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {CrossChainPayload, GovernanceMode, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
@@ -81,7 +80,7 @@ contract GovernanceCrosschainTest is Test {
     address internal whale = makeAddr("whale");
 
     function setUp() public {
-        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN);
+        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Dual);
         governance = new CrosschainHarness();
         governance.setStrategy(address(strategy));
         counter = new Counter();
@@ -172,7 +171,9 @@ contract GovernanceCrosschainTest is Test {
     function test_ReceiveMessage_WormholeDisabledInStrategy_Reverts() public {
         CrosschainHarness otherChain = new CrosschainHarness();
         // a strategy with a zero Wormhole address (e.g. a chain that is not a receiver)
-        otherChain.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, address(0), TARGET_CHAIN)));
+        otherChain.setStrategy(
+            address(new RigoblockGovernanceStrategy(STAKING, address(0), TARGET_CHAIN, GovernanceMode.Dual))
+        );
 
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
@@ -222,7 +223,9 @@ contract GovernanceCrosschainTest is Test {
 
     function test_ReceiveMessage_LocalEmitter_Reverts() public {
         // a chain whose Wormhole chain id equals the emitter's (i.e. the sender chain itself)
-        governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN)));
+        governance.setStrategy(
+            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN, GovernanceMode.Dual))
+        );
 
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
@@ -451,7 +454,12 @@ contract GovernanceCrosschainTest is Test {
     ///     through self-targeted actions, exercising the same onlyGovernance path as local voting.
     function test_ReceiveMessage_BatchWithSelfUpgrades_Executes() public {
         CrosschainHarness newImpl = new CrosschainHarness();
-        RigoblockGovernanceStrategy newStrategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN);
+        RigoblockGovernanceStrategy newStrategy = new RigoblockGovernanceStrategy(
+            STAKING,
+            WORMHOLE,
+            TARGET_CHAIN,
+            GovernanceMode.Receiver
+        );
 
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](2);
         actions[0] = IGovernanceVoting.ProposedAction({

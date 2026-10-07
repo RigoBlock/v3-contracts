@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "./IGovernanceEvents.sol";
 
 interface IGovernanceVoting {
-    // Values match the OpenZeppelin support values. See docs/governance/TALLY_COMPAT.md.
+    // Values match the OpenZeppelin support values. Rationale is documented in the project documentation.
     enum VoteType {
         Against,
         For,

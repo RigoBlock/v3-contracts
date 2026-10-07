@@ -14,10 +14,8 @@ interface IAGovernance {
     ) external returns (uint256 proposalId);
 
     /// @notice Allows a pool to vote on a proposal.
-    /// @dev The support value is passed verbatim to the governance, which interprets it
-    ///      according to its own VoteType ordering (see docs/governance/TALLY_COMPAT.md).
     /// @param proposalId Number of the proposal.
-    /// @param support Encoded vote type (uint8 for OZ selector compatibility).
+    /// @param support Encoded vote type.
     function castVote(uint256 proposalId, uint8 support) external;
 
     /// @notice Allows a pool to execute a proposal.
