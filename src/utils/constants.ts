@@ -23,7 +23,7 @@ interface ChainConfig {
 }
 
 // Governance mode of a chain, mirroring the on-chain GovernanceMode enum
-// (contracts/governance/types/GovernanceTypes.sol). Must be set per chain.
+// (contracts/governance/strategies/RigoblockGovernanceStrategy.sol). Must be set per chain.
 export type GovernanceMode = "sender" | "dual" | "receiver";
 
 // Ethereum mainnet Rigoblock governance proxy. This address is the Wormhole emitter
