@@ -3,7 +3,7 @@ pragma solidity 0.8.37;
 
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
-import {CrossChainPayload, GovernanceMode, ProposalStatus} from "../types/GovernanceTypes.sol";
+import {CrossChainPayload, ProposalStatus} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
@@ -12,6 +12,15 @@ import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {IStructs} from "../../staking/interfaces/IStructs.sol";
 import {TimeType} from "../types/TimeType.sol";
+
+/// @notice Governance mode of a chain, fixed in the strategy at deployment.
+/// @dev See the governance documentation for per-mode behavior. Encoded as uint8; value
+///      numbering is part of the deployment configuration and must never change.
+enum GovernanceMode {
+    Sender,
+    Dual,
+    Receiver
+}
 
 /// @title RigoblockGovernanceStrategy - Custom specs of the Rigoblock governance.
 /// @dev Each strategy contract is specific to the governance model and may vary by chain.

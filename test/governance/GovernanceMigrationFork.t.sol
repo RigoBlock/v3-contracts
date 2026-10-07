@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {GovernanceMode, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 
 import {Test} from "forge-std/Test.sol";

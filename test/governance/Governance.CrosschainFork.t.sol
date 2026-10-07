@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {CrossChainPayload, GovernanceMode} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";

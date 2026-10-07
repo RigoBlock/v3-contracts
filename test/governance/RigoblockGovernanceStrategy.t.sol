@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {CrossChainPayload, GovernanceMode, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {CrossChainPayload, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";

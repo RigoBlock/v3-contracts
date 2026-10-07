@@ -77,7 +77,7 @@ so execution is only possible in a later unit. Everything that depends on the st
 
 ## Governance modes
 
-The strategy is deployed with a `GovernanceMode` (`contracts/governance/types/GovernanceTypes.sol`),
+The strategy is deployed with a `GovernanceMode` (defined in `RigoblockGovernanceStrategy.sol`),
 fixed per chain in `governanceMode` inside `chainConfig` (`src/utils/constants.ts`). The deploy
 script (`src/deploy/deploy_governance.ts`) reverts when the mode is not configured for a chain.
 

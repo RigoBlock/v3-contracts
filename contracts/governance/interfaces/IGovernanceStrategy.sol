@@ -23,7 +23,7 @@ interface IGovernanceStrategy {
 
     /// @notice Returns the state of a proposal for a required quorum.
     /// @dev Must use the same time reference as `timeType` and revert for unsupported time types.
-    ///      Strategy-dependent behavior is documented in the governance documentation.
+    ///      See docs/governance/STRATEGY.md.
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
     /// @param timeType Time reference used by the proposal's voting period.
