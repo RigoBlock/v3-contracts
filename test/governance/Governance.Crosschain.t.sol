@@ -466,7 +466,7 @@ contract GovernanceCrosschainTest is Test {
             WORMHOLE,
             TARGET_CHAIN,
             GovernanceMode.Receiver,
-            address(0)
+            makeAddr("recovery")
         );
 
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](2);
@@ -669,7 +669,7 @@ contract GovernanceCrosschainTest is Test {
             WORMHOLE,
             TARGET_CHAIN,
             GovernanceMode.Receiver,
-            address(0)
+            makeAddr("recovery")
         );
         governance.setStrategy(address(receiverStrategy));
 

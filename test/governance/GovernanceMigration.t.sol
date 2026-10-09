@@ -61,6 +61,14 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         require(!_revertOnQuorumValidation, MockInvalidQuorumThreshold());
     }
 
+    function requestRecover() external pure override {
+        revert();
+    }
+
+    function rejectRecover() external pure override {
+        revert();
+    }
+
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
         uint256 minimumQuorum,

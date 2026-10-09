@@ -56,8 +56,9 @@ chains**, so a misconfigured deployment cannot arm the recovery path even by acc
 **zeroes the staking proxy on receiver chains**, so no staking address can ever influence a
 receiver chain, whatever was passed at deploy time:
 
-- `recoveryAddress` — a Rigoblock-team multisig (e.g. 3/5), nonzero on Receiver chains,
-  zero elsewhere.
+- `recoveryAddress` — a Rigoblock-team address, required on Receiver chains: the constructor
+  reverts on a zero address there, so even a hand deployment cannot ship a permanently dead
+  hatch. Zero elsewhere.
 
 The governance proxy needs no constructor argument: the proxy is deterministically deployed
 at the same address on every chain, so the strategy authenticates a recovery rejection

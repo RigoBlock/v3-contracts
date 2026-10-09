@@ -62,16 +62,15 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         _mode = mode;
         // receiver chains never read staking; the recovery address is receiver-only
         if (mode == GovernanceMode.Receiver) {
+            require(recoveryAddress != address(0), GovRecoveryAddressZero());
             _recoveryAddress = recoveryAddress;
         } else {
             _stakingProxy = stakingProxy;
         }
     }
 
-    /// @notice Requests the governance recovery; executable after the challenge window.
-    /// @dev Only the recovery address can request, and only the governance proxy (via a
-    ///      delivered proposal action) can reject.
-    function requestRecover() external {
+    /// @inheritdoc IGovernanceStrategy
+    function requestRecover() external override {
         require(msg.sender == _recoveryAddress, GovRecoveryUnauthorized(msg.sender));
         // a nonzero timestamp covers a pending request and an active recovery alike:
         // re-requesting an active recovery would overwrite its timestamp and disarm it
@@ -80,8 +79,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         emit RecoverRequested(block.timestamp);
     }
 
-    /// @notice Rejects a pending or active recovery (the governance's veto).
-    function rejectRecover() external {
+    /// @inheritdoc IGovernanceStrategy
+    function rejectRecover() external override {
         require(msg.sender == _GOVERNANCE_PROXY, GovRecoveryUnauthorized(msg.sender));
         require(_recoveryRequestedAt != 0, GovRecoveryNotPending());
         _recoveryRequestedAt = 0;
@@ -92,9 +91,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         _assertTimestamp(params.timeType);
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
-        if (_mode == GovernanceMode.Receiver) return;
-        _assertValidProposalThreshold(params.proposalThreshold);
-        _assertValidQuorumThreshold(params.quorumThreshold);
+        assertValidProposalThreshold(params.proposalThreshold);
+        assertValidQuorumThreshold(params.quorumThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy

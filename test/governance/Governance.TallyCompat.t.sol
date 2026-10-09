@@ -115,6 +115,14 @@ contract MockCompatStrategy is IGovernanceStrategy {
 
     function assertValidQuorumThreshold(uint256) external pure {}
 
+    function requestRecover() external pure override {
+        revert();
+    }
+
+    function rejectRecover() external pure override {
+        revert();
+    }
+
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
         uint256 minimumQuorum,

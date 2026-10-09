@@ -360,7 +360,20 @@ contract RigoblockGovernanceStrategyTest is Test {
     ///     so these tests deploy with a zero staking proxy and no staking mocks.
     function _receiverStrategy() private returns (RigoblockGovernanceStrategy) {
         return
-            new RigoblockGovernanceStrategy(address(0), WORMHOLE, TARGET_CHAIN_ID, GovernanceMode.Receiver, address(0));
+            new RigoblockGovernanceStrategy(
+                address(0),
+                WORMHOLE,
+                TARGET_CHAIN_ID,
+                GovernanceMode.Receiver,
+                makeAddr("recovery")
+            );
+    }
+
+    /// @dev A receiver-chain strategy without a recovery address is a permanently dead
+    ///     hatch; the constructor must not allow it even in a hand deployment.
+    function test_Constructor_Receiver_ZeroRecoveryAddress_Reverts() public {
+        vm.expectRevert(IGovernanceStrategy.GovRecoveryAddressZero.selector);
+        new RigoblockGovernanceStrategy(address(0), WORMHOLE, TARGET_CHAIN_ID, GovernanceMode.Receiver, address(0));
     }
 
     function test_Receiver_BeforePropose_Reverts() public {

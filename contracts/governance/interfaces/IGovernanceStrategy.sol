@@ -52,6 +52,17 @@ interface IGovernanceStrategy {
     /// @notice Thrown when no recovery request is pending.
     error GovRecoveryNotPending();
 
+    /// @notice Thrown when a receiver-chain strategy is deployed without a recovery address.
+    error GovRecoveryAddressZero();
+
+    /// @notice Requests the governance recovery; executable after the challenge window.
+    /// @dev Only callable by the recovery address, and only when no request is pending or active.
+    function requestRecover() external;
+
+    /// @notice Rejects a pending or active recovery (the governance's veto).
+    /// @dev Only callable by the governance proxy, i.e. as a delivered governance action.
+    function rejectRecover() external;
+
     /// @notice Reverts if initialization paramters are incorrect.
     /// @dev Only used at initialization, as params deleted from factory storage after setup.
     /// @param params Tuple of factory parameters.
