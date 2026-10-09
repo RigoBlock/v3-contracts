@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
-import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
+import {CrossChainPayload, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
@@ -24,9 +25,17 @@ contract RigoblockGovernanceStrategyTest is Test {
     uint256 internal constant FEE = 0.001 ether;
 
     RigoblockGovernanceStrategy internal strategy;
+    RigoblockGovernanceStrategy internal senderStrategy;
 
     function setUp() public {
-        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, LOCAL_CHAIN_ID);
+        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, LOCAL_CHAIN_ID, GovernanceMode.Dual, address(0));
+        senderStrategy = new RigoblockGovernanceStrategy(
+            STAKING,
+            WORMHOLE,
+            LOCAL_CHAIN_ID,
+            GovernanceMode.Sender,
+            address(0)
+        );
         vm.mockCall(WORMHOLE, abi.encodeWithSelector(ICoreBridge.messageFee.selector), abi.encode(FEE));
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
     }
@@ -60,7 +69,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         vm.mockCall(GRG, abi.encodeWithSelector(IERC20.totalSupply.selector), abi.encode(supply));
     }
 
-    function test_beforePropose_NonWormhole_Passes() public view {
+    function test_beforePropose_NonWormhole_Passes() public {
         IGovernanceVoting.ProposedAction memory action = _action(TARGET, "", 0);
         IGovernanceVoting.ProposedAction memory result = strategy.beforePropose(action);
         assertEq(result.target, action.target);
@@ -69,43 +78,35 @@ contract RigoblockGovernanceStrategyTest is Test {
     }
 
     function test_beforePropose_WormholeCorrect_Passes() public {
-        vm.chainId(1);
-        IGovernanceVoting.ProposedAction memory result = strategy.beforePropose(
+        IGovernanceVoting.ProposedAction memory result = senderStrategy.beforePropose(
             _action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0)
         );
         assertEq(result.target, WORMHOLE);
     }
 
-    function test_beforePropose_NotMainnet_Reverts() public {
-        vm.chainId(LOCAL_CHAIN_ID);
-        vm.expectRevert(RigoblockGovernanceStrategy.GovCrosschainNotMainnet.selector);
+    function test_beforePropose_WormholeAction_DualMode_Reverts() public {
+        vm.expectRevert(IGovernanceStrategy.GovCrosschainNotSender.selector);
         strategy.beforePropose(_action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0));
     }
 
     function test_beforePropose_WormholeInvalidData_Reverts() public {
-        vm.chainId(1);
         bytes memory data = abi.encodePacked(bytes4(keccak256("unknown()")));
-        vm.expectRevert(RigoblockGovernanceStrategy.GovCrosschainInvalidData.selector);
-        strategy.beforePropose(_action(WORMHOLE, data, 0));
+        vm.expectRevert(IGovernanceStrategy.GovCrosschainInvalidData.selector);
+        senderStrategy.beforePropose(_action(WORMHOLE, data, 0));
     }
 
     function test_beforePropose_WormholeTargetSelf_Reverts() public {
-        vm.chainId(1);
-        vm.expectRevert(
-            abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainTargetSelf.selector, LOCAL_CHAIN_ID)
-        );
-        strategy.beforePropose(_action(WORMHOLE, _wormholeData(LOCAL_CHAIN_ID), 0));
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainTargetSelf.selector, LOCAL_CHAIN_ID));
+        senderStrategy.beforePropose(_action(WORMHOLE, _wormholeData(LOCAL_CHAIN_ID), 0));
     }
 
     function test_beforePropose_WormholeNonZeroValue_Reverts() public {
-        vm.chainId(1);
         uint256 value = 0.5 ether;
-        vm.expectRevert(abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
-        strategy.beforePropose(_action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), value));
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
+        senderStrategy.beforePropose(_action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), value));
     }
 
     function test_beforePropose_WormholeNonZeroInnerActionValue_Reverts() public {
-        vm.chainId(1);
         uint256 value = 0.5 ether;
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
         actions[0] = _action(TARGET, "", value);
@@ -120,12 +121,11 @@ contract RigoblockGovernanceStrategyTest is Test {
             abi.encode(crossChainPayload),
             uint8(200)
         );
-        vm.expectRevert(abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
-        strategy.beforePropose(_action(WORMHOLE, data, 0));
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
+        senderStrategy.beforePropose(_action(WORMHOLE, data, 0));
     }
 
     function test_beforePropose_WormholeNonFinalizedConsistencyLevel_Reverts() public {
-        vm.chainId(1);
         // 1 = "confirmed": guardians attest without Ethereum finality, which governance messages must not use
         bytes memory data = abi.encodeWithSelector(
             ICoreBridge.publishMessage.selector,
@@ -134,9 +134,9 @@ contract RigoblockGovernanceStrategyTest is Test {
             uint8(1)
         );
         vm.expectRevert(
-            abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidConsistencyLevel.selector, uint8(1))
+            abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainInvalidConsistencyLevel.selector, uint8(1))
         );
-        strategy.beforePropose(_action(WORMHOLE, data, 0));
+        senderStrategy.beforePropose(_action(WORMHOLE, data, 0));
     }
 
     function test_beforeExecute_NonWormhole_ReturnsUnchanged() public {
@@ -149,7 +149,7 @@ contract RigoblockGovernanceStrategyTest is Test {
 
     function test_beforeExecute_Wormhole_ReturnsFee() public {
         IGovernanceVoting.ProposedAction memory action = _action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0);
-        IGovernanceVoting.ProposedAction memory result = strategy.beforeExecute(action);
+        IGovernanceVoting.ProposedAction memory result = senderStrategy.beforeExecute(action);
         assertEq(result.target, WORMHOLE);
         assertEq(result.value, FEE);
     }
@@ -158,8 +158,17 @@ contract RigoblockGovernanceStrategyTest is Test {
         // Wormhole's publishMessage requires msg.value == messageFee(), so any wrapper value
         // set at proposal time must be replaced by the fee rather than added to it.
         IGovernanceVoting.ProposedAction memory action = _action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 1 ether);
-        IGovernanceVoting.ProposedAction memory result = strategy.beforeExecute(action);
+        IGovernanceVoting.ProposedAction memory result = senderStrategy.beforeExecute(action);
         assertEq(result.value, FEE);
+    }
+
+    function test_beforeExecute_Wormhole_DualMode_PassesThrough() public {
+        // Unreachable in practice (Dual beforePropose reverts wormhole actions): the Dual
+        // branch leaves any action unchanged.
+        IGovernanceVoting.ProposedAction memory action = _action(WORMHOLE, _wormholeData(TARGET_CHAIN_ID), 0);
+        IGovernanceVoting.ProposedAction memory result = strategy.beforeExecute(action);
+        assertEq(result.target, WORMHOLE);
+        assertEq(result.value, 0);
     }
 
     function test_AssertValidInitParams_Blocknumber_Reverts() public {
@@ -172,20 +181,14 @@ contract RigoblockGovernanceStrategyTest is Test {
             name: "Rigoblock Governance"
         });
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
-                TimeType.Blocknumber
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
         );
         strategy.assertValidInitParams(params);
     }
 
     function test_VotingTimestamps_Blocknumber_Reverts() public {
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
-                TimeType.Blocknumber
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
         );
         strategy.votingTimestamps(TimeType.Blocknumber);
     }
@@ -212,10 +215,7 @@ contract RigoblockGovernanceStrategyTest is Test {
             executed: false
         });
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
-                TimeType.Blocknumber
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
         );
         strategy.getProposalState(proposal, 100, TimeType.Blocknumber);
     }
@@ -258,7 +258,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
                 99_999e18,
                 100_000e18,
                 200_000e18
@@ -272,7 +272,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
                 200_001e18,
                 100_000e18,
                 200_000e18
@@ -293,7 +293,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
                 399_999e18,
                 400_000e18,
                 1_000_000e18
@@ -307,7 +307,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
                 1_000_001e18,
                 400_000e18,
                 1_000_000e18
@@ -327,7 +327,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(1_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
                 15_000e18,
                 20_000e18,
                 100_000e18
@@ -347,12 +347,259 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(1_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
                 50_000e18,
                 100_000e18,
                 400_000e18
             )
         );
         strategy.assertValidQuorumThreshold(50_000e18);
+    }
+
+    /// @dev Receiver-mode strategies must work with no staking contract at all (e.g. HyperEVM),
+    ///     so these tests deploy with a zero staking proxy and no staking mocks.
+    function _receiverStrategy() private returns (RigoblockGovernanceStrategy) {
+        return
+            new RigoblockGovernanceStrategy(
+                address(0),
+                WORMHOLE,
+                TARGET_CHAIN_ID,
+                GovernanceMode.Receiver,
+                makeAddr("recovery")
+            );
+    }
+
+    /// @dev A receiver-chain strategy without a recovery address is a permanently dead
+    ///     hatch; the constructor must not allow it even in a hand deployment.
+    function test_Constructor_Receiver_ZeroRecoveryAddress_Reverts() public {
+        vm.expectRevert(IGovernanceStrategy.GovRecoveryAddressZero.selector);
+        new RigoblockGovernanceStrategy(address(0), WORMHOLE, TARGET_CHAIN_ID, GovernanceMode.Receiver, address(0));
+    }
+
+    function test_Receiver_BeforePropose_Reverts() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        vm.expectRevert(IGovernanceStrategy.GovLocalGovernanceDisabled.selector);
+        receiver.beforePropose(_action(TARGET, "", 0));
+    }
+
+    function test_Receiver_BeforeExecute_Reverts() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        vm.expectRevert(IGovernanceStrategy.GovLocalGovernanceDisabled.selector);
+        receiver.beforeExecute(_action(TARGET, "", 0));
+    }
+
+    function test_Receiver_VotingTimestamps_Reverts() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        vm.expectRevert(IGovernanceStrategy.GovLocalGovernanceDisabled.selector);
+        receiver.votingTimestamps(TimeType.Timestamp);
+    }
+
+    function test_Receiver_GetVotingPower_ReturnsZero() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        assertEq(receiver.getVotingPower(address(0x9999)), 0);
+    }
+
+    function test_Receiver_GetProposalState_ReturnsDefeatedWithoutStaking() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        // values are irrelevant: receiver mode returns Defeated without inspecting the proposal
+        IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({
+            actionsLength: 1,
+            startBlockOrTime: 1,
+            endBlockOrTime: 2,
+            votesFor: 100,
+            votesAgainst: 0,
+            votesAbstain: 0,
+            executed: false
+        });
+        assertEq(uint256(receiver.getProposalState(proposal, 1, TimeType.Timestamp)), uint256(ProposalStatus.Defeated));
+    }
+
+    function test_Receiver_VotingPeriod_ReturnsDefaultWithoutStaking() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        assertEq(receiver.votingPeriod(), 7 days);
+    }
+
+    function test_Receiver_AssertValidInitParams_BoundedThresholdValidation() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory.Parameters({
+            implementation: address(0),
+            governanceStrategy: address(receiver),
+            proposalThreshold: 1,
+            quorumThreshold: 1,
+            timeType: TimeType.Timestamp,
+            name: "Rigoblock Governance"
+        });
+        // bounds are staking-free on receiver chains: in-range thresholds pass, zero and
+        // above-uint96 thresholds revert
+        receiver.assertValidInitParams(params);
+
+        params.proposalThreshold = 0;
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector, 0));
+        receiver.assertValidInitParams(params);
+
+        params.proposalThreshold = 1;
+        params.quorumThreshold = 0;
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector, 0));
+        receiver.assertValidInitParams(params);
+
+        params.quorumThreshold = uint256(type(uint96).max) + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
+        receiver.assertValidInitParams(params);
+    }
+
+    function test_Receiver_AssertValidInitParams_Blocknumber_Reverts() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory.Parameters({
+            implementation: address(0),
+            governanceStrategy: address(receiver),
+            proposalThreshold: 0,
+            quorumThreshold: 0,
+            timeType: TimeType.Blocknumber,
+            name: "Rigoblock Governance"
+        });
+        vm.expectRevert(
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
+        );
+        receiver.assertValidInitParams(params);
+    }
+
+    /// @dev Receiver thresholds are staking-free but bounded: zero would let anyone create
+    ///     inert proposals, and a threshold above the recovery address's uint96 power would
+    ///     brick recovery. Boundary values are accepted.
+    function test_Receiver_ThresholdValidators_BoundedWithoutStaking() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        receiver.assertValidProposalThreshold(1);
+        receiver.assertValidProposalThreshold(type(uint96).max);
+        receiver.assertValidQuorumThreshold(1);
+        receiver.assertValidQuorumThreshold(type(uint96).max);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector, uint256(0))
+        );
+        receiver.assertValidProposalThreshold(0);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
+        receiver.assertValidQuorumThreshold(uint256(type(uint96).max) + 1);
+    }
+
+    function test_Receiver_WormholeConfig_Readable() public {
+        RigoblockGovernanceStrategy receiver = _receiverStrategy();
+        assertEq(receiver.wormhole(), WORMHOLE);
+        assertEq(receiver.wormholeChainId(), TARGET_CHAIN_ID);
+    }
+
+    /// @dev The recovery path is inert on sender and dual strategies: the recovery address is
+    ///     the zero address there, so the additional path cannot disrupt regular governance.
+    function test_NonReceiver_RecoveryIsInert() public {
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, address(this)));
+        strategy.requestRecover();
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, address(this)));
+        strategy.rejectRecover();
+
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, address(this)));
+        senderStrategy.requestRecover();
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, address(this)));
+        senderStrategy.rejectRecover();
+    }
+
+    /// @dev The constructor zeroes the recovery params on non-receiver chains, so a
+    ///     misconfigured deployment cannot arm the recovery path even by accident.
+    function test_Constructor_NonReceiver_ZeroesRecoveryParams() public {
+        address passedRecovery = makeAddr("passedRecovery");
+        RigoblockGovernanceStrategy dual = new RigoblockGovernanceStrategy(
+            STAKING,
+            WORMHOLE,
+            LOCAL_CHAIN_ID,
+            GovernanceMode.Dual,
+            passedRecovery
+        );
+        // the passed recovery address was not stored: the request reverts for it too
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, passedRecovery));
+        vm.prank(passedRecovery);
+        dual.requestRecover();
+    }
+
+    /// @dev The constructor zeroes the staking proxy on receiver chains: every receiver read
+    ///     path must keep working with a staking address that reverts on any call.
+    function test_Constructor_Receiver_ZeroesStakingProxy() public {
+        RigoblockGovernanceStrategy receiver = new RigoblockGovernanceStrategy(
+            address(new StakingBomb()),
+            WORMHOLE,
+            LOCAL_CHAIN_ID,
+            GovernanceMode.Receiver,
+            makeAddr("recovery")
+        );
+        // any of these reverting would prove a staking read
+        receiver.getVotingPower(makeAddr("anyone"));
+        receiver.votingPeriod();
+        receiver.assertValidProposalThreshold(1);
+        receiver.assertValidQuorumThreshold(type(uint96).max);
+        receiver.assertValidInitParams(
+            IRigoblockGovernanceFactory.Parameters({
+                implementation: address(0),
+                governanceStrategy: address(receiver),
+                proposalThreshold: 1,
+                quorumThreshold: 1,
+                timeType: TimeType.Timestamp,
+                name: "Rigoblock Governance"
+            })
+        );
+        IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({
+            actionsLength: 1,
+            startBlockOrTime: block.timestamp + 100,
+            endBlockOrTime: block.timestamp + 200,
+            votesFor: 0,
+            votesAgainst: 0,
+            votesAbstain: 0,
+            executed: false
+        });
+        assertEq(
+            uint256(receiver.getProposalState(proposal, 100, TimeType.Timestamp)),
+            uint256(ProposalStatus.Defeated)
+        );
+    }
+
+    /// @dev Even with the recovery slot poisoned to a past timestamp, a dual strategy ignores
+    ///     it: every recovery branch is gated on Receiver mode, so regular governance cannot
+    ///     be disrupted through this path.
+    function test_Dual_RecoveryStorageIsIgnored() public {
+        // _recoveryRequestedAt is the strategy's only storage slot: poison it with an
+        // already-active-looking timestamp
+        vm.warp(46 days);
+        vm.store(address(strategy), 0, bytes32(uint256(1)));
+
+        IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({
+            actionsLength: 1,
+            startBlockOrTime: block.timestamp + 100,
+            endBlockOrTime: block.timestamp + 200,
+            votesFor: 0,
+            votesAgainst: 0,
+            votesAbstain: 0,
+            executed: false
+        });
+        // a not-started proposal reads Pending, not the receiver fail-closed Defeated
+        assertEq(
+            uint256(strategy.getProposalState(proposal, 100, TimeType.Timestamp)),
+            uint256(ProposalStatus.Pending)
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, address(this)));
+        strategy.requestRecover();
+    }
+}
+
+/// @dev A staking address whose every call reverts: used to prove receiver paths never read it.
+contract StakingBomb {
+    fallback() external payable {
+        revert("staking call");
     }
 }

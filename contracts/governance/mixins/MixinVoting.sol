@@ -73,7 +73,7 @@ abstract contract MixinVoting is MixinState {
     }
 
     /// @inheritdoc IGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
     function propose(
         address[] memory targets,
         uint256[] memory values,
@@ -250,7 +250,7 @@ abstract contract MixinVoting is MixinState {
     }
 
     /// @inheritdoc IGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
     function execute(
         address[] memory targets,
         uint256[] memory values,
@@ -301,7 +301,7 @@ abstract contract MixinVoting is MixinState {
     }
 
     /// @inheritdoc IGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
     function cancel(
         address[] memory targets,
         uint256[] memory values,

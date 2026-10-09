@@ -22,7 +22,7 @@ target chains such as HyperEVM through Wormhole cross-chain messages.
 A chain's role is expressed entirely through its governance strategy:
 
 - **Ethereum mainnet is the only sender.** `RigoblockGovernanceStrategy.beforePropose`
-  rejects Wormhole actions on any other chain (`GovCrosschainNotMainnet`), and the
+  rejects Wormhole actions in any other mode (`GovCrosschainNotSender`), and the
   receiver mixin cannot run on mainnet at all (`GovReceiverLocalEmitter`, since the
   trusted emitter is mainnet itself). The trusted emitter is checked as
   `emitterAddress == address(this)`: the proxy is deployed at the same deterministic

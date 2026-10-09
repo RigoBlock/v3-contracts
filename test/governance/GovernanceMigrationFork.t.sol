@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
+import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 
@@ -48,7 +49,9 @@ contract GovernanceMigrationForkTest is Test {
         newStrategy = new RigoblockGovernanceStrategy(
             Constants.GRG_STAKING,
             Constants.WORMHOLE_ETHEREUM,
-            uint16(2) // Wormhole Ethereum chain id
+            uint16(2), // Wormhole Ethereum chain id
+            GovernanceMode.Sender, // deployed on the mainnet fork
+            address(0)
         );
 
         // Give the test voter enough voting power to create and pass proposals. Voting power is

@@ -65,6 +65,8 @@ so execution is only possible in a later unit. Everything that depends on the st
 
 - **Voting power**: current-epoch delegated GRG stake (`IStaking.getOwnerStakeByStatus`).
 - **Qualified majority**: `3 * votesFor > 2 * globalDelegatedStake && votesFor >= minimumQuorum`.
+  On Receiver chains the consensus is staking-free instead: `votesFor >= minimumQuorum`, so a
+  recovery vote qualifies without any staking read.
 - **Voting period**: `min(7 days, staking epoch duration)`, anchored to the current epoch's earliest
   end time; voting always starts at least one second in the future to prevent same-block upgrades.
 - **Thresholds**: proposal threshold between 1% and 2% of GRG total supply (hard floor 20,000 GRG
@@ -74,3 +76,101 @@ so execution is only possible in a later unit. Everything that depends on the st
   value — the wrapper `action.value` and every inner payload action's `value` are validated at
   proposal time, as the governance holds no native balance on receiver chains (the Wormhole fee
   is attached at execution time). See `docs/wormhole/GOVERNANCE_CROSSCHAIN.md`.
+
+## Governance modes
+
+The strategy is deployed with a `GovernanceMode` (defined in `RigoblockGovernanceStrategy.sol`),
+fixed per chain in `governanceMode` inside `chainConfig` (`src/utils/constants.ts`). The deploy
+script (`src/deploy/deploy_governance.ts`) reverts when the mode is not configured for a chain.
+
+| Chain                                                | Mode       |
+| ---------------------------------------------------- | ---------- |
+| Ethereum mainnet (1)                                 | `Sender`   |
+| Arbitrum, Optimism, Polygon, Unichain, Base, Sepolia | `Dual`     |
+| BSC (56), HyperEVM (999)                             | `Receiver` |
+
+The mode is validated only at deployment time. The deploy script is authoritative for the
+chain-to-mode mapping and reverts when the configured mode is missing, unknown, or not the
+expected one for the chain (mainnet → `Sender`, HyperEVM and BSC → `Receiver`, every other
+chain → `Dual`), so a new chain cannot be wired with an invalid or unintended configuration as
+long as the canonical deploy path (`deploy_governance.ts`) is used. The strategy contract
+itself carries no chain check — its only mode gate is that crosschain _sending_ requires
+`Sender`. An `upgradeStrategy` swap to a misconfigured strategy would only change
+local-governance behavior, never the crosschain receiver path, and would be visible on-chain
+before any local proposal is created.
+
+Sending and receiving are gated at two independent layers. The strategy's mode decides who may
+create crosschain proposals (only `Sender`); the receiver mixin independently pins the
+trusted emitter to Wormhole chain id 2 (Ethereum mainnet) as an implementation constant
+(`MixinConstants.sol`), so a strategy swap can never re-point which chain's governance is
+trusted — a message emitted by any other chain's governance proxy is rejected regardless of
+the local strategy.
+
+- **Sender** (mainnet): local GRG voting, plus crosschain sending — a local proposal may
+  contain Wormhole `publishMessage` actions (gated by `beforePropose`), which receivers execute.
+- **Dual**: local GRG voting plus crosschain receiving. Local proposals pass through
+  `beforePropose` unchanged unless they target the Wormhole contract, which reverts
+  (`GovCrosschainNotSender`) — only the `Sender` governance sends.
+
+  The Dual branch of `beforeExecute` returns actions unchanged — no symmetric wormhole-target
+  revert. This pass-through is unreachable, not missing: `beforePropose` already rejected any
+  wormhole-targeting action, so no Dual chain can ever store such a proposal, and the old
+  `block.chainid == 1` strategies gated them the same way. Even a rogue `upgradeStrategy` swap
+  to a strategy without the `beforePropose` gate could only make Dual governance _publish_ a VAA
+  — every receiver pins the trusted emitter to Ethereum mainnet (`emitterChainId == 2`), so that
+  VAA is rejected on delivery. The revert belongs in `beforePropose` (where proposals are born);
+  duplicating it in `beforeExecute` would be dead code.
+
+- **Receiver** (BSC, HyperEVM): managed exclusively from mainnet; local governance is disabled
+  and every staking interaction is skipped, so the strategy works even where no staking system
+  exists (HyperEVM):
+  - `beforePropose`, `beforeExecute` and `votingTimestamps` revert `GovLocalGovernanceDisabled`
+    — no local proposal can be created or executed.
+  - `getVotingPower` returns 0 and `getProposalState` returns `Defeated` without reading
+    staking; `votingPeriod` returns the 7-day default. These are read methods and must not
+    revert, but they can never open a local path: `Defeated` can never satisfy the
+    `Succeeded` gate in `execute`, and the governance implementation reverts for non-stored
+    proposals before reaching the strategy, so the values are only observable on direct
+    strategy calls.
+  - `assertValidInitParams` and the threshold validators skip the GRG-supply bounds (thresholds
+    are inert on chains without local voting) but still enforce `(0, uint96.max]`: a stored
+    quorum above `uint96.max` would make the recovery path unreachable. The validators
+    early-return rather than revert because a mainnet-sent crosschain `updateThresholds`
+    action must not revert and brick the whole VAA batch.
+  - The crosschain receiver path (`receiveMessage`) is unaffected: it reads the strategy only
+    for `wormhole()` / `wormholeChainId()` and never touches staking.
+  - A strategy deployed with a nonzero recovery address carries the recovery escape hatch:
+    after a 60-day challenge window with no mainnet veto, the recovery address can drive the
+    ordinary local proposal/vote/execute flow to recover a frozen governance. The recovery
+    vote is a superquorum under a staking-free receiver consensus (`votesFor >= minimumQuorum`),
+    so the proposal qualifies immediately and is executable at the next block. See RECOVERY.md
+    for the full design.
+
+On receiver chains the constructor always zeroes the staking proxy, whatever was passed: the
+receiver branches never read it, so a misconfigured staking address cannot affect a receiver
+chain. On sender and dual chains it must be a live staking proxy.
+
+Upgrading a live governance between modes is a strategy swap via `upgradeStrategy`: deploy the
+new strategy for the chain, then execute a single proposal with `upgradeImplementation` (only
+if the implementation changed) and `upgradeStrategy` — never split the two across proposals.
+
+## Factory and proxy address
+
+`RigoblockGovernanceFactory.createGovernance` salts the proxy with
+`keccak256(abi.encode(msg.sender, name))` only. The implementation, strategy, thresholds and
+time type are read from the factory's transient storage by the proxy constructor — they are
+**not** part of the proxy init code. Consequences:
+
+- The proxy address on every chain depends only on the factory address, the deployer key
+  and the name. In particular it is independent of the implementation address, so a chain
+  created with a **newer governance implementation** still lands at the same proxy address
+  as the other chains (same key, same `"Rigoblock Governance"` name). There is no beacon and
+  no two-step upgrade: pass the current implementation and strategy as `createGovernance`
+  arguments.
+- Because the proxy address is chain-independent, the governance strategy hardcodes it as a
+  constant to authenticate a recovery rejection (`rejectRecover`) — no constructor argument
+  and no per-chain configuration that could be set wrong.
+- This is how HyperEVM is brought under the canonical governance: deploy (or reuse) the
+  implementation and strategy, then `createGovernance(newImplementation, strategy, …)` from
+  the same deployer key — the proxy is created already pointing at the new implementation,
+  natively bonded to the passed strategy.
