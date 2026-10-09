@@ -8,6 +8,50 @@ import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {
+    /// @notice Emitted when a recovery is requested.
+    event RecoverRequested(uint256 timestamp);
+
+    /// @notice Emitted when a recovery is rejected.
+    event RecoverRejected();
+
+    /// @notice Thrown when a local governance method is called on a receiver-only chain.
+    error GovLocalGovernanceDisabled();
+
+    /// @notice Thrown when a Wormhole cross-chain action has malformed calldata.
+    error GovCrosschainInvalidData();
+
+    /// @notice Thrown when a Wormhole cross-chain action targets the current chain.
+    error GovCrosschainTargetSelf(uint16 targetChainId);
+
+    /// @notice Thrown when a non-sender governance attempts to create a cross-chain proposal.
+    error GovCrosschainNotSender();
+
+    /// @notice Thrown when a Wormhole cross-chain action carries a non-zero wrapper value.
+    error GovCrosschainInvalidValue(uint256 value);
+
+    /// @notice Thrown when a Wormhole message is published with a non-finalized consistency level.
+    /// @param consistencyLevel The supplied consistency level.
+    error GovCrosschainInvalidConsistencyLevel(uint8 consistencyLevel);
+
+    /// @notice Thrown when the proposal threshold is outside the allowed range.
+    error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
+
+    /// @notice Thrown when the quorum threshold is outside the allowed range.
+    error GovStrategyInvalidQuorumThreshold(uint256 quorumThreshold, uint256 floor, uint256 cap);
+
+    /// @notice Thrown when the governance time type is not TimeType.Timestamp.
+    error GovStrategyInvalidTimeType(TimeType timeType);
+
+    /// @notice Thrown when an address other than the recovery address or the governance proxy
+    ///      attempts to manage a recovery request.
+    error GovRecoveryUnauthorized(address caller);
+
+    /// @notice Thrown when a recovery request is pending or already active.
+    error GovRecoveryAlreadyPending();
+
+    /// @notice Thrown when no recovery request is pending.
+    error GovRecoveryNotPending();
+
     /// @notice Reverts if initialization paramters are incorrect.
     /// @dev Only used at initialization, as params deleted from factory storage after setup.
     /// @param params Tuple of factory parameters.
@@ -23,7 +67,6 @@ interface IGovernanceStrategy {
 
     /// @notice Returns the state of a proposal for a required quorum.
     /// @dev Must use the same time reference as `timeType` and revert for unsupported time types.
-    ///      See docs/governance/STRATEGY.md.
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
     /// @param timeType Time reference used by the proposal's voting period.

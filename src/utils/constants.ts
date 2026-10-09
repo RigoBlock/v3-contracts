@@ -20,18 +20,16 @@ interface ChainConfig {
   wormhole: string;
   wormholeChainId: number;
   governanceMode: GovernanceMode;
+  governanceRecovery?: string;
 }
 
 // Governance mode of a chain, mirroring the on-chain GovernanceMode enum
 // (contracts/governance/strategies/RigoblockGovernanceStrategy.sol). Must be set per chain.
 export type GovernanceMode = "sender" | "dual" | "receiver";
 
-// Ethereum mainnet Rigoblock governance proxy. This address is the Wormhole emitter
-// for cross-chain governance messages and, since the governance proxy is deterministically
-// deployed at the same address on every chain, also the trusted emitter hardcoded in the
-// governance implementation's cross-chain receiver mixin.
-export const mainnetGovernanceProxy =
-  "0x5F8607739c2D2d0b57a4292868C368AB1809767a";
+// The Rigoblock governance proxy, deployed at the same address on every chain; used by the
+// AGovernance adapter. The strategy contract authenticates recovery against the same value.
+export const governanceProxy = "0x5F8607739c2D2d0b57a4292868C368AB1809767a";
 
 // Chain-specific configuration
 export const chainConfig: { [chainId: number]: ChainConfig } = {

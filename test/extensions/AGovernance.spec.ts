@@ -102,6 +102,7 @@ describe("AGovernance", async () => {
           "0x1111111111111111111111111111111111111111",
           1,
           1,
+          "0x0000000000000000000000000000000000000000",
         ],
       );
       // we deploy from user2 as otherwise governance already exists

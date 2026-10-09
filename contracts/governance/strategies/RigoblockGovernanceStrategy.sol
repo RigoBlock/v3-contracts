@@ -28,51 +28,64 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Wormhole core contract on the same chain as this strategy.
     address private immutable _wormhole;
 
+    /// @notice Maximum voting period; receiver chains always use it.
+    uint256 private constant _VOTING_PERIOD = 7 days;
+
+    /// @notice Challenge window between a recovery request and its activation.
+    uint256 private constant _RECOVERY_WINDOW = 45 days;
+
+    /// @notice The Rigoblock governance proxy, identical on every chain; authenticates a recovery rejection.
+    address private constant _GOVERNANCE_PROXY = 0x5F8607739c2D2d0b57a4292868C368AB1809767a;
+
     /// @notice Wormhole chain id of the chain this strategy is deployed on.
     uint16 private immutable _wormholeChainId;
 
     address private immutable _stakingProxy;
-    uint256 private immutable _votingPeriod;
 
     /// @notice Governance mode of the chain this strategy is deployed on.
     GovernanceMode private immutable _mode;
 
-    /// @notice Thrown when a local governance method is called on a receiver-only chain.
-    error GovLocalGovernanceDisabled();
+    /// @notice Pre-designated recovery address; only meaningful on receiver chains.
+    address private immutable _recoveryAddress;
 
-    /// @notice Thrown when a Wormhole cross-chain action has malformed calldata.
-    error GovCrosschainInvalidData();
+    uint256 private _recoveryRequestedAt;
 
-    /// @notice Thrown when a Wormhole cross-chain action targets the current chain.
-    error GovCrosschainTargetSelf(uint16 targetChainId);
-
-    /// @notice Thrown when a non-sender governance attempts to create a cross-chain proposal.
-    error GovCrosschainNotSender();
-
-    /// @notice Thrown when a Wormhole cross-chain action carries a non-zero wrapper value.
-    /// @dev The inner action value is paid on the destination chain from the receiver's balance,
-    /// so the wrapper must be zero and the Wormhole fee is attached at execution time only.
-    error GovCrosschainInvalidValue(uint256 value);
-
-    /// @notice Thrown when a Wormhole message is published with a consistency level other than finalized.
-    /// @param consistencyLevel The supplied consistency level.
-    error GovCrosschainInvalidConsistencyLevel(uint8 consistencyLevel);
-
-    /// @notice Thrown when the proposal threshold is outside the allowed range.
-    error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
-
-    /// @notice Thrown when the quorum threshold is outside the allowed range.
-    error GovStrategyInvalidQuorumThreshold(uint256 quorumThreshold, uint256 floor, uint256 cap);
-
-    /// @notice Thrown when the governance time type is not TimeType.Timestamp.
-    error GovStrategyInvalidTimeType(TimeType timeType);
-
-    constructor(address stakingProxy, address wormhole, uint16 wormholeChainId, GovernanceMode mode) {
-        _stakingProxy = stakingProxy;
+    constructor(
+        address stakingProxy,
+        address wormhole,
+        uint16 wormholeChainId,
+        GovernanceMode mode,
+        address recoveryAddress
+    ) {
         _wormhole = wormhole;
         _wormholeChainId = wormholeChainId;
         _mode = mode;
-        _votingPeriod = 7 days;
+        // receiver chains never read staking; the recovery address is receiver-only
+        if (mode == GovernanceMode.Receiver) {
+            _recoveryAddress = recoveryAddress;
+        } else {
+            _stakingProxy = stakingProxy;
+        }
+    }
+
+    /// @notice Requests the governance recovery; executable after the challenge window.
+    /// @dev Only the recovery address can request, and only the governance proxy (via a
+    ///      delivered proposal action) can reject.
+    function requestRecover() external {
+        require(msg.sender == _recoveryAddress, GovRecoveryUnauthorized(msg.sender));
+        // a nonzero timestamp covers a pending request and an active recovery alike:
+        // re-requesting an active recovery would overwrite its timestamp and disarm it
+        require(_recoveryRequestedAt == 0, GovRecoveryAlreadyPending());
+        _recoveryRequestedAt = block.timestamp;
+        emit RecoverRequested(block.timestamp);
+    }
+
+    /// @notice Rejects a pending or active recovery (the governance's veto).
+    function rejectRecover() external {
+        require(msg.sender == _GOVERNANCE_PROXY, GovRecoveryUnauthorized(msg.sender));
+        require(_recoveryRequestedAt != 0, GovRecoveryNotPending());
+        _recoveryRequestedAt = 0;
+        emit RecoverRejected();
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -102,15 +115,15 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         uint256 minimumQuorum,
         TimeType timeType
     ) external view override returns (ProposalStatus) {
-        if (_mode == GovernanceMode.Receiver) return ProposalStatus.Defeated;
         _assertTimestamp(timeType);
-
-        // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
-        // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
         uint256 time = block.timestamp;
+        // fail closed on receiver chains unless an active recovery authorizes local governance
+        if (_mode == GovernanceMode.Receiver && !_isRecoveryActive()) return ProposalStatus.Defeated;
         if (time <= proposal.startBlockOrTime) {
             return ProposalStatus.Pending;
         } else if (time <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum)) {
+            // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
+            // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
             return ProposalStatus.Qualified;
         } else if (time <= proposal.endBlockOrTime) {
             return ProposalStatus.Active;
@@ -127,6 +140,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         IGovernanceState.Proposal memory proposal,
         uint256 minimumQuorum
     ) private view returns (bool) {
+        if (_mode == GovernanceMode.Receiver) {
+            // the recovery address holds superquorum by design
+            return proposal.votesFor >= minimumQuorum;
+        }
         return (3 * proposal.votesFor >
             2 *
                 IStaking(_getStakingProxy())
@@ -137,7 +154,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function getVotingPower(address account) public view override returns (uint256) {
-        if (_mode == GovernanceMode.Receiver) return 0;
+        if (_mode == GovernanceMode.Receiver) {
+            // uint96: fits the vote receipt, far above any real quorum, no external reads
+            return _isRecoveryActive() && account == _recoveryAddress ? type(uint96).max : 0;
+        }
         return
             IStaking(_getStakingProxy())
                 .getOwnerStakeByStatus(account, IStructs.StakeStatus.DELEGATED)
@@ -146,9 +166,9 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function votingPeriod() public view override returns (uint256) {
-        if (_mode == GovernanceMode.Receiver) return _votingPeriod;
+        if (_mode == GovernanceMode.Receiver) return _VOTING_PERIOD;
         uint256 stakingEpochDuration = IStorage(_getStakingProxy()).epochDurationInSeconds();
-        return stakingEpochDuration < _votingPeriod ? stakingEpochDuration : _votingPeriod;
+        return stakingEpochDuration < _VOTING_PERIOD ? stakingEpochDuration : _VOTING_PERIOD;
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -156,12 +176,16 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         TimeType timeType
     ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
         _assertTimestamp(timeType);
-        require(_mode != GovernanceMode.Receiver, GovLocalGovernanceDisabled());
 
-        startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
-
-        // we require voting starts next block to prevent instant upgrade
-        startBlockOrTime = block.timestamp >= startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
+        if (_mode == GovernanceMode.Receiver) {
+            // recovery has no flash-vote risk: power is fixed to the recovery address
+            require(_isRecoveryActive(), GovLocalGovernanceDisabled());
+            startBlockOrTime = block.timestamp;
+        } else {
+            // we require voting starts next block to prevent instant upgrade
+            startBlockOrTime = IStaking(_getStakingProxy()).getCurrentEpochEarliestEndTimeInSeconds();
+            startBlockOrTime = block.timestamp >= startBlockOrTime ? block.timestamp + 1 : startBlockOrTime;
+        }
 
         endBlockOrTime = startBlockOrTime + votingPeriod();
     }
@@ -216,7 +240,12 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         IGovernanceVoting.ProposedAction calldata action
     ) external view override returns (IGovernanceVoting.ProposedAction memory) {
         if (_mode == GovernanceMode.Receiver) {
-            revert GovLocalGovernanceDisabled();
+            require(_isRecoveryActive(), GovLocalGovernanceDisabled());
+            // fails fast: publishing would revert on the fee at execution time
+            if (action.target == _wormhole) {
+                revert GovCrosschainNotSender();
+            }
+            return action;
         } else if (_mode == GovernanceMode.Sender) {
             if (action.target != _wormhole) {
                 return action;
@@ -262,7 +291,12 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         IGovernanceVoting.ProposedAction memory action
     ) external view override returns (IGovernanceVoting.ProposedAction memory) {
         if (_mode == GovernanceMode.Receiver) {
-            revert GovLocalGovernanceDisabled();
+            require(_isRecoveryActive(), GovLocalGovernanceDisabled());
+            // fails fast: publishing would revert on the fee at execution time
+            if (action.target == _wormhole) {
+                revert GovCrosschainNotSender();
+            }
+            return action;
         } else if (_mode == GovernanceMode.Sender) {
             if (action.target != _wormhole) {
                 return action;
@@ -290,5 +324,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice It is more gas efficient at deploy to reading immutable from internal method.
     function _getStakingProxy() private view returns (address) {
         return _stakingProxy;
+    }
+
+    function _isRecoveryActive() private view returns (bool) {
+        uint256 requestedAt = _recoveryRequestedAt;
+        return requestedAt != 0 && block.timestamp >= requestedAt + _RECOVERY_WINDOW;
     }
 }

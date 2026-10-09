@@ -44,7 +44,9 @@ contract GovernanceCrosschainForkTest is Test {
         // sender role: the strategy's local Wormhole id is Ethereum's
         governance = new CrosschainHarness();
         governance.setStrategy(
-            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN, GovernanceMode.Sender))
+            address(
+                new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN, GovernanceMode.Sender, address(0))
+            )
         );
         governance.setParams(1, 1);
 
@@ -177,7 +179,7 @@ contract GovernanceCrosschainForkTest is Test {
         // swap to the receiver role: the strategy's local Wormhole id is now the target chain.
         // The receiver path only reads wormhole()/wormholeChainId(), so any non-receiver mode works.
         governance.setStrategy(
-            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Sender))
+            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Sender, address(0)))
         );
 
         // delivering the two VAAs in order executes both batches in order

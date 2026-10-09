@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 
 import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
 import {CrossChainPayload, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
@@ -9,6 +10,7 @@ import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governan
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernance.sol";
 import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge, CoreBridgeVM, GuardianSignature} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
@@ -60,6 +62,10 @@ contract CrosschainHarness is RigoblockGovernance {
         _paramsWrapper().governanceParameters.quorumThreshold = quorumThreshold_;
     }
 
+    function setTimeType(TimeType timeType_) external {
+        _paramsWrapper().governanceParameters.timeType = timeType_;
+    }
+
     function implementation() external view returns (address) {
         return _implementation().value;
     }
@@ -81,7 +87,7 @@ contract GovernanceCrosschainTest is Test {
     address internal whale = makeAddr("whale");
 
     function setUp() public {
-        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Dual);
+        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Dual, address(0));
         governance = new CrosschainHarness();
         governance.setStrategy(address(strategy));
         counter = new Counter();
@@ -173,7 +179,7 @@ contract GovernanceCrosschainTest is Test {
         CrosschainHarness otherChain = new CrosschainHarness();
         // a strategy with a zero Wormhole address (e.g. a chain that is not a receiver)
         otherChain.setStrategy(
-            address(new RigoblockGovernanceStrategy(STAKING, address(0), TARGET_CHAIN, GovernanceMode.Dual))
+            address(new RigoblockGovernanceStrategy(STAKING, address(0), TARGET_CHAIN, GovernanceMode.Dual, address(0)))
         );
 
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
@@ -225,7 +231,7 @@ contract GovernanceCrosschainTest is Test {
     function test_ReceiveMessage_LocalEmitter_Reverts() public {
         // a chain whose Wormhole chain id equals the emitter's (i.e. the sender chain itself)
         governance.setStrategy(
-            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN, GovernanceMode.Dual))
+            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN, GovernanceMode.Dual, address(0)))
         );
 
         IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
@@ -459,7 +465,8 @@ contract GovernanceCrosschainTest is Test {
             STAKING,
             WORMHOLE,
             TARGET_CHAIN,
-            GovernanceMode.Receiver
+            GovernanceMode.Receiver,
+            address(0)
         );
 
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](2);
@@ -652,6 +659,32 @@ contract GovernanceCrosschainTest is Test {
         governance.execute(proposalId);
         assertEq(counter.value(), 2);
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
+    }
+
+    /// @notice With a Receiver-mode strategy installed, local proposal creation reverts at the
+    ///     proxy level, while the cross-chain receive path keeps executing unaffected.
+    function test_Receiver_LocalProposeReverts_ReceiveStillExecutes() public {
+        RigoblockGovernanceStrategy receiverStrategy = new RigoblockGovernanceStrategy(
+            STAKING,
+            WORMHOLE,
+            TARGET_CHAIN,
+            GovernanceMode.Receiver,
+            address(0)
+        );
+        governance.setStrategy(address(receiverStrategy));
+
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = _buildIncrementAction();
+        // the voting-power gate fires before the strategy hook: getVotingPower returns 0 on a
+        // receiver chain, so proposal creation is fail-closed either way. The harness leaves the
+        // proposal threshold uninitialized (uint256.max).
+        vm.expectRevert(abi.encodeWithSelector(MixinVoting.GovLowVotingPower.selector, 0, type(uint256).max));
+        governance.propose(actions, "receiver local proposal");
+
+        _mockParseAndVerify(_buildVaa(_encodePayload(_buildIncrementAction()), 0));
+        governance.receiveMessage("");
+        assertEq(counter.value(), 1);
+        assertEq(governance.nextMinimumSequence(), 1);
     }
 }
 

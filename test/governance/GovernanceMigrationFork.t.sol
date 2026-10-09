@@ -50,7 +50,8 @@ contract GovernanceMigrationForkTest is Test {
             Constants.GRG_STAKING,
             Constants.WORMHOLE_ETHEREUM,
             uint16(2), // Wormhole Ethereum chain id
-            GovernanceMode.Sender // deployed on the mainnet fork
+            GovernanceMode.Sender, // deployed on the mainnet fork
+            address(0)
         );
 
         // Give the test voter enough voting power to create and pass proposals. Voting power is

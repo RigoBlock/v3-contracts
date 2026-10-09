@@ -54,6 +54,24 @@ export default deployScript(
       );
     }
 
+    // Receiver chains carry a recovery address, validated here so a chain can never
+    // ship with an unset or unintended configuration.
+    const isReceiver = config.governanceMode === "receiver";
+    if (isReceiver && !config.governanceRecovery) {
+      throw new Error(
+        `governanceRecovery must be set for receiver chain ${chainId}. ` +
+          "Set it to the recovery multisig in src/utils/constants.ts.",
+      );
+    }
+    if (!isReceiver && config.governanceRecovery) {
+      throw new Error(
+        `governanceRecovery must not be set for non-receiver chain ${chainId} (${config.governanceMode}).`,
+      );
+    }
+    const recoveryAddress = isReceiver
+      ? (config.governanceRecovery as string)
+      : "0x0000000000000000000000000000000000000000";
+
     // The cross-chain receiver capability lives inside the governance implementation itself:
     // the governance proxy is the receiver hub on each chain, and its deterministic address is
     // known in advance on every chain. A chain opts in as a receiver by deploying its governance
@@ -85,10 +103,13 @@ export default deployScript(
         account: deployer,
         artifact: await readArtifact("RigoblockGovernanceStrategy"),
         args: [
-          config.stakingProxy,
+          // the constructor zeroes the staking proxy on receiver chains; pass zero here too so
+          // the deterministic address never depends on a staking entry a receiver chain ignores
+          isReceiver ? ethers.ZeroAddress : config.stakingProxy,
           config.wormhole,
           config.wormholeChainId,
           governanceMode,
+          recoveryAddress,
         ],
       },
       { deterministic: true },
